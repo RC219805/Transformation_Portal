@@ -49,7 +49,7 @@ make check-fastvlm-runtime
 
 ## Apache APEX Mode
 
-For the current Lux V3 relative-depth surface, the Apache-2.0 APEX path uses `--model-key "da3-metric"`. The bare `da3` selector is now the research-default DA3 path and requires `--non-commercial-ok "true"`.
+For the current Lux V3 relative-depth surface, the Apache-2.0 APEX path uses `--model-key "da3-metric"` — also the out-of-the-box default when no `--model-key` is given (repair 1.2, #2066). The bare `da3` model selector is deprecated: it still resolves the research model and requires `--non-commercial-ok "true"`; use `--model-key "da3-research"` explicitly.
 
 ### Basic APEX Command
 
@@ -137,7 +137,7 @@ lux-depth-v3 \
 
 ### Variant A2: DA3 Research Default
 
-The `da3` selector resolves to the research-default nested DA3 checkpoint and requires non-commercial acknowledgement.
+The deprecated `da3` model selector resolves to the research nested DA3 checkpoint and requires non-commercial acknowledgement; prefer the explicit `da3-research`. With no selector, the default is the Apache-2.0 `da3_metric` model.
 
 ```bash
 lux-depth-v3 \

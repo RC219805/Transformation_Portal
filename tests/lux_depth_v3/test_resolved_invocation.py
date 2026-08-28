@@ -38,12 +38,22 @@ def _build(config: EnhanceConfig, tmp_path: Path):
 
 
 class TestSingleResolution:
-    def test_default_selector_fails_closed_on_license(self, tmp_path: Path) -> None:
-        # The bare default resolves to the research-licensed model; the
-        # builder is THE enforcing resolution and must raise, matching the
-        # error a real run surfaces at validation time.
+    def test_default_selector_resolves_commercial_safe_model(self, tmp_path: Path) -> None:
+        # Repair 1.2 (#2066, option A): the bare default resolves the
+        # Apache-2.0 metric model without any license acknowledgement, and
+        # records the distinct "default" selector — never the "da3" alias,
+        # whose (deprecated) meaning is still the research model.
+        invocation = _build(EnhanceConfig(), tmp_path)
+        assert invocation.resolved_model is not None
+        assert invocation.resolved_model.canonical_key == "da3_metric"
+        assert invocation.resolved_model.requested_selector == "default"
+
+    def test_research_selector_fails_closed_on_license(self, tmp_path: Path) -> None:
+        # The builder is THE enforcing resolution and must raise for the
+        # research model without non_commercial_ok, matching the error a
+        # real run surfaces at validation time.
         with pytest.raises(ModelLicenseError):
-            _build(EnhanceConfig(), tmp_path)
+            _build(EnhanceConfig(model_key="da3-research"), tmp_path)
 
     def test_commercial_key_resolves_metric(self, tmp_path: Path) -> None:
         invocation = _build(_commercial_config(), tmp_path)

@@ -660,7 +660,9 @@ def test_da3_backend_registry_instantiation_without_config_defers_license_gate()
     backend = registry.get_backend("da3")
 
     assert isinstance(backend, DA3Backend)
-    assert backend._resolved_model_contract.canonical_key == "da3_research"
+    # Repair 1.2 (#2066): the no-selector default is the commercial-safe
+    # metric model, so metadata instantiation resolves cleanly.
+    assert backend._resolved_model_contract.canonical_key == "da3_metric"
 
 
 @pytest.mark.skipif(

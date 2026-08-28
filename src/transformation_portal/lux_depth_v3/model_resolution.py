@@ -11,9 +11,11 @@ from transformation_portal.core.security.model_lock import resolve_model_lock_re
 
 from .model_registry import (
     DEFAULT_MODEL_KEY,
+    DEFAULT_MODEL_SELECTOR,
     AcceleratorKind,
     BackendKind,
     UsageClass,
+    deprecated_model_key_alias_warning,
     get_model_spec,
     legacy_model_variant_warning,
     resolve_legacy_model_variant_key,
@@ -39,6 +41,24 @@ class BackendCapabilityError(ModelResolutionError):
 
 class DeprecatedModelSelectorWarning(DeprecationWarning):
     """Warning emitted for legacy compatibility selectors."""
+
+
+class DefaultModelSelectionChangedWarning(UserWarning):
+    """Warning that the no-selector default changed (repair 1.2, #2066).
+
+    Emitted only when a run gives no model selector while acknowledging
+    non_commercial_ok — the one cohort whose resolved model changed when the
+    default moved from da3_research to da3_metric.
+    """
+
+
+_DEFAULT_MODEL_CHANGED_WARNING = (
+    "No model selector was given. The default model is now da3_metric "
+    "(Apache-2.0, commercial-safe; repair 1.2, issue #2066). Runs that "
+    "combined the old default with non_commercial_ok=True previously "
+    "resolved da3_research — pass model_key='da3-research' to keep the "
+    "research model."
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +100,18 @@ def _resolve_selector(
         key = resolve_registry_key(request.model_key)
         if key is None:
             raise UnknownModelError(f"Unknown model selector: {request.model_key}")
+        # Deprecated-alias warning cycle (repair 1.2, #2066): emitted only on
+        # the license-enforcing resolution — the user-facing selection
+        # boundary — so internal metadata-only re-resolutions of the same
+        # config do not duplicate it.
+        if request.enforce_license:
+            alias_warning = deprecated_model_key_alias_warning(request.model_key)
+            if alias_warning:
+                warnings.warn(
+                    alias_warning,
+                    DeprecatedModelSelectorWarning,
+                    stacklevel=3,
+                )
         return request.model_key, key, None
 
     if request.raw_model_id:
@@ -106,7 +138,16 @@ def _resolve_selector(
         selector = variant_name if isinstance(variant_name, str) else str(request.model_variant)
         return selector, key, variant_name if isinstance(variant_name, str) else None
 
-    return "da3", DEFAULT_MODEL_KEY, None
+    # No selector: the commercial-safe default (repair 1.2, #2066). The
+    # recorded selector is the distinct DEFAULT_MODEL_SELECTOR label — not the
+    # "da3" alias, whose (deprecated) meaning is still the research model.
+    if request.enforce_license and request.non_commercial_ok:
+        warnings.warn(
+            _DEFAULT_MODEL_CHANGED_WARNING,
+            DefaultModelSelectionChangedWarning,
+            stacklevel=3,
+        )
+    return DEFAULT_MODEL_SELECTOR, DEFAULT_MODEL_KEY, None
 
 
 def _resolve_accelerator(spec: Any, use_coreml_backend: bool) -> AcceleratorKind:

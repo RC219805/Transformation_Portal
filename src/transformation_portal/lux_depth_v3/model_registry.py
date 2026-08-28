@@ -65,7 +65,16 @@ class ModelSpec:
     maturity: Literal["stable", "compat", "experimental", "internal"] = "stable"
 
 
-DEFAULT_MODEL_KEY = "da3_research"
+# Repair 1.2 (#2066, option A): the out-of-the-box default is the
+# commercial-safe Apache-2.0 metric model. The research model remains
+# available behind an explicit selector + non_commercial_ok acknowledgement.
+DEFAULT_MODEL_KEY = "da3_metric"
+
+# Selector label recorded when no model selector was given. Distinct from the
+# "da3" alias so manifests stay honest: "da3" still names the research model
+# (deprecated, see DEPRECATED_MODEL_KEY_ALIAS_WARNINGS) while the default is
+# da3_metric.
+DEFAULT_MODEL_SELECTOR = "default"
 
 
 MODEL_REGISTRY: Dict[str, ModelSpec] = {
@@ -199,8 +208,8 @@ LEGACY_MODEL_VARIANT_WARNINGS: Dict[str, str] = {
     "METRIC_LARGE": (
         "ModelVariant.METRIC_LARGE is deprecated. It resolves to da3_research, "
         "which uses depth-anything/DA3NESTED-GIANT-LARGE-1.1 and requires "
-        "non_commercial_ok=True. Use model_key='da3' or model_key='da3-research' "
-        "for the research-default selector."
+        "non_commercial_ok=True. Use model_key='da3-research' explicitly for "
+        "the research model; the commercial-safe default is da3_metric."
     ),
     "METRIC_BASE": (
         "ModelVariant.METRIC_BASE is deprecated. It resolves to da3_base for "
@@ -215,9 +224,33 @@ LEGACY_MODEL_VARIANT_WARNINGS: Dict[str, str] = {
 }
 
 
+# Repair 1.2 (#2066, option A): deprecated model_key aliases. Each alias keeps
+# its historical meaning for the length of the warning cycle — its meaning
+# never silently flips — and resolution emits DeprecatedModelSelectorWarning
+# steering callers to an explicit selector.
+DEPRECATED_MODEL_KEY_ALIAS_WARNINGS: Dict[str, str] = {
+    "da3": (
+        "model_key='da3' is deprecated as a model selector. It still resolves "
+        "to da3_research (cc-by-nc-4.0, requires non_commercial_ok=True) for "
+        "compatibility, but no longer matches the default. Use "
+        "model_key='da3-research' explicitly for the research model, or "
+        "model_key='da3-metric' (Apache-2.0) — the commercial-safe default. "
+        "'da3' remains the backend-family identifier (--depth-backend da3), "
+        "which is unchanged."
+    ),
+}
+
+
 def canonicalize_selector(selector: str) -> str:
     """Normalize a selector for alias lookup."""
     return selector.strip().lower()
+
+
+def deprecated_model_key_alias_warning(selector: Optional[str]) -> Optional[str]:
+    """Return the deprecation warning text for a deprecated model_key alias."""
+    if not selector:
+        return None
+    return DEPRECATED_MODEL_KEY_ALIAS_WARNINGS.get(canonicalize_selector(selector))
 
 
 def canonicalize_repo_id(repo_id: str) -> str:

@@ -46,12 +46,12 @@ Usage:
         --segmentation-backend "efficientsam" \\
         --depth-device "mps"
 
-    # Research-only: DA3 research default (explicit opt-in)
+    # Research-only: DA3 research model (explicit opt-in)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex_da31" \\
         --quality-tier "apex" \\
-        --model-key "da3" \\
+        --model-key "da3-research" \\
         --non-commercial-ok "true" \\
         --depth-device "mps" \\
         --materials-v3 "on" \\
@@ -336,8 +336,9 @@ def main(
         "--model-key",
         help=(
             "Model selector for the current Lux V3 relative-depth surface: "
-            "da3 (research-default, requires --non-commercial-ok), "
-            "da3-research, or da3-metric (Apache-2.0)."
+            "da3-metric (Apache-2.0, the default) or da3-research "
+            "(requires --non-commercial-ok). The bare 'da3' model alias is "
+            "deprecated; it still selects the research model."
         ),
     ),
     depth_pro_python: Optional[str] = typer.Option(

@@ -235,7 +235,7 @@ Output Deliverables
 --model-key "da3-metric"
 ```
 
-**Explanation:** `da3` is now the research-default selector. Use `--model-key "da3-metric"` for the Apache-2.0 DA3 path on the current Lux V3 relative-depth surface.
+**Explanation:** the `da3` model selector (deprecated) resolves the research model and requires the non-commercial acknowledgement. Use `--model-key "da3-metric"` (or simply omit `--model-key` — it is the default as of repair 1.2, #2066) for the Apache-2.0 DA3 path, or `--model-key "da3-research"` explicitly for the research model.
 
 ---
 

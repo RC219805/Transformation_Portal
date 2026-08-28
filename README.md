@@ -118,7 +118,7 @@ Transformation Portal supports depth models across two tiers with different lice
 
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
-- **Use for:** The governed depth workflow surface. Select `model_key="da3-metric"` for the Apache-2.0 DA3 path, or `model_key="da3"` / `model_key="da3-research"` for the research-default selector.
+- **Use for:** The governed depth workflow surface. The default model is the Apache-2.0 `da3_metric`; select `model_key="da3-research"` for the research model (requires `--non-commercial-ok`). The bare `da3` model selector is deprecated and still resolves the research model.
 - **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. Use `make install-ml-core` for current operator setup; advanced Apple Silicon bootstrap-profile work can run `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` directly.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
@@ -128,7 +128,7 @@ Transformation Portal supports depth models across two tiers with different lice
 - **Use for:** Explicitly acknowledged research and non-commercial evaluation paths
 - **Requirements:** `non_commercial_ok=True`, plus Apple license acceptance for `depth_pro`
 
-**Important:** The research-default DA3 selector is not part of the Apache-2.0 path. See [ADR-015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md) for governance details.
+**Important:** The research DA3 model is not part of the Apache-2.0 path. See [ADR-015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md) for governance details.
 
 ### Research Preset Example
 
