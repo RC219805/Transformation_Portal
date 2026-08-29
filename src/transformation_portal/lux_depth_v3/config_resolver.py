@@ -287,13 +287,16 @@ def with_typed_preset_provenance(
     preset_model_key: Optional[str],
 ) -> ResolvedModel:
     """Record a typed preset as the source of its resolved model identity."""
-    if preset_model_key is None:
+    preset = config.preset
+    if preset_model_key is None or preset is None:
+        # preset_model_key_for_selection only returns a key for a typed
+        # preset, so a None preset here means there is nothing to record.
         return contract
     return replace(
         contract,
-        requested_selector=f"preset:{config.preset.value}",
+        requested_selector=f"preset:{preset.value}",
         legacy_model_variant_name=None,
-        resolution_reason=(f"typed preset {config.preset.value!r} selected " f"{contract.canonical_key!r}"),
+        resolution_reason=(f"typed preset {preset.value!r} selected " f"{contract.canonical_key!r}"),
     )
 
 
