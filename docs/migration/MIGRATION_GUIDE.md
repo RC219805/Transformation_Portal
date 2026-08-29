@@ -48,9 +48,15 @@ result = pipeline.run(image)
 ```
 
 **Available backends:**
-- `da3` (Depth Anything V3 family) - Default backend family; the bare `da3` selector now resolves to the research-default DA3 model and requires `--non-commercial-ok`
+- `da3` (Depth Anything V3 family) - Default backend family; the default model is the Apache-2.0 `da3_metric` (repair 1.2, #2066). The bare `da3` model selector is deprecated: it still resolves the research model and requires `--non-commercial-ok`
 - `da3-metric` - Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `depth_pro` (Apple Depth Pro) - Research only, requires explicit license acceptance
+
+No-selector runs now record `requested_selector: "default"` plus a
+`resolution_reason` naming the `da3_metric` default. The same reason is
+published as `model_contract.resolution_reason` in run cards. This keeps the
+default path distinct from the deprecated `da3` research alias and ensures
+metric and research selections produce different cache/manifest fingerprints.
 
 #### 3. Configuration Format
 

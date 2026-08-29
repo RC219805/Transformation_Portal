@@ -1070,6 +1070,30 @@ class TestConfigResolverClass:
         assert fingerprint is not None
         assert len(fingerprint.to_sha256()) == 64
 
+    def test_resolver_compute_fingerprint_propagates_resolved_model_contract(self):
+        """The class wrapper must preserve metric/research cache identity."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
+
+        resolver = ConfigResolver()
+        config = EnhanceConfig()
+        metric = resolve_model_contract(ModelRequest(model_key="da3-metric"))
+        research = resolve_model_contract(ModelRequest(model_key="da3-research", non_commercial_ok=True))
+
+        metric_fingerprint = resolver.compute_fingerprint(
+            config,
+            resolved_model_contract=metric,
+        )
+        research_fingerprint = resolver.compute_fingerprint(
+            config,
+            resolved_model_contract=research,
+        )
+
+        assert metric_fingerprint.model_variant.startswith("da3_metric:")
+        assert research_fingerprint.model_variant.startswith("da3_research:")
+        assert metric_fingerprint.to_sha256() != research_fingerprint.to_sha256()
+
     def test_resolver_build_run_card_fingerprint(self):
         """Test resolver build_run_card_fingerprint method."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -1081,6 +1105,30 @@ class TestConfigResolverClass:
 
         assert "sha256" in fingerprint
         assert "canonical_json" in fingerprint
+
+    def test_resolver_run_card_wrapper_propagates_resolved_model_contract(self):
+        """The run-card wrapper must not collapse metric and research models."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
+
+        resolver = ConfigResolver()
+        config = EnhanceConfig()
+        metric = resolve_model_contract(ModelRequest(model_key="da3-metric"))
+        research = resolve_model_contract(ModelRequest(model_key="da3-research", non_commercial_ok=True))
+
+        metric_fingerprint = resolver.build_run_card_fingerprint(
+            config,
+            resolved_model_contract=metric,
+        )
+        research_fingerprint = resolver.build_run_card_fingerprint(
+            config,
+            resolved_model_contract=research,
+        )
+
+        assert metric_fingerprint["model_variant"].startswith("da3_metric:")
+        assert research_fingerprint["model_variant"].startswith("da3_research:")
+        assert metric_fingerprint["sha256"] != research_fingerprint["sha256"]
 
 
 class TestResolvedConfig:

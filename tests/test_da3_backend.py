@@ -206,8 +206,12 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
     python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
 
     backend = DA3Backend(
+        # Explicit research selection: repair 1.2 (#2066) moved the
+        # no-selector default to da3_metric, and this test's argv
+        # assertions exercise research model-key + license-flag propagation.
         _licensed_da3_config(
             depth_device="cpu",
+            model_key="da3-research",
             da3_python_executable=str(python_executable),
             da3_subprocess_timeout_seconds=321,
         )
@@ -410,8 +414,12 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
     python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
 
     backend = DA3Backend(
+        # Explicit research selection: repair 1.2 (#2066) moved the
+        # no-selector default to da3_metric, and this test's argv
+        # assertions exercise research model-key + license-flag propagation.
         _licensed_da3_config(
             depth_device="cpu",
+            model_key="da3-research",
             da3_python_executable=str(python_executable),
             da3_subprocess_timeout_seconds=123,
         )
@@ -660,7 +668,9 @@ def test_da3_backend_registry_instantiation_without_config_defers_license_gate()
     backend = registry.get_backend("da3")
 
     assert isinstance(backend, DA3Backend)
-    assert backend._resolved_model_contract.canonical_key == "da3_research"
+    # Repair 1.2 (#2066): the no-selector default is the commercial-safe
+    # metric model, so metadata instantiation resolves cleanly.
+    assert backend._resolved_model_contract.canonical_key == "da3_metric"
 
 
 @pytest.mark.skipif(

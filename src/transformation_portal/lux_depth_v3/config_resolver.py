@@ -35,7 +35,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -45,11 +45,19 @@ from ..ingest.canonical_json import canonicalize_json, dumps_json
 from ._backend_contract import normalize_backend_id
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
+from .model_registry import resolve_legacy_model_variant_key
 from .model_resolution import (
     ModelRequest,
     ResolvedModel,
+    carry_direct_model_contract,
+    direct_model_contract,
+    direct_model_source_selector_state,
+    refresh_direct_model_acknowledgement,
     resolve_model_contract,
+    restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
+    warn_default_model_selection_changed,
+    warn_deprecated_model_alias,
 )
 
 logger = logging.getLogger(__name__)
@@ -243,6 +251,53 @@ def _compat_model_variant_for_resolved_key(canonical_key: str) -> ModelVariant:
     if canonical_key == "da3_small":
         return ModelVariant.METRIC_SMALL
     return ModelVariant.METRIC_LARGE
+
+
+def preset_model_key_for_selection(
+    config: EnhanceConfig,
+    resolved_model_variant: Optional[ModelVariant] = None,
+) -> Optional[str]:
+    """Return the registry key selected by a typed preset, if applicable.
+
+    A typed preset is an explicit model-selection plane.  Resolve its legacy
+    compatibility variant through the registry without presenting that
+    internal mapping as a user-supplied deprecated ``ModelVariant``.  Explicit
+    model selectors and overrides continue to take precedence.
+    """
+    if (
+        config.preset is None
+        or bool(getattr(config, "model_key", None))
+        or bool(getattr(config, "raw_model_id", None))
+        or config.model_variant is not None
+    ):
+        return None
+
+    variant = resolved_model_variant
+    if variant is None:
+        _, variant = resolve_preset(config.preset)
+    key = resolve_legacy_model_variant_key(variant)
+    if key is None:
+        raise ValueError(f"Preset {config.preset.value!r} resolved an unknown model variant")
+    return key
+
+
+def with_typed_preset_provenance(
+    config: EnhanceConfig,
+    contract: ResolvedModel,
+    preset_model_key: Optional[str],
+) -> ResolvedModel:
+    """Record a typed preset as the source of its resolved model identity."""
+    preset = config.preset
+    if preset_model_key is None or preset is None:
+        # preset_model_key_for_selection only returns a key for a typed
+        # preset, so a None preset here means there is nothing to record.
+        return contract
+    return replace(
+        contract,
+        requested_selector=f"preset:{preset.value}",
+        legacy_model_variant_name=None,
+        resolution_reason=(f"typed preset {preset.value!r} selected " f"{contract.canonical_key!r}"),
+    )
 
 
 def resolved_model_identity_for_backend(
@@ -532,6 +587,8 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
 def build_depth_cache_payload(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build depth cache fingerprint payload.
 
@@ -541,6 +598,7 @@ def build_depth_cache_payload(
     Args:
         config: EnhanceConfig instance
         model_variant: Resolved model variant (uses config.model_variant if not provided)
+        resolved_model_contract: Authoritative model identity when available
 
     Returns:
         Dictionary of depth configuration for cache fingerprinting
@@ -552,7 +610,11 @@ def build_depth_cache_payload(
     effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
-        "model_variant": resolved_model_identity_for_backend(config, mv),
+        "model_variant": resolved_model_identity_for_backend(
+            config,
+            mv,
+            resolved_model_contract=resolved_model_contract,
+        ),
         "model_key": getattr(config, "model_key", None),
         "raw_model_id": getattr(config, "raw_model_id", None),
         "depth_device": config.depth_device,
@@ -577,9 +639,15 @@ def build_depth_cache_fingerprint(
     model_variant: ModelVariant,
     backend_id: str,
     output_depth_units: str,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> str:
     """Build backend-scoped depth cache fingerprint."""
-    cache_payload = build_depth_cache_payload(config, model_variant)
+    cache_payload = build_depth_cache_payload(
+        config,
+        model_variant,
+        resolved_model_contract=resolved_model_contract,
+    )
     base_fp = hashlib.sha256(
         dumps_json(
             cache_payload,
@@ -646,6 +714,8 @@ def build_run_card_config_fingerprint(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
     backend_metadata: Optional[Any] = None,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build run-card config fingerprint with full provenance.
 
@@ -656,13 +726,18 @@ def build_run_card_config_fingerprint(
         config: EnhanceConfig instance
         model_variant: Resolved model variant
         backend_metadata: Optional backend selection metadata
+        resolved_model_contract: Authoritative model identity when available
 
     Returns:
         Dictionary with fingerprint payload and SHA-256 hash
     """
     from .ingest_adapter import raw_ingest_summary
 
-    base = compute_config_fingerprint(config, model_variant)
+    base = compute_config_fingerprint(
+        config,
+        model_variant,
+        resolved_model_contract=resolved_model_contract,
+    )
     raw_summary = raw_ingest_summary(
         config,
         raw_python_executable=base.raw_python_executable,
@@ -742,12 +817,14 @@ def build_orchestrator_run_card_config_fingerprint(
     backend_selection: Optional[Dict[str, Any]] = None,
     run_card_version: Optional[str] = None,
     include_proofs: Optional[bool] = None,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build the orchestrator run-card config fingerprint payload."""
     fingerprint = build_run_card_config_fingerprint(
         config,
         model_variant,
         backend_metadata,
+        resolved_model_contract=resolved_model_contract,
     )
     payload = {key: value for key, value in fingerprint.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}}
     resolved_backend = None
@@ -845,6 +922,12 @@ class ConfigResolver:
         Returns:
             ResolvedConfig with fully resolved settings
         """
+        # Resolver-owned compatibility projections must not become sticky
+        # user selectors after a caller changes any source selection plane.
+        restore_stale_direct_model_selection(config)
+        refresh_direct_model_acknowledgement(config, stacklevel=3)
+        source_selector_state = direct_model_source_selector_state(config)
+
         # Resolve preset and model variant
         apply_effective_da3_runtime_config(config)
         apply_effective_raw_runtime_config(config)
@@ -852,26 +935,52 @@ class ConfigResolver:
             config.preset,
             config.model_variant,
         )
+        preset_model_key = preset_model_key_for_selection(
+            config,
+            resolved_model,
+        )
         # P0-1 (issue #2065): when the CLI has already performed the single
         # license-enforcing resolution, consume its authoritative contract
         # instead of re-resolving (which would use enforce_license=False and
         # could drift through the legacy model_variant compatibility mapping).
         authoritative_contract = None
+        enforce_authoritative_license = True
         invocation = getattr(config, "resolved_invocation", None)
         if invocation is not None:
             authoritative_contract = getattr(invocation, "resolved_model", None)
+        elif normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+            authoritative_contract = direct_model_contract(config)
+            # Direct ConfigResolver use is a metadata-only boundary. Preserve
+            # that public behavior across repeated calls while still
+            # revalidating registry and lock integrity. Execution boundaries
+            # (invocation construction and DA3Backend) always enforce policy.
+            enforce_authoritative_license = False
         if authoritative_contract is not None:
             resolved_model_contract = validate_authoritative_model_contract(
                 authoritative_contract,
                 non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                enforce_license=enforce_authoritative_license,
             )
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
             )
         else:
+            # A pure default carries no selection on any plane: the
+            # resolved default must then be pinned onto the config BEFORE
+            # the compat model_variant mutation below, or downstream
+            # re-resolutions (DA3Backend, engine) would read the mutated
+            # METRIC_LARGE as an explicit legacy selection and resolve the
+            # research model — a split identity between run-card metadata
+            # (da3_metric) and the executed model (repair 1.2, #2066).
+            pure_default_selection = (
+                getattr(config, "model_key", None) is None
+                and getattr(config, "raw_model_id", None) is None
+                and config.model_variant is None
+                and config.preset is None
+            )
             resolved_model_contract = resolve_model_contract(
                 ModelRequest(
-                    model_key=getattr(config, "model_key", None),
+                    model_key=getattr(config, "model_key", None) or preset_model_key,
                     raw_model_id=getattr(config, "raw_model_id", None),
                     model_variant=config.model_variant,
                     use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
@@ -879,6 +988,28 @@ class ConfigResolver:
                     enforce_license=False,
                 )
             )
+            if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+                warn_deprecated_model_alias(
+                    getattr(config, "model_key", None),
+                    stacklevel=3,
+                )
+            resolved_model_contract = with_typed_preset_provenance(
+                config,
+                resolved_model_contract,
+                preset_model_key,
+            )
+            if pure_default_selection:
+                # The CLI's authoritative invocation already emitted this
+                # migration warning during its enforcing resolution. Direct
+                # Python callers have no invocation carrier, so surface the
+                # affected-cohort warning once here before pinning model_key;
+                # subsequent backend enforcement sees an explicit canonical
+                # key and cannot duplicate it.
+                if normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"} and bool(
+                    getattr(config, "non_commercial_ok", False)
+                ):
+                    warn_default_model_selection_changed(stacklevel=3)
+                config.model_key = resolved_model_contract.canonical_key
             if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
                 resolved_model = _compat_model_variant_for_resolved_key(
                     resolved_model_contract.canonical_key,
@@ -892,13 +1023,23 @@ class ConfigResolver:
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
+        if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+            carry_direct_model_contract(
+                config,
+                resolved_model_contract,
+                source_selector_state=source_selector_state,
+            )
 
         # Determine preset resolution metadata
         preset_requested = getattr(config, "preset_requested", None) or (config.preset.value if config.preset else None)
         preset_resolved = config.preset.value if config.preset else f"quality_tier:{config.quality_tier}"
 
         # Compute fingerprint
-        fingerprint = compute_config_fingerprint(config, resolved_model)
+        fingerprint = compute_config_fingerprint(
+            config,
+            resolved_model,
+            resolved_model_contract=resolved_model_contract,
+        )
 
         return ResolvedConfig(
             enhance_config=config,
@@ -939,23 +1080,32 @@ class ConfigResolver:
         self,
         config: EnhanceConfig,
         model_variant: Optional[ModelVariant] = None,
+        *,
+        resolved_model_contract: Optional[ResolvedModel] = None,
     ) -> ConfigFingerprint:
         """Compute configuration fingerprint.
 
         Args:
             config: EnhanceConfig instance
             model_variant: Optional resolved model variant
+            resolved_model_contract: Authoritative model identity when available
 
         Returns:
             ConfigFingerprint for cache validation
         """
-        return compute_config_fingerprint(config, model_variant)
+        return compute_config_fingerprint(
+            config,
+            model_variant,
+            resolved_model_contract=resolved_model_contract,
+        )
 
     def build_run_card_fingerprint(
         self,
         config: EnhanceConfig,
         model_variant: Optional[ModelVariant] = None,
         backend_metadata: Optional[Any] = None,
+        *,
+        resolved_model_contract: Optional[ResolvedModel] = None,
     ) -> Dict[str, Any]:
         """Build run-card fingerprint with provenance.
 
@@ -963,6 +1113,7 @@ class ConfigResolver:
             config: EnhanceConfig instance
             model_variant: Resolved model variant
             backend_metadata: Backend selection metadata
+            resolved_model_contract: Authoritative model identity when available
 
         Returns:
             Dictionary with fingerprint and SHA-256 hash
@@ -971,4 +1122,5 @@ class ConfigResolver:
             config,
             model_variant,
             backend_metadata,
+            resolved_model_contract=resolved_model_contract,
         )

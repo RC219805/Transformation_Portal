@@ -242,7 +242,7 @@ Do not add new root files unless the placement is genuinely operational (e.g., `
 Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted roots, atomic writes (helpers in `lux_depth_v3/io_atomic.py`). For subprocesses: `subprocess.run([...], check=True, capture_output=True, text=True)`, explicit argv, no `shell=True`, set timeouts, surface stderr meaningfully.
 
 ### Backend / license governance
-- `da3` is the default commercial-safe production depth backend.
+- `da3` is the default commercial-safe production depth backend, and — as of repair 1.2 (#2066) — the default model is the commercial-safe `da3_metric` (Apache-2.0). The bare `da3` *model* selector is deprecated (still resolves the research model; requires `non_commercial_ok`); the `da3` backend-family identifier is unchanged.
 - `da3-research` / `depth_pro` require `non_commercial_ok=True` + (for Depth Pro) `accept_apple_depth_pro_research_license=True`.
 - Depth Pro lives in its own venv (constraint conflicts with main repo stack: pinned `torch==2.13.0`, `torchvision==0.28.0`, `numpy==1.26.4`).
 - Backend resolution metadata (`requested_backend`, `resolved_backend`, `resolution_status`, `resolution_reason`) is part of every manifest — preserve it.

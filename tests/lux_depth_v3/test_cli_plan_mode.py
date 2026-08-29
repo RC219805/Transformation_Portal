@@ -92,7 +92,9 @@ class TestPlanMode:
         assert not output_dir.exists()
         assert sorted(p.name for p in input_dir.iterdir()) == ["sample.png"]
 
-    def test_plan_default_model_fails_license_gate_like_run(self, tmp_path: Path) -> None:
+    def test_plan_default_model_resolves_commercial_safe(self, tmp_path: Path) -> None:
+        # Repair 1.2 (#2066, option A): the bare default plans the Apache-2.0
+        # metric model with the distinct "default" selector recorded.
         input_dir = _make_input_dir(tmp_path)
         result = runner.invoke(
             app,
@@ -101,6 +103,25 @@ class TestPlanMode:
                 str(input_dir),
                 "--output-dir",
                 str(tmp_path / "out"),
+                "--plan",
+            ],
+        )
+        assert result.exit_code == 0
+        payload = _extract_plan_json(result.output)
+        assert payload["resolved_model"]["canonical_key"] == "da3_metric"
+        assert payload["resolved_model"]["requested_selector"] == "default"
+
+    def test_plan_research_model_fails_license_gate_like_run(self, tmp_path: Path) -> None:
+        input_dir = _make_input_dir(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--model-key",
+                "da3-research",
                 "--plan",
             ],
         )
