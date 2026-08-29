@@ -98,6 +98,13 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 - `da3-metric` - Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `da3-base` / `da3-small` - registry-supported experimental selectors, hidden from public CLI help until smoke-tested
 
+Programmatic typed presets preserve their historical model mappings:
+`Preset.DEFAULT`, `Preset.ARCHITECTURAL_INTERIOR`, and
+`Preset.LUXURY_ESTATE` select `da3-research` and require
+`non_commercial_ok=True`; `Preset.ARCHITECTURAL_EXTERIOR` selects
+`da3-base`. Omitting the typed preset and all model selectors remains the
+commercial-safe `da3-metric` default.
+
 **Recommendation:** Start with `--quality-tier`, add `--preset` only when needed.
 
 ## Common Workflows

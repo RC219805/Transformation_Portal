@@ -11,11 +11,12 @@ Covers the acceptance criteria that are testable without ML dependencies:
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant, Preset
 from transformation_portal.lux_depth_v3.model_resolution import (
     DefaultModelSelectionChangedWarning,
     DeprecatedModelSelectorWarning,
@@ -753,6 +754,232 @@ class TestPythonApiDefaultParity:
         backend = DA3Backend(config)
         assert backend._resolved_model_contract.canonical_key == "da3_base"
 
+    @pytest.mark.parametrize(
+        ("preset", "expected_model_key"),
+        (
+            (Preset.DEFAULT, "da3_research"),
+            (Preset.ARCHITECTURAL_INTERIOR, "da3_research"),
+            (Preset.ARCHITECTURAL_EXTERIOR, "da3_base"),
+            (Preset.LUXURY_ESTATE, "da3_research"),
+        ),
+    )
+    def test_typed_preset_identity_matches_plan_resolver_backend_and_run_card(
+        self,
+        tmp_path: Path,
+        preset: Preset,
+        expected_model_key: str,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            ConfigResolver,
+            build_orchestrator_run_card_config_fingerprint,
+        )
+
+        config = EnhanceConfig(
+            preset=preset,
+            non_commercial_ok=True,
+        )
+        invocation = _build(config, tmp_path)
+        config.resolved_invocation = invocation
+        resolved = ConfigResolver().resolve(config)
+        backend = DA3Backend(config)
+        run_card_fingerprint = build_orchestrator_run_card_config_fingerprint(
+            config,
+            resolved.model_variant,
+            None,
+            resolved_model_contract=resolved.resolved_model_contract,
+        )
+
+        assert invocation.resolved_model is not None
+        assert invocation.resolved_model.canonical_key == expected_model_key
+        assert invocation.resolved_model.requested_selector == f"preset:{preset.value}"
+        assert invocation.resolved_model.resolution_reason == (
+            f"typed preset {preset.value!r} selected {expected_model_key!r}"
+        )
+        assert resolved.resolved_model_contract is invocation.resolved_model
+        assert backend._resolved_model_contract is invocation.resolved_model
+        assert resolved.fingerprint is not None
+        assert resolved.fingerprint.model_variant.startswith(f"{expected_model_key}:")
+        assert run_card_fingerprint["model_variant"] == resolved.fingerprint.model_variant
+
+    @pytest.mark.parametrize(
+        ("preset", "expected_model_key", "requires_acknowledgement"),
+        (
+            (Preset.DEFAULT, "da3_research", True),
+            (Preset.ARCHITECTURAL_INTERIOR, "da3_research", True),
+            (Preset.ARCHITECTURAL_EXTERIOR, "da3_base", False),
+            (Preset.LUXURY_ESTATE, "da3_research", True),
+        ),
+    )
+    def test_typed_preset_plan_license_boundary(
+        self,
+        tmp_path: Path,
+        preset: Preset,
+        expected_model_key: str,
+        requires_acknowledgement: bool,
+    ) -> None:
+        config = EnhanceConfig(preset=preset)
+
+        if requires_acknowledgement:
+            with pytest.raises(ModelLicenseError):
+                _build(config, tmp_path)
+            return
+
+        invocation = _build(config, tmp_path)
+        assert invocation.resolved_model is not None
+        assert invocation.resolved_model.canonical_key == expected_model_key
+
+    @pytest.mark.parametrize(
+        ("preset", "expected_model_key", "requires_acknowledgement"),
+        (
+            (Preset.DEFAULT, "da3_research", True),
+            (Preset.ARCHITECTURAL_INTERIOR, "da3_research", True),
+            (Preset.ARCHITECTURAL_EXTERIOR, "da3_base", False),
+            (Preset.LUXURY_ESTATE, "da3_research", True),
+        ),
+    )
+    @pytest.mark.parametrize("non_commercial_ok", (False, True))
+    def test_typed_preset_direct_python_boundary(
+        self,
+        preset: Preset,
+        expected_model_key: str,
+        requires_acknowledgement: bool,
+        non_commercial_ok: bool,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=preset,
+            non_commercial_ok=non_commercial_ok,
+        )
+        resolved = ConfigResolver().resolve(config)
+        assert resolved.resolved_model_contract is not None
+        assert resolved.resolved_model_contract.canonical_key == expected_model_key
+        assert resolved.resolved_model_contract.requested_selector == f"preset:{preset.value}"
+        assert config.model_key is None
+
+        if requires_acknowledgement and not non_commercial_ok:
+            with pytest.raises(ModelLicenseError):
+                DA3Backend(config)
+            return
+
+        backend = DA3Backend(config)
+        assert backend._resolved_model_contract.canonical_key == expected_model_key
+
+    def test_unacknowledged_research_preset_resolver_is_idempotent(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(preset=Preset.ARCHITECTURAL_INTERIOR)
+        resolver = ConfigResolver()
+
+        first = resolver.resolve(config)
+        second = resolver.resolve(config)
+
+        assert first.resolved_model_contract is second.resolved_model_contract
+        assert second.resolved_model_contract.canonical_key == "da3_research"
+        assert second.resolved_model_contract.requested_selector == "preset:architectural_interior"
+        with pytest.raises(ModelLicenseError):
+            DA3Backend(config)
+
+    @pytest.mark.parametrize(
+        ("selection", "expected_model_key"),
+        (
+            ({"model_key": "da3-metric"}, "da3_metric"),
+            ({"raw_model_id": "depth-anything/DA3METRIC-LARGE"}, "da3_metric"),
+            ({"model_variant": ModelVariant.METRIC_SMALL}, "da3_small"),
+        ),
+    )
+    def test_explicit_model_selection_overrides_typed_preset(
+        self,
+        selection: dict[str, object],
+        expected_model_key: str,
+    ) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_INTERIOR,
+            non_commercial_ok=True,
+            **selection,
+        )
+        if "model_variant" in selection:
+            with pytest.warns(DeprecatedModelSelectorWarning):
+                resolved = ConfigResolver().resolve(config)
+        else:
+            resolved = ConfigResolver().resolve(config)
+
+        assert resolved.resolved_model_contract is not None
+        assert resolved.resolved_model_contract.canonical_key == expected_model_key
+
+    def test_repeated_resolution_replaces_resolver_owned_preset_variant(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_EXTERIOR,
+            non_commercial_ok=True,
+        )
+        resolver = ConfigResolver()
+        first = resolver.resolve(config)
+        config.preset = Preset.ARCHITECTURAL_INTERIOR
+        second = resolver.resolve(config)
+        backend = DA3Backend(config)
+
+        assert first.resolved_model_contract.canonical_key == "da3_base"
+        assert second.resolved_model_contract.canonical_key == "da3_research"
+        assert second.resolved_model_contract.requested_selector == "preset:architectural_interior"
+        assert backend._resolved_model_contract is second.resolved_model_contract
+        assert config.model_key is None
+
+    def test_raw_model_id_overrides_prior_preset_projection(self) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_EXTERIOR,
+            non_commercial_ok=True,
+        )
+        resolver = ConfigResolver()
+        resolver.resolve(config)
+        config.raw_model_id = "depth-anything/DA3METRIC-LARGE"
+
+        resolved = resolver.resolve(config)
+
+        assert resolved.resolved_model_contract.canonical_key == "da3_metric"
+        assert resolved.resolved_model_contract.requested_selector == config.raw_model_id
+        assert config.model_key is None
+
+    def test_legacy_variant_overrides_prior_preset_projection(self) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_EXTERIOR,
+            non_commercial_ok=True,
+        )
+        resolver = ConfigResolver()
+        resolver.resolve(config)
+        config.model_variant = ModelVariant.METRIC_SMALL
+
+        with pytest.warns(DeprecatedModelSelectorWarning):
+            resolved = resolver.resolve(config)
+
+        assert resolved.resolved_model_contract.canonical_key == "da3_small"
+
+    def test_typed_preset_replaces_prior_selector_free_default_projection(self) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(non_commercial_ok=True)
+        resolver = ConfigResolver()
+        first = resolver.resolve(config)
+        config.preset = Preset.ARCHITECTURAL_EXTERIOR
+
+        second = resolver.resolve(config)
+
+        assert first.resolved_model_contract.canonical_key == "da3_metric"
+        assert second.resolved_model_contract.canonical_key == "da3_base"
+        assert second.resolved_model_contract.requested_selector == "preset:architectural_exterior"
+        assert config.model_key is None
+
     def test_explicit_legacy_variant_still_means_research_and_gates(self) -> None:
         from transformation_portal.depth.backends.da3 import DA3Backend
         from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
@@ -814,6 +1041,164 @@ class TestPythonApiDefaultParity:
             ConfigResolver().resolve(config)
             DA3Backend(config)
         assert len(caught) == 1
+
+    def test_default_change_warning_emits_when_acknowledgement_changes(self) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig()
+        resolver = ConfigResolver()
+        resolver.resolve(config)
+        config.non_commercial_ok = True
+
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research") as caught:
+            resolved = resolver.resolve(config)
+
+        assert len(caught) == 1
+        assert resolved.resolved_model_contract.canonical_key == "da3_metric"
+        assert resolved.resolved_model_contract.requested_selector == "default"
+
+    def test_acknowledgement_change_preserves_alias_and_warning_cardinality(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(model_key="da3", non_commercial_ok=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            resolved = ConfigResolver().resolve(config)
+            config.non_commercial_ok = False
+            with pytest.raises(ModelLicenseError):
+                DA3Backend(config)
+            with pytest.raises(ModelLicenseError):
+                _build(config, tmp_path)
+
+        alias_warnings = [warning for warning in caught if issubclass(warning.category, DeprecatedModelSelectorWarning)]
+        assert len(alias_warnings) == 1
+        assert resolved.resolved_model_contract.canonical_key == "da3_research"
+        assert resolved.resolved_model_contract.requested_selector == "da3"
+
+    def test_acknowledgement_change_preserves_exterior_preset_provenance(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_EXTERIOR,
+            non_commercial_ok=True,
+        )
+        resolved = ConfigResolver().resolve(config)
+        config.non_commercial_ok = False
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            backend = DA3Backend(config)
+            invocation = _build(config, tmp_path)
+
+        assert not [warning for warning in caught if issubclass(warning.category, DeprecatedModelSelectorWarning)]
+        for contract in (
+            resolved.resolved_model_contract,
+            backend._resolved_model_contract,
+            invocation.resolved_model,
+        ):
+            assert contract.canonical_key == "da3_base"
+            assert contract.requested_selector == "preset:architectural_exterior"
+            assert contract.legacy_model_variant_name is None
+
+    def test_default_acknowledgement_transition_preserves_provenance_and_warns_once(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig()
+        resolved = ConfigResolver().resolve(config)
+        config.non_commercial_ok = True
+
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research") as caught:
+            backend = DA3Backend(config)
+            invocation = _build(config, tmp_path)
+
+        assert len(caught) == 1
+        for contract in (
+            resolved.resolved_model_contract,
+            backend._resolved_model_contract,
+            invocation.resolved_model,
+        ):
+            assert contract.canonical_key == "da3_metric"
+            assert contract.requested_selector == "default"
+
+    def test_revoked_acknowledgement_preserves_research_preset_and_fails_closed(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            preset=Preset.ARCHITECTURAL_INTERIOR,
+            non_commercial_ok=True,
+        )
+        resolved = ConfigResolver().resolve(config)
+        config.non_commercial_ok = False
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with pytest.raises(ModelLicenseError):
+                DA3Backend(config)
+            with pytest.raises(ModelLicenseError):
+                _build(config, tmp_path)
+
+        assert not [warning for warning in caught if issubclass(warning.category, DeprecatedModelSelectorWarning)]
+        assert resolved.resolved_model_contract.canonical_key == "da3_research"
+        assert resolved.resolved_model_contract.requested_selector == "preset:architectural_interior"
+
+    @pytest.mark.parametrize(
+        ("selection", "expected_selector", "expected_alias_warnings"),
+        (
+            (
+                {"preset": Preset.ARCHITECTURAL_INTERIOR},
+                "preset:architectural_interior",
+                0,
+            ),
+            ({"model_key": "da3"}, "da3", 1),
+        ),
+    )
+    def test_granted_research_acknowledgement_preserves_provenance_across_consumers(
+        self,
+        tmp_path: Path,
+        selection: dict[str, object],
+        expected_selector: str,
+        expected_alias_warnings: int,
+    ) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(non_commercial_ok=False, **selection)
+        resolver = ConfigResolver()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            first = resolver.resolve(config)
+            config.non_commercial_ok = True
+            second = resolver.resolve(config)
+            backend = DA3Backend(config)
+            invocation = _build(config, tmp_path)
+
+        alias_warnings = [warning for warning in caught if issubclass(warning.category, DeprecatedModelSelectorWarning)]
+        assert len(alias_warnings) == expected_alias_warnings
+        for contract in (
+            first.resolved_model_contract,
+            second.resolved_model_contract,
+            backend._resolved_model_contract,
+            invocation.resolved_model,
+        ):
+            assert contract.canonical_key == "da3_research"
+            assert contract.requested_selector == expected_selector
 
     def test_direct_deprecated_alias_warning_is_emitted_once(self) -> None:
         from transformation_portal.depth.backends.da3 import DA3Backend

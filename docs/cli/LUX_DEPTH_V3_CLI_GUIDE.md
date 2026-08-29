@@ -211,6 +211,11 @@ lux-depth-v3 \
   - `da3-research`: Explicit research DA3 selector; requires `--non-commercial-ok "true"`
   - `da3`: Deprecated compatibility alias for `da3-research`; do not use it in new commands
   - `da3-metric`: Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
+  - Python API typed presets keep their historical mappings: `Preset.DEFAULT`,
+    `Preset.ARCHITECTURAL_INTERIOR`, and `Preset.LUXURY_ESTATE` select
+    `da3-research` (requiring `non_commercial_ok=True`), while
+    `Preset.ARCHITECTURAL_EXTERIOR` selects `da3-base`. With no typed preset
+    or model selector, the default remains `da3-metric`.
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
   - Options: `cpu`, `cuda`, `mps`
 - `--da3-python PATH`: Override the isolated DA3 subprocess interpreter.

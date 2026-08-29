@@ -35,7 +35,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -45,14 +45,19 @@ from ..ingest.canonical_json import canonicalize_json, dumps_json
 from ._backend_contract import normalize_backend_id
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
+from .model_registry import resolve_legacy_model_variant_key
 from .model_resolution import (
     ModelRequest,
     ResolvedModel,
-    carry_direct_default_model_contract,
-    direct_default_model_contract,
+    carry_direct_model_contract,
+    direct_model_contract,
+    direct_model_source_selector_state,
+    refresh_direct_model_acknowledgement,
     resolve_model_contract,
+    restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
     warn_default_model_selection_changed,
+    warn_deprecated_model_alias,
 )
 
 logger = logging.getLogger(__name__)
@@ -246,6 +251,50 @@ def _compat_model_variant_for_resolved_key(canonical_key: str) -> ModelVariant:
     if canonical_key == "da3_small":
         return ModelVariant.METRIC_SMALL
     return ModelVariant.METRIC_LARGE
+
+
+def preset_model_key_for_selection(
+    config: EnhanceConfig,
+    resolved_model_variant: Optional[ModelVariant] = None,
+) -> Optional[str]:
+    """Return the registry key selected by a typed preset, if applicable.
+
+    A typed preset is an explicit model-selection plane.  Resolve its legacy
+    compatibility variant through the registry without presenting that
+    internal mapping as a user-supplied deprecated ``ModelVariant``.  Explicit
+    model selectors and overrides continue to take precedence.
+    """
+    if (
+        config.preset is None
+        or bool(getattr(config, "model_key", None))
+        or bool(getattr(config, "raw_model_id", None))
+        or config.model_variant is not None
+    ):
+        return None
+
+    variant = resolved_model_variant
+    if variant is None:
+        _, variant = resolve_preset(config.preset)
+    key = resolve_legacy_model_variant_key(variant)
+    if key is None:
+        raise ValueError(f"Preset {config.preset.value!r} resolved an unknown model variant")
+    return key
+
+
+def with_typed_preset_provenance(
+    config: EnhanceConfig,
+    contract: ResolvedModel,
+    preset_model_key: Optional[str],
+) -> ResolvedModel:
+    """Record a typed preset as the source of its resolved model identity."""
+    if preset_model_key is None:
+        return contract
+    return replace(
+        contract,
+        requested_selector=f"preset:{config.preset.value}",
+        legacy_model_variant_name=None,
+        resolution_reason=(f"typed preset {config.preset.value!r} selected " f"{contract.canonical_key!r}"),
+    )
 
 
 def resolved_model_identity_for_backend(
@@ -870,6 +919,12 @@ class ConfigResolver:
         Returns:
             ResolvedConfig with fully resolved settings
         """
+        # Resolver-owned compatibility projections must not become sticky
+        # user selectors after a caller changes any source selection plane.
+        restore_stale_direct_model_selection(config)
+        refresh_direct_model_acknowledgement(config, stacklevel=3)
+        source_selector_state = direct_model_source_selector_state(config)
+
         # Resolve preset and model variant
         apply_effective_da3_runtime_config(config)
         apply_effective_raw_runtime_config(config)
@@ -877,25 +932,31 @@ class ConfigResolver:
             config.preset,
             config.model_variant,
         )
+        preset_model_key = preset_model_key_for_selection(
+            config,
+            resolved_model,
+        )
         # P0-1 (issue #2065): when the CLI has already performed the single
         # license-enforcing resolution, consume its authoritative contract
         # instead of re-resolving (which would use enforce_license=False and
         # could drift through the legacy model_variant compatibility mapping).
         authoritative_contract = None
-        carry_direct_default = False
+        enforce_authoritative_license = True
         invocation = getattr(config, "resolved_invocation", None)
         if invocation is not None:
             authoritative_contract = getattr(invocation, "resolved_model", None)
         elif normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
-            # Direct Python callers have no ResolvedInvocation. Preserve the
-            # original no-selector provenance across repeated resolver passes
-            # instead of treating ConfigResolver's own canonical key pin as
-            # an explicit user selection.
-            authoritative_contract = direct_default_model_contract(config)
+            authoritative_contract = direct_model_contract(config)
+            # Direct ConfigResolver use is a metadata-only boundary. Preserve
+            # that public behavior across repeated calls while still
+            # revalidating registry and lock integrity. Execution boundaries
+            # (invocation construction and DA3Backend) always enforce policy.
+            enforce_authoritative_license = False
         if authoritative_contract is not None:
             resolved_model_contract = validate_authoritative_model_contract(
                 authoritative_contract,
                 non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                enforce_license=enforce_authoritative_license,
             )
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
@@ -916,13 +977,23 @@ class ConfigResolver:
             )
             resolved_model_contract = resolve_model_contract(
                 ModelRequest(
-                    model_key=getattr(config, "model_key", None),
+                    model_key=getattr(config, "model_key", None) or preset_model_key,
                     raw_model_id=getattr(config, "raw_model_id", None),
                     model_variant=config.model_variant,
                     use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
                     non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
                     enforce_license=False,
                 )
+            )
+            if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+                warn_deprecated_model_alias(
+                    getattr(config, "model_key", None),
+                    stacklevel=3,
+                )
+            resolved_model_contract = with_typed_preset_provenance(
+                config,
+                resolved_model_contract,
+                preset_model_key,
             )
             if pure_default_selection:
                 # The CLI's authoritative invocation already emitted this
@@ -936,7 +1007,6 @@ class ConfigResolver:
                 ):
                     warn_default_model_selection_changed(stacklevel=3)
                 config.model_key = resolved_model_contract.canonical_key
-                carry_direct_default = True
             if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
                 resolved_model = _compat_model_variant_for_resolved_key(
                     resolved_model_contract.canonical_key,
@@ -950,8 +1020,12 @@ class ConfigResolver:
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
-        if carry_direct_default:
-            carry_direct_default_model_contract(config, resolved_model_contract)
+        if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+            carry_direct_model_contract(
+                config,
+                resolved_model_contract,
+                source_selector_state=source_selector_state,
+            )
 
         # Determine preset resolution metadata
         preset_requested = getattr(config, "preset_requested", None) or (config.preset.value if config.preset else None)

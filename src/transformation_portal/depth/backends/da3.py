@@ -34,10 +34,16 @@ from ...core.ml_dependency_health import (
     ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
+from ...lux_depth_v3.config_resolver import (
+    preset_model_key_for_selection,
+    with_typed_preset_provenance,
+)
 from ...lux_depth_v3.model_resolution import (
     ModelRequest,
-    direct_default_model_contract,
+    direct_model_contract,
+    refresh_direct_model_acknowledgement,
     resolve_model_contract,
+    restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
 )
 from .protocol import DepthResult, LicenseType
@@ -167,20 +173,23 @@ class DA3Backend:
         # (da3_metric) back into the research model (da3_research).
         authoritative_contract = None
         if config is not None:
+            restore_stale_direct_model_selection(config)
+            refresh_direct_model_acknowledgement(config, stacklevel=3)
             invocation = getattr(config, "resolved_invocation", None)
             if invocation is not None:
                 authoritative_contract = getattr(invocation, "resolved_model", None)
             if authoritative_contract is None:
-                authoritative_contract = direct_default_model_contract(config)
+                authoritative_contract = direct_model_contract(config)
         if authoritative_contract is not None:
             self._resolved_model_contract = validate_authoritative_model_contract(
                 authoritative_contract,
                 non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
             )
         else:
+            preset_model_key = preset_model_key_for_selection(config) if config is not None else None
             self._resolved_model_contract = resolve_model_contract(
                 ModelRequest(
-                    model_key=getattr(config, "model_key", None) if config is not None else None,
+                    model_key=(getattr(config, "model_key", None) or preset_model_key if config is not None else None),
                     raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
                     # Selection must come from what the config actually
                     # carries — NOT self._model_variant, whose METRIC_LARGE
@@ -194,6 +203,12 @@ class DA3Backend:
                     enforce_license=config is not None,
                 )
             )
+            if config is not None:
+                self._resolved_model_contract = with_typed_preset_provenance(
+                    config,
+                    self._resolved_model_contract,
+                    preset_model_key,
+                )
         self._model_id = self._resolved_model_contract.spec.repo_id
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
