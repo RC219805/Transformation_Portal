@@ -13,7 +13,11 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.attestation.dsse import DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, pre_auth_encode
-from transformation_portal.attestation.run_card_detached import build_run_card_detached_attestation_payload
+from transformation_portal.attestation.run_card_detached import (
+    build_run_card_detached_attestation_payload,
+    canonical_run_card_attestation_preimage_bytes,
+    compute_run_card_attestation_sha256,
+)
 from transformation_portal.attestation.run_card_intoto import build_run_card_dsse_envelope, canonical_run_card_statement_bytes
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
@@ -22,9 +26,14 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = PROJECT_ROOT / "tools" / "verify_run_card_attestation.py"
+FAKE_GPG_PATH = PROJECT_ROOT / "tests" / "fixtures" / "attestation" / "fake_gpg.py"
 
 
-def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run_tool(
+    *args: str,
+    path_prepend: Path | None = None,
+    env_updates: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     pythonpath_parts = [str(PROJECT_ROOT / "src"), str(PROJECT_ROOT)]
     if env.get("PYTHONPATH"):
@@ -32,6 +41,8 @@ def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.Comple
     env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     if path_prepend is not None:
         env["PATH"] = os.pathsep.join([str(path_prepend), env.get("PATH", "")])
+    if env_updates:
+        env.update(env_updates)
     return subprocess.run(
         [sys.executable, str(TOOL_PATH), *args],
         cwd=PROJECT_ROOT,
@@ -152,32 +163,7 @@ def _write_fake_gpg(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     gpg_path = bin_dir / "gpg"
-    gpg_path.write_text(
-        """#!/bin/sh
-if printf '%s' "$*" | grep -q -- "--verify"; then
-  exit 0
-fi
-cat >/dev/null
-if printf '%s' "$*" | grep -q -- "--clearsign"; then
-  cat <<'EOF'
------BEGIN PGP SIGNED MESSAGE-----
-Hash: SHA256
-
-payload
------BEGIN PGP SIGNATURE-----
-fake-clearsign
------END PGP SIGNATURE-----
-EOF
-  exit 0
-fi
-cat <<'EOF'
------BEGIN PGP SIGNATURE-----
-fake-detached
------END PGP SIGNATURE-----
-EOF
-""",
-        encoding="utf-8",
-    )
+    gpg_path.write_bytes(FAKE_GPG_PATH.read_bytes())
     gpg_path.chmod(0o755)
     return bin_dir
 
@@ -191,14 +177,35 @@ def _write_fake_cosign(tmp_path: Path) -> Path:
     return bin_dir
 
 
+def _fake_clearsign(payload: bytes) -> str:
+    encoded = base64.b64encode(payload).decode("ascii")
+    return (
+        "-----BEGIN PGP SIGNED MESSAGE-----\n"
+        "Hash: SHA256\n"
+        f"X-TP-Fake-Payload: {encoded}\n\n"
+        "payload\n"
+        "-----BEGIN PGP SIGNATURE-----\n"
+        "fake-clearsign\n"
+        "-----END PGP SIGNATURE-----\n"
+    )
+
+
 def _build_inputs(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     run_card_path = _write_run_card_v2(tmp_path)
     run_card_payload = json.loads(run_card_path.read_text(encoding="utf-8"))
     run_card_bytes = run_card_path.read_bytes()
+    native_preimage = canonical_run_card_attestation_preimage_bytes(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+    )
     native_attestation = build_run_card_detached_attestation_payload(
         run_card_payload,
         run_card_bytes=run_card_bytes,
-        signature={"algorithm": "openpgp-clearsign", "key_id": "test", "signature": "deadbeef"},
+        signature={
+            "algorithm": "openpgp-clearsign",
+            "key_id": "test",
+            "signature": _fake_clearsign(native_preimage),
+        },
     )
     dsse_statement_bytes = canonical_run_card_statement_bytes(
         run_card_path=run_card_path,
@@ -225,10 +232,18 @@ def _build_inputs_v1(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     run_card_path = _write_run_card_v1(tmp_path)
     run_card_payload = json.loads(run_card_path.read_text(encoding="utf-8"))
     run_card_bytes = run_card_path.read_bytes()
+    native_preimage = canonical_run_card_attestation_preimage_bytes(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+    )
     native_attestation = build_run_card_detached_attestation_payload(
         run_card_payload,
         run_card_bytes=run_card_bytes,
-        signature={"algorithm": "openpgp-clearsign", "key_id": "test", "signature": "deadbeef"},
+        signature={
+            "algorithm": "openpgp-clearsign",
+            "key_id": "test",
+            "signature": _fake_clearsign(native_preimage),
+        },
     )
     dsse_statement_bytes = canonical_run_card_statement_bytes(
         run_card_path=run_card_path,
@@ -301,6 +316,70 @@ def test_verify_cli_accepts_gpg_and_sigstore_bundle_when_helpers_exist(tmp_path:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_verify_cli_rejects_unrelated_native_clearsign_even_when_self_hash_is_allowed_missing(
+    tmp_path: Path,
+) -> None:
+    run_card_path, native_path, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_path.unlink()
+    native_attestation = json.loads(native_path.read_text(encoding="utf-8"))
+    native_attestation["signature"]["signature"] = _fake_clearsign(b'{"schema":"unrelated"}')
+    native_attestation["attestation_sha256"] = None
+    native_path.write_text(json.dumps(native_attestation), encoding="utf-8")
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-native",
+        "--allow-missing-attestation-sha",
+        "--gpg",
+        path_prepend=fake_gpg,
+    )
+
+    assert result.returncode == 5
+    assert "does not match the expected canonical preimage bytes" in result.stderr
+
+
+def test_verify_cli_rejects_native_recorded_key_mismatch(tmp_path: Path) -> None:
+    run_card_path, _, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_path.unlink()
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-native",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_RESOLVED_FINGERPRINT": "B" * 40},
+    )
+
+    assert result.returncode == 5
+    assert "primary fingerprint does not match recorded key_id" in result.stderr
+
+
+@pytest.mark.parametrize("status_mode", ["missing", "ambiguous"])
+def test_verify_cli_rejects_native_missing_or_ambiguous_validsig(tmp_path: Path, status_mode: str) -> None:
+    run_card_path, native_path, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_path.unlink()
+    native_attestation = json.loads(native_path.read_text(encoding="utf-8"))
+    native_attestation["attestation_sha256"] = compute_run_card_attestation_sha256(native_attestation)
+    native_path.write_text(json.dumps(native_attestation), encoding="utf-8")
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-native",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_STATUS_MODE": status_mode},
+    )
+
+    assert result.returncode == 5
+    assert "exactly one VALIDSIG record" in result.stderr
 
 
 def test_verify_cli_rejects_explicit_sigstore_bundle_without_dsse_attestation(tmp_path: Path) -> None:
@@ -415,6 +494,8 @@ def test_verify_cli_runs_from_source_checkout_without_pyproject_install(tmp_path
     (repo_root / "src" / "transformation_portal" / "attestation" / "run_card_detached.py").write_text(
         "def bind_run_card_detached_attestation(*_args, **_kwargs):\n"
         "    return None\n"
+        "def canonical_run_card_attestation_preimage_bytes(*_args, **_kwargs):\n"
+        '    return b""\n'
         "def validate_run_card_detached_attestation_surface(*_args, **_kwargs):\n"
         "    return None\n"
         "def verify_run_card_attestation_self_hash(*_args, **_kwargs):\n"

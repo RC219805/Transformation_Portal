@@ -13,6 +13,7 @@ from transformation_portal.attestation.detached import (
     canonical_attestation_preimage_bytes,
 )
 from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 
 pytestmark = pytest.mark.unit
@@ -36,6 +37,16 @@ def _machine_extract_payload(*, elapsed_seconds: float) -> dict[str, Any]:
     }
 
 
+def _anchored_evidence() -> dict[str, Any]:
+    machine_payload = _machine_extract_payload(elapsed_seconds=1.0)
+    machine_payload["data"]["file_integrity"] = {"sha256": "a" * 64}
+    return build_evidence_payload(
+        machine_payload,
+        projection_profile=load_projection_profile(),
+        bundle_root_sha256="b" * 64,
+    )
+
+
 def test_detached_attestation_binds_to_evidence_sha256() -> None:
     evidence = build_evidence_payload(
         _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
@@ -44,6 +55,7 @@ def test_detached_attestation_binds_to_evidence_sha256() -> None:
 
     attestation = build_detached_attestation_payload(evidence, signature=signature, enforce_recompute_match=True)
     assert attestation["subject"]["evidence_sha256"] == evidence["evidence_sha256"]
+    assert bind_attestation_to_evidence(attestation, evidence) is None
 
 
 def test_attestation_canonical_bytes_are_deterministic() -> None:
@@ -139,3 +151,112 @@ def test_bind_attestation_to_evidence_rejects_mismatched_hash() -> None:
 
     with pytest.raises(ValueError, match="attestation does not bind to this evidence payload"):
         bind_attestation_to_evidence(attestation, evidence_b)
+
+
+def test_bind_attestation_to_evidence_rejects_tampered_projected_envelope() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence, signature=signature)
+
+    evidence["projected_envelope"]["data"]["preset"] = "tampered"
+
+    with pytest.raises(ValueError, match="projected_envelope does not reproduce stored evidence_sha256"):
+        bind_attestation_to_evidence(attestation, evidence)
+
+
+def test_bind_attestation_to_evidence_normalizes_valid_digest_case() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence, signature=signature)
+    evidence["evidence_sha256"] = evidence["evidence_sha256"].upper()
+    attestation["subject"]["evidence_sha256"] = attestation["subject"]["evidence_sha256"].upper()
+
+    assert bind_attestation_to_evidence(attestation, evidence) is None
+
+
+def test_bind_attestation_to_evidence_normalizes_secondary_anchor_case() -> None:
+    evidence = _anchored_evidence()
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    evidence["file_sha256"] = evidence["file_sha256"].upper()
+    evidence["bundle_root_sha256"] = evidence["bundle_root_sha256"].upper()
+    attestation["subject"]["file_sha256"] = attestation["subject"]["file_sha256"].upper()
+    attestation["subject"]["bundle_root_sha256"] = attestation["subject"]["bundle_root_sha256"].upper()
+
+    assert bind_attestation_to_evidence(attestation, evidence) is None
+
+
+@pytest.mark.parametrize("anchor", ["file_sha256", "bundle_root_sha256"])
+def test_bind_attestation_to_evidence_rejects_mutated_secondary_anchor(anchor: str) -> None:
+    evidence = _anchored_evidence()
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    attestation["subject"][anchor] = "c" * 64
+
+    with pytest.raises(ValueError, match=rf"{anchor} mismatch"):
+        bind_attestation_to_evidence(attestation, evidence)
+
+
+@pytest.mark.parametrize("anchor", ["file_sha256", "bundle_root_sha256"])
+def test_bind_attestation_to_evidence_rejects_one_sided_missing_secondary_anchor(anchor: str) -> None:
+    evidence = _anchored_evidence()
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    attestation["subject"].pop(anchor)
+
+    with pytest.raises(ValueError, match=rf"{anchor} mismatch"):
+        bind_attestation_to_evidence(attestation, evidence)
+
+
+def test_bind_attestation_to_evidence_treats_missing_and_null_as_unbound() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0),
+        projection_profile=load_projection_profile(),
+    )
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    attestation["subject"].pop("file_sha256")
+    evidence.pop("bundle_root_sha256")
+
+    assert bind_attestation_to_evidence(attestation, evidence) is None
+
+
+def test_bind_attestation_to_evidence_rejects_file_anchor_divorced_from_projection() -> None:
+    evidence = _anchored_evidence()
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    evidence["file_sha256"] = "c" * 64
+    attestation["subject"]["file_sha256"] = "c" * 64
+
+    with pytest.raises(ValueError, match="file_sha256 does not match projected_envelope file digest"):
+        bind_attestation_to_evidence(attestation, evidence)
+
+
+def test_bind_attestation_to_evidence_rejects_invalid_projected_file_anchor() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0),
+        projection_profile=load_projection_profile(),
+    )
+    evidence["projected_envelope"]["data"]["file_integrity"] = {"sha256": "invalid"}
+    evidence["evidence_sha256"] = hashlib.sha256(canonicalize_json(evidence["projected_envelope"])).hexdigest()
+    attestation = build_detached_attestation_payload(
+        evidence,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+
+    with pytest.raises(ValueError, match="projected_envelope.data.file_integrity.sha256"):
+        bind_attestation_to_evidence(attestation, evidence)

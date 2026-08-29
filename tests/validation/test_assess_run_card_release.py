@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from transformation_portal.attestation.run_card_detached import build_run_card_detached_attestation_payload
+from transformation_portal.attestation.run_card_detached import (
+    build_run_card_detached_attestation_payload,
+    canonical_run_card_attestation_preimage_bytes,
+    compute_run_card_attestation_sha256,
+)
 from transformation_portal.attestation.run_card_intoto import build_run_card_dsse_envelope, canonical_run_card_statement_bytes
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 from transformation_portal.lux_depth_v3.validators.release_assessment import assess_run_card_release
@@ -207,6 +211,64 @@ def test_release_assessment_can_allow_missing_native_attestation_sha(tmp_path: P
     native_check = next(check for check in default_assessment["checks"] if check["name"] == "native_attestation")
     assert any("attestation_sha256" in error for error in native_check["details"]["errors"])
     assert tolerant_assessment["status"] == "PASS"
+
+
+def test_release_assessment_gpg_verification_binds_native_preimage_and_recorded_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_card_path = _write_run_card_v2(tmp_path)
+    _write_attestations(run_card_path)
+    run_card_path.with_suffix(".attestation.dsse.json").unlink()
+    run_card_path.with_suffix(".attestation.dsse.sigstore.bundle.json").unlink()
+    captured: dict[str, object] = {}
+
+    def _verify(signature: str, *, expected_payload: bytes, key_id: str) -> None:
+        captured.update(signature=signature, expected_payload=expected_payload, key_id=key_id)
+
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.validators.release_assessment.gpg_verify_clearsign",
+        _verify,
+    )
+
+    assessment = assess_run_card_release(
+        run_card_path=run_card_path,
+        require_native_attestation=True,
+        verify_gpg=True,
+    )
+
+    run_card_payload = json.loads(run_card_path.read_text(encoding="utf-8"))
+    assert assessment["status"] == "PASS"
+    assert captured == {
+        "signature": "deadbeef",
+        "expected_payload": canonical_run_card_attestation_preimage_bytes(
+            run_card_payload,
+            run_card_bytes=run_card_path.read_bytes(),
+        ),
+        "key_id": "test",
+    }
+
+
+def test_release_assessment_rejects_non_gpg_native_algorithm_when_verification_requested(tmp_path: Path) -> None:
+    run_card_path = _write_run_card_v2(tmp_path)
+    _write_attestations(run_card_path)
+    run_card_path.with_suffix(".attestation.dsse.json").unlink()
+    run_card_path.with_suffix(".attestation.dsse.sigstore.bundle.json").unlink()
+    native_path = run_card_path.with_suffix(".attestation.native.json")
+    native_attestation = json.loads(native_path.read_text(encoding="utf-8"))
+    native_attestation["signature"]["algorithm"] = "logical-label"
+    native_attestation["attestation_sha256"] = compute_run_card_attestation_sha256(native_attestation)
+    native_path.write_text(json.dumps(native_attestation), encoding="utf-8")
+
+    assessment = assess_run_card_release(
+        run_card_path=run_card_path,
+        require_native_attestation=True,
+        verify_gpg=True,
+    )
+
+    native_check = next(check for check in assessment["checks"] if check["name"] == "native_attestation")
+    assert assessment["status"] == "FAIL"
+    assert any("openpgp-clearsign" in error for error in native_check["details"]["errors"])
 
 
 def test_assess_run_card_release_script_runs_from_source_checkout(tmp_path: Path) -> None:
