@@ -23,6 +23,7 @@ DRY_RUN=0
 VERIFY_ONLY=0
 SKIP_MODEL_DOWNLOAD=0
 SKIP_VERIFY=0
+BASE_PYTHON="${TP_FASTVLM_BASE_PYTHON:-}"
 
 usage() {
   cat <<'EOF'
@@ -31,6 +32,7 @@ Usage: scripts/setup/install_fastvlm_runtime.sh [options]
 Options:
   --models ROLE[,ROLE...]     Model roles to install (default: smoke,default)
   --all-models                Install all manifest model roles
+  --base-python PATH          Trusted interpreter used to build or audit the runtime venv
   --verify-only               Verify the existing runtime and exit
   --skip-model-download       Install runtime sources/venv but do not download models
   --skip-verify               Skip Python/model verification; source trust still runs last
@@ -51,6 +53,22 @@ while [ "$#" -gt 0 ]; do
       ;;
     --all-models)
       ALL_MODELS=1
+      shift
+      ;;
+    --base-python)
+      BASE_PYTHON="${2:-}"
+      if [ -z "$BASE_PYTHON" ]; then
+        echo "--base-python requires a path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --base-python=*)
+      BASE_PYTHON="${1#*=}"
+      if [ -z "$BASE_PYTHON" ]; then
+        echo "--base-python requires a path" >&2
+        exit 2
+      fi
       shift
       ;;
     --verify-only)
@@ -88,6 +106,7 @@ else
 fi
 
 REPO_PY="$("$REPO_ROOT/scripts/setup/resolve_python_311.sh")"
+RUNTIME_BASE_PY="${BASE_PYTHON:-$REPO_PY}"
 
 SOURCE_INSTALLER="$REPO_ROOT/scripts/setup/install_fastvlm_sources.py"
 VENV_INSTALLER="$REPO_ROOT/scripts/setup/install_fastvlm_venv.py"
@@ -127,6 +146,10 @@ if [ "$DRY_RUN" -eq 0 ]; then
   # Retain the inherited descriptor through the final exec so the transaction
   # remains serialized even if the parent lock-runner process is terminated.
   unset TP_FASTVLM_INSTALL_LOCK_FD TP_FASTVLM_INSTALL_LOCK_TOKEN
+  if ! "$RUNTIME_BASE_PY" -I -S -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)'; then
+    echo "FastVLM base Python must be Python 3.11 or newer: $RUNTIME_BASE_PY" >&2
+    exit 1
+  fi
 fi
 
 run() {
@@ -145,6 +168,7 @@ verify_runtime() {
   run "$REPO_PY" -I -S "$REPO_ROOT/scripts/validation/validate_fastvlm_runtime.py" \
     --manifest "$MANIFEST_PATH" \
     --runtime-root "$RUNTIME_ROOT" \
+    --base-python "$RUNTIME_BASE_PY" \
     "${MODEL_ARGS[@]}" \
     --verify-only
 }
@@ -177,6 +201,7 @@ audit_venv() {
   run "$REPO_PY" -I -S "$VENV_INSTALLER" \
     --manifest "$MANIFEST_PATH" \
     --runtime-root "$RUNTIME_ROOT" \
+    --base-python "$RUNTIME_BASE_PY" \
     --audit-only
 }
 
@@ -191,7 +216,7 @@ install_sources
 run "$REPO_PY" -I -S "$VENV_INSTALLER" \
   --manifest "$MANIFEST_PATH" \
   --runtime-root "$RUNTIME_ROOT" \
-  --base-python "$REPO_PY" \
+  --base-python "$RUNTIME_BASE_PY" \
   --requirements "$RUNTIME_REQUIREMENTS_FILE"
 
 if [ "$SKIP_MODEL_DOWNLOAD" -eq 0 ]; then

@@ -25,6 +25,7 @@ PIP_INSTALL_TIMEOUT_SECONDS = 3600
 PIP_BOOTSTRAP_CLEANUP_TIMEOUT_SECONDS = 120
 PIP_CHECK_TIMEOUT_SECONDS = 120
 PIP_FREEZE_TIMEOUT_SECONDS = 120
+MINIMUM_PYTHON_VERSION = (3, 11)
 FREEZE_EVIDENCE_NAME = "fastvlm-pip-freeze.txt"
 _ALLOWED_BOOTSTRAP_PTH_PAYLOADS = frozenset(
     {
@@ -61,8 +62,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--requirements", default="")
     parser.add_argument("--audit-only", action="store_true")
     args = parser.parse_args(argv)
-    if not args.audit_only and (not args.base_python or not args.requirements):
-        parser.error("--base-python and --requirements are required unless --audit-only is selected")
+    if not args.base_python:
+        parser.error("--base-python is required for install and audit operations")
+    if not args.audit_only and not args.requirements:
+        parser.error("--requirements is required unless --audit-only is selected")
     return args
 
 
@@ -174,6 +177,23 @@ def _run_checked(command: Sequence[str], *, timeout_seconds: int, description: s
         detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
         raise RuntimeVerificationError(f"{description} failed: {detail}")
     return completed
+
+
+def _require_supported_base_python(path: Path) -> Path:
+    trusted_python = _require_regular_file(path, description="FastVLM base Python", executable=True)
+    minimum = MINIMUM_PYTHON_VERSION
+    _run_checked(
+        [
+            str(trusted_python),
+            "-I",
+            "-S",
+            "-c",
+            f"import sys; raise SystemExit(0 if sys.version_info[:2] >= {minimum!r} else 1)",
+        ],
+        timeout_seconds=PIP_BOOTSTRAP_CLEANUP_TIMEOUT_SECONDS,
+        description=f"FastVLM base Python {minimum[0]}.{minimum[1]}+ check",
+    )
+    return trusted_python
 
 
 def _read_regular_json(path: Path) -> Any:
@@ -307,11 +327,7 @@ def _parse_pyvenv_config(path: Path) -> dict[str, str]:
 
 
 def _validate_venv_controls(venv_dir: Path, *, expected_base_python: Path) -> None:
-    expected_python = _require_regular_file(
-        expected_base_python,
-        description="FastVLM expected base Python",
-        executable=True,
-    )
+    expected_python = _require_supported_base_python(expected_base_python)
     config_path = venv_dir / "pyvenv.cfg"
     _ensure_no_symlink_components(config_path)
     values = _parse_pyvenv_config(config_path)
@@ -350,7 +366,7 @@ def _validate_venv_controls(venv_dir: Path, *, expected_base_python: Path) -> No
 
     launcher_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
     canonical_launcher = launcher_dir / ("python.exe" if os.name == "nt" else "python")
-    base_payload = _read_regular_bytes(expected_python, description="FastVLM expected base Python")
+    base_payload = _read_regular_bytes(expected_executable, description="FastVLM expected base Python")
     launchers = [path for path in launcher_dir.iterdir() if _is_python_launcher(path.name)]
     if canonical_launcher not in launchers:
         raise RuntimeVerificationError(f"FastVLM venv Python launcher is missing: {canonical_launcher}")
@@ -359,8 +375,8 @@ def _validate_venv_controls(venv_dir: Path, *, expected_base_python: Path) -> No
             raise RuntimeVerificationError(f"FastVLM venv Python launcher does not match the trusted base: {launcher}")
 
 
-def audit_runtime_venv(venv_dir: Path, *, expected_base_python: Path | None = None) -> None:
-    """Reject startup code, editable installs, symlinks, and special site entries."""
+def audit_runtime_venv(venv_dir: Path, *, expected_base_python: Path) -> None:
+    """Reject unsafe venv controls and bind them to a caller-trusted base."""
 
     target = _lexical_absolute(venv_dir)
     _validate_existing_target(target, directory=True, description="FastVLM venv")
@@ -402,8 +418,7 @@ def audit_runtime_venv(venv_dir: Path, *, expected_base_python: Path | None = No
                             raise RuntimeVerificationError(f"FastVLM venv contains an editable install: {path}")
 
     visit(target, in_site_packages=False)
-    trusted_base = expected_base_python or Path(getattr(sys, "_base_executable", sys.executable))
-    _validate_venv_controls(target, expected_base_python=trusted_base)
+    _validate_venv_controls(target, expected_base_python=expected_base_python)
 
 
 def _validate_freeze_output(output: str) -> bytes:
@@ -587,7 +602,7 @@ def prepare_runtime_venv(
     evidence_path = runtime / FREEZE_EVIDENCE_NAME
     _validate_existing_target(target_venv, directory=True, description="FastVLM venv")
     _validate_existing_target(evidence_path, directory=False, description="FastVLM dependency evidence")
-    trusted_python = _require_regular_file(base_python, description="FastVLM base Python", executable=True)
+    trusted_python = _require_supported_base_python(base_python)
     trusted_requirements = _require_regular_file(requirements, description="FastVLM requirements")
 
     staged_venv = Path(tempfile.mkdtemp(prefix=".venv-fastvlm-stage-", dir=runtime))
@@ -610,7 +625,12 @@ def prepare_runtime_venv(
     return "installed"
 
 
-def audit_installed_runtime_venv(manifest: Mapping[str, Any], *, root: Path) -> str:
+def audit_installed_runtime_venv(
+    manifest: Mapping[str, Any],
+    *,
+    root: Path,
+    expected_base_python: Path,
+) -> str:
     """Audit the promoted venv and evidence without executing the venv."""
 
     require_valid_manifest(manifest)
@@ -626,7 +646,7 @@ def audit_installed_runtime_venv(manifest: Mapping[str, Any], *, root: Path) -> 
         raise RuntimeVerificationError(f"FastVLM venv is missing: {target_venv}")
     if not evidence_path.exists():
         raise RuntimeVerificationError(f"FastVLM dependency evidence is missing: {evidence_path}")
-    audit_runtime_venv(target_venv)
+    audit_runtime_venv(target_venv, expected_base_python=expected_base_python)
     return "verified"
 
 
@@ -636,7 +656,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_manifest(Path(args.manifest))
         root = runtime_root(manifest, override=args.runtime_root)
         if args.audit_only:
-            status = audit_installed_runtime_venv(manifest, root=root)
+            status = audit_installed_runtime_venv(
+                manifest,
+                root=root,
+                expected_base_python=Path(args.base_python),
+            )
         else:
             status = prepare_runtime_venv(
                 manifest,

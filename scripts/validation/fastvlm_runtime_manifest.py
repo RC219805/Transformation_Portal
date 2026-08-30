@@ -200,6 +200,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
                 errors.append(f"runtime_sources.{name}.target_dir must be " f"{TRUSTED_RUNTIME_SOURCE_TARGETS[name]}")
             patch = source.get("patch")
             if schema_version != FASTVLM_RUNTIME_SCHEMA_V2:
+                if patch is not None:
+                    errors.append(f"runtime_sources.{name}.patch is not supported by {FASTVLM_RUNTIME_SCHEMA_V1}")
                 continue
             if name != "mlx_vlm":
                 if patch is not None:
@@ -742,9 +744,18 @@ def verify_source_checkout(
     verify_checkout_tree(target, git_dir, treeish)
 
 
+def verify_legacy_source_checkout(path: Path, *, expected_origin: str, expected_revision: str) -> None:
+    """Verify the historical v1 origin and HEAD without authorizing its mutable tree."""
+
+    _target, _git_dir, head = inspect_source_checkout(path, expected_origin=expected_origin)
+    if head != expected_revision:
+        raise RuntimeVerificationError(f"FastVLM runtime source revision mismatch: {head} != {expected_revision}")
+
+
 def verify_runtime_sources(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
-    require_source_integrity_manifest(manifest)
+    require_valid_manifest(manifest)
     runtime = root or runtime_root(manifest)
+    source_schema_v2 = manifest.get("schema_version") == FASTVLM_RUNTIME_SCHEMA_V2
     errors: list[str] = []
     sources = manifest.get("runtime_sources")
     if not isinstance(sources, dict):
@@ -761,15 +772,22 @@ def verify_runtime_sources(manifest: Mapping[str, Any], *, root: Path | None = N
             errors.append(str(exc))
             continue
         source_targets[name] = target
-        patch = source.get("patch")
+        patch = source.get("patch") if source_schema_v2 else None
         expected_tree = str(patch.get("patched_tree")) if isinstance(patch, dict) else None
         try:
-            verify_source_checkout(
-                target,
-                expected_origin=TRUSTED_RUNTIME_SOURCES[name],
-                expected_revision=str(source["revision"]),
-                expected_tree=expected_tree,
-            )
+            if source_schema_v2:
+                verify_source_checkout(
+                    target,
+                    expected_origin=TRUSTED_RUNTIME_SOURCES[name],
+                    expected_revision=str(source["revision"]),
+                    expected_tree=expected_tree,
+                )
+            else:
+                verify_legacy_source_checkout(
+                    target,
+                    expected_origin=TRUSTED_RUNTIME_SOURCES[name],
+                    expected_revision=str(source["revision"]),
+                )
         except (ManifestError, RuntimeVerificationError, OSError, UnicodeError) as exc:
             errors.append(f"FastVLM runtime source {name} failed verification: {exc}")
 
@@ -821,6 +839,10 @@ def verify_python_runtime(manifest: Mapping[str, Any], *, root: Path | None = No
 def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
     runtime = root or runtime_root(manifest)
     try:
+        require_source_integrity_manifest(manifest)
+        source_errors = verify_runtime_sources(manifest, root=runtime)
+        if source_errors:
+            return source_errors
         python_path = python_runtime_path(manifest, root=runtime)
         sources = manifest.get("runtime_sources")
         if not isinstance(sources, dict) or not isinstance(sources.get("mlx_vlm"), dict):

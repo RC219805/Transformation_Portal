@@ -165,8 +165,9 @@ The installer is manifest-backed and fail-closed:
 ```bash
 ./scripts/setup/install_fastvlm_runtime.sh --dry-run --models smoke,default
 ./scripts/setup/install_fastvlm_runtime.sh --verify-only --models smoke
-./scripts/validation/validate_fastvlm_runtime.py --verify-only --models smoke
-./scripts/validation/validate_fastvlm_runtime.py --json --models smoke
+./scripts/setup/install_fastvlm_runtime.sh --verify-only --base-python /path/to/original/python3.11 --models smoke
+./scripts/validation/validate_fastvlm_runtime.py --base-python "$(./scripts/setup/resolve_python_311.sh)" --verify-only --models smoke
+./scripts/validation/validate_fastvlm_runtime.py --base-python "$(./scripts/setup/resolve_python_311.sh)" --json --models smoke
 ```
 
 The installer's final verification is static: it checks the manifest, source
@@ -183,6 +184,18 @@ Validation output is safe for shared CI logs: human-readable failures and the
 machine-readable `--json` payload retain statuses and error counts while
 redacting raw exception text and local filesystem paths.
 
+For v2 Python checks, `--base-python` is the caller-supplied trust anchor and
+must identify the interpreter that built the copied runtime venv. The installer
+uses the current repo resolver for a fresh build. When checking an existing
+runtime after that resolver changes, pass its original builder with
+`--base-python` or set `TP_FASTVLM_BASE_PYTHON` for the Make targets; do not infer
+the trust anchor from the runtime's mutable `pyvenv.cfg`. A legacy v1
+manifest remains readable for non-authorizing origin/HEAD and path validation,
+but its mutable source/venv layout cannot establish governed runtime
+authorization or validator import-smoke evidence. Execution callers must not
+treat legacy path evidence as authorization; reinstall with the governed v2
+installer before use.
+
 The manifest lives at `config/fastvlm_runtime_manifest.json` and pins:
 
 ```text
@@ -196,13 +209,13 @@ resulting Git tree. Installation materializes both revisions in a fresh,
 hook-free staging checkout, applies that exact patch with the Git index,
 verifies every file and executable bit against its Git blob/tree, and promotes
 the pair with rollback on failure. Existing checkout metadata and origin are
-validated before any network access. Runtime validation does not use Git ignore
-rules: missing, modified, symlinked, ignored, or additional files and directories
-are rejected, including bytecode, native extensions, `.pth` files, active local
-excludes, redirected worktrees/object stores, and executable Git hooks. Ambient
-Git configuration and `GIT_*` redirection variables are disabled. Do not replace
-the governed patch with native upstream FastVLM support without also migrating
-and revalidating the CoreML checkpoint format.
+validated before any network access. V2 runtime validation does not use Git
+ignore rules: missing, modified, symlinked, ignored, or additional files and
+directories are rejected, including bytecode, native extensions, `.pth` files,
+active local excludes, redirected worktrees/object stores, and executable Git
+hooks. Ambient Git configuration and `GIT_*` redirection variables are disabled.
+Do not replace the governed patch with native upstream FastVLM support without
+also migrating and revalidating the CoreML checkpoint format.
 
 The isolated Python dependency set is pinned in
 `config/fastvlm_runtime_requirements.txt`. The governed source checkout is not
@@ -232,12 +245,23 @@ TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 \
 make validate-portal-fastvlm-captioning-live
 ```
 
+Both validation Make targets audit the v2 sources and venv against that trusted
+base before import or local caption execution. Local-backend validation cannot
+skip the runtime audit; `--skip-local-runtime-check` is limited to an externally
+managed backend selected with `--no-spawn-local-backend`. The local smoke child
+also drops ambient FastVLM Python, source, and model path overrides so execution
+uses the same canonical paths that were audited. It forces in-process workers
+with memory-backed queue and job state so an external worker cannot satisfy the
+local smoke request with a different runtime.
+
 `make check-fastvlm-runtime` runs the import-smoke check and requires the local
 MLX/Metal runtime to be usable. In headless or sandboxed macOS sessions without
 a Metal device, use
-`./scripts/validation/validate_fastvlm_runtime.py --verify-only --models smoke,default`
-only for static manifest, source, Python,
-and checksum evidence; it is not enough to prove caption generation can run.
+`./scripts/validation/validate_fastvlm_runtime.py --base-python "$(./scripts/setup/resolve_python_311.sh)" --verify-only --models smoke,default`
+only for static manifest, source, Python, and checksum evidence; it is not enough
+to prove caption generation can run. If the installed runtime predates a
+resolver change, replace the example's resolved path with its independently
+trusted original builder interpreter.
 
 ## Standalone Smoke Test
 

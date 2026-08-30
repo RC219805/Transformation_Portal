@@ -164,6 +164,28 @@ def _write_governed_source_fixture(tmp_path: Path, module: ModuleType) -> tuple[
     return manifest, runtime_root, patch_path
 
 
+def _write_legacy_source_fixture(tmp_path: Path) -> tuple[dict, Path]:
+    runtime_root = tmp_path / "legacy-fastvlm"
+    ml_fastvlm = runtime_root / "legacy-ml-fastvlm"
+    ml_revision = _init_source_repo(
+        ml_fastvlm,
+        "https://github.com/apple/ml-fastvlm.git",
+        {"model_export/runtime.py": "MODE = 'legacy'\n"},
+    )
+    mlx_vlm = runtime_root / "legacy-mlx-vlm"
+    mlx_revision = _init_source_repo(
+        mlx_vlm,
+        "https://github.com/Blaizzy/mlx-vlm.git",
+        {"mlx_vlm/__init__.py": "", "mlx_vlm/runtime.py": "MODE = 'legacy'\n"},
+    )
+    manifest = _manifest(tmp_path)
+    manifest["schema_version"] = "fastvlm-runtime.v1"
+    manifest["runtime_sources"]["ml_fastvlm"].update({"revision": ml_revision, "target_dir": "legacy-ml-fastvlm"})
+    manifest["runtime_sources"]["mlx_vlm"].update({"revision": mlx_revision, "target_dir": "legacy-mlx-vlm"})
+    manifest["runtime_sources"]["mlx_vlm"].pop("patch")
+    return manifest, runtime_root
+
+
 def test_manifest_validator_rejects_unpinned_or_untrusted_manifest_values(tmp_path: Path) -> None:
     module = _load_script_module("fastvlm_runtime_manifest_test", "scripts/validation/fastvlm_runtime_manifest.py")
     manifest = _manifest(tmp_path)
@@ -190,28 +212,42 @@ def test_manifest_validator_rejects_unpinned_or_untrusted_manifest_values(tmp_pa
     assert any("sha256 must be a SHA-256 hex digest" in error for error in errors)
 
 
-def test_manifest_v1_remains_validation_compatible_but_cannot_authorize_sources(tmp_path: Path) -> None:
+def test_manifest_v1_remains_validation_compatible_but_cannot_authorize_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     module = _load_script_module("fastvlm_runtime_manifest_v1_test", "scripts/validation/fastvlm_runtime_manifest.py")
-    manifest = _manifest(tmp_path)
-    manifest["schema_version"] = "fastvlm-runtime.v1"
-    manifest["runtime_sources"]["ml_fastvlm"]["target_dir"] = "legacy-ml-fastvlm"
-    manifest["runtime_sources"]["mlx_vlm"]["target_dir"] = "legacy-mlx-vlm"
-    manifest["runtime_sources"]["mlx_vlm"].pop("patch")
-    runtime_root = tmp_path / "runtime"
-    _write_fixture_runtime(runtime_root)
+    manifest, runtime_root = _write_legacy_source_fixture(tmp_path)
+    model_dir = runtime_root / "checkpoints/FastVLM-0.5B-fp16"
+    model_dir.mkdir(parents=True)
+    (model_dir / "config.json").write_bytes(b"model-config")
 
     assert module.validate_manifest(manifest) == []
+    assert module.verify_runtime_sources(manifest, root=runtime_root) == []
     assert (
         module.verify_runtime(
             manifest,
             roles=["smoke"],
             root=runtime_root,
             include_sources=False,
+            include_python=False,
         )
         == []
     )
+    legacy_metadata = runtime_root / "legacy-mlx-vlm/mlx_vlm.egg-info/PKG-INFO"
+    legacy_metadata.parent.mkdir()
+    legacy_metadata.write_text("Name: mlx-vlm\n", encoding="utf-8")
+    assert module.verify_runtime_sources(manifest, root=runtime_root) == []
+    _git(runtime_root / "legacy-mlx-vlm", "remote", "set-url", "origin", "https://example.invalid/attacker.git")
+    errors = module.verify_runtime_sources(manifest, root=runtime_root)
+    assert any("origin mismatch" in error for error in errors)
+    import_calls: list[bool] = []
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: import_calls.append(True))
+    import_errors = module.verify_python_imports(manifest, root=runtime_root)
+    assert any("source integrity requires fastvlm-runtime.v2" in error for error in import_errors)
+    assert not import_calls
     with pytest.raises(module.ManifestError, match="source integrity requires fastvlm-runtime.v2"):
-        module.verify_runtime_sources(manifest, root=runtime_root)
+        module.require_source_integrity_manifest(manifest)
 
 
 def test_manifest_v2_requires_governed_patch_and_rejects_unknown_schema(tmp_path: Path) -> None:
@@ -225,6 +261,11 @@ def test_manifest_v2_requires_governed_patch_and_rejects_unknown_schema(tmp_path
     manifest["schema_version"] = "fastvlm-runtime.v3"
     errors = module.validate_manifest(manifest)
     assert any("schema_version must be fastvlm-runtime.v1 or fastvlm-runtime.v2" in error for error in errors)
+
+    legacy_manifest = _manifest(tmp_path)
+    legacy_manifest["schema_version"] = "fastvlm-runtime.v1"
+    errors = module.validate_manifest(legacy_manifest)
+    assert "runtime_sources.mlx_vlm.patch is not supported by fastvlm-runtime.v1" in errors
 
 
 @pytest.mark.parametrize(
@@ -304,6 +345,26 @@ def test_runtime_verifier_rejects_unverifiable_source_checkout(tmp_path: Path) -
     assert any("not a standalone Git checkout" in error for error in errors)
 
 
+def test_import_smoke_rejects_unverified_sources_before_python_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module(
+        "fastvlm_import_source_boundary_test",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+    )
+    runtime_root = tmp_path / "fastvlm"
+    manifest = _manifest(tmp_path)
+    _write_fixture_runtime(runtime_root)
+    process_calls: list[bool] = []
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: process_calls.append(True))
+
+    errors = module.verify_python_imports(manifest, root=runtime_root)
+
+    assert any("not a standalone Git checkout" in error for error in errors)
+    assert not process_calls
+
+
 def test_runtime_source_verifier_accepts_only_the_governed_patched_tree(tmp_path: Path) -> None:
     module = _load_script_module(
         "fastvlm_runtime_manifest_patched_source_test",
@@ -336,16 +397,23 @@ def test_fastvlm_installer_applies_and_verifies_manifest_pinned_patch() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     installer = (repo_root / "scripts/setup/install_fastvlm_runtime.sh").read_text(encoding="utf-8")
     source_installer = (repo_root / "scripts/setup/install_fastvlm_sources.py").read_text(encoding="utf-8")
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
 
     assert "install_fastvlm_sources.py" in installer
     assert "install_fastvlm_venv.py" in installer
     assert "run_fastvlm_install_locked.py" in installer
     assert "install_sources" in installer
+    assert installer.count('--base-python "$RUNTIME_BASE_PY"') >= 3
+    assert "--base-python PATH" in installer
     assert 'if [ "$SKIP_VERIFY" -eq 0 ]' in installer
     assert installer.rstrip().endswith("verify_sources_last")
     assert '["apply", "--index", str(patch_path)]' in source_installer
     assert '["write-tree"]' in source_installer
     assert "_promote_source_set" in source_installer
+    assert (
+        '@"$(PY)" scripts/validation/validate_fastvlm_runtime.py '
+        '--base-python "$${TP_FASTVLM_BASE_PYTHON:-$(PY)}"' in makefile
+    )
 
 
 def test_manifest_validator_rejects_unknown_runtime_sources(tmp_path: Path) -> None:
@@ -405,9 +473,16 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
     runtime_root = tmp_path / "fastvlm"
     _write_fixture_runtime(runtime_root)
     import_smoke_calls: list[bool] = []
+    audit_base_paths: list[Path] = []
+    trusted_base = tmp_path / "trusted-base-python"
 
     monkeypatch.setattr(module, "verify_python_imports", lambda *_args, **_kwargs: import_smoke_calls.append(True) or [])
-    monkeypatch.setattr(module, "audit_runtime_venv", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
+
+    def record_audit(_venv: Path, *, expected_base_python: Path) -> None:
+        audit_base_paths.append(expected_base_python)
+
+    monkeypatch.setattr(module, "audit_runtime_venv", record_audit)
 
     assert (
         module.main(
@@ -418,12 +493,14 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
                 str(runtime_root),
                 "--models",
                 "smoke",
-                "--skip-source-check",
+                "--base-python",
+                str(trusted_base),
             ]
         )
         == 0
     )
     assert import_smoke_calls == [True]
+    assert audit_base_paths == [trusted_base]
 
     import_smoke_calls.clear()
     assert (
@@ -435,13 +512,15 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
                 str(runtime_root),
                 "--models",
                 "smoke",
-                "--skip-source-check",
+                "--base-python",
+                str(trusted_base),
                 "--verify-only",
             ]
         )
         == 0
     )
     assert not import_smoke_calls
+    assert audit_base_paths == [trusted_base] * 2
 
 
 def test_fastvlm_import_smoke_imports_modules_and_reports_metal_failures(
@@ -466,6 +545,7 @@ def test_fastvlm_import_smoke_imports_modules_and_reports_metal_failures(
         )
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
 
     errors = module.verify_python_imports(manifest, root=runtime_root)
 
@@ -501,6 +581,7 @@ def test_fastvlm_import_smoke_includes_network_free_datasets_capability_check(
         return module.subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
 
     assert module.verify_python_imports(manifest, root=runtime_root) == []
     assert module.FASTVLM_RUNTIME_IMPORTS == ("datasets", "huggingface_hub", "mlx_vlm")
@@ -533,6 +614,7 @@ def test_fastvlm_import_smoke_reports_missing_python_without_spawning(
         raise AssertionError("missing Python must be reported before subprocess.run")
 
     monkeypatch.setattr(module.subprocess, "run", fail_run)
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
 
     errors = module.verify_python_imports(manifest, root=runtime_root)
 
@@ -560,8 +642,50 @@ def test_runtime_validator_starts_with_site_imports_disabled() -> None:
     assert "Validate the governed local FastVLM advisory captioning runtime" in completed.stdout
 
 
+def test_runtime_validator_fails_closed_without_trusted_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script_module(
+        "validate_fastvlm_runtime_base_contract_test",
+        "scripts/validation/validate_fastvlm_runtime.py",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    runtime_root = tmp_path / "fastvlm"
+    _write_manifest(manifest_path, _manifest(tmp_path))
+    _write_fixture_runtime(runtime_root)
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
+
+    def fail_audit(*_args, **_kwargs):  # noqa: ANN001
+        pytest.fail("runtime venv audit must not run without a caller-trusted base Python")
+
+    monkeypatch.setattr(module, "audit_runtime_venv", fail_audit)
+
+    rc = module.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--runtime-root",
+            str(runtime_root),
+            "--models",
+            "smoke",
+            "--verify-only",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert payload["error_count"] == 1
+    assert payload["checks"]["python_environment"]["status"] == "failed"
+    assert payload["checks"]["python_environment"]["error_count"] == 1
+    assert payload["checks"]["python_imports"]["status"] == "skipped"
+
+
 def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
@@ -576,6 +700,7 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     _write_manifest(manifest_path, _manifest(tmp_path))
     _write_fixture_runtime(runtime_root)
     module.audit_runtime_venv = lambda *_args, **_kwargs: None
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
 
     rc = module.main(
         [
@@ -585,7 +710,8 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
             str(runtime_root),
             "--models",
             "smoke",
-            "--skip-source-check",
+            "--base-python",
+            os.path.realpath(sys.executable),
             "--verify-only",
             "--json",
         ]
@@ -597,9 +723,111 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     assert payload["advisory_role"] == "advisory"
     assert payload["used_for_quality_gate"] is False
     assert payload["checks"]["manifest"]["status"] == "ready"
-    assert payload["checks"]["runtime_sources"]["status"] == "skipped"
+    assert payload["checks"]["runtime_authorization"]["status"] == "ready"
+    assert payload["checks"]["runtime_sources"]["status"] == "ready"
     assert payload["checks"]["python_executable"]["status"] == "ready"
     assert payload["checks"]["python_environment"]["status"] == "ready"
+    assert payload["checks"]["models"]["smoke"]["status"] == "ready"
+    assert payload["checks"]["python_imports"]["status"] == "skipped"
+
+    monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: ["tampered source"])
+    failed_evidence = module.build_runtime_evidence(
+        manifest_path=manifest_path,
+        root=runtime_root,
+        roles=["smoke"],
+        manifest=_manifest(tmp_path),
+        include_sources=True,
+        include_python=True,
+        include_import_smoke=False,
+        expected_base_python=Path(os.path.realpath(sys.executable)),
+    )
+    assert failed_evidence["runtime_status"] == "invalid"
+    assert failed_evidence["checks"]["runtime_authorization"]["status"] == "failed"
+
+
+def test_runtime_validator_skipped_sources_are_non_authorizing_and_do_not_run_imports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script_module(
+        "validate_fastvlm_runtime_skip_source_contract_test",
+        "scripts/validation/validate_fastvlm_runtime.py",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    runtime_root = tmp_path / "fastvlm"
+    _write_manifest(manifest_path, _manifest(tmp_path))
+    _write_fixture_runtime(runtime_root)
+    monkeypatch.setattr(module, "audit_runtime_venv", lambda *_args, **_kwargs: None)
+    import_calls: list[bool] = []
+    monkeypatch.setattr(module, "verify_python_imports", lambda *_args, **_kwargs: import_calls.append(True) or [])
+
+    rc = module.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--runtime-root",
+            str(runtime_root),
+            "--models",
+            "smoke",
+            "--skip-source-check",
+            "--base-python",
+            os.path.realpath(sys.executable),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert payload["runtime_status"] == "invalid"
+    assert payload["checks"]["runtime_authorization"]["status"] == "failed"
+    assert payload["checks"]["runtime_sources"]["status"] == "skipped"
+    assert payload["checks"]["python_imports"]["status"] == "skipped"
+    assert not import_calls
+
+
+def test_public_runtime_validator_reports_clean_v1_sources_as_non_authorizing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script_module(
+        "validate_fastvlm_runtime_v1_test",
+        "scripts/validation/validate_fastvlm_runtime.py",
+    )
+    manifest, runtime_root = _write_legacy_source_fixture(tmp_path)
+    python_path = runtime_root / ".venv-fastvlm/bin/python"
+    python_path.parent.mkdir(parents=True)
+    python_path.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+    python_path.chmod(0o755)
+    model_dir = runtime_root / "checkpoints/FastVLM-0.5B-fp16"
+    model_dir.mkdir(parents=True)
+    (model_dir / "config.json").write_bytes(b"model-config")
+    manifest_path = tmp_path / "fastvlm-runtime-v1.json"
+    _write_manifest(manifest_path, manifest)
+
+    rc = module.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--runtime-root",
+            str(runtime_root),
+            "--models",
+            "smoke",
+            "--verify-only",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert payload["runtime_status"] == "invalid"
+    assert payload["error_count"] == 1
+    assert payload["checks"]["manifest"]["status"] == "ready"
+    assert payload["checks"]["runtime_authorization"]["status"] == "failed"
+    assert payload["checks"]["runtime_authorization"]["scope"] == "governance"
+    assert payload["checks"]["runtime_sources"]["status"] == "ready"
+    assert payload["checks"]["runtime_sources"]["scope"] == "legacy-origin-head-only"
+    assert payload["checks"]["python_environment"]["status"] == "skipped"
     assert payload["checks"]["models"]["smoke"]["status"] == "ready"
     assert payload["checks"]["python_imports"]["status"] == "skipped"
 
@@ -639,7 +867,7 @@ def test_runtime_validator_rejects_poisoned_venv_before_import_execution(
 
     monkeypatch.setattr(validator, "verify_python_imports", fail_import)
 
-    evidence = validator._runtime_evidence(
+    evidence = validator.build_runtime_evidence(
         manifest_path=tmp_path / "manifest.json",
         root=runtime_root,
         roles=["smoke"],
@@ -647,6 +875,7 @@ def test_runtime_validator_rejects_poisoned_venv_before_import_execution(
         include_sources=False,
         include_python=True,
         include_import_smoke=True,
+        expected_base_python=Path(os.path.realpath(sys.executable)),
     )
 
     assert evidence["runtime_status"] == "invalid"
@@ -659,7 +888,7 @@ def test_runtime_validator_rejects_poisoned_venv_before_import_execution(
     metadata.parent.mkdir()
     metadata.write_text("{not-json", encoding="utf-8")
 
-    malformed_evidence = validator._runtime_evidence(
+    malformed_evidence = validator.build_runtime_evidence(
         manifest_path=tmp_path / "manifest.json",
         root=runtime_root,
         roles=["smoke"],
@@ -667,6 +896,7 @@ def test_runtime_validator_rejects_poisoned_venv_before_import_execution(
         include_sources=False,
         include_python=True,
         include_import_smoke=True,
+        expected_base_python=Path(os.path.realpath(sys.executable)),
     )
 
     assert malformed_evidence["runtime_status"] == "invalid"
@@ -696,14 +926,15 @@ def test_validate_fastvlm_runtime_redacts_human_and_json_error_details(
     monkeypatch.setattr(module, "selected_model_roles", lambda *_args, **_kwargs: ["smoke"])
     monkeypatch.setattr(
         module,
-        "_runtime_evidence",
+        "build_runtime_evidence",
         lambda **_kwargs: {
             "errors": [private_detail],
             "checks": {},
         },
     )
 
-    rc = module.main(["--manifest", str(tmp_path / "manifest.json")])
+    trusted_base_args = ["--base-python", os.path.realpath(sys.executable)]
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json"), *trusted_base_args])
 
     captured = capsys.readouterr()
     assert rc == 1
@@ -716,7 +947,7 @@ def test_validate_fastvlm_runtime_redacts_human_and_json_error_details(
 
     monkeypatch.setattr(module, "load_manifest", invalid_manifest)
 
-    rc = module.main(["--manifest", str(tmp_path / "manifest.json")])
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json"), *trusted_base_args])
 
     captured = capsys.readouterr()
     assert rc == 2
@@ -724,7 +955,7 @@ def test_validate_fastvlm_runtime_redacts_human_and_json_error_details(
     assert "manifest invalid" in captured.err
     assert "details redacted" in captured.err.lower()
 
-    rc = module.main(["--manifest", str(tmp_path / "manifest.json"), "--json"])
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json"), "--json", *trusted_base_args])
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)

@@ -260,7 +260,7 @@ install-fastvlm-runtime:
 
 check-fastvlm-runtime:
 	@echo "Verifying governed FastVLM advisory captioning runtime..."
-	@"$(PY)" scripts/validation/validate_fastvlm_runtime.py --models "$${TP_FASTVLM_VALIDATE_MODELS:-smoke,default}"
+	@"$(PY)" scripts/validation/validate_fastvlm_runtime.py --base-python "$${TP_FASTVLM_BASE_PYTHON:-$(PY)}" --models "$${TP_FASTVLM_VALIDATE_MODELS:-smoke,default}"
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS) $(PHASE6_SMOKE_TESTS)
@@ -522,7 +522,7 @@ validate-portal-lux-materials-live:
 
 validate-portal-fastvlm-captioning-live:
 	@echo "Running live FastVLM advisory captioning backend smoke validation..."
-	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=1 TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 "$(PY)" scripts/validation/validate_portal_fastvlm_captioning_live.py --api-key "$${TP_API_KEY:-contract-secret}"
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=1 TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 "$(PY)" scripts/validation/validate_portal_fastvlm_captioning_live.py --api-key "$${TP_API_KEY:-contract-secret}" --base-python "$${TP_FASTVLM_BASE_PYTHON:-$(PY)}"
 
 validate-portal-css-layer-parity:
 	@echo "Validating production portal CSS layer parity..."

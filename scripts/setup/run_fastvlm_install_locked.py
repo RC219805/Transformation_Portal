@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Sequence
 
 DEFAULT_LOCK_TIMEOUT_SECONDS = 1800.0
+MAX_PORTABLE_LOCK_OFFSET = (1 << 31) - 1
 LOCK_FD_ENV = "TP_FASTVLM_INSTALL_LOCK_FD"
 LOCK_TOKEN_ENV = "TP_FASTVLM_INSTALL_LOCK_TOKEN"
 
@@ -124,7 +125,7 @@ def run_locked(lock_path: Path, command: Sequence[str], *, timeout_seconds: floa
     descriptor = _open_lock(lock_path)
     try:
         _acquire_lock(descriptor, timeout_seconds=timeout_seconds)
-        token = secrets.randbits(61) or 1
+        token = secrets.randbelow(MAX_PORTABLE_LOCK_OFFSET) + 1
         os.lseek(descriptor, token, os.SEEK_SET)
         environment = os.environ.copy()
         environment[LOCK_FD_ENV] = str(descriptor)

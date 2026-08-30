@@ -22,6 +22,7 @@ def _load_manifest_helpers() -> Any:
 
 
 _manifest_helpers = _load_manifest_helpers()
+FASTVLM_RUNTIME_SCHEMA_V2 = _manifest_helpers.FASTVLM_RUNTIME_SCHEMA_V2
 ManifestError = _manifest_helpers.ManifestError
 add_common_manifest_args = _manifest_helpers.add_common_manifest_args
 load_manifest = _manifest_helpers.load_manifest
@@ -74,6 +75,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip isolated Python executable checks. Intended only for focused tests with fixture model directories.",
     )
     parser.add_argument(
+        "--base-python",
+        default="",
+        help="Caller-trusted base Python used to build the copied runtime venv.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit machine-readable validation evidence.",
@@ -113,7 +119,7 @@ def _print_redacted_failure() -> None:
     print("Validation details redacted; use --json for structured redacted status.", file=sys.stderr)
 
 
-def _runtime_evidence(
+def build_runtime_evidence(
     *,
     manifest_path: Path,
     root: Path,
@@ -122,6 +128,7 @@ def _runtime_evidence(
     include_sources: bool,
     include_python: bool,
     include_import_smoke: bool,
+    expected_base_python: Path | None,
 ) -> dict[str, Any]:
     checks: dict[str, Any] = {}
     errors: list[str] = []
@@ -137,13 +144,28 @@ def _runtime_evidence(
         errors.extend(manifest_errors)
         return _evidence(manifest_path=manifest_path, root=root, roles=roles, errors=errors, checks=checks)
 
+    source_schema_v2 = manifest.get("schema_version") == FASTVLM_RUNTIME_SCHEMA_V2
+    authorization_errors: list[str] = []
+    if not source_schema_v2:
+        authorization_errors.append(f"FastVLM governed runtime authorization requires {FASTVLM_RUNTIME_SCHEMA_V2}")
+    if not include_sources:
+        authorization_errors.append("FastVLM governed runtime authorization requires source verification")
+    if not include_python:
+        authorization_errors.append("FastVLM governed runtime authorization requires Python environment verification")
+    errors.extend(authorization_errors)
+
     if include_sources:
         source_errors = verify_runtime_sources(manifest, root=root)
         checks["runtime_sources"] = _check_evidence(
             status=_status_for_errors(source_errors),
             errors=source_errors,
             path=root,
-            remediation="Run scripts/setup/install_fastvlm_runtime.sh to install the pinned FastVLM source checkouts.",
+            scope="static" if source_schema_v2 else "legacy-origin-head-only",
+            remediation=(
+                "Run scripts/setup/install_fastvlm_runtime.sh to install the pinned FastVLM source checkouts."
+                if source_schema_v2
+                else "Reinstall the governed FastVLM v2 runtime before governed runtime validation or use."
+            ),
         )
         errors.extend(source_errors)
     else:
@@ -169,17 +191,33 @@ def _runtime_evidence(
         )
         errors.extend(python_errors)
         venv_audit_errors: list[str] = []
+        venv_audit_skipped = False
         if not python_errors:
-            try:
-                audit_runtime_venv(python_path.parent.parent)
-            except (OSError, UnicodeError, ValueError, VenvManifestError, VenvRuntimeVerificationError) as exc:
-                venv_audit_errors.append(str(exc))
-        checks["python_environment"] = _check_evidence(
-            status=_status_for_errors(venv_audit_errors),
-            errors=venv_audit_errors,
-            path=python_path.parent.parent,
-            remediation="Rebuild the governed FastVLM venv; startup hooks, symlinks, and editable installs are prohibited.",
-        )
+            if not source_schema_v2:
+                venv_audit_skipped = True
+            elif expected_base_python is None:
+                venv_audit_errors.append("FastVLM validation requires a caller-trusted base Python")
+            else:
+                try:
+                    audit_runtime_venv(
+                        python_path.parent.parent,
+                        expected_base_python=expected_base_python,
+                    )
+                except (OSError, UnicodeError, ValueError, VenvManifestError, VenvRuntimeVerificationError) as exc:
+                    venv_audit_errors.append(str(exc))
+        if venv_audit_skipped:
+            checks["python_environment"] = _check_evidence(
+                status="skipped",
+                path=python_path.parent.parent,
+                remediation="Legacy v1 venv audit is non-authorizing; reinstall the governed FastVLM v2 runtime.",
+            )
+        else:
+            checks["python_environment"] = _check_evidence(
+                status=_status_for_errors(venv_audit_errors),
+                errors=venv_audit_errors,
+                path=python_path.parent.parent,
+                remediation="Rebuild the governed FastVLM venv; startup hooks, symlinks, and editable installs are prohibited.",
+            )
         errors.extend(venv_audit_errors)
     else:
         checks["python_executable"] = _check_evidence(
@@ -225,6 +263,12 @@ def _runtime_evidence(
             reason = "Import smoke checks were skipped because static runtime checks failed."
         checks["python_imports"] = _check_evidence(status="skipped", scope="import-smoke", remediation=reason)
 
+    checks["runtime_authorization"] = _check_evidence(
+        status=_status_for_errors(errors),
+        errors=errors,
+        scope="governance",
+        remediation="Repair every failed governed check before treating runtime evidence as authorization.",
+    )
     return _evidence(manifest_path=manifest_path, root=root, roles=roles, errors=errors, checks=checks)
 
 
@@ -256,14 +300,19 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_manifest(manifest_path)
         root = runtime_root(manifest, override=args.runtime_root or None)
         roles = selected_model_roles(manifest, models=str(args.models), all_models=bool(args.all_models))
-        evidence = _runtime_evidence(
+        evidence = build_runtime_evidence(
             manifest_path=manifest_path,
             root=root,
             roles=roles,
             manifest=manifest,
             include_sources=not bool(args.skip_source_check),
             include_python=not bool(args.skip_python_check),
-            include_import_smoke=not bool(args.verify_only) and not bool(args.skip_python_check),
+            include_import_smoke=(
+                not bool(args.verify_only)
+                and not bool(args.skip_python_check)
+                and not bool(args.skip_source_check)
+            ),
+            expected_base_python=Path(args.base_python) if args.base_python else None,
         )
     except ManifestError as exc:
         evidence = _evidence(
