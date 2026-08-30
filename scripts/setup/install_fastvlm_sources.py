@@ -268,11 +268,7 @@ def install_runtime_sources(
         if not errors:
             return "ready"
     if dry_run:
-        for name in TRUSTED_RUNTIME_SOURCES:
-            print(
-                f"[dry-run] source={name} revision={expected_heads[name]} "
-                f"target_dir={sources[name]['target_dir']}"
-            )
+        print("[dry-run] governed source plan validated")
         return "dry-run"
 
     runtime = _ensure_safe_runtime_root(runtime, create=True)

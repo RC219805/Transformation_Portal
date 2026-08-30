@@ -445,8 +445,7 @@ def test_source_installer_dry_run_does_not_log_absolute_runtime_targets(
 
     output = capsys.readouterr().out
     assert str(runtime_root) not in output
-    assert "target_dir=ml-fastvlm" in output
-    assert "target_dir=mlx-vlm" in output
+    assert output.strip() == "[dry-run] governed source plan validated"
 
 
 def test_source_installer_rejects_hooks_without_execution_or_network(
@@ -1290,8 +1289,7 @@ def test_skip_verify_dry_run_still_executes_mandatory_source_preflight() -> None
 
     assert completed.returncode == 0, completed.stderr
     assert "FastVLM governed sources: dry-run" in completed.stdout
-    assert "source=ml_fastvlm" in completed.stdout
-    assert "source=mlx_vlm" in completed.stdout
+    assert completed.stdout.count("[dry-run] governed source plan validated") == 2
     assert completed.stdout.rstrip().endswith("FastVLM governed sources: dry-run")
     assert completed.stdout.count("FastVLM governed sources: dry-run") == 2
 
