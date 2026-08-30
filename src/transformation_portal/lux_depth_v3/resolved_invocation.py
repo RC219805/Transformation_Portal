@@ -25,7 +25,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
-from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
+from .model_resolution import (
+    ModelRequest,
+    ResolvedModel,
+    direct_model_contract,
+    model_selection_migration_notices,
+    refresh_direct_model_acknowledgement,
+    resolve_model_contract,
+    restore_stale_direct_model_selection,
+    validate_authoritative_model_contract,
+)
 
 if TYPE_CHECKING:
     from .config import EnhanceConfig
@@ -88,6 +97,7 @@ class ResolvedInvocation:
             usage_class = getattr(spec, "usage_class", None)
             model_payload = {
                 "requested_selector": resolved.requested_selector,
+                "resolution_reason": resolved.resolution_reason,
                 "canonical_key": resolved.canonical_key,
                 "repo_id": getattr(spec, "repo_id", None),
                 "revision": resolved.revision,
@@ -220,7 +230,10 @@ def _requested_artifacts(config: "EnhanceConfig") -> Tuple[str, ...]:
     return tuple(artifacts)
 
 
-def _plan_warnings(config: "EnhanceConfig") -> Tuple[str, ...]:
+def _plan_warnings(
+    config: "EnhanceConfig",
+    resolved_model: Optional[ResolvedModel],
+) -> Tuple[str, ...]:
     warnings: List[str] = []
     if getattr(config, "emit_marketing", False):
         warnings.append("--emit-marketing currently produces no deliverable (disposition tracked in issue #2067)")
@@ -229,6 +242,12 @@ def _plan_warnings(config: "EnhanceConfig") -> Tuple[str, ...]:
             "--emit-master16 and --emit-upscaled16 currently act as a single "
             "bit-depth switch (disposition tracked in issue #2068)"
         )
+    warnings.extend(
+        model_selection_migration_notices(
+            resolved_model,
+            non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+        )
+    )
     return tuple(warnings)
 
 
@@ -248,12 +267,24 @@ def build_resolved_invocation(
     """
     # Local imports keep this module import-light and cycle-free.
     from ..depth.backends.registry import DepthBackendRegistry
-    from .config_resolver import compute_config_fingerprint
+    from .config_resolver import (
+        compute_config_fingerprint,
+        preset_model_key_for_selection,
+        with_typed_preset_provenance,
+    )
     from .pipeline_coordinator import (
         normalize_backend_id,
         resolve_requested_backend,
         resolve_runtime_backend_chain,
     )
+
+    # A config may have passed through the direct-Python resolver before it is
+    # promoted to an enforcing invocation. Restore stale resolver-owned
+    # projections, or reuse an unchanged bounded contract without resolving a
+    # different selector source.
+    restore_stale_direct_model_selection(config)
+    refresh_direct_model_acknowledgement(config, stacklevel=3)
+    prior_direct_contract = direct_model_contract(config)
 
     # Backend selection parity (P0-1): use the SAME platform-aware requested-
     # backend resolution and registry validation the runtime uses, so a plan
@@ -275,16 +306,28 @@ def build_resolved_invocation(
 
     resolved_model: Optional[ResolvedModel] = None
     if planned_backend == "da3":
-        resolved_model = resolve_model_contract(
-            ModelRequest(
-                model_key=getattr(config, "model_key", None),
-                raw_model_id=getattr(config, "raw_model_id", None),
-                model_variant=getattr(config, "model_variant", None),
-                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+        if prior_direct_contract is not None:
+            resolved_model = validate_authoritative_model_contract(
+                prior_direct_contract,
                 non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
-                enforce_license=True,
             )
-        )
+        else:
+            preset_model_key = preset_model_key_for_selection(config)
+            resolved_model = resolve_model_contract(
+                ModelRequest(
+                    model_key=getattr(config, "model_key", None) or preset_model_key,
+                    raw_model_id=getattr(config, "raw_model_id", None),
+                    model_variant=getattr(config, "model_variant", None),
+                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+                    non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                    enforce_license=True,
+                )
+            )
+            resolved_model = with_typed_preset_provenance(
+                config,
+                resolved_model,
+                preset_model_key,
+            )
     # License evaluation happened for every planned backend: the DA3 family
     # through resolve_model_contract, every other backend through the
     # registry's license validation above.
@@ -328,5 +371,5 @@ def build_resolved_invocation(
         input_dir=str(input_dir_resolved),
         input_files=tuple(sorted(relative_files)),
         config_fingerprint_sha256=fingerprint_sha256,
-        warnings=_plan_warnings(config),
+        warnings=_plan_warnings(config, resolved_model),
     )

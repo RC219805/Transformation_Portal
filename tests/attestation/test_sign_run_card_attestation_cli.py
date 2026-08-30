@@ -18,9 +18,16 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = PROJECT_ROOT / "tools" / "sign_run_card_attestation.py"
+VERIFY_TOOL_PATH = PROJECT_ROOT / "tools" / "verify_run_card_attestation.py"
+FAKE_GPG_PATH = PROJECT_ROOT / "tests" / "fixtures" / "attestation" / "fake_gpg.py"
 
 
-def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run_tool(
+    *args: str,
+    path_prepend: Path | None = None,
+    env_updates: dict[str, str] | None = None,
+    tool_path: Path = TOOL_PATH,
+) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     pythonpath_parts = [str(PROJECT_ROOT / "src"), str(PROJECT_ROOT)]
     if env.get("PYTHONPATH"):
@@ -28,8 +35,10 @@ def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.Comple
     env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     if path_prepend is not None:
         env["PATH"] = os.pathsep.join([str(path_prepend), env.get("PATH", "")])
+    if env_updates:
+        env.update(env_updates)
     return subprocess.run(
-        [sys.executable, str(TOOL_PATH), *args],
+        [sys.executable, str(tool_path), *args],
         cwd=PROJECT_ROOT,
         env=env,
         capture_output=True,
@@ -148,32 +157,7 @@ def _write_fake_gpg(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     gpg_path = bin_dir / "gpg"
-    gpg_path.write_text(
-        """#!/bin/sh
-if printf '%s' "$*" | grep -q -- "--verify"; then
-  exit 0
-fi
-cat >/dev/null
-if printf '%s' "$*" | grep -q -- "--clearsign"; then
-  cat <<'EOF'
------BEGIN PGP SIGNED MESSAGE-----
-Hash: SHA256
-
-payload
------BEGIN PGP SIGNATURE-----
-fake-clearsign
------END PGP SIGNATURE-----
-EOF
-  exit 0
-fi
-cat <<'EOF'
------BEGIN PGP SIGNATURE-----
-fake-detached
------END PGP SIGNATURE-----
-EOF
-""",
-        encoding="utf-8",
-    )
+    gpg_path.write_bytes(FAKE_GPG_PATH.read_bytes())
     gpg_path.chmod(0o755)
     return bin_dir
 
@@ -232,6 +216,39 @@ def test_sign_cli_writes_native_and_dsse_sidecars_with_fake_gpg(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     assert native_path.exists()
     assert dsse_path.exists()
+
+    verify_result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-native",
+        "--require-dsse",
+        "--gpg",
+        path_prepend=fake_path,
+        tool_path=VERIFY_TOOL_PATH,
+    )
+    assert verify_result.returncode == 0, verify_result.stderr
+
+
+def test_sign_cli_rejects_native_signature_key_mismatch_before_writing(tmp_path: Path) -> None:
+    run_card_path = _write_run_card_v2(tmp_path)
+    fake_path = _write_fake_gpg(tmp_path)
+    native_path = run_card_path.with_suffix(".attestation.native.json")
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--format",
+        "native",
+        "--gpg",
+        "--key-id",
+        "logical-label",
+        path_prepend=fake_path,
+        env_updates={"TP_FAKE_GPG_RESOLVED_FINGERPRINT": "B" * 40},
+    )
+
+    assert result.returncode == 4
+    assert "primary fingerprint does not match recorded key_id" in result.stderr
+    assert not native_path.exists()
 
 
 def test_sign_cli_supports_v1_run_cards_with_fake_gpg(tmp_path: Path) -> None:
@@ -335,7 +352,9 @@ def test_sign_cli_runs_from_source_checkout_without_pyproject_install(tmp_path: 
         "def gpg_clearsign_bytes(*_args, **_kwargs):\n"
         '    return ""\n'
         "def gpg_detached_sign_bytes(*_args, **_kwargs):\n"
-        '    return b""\n',
+        '    return b""\n'
+        "def gpg_verify_clearsign(*_args, **_kwargs):\n"
+        "    return None\n",
         encoding="utf-8",
     )
     (repo_root / "src" / "transformation_portal" / "attestation" / "run_card_detached.py").write_text(

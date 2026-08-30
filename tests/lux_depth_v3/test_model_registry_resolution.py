@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import platform
+import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +23,7 @@ from transformation_portal.lux_depth_v3.model_registry import (
 )
 from transformation_portal.lux_depth_v3.model_resolution import (
     BackendCapabilityError,
+    DefaultModelSelectionChangedWarning,
     DeprecatedModelSelectorWarning,
     ModelLicenseError,
     ModelRequest,
@@ -244,3 +248,109 @@ def test_public_cli_model_visibility_is_limited_to_research_and_metric() -> None
     assert [spec.key for spec in visible_cli_model_specs()] == ["da3_research", "da3_metric"]
     assert resolve_legacy_model_variant_key(ModelVariant.METRIC_BASE) == "da3_base"
     assert get_model_spec("da3_base").exposed_in_cli is False
+
+
+class TestDa3DefaultDisposition:
+    """Repair 1.2 (#2066, option A): commercial-safe default, deprecated
+    'da3' model alias, and the engine-side enforcement regression."""
+
+    def test_default_resolves_commercial_safe_metric_model(self) -> None:
+        resolved = resolve_model_contract(ModelRequest())
+        assert resolved.canonical_key == "da3_metric"
+        assert resolved.spec.license_id == "apache-2.0"
+        assert resolved.requested_selector == "default"
+        assert resolved.resolution_reason == ("no model selector supplied; defaulted to 'da3_metric'")
+
+    def test_default_selector_label_is_not_the_da3_alias(self) -> None:
+        # Manifest honesty: the "da3" alias (deprecated) still means the
+        # research model, so the default path must not record it.
+        resolved = resolve_model_contract(ModelRequest())
+        assert resolved.requested_selector != "da3"
+
+    def test_da3_alias_meaning_unchanged_but_deprecated(self) -> None:
+        # The alias never silently flips meaning during the warning cycle:
+        # it still resolves the research model and still fails closed
+        # without the acknowledgement.
+        with pytest.warns(DeprecatedModelSelectorWarning, match="model_key='da3' is deprecated"):
+            resolved = resolve_model_contract(ModelRequest(model_key="da3", non_commercial_ok=True))
+        assert resolved.canonical_key == "da3_research"
+        assert resolved.resolution_reason == ("deprecated model alias 'da3' resolved to 'da3_research'")
+        with pytest.warns(DeprecatedModelSelectorWarning):
+            with pytest.raises(ModelLicenseError):
+                resolve_model_contract(ModelRequest(model_key="da3"))
+
+    def test_da3_alias_warning_is_visible_under_default_python_filters(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        env = os.environ.copy()
+        env.pop("PYTHONWARNINGS", None)
+        env["PYTHONPATH"] = str(repo_root / "src")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from transformation_portal.lux_depth_v3.model_resolution "
+                    "import ModelRequest, resolve_model_contract; "
+                    "resolve_model_contract(ModelRequest(model_key='da3', non_commercial_ok=True))"
+                ),
+            ],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "DeprecatedModelSelectorWarning" in result.stderr
+        assert "model_key='da3' is deprecated" in result.stderr
+
+    def test_explicit_selectors_do_not_warn(self) -> None:
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error", DeprecatedModelSelectorWarning)
+            resolve_model_contract(ModelRequest(model_key="da3-metric"))
+            resolve_model_contract(ModelRequest(model_key="da3-research", non_commercial_ok=True))
+
+    def test_default_with_non_commercial_ok_warns_about_changed_default(self) -> None:
+        # The one cohort whose resolved model changed: bare default plus
+        # non_commercial_ok previously resolved da3_research.
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research"):
+            resolved = resolve_model_contract(ModelRequest(non_commercial_ok=True))
+        assert resolved.canonical_key == "da3_metric"
+
+    def test_default_without_acknowledgement_does_not_warn(self) -> None:
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error", DefaultModelSelectionChangedWarning)
+            resolve_model_contract(ModelRequest())
+
+    def test_metadata_only_resolution_does_not_duplicate_selection_warnings(self) -> None:
+        # Internal enforce_license=False re-resolutions (config_resolver,
+        # pipeline_coordinator) are metadata-only and must not re-emit the
+        # user-facing selection warnings.
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error", DeprecatedModelSelectorWarning)
+            _warnings.simplefilter("error", DefaultModelSelectionChangedWarning)
+            resolve_model_contract(ModelRequest(model_key="da3", non_commercial_ok=True, enforce_license=False))
+            resolve_model_contract(ModelRequest(non_commercial_ok=True, enforce_license=False))
+
+    def test_execution_cannot_reach_inference_through_non_enforcing_resolution(self) -> None:
+        # Regression required by #2066: the enforce_license=False sites are
+        # metadata-only. The engine boundary re-resolves WITH enforcement,
+        # so a research selection without the acknowledgement fails closed
+        # before any model load even though the metadata resolution above
+        # succeeded for the same selection.
+        metadata_only = resolve_model_contract(ModelRequest(model_key="da3-research", enforce_license=False))
+        assert metadata_only.canonical_key == "da3_research"
+
+        engine = DA3InferenceEngine.__new__(DA3InferenceEngine)
+        engine._resolved_model_contract = None
+        engine.config = DA3Config()
+        engine.config.model_key = "da3-research"
+        engine.config.non_commercial_ok = False
+        with pytest.raises(ModelLicenseError):
+            engine._resolve_model_contract()

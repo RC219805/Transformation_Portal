@@ -69,3 +69,16 @@ def test_docs_and_help_describe_presets_as_curated_or_metadata_labels():
     assert "--preset apple-depth-pro-research" not in docs_text
     assert "depth-anything-v3.1-research-m4" in docs_text
     assert "metadata label" in docs_text
+
+
+def test_active_da3_research_examples_use_explicit_model_selector():
+    """Research examples must not rely on the changed default or deprecated alias."""
+    docs_text = _joined_docs_text()
+    agent_text = (REPO_ROOT / ".github" / "apex-workflow-orchestrator.copilot-agent.yml").read_text(encoding="utf-8")
+
+    assert '--model-key "da3" \\' not in docs_text
+    assert 'model_key="da3"' not in docs_text
+    assert '--model-key "da3-research"' in docs_text
+    assert 'model_key="da3-research"' in docs_text
+    assert 'model_key="da3"' not in agent_text
+    assert 'model_key="da3-research"' in agent_text

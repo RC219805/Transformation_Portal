@@ -895,36 +895,138 @@ def test_portal_fastvlm_captioning_runtime_check_is_local_backend_scoped():
         skip_local_runtime_check=False,
         require_local_runtime_check=True,
     )
-    assert not module._should_validate_local_runtime(
+    assert module._should_validate_local_runtime(
         spawn_local_backend=True,
         skip_local_runtime_check=True,
         require_local_runtime_check=True,
     )
 
 
-def test_portal_fastvlm_captioning_runtime_ready_skips_import_when_static_runtime_fails(
+def test_portal_fastvlm_captioning_rejects_runtime_skip_with_local_backend(
+    capsys: pytest.CaptureFixture[str],
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_skip_local")
+
+    with pytest.raises(SystemExit) as exc_info:
+        module._parse_args(["--skip-local-runtime-check"])
+
+    assert exc_info.value.code == 2
+    assert "requires --no-spawn-local-backend" in capsys.readouterr().err
+
+
+def test_portal_fastvlm_captioning_runtime_ready_uses_audited_validator(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
     module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_runtime_missing_python")
-    manifest = {"schema_version": "fastvlm-runtime.v1"}
-    runtime_root = Path("/tmp/fastvlm")
-    static_errors = [f"FastVLM Python executable missing: {runtime_root}/.venv-fastvlm/bin/python"]
+    manifest = {"schema_version": "fastvlm-runtime.v2"}
+    runtime_root = tmp_path / "fastvlm"
+    trusted_base = tmp_path / "trusted-python"
+    calls: list[dict] = []
 
     monkeypatch.setattr(module, "load_manifest", lambda: manifest)
     monkeypatch.setattr(module, "runtime_root", lambda _manifest: runtime_root)
     monkeypatch.setattr(module, "selected_model_roles", lambda _manifest, *, models: [models])
-    monkeypatch.setattr(module, "verify_runtime", lambda *_args, **_kwargs: list(static_errors))
+    monkeypatch.setattr(module, "default_manifest_path", lambda: tmp_path / "manifest.json")
+    monkeypatch.setattr(module, "build_runtime_evidence", lambda **kwargs: calls.append(kwargs) or {"errors": []})
 
-    def fail_import_smoke(*_args, **_kwargs):  # noqa: ANN001
-        raise AssertionError("import smoke must be skipped when static runtime checks already failed")
+    module._validate_runtime_ready("smoke", expected_base_python=trusted_base)
 
-    monkeypatch.setattr(module, "verify_python_imports", fail_import_smoke)
+    assert len(calls) == 1
+    assert calls[0]["manifest"] is manifest
+    assert calls[0]["root"] == runtime_root
+    assert calls[0]["roles"] == ["smoke"]
+    assert calls[0]["include_sources"] is True
+    assert calls[0]["include_python"] is True
+    assert calls[0]["include_import_smoke"] is True
+    assert calls[0]["expected_base_python"] == trusted_base
+
+
+def test_portal_fastvlm_captioning_runtime_ready_reports_audited_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_runtime_audit_failure")
+    monkeypatch.setattr(module, "load_manifest", lambda: {"schema_version": "fastvlm-runtime.v2"})
+    monkeypatch.setattr(module, "runtime_root", lambda _manifest: tmp_path / "fastvlm")
+    monkeypatch.setattr(module, "selected_model_roles", lambda _manifest, *, models: [models])
+    monkeypatch.setattr(
+        module,
+        "build_runtime_evidence",
+        lambda **_kwargs: {"errors": ["validation details redacted"], "error_count": 1},
+    )
 
     with pytest.raises(module.SmokeFailure) as exc_info:
-        module._validate_runtime_ready("smoke")
+        module._validate_runtime_ready("smoke", expected_base_python=tmp_path / "trusted-python")
 
     assert exc_info.value.kind == "environment"
-    assert static_errors[0] in str(exc_info.value)
+    assert "audited validation reported 1 error" in str(exc_info.value)
+
+
+def test_portal_fastvlm_captioning_local_backend_isolates_audited_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_clean_env")
+    original = {name: f"/attacker/{index}" for index, name in enumerate(module._FASTVLM_RUNTIME_PATH_ENV)}
+    original.update(
+        {
+            "TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED": "0",
+            "TP_ORCHESTRATOR_QUEUE_BACKEND": "redis",
+            "TP_ORCHESTRATOR_STATE_BACKEND": "postgres",
+        }
+    )
+    for name, value in original.items():
+        monkeypatch.setenv(name, value)
+    handle = object()
+
+    def spawn(api_key: str, *, timeout_seconds: float):
+        assert api_key == "secret"
+        assert timeout_seconds == 12.0
+        assert all(name not in os.environ for name in module._FASTVLM_RUNTIME_PATH_ENV)
+        assert {name: os.environ[name] for name in module._LOCAL_BACKEND_ENV} == module._LOCAL_BACKEND_ENV
+        return handle
+
+    monkeypatch.setattr(module, "_spawn_local_backend", spawn)
+
+    assert module._spawn_audited_local_backend("secret", timeout_seconds=12.0) is handle
+    assert {name: os.environ[name] for name in original} == original
+
+
+def test_portal_fastvlm_captioning_main_audits_before_local_backend_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_main_audit_order")
+    trusted_base = tmp_path / "trusted-python"
+    events: list[tuple[str, object]] = []
+    backend_handle = SimpleNamespace(base_url="http://127.0.0.1:4567")
+
+    monkeypatch.setattr(
+        module,
+        "_validate_runtime_ready",
+        lambda model, *, expected_base_python: events.append(("audit", (model, expected_base_python))),
+    )
+    monkeypatch.setattr(module, "_prepare_input_dir", lambda *_args: (tmp_path / "input", False))
+    monkeypatch.setattr(module, "_resolve_output_dir", lambda *_args: (tmp_path / "output", False))
+    monkeypatch.setattr(
+        module,
+        "_spawn_audited_local_backend",
+        lambda api_key, *, timeout_seconds: events.append(("spawn", (api_key, timeout_seconds))) or backend_handle,
+    )
+    monkeypatch.setattr(module, "_terminate_runtime", lambda _handle: None)
+
+    def stop_after_spawn(*_args, **_kwargs):  # noqa: ANN001
+        events.append(("request", None))
+        raise module.SmokeFailure("stop after audited spawn", kind="contract")
+
+    monkeypatch.setattr(module, "_request_json", stop_after_spawn)
+
+    rc = module.main(["--model-role", "review", "--base-python", str(trusted_base)])
+
+    assert rc == 1
+    assert events[0] == ("audit", ("review", trusted_base))
+    assert events[1][0] == "spawn"
+    assert events[2] == ("request", None)
 
 
 def test_portal_lux_materials_sam2_prerequisite_reports_missing_checkpoint(tmp_path: Path):

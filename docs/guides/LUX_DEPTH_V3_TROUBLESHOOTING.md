@@ -74,6 +74,7 @@ lux-depth-v3 \
   --output-dir "./output" \
   --quality-tier "apex" \
   --preset "depth-anything-v3.1-research-m4" \
+  --model-key "da3-research" \
   --non-commercial-ok "true"
 ```
 
@@ -173,7 +174,7 @@ Output Deliverables
 --quality-tier "apex"
 
 # ✅ OR use preset alone for specialized configurations
---preset "depth-anything-v3.1-research-m4" --non-commercial-ok "true"
+--preset "depth-anything-v3.1-research-m4" --model-key "da3-research" --non-commercial-ok "true"
 ```
 
 **Explanation:** When both are specified, preset takes precedence. This can lead to unexpected behavior.
@@ -202,14 +203,14 @@ Output Deliverables
 
 **Problem:**
 ```bash
-# ❌ Missing required license flags
---preset "depth-anything-v3.1-research-m4"
+# ❌ Explicit research selection missing its required license acknowledgement
+--model-key "da3-research"
 ```
 
 **Solution:**
 ```bash
 # ✅ Acknowledge non-commercial license
---preset "depth-anything-v3.1-research-m4" \
+--model-key "da3-research" \
 --non-commercial-ok "true"
 ```
 
@@ -235,7 +236,7 @@ Output Deliverables
 --model-key "da3-metric"
 ```
 
-**Explanation:** `da3` is now the research-default selector. Use `--model-key "da3-metric"` for the Apache-2.0 DA3 path on the current Lux V3 relative-depth surface.
+**Explanation:** the `da3` model selector (deprecated) resolves the research model and requires the non-commercial acknowledgement. Use `--model-key "da3-metric"` (or simply omit `--model-key` — it is the default as of repair 1.2, #2066) for the Apache-2.0 DA3 path, or `--model-key "da3-research"` explicitly for the research model.
 
 ---
 
@@ -461,6 +462,7 @@ collision when the Depth Pro subprocess loads its own libomp from `.venv-depth-p
 **Depth Anything V3.1 (CC BY-NC 4.0):**
 ```bash
 --preset "depth-anything-v3.1-research-m4" \
+--model-key "da3-research" \
 --non-commercial-ok "true"
 ```
 - ❌ Commercial use **not allowed**
@@ -572,6 +574,7 @@ lux-depth-v3 \
   --input-dir "./input_images" \
   --output-dir "./output/research" \
   --preset "depth-anything-v3.1-research-m4" \
+  --model-key "da3-research" \
   --non-commercial-ok "true" \
   --quality-tier "apex" \
   --depth-device "cuda" \

@@ -1265,6 +1265,7 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
     payload["model_contract"] = {
         "contract_kind": "hf_revision",
         "requested_model_selector": "METRIC_LARGE",
+        "resolution_reason": "legacy model variant 'METRIC_LARGE' resolved to 'da3_research'",
         "canonical_model_key": "da3_research",
         "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         "resolved_revision": "b2359bdf726fb44ef62acca04d629dcf158053e7",
@@ -1278,6 +1279,24 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
         "manifest_schema_version": 1,
     }
     _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+def test_build_run_card_model_contract_records_default_resolution_reason() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(non_commercial_ok=False)
+    resolved = resolve_model_contract(ModelRequest())
+    orch._resolved_model_contract = replace(resolved, revision="b" * 40)
+
+    with patch(
+        "transformation_portal.lux_depth_v3.orchestrator.load_model_lock_manifest_payload",
+        return_value={"version": 1},
+    ):
+        model_contract = orch._build_run_card_model_contract()
+
+    assert model_contract is not None
+    assert model_contract["requested_model_selector"] == "default"
+    assert model_contract["canonical_model_key"] == "da3_metric"
+    assert model_contract["resolution_reason"] == "no model selector supplied; defaulted to 'da3_metric'"
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])

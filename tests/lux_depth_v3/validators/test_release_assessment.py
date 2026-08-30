@@ -112,7 +112,15 @@ class TestNativeAttestation:
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
         native_path = run_card.with_suffix(".attestation.native.json")
         native_path.write_text(
-            json.dumps({"signature": {"signature": "-----BEGIN PGP-----\n..."}}),
+            json.dumps(
+                {
+                    "signature": {
+                        "algorithm": "openpgp-clearsign",
+                        "key_id": "A" * 40,
+                        "signature": "-----BEGIN PGP-----\n...",
+                    }
+                }
+            ),
             encoding="utf-8",
         )
         with (
@@ -120,6 +128,11 @@ class TestNativeAttestation:
             patch.object(release_assessment, "validate_run_card_detached_attestation_surface"),
             patch.object(release_assessment, "bind_run_card_detached_attestation"),
             patch.object(release_assessment, "verify_run_card_attestation_self_hash"),
+            patch.object(
+                release_assessment,
+                "canonical_run_card_attestation_preimage_bytes",
+                return_value=b"preimage",
+            ),
             patch.object(release_assessment, "gpg_verify_clearsign") as mock_gpg,
         ):
             report = assess_run_card_release(
@@ -127,7 +140,11 @@ class TestNativeAttestation:
                 require_native_attestation=True,
                 verify_gpg=True,
             )
-        assert mock_gpg.call_count == 1
+        mock_gpg.assert_called_once_with(
+            "-----BEGIN PGP-----\n...",
+            expected_payload=b"preimage",
+            key_id="A" * 40,
+        )
         native = _check(report, "native_attestation")
         assert native["status"] == "PASS"
         assert native["details"]["errors"] == []

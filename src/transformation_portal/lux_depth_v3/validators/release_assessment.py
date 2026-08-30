@@ -16,6 +16,7 @@ from transformation_portal.attestation.dsse import (
 from transformation_portal.attestation.gpg import gpg_verify_clearsign, gpg_verify_detached_signature_bytes
 from transformation_portal.attestation.run_card_detached import (
     bind_run_card_detached_attestation,
+    canonical_run_card_attestation_preimage_bytes,
     validate_run_card_detached_attestation_surface,
     verify_run_card_attestation_self_hash,
 )
@@ -114,7 +115,20 @@ def assess_run_card_release(
                     require_digest=(not allow_missing_attestation_sha),
                 )
                 if verify_gpg:
-                    gpg_verify_clearsign(str(native_attestation["signature"]["signature"]))
+                    signature_algorithm = native_attestation["signature"]["algorithm"]
+                    if signature_algorithm != "openpgp-clearsign":
+                        raise ValueError(
+                            "native signature.algorithm must be 'openpgp-clearsign' for GPG verification, "
+                            f"got {signature_algorithm!r}"
+                        )
+                    gpg_verify_clearsign(
+                        str(native_attestation["signature"]["signature"]),
+                        expected_payload=canonical_run_card_attestation_preimage_bytes(
+                            run_card_payload,
+                            run_card_bytes=run_card_bytes,
+                        ),
+                        key_id=str(native_attestation["signature"]["key_id"]),
+                    )
             except Exception as exc:  # noqa: BLE001 - normalized assessment surface
                 native_errors.append(str(exc))
         checks.append(

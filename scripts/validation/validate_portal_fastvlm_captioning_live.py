@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastvlm_runtime_manifest import (
+    default_manifest_path,
     load_manifest,
     runtime_root,
     selected_model_roles,
-    verify_python_imports,
-    verify_runtime,
 )
+from validate_fastvlm_runtime import build_runtime_evidence
 from validate_portal_lux_materials_live import (
     DEFAULT_API_KEY,
     DEFAULT_ORCHESTRATOR_BASE_URL,
@@ -44,6 +44,17 @@ from validate_portal_lux_materials_live import (
 )
 
 TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "partial"}
+_FASTVLM_RUNTIME_PATH_ENV = (
+    "TP_FASTVLM_PYTHON",
+    "TP_FASTVLM_MLX_VLM_DIR",
+    "TP_FASTVLM_MODEL",
+    "TP_FASTVLM_REVIEW_MODEL",
+)
+_LOCAL_BACKEND_ENV = {
+    "TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED": "1",
+    "TP_ORCHESTRATOR_QUEUE_BACKEND": "memory",
+    "TP_ORCHESTRATOR_STATE_BACKEND": "memory",
+}
 
 
 def _argv_preview_tokens(preview: Dict[str, Any]) -> list[str]:
@@ -65,18 +76,42 @@ def _expect_status(status: int, expected: int, context: str, body: Dict[str, Any
         raise SmokeFailure(f"{context} returned HTTP {status}, expected {expected}: {json.dumps(body, sort_keys=True)}")
 
 
-def _validate_runtime_ready(model_role: str) -> None:
+def _validate_runtime_ready(model_role: str, *, expected_base_python: Path) -> None:
     manifest = load_manifest()
     root = runtime_root(manifest)
     roles = selected_model_roles(manifest, models=model_role)
-    errors = verify_runtime(manifest, roles=roles, root=root)
-    if not errors:
-        errors.extend(verify_python_imports(manifest, root=root))
-    if errors:
+    evidence = build_runtime_evidence(
+        manifest_path=default_manifest_path(),
+        root=root,
+        roles=roles,
+        manifest=manifest,
+        include_sources=True,
+        include_python=True,
+        include_import_smoke=True,
+        expected_base_python=expected_base_python,
+    )
+    if evidence["errors"]:
         raise SmokeFailure(
-            "FastVLM runtime prerequisites are not ready:\n" + "\n".join(f"- {error}" for error in errors),
+            "FastVLM runtime prerequisites are not ready; "
+            f"audited validation reported {evidence['error_count']} error(s)",
             kind="environment",
         )
+
+
+def _spawn_audited_local_backend(api_key: str, *, timeout_seconds: float) -> LocalRuntimeHandle:
+    """Spawn canonical audited paths with no external worker delegation."""
+
+    controlled_names = (*_FASTVLM_RUNTIME_PATH_ENV, *_LOCAL_BACKEND_ENV)
+    preserved = {name: os.environ[name] for name in controlled_names if name in os.environ}
+    for name in _FASTVLM_RUNTIME_PATH_ENV:
+        os.environ.pop(name, None)
+    os.environ.update(_LOCAL_BACKEND_ENV)
+    try:
+        return _spawn_local_backend(api_key, timeout_seconds=timeout_seconds)
+    finally:
+        for name in controlled_names:
+            os.environ.pop(name, None)
+        os.environ.update(preserved)
 
 
 def _build_captioning_payload(
@@ -379,6 +414,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Manifest model role for live captioning validation (default: %(default)s)",
     )
     parser.add_argument(
+        "--base-python",
+        default=os.getenv("TP_FASTVLM_BASE_PYTHON", sys.executable),
+        help="Caller-trusted interpreter that built the local FastVLM runtime venv (default: current Python)",
+    )
+    parser.add_argument(
         "--fastvlm-timeout-seconds",
         type=int,
         default=180,
@@ -401,7 +441,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Preserve temp input/output directories instead of deleting them",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.skip_local_runtime_check and args.spawn_local_backend:
+        parser.error("--skip-local-runtime-check requires --no-spawn-local-backend")
+    if args.skip_local_runtime_check and args.require_local_runtime_check:
+        parser.error("--skip-local-runtime-check cannot be combined with --require-local-runtime-check")
+    return args
 
 
 def _should_validate_local_runtime(
@@ -410,9 +455,11 @@ def _should_validate_local_runtime(
     skip_local_runtime_check: bool,
     require_local_runtime_check: bool,
 ) -> bool:
+    if spawn_local_backend:
+        return True
     if skip_local_runtime_check:
         return False
-    return bool(spawn_local_backend or require_local_runtime_check)
+    return bool(require_local_runtime_check)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -432,14 +479,17 @@ def main(argv: list[str] | None = None) -> int:
             skip_local_runtime_check=bool(args.skip_local_runtime_check),
             require_local_runtime_check=bool(args.require_local_runtime_check),
         ):
-            _validate_runtime_ready(str(args.model_role))
+            _validate_runtime_ready(
+                str(args.model_role),
+                expected_base_python=Path(args.base_python),
+            )
         fixture_image = Path(args.fixture_image).resolve()
         input_dir, input_dir_is_temp = _prepare_input_dir(str(args.input_dir), fixture_image)
         output_dir, output_dir_is_temp = _resolve_output_dir(str(args.output_dir))
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if args.spawn_local_backend:
-            backend_runtime = _spawn_local_backend(
+            backend_runtime = _spawn_audited_local_backend(
                 str(args.api_key),
                 timeout_seconds=float(args.backend_startup_timeout_seconds),
             )

@@ -669,6 +669,7 @@ class EnhanceOrchestrator:
             self._model_variant,
             backend_id,
             expected_units,
+            resolved_model_contract=getattr(self, "_resolved_model_contract", None),
         )
 
     def _default_model_id_for_backend(self, backend_id: str) -> str:
@@ -856,14 +857,22 @@ class EnhanceOrchestrator:
 
         Delegates to config_resolver.build_depth_cache_payload().
         """
-        return build_depth_cache_payload(self.config, self._model_variant)
+        return build_depth_cache_payload(
+            self.config,
+            self._model_variant,
+            resolved_model_contract=getattr(self, "_resolved_model_contract", None),
+        )
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         """Compute configuration fingerprint for cache validation.
 
         Delegates to config_resolver.compute_config_fingerprint().
         """
-        return compute_config_fingerprint(self.config, self._model_variant)
+        return compute_config_fingerprint(
+            self.config,
+            self._model_variant,
+            resolved_model_contract=getattr(self, "_resolved_model_contract", None),
+        )
 
     @staticmethod
     def _finalize_run_card_config_fingerprint(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -888,6 +897,7 @@ class EnhanceOrchestrator:
             backend_selection=backend_selection,
             run_card_version=run_card_version,
             include_proofs=include_proofs,
+            resolved_model_contract=getattr(self, "_resolved_model_contract", None),
         )
 
     def _extract_v2_depth_handoff_status(
@@ -6301,6 +6311,7 @@ class EnhanceOrchestrator:
         return {
             "contract_kind": "hf_revision",
             "requested_model_selector": resolved_contract.requested_selector,
+            "resolution_reason": resolved_contract.resolution_reason,
             "canonical_model_key": resolved_contract.canonical_key,
             "resolved_repo_id": resolved_contract.spec.repo_id,
             "resolved_revision": resolved_contract.revision,

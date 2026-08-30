@@ -9,6 +9,7 @@ import sys
 import traceback
 from pathlib import Path
 
+from transformation_portal.attestation.detached import canonical_attestation_preimage_bytes
 from transformation_portal.attestation.verify import (
     bind_attestation_to_evidence,
     validate_detached_attestation_surface,
@@ -79,7 +80,11 @@ def main() -> int:
             from transformation_portal.attestation.gpg import gpg_verify_clearsign
 
             signature_text = str(attestation["signature"]["signature"])
-            gpg_verify_clearsign(signature_text)
+            gpg_verify_clearsign(
+                signature_text,
+                expected_payload=canonical_attestation_preimage_bytes(evidence),
+                key_id=str(attestation["signature"]["key_id"]),
+            )
         except (TypeError, ValueError) as exc:
             print(f"Signature verification failed: {exc}", file=sys.stderr)
             return EXIT_VERIFY_FAILED
