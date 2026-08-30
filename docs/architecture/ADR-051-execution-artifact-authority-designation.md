@@ -21,11 +21,11 @@ not reinvent"), "Repair, Designate, Prove" superseding recommendation (2026-08-2
 ## Context
 
 The repository carries multiple parallel implementations of execution scheduling, execution identity,
-CAS/Merkle lineage, artifact storage, and event/audit recording. An external `lux_depth_v4` proposal
-assumed "one repository-standard durable executor and CAS" exists to bind to; verification
-(2026-08-27/28, at `c6d620a`) established that it does not. Before any new plan, ledger, or
-artifact-store abstraction merges, this ADR designates one authority per concern and disposes of the
-competitors — including their test suites and coverage floors.
+CAS/Merkle lineage, artifact storage, and event/audit recording. Verification (2026-08-27/28,
+initially at `c6d620a` and refreshed below) established that no single repository authority spans
+these concerns. Before any new plan, ledger, or artifact-store abstraction merges, this ADR proposes
+designating one authority per concern and disposing of the competitors — including their test suites
+and coverage floors.
 
 ### Inventory (initially verified at `c6d620a`; execution-surface corrections reverified at `61456c3`;
 affected identity and evidence-binding claims refreshed at `81c9f15` — facts, not proposals)
@@ -37,13 +37,13 @@ because its queue/lease responsibility is the job boundary, not an eighth stage 
 
 | # | Implementation | Character | Verified consumers | Tests |
 |---|---|---|---|---|
-| 1 | `stage_graph/graph.py` wrapped by `core/cas_dag_executor.py` | ThreadPool DAG + CAS + MerkleDAG provenance, deterministic replay | No production consumers outside `core/`; `lux_depth_v3/v2_enhance.py:36-37` imports `stage_graph` for one stage adapter | `tests/` (stage_graph has a branch floor) |
-| 2 | `spatial_ai/orchestration/graph/executor.py` (ADR-029) | Execution-graph executor with its own `ExecutionGraph`/`ExecutionPlan` | `spatial_ai` only | `tests/spatial_ai/` |
+| 1 | `stage_graph/graph.py` wrapped by `core/cas_dag_executor.py` | ThreadPool DAG + CAS + MerkleDAG provenance, deterministic replay | No verified production construction of `StageGraph` or `CASDAGExecutor`; Lux V2 and DepthPro consume individual stage primitives and implementations, while execution-graph nodes consume `StageStatus` | `tests/` (stage_graph has a branch floor) |
+| 2 | `spatial_ai/orchestration/graph/executor.py` (ADR-029) | Execution-graph executor with its own `ExecutionGraph`/`ExecutionPlan` | Package-local definitions and a default-off graph adapter, plus examples and tests; no verified production configuration enables construction | `tests/spatial_ai/` |
 | 3 | `execution_graph/scheduler.py` (`PriorityDAGScheduler`) + `nodes/` | Priority DAG scheduler with in-process node execution and node library | `dashboard/execution_manager.py:379-405` constructs the scheduler at runtime, adds dashboard pipeline nodes, and consumes its execution order; `dashboard/dag_api.py` exposes a scheduler injection/visualization surface, although its import is type-only | own suites plus dashboard suites |
 | 4 | `execution_graph/distributed_executor.py` (`DistributedDAGExecutor`) | Local/Ray wrapper around row 3, with its own Ray execution loop | Package re-export plus tests/doc examples only; no verified runtime construction or execution outside its own suite | `tests/execution_graph/test_distributed_executor.py` |
-| 5 | `comfyui/executor.py` (+ `workflow_builder.py`, `custom_nodes.py`) | ComfyUI workflow executor | comfyui surface; carries `comfyui/*` branch-coverage floors | own suites |
-| 6 | `runtime/engine.py` + `runtime/scheduler.py` (+ `process_executor.py`, `execution_manifest.py`, `ledger.py`, `replay.py`) | Runtime execution engine with Merkle-backed manifests and replay | runtime package surfaces; dashboard | `tests/runtime/` (engine, execution_manifest, ledger, process_executor, …) |
-| 7 | `lux_depth_v3` orchestrator + `pipeline_coordinator`/`execution_engine` | Bespoke per-image state machine; `ExecutionPlan` is a flat string list (`pipeline_coordinator.py:1051-1097`); facade classes production-dead | **The flagship pipeline — the only path users run** | `tests/lux_depth_v3/` (36 files) |
+| 5 | `comfyui/executor.py` (+ `workflow_builder.py`, `custom_nodes.py`) | ComfyUI workflow executor | Package re-export, templates, documentation examples, and tests only; no verified external consumer or production construction | own suites |
+| 6 | `runtime/engine.py` + `runtime/scheduler.py` (+ `process_executor.py`, `execution_manifest.py`, `ledger.py`, `replay.py`) | Runtime execution engine with Merkle-backed manifests and replay | Internal runtime references and package re-export, plus documentation examples and tests; no verified dashboard or other production construction | `tests/runtime/` (engine, execution_manifest, ledger, process_executor, …) |
+| 7 | `lux_depth_v3` orchestrator + `pipeline_coordinator`/`execution_engine` | Bespoke per-image state machine; `ExecutionPlan` is a flat string list (`pipeline_coordinator.py:1051-1097`); facade classes production-dead | **Current Lux Depth production execution path** | `tests/lux_depth_v3/` (36 files) |
 | J | `orchestrator/worker.py` `WorkerRunner` + `orchestrator/worker_process.py` (standalone `python -m ...worker_process` entry point for multi-host workers) | Durable job-level queue/lease consumer — not a stage DAG | FastAPI lifespan (only in-process execution path since Phase 2.E); standalone process for multi-host deployment | `tests/orchestrator/` (incl. `test_worker_process_contract.py`) |
 
 `execution_graph.patcher` has verified `rl`/`evals` consumers, but those consumers do not construct
@@ -52,9 +52,12 @@ either row 3 or row 4 and therefore are not evidence that either execution surfa
 **Execution identity.** `core/execution_identity.py` (`ExecutionIdentity`, `compute_cas_id`,
 `compute_code_hash`, `create_artifact_metadata`) implements model+config+code identity and is
 **consumed within `core/`** (`core/execution_wrapper.py:49,314`, `core/cas_dag_executor.py:54`) but
-**unwired from the Lux production path**. Competing partial identities: `config_resolver.compute_config_fingerprint`, the depth
-cache fingerprint (`config_resolver.py:507-566`), the segmentation cache key
-(`segmentation/_cache.py:251-320`), and the manifest `ConfigFingerprint`.
+**unwired from the Lux production path**. `config_resolver.compute_config_fingerprint` returns the
+manifest `ConfigFingerprint`; it is not a separate identity implementation. The depth-cache
+fingerprint is a separate projection (`config_resolver.py:637-659`), and the segmentation cache key
+is another (`segmentation/_cache.py:251-320`). The manifest/config and depth-cache projections share
+model identity through `resolved_model_identity_for_backend`, but these partial operational
+projections do not capture complete code, dependency, and executed-path identity.
 *Evidence updates (2026-08-28; facts, not designations):* PR #2070 (`e30bd58`) introduced the
 provisional `ResolvedInvocation` serialization and contract-aware fingerprint surface. PR #2081
 (`81c9f15`) then selected `da3_metric` as the commercial-safe default and repaired identity and
@@ -99,7 +102,8 @@ Plus `lux_depth_v3/artifact_manager.py` (index/hash/Merkle root, live) and `port
 
 1. Seven stage-level execution surfaces plus a separate job-runner boundary; none is both durable
    and used by Lux Depth.
-2. Identity is fragmented across four partial fingerprints; the complete implementation is unwired.
+2. Partial operational identity projections lack complete code, dependency, and executed-path
+   identity; the code-aware `core/execution_identity.py` implementation remains unwired from Lux.
 3. Four artifact roles across three same-named classes and two ad-hoc surfaces; the generation
    publication transaction has no owner.
 4. Frozen or parallel implementations retain green test suites that no longer prove production
