@@ -50,6 +50,9 @@ def _write_fake_python(path: Path, *, version: str, real_python: str) -> Path:
     script = f"""#!/bin/sh
 REAL_PYTHON={shlex.quote(real_python)}
 FAKE_VERSION={shlex.quote(version)}
+if [ "$1" = "-I" ] && [ "$2" = "-S" ] && [ "$3" = "-c" ]; then
+    exit {exit_code}
+fi
 if [ "$1" = "-c" ]; then
     exit {exit_code}
 fi
@@ -85,6 +88,21 @@ FAKE_VERSION={shlex.quote(version)}
 PLATFORM_SYSTEM={shlex.quote(platform_system)}
 PLATFORM_MACHINE={shlex.quote(platform_machine)}
 PIP_LOG_PATH={shlex.quote(str(pip_log_path))}
+if [ "$1" = "-I" ] && [ "$2" = "-S" ] && [ "$3" = "-c" ]; then
+    case "$4" in
+        *"platform.system()"*)
+            echo "$PLATFORM_SYSTEM"
+            exit 0
+            ;;
+        *"platform.machine()"*)
+            echo "$PLATFORM_MACHINE"
+            exit 0
+            ;;
+        *)
+            exit {exit_code}
+            ;;
+    esac
+fi
 if [ "$1" = "-c" ]; then
     case "$2" in
         *"platform.system()"*)

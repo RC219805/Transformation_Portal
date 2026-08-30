@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -146,6 +147,89 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert result.caption_parse.validated is True
     assert result.caption_parse.caption["scene"] == "Pool"
     assert result.raw_stdout
+    assert result.raw_stderr == ""
+    assert not list(runtime_dir.rglob("*.pyc"))
+
+
+def test_runtime_normalizes_relative_child_paths_before_changing_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caller_dir = tmp_path / "caller"
+    runtime_dir = caller_dir / "runtime" / "mlx-vlm"
+    model_path = caller_dir / "runtime" / "checkpoints" / "model"
+    image_path = caller_dir / "input.png"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    model_path.mkdir(parents=True)
+    image_path.write_bytes(b"not-a-real-image")
+    monkeypatch.chdir(caller_dir)
+    config = FastVLMRuntimeConfig(
+        enabled=True,
+        python_path=Path(sys.executable),
+        mlx_vlm_dir=Path("runtime/mlx-vlm"),
+        model_path=Path("runtime/checkpoints/model"),
+        max_tokens=12,
+        timeout_seconds=3,
+    )
+    real_run = subprocess.run
+    observed: dict[str, object] = {}
+
+    def capture_child_paths(*args, **kwargs):  # noqa: ANN001
+        observed["cwd"] = kwargs["cwd"]
+        observed["pythonpath"] = kwargs["env"]["PYTHONPATH"]
+        return real_run(*args, **kwargs)  # pylint: disable=subprocess-run-check
+
+    monkeypatch.setattr(subprocess, "run", capture_child_paths)
+
+    result = run_fastvlm_caption(config, Path("input.png"))
+
+    assert result.success is True
+    assert observed == {
+        "cwd": str(runtime_dir),
+        "pythonpath": str(runtime_dir),
+    }
+    assert result.command[result.command.index("--model") + 1] == str(model_path)
+    assert result.command[result.command.index("--image") + 1] == str(image_path)
+
+
+def test_runtime_subprocess_strips_ambient_python_controls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import os, sys\n"
+        "allowed = {'PYTHONDONTWRITEBYTECODE', 'PYTHONNOUSERSITE', 'PYTHONPATH', 'PYTHONSAFEPATH'}\n"
+        "unexpected = sorted(name for name in os.environ if name.startswith('PYTHON') and name not in allowed)\n"
+        "if unexpected:\n"
+        "    print('unexpected=' + ','.join(unexpected), file=sys.stderr)\n"
+        "    raise SystemExit(9)\n"
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+    monkeypatch.setenv("PYTHONINSPECT", "1")
+    monkeypatch.setenv("PYTHONWARNINGS", "error")
+    monkeypatch.setenv("PYTHONHASHSEED", "123")
+    monkeypatch.setenv("PYTHONBREAKPOINT", "attacker.module")
+    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "attacker-venv"))
+    monkeypatch.setenv("__PYVENV_LAUNCHER__", str(tmp_path / "attacker-python"))
+    real_run = subprocess.run
+
+    def assert_clean_environment(*args, **kwargs):  # noqa: ANN001
+        child_environment = kwargs["env"]
+        assert "VIRTUAL_ENV" not in child_environment
+        assert "__PYVENV_LAUNCHER__" not in child_environment
+        return real_run(*args, **kwargs)  # pylint: disable=subprocess-run-check
+
+    monkeypatch.setattr(subprocess, "run", assert_clean_environment)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is True
     assert result.raw_stderr == ""
 
 
