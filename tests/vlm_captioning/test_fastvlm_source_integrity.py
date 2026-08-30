@@ -614,6 +614,34 @@ def test_python_311_staged_venv_removes_bootstrap_setuptools_pth(tmp_path: Path)
     module.audit_runtime_venv(staged_venv, expected_base_python=python_311)
 
 
+def test_venv_install_removes_only_canonical_root_lib64_alias(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_lib64_alias_test", "scripts/setup/install_fastvlm_venv.py")
+    staged_venv = tmp_path / "venv"
+    (staged_venv / "lib").mkdir(parents=True)
+    alias = staged_venv / "lib64"
+    alias.symlink_to("lib", target_is_directory=True)
+
+    module._remove_canonical_lib64_alias(staged_venv)
+
+    assert not alias.exists()
+    assert not alias.is_symlink()
+
+
+@pytest.mark.parametrize("target", ["../external", "lib/site-packages"])
+def test_venv_install_rejects_noncanonical_root_lib64_alias(tmp_path: Path, target: str) -> None:
+    module = _load_script_module("fastvlm_bad_lib64_alias_test", "scripts/setup/install_fastvlm_venv.py")
+    staged_venv = tmp_path / "venv"
+    (staged_venv / "lib/site-packages").mkdir(parents=True)
+    (tmp_path / "external").mkdir()
+    alias = staged_venv / "lib64"
+    alias.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(module.RuntimeVerificationError, match="lib64 alias must point exactly"):
+        module._remove_canonical_lib64_alias(staged_venv)
+
+    assert alias.is_symlink()
+
+
 def test_venv_install_removes_allowlisted_setuptools_pth_after_locked_install(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -239,6 +239,36 @@ def _remove_allowlisted_bootstrap_pth(stage: Path) -> None:
         candidate.unlink()
 
 
+def _remove_canonical_lib64_alias(stage: Path) -> None:
+    """Remove only the standard root ``lib64 -> lib`` venv alias.
+
+    CPython creates this alias on common 64-bit Linux platforms even with
+    ``venv --copies``. The promoted runtime remains symlink-free: validate the
+    exact venv-local shape before unlinking it, and reject every other symlink
+    through the normal audit.
+    """
+
+    alias = stage / "lib64"
+    try:
+        alias_metadata = alias.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISLNK(alias_metadata.st_mode):
+        return
+
+    library_dir = stage / "lib"
+    try:
+        library_metadata = library_dir.lstat()
+    except FileNotFoundError as exc:
+        raise RuntimeVerificationError("FastVLM venv lib64 alias requires a real root lib directory") from exc
+    raw_target = os.readlink(alias)
+    if raw_target != "lib" or not stat.S_ISDIR(library_metadata.st_mode):
+        raise RuntimeVerificationError("FastVLM venv lib64 alias must point exactly to the real root lib directory")
+    if Path(os.path.realpath(alias)) != Path(os.path.realpath(library_dir)):
+        raise RuntimeVerificationError("FastVLM venv lib64 alias escapes the real root lib directory")
+    alias.unlink()
+
+
 def _uninstall_bootstrap_setuptools(stage_python: Path) -> None:
     """Remove setuptools after its executable bootstrap hook is gone."""
 
@@ -392,6 +422,7 @@ def _build_staged_venv(base_python: Path, stage: Path, requirements: Path) -> by
         description="FastVLM venv creation",
     )
     stage_python = stage / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _remove_canonical_lib64_alias(stage)
     _remove_allowlisted_bootstrap_pth(stage)
     audit_runtime_venv(stage, expected_base_python=base_python)
     _uninstall_bootstrap_setuptools(stage_python)

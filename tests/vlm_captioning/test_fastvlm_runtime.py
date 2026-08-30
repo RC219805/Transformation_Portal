@@ -151,6 +151,50 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert not list(runtime_dir.rglob("*.pyc"))
 
 
+def test_runtime_normalizes_relative_child_paths_before_changing_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caller_dir = tmp_path / "caller"
+    runtime_dir = caller_dir / "runtime" / "mlx-vlm"
+    model_path = caller_dir / "runtime" / "checkpoints" / "model"
+    image_path = caller_dir / "input.png"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    model_path.mkdir(parents=True)
+    image_path.write_bytes(b"not-a-real-image")
+    monkeypatch.chdir(caller_dir)
+    config = FastVLMRuntimeConfig(
+        enabled=True,
+        python_path=Path(sys.executable),
+        mlx_vlm_dir=Path("runtime/mlx-vlm"),
+        model_path=Path("runtime/checkpoints/model"),
+        max_tokens=12,
+        timeout_seconds=3,
+    )
+    real_run = subprocess.run
+    observed: dict[str, object] = {}
+
+    def capture_child_paths(*args, **kwargs):  # noqa: ANN001
+        observed["cwd"] = kwargs["cwd"]
+        observed["pythonpath"] = kwargs["env"]["PYTHONPATH"]
+        return real_run(*args, **kwargs)  # pylint: disable=subprocess-run-check
+
+    monkeypatch.setattr(subprocess, "run", capture_child_paths)
+
+    result = run_fastvlm_caption(config, Path("input.png"))
+
+    assert result.success is True
+    assert observed == {
+        "cwd": str(runtime_dir),
+        "pythonpath": str(runtime_dir),
+    }
+    assert result.command[result.command.index("--model") + 1] == str(model_path)
+    assert result.command[result.command.index("--image") + 1] == str(image_path)
+
+
 def test_runtime_subprocess_strips_ambient_python_controls(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

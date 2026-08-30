@@ -288,14 +288,16 @@ def run_fastvlm_caption(
     Failures are returned as structured advisory results unless
     ``config.strict`` is true.
     """
-    image = Path(image_path)
+    runtime_dir = Path(os.path.abspath(config.mlx_vlm_dir))
+    model_path = Path(os.path.abspath(config.model_path))
+    image = Path(os.path.abspath(image_path))
     active_prompt = prompt if prompt is not None else prompt_for_fastvlm_model(config.model_path, model_role)
     command = [
         str(config.python_path),
         "-m",
         "mlx_vlm.generate",
         "--model",
-        str(config.model_path),
+        str(model_path),
         "--image",
         str(image),
         "--prompt",
@@ -318,10 +320,10 @@ def run_fastvlm_caption(
         command[0] = resolve_fastvlm_python_executable(config.python_path)
     except FileNotFoundError as exc:
         return fail("missing_runtime", str(exc))
-    if not config.mlx_vlm_dir.exists() or not config.mlx_vlm_dir.is_dir():
-        return fail("missing_runtime", f"FastVLM mlx-vlm directory not found: {config.mlx_vlm_dir}")
-    if not config.model_path.exists():
-        return fail("missing_model", f"FastVLM model path not found: {config.model_path}")
+    if not runtime_dir.exists() or not runtime_dir.is_dir():
+        return fail("missing_runtime", f"FastVLM mlx-vlm directory not found: {runtime_dir}")
+    if not model_path.exists():
+        return fail("missing_model", f"FastVLM model path not found: {model_path}")
     if not image.exists() or not image.is_file():
         return fail("missing_image", f"FastVLM image path not found: {image}")
     if config.max_tokens < 1:
@@ -339,14 +341,14 @@ def run_fastvlm_caption(
         {
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONNOUSERSITE": "1",
-            "PYTHONPATH": str(config.mlx_vlm_dir),
+            "PYTHONPATH": str(runtime_dir),
             "PYTHONSAFEPATH": "1",
         }
     )
     try:
         completed = subprocess.run(
             command,
-            cwd=str(config.mlx_vlm_dir),
+            cwd=str(runtime_dir),
             capture_output=True,
             text=True,
             timeout=config.timeout_seconds,
