@@ -433,6 +433,22 @@ def test_source_installer_rejects_target_collisions_before_filesystem_or_network
     assert not runtime_root.exists()
 
 
+def test_source_installer_dry_run_does_not_log_absolute_runtime_targets(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script_module("fastvlm_redacted_source_plan_test", "scripts/setup/install_fastvlm_sources.py")
+    manifest = _manifest(tmp_path)
+    runtime_root = tmp_path / "private-runtime-root"
+
+    assert module.install_runtime_sources(manifest, root=runtime_root, dry_run=True) == "dry-run"
+
+    output = capsys.readouterr().out
+    assert str(runtime_root) not in output
+    assert "target_dir=ml-fastvlm" in output
+    assert "target_dir=mlx-vlm" in output
+
+
 def test_source_installer_rejects_hooks_without_execution_or_network(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
