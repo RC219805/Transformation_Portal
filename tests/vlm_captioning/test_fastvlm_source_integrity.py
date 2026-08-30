@@ -802,10 +802,11 @@ def test_venv_audit_rejects_mutated_pyvenv_controls(
         text=True,
         timeout=60,
     )
-    # Mirror the governed builder's platform normalization so this fixture
-    # reaches the pyvenv.cfg control under test without weakening the audit's
-    # symlink-free runtime contract.
+    # Mirror the governed builder's pre-audit platform/bootstrap normalization
+    # so this fixture reaches the pyvenv.cfg control under test without
+    # weakening the symlink- and startup-hook-free runtime contract.
     module._remove_canonical_lib64_alias(venv)
+    module._remove_allowlisted_bootstrap_pth(venv)
     config = venv / "pyvenv.cfg"
     lines = config.read_text(encoding="utf-8").splitlines()
     config.write_text(
