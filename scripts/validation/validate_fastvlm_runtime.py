@@ -4,25 +4,52 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
 from typing import Any
 
-from fastvlm_runtime_manifest import (
-    ManifestError,
-    add_common_manifest_args,
-    load_manifest,
-    model_target_dir,
-    python_runtime_path,
-    runtime_root,
-    selected_model_roles,
-    validate_manifest,
-    verify_model_role,
-    verify_python_imports,
-    verify_python_runtime,
-    verify_runtime_sources,
-)
+
+def _load_manifest_helpers() -> Any:
+    helper_path = Path(__file__).resolve().with_name("fastvlm_runtime_manifest.py")
+    spec = importlib.util.spec_from_file_location("fastvlm_runtime_manifest_validator", helper_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load FastVLM manifest helpers from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_manifest_helpers = _load_manifest_helpers()
+ManifestError = _manifest_helpers.ManifestError
+add_common_manifest_args = _manifest_helpers.add_common_manifest_args
+load_manifest = _manifest_helpers.load_manifest
+model_target_dir = _manifest_helpers.model_target_dir
+python_runtime_path = _manifest_helpers.python_runtime_path
+runtime_root = _manifest_helpers.runtime_root
+selected_model_roles = _manifest_helpers.selected_model_roles
+validate_manifest = _manifest_helpers.validate_manifest
+verify_model_role = _manifest_helpers.verify_model_role
+verify_python_imports = _manifest_helpers.verify_python_imports
+verify_python_runtime = _manifest_helpers.verify_python_runtime
+verify_runtime_sources = _manifest_helpers.verify_runtime_sources
+
+
+def _load_venv_helpers() -> Any:
+    helper_path = Path(__file__).resolve().parents[1] / "setup" / "install_fastvlm_venv.py"
+    spec = importlib.util.spec_from_file_location("fastvlm_runtime_venv_auditor", helper_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load FastVLM venv auditor from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_venv_helpers = _load_venv_helpers()
+audit_runtime_venv = _venv_helpers.audit_runtime_venv
+VenvManifestError = _venv_helpers.ManifestError
+VenvRuntimeVerificationError = _venv_helpers.RuntimeVerificationError
 
 _REDACTED_DETAIL = "validation details redacted"
 _REDACTED_PATH = "<redacted>"
@@ -141,11 +168,29 @@ def _runtime_evidence(
             remediation="Run make install-fastvlm-runtime or repair .runtime/fastvlm/.venv-fastvlm.",
         )
         errors.extend(python_errors)
+        venv_audit_errors: list[str] = []
+        if not python_errors:
+            try:
+                audit_runtime_venv(python_path.parent.parent)
+            except (OSError, UnicodeError, ValueError, VenvManifestError, VenvRuntimeVerificationError) as exc:
+                venv_audit_errors.append(str(exc))
+        checks["python_environment"] = _check_evidence(
+            status=_status_for_errors(venv_audit_errors),
+            errors=venv_audit_errors,
+            path=python_path.parent.parent,
+            remediation="Rebuild the governed FastVLM venv; startup hooks, symlinks, and editable installs are prohibited.",
+        )
+        errors.extend(venv_audit_errors)
     else:
         checks["python_executable"] = _check_evidence(
             status="skipped",
             path=root / ".venv-fastvlm" / "bin" / "python",
             remediation="Python executable checks were skipped by request.",
+        )
+        checks["python_environment"] = _check_evidence(
+            status="skipped",
+            path=root / ".venv-fastvlm",
+            remediation="Python environment checks were skipped by request.",
         )
 
     model_checks: dict[str, Any] = {}

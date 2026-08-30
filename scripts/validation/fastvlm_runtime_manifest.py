@@ -17,17 +17,28 @@ TRUSTED_FASTVLM_MODEL_REPOS = {
     "apple/FastVLM-1.5B-int8",
     "apple/FastVLM-7B-int4",
 }
+TRUSTED_FASTVLM_MODEL_ROLES = {
+    "smoke": "apple/FastVLM-0.5B-fp16",
+    "default": "apple/FastVLM-1.5B-int8",
+    "review": "apple/FastVLM-7B-int4",
+}
 TRUSTED_RUNTIME_SOURCES = {
     "ml_fastvlm": "https://github.com/apple/ml-fastvlm.git",
     "mlx_vlm": "https://github.com/Blaizzy/mlx-vlm.git",
 }
 TRUSTED_MLX_VLM_PATCH_SOURCE = "ml_fastvlm"
 TRUSTED_MLX_VLM_PATCH_PATH = "model_export/fastvlm_mlx-vlm.patch"
+FASTVLM_RUNTIME_SCHEMA_V1 = "fastvlm-runtime.v1"
+FASTVLM_RUNTIME_SCHEMA_V2 = "fastvlm-runtime.v2"
 TRUSTED_RUNTIME_SOURCE_TARGETS = {
     "ml_fastvlm": "ml-fastvlm",
     "mlx_vlm": "mlx-vlm",
 }
+TRUSTED_RUNTIME_VENV_DIR = ".venv-fastvlm"
+TRUSTED_RUNTIME_ROOT = ".runtime/fastvlm"
+FASTVLM_DEPENDENCY_EVIDENCE_NAME = "fastvlm-pip-freeze.txt"
 FASTVLM_RUNTIME_IMPORTS = ("datasets", "huggingface_hub", "mlx_vlm")
+FASTVLM_IMPORT_SMOKE_TIMEOUT_SECONDS = 60
 GIT_SUBPROCESS_TIMEOUT_SECONDS = 30
 HEX_DIGITS = set("0123456789abcdef")
 _ALLOWED_LOCAL_GIT_CONFIG_KEYS = {
@@ -139,14 +150,26 @@ def selected_model_roles(
     return roles
 
 
+def _targets_overlap(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
+    common_length = min(len(left), len(right))
+    return left[:common_length] == right[:common_length]
+
+
 def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
-    if manifest.get("schema_version") != "fastvlm-runtime.v1":
-        errors.append("schema_version must be fastvlm-runtime.v1")
+    runtime_targets: list[tuple[str, tuple[str, ...]]] = [
+        ("dependency evidence", _safe_relative_parts(FASTVLM_DEPENDENCY_EVIDENCE_NAME))
+    ]
+    schema_version = manifest.get("schema_version")
+    if schema_version not in {FASTVLM_RUNTIME_SCHEMA_V1, FASTVLM_RUNTIME_SCHEMA_V2}:
+        errors.append(f"schema_version must be {FASTVLM_RUNTIME_SCHEMA_V1} or {FASTVLM_RUNTIME_SCHEMA_V2}")
+    configured_runtime_root = manifest.get("runtime_root") or TRUSTED_RUNTIME_ROOT
     try:
-        safe_child(repo_root(), manifest.get("runtime_root") or ".runtime/fastvlm")
+        safe_child(repo_root(), configured_runtime_root)
     except ManifestError as exc:
         errors.append(str(exc))
+    if schema_version == FASTVLM_RUNTIME_SCHEMA_V2 and configured_runtime_root != TRUSTED_RUNTIME_ROOT:
+        errors.append(f"runtime_root must be {TRUSTED_RUNTIME_ROOT}")
 
     sources = manifest.get("runtime_sources")
     if not isinstance(sources, dict):
@@ -165,12 +188,19 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
             if not _is_git_revision(source.get("revision")):
                 errors.append(f"runtime_sources.{name}.revision must be a pinned 40-hex revision")
             try:
-                _safe_relative_parts(source.get("target_dir"))
+                source_target = _safe_relative_parts(source.get("target_dir"))
             except ManifestError as exc:
                 errors.append(str(exc))
-            if source.get("target_dir") != TRUSTED_RUNTIME_SOURCE_TARGETS[name]:
+            else:
+                runtime_targets.append((f"runtime_sources.{name}.target_dir", source_target))
+            if (
+                schema_version == FASTVLM_RUNTIME_SCHEMA_V2
+                and source.get("target_dir") != TRUSTED_RUNTIME_SOURCE_TARGETS[name]
+            ):
                 errors.append(f"runtime_sources.{name}.target_dir must be " f"{TRUSTED_RUNTIME_SOURCE_TARGETS[name]}")
             patch = source.get("patch")
+            if schema_version != FASTVLM_RUNTIME_SCHEMA_V2:
+                continue
             if name != "mlx_vlm":
                 if patch is not None:
                     errors.append(f"runtime_sources.{name}.patch is not supported")
@@ -191,10 +221,31 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
             if not _is_git_revision(patch.get("patched_tree")):
                 errors.append("runtime_sources.mlx_vlm.patch.patched_tree must be a 40-hex Git tree")
 
+    python_config = manifest.get("python")
+    if not isinstance(python_config, dict):
+        errors.append("python must be an object")
+    else:
+        venv_dir = python_config.get("venv_dir") or TRUSTED_RUNTIME_VENV_DIR
+        try:
+            venv_target = _safe_relative_parts(venv_dir)
+        except ManifestError as exc:
+            errors.append(str(exc))
+        else:
+            runtime_targets.append(("python.venv_dir", venv_target))
+        if schema_version == FASTVLM_RUNTIME_SCHEMA_V2 and venv_dir != TRUSTED_RUNTIME_VENV_DIR:
+            errors.append(f"python.venv_dir must be {TRUSTED_RUNTIME_VENV_DIR}")
+
     models = manifest.get("models")
     if not isinstance(models, dict) or not models:
         errors.append("models must be a non-empty object")
     else:
+        if schema_version == FASTVLM_RUNTIME_SCHEMA_V2:
+            missing_roles = sorted(set(TRUSTED_FASTVLM_MODEL_ROLES) - set(models))
+            extra_roles = sorted(set(models) - set(TRUSTED_FASTVLM_MODEL_ROLES))
+            if missing_roles:
+                errors.append(f"models is missing required role(s): {', '.join(missing_roles)}")
+            if extra_roles:
+                errors.append(f"models contains unknown role(s): {', '.join(extra_roles)}")
         for role, model in models.items():
             if not isinstance(model, dict):
                 errors.append(f"models.{role} must be an object")
@@ -202,12 +253,21 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
             repo_id = model.get("repo_id")
             if repo_id not in TRUSTED_FASTVLM_MODEL_REPOS:
                 errors.append(f"models.{role}.repo_id is not allowlisted")
+            expected_repo = TRUSTED_FASTVLM_MODEL_ROLES.get(role)
+            if schema_version == FASTVLM_RUNTIME_SCHEMA_V2 and expected_repo is not None and repo_id != expected_repo:
+                errors.append(f"models.{role}.repo_id must be {expected_repo}")
             if not _is_git_revision(model.get("revision")):
                 errors.append(f"models.{role}.revision must be a pinned 40-hex revision")
             try:
-                _safe_relative_parts(model.get("target_dir"))
+                model_target = _safe_relative_parts(model.get("target_dir"))
             except ManifestError as exc:
                 errors.append(str(exc))
+            else:
+                runtime_targets.append((f"models.{role}.target_dir", model_target))
+            if schema_version == FASTVLM_RUNTIME_SCHEMA_V2 and repo_id in TRUSTED_FASTVLM_MODEL_REPOS:
+                expected_target = f"checkpoints/{str(repo_id).rsplit('/', maxsplit=1)[-1]}"
+                if model.get("target_dir") != expected_target:
+                    errors.append(f"models.{role}.target_dir must be {expected_target}")
             required_files = model.get("required_files")
             if not isinstance(required_files, list) or not required_files:
                 errors.append(f"models.{role}.required_files must be a non-empty list")
@@ -225,6 +285,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
                 size = entry.get("size_bytes")
                 if not isinstance(size, int) or size <= 0:
                     errors.append(f"models.{role}.required_files[{index}].size_bytes must be a positive integer")
+    for index, (left_name, left_target) in enumerate(runtime_targets):
+        for right_name, right_target in runtime_targets[index + 1 :]:
+            if _targets_overlap(left_target, right_target):
+                errors.append(f"FastVLM runtime targets overlap: {left_name} and {right_name}")
     return errors
 
 
@@ -232,6 +296,17 @@ def require_valid_manifest(manifest: Mapping[str, Any]) -> None:
     errors = validate_manifest(manifest)
     if errors:
         raise ManifestError("; ".join(errors))
+
+
+def require_source_integrity_manifest(manifest: Mapping[str, Any]) -> None:
+    """Require the v2 contract before installing or trusting runtime sources."""
+
+    require_valid_manifest(manifest)
+    if manifest.get("schema_version") != FASTVLM_RUNTIME_SCHEMA_V2:
+        raise ManifestError(
+            f"FastVLM source integrity requires {FASTVLM_RUNTIME_SCHEMA_V2}; "
+            f"{FASTVLM_RUNTIME_SCHEMA_V1} remains validation-only for compatibility"
+        )
 
 
 def compute_file_sha256(path: Path) -> str:
@@ -668,6 +743,7 @@ def verify_source_checkout(
 
 
 def verify_runtime_sources(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
+    require_source_integrity_manifest(manifest)
     runtime = root or runtime_root(manifest)
     errors: list[str] = []
     sources = manifest.get("runtime_sources")
@@ -791,8 +867,11 @@ def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = No
         "print('\\n'.join(missing), file=sys.stderr)\n"
         "sys.exit(1 if missing else 0)"
     )
-    python_environment = os.environ.copy()
-    python_environment.pop("PYTHONHOME", None)
+    python_environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
+    }
     python_environment.update(
         {
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -808,12 +887,15 @@ def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = No
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=30,
+            timeout=FASTVLM_IMPORT_SMOKE_TIMEOUT_SECONDS,
             env=python_environment,
         )
     except subprocess.TimeoutExpired as exc:
         output = (exc.stderr if isinstance(exc.stderr, str) else "") or (exc.stdout if isinstance(exc.stdout, str) else "")
-        return ["FastVLM Python import smoke timed out after 30s: " + (output.strip() or str(python_path))]
+        return [
+            f"FastVLM Python import smoke timed out after {FASTVLM_IMPORT_SMOKE_TIMEOUT_SECONDS}s: "
+            + (output.strip() or str(python_path))
+        ]
     if completed.returncode == 0:
         return []
     return [

@@ -330,8 +330,11 @@ def run_fastvlm_caption(
         return fail("invalid_config", "FastVLM timeout_seconds must be greater than zero.")
 
     start = time.monotonic()
-    runtime_environment = os.environ.copy()
-    runtime_environment.pop("PYTHONHOME", None)
+    runtime_environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
+    }
     runtime_environment.update(
         {
             "PYTHONDONTWRITEBYTECODE": "1",

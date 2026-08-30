@@ -8,6 +8,7 @@ import errno
 import importlib.util
 import json
 import os
+import re
 import secrets
 import shutil
 import stat
@@ -22,6 +23,7 @@ VALIDATION_DIR = SCRIPT_DIR.parent / "validation"
 VENV_BUILD_TIMEOUT_SECONDS = 300
 PIP_INSTALL_TIMEOUT_SECONDS = 3600
 PIP_BOOTSTRAP_CLEANUP_TIMEOUT_SECONDS = 120
+PIP_CHECK_TIMEOUT_SECONDS = 120
 PIP_FREEZE_TIMEOUT_SECONDS = 120
 FREEZE_EVIDENCE_NAME = "fastvlm-pip-freeze.txt"
 _ALLOWED_BOOTSTRAP_PTH_PAYLOADS = frozenset(
@@ -129,6 +131,7 @@ def _isolated_python_environment() -> dict[str, str]:
         key: value
         for key, value in os.environ.items()
         if not key.upper().startswith("PYTHON")
+        and not key.upper().startswith("PIP_")
         and key.upper()
         not in {
             "PYTHONHOME",
@@ -240,13 +243,93 @@ def _uninstall_bootstrap_setuptools(stage_python: Path) -> None:
     """Remove setuptools after its executable bootstrap hook is gone."""
 
     _run_checked(
-        [str(stage_python), "-I", "-m", "pip", "uninstall", "--yes", "setuptools"],
+        [str(stage_python), "-I", "-m", "pip", "--isolated", "uninstall", "--yes", "setuptools"],
         timeout_seconds=PIP_BOOTSTRAP_CLEANUP_TIMEOUT_SECONDS,
         description="FastVLM bootstrap setuptools removal",
     )
 
 
-def audit_runtime_venv(venv_dir: Path) -> None:
+def _is_python_launcher(name: str) -> bool:
+    return re.fullmatch(r"pythonw?(?:\d+(?:\.\d+)?)?(?:\.exe)?", name.lower()) is not None
+
+
+def _is_startup_module_entry(name: str) -> bool:
+    lower_name = name.lower()
+    return any(lower_name == module or lower_name.startswith(f"{module}.") for module in ("sitecustomize", "usercustomize"))
+
+
+def _parse_pyvenv_config(path: Path) -> dict[str, str]:
+    payload = _read_regular_bytes(path, description="FastVLM pyvenv.cfg")
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeVerificationError(f"FastVLM pyvenv.cfg must be UTF-8: {path}") from exc
+    values: dict[str, str] = {}
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        key, separator, value = line.partition("=")
+        normalized_key = key.strip().lower()
+        if not separator or not normalized_key or normalized_key in values:
+            raise RuntimeVerificationError(f"FastVLM pyvenv.cfg contains invalid metadata at line {line_number}: {path}")
+        values[normalized_key] = value.strip()
+    return values
+
+
+def _validate_venv_controls(venv_dir: Path, *, expected_base_python: Path) -> None:
+    expected_python = _require_regular_file(
+        expected_base_python,
+        description="FastVLM expected base Python",
+        executable=True,
+    )
+    config_path = venv_dir / "pyvenv.cfg"
+    _ensure_no_symlink_components(config_path)
+    values = _parse_pyvenv_config(config_path)
+    if values.get("include-system-site-packages", "").lower() != "false":
+        raise RuntimeVerificationError("FastVLM pyvenv.cfg must set include-system-site-packages = false")
+
+    base_metadata = _run_checked(
+        [
+            str(expected_python),
+            "-I",
+            "-S",
+            "-c",
+            (
+                "import json, os, sys; "
+                "print(json.dumps({'executable': os.path.realpath(sys._base_executable), "
+                "'home': os.path.realpath(os.path.dirname(sys._base_executable))}))"
+            ),
+        ],
+        timeout_seconds=PIP_BOOTSTRAP_CLEANUP_TIMEOUT_SECONDS,
+        description="FastVLM trusted base Python metadata",
+    )
+    try:
+        expected_metadata = json.loads(base_metadata.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise RuntimeVerificationError("FastVLM trusted base Python returned invalid metadata") from exc
+    expected_executable = Path(str(expected_metadata.get("executable") or ""))
+    expected_home = Path(str(expected_metadata.get("home") or ""))
+    configured_home = Path(values.get("home", ""))
+    configured_executable = Path(values.get("executable", ""))
+    if not configured_home.is_absolute() or not configured_executable.is_absolute():
+        raise RuntimeVerificationError("FastVLM pyvenv.cfg must bind absolute home and executable paths")
+    if Path(os.path.realpath(configured_home)) != expected_home:
+        raise RuntimeVerificationError("FastVLM pyvenv.cfg home does not match the trusted base Python")
+    if Path(os.path.realpath(configured_executable)) != expected_executable:
+        raise RuntimeVerificationError("FastVLM pyvenv.cfg executable does not match the trusted base Python")
+
+    launcher_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+    canonical_launcher = launcher_dir / ("python.exe" if os.name == "nt" else "python")
+    base_payload = _read_regular_bytes(expected_python, description="FastVLM expected base Python")
+    launchers = [path for path in launcher_dir.iterdir() if _is_python_launcher(path.name)]
+    if canonical_launcher not in launchers:
+        raise RuntimeVerificationError(f"FastVLM venv Python launcher is missing: {canonical_launcher}")
+    for launcher in launchers:
+        if _read_regular_bytes(launcher, description="FastVLM venv Python launcher") != base_payload:
+            raise RuntimeVerificationError(f"FastVLM venv Python launcher does not match the trusted base: {launcher}")
+
+
+def audit_runtime_venv(venv_dir: Path, *, expected_base_python: Path | None = None) -> None:
     """Reject startup code, editable installs, symlinks, and special site entries."""
 
     target = _lexical_absolute(venv_dir)
@@ -266,21 +349,20 @@ def audit_runtime_venv(venv_dir: Path) -> None:
                 metadata = entry.stat(follow_symlinks=False)
                 child_in_site = in_site_packages or entry.name in {"site-packages", "dist-packages"}
                 if stat.S_ISLNK(metadata.st_mode):
-                    if child_in_site:
-                        raise RuntimeVerificationError(f"FastVLM venv site packages must not contain symlinks: {path}")
-                    continue
+                    raise RuntimeVerificationError(f"FastVLM venv must not contain symlinks: {path}")
                 if stat.S_ISDIR(metadata.st_mode):
+                    if child_in_site and _is_startup_module_entry(entry.name):
+                        raise RuntimeVerificationError(f"FastVLM venv contains prohibited startup module: {path}")
                     visit(path, in_site_packages=child_in_site)
                     continue
                 if not stat.S_ISREG(metadata.st_mode):
                     raise RuntimeVerificationError(f"FastVLM venv contains unsupported filesystem entry: {path}")
+                lower_name = entry.name.lower()
+                if lower_name.endswith("._pth"):
+                    raise RuntimeVerificationError(f"FastVLM venv contains prohibited path-control artifact: {path}")
                 if not child_in_site:
                     continue
-                lower_name = entry.name.lower()
-                if lower_name.endswith((".pth", ".egg-link")) or lower_name in {
-                    "sitecustomize.py",
-                    "usercustomize.py",
-                }:
+                if lower_name.endswith((".pth", ".egg-link")) or _is_startup_module_entry(lower_name):
                     raise RuntimeVerificationError(f"FastVLM venv contains prohibited startup/editable artifact: {path}")
                 if lower_name == "direct_url.json":
                     payload = _read_regular_json(path)
@@ -290,6 +372,8 @@ def audit_runtime_venv(venv_dir: Path) -> None:
                             raise RuntimeVerificationError(f"FastVLM venv contains an editable install: {path}")
 
     visit(target, in_site_packages=False)
+    trusted_base = expected_base_python or Path(getattr(sys, "_base_executable", sys.executable))
+    _validate_venv_controls(target, expected_base_python=trusted_base)
 
 
 def _validate_freeze_output(output: str) -> bytes:
@@ -303,37 +387,47 @@ def _validate_freeze_output(output: str) -> bytes:
 
 def _build_staged_venv(base_python: Path, stage: Path, requirements: Path) -> bytes:
     _run_checked(
-        [str(base_python), "-I", "-m", "venv", str(stage)],
+        [str(base_python), "-I", "-S", "-m", "venv", "--copies", str(stage)],
         timeout_seconds=VENV_BUILD_TIMEOUT_SECONDS,
         description="FastVLM venv creation",
     )
     stage_python = stage / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     _remove_allowlisted_bootstrap_pth(stage)
-    audit_runtime_venv(stage)
+    audit_runtime_venv(stage, expected_base_python=base_python)
     _uninstall_bootstrap_setuptools(stage_python)
-    audit_runtime_venv(stage)
+    audit_runtime_venv(stage, expected_base_python=base_python)
     _run_checked(
         [
             str(stage_python),
             "-I",
             "-m",
             "pip",
+            "--isolated",
             "install",
             "--no-input",
             "--disable-pip-version-check",
+            "--no-deps",
+            "--only-binary=:all:",
             "--requirement",
             str(requirements),
         ],
         timeout_seconds=PIP_INSTALL_TIMEOUT_SECONDS,
         description="FastVLM dependency installation",
     )
-    audit_runtime_venv(stage)
+    _remove_allowlisted_bootstrap_pth(stage)
+    audit_runtime_venv(stage, expected_base_python=base_python)
+    _run_checked(
+        [str(stage_python), "-I", "-m", "pip", "--isolated", "check"],
+        timeout_seconds=PIP_CHECK_TIMEOUT_SECONDS,
+        description="FastVLM dependency consistency check",
+    )
+    audit_runtime_venv(stage, expected_base_python=base_python)
     freeze = _run_checked(
-        [str(stage_python), "-I", "-m", "pip", "freeze", "--all"],
+        [str(stage_python), "-I", "-m", "pip", "--isolated", "freeze", "--all"],
         timeout_seconds=PIP_FREEZE_TIMEOUT_SECONDS,
         description="FastVLM dependency evidence capture",
     )
-    audit_runtime_venv(stage)
+    audit_runtime_venv(stage, expected_base_python=base_python)
     return _validate_freeze_output(freeze.stdout)
 
 
@@ -391,6 +485,7 @@ def _promote_venv_and_evidence(
     target_venv: Path,
     staged_evidence: Path,
     evidence_path: Path,
+    expected_base_python: Path,
 ) -> None:
     token = f"{os.getpid()}-{secrets.token_hex(8)}"
     venv_backup = runtime / f".{target_venv.name}.backup-{token}"
@@ -412,7 +507,7 @@ def _promote_venv_and_evidence(
             moved_evidence = True
         _replace_path(staged_evidence, evidence_path)
         promoted_evidence = True
-        audit_runtime_venv(target_venv)
+        audit_runtime_venv(target_venv, expected_base_python=expected_base_python)
         _fsync_directory(runtime)
     except Exception as exc:
         rollback_errors: list[str] = []
@@ -475,6 +570,7 @@ def prepare_runtime_venv(
             target_venv=target_venv,
             staged_evidence=staged_evidence,
             evidence_path=evidence_path,
+            expected_base_python=trusted_python,
         )
     finally:
         _remove_path(staged_venv)

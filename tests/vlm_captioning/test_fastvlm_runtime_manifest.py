@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -31,7 +32,7 @@ def _digest(payload: bytes) -> str:
 
 def _manifest(tmp_path: Path, payload: bytes = b"model-config") -> dict:
     return {
-        "schema_version": "fastvlm-runtime.v1",
+        "schema_version": "fastvlm-runtime.v2",
         "runtime_root": ".runtime/fastvlm",
         "python": {"venv_dir": ".venv-fastvlm"},
         "runtime_sources": {
@@ -64,7 +65,19 @@ def _manifest(tmp_path: Path, payload: bytes = b"model-config") -> dict:
                         "size_bytes": len(payload),
                     }
                 ],
-            }
+            },
+            "default": {
+                "repo_id": "apple/FastVLM-1.5B-int8",
+                "revision": "924716f32f1dbb29e8d2b62aac9010039ebc1ad7",
+                "target_dir": "checkpoints/FastVLM-1.5B-int8",
+                "required_files": [{"path": "config.json", "sha256": _digest(payload), "size_bytes": len(payload)}],
+            },
+            "review": {
+                "repo_id": "apple/FastVLM-7B-int4",
+                "revision": "1aeadbaaba011276f3dcda9582e5e64e2a90873a",
+                "target_dir": "checkpoints/FastVLM-7B-int4",
+                "required_files": [{"path": "config.json", "sha256": _digest(payload), "size_bytes": len(payload)}],
+            },
         },
     }
 
@@ -175,6 +188,96 @@ def test_manifest_validator_rejects_unpinned_or_untrusted_manifest_values(tmp_pa
     assert any("repo_id is not allowlisted" in error for error in errors)
     assert any("Unsafe FastVLM manifest path" in error for error in errors)
     assert any("sha256 must be a SHA-256 hex digest" in error for error in errors)
+
+
+def test_manifest_v1_remains_validation_compatible_but_cannot_authorize_sources(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_runtime_manifest_v1_test", "scripts/validation/fastvlm_runtime_manifest.py")
+    manifest = _manifest(tmp_path)
+    manifest["schema_version"] = "fastvlm-runtime.v1"
+    manifest["runtime_sources"]["ml_fastvlm"]["target_dir"] = "legacy-ml-fastvlm"
+    manifest["runtime_sources"]["mlx_vlm"]["target_dir"] = "legacy-mlx-vlm"
+    manifest["runtime_sources"]["mlx_vlm"].pop("patch")
+    runtime_root = tmp_path / "runtime"
+    _write_fixture_runtime(runtime_root)
+
+    assert module.validate_manifest(manifest) == []
+    assert (
+        module.verify_runtime(
+            manifest,
+            roles=["smoke"],
+            root=runtime_root,
+            include_sources=False,
+        )
+        == []
+    )
+    with pytest.raises(module.ManifestError, match="source integrity requires fastvlm-runtime.v2"):
+        module.verify_runtime_sources(manifest, root=runtime_root)
+
+
+def test_manifest_v2_requires_governed_patch_and_rejects_unknown_schema(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_runtime_manifest_v2_test", "scripts/validation/fastvlm_runtime_manifest.py")
+    manifest = _manifest(tmp_path)
+    manifest["runtime_sources"]["mlx_vlm"].pop("patch")
+
+    errors = module.validate_manifest(manifest)
+
+    assert "runtime_sources.mlx_vlm.patch must be an object" in errors
+    manifest["schema_version"] = "fastvlm-runtime.v3"
+    errors = module.validate_manifest(manifest)
+    assert any("schema_version must be fastvlm-runtime.v1 or fastvlm-runtime.v2" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_errors"),
+    [
+        (
+            lambda manifest: manifest["python"].update({"venv_dir": "mlx-vlm"}),
+            ("python.venv_dir must be .venv-fastvlm", "runtime targets overlap"),
+        ),
+        (
+            lambda manifest: manifest["models"]["smoke"].update({"target_dir": "ml-fastvlm"}),
+            ("models.smoke.target_dir must be checkpoints/FastVLM-0.5B-fp16", "runtime targets overlap"),
+        ),
+        (
+            lambda manifest: manifest["models"]["smoke"].update({"target_dir": ".venv-fastvlm/models"}),
+            ("models.smoke.target_dir must be checkpoints/FastVLM-0.5B-fp16", "runtime targets overlap"),
+        ),
+    ],
+)
+def test_manifest_v2_rejects_noncanonical_or_overlapping_runtime_targets(
+    tmp_path: Path,
+    mutate,
+    expected_errors: tuple[str, ...],
+) -> None:
+    module = _load_script_module("fastvlm_runtime_target_collision_test", "scripts/validation/fastvlm_runtime_manifest.py")
+    manifest = _manifest(tmp_path)
+    mutate(manifest)
+
+    errors = module.validate_manifest(manifest)
+
+    for expected in expected_errors:
+        assert any(expected in error for error in errors)
+
+
+def test_manifest_v2_binds_runtime_root_and_required_model_roles(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_runtime_role_binding_test", "scripts/validation/fastvlm_runtime_manifest.py")
+    manifest = _manifest(tmp_path)
+    manifest["runtime_root"] = "alternate/runtime"
+    manifest["models"]["default"], manifest["models"]["review"] = (
+        manifest["models"]["review"],
+        manifest["models"]["default"],
+    )
+
+    errors = module.validate_manifest(manifest)
+
+    assert "runtime_root must be .runtime/fastvlm" in errors
+    assert "models.default.repo_id must be apple/FastVLM-1.5B-int8" in errors
+    assert "models.review.repo_id must be apple/FastVLM-7B-int4" in errors
+
+    manifest = _manifest(tmp_path)
+    manifest["models"].pop("default")
+
+    assert "models is missing required role(s): default" in module.validate_manifest(manifest)
 
 
 def test_runtime_verifier_accepts_fixture_runtime_and_rejects_missing_python(tmp_path: Path) -> None:
@@ -304,6 +407,7 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
     import_smoke_calls: list[bool] = []
 
     monkeypatch.setattr(module, "verify_python_imports", lambda *_args, **_kwargs: import_smoke_calls.append(True) or [])
+    monkeypatch.setattr(module, "audit_runtime_venv", lambda *_args, **_kwargs: None)
 
     assert (
         module.main(
@@ -381,12 +485,19 @@ def test_fastvlm_import_smoke_includes_network_free_datasets_capability_check(
     manifest = _manifest(tmp_path)
     _write_fixture_runtime(runtime_root)
     smoke_sources: list[str] = []
+    monkeypatch.setenv("PYTHONWARNINGS", "error")
+    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "attacker-venv"))
+    monkeypatch.setenv("__PYVENV_LAUNCHER__", str(tmp_path / "attacker-python"))
 
     def fake_run(args, **kwargs):  # noqa: ANN001
         smoke_sources.append(args[-1])
+        assert kwargs["timeout"] == module.FASTVLM_IMPORT_SMOKE_TIMEOUT_SECONDS == 60
         assert kwargs["env"]["PYTHONDONTWRITEBYTECODE"] == "1"
         assert kwargs["env"]["PYTHONNOUSERSITE"] == "1"
         assert kwargs["env"]["PYTHONPATH"] == str(runtime_root / "mlx-vlm")
+        assert "PYTHONWARNINGS" not in kwargs["env"]
+        assert "VIRTUAL_ENV" not in kwargs["env"]
+        assert "__PYVENV_LAUNCHER__" not in kwargs["env"]
         return module.subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
@@ -429,6 +540,26 @@ def test_fastvlm_import_smoke_reports_missing_python_without_spawning(
     assert "FastVLM Python executable missing" in errors[0]
 
 
+def test_runtime_validator_starts_with_site_imports_disabled() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            str(repo_root / "scripts/validation/validate_fastvlm_runtime.py"),
+            "--help",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "Validate the governed local FastVLM advisory captioning runtime" in completed.stdout
+
+
 def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -444,6 +575,7 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     runtime_root = tmp_path / "fastvlm"
     _write_manifest(manifest_path, _manifest(tmp_path))
     _write_fixture_runtime(runtime_root)
+    module.audit_runtime_venv = lambda *_args, **_kwargs: None
 
     rc = module.main(
         [
@@ -467,8 +599,80 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     assert payload["checks"]["manifest"]["status"] == "ready"
     assert payload["checks"]["runtime_sources"]["status"] == "skipped"
     assert payload["checks"]["python_executable"]["status"] == "ready"
+    assert payload["checks"]["python_environment"]["status"] == "ready"
     assert payload["checks"]["models"]["smoke"]["status"] == "ready"
     assert payload["checks"]["python_imports"]["status"] == "skipped"
+
+
+def test_runtime_validator_rejects_poisoned_venv_before_import_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator = _load_script_module(
+        "validate_fastvlm_runtime_poison_test",
+        "scripts/validation/validate_fastvlm_runtime.py",
+    )
+    venv_builder = _load_script_module(
+        "fastvlm_runtime_poison_venv_builder",
+        "scripts/setup/install_fastvlm_venv.py",
+    )
+    manifest = _manifest(tmp_path)
+    runtime_root = tmp_path / "fastvlm"
+    _write_fixture_runtime(runtime_root)
+    shutil.rmtree(runtime_root / ".venv-fastvlm")
+    requirements = tmp_path / "empty-requirements.txt"
+    requirements.write_text("", encoding="utf-8")
+    venv_builder._build_staged_venv(
+        Path(os.path.realpath(sys.executable)),
+        runtime_root / ".venv-fastvlm",
+        requirements,
+    )
+    marker = tmp_path / "poison-executed"
+    site_packages = next((runtime_root / ".venv-fastvlm").glob("lib/python*/site-packages"))
+    (site_packages / "sitecustomize.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    def fail_import(*_args, **_kwargs):  # noqa: ANN001
+        raise AssertionError("poisoned venv must be rejected before import smoke")
+
+    monkeypatch.setattr(validator, "verify_python_imports", fail_import)
+
+    evidence = validator._runtime_evidence(
+        manifest_path=tmp_path / "manifest.json",
+        root=runtime_root,
+        roles=["smoke"],
+        manifest=manifest,
+        include_sources=False,
+        include_python=True,
+        include_import_smoke=True,
+    )
+
+    assert evidence["runtime_status"] == "invalid"
+    assert evidence["checks"]["python_environment"]["status"] == "failed"
+    assert evidence["checks"]["python_imports"]["status"] == "skipped"
+    assert not marker.exists()
+
+    (site_packages / "sitecustomize.py").unlink()
+    metadata = site_packages / "poisoned-1.0.dist-info/direct_url.json"
+    metadata.parent.mkdir()
+    metadata.write_text("{not-json", encoding="utf-8")
+
+    malformed_evidence = validator._runtime_evidence(
+        manifest_path=tmp_path / "manifest.json",
+        root=runtime_root,
+        roles=["smoke"],
+        manifest=manifest,
+        include_sources=False,
+        include_python=True,
+        include_import_smoke=True,
+    )
+
+    assert malformed_evidence["runtime_status"] == "invalid"
+    assert malformed_evidence["errors"] == ["validation details redacted"]
+    assert malformed_evidence["checks"]["python_environment"]["status"] == "failed"
+    assert str(tmp_path) not in json.dumps(malformed_evidence)
 
 
 def test_validate_fastvlm_runtime_redacts_human_and_json_error_details(

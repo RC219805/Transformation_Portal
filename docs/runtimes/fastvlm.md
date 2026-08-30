@@ -169,11 +169,15 @@ The installer is manifest-backed and fail-closed:
 ./scripts/validation/validate_fastvlm_runtime.py --json --models smoke
 ```
 
-`--skip-verify` skips only the final Python/model smoke. It never skips source
-trust verification. The complete source, venv, evidence, and model transaction
-is serialized by an interprocess lock. Existing source trust is checked before
-source replacement, dependency, or model work and again as the absolute last
-installer operation, including when `--skip-verify` is selected.
+The installer's final verification is static: it checks the manifest, source
+trees, Python executable, selected-model checksums, and venv audit without
+importing FastVLM or exercising MLX/Metal. `--skip-verify` skips only that final
+static Python/model pass; it never skips source trust verification. The complete
+source, venv, evidence, and model transaction is serialized by an interprocess
+lock. Existing source trust is checked before source replacement, dependency,
+or model work and again as the absolute last installer operation, including
+when `--skip-verify` is selected. Run `make check-fastvlm-runtime` for import
+and MLX/Metal smoke coverage.
 
 Validation output is safe for shared CI logs: human-readable failures and the
 machine-readable `--json` payload retain statuses and error counts while

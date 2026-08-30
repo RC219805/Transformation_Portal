@@ -25,7 +25,7 @@ is_supported_python() {
         [[ -n "$candidate" ]] || return 1
     fi
 
-    "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1
+    "$candidate" -I -S -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1
 }
 
 emit_guidance() {

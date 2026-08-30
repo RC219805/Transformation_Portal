@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -148,6 +149,44 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert result.raw_stdout
     assert result.raw_stderr == ""
     assert not list(runtime_dir.rglob("*.pyc"))
+
+
+def test_runtime_subprocess_strips_ambient_python_controls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import os, sys\n"
+        "allowed = {'PYTHONDONTWRITEBYTECODE', 'PYTHONNOUSERSITE', 'PYTHONPATH', 'PYTHONSAFEPATH'}\n"
+        "unexpected = sorted(name for name in os.environ if name.startswith('PYTHON') and name not in allowed)\n"
+        "if unexpected:\n"
+        "    print('unexpected=' + ','.join(unexpected), file=sys.stderr)\n"
+        "    raise SystemExit(9)\n"
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+    monkeypatch.setenv("PYTHONINSPECT", "1")
+    monkeypatch.setenv("PYTHONWARNINGS", "error")
+    monkeypatch.setenv("PYTHONHASHSEED", "123")
+    monkeypatch.setenv("PYTHONBREAKPOINT", "attacker.module")
+    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "attacker-venv"))
+    monkeypatch.setenv("__PYVENV_LAUNCHER__", str(tmp_path / "attacker-python"))
+    real_run = subprocess.run
+
+    def assert_clean_environment(*args, **kwargs):  # noqa: ANN001
+        child_environment = kwargs["env"]
+        assert "VIRTUAL_ENV" not in child_environment
+        assert "__PYVENV_LAUNCHER__" not in child_environment
+        return real_run(*args, **kwargs)  # pylint: disable=subprocess-run-check
+
+    monkeypatch.setattr(subprocess, "run", assert_clean_environment)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is True
+    assert result.raw_stderr == ""
 
 
 def test_default_runtime_paths_resolve_from_repo_root_when_cwd_changes(

@@ -1,5 +1,5 @@
 {
-  "schema_version": "fastvlm-runtime.v1",
+  "schema_version": "fastvlm-runtime.v2",
   "runtime_root": ".runtime/fastvlm",
   "python": {
     "venv_dir": ".venv-fastvlm"

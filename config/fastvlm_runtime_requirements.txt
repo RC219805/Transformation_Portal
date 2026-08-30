@@ -63,6 +63,7 @@ safehttpx==0.1.7
 safetensors==0.8.0
 scipy==1.13.1
 semantic-version==2.10.0
+setuptools==84.0.0
 shellingham==1.5.4
 six==1.17.0
 starlette==1.6.0

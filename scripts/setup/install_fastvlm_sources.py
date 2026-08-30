@@ -34,7 +34,7 @@ RuntimeVerificationError = _manifest_helpers.RuntimeVerificationError
 TRUSTED_RUNTIME_SOURCES = _manifest_helpers.TRUSTED_RUNTIME_SOURCES
 inspect_source_checkout = _manifest_helpers.inspect_source_checkout
 load_manifest = _manifest_helpers.load_manifest
-require_valid_manifest = _manifest_helpers.require_valid_manifest
+require_source_integrity_manifest = _manifest_helpers.require_source_integrity_manifest
 run_secure_git = _manifest_helpers.run_secure_git
 runtime_root = _manifest_helpers.runtime_root
 safe_child = _manifest_helpers.safe_child
@@ -257,7 +257,7 @@ def install_runtime_sources(
     root: Path,
     dry_run: bool = False,
 ) -> str:
-    require_valid_manifest(manifest)
+    require_source_integrity_manifest(manifest)
     runtime = _ensure_safe_runtime_root(root, create=False)
     targets, existing_heads = _preflight_existing_sources(manifest, runtime)
     sources = manifest["runtime_sources"]
@@ -285,7 +285,7 @@ def install_runtime_sources(
 def verify_installed_runtime_sources(manifest: Mapping[str, Any], *, root: Path) -> str:
     """Perform a pure, network-free verification of the installed source pair."""
 
-    require_valid_manifest(manifest)
+    require_source_integrity_manifest(manifest)
     runtime = _ensure_safe_runtime_root(root, create=False)
     _preflight_existing_sources(manifest, runtime)
     errors = verify_runtime_sources(manifest, root=runtime)

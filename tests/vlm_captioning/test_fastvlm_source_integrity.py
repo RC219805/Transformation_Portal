@@ -44,7 +44,7 @@ def _find_python_311() -> Path | None:
         candidates.append(Path(discovered))
     for candidate in candidates:
         completed = subprocess.run(
-            [str(candidate), "-I", "-c", "import sys; raise SystemExit(sys.version_info[:2] != (3, 11))"],
+            [str(candidate), "-I", "-S", "-c", "import sys; raise SystemExit(sys.version_info[:2] != (3, 11))"],
             check=False,
             capture_output=True,
             text=True,
@@ -392,7 +392,45 @@ def test_source_installer_rejects_wrong_origin_before_staging_or_contact(
     with pytest.raises(module.RuntimeVerificationError, match="origin mismatch"):
         module.install_runtime_sources(manifest, root=runtime_root)
 
-    assert stage_calls == []
+    assert not stage_calls
+
+
+def test_source_installer_rejects_legacy_v1_before_filesystem_or_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_v1_source_install_test", "scripts/setup/install_fastvlm_sources.py")
+    manifest, _state = _local_source_contract(tmp_path)
+    _allow_local_sources(module, manifest, monkeypatch)
+    manifest["schema_version"] = "fastvlm-runtime.v1"
+    manifest["runtime_sources"]["mlx_vlm"].pop("patch")
+    runtime_root = tmp_path / "missing-runtime"
+    git_calls: list[bool] = []
+    monkeypatch.setattr(module, "run_secure_git", lambda *_args, **_kwargs: git_calls.append(True))
+
+    with pytest.raises(module.ManifestError, match="source integrity requires fastvlm-runtime.v2"):
+        module.install_runtime_sources(manifest, root=runtime_root)
+
+    assert not git_calls
+    assert not runtime_root.exists()
+
+
+def test_source_installer_rejects_target_collisions_before_filesystem_or_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_colliding_source_install_test", "scripts/setup/install_fastvlm_sources.py")
+    manifest, _state = _local_source_contract(tmp_path)
+    manifest["models"]["smoke"]["target_dir"] = "ml-fastvlm"
+    runtime_root = tmp_path / "missing-runtime"
+    stage_calls: list[bool] = []
+    monkeypatch.setattr(module, "_stage_source_set", lambda *_args, **_kwargs: stage_calls.append(True))
+
+    with pytest.raises(module.ManifestError, match="runtime targets overlap"):
+        module.install_runtime_sources(manifest, root=runtime_root)
+
+    assert not stage_calls
+    assert not runtime_root.exists()
 
 
 def test_source_installer_rejects_hooks_without_execution_or_network(
@@ -416,7 +454,7 @@ def test_source_installer_rejects_hooks_without_execution_or_network(
         module.install_runtime_sources(manifest, root=runtime_root)
 
     assert not marker.exists()
-    assert stage_calls == []
+    assert not stage_calls
 
 
 def test_source_installer_rejects_symlinked_target_before_staging(
@@ -437,7 +475,7 @@ def test_source_installer_rejects_symlinked_target_before_staging(
     with pytest.raises((module.ManifestError, module.RuntimeVerificationError), match="escapes runtime root|real directory"):
         module.install_runtime_sources(manifest, root=runtime_root)
 
-    assert stage_calls == []
+    assert not stage_calls
 
 
 def test_source_installer_is_idempotent_and_supports_patched_revision_upgrade(
@@ -558,7 +596,178 @@ def test_python_311_staged_venv_removes_bootstrap_setuptools_pth(tmp_path: Path)
 
     assert b"setuptools==" not in freeze.lower()
     assert not list(staged_venv.rglob("*.pth"))
+    module.audit_runtime_venv(staged_venv, expected_base_python=python_311)
+
+
+def test_venv_install_removes_allowlisted_setuptools_pth_after_locked_install(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_locked_setuptools_pth_test", "scripts/setup/install_fastvlm_venv.py")
+    requirements = tmp_path / "empty-requirements.txt"
+    requirements.write_text("", encoding="utf-8")
+    staged_venv = tmp_path / "venv"
+    real_run_checked = module._run_checked
+
+    def recreate_setuptools_pth(command, **kwargs):  # noqa: ANN001
+        result = real_run_checked(command, **kwargs)
+        if command[2:4] == ["-m", "pip"] and "install" in command:
+            site_packages = next(staged_venv.glob("lib/python*/site-packages"))
+            (site_packages / "distutils-precedence.pth").write_bytes(next(iter(module._ALLOWED_BOOTSTRAP_PTH_PAYLOADS)))
+        return result
+
+    monkeypatch.setattr(module, "_run_checked", recreate_setuptools_pth)
+
+    module._build_staged_venv(Path(os.path.realpath(sys.executable)), staged_venv, requirements)
+
+    assert not list(staged_venv.rglob("*.pth"))
     module.audit_runtime_venv(staged_venv)
+
+
+def test_venv_install_strips_ambient_pip_policy_and_uses_isolated_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_pip_isolation_test", "scripts/setup/install_fastvlm_venv.py")
+    monkeypatch.setenv("PIP_INDEX_URL", "https://attacker.invalid/simple")
+    monkeypatch.setenv("PIP_EXTRA_INDEX_URL", "https://attacker.invalid/extra")
+    monkeypatch.setenv("PIP_TARGET", str(tmp_path / "attacker-target"))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "attacker-python"))
+
+    environment = module._isolated_python_environment()
+
+    assert environment["PIP_CONFIG_FILE"] == os.devnull
+    assert environment["PYTHONNOUSERSITE"] == "1"
+    assert "PIP_INDEX_URL" not in environment
+    assert "PIP_EXTRA_INDEX_URL" not in environment
+    assert "PIP_TARGET" not in environment
+    assert environment.get("PYTHONPATH") is None
+
+    requirements = tmp_path / "empty-requirements.txt"
+    requirements.write_text("", encoding="utf-8")
+    staged_venv = tmp_path / "venv"
+    commands: list[list[str]] = []
+    real_run_checked = module._run_checked
+
+    def record_run_checked(command, **kwargs):  # noqa: ANN001
+        commands.append(list(command))
+        return real_run_checked(command, **kwargs)
+
+    monkeypatch.setattr(module, "_run_checked", record_run_checked)
+    module._build_staged_venv(Path(os.path.realpath(sys.executable)), staged_venv, requirements)
+
+    pip_commands = [command for command in commands if command[2:4] == ["-m", "pip"]]
+    assert pip_commands
+    assert all(command[4] == "--isolated" for command in pip_commands)
+    install_command = next(command for command in pip_commands if "install" in command)
+    assert "--no-deps" in install_command
+    assert "--only-binary=:all:" in install_command
+    assert any(command[-1] == "check" for command in pip_commands)
+
+
+def test_staged_venv_stops_before_freeze_when_pip_check_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_pip_check_failure_test", "scripts/setup/install_fastvlm_venv.py")
+    requirements = tmp_path / "empty-requirements.txt"
+    requirements.write_text("", encoding="utf-8")
+    staged_venv = tmp_path / "venv"
+    commands: list[list[str]] = []
+    real_run_checked = module._run_checked
+
+    def fail_pip_check(command, **kwargs):  # noqa: ANN001
+        commands.append(list(command))
+        if command[-1] == "check":
+            raise module.RuntimeVerificationError("FastVLM dependency consistency check failed")
+        return real_run_checked(command, **kwargs)
+
+    monkeypatch.setattr(module, "_run_checked", fail_pip_check)
+
+    with pytest.raises(module.RuntimeVerificationError, match="dependency consistency check failed"):
+        module._build_staged_venv(Path(os.path.realpath(sys.executable)), staged_venv, requirements)
+
+    assert any(command[-1] == "check" for command in commands)
+    assert not any(command[-2:] == ["freeze", "--all"] for command in commands)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "lib/python3.11/site-packages/sitecustomize.pyc",
+        "lib/python3.11/site-packages/sitecustomize.cpython-311-darwin.so",
+        "lib/python3.11/site-packages/usercustomize.pyd",
+        "bin/python._pth",
+    ],
+)
+def test_venv_audit_rejects_import_equivalent_startup_controls(tmp_path: Path, relative_path: str) -> None:
+    module = _load_script_module("fastvlm_startup_variant_test", "scripts/setup/install_fastvlm_venv.py")
+    venv = tmp_path / "venv"
+    artifact = venv / relative_path
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"untrusted")
+
+    with pytest.raises(module.RuntimeVerificationError, match="startup|path-control"):
+        module.audit_runtime_venv(venv)
+
+
+@pytest.mark.parametrize("module_name", ["sitecustomize", "usercustomize"])
+def test_venv_audit_rejects_startup_module_packages(tmp_path: Path, module_name: str) -> None:
+    module = _load_script_module("fastvlm_startup_package_test", "scripts/setup/install_fastvlm_venv.py")
+    package = tmp_path / "venv/lib/python3.11/site-packages" / module_name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("raise RuntimeError('executed')\n", encoding="utf-8")
+
+    with pytest.raises(module.RuntimeVerificationError, match="prohibited startup module"):
+        module.audit_runtime_venv(tmp_path / "venv")
+
+
+@pytest.mark.parametrize("symlink_path", ["lib", "bin/python"])
+def test_venv_audit_rejects_ancestor_and_launcher_symlinks(tmp_path: Path, symlink_path: str) -> None:
+    module = _load_script_module("fastvlm_venv_symlink_test", "scripts/setup/install_fastvlm_venv.py")
+    venv = tmp_path / "venv"
+    external = tmp_path / "external"
+    external.mkdir()
+    link = venv / symlink_path
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(module.RuntimeVerificationError, match="must not contain symlinks"):
+        module.audit_runtime_venv(venv)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("include-system-site-packages", "true", "include-system-site-packages"),
+        ("home", "/tmp/untrusted-python", "home does not match"),
+        ("executable", "/tmp/untrusted-python", "executable does not match"),
+    ],
+)
+def test_venv_audit_rejects_mutated_pyvenv_controls(
+    tmp_path: Path,
+    key: str,
+    value: str,
+    message: str,
+) -> None:
+    module = _load_script_module("fastvlm_pyvenv_control_test", "scripts/setup/install_fastvlm_venv.py")
+    venv = tmp_path / "venv"
+    subprocess.run(
+        [os.path.realpath(sys.executable), "-I", "-S", "-m", "venv", "--copies", str(venv)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    config = venv / "pyvenv.cfg"
+    lines = config.read_text(encoding="utf-8").splitlines()
+    config.write_text(
+        "\n".join(f"{key} = {value}" if line.lower().startswith(f"{key} =") else line for line in lines) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.RuntimeVerificationError, match=message):
+        module.audit_runtime_venv(venv, expected_base_python=Path(sys.executable))
 
 
 @pytest.mark.parametrize(
@@ -608,7 +817,41 @@ def test_staged_venv_rejects_untrusted_startup_before_stage_python(
     with pytest.raises(module.RuntimeVerificationError):
         module._build_staged_venv(base_python, staged_venv, requirements)
 
-    assert commands == [[str(base_python), "-I", "-m", "venv", str(staged_venv)]]
+    assert commands == [[str(base_python), "-I", "-S", "-m", "venv", "--copies", str(staged_venv)]]
+
+
+def test_staged_venv_rejects_sitecustomize_package_before_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_pre_execution_package_test", "scripts/setup/install_fastvlm_venv.py")
+    requirements = tmp_path / "empty-requirements.txt"
+    requirements.write_text("", encoding="utf-8")
+    staged_venv = tmp_path / "venv"
+    base_python = tmp_path / "base-python"
+    marker = tmp_path / "startup-executed"
+    commands: list[list[str]] = []
+
+    def fake_run_checked(command, **_kwargs):  # noqa: ANN001
+        commands.append(list(command))
+        if len(commands) > 1:
+            marker.write_text("executed", encoding="utf-8")
+            pytest.fail("staged Python executed before the startup package was rejected")
+        package = staged_venv / "lib/python3.11/site-packages/sitecustomize"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text(
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(module, "_run_checked", fake_run_checked)
+
+    with pytest.raises(module.RuntimeVerificationError, match="prohibited startup module"):
+        module._build_staged_venv(base_python, staged_venv, requirements)
+
+    assert not marker.exists()
+    assert commands == [[str(base_python), "-I", "-S", "-m", "venv", "--copies", str(staged_venv)]]
 
 
 @pytest.mark.parametrize(
@@ -663,9 +906,32 @@ def test_freeze_evidence_symlink_is_rejected_without_touching_victim(
             requirements=requirements,
         )
 
-    assert build_calls == []
+    assert not build_calls
     assert victim.read_text(encoding="utf-8") == "preserve me\n"
     assert (runtime_root / "fastvlm-pip-freeze.txt").is_symlink()
+
+
+def test_venv_install_rejects_target_collisions_before_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module("fastvlm_colliding_venv_install_test", "scripts/setup/install_fastvlm_venv.py")
+    manifest = _manifest(tmp_path)
+    manifest["python"]["venv_dir"] = "mlx-vlm"
+    runtime_root = tmp_path / "missing-runtime"
+    build_calls: list[bool] = []
+    monkeypatch.setattr(module, "_build_staged_venv", lambda *_args: build_calls.append(True))
+
+    with pytest.raises(module.ManifestError, match="runtime targets overlap"):
+        module.prepare_runtime_venv(
+            manifest,
+            root=runtime_root,
+            base_python=Path(sys.executable),
+            requirements=tmp_path / "requirements.txt",
+        )
+
+    assert not build_calls
+    assert not runtime_root.exists()
 
 
 def test_venv_and_evidence_promotion_roll_back_together(
@@ -763,7 +1029,9 @@ def test_install_lock_serializes_concurrent_upgrade_transactions(tmp_path: Path)
             delay,
         ]
 
-    first = subprocess.Popen(command("v1", "0.4"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    first = subprocess.Popen(  # pylint: disable=consider-using-with
+        command("v1", "0.4"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         if log_path.exists() and "v1:start" in log_path.read_text(encoding="utf-8"):
@@ -772,7 +1040,9 @@ def test_install_lock_serializes_concurrent_upgrade_transactions(tmp_path: Path)
     else:
         first.kill()
         raise AssertionError("first transaction did not acquire the install lock")
-    second = subprocess.Popen(command("v2", "0"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second = subprocess.Popen(  # pylint: disable=consider-using-with
+        command("v2", "0"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
     first_stdout, first_stderr = first.communicate(timeout=10)
     second_stdout, second_stderr = second.communicate(timeout=10)
 
@@ -782,7 +1052,49 @@ def test_install_lock_serializes_concurrent_upgrade_transactions(tmp_path: Path)
     assert version_path.read_text(encoding="utf-8") == "v2"
 
 
-def test_public_installer_serializes_the_complete_concurrent_transaction(tmp_path: Path) -> None:
+def test_install_lock_assertion_rejects_and_does_not_acquire_forged_fd(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_forged_lock_test", "scripts/setup/run_fastvlm_install_locked.py")
+    lock_path = tmp_path / "fastvlm.lock"
+    descriptor = module._open_lock(lock_path)  # pylint: disable=consider-using-with
+    token = 1234567
+    os.lseek(descriptor, token, os.SEEK_SET)
+    try:
+        with pytest.raises(module.InstallLockError, match="does not hold"):
+            module.assert_lock_held(lock_path, descriptor, token)
+
+        probe = module._open_lock(lock_path)  # pylint: disable=consider-using-with
+        try:
+            module._acquire_lock(probe, timeout_seconds=0.1)
+            module.fcntl.flock(probe, module.fcntl.LOCK_UN)
+        finally:
+            os.close(probe)
+    finally:
+        os.close(descriptor)
+
+
+def test_install_lock_assertion_accepts_bound_locked_fd_and_token(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_valid_lock_test", "scripts/setup/run_fastvlm_install_locked.py")
+    lock_path = tmp_path / "fastvlm.lock"
+    descriptor = module._open_lock(lock_path)  # pylint: disable=consider-using-with
+    token = 7654321
+    try:
+        module._acquire_lock(descriptor, timeout_seconds=0.1)
+        os.lseek(descriptor, token, os.SEEK_SET)
+
+        module.assert_lock_held(lock_path, descriptor, token)
+    finally:
+        os.close(descriptor)
+
+
+@pytest.mark.parametrize(
+    "terminate_lock_runner",
+    [False, True],
+    ids=["normal", "lock-runner-parent-terminated"],
+)
+def test_public_installer_serializes_the_complete_concurrent_transaction(
+    tmp_path: Path,
+    terminate_lock_runner: bool,
+) -> None:
     source_root = Path(__file__).resolve().parents[2]
     repo_root = tmp_path / "repo"
     setup_dir = repo_root / "scripts/setup"
@@ -811,7 +1123,13 @@ def test_public_installer_serializes_the_complete_concurrent_transaction(tmp_pat
                 "    stream.flush()",
                 "    os.fsync(stream.fileno())",
                 "if action == 'source':",
-                "    time.sleep(0.35)",
+                "    gate_name = os.environ.get('TP_TEST_SOURCE_GATE')",
+                "    if gate_name:",
+                "        gate = pathlib.Path(gate_name)",
+                "        while not gate.exists():",
+                "            time.sleep(0.01)",
+                "    else:",
+                "        time.sleep(0.35)",
                 "with log.open('a', encoding='utf-8') as stream:",
                 "    stream.write(f'{label}:{action}:end\\n')",
                 "    stream.flush()",
@@ -860,17 +1178,21 @@ def test_public_installer_serializes_the_complete_concurrent_transaction(tmp_pat
         encoding="utf-8",
     )
 
-    def launch(label: str) -> subprocess.Popen[str]:
+    def launch(label: str, *, source_gate: Path | None = None) -> subprocess.Popen[str]:
+        environment = {**os.environ, "TP_TEST_TRANSACTION_LABEL": label}
+        if source_gate is not None:
+            environment["TP_TEST_SOURCE_GATE"] = str(source_gate)
         return subprocess.Popen(
             [str(installer), "--skip-verify"],
             cwd=repo_root,
-            env={**os.environ, "TP_TEST_TRANSACTION_LABEL": label},
+            env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
 
-    first = launch("v1")
+    source_gate = tmp_path / "release-v1-source" if terminate_lock_runner else None
+    first = launch("v1", source_gate=source_gate)
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         if log_path.exists() and "v1:source:start" in log_path.read_text(encoding="utf-8"):
@@ -879,11 +1201,43 @@ def test_public_installer_serializes_the_complete_concurrent_transaction(tmp_pat
     else:
         first.kill()
         raise AssertionError("first public install did not enter its source transaction")
+
+    if terminate_lock_runner:
+        first.terminate()
+        first.wait(timeout=5)
+        lock_module = _load_script_module(
+            "fastvlm_orphaned_installer_lock_test",
+            "scripts/setup/run_fastvlm_install_locked.py",
+        )
+        probe = lock_module._open_lock(repo_root / ".runtime/.fastvlm-install.lock")
+        try:
+            with pytest.raises(lock_module.InstallLockError, match="Timed out"):
+                lock_module._acquire_lock(probe, timeout_seconds=0.1)
+        finally:
+            os.close(probe)
     second = launch("v2")
-    first_stdout, first_stderr = first.communicate(timeout=10)
+    second_entered_before_release = False
+    if source_gate is not None:
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            if "v2:source:start" in log_path.read_text(encoding="utf-8"):
+                second_entered_before_release = True
+                break
+            time.sleep(0.02)
+        source_gate.touch()
+
+    if terminate_lock_runner:
+        first_stdout = first.stdout.read() if first.stdout is not None else ""
+        first_stderr = first.stderr.read() if first.stderr is not None else ""
+    else:
+        first_stdout, first_stderr = first.communicate(timeout=10)
     second_stdout, second_stderr = second.communicate(timeout=10)
 
-    assert first.returncode == 0, first_stdout + first_stderr
+    if terminate_lock_runner:
+        assert first.returncode != 0
+        assert not second_entered_before_release, second_stdout + second_stderr
+    else:
+        assert first.returncode == 0, first_stdout + first_stderr
     assert second.returncode == 0, second_stdout + second_stderr
     assert log_path.read_text(encoding="utf-8").splitlines() == [
         "v1:source:start",
@@ -924,3 +1278,87 @@ def test_skip_verify_dry_run_still_executes_mandatory_source_preflight() -> None
     assert "source=mlx_vlm" in completed.stdout
     assert completed.stdout.rstrip().endswith("FastVLM governed sources: dry-run")
     assert completed.stdout.count("FastVLM governed sources: dry-run") == 2
+
+
+def test_public_installer_scrubs_ambient_python_startup_before_resolver(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    poison_dir = tmp_path / "poison"
+    poison_dir.mkdir()
+    marker = tmp_path / "sitecustomize-executed"
+    (poison_dir / "sitecustomize.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            str(repo_root / "scripts/setup/install_fastvlm_runtime.sh"),
+            "--dry-run",
+            "--skip-model-download",
+            "--skip-verify",
+        ],
+        cwd=repo_root,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(poison_dir),
+            "PYTHONSTARTUP": str(poison_dir / "sitecustomize.py"),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert not marker.exists()
+
+
+def test_public_installer_ignores_hostile_repo_venv_startup_hooks_before_trust(tmp_path: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2]
+    repo_root = tmp_path / "repo"
+    setup_dir = repo_root / "scripts/setup"
+    setup_dir.mkdir(parents=True)
+    installer = setup_dir / "install_fastvlm_runtime.sh"
+    for name in ("install_fastvlm_runtime.sh", "resolve_python_311.sh", "run_fastvlm_install_locked.py"):
+        shutil.copy2(source_root / "scripts/setup" / name, setup_dir / name)
+    installer.chmod(0o755)
+
+    helper_log = tmp_path / "helpers.log"
+    helper_template = "\n".join(
+        [
+            "import os",
+            "from pathlib import Path",
+            "with Path(os.environ['TP_TEST_HELPER_LOG']).open('a', encoding='utf-8') as stream:",
+            "    stream.write({label!r} + '\\n')",
+        ]
+    )
+    (setup_dir / "install_fastvlm_sources.py").write_text(helper_template.format(label="source"), encoding="utf-8")
+    (setup_dir / "install_fastvlm_venv.py").write_text(helper_template.format(label="venv"), encoding="utf-8")
+
+    repo_venv = repo_root / ".venv"
+    subprocess.run(
+        [sys.executable, "-I", "-S", "-m", "venv", "--copies", str(repo_venv)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    site_packages = next(repo_venv.glob("lib/python*/site-packages"))
+    startup_marker = tmp_path / "hostile-pth-executed"
+    (site_packages / "attack.pth").write_text(
+        "import pathlib; " f"pathlib.Path({str(startup_marker)!r}).write_text('executed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [str(installer), "--skip-model-download", "--skip-verify"],
+        cwd=repo_root,
+        env={**os.environ, "TP_TEST_HELPER_LOG": str(helper_log)},
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert not startup_marker.exists()
+    assert helper_log.read_text(encoding="utf-8").splitlines() == ["source", "venv", "venv", "source"]

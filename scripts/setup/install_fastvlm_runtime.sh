@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Python startup variables can execute caller-controlled code before any
+# manifest, source, or lock verification. Scrub the entire namespace first.
+while IFS= read -r fastvlm_env_name; do
+  case "$fastvlm_env_name" in
+    PYTHON*) unset "$fastvlm_env_name" ;;
+  esac
+done < <(compgen -e)
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONNOUSERSITE=1
+export PYTHONSAFEPATH=1
 
 ORIGINAL_ARGS=("$@")
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -88,23 +97,36 @@ VENV_DIR="$RUNTIME_ROOT/.venv-fastvlm"
 VENV_PY="$VENV_DIR/bin/python"
 
 if [ "$DRY_RUN" -eq 0 ]; then
-  if [ -z "${TP_FASTVLM_INSTALL_LOCK_FD:-}" ]; then
-    exec "$REPO_PY" "$LOCK_RUNNER" run \
+  if [ -z "${TP_FASTVLM_INSTALL_LOCK_FD:-}" ] && [ -z "${TP_FASTVLM_INSTALL_LOCK_TOKEN:-}" ]; then
+    exec "$REPO_PY" -I -S "$LOCK_RUNNER" run \
       --lock-file "$LOCK_FILE" \
       -- "$0" "${ORIGINAL_ARGS[@]}"
   fi
-  LOCK_FD="$TP_FASTVLM_INSTALL_LOCK_FD"
+  LOCK_FD="${TP_FASTVLM_INSTALL_LOCK_FD:-}"
+  LOCK_TOKEN="${TP_FASTVLM_INSTALL_LOCK_TOKEN:-}"
+  if [ -z "$LOCK_FD" ] || [ -z "$LOCK_TOKEN" ]; then
+    echo "FastVLM installer inherited an incomplete transaction lock handoff" >&2
+    exit 1
+  fi
   case "$LOCK_FD" in
     ''|*[!0-9]*)
       echo "FastVLM installer inherited an invalid transaction lock descriptor" >&2
       exit 1
       ;;
   esac
-  "$REPO_PY" "$LOCK_RUNNER" assert-held \
+  case "$LOCK_TOKEN" in
+    ''|*[!0-9]*)
+      echo "FastVLM installer inherited an invalid transaction lock token" >&2
+      exit 1
+      ;;
+  esac
+  "$REPO_PY" -I -S "$LOCK_RUNNER" assert-held \
     --lock-file "$LOCK_FILE" \
-    --fd "$LOCK_FD"
-  eval "exec ${LOCK_FD}>&-"
-  unset LOCK_FD TP_FASTVLM_INSTALL_LOCK_FD
+    --fd "$LOCK_FD" \
+    --token "$LOCK_TOKEN"
+  # Retain the inherited descriptor through the final exec so the transaction
+  # remains serialized even if the parent lock-runner process is terminated.
+  unset TP_FASTVLM_INSTALL_LOCK_FD TP_FASTVLM_INSTALL_LOCK_TOKEN
 fi
 
 run() {
@@ -120,7 +142,7 @@ run() {
 }
 
 verify_runtime() {
-  run "$REPO_PY" "$REPO_ROOT/scripts/validation/validate_fastvlm_runtime.py" \
+  run "$REPO_PY" -I -S "$REPO_ROOT/scripts/validation/validate_fastvlm_runtime.py" \
     --manifest "$MANIFEST_PATH" \
     --runtime-root "$RUNTIME_ROOT" \
     "${MODEL_ARGS[@]}" \
@@ -135,7 +157,7 @@ install_sources() {
   if [ "$DRY_RUN" -eq 1 ]; then
     source_args+=(--dry-run)
   fi
-  "$REPO_PY" "$SOURCE_INSTALLER" "${source_args[@]}"
+  "$REPO_PY" -I -S "$SOURCE_INSTALLER" "${source_args[@]}"
 }
 
 verify_sources_last() {
@@ -148,11 +170,11 @@ verify_sources_last() {
   else
     source_args+=(--verify-only)
   fi
-  exec "$REPO_PY" "$SOURCE_INSTALLER" "${source_args[@]}"
+  exec "$REPO_PY" -I -S "$SOURCE_INSTALLER" "${source_args[@]}"
 }
 
 audit_venv() {
-  run "$REPO_PY" "$VENV_INSTALLER" \
+  run "$REPO_PY" -I -S "$VENV_INSTALLER" \
     --manifest "$MANIFEST_PATH" \
     --runtime-root "$RUNTIME_ROOT" \
     --audit-only
@@ -166,14 +188,14 @@ fi
 
 install_sources
 
-run "$REPO_PY" "$VENV_INSTALLER" \
+run "$REPO_PY" -I -S "$VENV_INSTALLER" \
   --manifest "$MANIFEST_PATH" \
   --runtime-root "$RUNTIME_ROOT" \
   --base-python "$REPO_PY" \
   --requirements "$RUNTIME_REQUIREMENTS_FILE"
 
 if [ "$SKIP_MODEL_DOWNLOAD" -eq 0 ]; then
-  run "$VENV_PY" "$REPO_ROOT/scripts/setup/download_fastvlm_models.py" \
+  run "$VENV_PY" -I "$REPO_ROOT/scripts/setup/download_fastvlm_models.py" \
     --manifest "$MANIFEST_PATH" \
     --runtime-root "$RUNTIME_ROOT" \
     "${MODEL_ARGS[@]}"

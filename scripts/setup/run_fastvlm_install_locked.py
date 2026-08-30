@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import os
+import secrets
 import stat
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from typing import Sequence
 
 DEFAULT_LOCK_TIMEOUT_SECONDS = 1800.0
 LOCK_FD_ENV = "TP_FASTVLM_INSTALL_LOCK_FD"
+LOCK_TOKEN_ENV = "TP_FASTVLM_INSTALL_LOCK_TOKEN"
 
 
 class InstallLockError(RuntimeError):
@@ -84,9 +86,11 @@ def _acquire_lock(descriptor: int, *, timeout_seconds: float) -> None:
             time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
 
 
-def assert_lock_held(lock_path: Path, descriptor: int) -> None:
+def assert_lock_held(lock_path: Path, descriptor: int, token: int) -> None:
     """Validate the inherited lock descriptor used by the installer body."""
 
+    if token <= 0:
+        raise InstallLockError("FastVLM installer inherited an invalid transaction lock token")
     target = _lexical_absolute(lock_path)
     try:
         opened = os.fstat(descriptor)
@@ -96,9 +100,22 @@ def assert_lock_held(lock_path: Path, descriptor: int) -> None:
     if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
         raise InstallLockError("FastVLM installer inherited an invalid transaction lock")
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
-        raise InstallLockError("FastVLM installer does not hold its transaction lock") from exc
+        inherited_token = os.lseek(descriptor, 0, os.SEEK_CUR)
+    except OSError as exc:
+        raise InstallLockError("FastVLM installer could not validate its transaction lock token") from exc
+    if inherited_token != token:
+        raise InstallLockError("FastVLM installer inherited a mismatched transaction lock token")
+
+    probe = _open_lock(target)
+    try:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        fcntl.flock(probe, fcntl.LOCK_UN)
+        raise InstallLockError("FastVLM installer does not hold its transaction lock")
+    finally:
+        os.close(probe)
 
 
 def run_locked(lock_path: Path, command: Sequence[str], *, timeout_seconds: float) -> int:
@@ -107,8 +124,11 @@ def run_locked(lock_path: Path, command: Sequence[str], *, timeout_seconds: floa
     descriptor = _open_lock(lock_path)
     try:
         _acquire_lock(descriptor, timeout_seconds=timeout_seconds)
+        token = secrets.randbits(61) or 1
+        os.lseek(descriptor, token, os.SEEK_SET)
         environment = os.environ.copy()
         environment[LOCK_FD_ENV] = str(descriptor)
+        environment[LOCK_TOKEN_ENV] = str(token)
         completed = subprocess.run(
             list(command),
             check=False,
@@ -130,6 +150,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     assert_parser = subparsers.add_parser("assert-held", help="Validate an inherited lock descriptor.")
     assert_parser.add_argument("--lock-file", required=True)
     assert_parser.add_argument("--fd", required=True, type=int)
+    assert_parser.add_argument("--token", required=True, type=int)
     return parser.parse_args(argv)
 
 
@@ -137,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         if args.action == "assert-held":
-            assert_lock_held(Path(args.lock_file), int(args.fd))
+            assert_lock_held(Path(args.lock_file), int(args.fd), int(args.token))
             return 0
         command = list(args.command)
         if command and command[0] == "--":
