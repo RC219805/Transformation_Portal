@@ -194,7 +194,7 @@ EXPECTED_STEP_IDENTITIES = (
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
     f'{TRUSTED_PYTHON} -m pip --isolated install --upgrade "pip==26.2.1"',
-    f'{TRUSTED_PYTHON} -m pip --isolated install "pip-tools==7.6.1"',
+    f'{TRUSTED_PYTHON} -m pip --isolated install "pip-tools==7.6.1" "click==8.4.2"',
     f"{TRUSTED_PYTHON} -m pip --isolated install -r requirements/security.txt",
 )
 

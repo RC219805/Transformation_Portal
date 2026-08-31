@@ -40,7 +40,7 @@ jobs:
       - name: Install lock generation tools
         run: |
           python -m pip install --upgrade "pip==26.2.1"
-          python -m pip install "pip-tools==7.6.1"
+          python -m pip install "pip-tools==7.6.1" "click==8.4.2"
 
       - name: Compile secure-install pilot lockfiles
         working-directory: requirements

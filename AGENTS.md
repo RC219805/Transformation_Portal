@@ -160,8 +160,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make -C requirements check-hash-pilot LOCK_PYTHON_VERSION=3.11`; use
   `HASH_PILOT_OUT_DIR=/tmp/tp-hash-pilot` to keep pilot artifacts disposable.
   Match CI with `python -m pip install --upgrade "pip==26.2.1"` and
-  `python -m pip install "pip-tools==7.6.1"`. Use the same toolchain for the
-  decisive generic-lock freshness check:
+  `python -m pip install "pip-tools==7.6.1" "click==8.4.2"`. Use the same
+  toolchain for the decisive generic-lock freshness check:
   `make -C requirements check-generic LOCK_PYTHON_VERSION=3.11`. Validate
   contract changes with
   `./.venv/bin/pytest tests/test_requirements_makefile_hash_pilot.py tests/test_secure_install_pilot_workflow.py -q`.

@@ -39,6 +39,7 @@ SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
 PIP_VERSION := 26.2.1
 PIP_TOOLS_VERSION := 7.6.1
+PIP_TOOLS_CLICK_VERSION := 8.4.2
 PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
 HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot
 PIP_COMPILE_BIN := $(if $(wildcard $(CURDIR)/../.venv/bin/pip-compile),$(CURDIR)/../.venv/bin/pip-compile,pip-compile)
@@ -153,6 +154,12 @@ require-pip-compile:
 	if [ "$$reported_version" != "pip-compile, version $(PIP_TOOLS_VERSION)" ]; then \
 		echo "ERROR: requirements/Makefile requires pip-tools==$(PIP_TOOLS_VERSION)."; \
 		echo "ERROR: $(PIP_COMPILE_BIN) reported '$${reported_version:-unknown}'."; \
+		exit 1; \
+	fi; \
+	reported_click_version="$$("$(PIP_PYTHON_BIN)" -c 'from importlib.metadata import version; print(version("click"))' 2>/dev/null)"; \
+	if [ "$$reported_click_version" != "$(PIP_TOOLS_CLICK_VERSION)" ]; then \
+		echo "ERROR: requirements/Makefile requires click==$(PIP_TOOLS_CLICK_VERSION) for pip-tools command provenance."; \
+		echo "ERROR: $(PIP_PYTHON_BIN) reported Click '$${reported_click_version:-unknown}'."; \
 		exit 1; \
 	fi
 

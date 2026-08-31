@@ -36,16 +36,16 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-boto3==1.43.78
+boto3==1.43.83
     # via
     #   -r base.in
     #   moto
-botocore==1.43.78
+botocore==1.43.83
     # via
     #   boto3
     #   moto
     #   s3transfer
-build==1.5.0
+build==1.6.0
     # via -r ci.in
 cachetools==7.1.7
     # via tox
@@ -64,11 +64,14 @@ charset-normalizer==3.5.1
     # via requests
 click==8.4.2
     # via
+    #   -r all.in
     #   black
     #   uvicorn
+cloudpickle==3.1.2
+    # via joblib
 colorama==0.4.6
     # via tox
-coverage[toml]==7.15.4
+coverage[toml]==7.16.0
     # via pytest-cov
 cryptography==50.0.0
     # via
@@ -104,7 +107,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.165.10
+hypothesis==6.167.1
     # via -r dev.in
 id==1.6.1
     # via twine
@@ -117,7 +120,7 @@ idna==3.19
     #   requests
 imagecodecs==2026.3.6
     # via -r base.in
-importlib-metadata==9.0.0
+importlib-metadata==9.0.1
     # via keyring
 iniconfig==2.3.0
     # via pytest
@@ -141,7 +144,7 @@ jmespath==1.1.0
     # via
     #   boto3
     #   botocore
-joblib==1.5.3
+joblib==1.6.0
     # via scikit-learn
 jsonschema==4.26.0
     # via
@@ -215,7 +218,7 @@ pathspec==1.1.1
     #   mypy
 pillow==12.3.0
     # via -r base.in
-platformdirs==4.11.3
+platformdirs==4.11.5
     # via
     #   black
     #   pylint
@@ -237,11 +240,11 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==3.0
     # via cffi
-pydantic==2.13.4
+pydantic==2.13.5
     # via
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.4
+pydantic-core==2.46.5
     # via pydantic
 pyflakes==3.4.0
     # via flake8
@@ -251,7 +254,7 @@ pygments==2.21.0
     #   pytest
     #   readme-renderer
     #   rich
-pylint==4.0.7
+pylint==4.0.8
     # via -r dev.in
 pypdf==6.16.2
     # via -r ci.in
@@ -282,7 +285,7 @@ pytest-xdist==3.8.0
     # via -r dev.in
 python-dateutil==2.9.0.post0
     # via botocore
-python-discovery==1.5.2
+python-discovery==1.6.0
     # via
     #   tox
     #   virtualenv
@@ -295,7 +298,7 @@ pyyaml==6.0.3
     #   moto
     #   pre-commit
     #   responses
-readme-renderer==45.0
+readme-renderer==46.0
     # via twine
 redis==6.4.0
     # via -r base.in
@@ -311,7 +314,7 @@ requests==2.34.2
     #   twine
 requests-toolbelt==1.0.0
     # via twine
-responses==0.26.2
+responses==0.26.3
     # via moto
 rfc3986==2.0.0
     # via twine
@@ -359,13 +362,13 @@ tomli-w==1.2.0
     # via tox
 tomlkit==0.15.1
     # via pylint
-tox==4.60.0
+tox==4.61.1
     # via -r ci.in
 tqdm==4.70.0
     # via -r base.in
 twine==7.0.0
     # via -r ci.in
-typer==0.27.1
+typer==0.27.2
     # via -r base.in
 types-pyyaml==6.0.12.20260815
     # via -r dev.in
@@ -396,7 +399,7 @@ urllib3==2.7.0
     #   twine
 uvicorn==0.52.1
     # via -r base.in
-virtualenv==21.7.4
+virtualenv==21.7.7
     # via
     #   pre-commit
     #   tox

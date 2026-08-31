@@ -67,7 +67,7 @@ def test_secure_install_pilot_workflow_runs_makefile_targets_and_uploads_artifac
     upload_step = next(step for step in steps if step.get("name") == "Upload secure-install pilot artifacts")
 
     assert 'python -m pip install --upgrade "pip==26.2.1"' in install_step["run"]
-    assert 'python -m pip install "pip-tools==7.6.1"' in install_step["run"]
+    assert 'python -m pip install "pip-tools==7.6.1" "click==8.4.2"' in install_step["run"]
     assert compile_step["working-directory"] == "requirements"
     assert "make compile-hash-pilot" in compile_step["run"]
     assert 'HASH_PILOT_OUT_DIR="${GITHUB_WORKSPACE}/requirements/.hash-pilot"' in compile_step["run"]
@@ -85,7 +85,7 @@ def test_secure_install_pilot_readme_mentions_local_toolchain_requirement() -> N
     readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
 
     assert 'python -m pip install --upgrade "pip==26.2.1"' in readme
-    assert 'python -m pip install "pip-tools==7.6.1"' in readme
+    assert 'python -m pip install "pip-tools==7.6.1" "click==8.4.2"' in readme
     assert ".github/workflows/secure-install-pilot.yml" in readme
 
 
