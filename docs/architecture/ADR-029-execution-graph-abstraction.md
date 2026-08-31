@@ -1,10 +1,12 @@
 # ADR-029: Execution Graph Abstraction for Spatial AI Orchestration
 
-**Status:** IMPLEMENTED
+**Status:** IMPLEMENTED — conditional long-term stage-executor supersession recorded for ADR-051
 **Date:** 2026-02-12
-**Updated:** 2026-03-23
+**Updated:** 2026-08-30
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
+**Conditional partial supersession:** [ADR-051](ADR-051-execution-artifact-authority-designation.md),
+effective only when ADR-051 is Accepted and only for the long-term stage-executor designation
 **Related:** ADR-027 (Phase 2 Extension), Phase 3 Foundation (v2.1.0-phase2-foundation)
 **Enforcement:** CI gates (determinism, cache correctness), provenance validation
 
@@ -1638,7 +1640,7 @@ def test_phase3_matches_phase2_golden_baseline():
 
 ## Approval
 
-**Status:** Proposed
+**Status:** Implemented
 **Review Date:** 2026-02-12
 **Approver:** Transformation Portal Architect (required)
 **Implementation Start:** Upon approval
@@ -1668,7 +1670,15 @@ def test_phase3_matches_phase2_golden_baseline():
 ---
 
 **Amendments:**
-- None (initial version)
+- 2026-08-30 — If and when Accepted, ADR-051 partially supersedes only this record's long-term
+  executor designation.
+  The shipped Spatial AI graph API, presets, adapters, cache behavior, golden outputs, and public
+  single-view and multi-view contracts remain supported migration constraints. This includes typed
+  camera/request validation, research-tier/license gates, result shapes, PLY/sidecar export, and
+  provenance. Spatial stages and cache metadata become adapters to the designated plan, executor,
+  identity, and CAS authorities; this amendment does not withdraw those public contracts. The
+  approval footer was also corrected from stale `Proposed` to `Implemented` to match the completed
+  implementation recorded at the top of this ADR.
 
 ---
 

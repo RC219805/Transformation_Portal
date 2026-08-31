@@ -1,6 +1,6 @@
 # Architecture Documentation Index
 
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-30
 **Classification:** canonical architecture index
 **Current overlay:** [May 12 architecture inventory](../governance/audit/architecture-inventory-2026-05-12.csv) on the preserved May 11 repo-wide documentation inventory.
 **Decision-currency overlay:** [ADR_DECISION_CURRENCY_REVIEW_2026-05-16.md](ADR_DECISION_CURRENCY_REVIEW_2026-05-16.md) — per-ADR classification (implemented / active / obsolete) and the source of the 2026-05-16 renumbering of `adr-0015` → `ADR-015` and `ADR-030-materials-v3` → `ADR-048-materials-v3`, plus the relocation of the V-JEPA 2 template to `templates/`.
@@ -75,6 +75,7 @@ These ADRs remain active support material. Keep them in this directory, and revi
 | [ADR-046-app-path-security-helper-extraction.md](ADR-046-app-path-security-helper-extraction.md) | current-support-adr |
 | [ADR-047-managed-sam2-checkpoint-security-extraction.md](ADR-047-managed-sam2-checkpoint-security-extraction.md) | current-support-adr |
 | [ADR-049-plugin-manifest-trust.md](ADR-049-plugin-manifest-trust.md) | current-support-adr |
+| [ADR-051-execution-artifact-authority-designation.md](ADR-051-execution-artifact-authority-designation.md) | current-support-adr (Proposed; design complete, exact-head owner sign-off pending) |
 | [templates/ADR-vjepa2-separate-repo-TEMPLATE.md](templates/ADR-vjepa2-separate-repo-TEMPLATE.md) | template (relocated 2026-05-16 out of the numbered ADR series; not a real ADR) |
 
 ## Review-Required Planning Docs
