@@ -3,7 +3,7 @@
 **Document Status:** Active operator runbook for the Postgres-backed
 orchestrator state. The memory backend remains the default; Postgres is
 opt-in via env vars.
-**Last Updated:** 2026-05-14
+**Last Updated:** 2026-08-30
 **Related Docs:**
 - `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` (the Phase 0
   baseline that introduced this work)
@@ -20,18 +20,26 @@ Postgres backend, and Phase 1.E wired `app.py` so `JobRepository` is the
 authoritative state surface while `JOBS` only carries runtime handles.
 With the Postgres backend enabled:
 
-- Restart no longer destroys in-flight jobs (the Phase 1.C sweeper
-  marks orphans `worker_lost_on_restart`).
+- Restart preserves in-flight job records; the Phase 1.C sweeper marks
+  orphaned active jobs `worker_lost` with
+  `error.code = worker_lost_on_restart`.
 - Multiple orchestrator workers can share state (a precondition for
   Phase 2 horizontal workers).
 - Job list/detail/cancel/artifact routes read durable job rows instead
   of falling back to process-local cache.
+- Reconnecting SSE clients can replay stored per-job events after a
+  restart by supplying `Last-Event-ID`.
 
 The wire shape of `/v1/jobs` and `/v2/jobs` is unchanged. The runtime
-swap is a single env flip. Durable SSE replay through `JobEventStore`
-is intentionally separate from this cutover; the event route now checks
-repository-backed job existence/state, but replay history is still a
-later event-store wiring change.
+swap is a single env flip. With the Postgres backend enabled,
+successfully persisted events receive a per-job monotonic sequence,
+emitted as the SSE `id`. A reconnect to
+`/v1/jobs/{job_id}/events` or `/v2/jobs/{job_id}/events` with a
+non-negative ASCII-decimal `Last-Event-ID` receives retained events with
+a higher sequence before live delivery; `Last-Event-ID: 0` requests all
+retained events. If the header is absent or blank, or no retained event
+has a higher sequence, the route emits current state before live or
+synthetic terminal delivery instead of replaying full history.
 
 ## Environment variables
 
@@ -135,7 +143,7 @@ TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tran
 | Pool size | `AsyncEngine` default plus `pool_pre_ping=True` and `pool_recycle=300`. Tune with `TP_DB_POOL_SIZE` once Phase 6 metrics are wired. |
 | Backups | Out of scope for Phase 1.B; document in the provider's runbook. The orchestrator never assumes durability beyond commit. |
 | Schema changes | Always go through Alembic and `make db-revision` so the migration graph stays linear. |
-| Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The restart sweeper (Phase 1.C, follow-up) will mark any orphaned `running` jobs `failed` with `error.code = worker_lost_on_restart`. |
+| Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The restart sweeper marks orphaned active jobs `worker_lost` with `error.code = worker_lost_on_restart`. |
 | Repository unavailable recovery | `JOB_REPOSITORY_UNAVAILABLE` is fail-closed and redacted. If it appears after fixing `TP_DATABASE_URL`, restart the backend process because repository construction failure is latched in process state. |
 
 ## Known limits in this layer
@@ -146,15 +154,26 @@ TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tran
 - Artifact files are handled by the `ArtifactStore` abstraction
   (local or S3-compatible); `job_artifacts` holds the lookup map while
   `jobs.artifacts.lifecycle` stores mirror/delete/retention metadata.
-- `JOBS` remains process-local by design. It stores live subprocess
-  handles, cancellation tasks, and subscriber queues only; it is not a
-  durable fallback when repository reads or writes fail.
-- Durable SSE replay is not wired through `JobEventStore` yet. Late
-  clients still receive the current process-local replay behavior; a
-  restart-safe event replay cutover is a separate PR.
+- `JOBS` and `EVENT_SUBSCRIBERS` remain process-local by design. `JOBS`
+  stores live subprocess handles and cancellation tasks, while
+  `EVENT_SUBSCRIBERS` stores live-delivery queues; neither is a durable
+  fallback when repository reads or writes fail.
+- The memory event store is process-local and loses replay history on
+  restart. Postgres event append and replay persistence are deliberately
+  best-effort: failures are logged and delivery falls back to live,
+  current-state, or synthetic terminal events. Durable replay can
+  therefore contain gaps and is an operational recovery surface, not a
+  fail-closed or complete audit record.
+- Postgres event history has no independent TTL or per-job count cap.
+  Associated event rows are deleted when `PostgresJobRepository` deletes
+  the job. Normal app cleanup waits until `TP_JOB_RETENTION_SECONDS` has
+  elapsed and undeleted artifacts no longer block deletion. Events for
+  IDs without a job row are outside that cleanup; monitor `job_events`
+  growth.
 
 ---
 
 *Phase 1.B Postgres backend - introduced 2026-05-13. Phase 1.E app
-cutover - introduced 2026-05-14. Update this doc
-when the wiring or any subsequent phase changes the operator surface.*
+cutover - introduced 2026-05-14. Durable SSE replay wiring - introduced
+2026-05-30. Update this doc when the wiring or any subsequent phase
+changes the operator surface.*
