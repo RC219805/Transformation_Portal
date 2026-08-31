@@ -3,12 +3,13 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-08-30
 **Maintainer:** Repository Architect
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
 `docs/architecture` file dispositions, the May 12 CLI reference alignment for
-`docs/cli`, and the June 11 CI/TODO documentation alignment refresh.
+`docs/cli`, the June 11 CI/TODO documentation alignment refresh, and the August
+30 execution/artifact authority and orchestrator-runtime fact refresh.
 
 Historical reports remain available for audit context, but they are not current
 operator guidance unless they are linked here as canonical documents.
@@ -42,7 +43,7 @@ operator guidance unless they are linked here as canonical documents.
 | PBR CLI testing | [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md) | Maintained |
 | Presence Security | [Presence Security](../guides/PRESENCE_SECURITY.md) | Maintained |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](../runtimes/fastvlm.md) | Maintained |
-| Orchestrator Postgres runtime (Phase 1.B/1.E) | [Orchestrator Postgres Runtime](../runtimes/orchestrator-postgres.md) | Maintained; durable `JobRepository` backend wired through `app.py`, opt-in via `TP_ORCHESTRATOR_STATE_BACKEND=postgres`; durable SSE replay remains separate |
+| Orchestrator Postgres runtime (Phase 1.B/1.E) | [Orchestrator Postgres Runtime](../runtimes/orchestrator-postgres.md) | Maintained; durable `JobRepository` and `JobEventStore` backends are wired through `app.py`, opt-in via `TP_ORCHESTRATOR_STATE_BACKEND=postgres`; ordered SSE history replays across restarts |
 | Lux Depth V3 troubleshooting | [Lux Depth V3 Troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | Maintained |
 | Context-aware rendering | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained |
 | PBR processing | [PBR Processor Quickstart](../guides/PBR_PROCESSOR_QUICKSTART.md) | Maintained |
@@ -96,6 +97,7 @@ operator guidance unless they are linked here as canonical documents.
 | Deterministic RAW ingest | [ADR-030](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | Maintained |
 | Schema contracts and topology | [Schema Contracts](../../schemas/README.md), [docs/schemas](../schemas/) | Maintained boundary for root runtime schema/profile contracts versus published schema contracts under docs |
 | Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
+| Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Accepted; authoritative repository designation. Implementation activation remains subject to the ADR's vertical-slice gates |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
 ## APEX And Archive Gates

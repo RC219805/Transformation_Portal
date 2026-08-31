@@ -1,11 +1,12 @@
 # Production Hardening Gap Audit - 2026-05-13
 
 **Document Status:** Active baseline for paid-pilot hardening
-**Last Updated:** 2026-05-15
+**Last Updated:** 2026-08-30
 **Maintainer:** Repository Architect
 **Related Docs:** `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`, `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`, `docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md`, `docs/deployment/PRODUCTION_READINESS.md`, `docs/operations/portal_telemetry_retention.md`
 **Related Scripts:** `scripts/ci/check_per_package_branch_coverage.py`, `scripts/ci/cold_zone_report.py`, `scripts/ci/check_per_package_coverage.py`, `tools/portal_telemetry_retention.py`
-**Related ADRs:** ADR-031 (test dependency isolation), ADR-044 (marker enforcement)
+**Related ADRs:** ADR-031 (test dependency isolation), ADR-044 (marker enforcement), ADR-051
+(execution and artifact authority designation)
 
 ---
 
@@ -64,11 +65,15 @@ than introduce parallel implementations.
 
 | Plan abstraction | Existing primitive | Location | Reuse note |
 | --- | --- | --- | --- |
-| `JobEventStore` | `EventStore` (per-event `.json` files written under date directories `<storage>/YYYY-MM-DD/<event_id>.json`; `Event` dataclass with `id, type, timestamp, data, metadata, user, correlation_id`) | `src/transformation_portal/events/store.py` | Currently orphaned. Wire to job lifecycle for Phase 1 instead of creating a new abstraction. |
-| Phase 7 organization, RBAC, and quota model | `TenantContext`, `TenantPolicy`, `TenantManager`, `TenantAwareFSGuard`, `create_tenant_sandbox()` (per-tenant `gpu_quota`, `network_allowed`, `allowed_node_types`) | `src/transformation_portal/core/security/tenant.py` | Fully tested but unwired in the request path. Phase 7 should ground the user, organization, and quota model on these primitives. |
-| Phase 6 audit-event table | `tp.phase4.provenance_capture`, `tp.crypto.merkle`, `attestation/{detached,dsse,verify,run_card_intoto}.py` | `src/tp/phase4/`, `src/transformation_portal/attestation/` | Cryptographic provenance is authoritative. The new operational audit table must mirror events, not duplicate the attestation chain. |
-| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_merkle_root(...)` (method) and module-level `compute_artifact_merkle_root(...)` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Phase 4.A landed: `src/transformation_portal/orchestrator/artifact_store/` reuses these helpers behind the `ArtifactStore` Protocol so the local + S3 backends share the validated path-traversal, fingerprint, content-type, and Merkle-input behaviour. Phase 4.B landed via PR #1776: `app.py` now uses the store for artifact delivery, signed S3 redirects, lifecycle metadata, deletion, cleanup, and readiness. The post-merge hardening follow-up preserves S3 response-header semantics, uses real bucket readiness, expands destructive-route/mirror tests, and keeps failed artifact cleanup retryable. |
-| Phase 3 frontdoor session readiness gate | `evaluateSessionScaling()` (returns `ok: false` for `multi_instance` and `ephemeral_runtime` with `*_requires_external_session_store` reason codes) | `web/secure-landing/lib/session-scaling.js` | Add a `redis` branch that flips the gate to `ok: true` rather than rewriting the readiness check. |
+| Durable job/SSE history | `JobEventStore` memory/Postgres implementations | `src/transformation_portal/orchestrator/storage/` | Live. Keep as the ordered job-history projection. If accepted, ADR-051 designates a versioned operational-record owner rather than treating SSE history as cryptographic evidence or a universal ledger. |
+| Durable mutable job state | `JobRepository` memory/Postgres implementations | `src/transformation_portal/orchestrator/storage/` | Live job/API snapshot for request, state, progress, logs, artifacts, summaries, and recovery. Keep its wire/projection contract, but do not promote mutable overwrites to canonical append-only history or generation visibility. |
+| General lifecycle events | `EventStore` | `src/transformation_portal/events/store.py` | Orphaned and not the job-history authority. Freeze and remove after any useful event vocabulary migrates; do not wire its raw per-event JSON writer into production. |
+| Canonical operational record and paid-pilot audit | `OperationalAuditStore`, proposed by ADR-051 to evolve in place into `OperationalRecordStore`; current audit API retained as a compatibility view | `src/transformation_portal/orchestrator/storage/` | If ADR-051 is accepted, reuse the live Postgres ownership. Add schema versioning, ordering, idempotency, generation/evidence digest references, tenant policy, lease fencing, the sole reader-visible generation commit, and an outbox rather than creating a parallel ledger. |
+| Phase 7 organization, RBAC, and quota model | `TenantContext`, `TenantPolicy`, `TenantManager`, `TenantAwareFSGuard`, `create_tenant_sandbox()` (per-tenant `gpu_quota`, `network_allowed`, `allowed_node_types`) | `src/transformation_portal/core/security/tenant.py`, `app.py` | Partially wired in managed-pilot request admission: tenant lookup/allowlist, pipeline policy, job ownership, workspace/CAS path guards, and an optional active-job cap are enforced. Durable multi-host atomic quota reservation, complete RBAC/identity, and the remaining policy fields are still open. |
+| Cryptographic evidence | `tp.phase4.provenance_capture`, `tp.crypto.merkle`, `attestation/{detached,dsse,verify,run_card_intoto}.py` | `src/tp/phase4/`, `src/transformation_portal/attestation/` | Cryptographic provenance remains authoritative in its contract-native domains. Operational records reference verified bytes by digest and never reinterpret, repair, or replace the attestation chain. |
+| Job artifact delivery | `orchestrator.artifact_store.ArtifactStore` local/S3 implementations, reusing `portal.job_artifacts` and Lux catalog/Merkle helpers | `src/transformation_portal/orchestrator/artifact_store/`, `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Live delivery authority for listing, reading, presigning, retention, and deletion. It remains separate from immutable CAS bytes, stage-cache metadata, and generation publication. |
+| Operational CAS and generation publication | `storage.cas_store.ArtifactStore` (ADR-051 proposed target name `ContentAddressedStore`) plus a proposed bounded `GenerationPublisher` protocol inside the existing orchestrator artifact-store package | `src/transformation_portal/storage/`, `src/transformation_portal/orchestrator/artifact_store/` | If ADR-051 is accepted, CAS and local/S3 staging own verified immutable bytes. The publisher prepares and verifies a closed generation, but only a fenced Postgres `OperationalRecordStore` commit makes it reader-visible after issue #2063. Object-store prefixes/markers are never visibility authority. |
+| Phase 3 frontdoor session readiness gate | `evaluateSessionScaling()` plus `SqliteSessionStore` / `RedisSessionStore` | `web/secure-landing/lib/session-scaling.js`, `web/secure-landing/lib/session-store/` | Landed. Redis returns a green multi-instance/ephemeral readiness result; SQLite and unknown backends remain fail-closed for those modes. Provider deployment/runbook validation remains separate. |
 | Phase 0 production-gap doc | This document | `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` | Treat as the authoritative reference cited by Phase 1 through Phase 7 PRs. |
 
 ## 5. Net-new surface (Phases 1 through 7)
@@ -84,14 +89,15 @@ Already done:
 
 - `JobRepository` and `JobEventStore` Protocols + `JobRecord` dataclass + memory backend (Phase 1.A, PR #1756).
 - `PostgresJobRepository` + `PostgresJobEventStore` + SQLAlchemy 2.x async ORM + Alembic initial migration + docker-compose Postgres service + `make db-upgrade` / `make db-revision` / `make test-orchestrator-postgres-contract` (Phase 1.B, PR #1758). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`. See `docs/runtimes/orchestrator-postgres.md` for the operator runbook.
-- Pessimistic restart recovery (Phase 1.C, PR #1759). `src/transformation_portal/orchestrator/recovery.py:sweep_orphaned_jobs` runs on every FastAPI startup via `_orchestrator_lifespan` in `app.py`: any job that the repository still records as `queued` or `running` but that no live worker in the runtime registry is executing is marked `failed` with `error.code = "worker_lost_on_restart"`. SSE late-clients now see a terminal `done` after a restart instead of hanging. Memory backend: deterministic no-op (per-process state). Postgres backend: durable. The lifespan also disposes the repository's connection pool on shutdown.
+- Pessimistic restart recovery (Phase 1.C, PR #1759). `src/transformation_portal/orchestrator/recovery.py:sweep_orphaned_jobs` runs on every FastAPI startup via `_orchestrator_lifespan` in `app.py`: any job that the repository still records as `queued` or `running` but that no live worker in the runtime registry is executing is marked `worker_lost` with `error.code = "worker_lost_on_restart"` and `retriable=True`. SSE late-clients now see a terminal `done` after a restart instead of hanging. Memory backend: deterministic no-op (per-process state). Postgres backend: durable. The lifespan also disposes the repository's connection pool on shutdown.
 - Runtime Pydantic envelope validation on `/v[12]/jobs` success paths (Phase 1.D). The four success-path returns (`_create_job`, `_list_jobs`, `_get_job`, `_cancel_job`) construct an `ApiEnvelope[T]` Pydantic model at runtime and serialize via `model_dump(by_alias=True, exclude_unset=True)`. Bad field types or missing required fields now raise at construction instead of slipping through as malformed JSON. Byte-identity with the legacy `_api_envelope` helper is pinned by `tests/orchestrator/test_envelope_runtime_validation.py` (12 tests: side-by-side model-vs-helper canonical JSON equality + HTTP-level wire-shape pins across `v1` and `v2`). SSE event payloads stay manual; the error path (`_error_response`) is unchanged.
 - `app.py` JobRepository cutover (Phase 1.E). Job list/detail/cancel/artifact/delete/events now load durable state from `JobRepository` first and overlay only runtime handles from `JOBS`; create writes a `JobRecord` before broker enqueue; runner state/progress/log/artifact mutations persist through repository methods; cleanup avoids artifact-unaware `repo.cleanup_expired()` and preserves Phase 4.B delete-retry metadata. Repository failures return redacted `503 JOB_REPOSITORY_UNAVAILABLE` instead of falling back to stale process cache.
+- Durable SSE replay through `JobEventStore` has since landed. The event route replays ordered
+  persisted history across restarts while preserving repository-backed job existence/state checks.
 
 Still net-new (follow-up commits / PRs):
 
 - `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130` but is still "defined, not yet wired" as a handler parameter. Wiring it would collapse the specific `_create_job` error reason codes (e.g. `"unsupported_pipeline"`) into a generic `"request_validation_failed"`; that trade-off is intentionally deferred per the module docstring's recommendation and is the next layer's decision.
-- Durable SSE replay through `JobEventStore` remains a separate event-store cutover. Phase 1.E makes the event route repository-backed for existence/state; it does not make event history restart-replayable.
 
 ### 5.2 Phase 2 - worker split
 
@@ -103,10 +109,14 @@ Already done:
 - `RedisQueueBroker` (Phase 2.B) backed by `redis>=5` async client + a docker-compose `redis` service (AOF on, `noeviction` policy, healthcheck) + `make test-worker-redis-contract`. Atomicity for acquire / extend / release / reclaim / cancel is implemented as server-side Lua so admission collisions and lease handoff never produce partial state, and lease deadlines are pinned to the Redis server clock (via `redis.call('TIME')`) so a multi-host fleet shares a single source of truth. Per-test `key_prefix` isolation lets pytest-xdist and shared-tenant Redis deployments coexist. The Phase 2.A contract test suite now runs against both backends; Redis activates when `TP_TEST_REDIS_URL` is set, mirroring the Phase 1.B Postgres pattern.
 - `app.py` broker-mediated dispatch (Phases 2.C–2.E). `_create_job` enqueues a `JobEnqueueRequest` instead of calling `asyncio.create_task(_run_job(...))`; an in-process `WorkerRunner` pool (`MAX_CONCURRENT_JOBS` workers) spawned in the FastAPI lifespan acquires leases and runs the existing `_run_job` body via `_orchestrator_job_executor`. `_request_cancel` routes through `broker.cancel`: queued (pre-lease) jobs are dropped from the broker FIFO and the orchestrator publishes the terminal cancelled-done event itself; leased (in-flight) jobs surface `LeaseStatus.cancelled` to the worker's next heartbeat, which trips an `asyncio.Event` bridged into `Job.cancel_requested` so the existing `_run_job` readline loop terminates the subprocess. The Phase 1.C restart sweep stays wired; broker close runs after worker stop on lifespan shutdown. Phase 2.E removed the legacy in-band `asyncio.create_task(_run_job(...))` fallback and the `TP_ORCHESTRATOR_USE_QUEUE_BROKER` env var — broker dispatch is the only execution path; `_dispatch_job` fail-closes with a 503 `QUEUE_UNAVAILABLE` if broker construction or `enqueue` raises.
 - `worker_lost` state + retry classification + broker-reclaim reconciler (Phase 2.D). The Job state machine gains a distinct `worker_lost` terminal state (`queued|running|succeeded|partial|failed|canceled|worker_lost`) so operators can distinguish executor failures (the work itself is broken) from broker-level failures (the worker died holding a lease — the job payload is intact). Both the Phase 1.C `sweep_orphaned_jobs` restart sweep and a new in-process reclaim reconciler driven by `broker.reclaim_expired_leases(now=server_time())` produce `state=worker_lost` with an explicit `error.retriable=True` flag; executor-level failures (`RUNNER_EXIT_NONZERO` / `RUNNER_NOT_FOUND` / `RUNNER_ERROR`) carry `error.retriable=False`. The reclaim reconciler runs every `TP_ORCHESTRATOR_RECLAIM_SWEEP_INTERVAL_SECONDS` (default 5s); the executor adapter has a terminal-state guard so a stale broker re-queue cannot re-spawn a job that was already marked `worker_lost`. Worker tunables accept the canonical `TP_WORKER_*` names (matching `worker.py:_config_from_env`) with the legacy `TP_ORCHESTRATOR_WORKER_*` form honored as a fallback for backward compatibility.
+- Standalone multi-host worker code and operator entrypoint have landed:
+  `orchestrator/worker_process.py`, `make run-orchestrator-worker`, and the paid-pilot services runbook
+  require Postgres plus Redis and reuse the app-owned executor.
 
 Still net-new (follow-up commits / PRs on this track):
 
-- Multi-host worker deployment (separate worker process, separate Dockerfile target, observable lease-reclaim metrics). Tracked under Phase 5 pilot deployment.
+- Managed multi-host deployment evidence, a dedicated container target, and observable
+  lease/reclaim metrics remain Phase-5 work; the separate worker process itself is no longer net-new.
 
 ### 5.3 Phase 3 - external sessions
 
@@ -116,7 +126,7 @@ Already done:
 
 - `SessionStore` contract + factory + `SqliteSessionStore` + `RedisSessionStore` (Phase 3.A). Lives under `web/secure-landing/lib/session-store/` with one module per concern: `contract.js` (JSDoc-typed wire shape), `sqlite-store.js` (refactor of the pre-Phase-3 SQLite logic — schema and statements byte-identical), `redis-store.js` (ioredis-backed implementation), and `index.js` (factory keyed off `TP_FRONTDOOR_SESSION_STORE=sqlite|redis`, default `sqlite`). Env vars: `TP_FRONTDOOR_SESSION_STORE`, `TP_FRONTDOOR_REDIS_URL`, `TP_FRONTDOOR_REDIS_KEY_PREFIX` (default `tp:frontdoor:`).
 - `evaluateSessionScaling()` gate flip (Phase 3.A). Accepts `sessionStoreBackend` and returns `ok: true` for `multi_instance` / `ephemeral_runtime` modes when `sessionStoreBackend === "redis"`, while keeping the `single_instance` + SQLite default green. Invalid mode declarations still fail closed; unknown backend values fall back to SQLite gate semantics so a misconfigured store can never silently unlock the gate.
-- `sessions.js` cut-over (Phase 3.B, this PR). The frontdoor's session helpers now delegate to `getSessionStore()` rather than touching `better-sqlite3` directly. Persistence-touching helpers (`createAnonymousSession`, `getSessionById`, `getSessionFromRequest`, `rotateAuthenticatedSession`, `destroySession`, `isLoginThrottled`, `recordLoginAttempt`, `revokeSessionOnAccessFailure`) became async; pure-cookie / CSRF helpers (`setSessionCookie`, `clearSessionCookie`, `validateCsrfToken`, `getRemoteAddress`) stay sync since they never touched the store. Every Next.js route handler that imports the helpers (`app/login`, `app/logout`, `app/portal`, `app/portal/bootstrap`, `app/v1/[...path]`) was updated to `await`. The audit-event payloads and the SQLite schema / SQL surface are byte-identical to the pre-Phase-3 implementation — the only observable change is the new backend selection and the async signatures.
+- `sessions.js` cut-over (Phase 3.B). The frontdoor's session helpers now delegate to `getSessionStore()` rather than touching `better-sqlite3` directly. Persistence-touching helpers (`createAnonymousSession`, `getSessionById`, `getSessionFromRequest`, `rotateAuthenticatedSession`, `destroySession`, `isLoginThrottled`, `recordLoginAttempt`, `revokeSessionOnAccessFailure`) became async; pure-cookie / CSRF helpers (`setSessionCookie`, `clearSessionCookie`, `validateCsrfToken`, `getRemoteAddress`) stay sync since they never touched the store. Every Next.js route handler that imports the helpers (`app/login`, `app/logout`, `app/portal`, `app/portal/bootstrap`, `app/v1/[...path]`) was updated to `await`. The audit-event payloads and the SQLite schema / SQL surface are byte-identical to the pre-Phase-3 implementation — the only observable change is the new backend selection and the async signatures.
 - `ioredis` runtime dep (Phase 3.B). `web/secure-landing/package.json` pins `ioredis: ^6.0.0` (lock resolves to 6.0.0) and `npm run build` succeeds with the dep present. Client construction explicitly selects RESP2 to preserve the established managed-provider wire contract; the `redis-store.js` module's lazy `await import("ioredis")` pattern is unchanged, so production multi-instance deployments activate the Redis path only when the corresponding env vars are set.
 - Test coverage. 250 frontdoor cases pass via `npm test`, including the 11 `tests/session-store.test.mjs` cases (SqliteSessionStore round-trip + RedisSessionStore login-throttle path through an injected fake client) and the 9 `tests/session-scaling.test.mjs` cases (gate semantics for sqlite + redis + invalid modes + unknown backends). The 13-case `tests/auth-flow.test.mjs` integration test exercises the async surface of `createAnonymousSession` / `rotateAuthenticatedSession` / `recordLoginAttempt` / `isLoginThrottled` end-to-end against the SQLite store. The 132-case `tests/routes.test.mjs` HTTP integration suite covers every async-bound route handler in the new shape.
 
@@ -166,7 +176,7 @@ Still net-new after Phase 4 closeout:
   `docs/deployment/managed_paid_pilot_staging_runbook.md`.
 - Still pending: managed-provider/staging validation against provider
   Postgres, Redis, and S3-compatible endpoints; Helm charts; Terraform;
-  Kubernetes manifests; separate multi-host worker deployment; and a CI deploy
+  Kubernetes manifests; managed multi-host worker deployment evidence; and a CI deploy
   pipeline beyond container build.
 - `docs/deployment/PRODUCTION_READINESS.md` exists but does not cover managed
   services.
@@ -177,20 +187,21 @@ Still net-new after Phase 4 closeout:
   `logging` plus a healthcheck-noise filter at `app.py:120`.
 - No queue-depth, job-latency, failure-rate, or artifact-write metrics.
 - No alert thresholds and no dashboard templates.
-- The only audit log today is `FSGuard.audit_log` (filesystem accesses to a
-  JSONL file at `src/transformation_portal/core/security/fs_guard.py:100`).
-  This is not an audit surface for jobs or the orchestrator.
+- `OperationalAuditStore` is live as a Postgres append-only managed-pilot control-plane audit surface;
+  `app.py:_record_pilot_audit` fail-closes audited tenant, job, and artifact mutations when it is
+  unavailable. `FSGuard.audit_log` remains a separate filesystem-access JSONL log.
 - Cryptographic provenance and attestation are complete (see section 4); the
-  operational audit-event table is the net-new piece.
+  versioned general operational-record schema, admission/publication transactions, and outbox remain
+  net-new under proposed ADR-051.
 
 ### 5.7 Phase 7 - commercial primitives
 
 - No `User`, `Organization`, `ApiKey`, `Quota`, `Billing`, or `Subscription`
   models in the codebase.
 - API-key auth is single-tenant only: `TP_API_KEY` and `TP_BACKEND_API_KEY`.
-- Tenant primitives in `src/transformation_portal/core/security/tenant.py`
-  exist but are not wired (see section 4); they should be the foundation for
-  this phase.
+- Tenant primitives in `src/transformation_portal/core/security/tenant.py` are partially wired into
+  managed-pilot allowlist, pipeline, job ownership, path, and optional active-job-cap enforcement
+  (see section 4). Durable multi-host quotas and complete organization/RBAC identity remain open.
 
 ## 6. Plan refinements
 
@@ -250,7 +261,7 @@ must pass before provider-backed paid-pilot admission:
 
 | Phase | Make target | What it must prove |
 | --- | --- | --- |
-| 1 | `test-orchestrator-postgres-contract` | `JobRepository` contract identical for memory and Postgres backends; restart recovery; cancel semantics; artifact index parity. Durable SSE replay remains a separate event-store cutover. |
+| 1 | `test-orchestrator-postgres-contract` | `JobRepository` and `JobEventStore` memory/Postgres contract parity; restart recovery; cancel semantics; artifact index parity; ordered durable SSE replay across restarts. |
 | 2 | `test-worker-redis-contract` | Queue lease and heartbeat expiry; duplicate-consumer protection; `worker_lost` marking; cancellation honored across queue boundary. |
 | 3 | `test-frontdoor-redis-contract` | Multi-instance and ephemeral readiness green paths; CSRF preserved across instances; throttle parity; session TTL semantics. |
 | 4 | `test-artifact-s3-contract` | S3-compatible write, read, delete, signed-URL expiry, checksum mismatch rejection, path-traversal rejection; deterministic Merkle inputs. |

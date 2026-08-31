@@ -4,6 +4,9 @@
 **Date:** 2026-03-20
 **Decision Makers:** Architect
 **Replaces:** None
+**Conditional partial supersession:** [ADR-051](ADR-051-execution-artifact-authority-designation.md),
+effective only when ADR-051 is Accepted and only for the permanent-retention finding for Lux
+depth/materials execution
 
 ---
 
@@ -237,9 +240,16 @@ and determined to be impractical due to tight coupling with orchestrator state:
 - Manifest-based cache restoration logic
 - Backend instance management and caching
 
-The extractable components (artifact persistence, subprocess coordination) have been
-moved to execution_engine.py. The remaining orchestration logic must stay in the
-orchestrator as it manages per-image state that flows across pipeline stages.
+The extractable components (artifact persistence, subprocess coordination) were moved to
+`execution_engine.py`. At the time of this decomposition, the remaining orchestration logic had to
+stay in the orchestrator because it managed per-image state across pipeline stages.
+
+**2026-08-30 amendment:** That Phase-6 finding records the 2026-03 extraction boundary; it is not a
+permanent prohibition. If and when Accepted, ADR-051 governs the target stage executor. Any
+migration must preserve
+per-image backend fallback tracking, fail-closed APEX gates, manifest cache restoration, backend
+lifecycle/caching, and the public facade. This ADR's five completed seams and `COMPLETE` historical
+status remain intact.
 
 ### Phase 7: Finalize Facade (Week 5) ✅ COMPLETE
 1. ✅ Document architectural boundaries between orchestrator and execution_engine
@@ -291,6 +301,7 @@ testable modules while maintaining backward compatibility.
 - [Q2 2026 Development Roadmap](DEVELOPMENT_ROADMAP_2026_Q2.md)
 - [Q1 2026 Codebase Audit](CODEBASE_AUDIT_2026_Q1.md) — Code Architecture: 6.2/10
 - [Architecture Philosophy](ARCHITECTURE_PHILOSOPHY.md)
+- [ADR-051 execution and artifact authority designation](ADR-051-execution-artifact-authority-designation.md)
 
 ---
 
