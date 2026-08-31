@@ -94,8 +94,6 @@ python -m transformation_portal.lux_depth_v3 \
   \
   --emit-master16 on \
   --emit-upscaled16 on \
-  --emit-marketing on \
-  --emit-report on \
   --emit-run-card on \
   \
   --enable-v2 on \
@@ -122,7 +120,6 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "  📁 v2/            - AI-enhanced images"
     echo "  📁 master16/      - Audit-grade 16-bit linear TIFFs"
     echo "  📁 upscaled16/    - 2x resolution 16-bit TIFFs"
-    echo "  📁 marketing/     - Web-ready sRGB JPEGs"
     echo "  📁 manifests/     - Processing metadata + run card"
     echo "  📁 logs/          - Pipeline execution logs"
     echo ""

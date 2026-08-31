@@ -77,8 +77,7 @@ Run:
 ```bash
 .venv/bin/python tools/run_apex_eval.py \
   --evalset evalsets/picacho_apex \
-  --output-dir output/apex_eval \
-  --emit-report on
+  --output-dir output/apex_eval
 ```
 
 For external canonical assets:
@@ -87,8 +86,7 @@ For external canonical assets:
 APEX_EVAL_ASSET_ROOT=/Volumes/apex_eval_assets \
 .venv/bin/python tools/run_apex_eval.py \
   --evalset evalsets/apex_real_estate_v1/evalset.example.json \
-  --output-dir output/apex_eval \
-  --emit-report on
+  --output-dir output/apex_eval
 ```
 
 The output is `apex_eval_report.json`. It records corpus readiness and, when candidate outputs are supplied,

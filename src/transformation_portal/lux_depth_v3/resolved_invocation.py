@@ -202,9 +202,8 @@ def _planned_stages(config: "EnhanceConfig") -> Tuple[str, ...]:
 
 
 def _requested_artifacts(config: "EnhanceConfig") -> Tuple[str, ...]:
-    # Only artifacts the pipeline actually produces are listed; the inert
-    # emit_marketing/emit_report switches surface as warnings instead
-    # (dispositions tracked in issues #2067/#2068).
+    # Only artifacts the pipeline actually produces are listed. Deprecated
+    # output-switch compatibility notices are carried separately in the plan.
     artifacts: List[str] = [
         "depth_u16_png",
         "depth_metadata_json",
@@ -234,9 +233,9 @@ def _plan_warnings(
     config: "EnhanceConfig",
     resolved_model: Optional[ResolvedModel],
 ) -> Tuple[str, ...]:
-    warnings: List[str] = []
-    if getattr(config, "emit_marketing", False):
-        warnings.append("--emit-marketing currently produces no deliverable (disposition tracked in issue #2067)")
+    from .config import deprecated_output_flag_notices
+
+    warnings: List[str] = list(deprecated_output_flag_notices(config))
     if getattr(config, "emit_master16", False) and getattr(config, "emit_upscaled16", False):
         warnings.append(
             "--emit-master16 and --emit-upscaled16 currently act as a single "

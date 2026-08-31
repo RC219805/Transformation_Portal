@@ -66,8 +66,6 @@ lux-depth-v3 \
   --cache-depth "on" \
   --emit-master16 "on" \
   --emit-upscaled16 "on" \
-  --emit-marketing "on" \
-  --emit-report "on" \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -126,8 +124,6 @@ lux-depth-v3 \
   --cache-depth "on" \
   --emit-master16 "on" \
   --emit-upscaled16 "on" \
-  --emit-marketing "on" \
-  --emit-report "on" \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -175,8 +171,6 @@ lux-depth-v3 \
   --cache-depth "on" \
   --emit-master16 "on" \
   --emit-upscaled16 "on" \
-  --emit-marketing "on" \
-  --emit-report "on" \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -269,12 +263,15 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 
 - `--emit-master16 TEXT`: Emit master 16-bit output (default: `off`)
 - `--emit-upscaled16 TEXT`: Emit upscaled 16-bit output (default: `off`)
-- `--emit-marketing TEXT`: Emit marketing-ready output (default: `off`)
-- `--emit-report TEXT`: Emit processing report (default: `on`)
 - `--emit-run-card TEXT`: Emit run card for reproducibility (default: `on`)
 - `--run-card-version TEXT`: Run card contract version (default: `v1`)
   - Options: `v1`, `v2`
   - Use `v2` for production trust decisions and detached attestation workflows
+
+`--emit-marketing` and `--emit-report` are deprecated compatibility
+flags and will be removed in the next major release. Either value emits a
+visible warning. No marketing artifact is produced, and the combined processing
+manifest is always emitted.
 
 ### License Acknowledgements
 
@@ -379,10 +376,9 @@ When APEX mode is enabled with all emit flags, the following outputs are generat
 ### Enhanced Images
 - `*_master16.tiff`: Master 16-bit output (when `--emit-master16 on`)
 - `*_upscaled16.tiff`: Upscaled 16-bit output (when `--emit-upscaled16 on`)
-- `*_marketing.jpg`: Marketing-ready 8-bit output (when `--emit-marketing on`)
 
 ### Metadata
-- `*_combined.json`: Processing manifest with provenance (when `--emit-report on`)
+- `*_combined.json`: Unconditional processing manifest with provenance
 - `*_run_card.json`: Run card for reproducibility tracking (when `--emit-run-card on`)
 - `*.attestation.native.json`: Repo-native detached attestation for a v2 run card (when signed)
 - `*.attestation.dsse.json`: DSSE + in-toto detached attestation sidecar (when signed)
@@ -468,8 +464,6 @@ lux-depth-v3 \
   --cache-depth "on" \
   --emit-master16 "on" \
   --emit-upscaled16 "on" \
-  --emit-marketing "on" \
-  --emit-report "on" \
   --emit-run-card "on"
 ```
 
@@ -485,8 +479,7 @@ lux-depth-v3 \
   --non-commercial-ok "true" \
   --depth-device "cuda" \
   --materials-v3 "on" \
-  --pbr "on" \
-  --emit-report "on"
+  --pbr "on"
 ```
 
 ### Workflow 4: PBR-Only (Skip V2 Enhancement)
@@ -502,8 +495,7 @@ lux-depth-v3 \
   --model-key "da3-metric" \
   --pbr "on" \
   --enable-v2 "off" \
-  --emit-master16 "on" \
-  --emit-report "on"
+  --emit-master16 "on"
 ```
 
 **Key Points:**
@@ -525,8 +517,7 @@ lux-depth-v3 \
   --pbr "on" \
   --cache-depth "on" \
   --emit-master16 "on" \
-  --emit-upscaled16 "on" \
-  --emit-marketing "on"
+  --emit-upscaled16 "on"
 ```
 
 **Note:** Using `--quality-tier apex` automatically enables appropriate features for commercial production. The `--preset` flag is optional and provides additional fine-tuning.

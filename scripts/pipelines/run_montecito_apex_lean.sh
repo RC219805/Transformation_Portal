@@ -54,7 +54,6 @@ python -m transformation_portal.lux_depth_v3 \
   --quality-tier apex \
   --depth-device mps \
   --materials-v3 on \
-  --emit-marketing on \
   --cache-depth on \
   --verbose
 

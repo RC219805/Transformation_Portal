@@ -8,6 +8,7 @@ from __future__ import annotations
 
 # Check xxhash availability for default hasher selection
 import importlib.util
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
@@ -19,6 +20,16 @@ if TYPE_CHECKING:
     from .pbr import PBRConfig
 
 _XXHASH_AVAILABLE = importlib.util.find_spec("xxhash") is not None
+
+
+class DeprecatedOutputFlagWarning(FutureWarning):
+    """Visible warning for legacy output switches pending major removal."""
+
+
+def deprecated_output_flag_notices(config: Any) -> Tuple[str, ...]:
+    """Return notices captured while normalizing legacy output flags."""
+
+    return tuple(getattr(config, "_deprecated_output_flag_notices", ()))
 
 
 class ModelVariant(Enum):
@@ -456,8 +467,14 @@ class EnhanceConfig:
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output
     emit_upscaled16: bool = False  # Emit upscaled 16-bit output
-    emit_marketing: bool = False  # Emit marketing-ready output
-    emit_report: bool = True  # Emit processing report
+    # Deprecated compatibility inputs. ``None`` means the caller omitted the
+    # legacy field; ``__post_init__`` normalizes these to their historical
+    # runtime values (False/True) without warning. Explicit True or False is
+    # accepted for one deprecation window, warns, and cannot change the
+    # truthful output contract: no marketing artifact and an unconditional
+    # combined report.
+    emit_marketing: Optional[bool] = None
+    emit_report: Optional[bool] = None
     emit_run_card: bool = True  # Emit run card for reproducibility
     run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
     run_card_include_proofs: bool = False  # Opt-in per-artifact inclusion proofs for v2 run cards
@@ -495,6 +512,34 @@ class EnhanceConfig:
 
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
+        deprecated_output_notices = []
+        if self.emit_marketing is None:
+            self.emit_marketing = False
+        else:
+            deprecated_output_notices.append(
+                "--emit-marketing / EnhanceConfig.emit_marketing is deprecated "
+                "and will be removed in the next major release; no marketing "
+                "artifact is produced"
+            )
+            self.emit_marketing = bool(self.emit_marketing)
+
+        if self.emit_report is None:
+            self.emit_report = True
+        else:
+            deprecated_output_notices.append(
+                "--emit-report / EnhanceConfig.emit_report is deprecated and "
+                "will be removed in the next major release; the combined report "
+                "is always produced and the supplied value is ignored"
+            )
+            self.emit_report = bool(self.emit_report)
+
+        # Keep the exact emitted messages available to resolver-only plans so
+        # CLI and direct-Python call paths expose the same compatibility facts
+        # without emitting a duplicate runtime warning.
+        self._deprecated_output_flag_notices = tuple(deprecated_output_notices)
+        for notice in deprecated_output_notices:
+            warnings.warn(notice, DeprecatedOutputFlagWarning, stacklevel=3)
+
         self.depth_backend = normalize_backend_id(
             self.depth_backend,
             warn=True,

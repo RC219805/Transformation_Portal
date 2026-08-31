@@ -69,8 +69,6 @@ Use the current lock-backed targets and runtime scripts above.
   --cache-depth on \
   --emit-master16 on \
   --emit-upscaled16 on \
-  --emit-marketing on \
-  --emit-report on \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite

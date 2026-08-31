@@ -54,7 +54,6 @@ make install-ml-core
   --output-dir ./output/lux_depth_v3 \
   --quality-tier apex \
   --model-key da3-metric \
-  --emit-report on \
   --emit-run-card on \
   --overwrite
 

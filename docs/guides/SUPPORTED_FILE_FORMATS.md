@@ -117,7 +117,6 @@ HDR video support is handled by the video grader's FFmpeg tone-mapping options.
   --pbr on \
   --emit-master16 on \
   --emit-upscaled16 on \
-  --emit-report on \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite

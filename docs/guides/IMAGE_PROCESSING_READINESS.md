@@ -81,7 +81,6 @@ prefer the Make target unless you are working directly on bootstrap coverage.
   --output-dir ./output/lux_depth_v3 \
   --quality-tier apex \
   --model-key da3-metric \
-  --emit-report on \
   --emit-run-card on \
   --overwrite
 ```

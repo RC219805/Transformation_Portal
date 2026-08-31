@@ -146,6 +146,40 @@ class TestManifestStructure:
         assert isinstance(data, dict)
 
 
+class TestDeprecatedOutputFlags:
+    @pytest.mark.parametrize("emit_report", [True, False])
+    def test_emit_report_value_never_suppresses_combined_manifest(
+        self,
+        tmp_path: Path,
+        emit_report: bool,
+    ) -> None:
+        from transformation_portal.lux_depth_v3.config import DeprecatedOutputFlagWarning
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        with pytest.warns(DeprecatedOutputFlagWarning, match="combined report is always produced"):
+            orchestrator = _create_orchestrator(tmp_path, emit_report=emit_report)
+        test_image = _make_test_image(tmp_path, f"report_{emit_report}.png")
+
+        result = orchestrator.enhance_image(ImageInput(path=test_image), input_root=tmp_path)
+
+        manifest_path = Path(result["manifest"])
+        assert manifest_path.is_file()
+        assert json.loads(manifest_path.read_text(encoding="utf-8"))["input"] is not None
+
+    def test_emit_marketing_warns_without_creating_fictional_artifact(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.config import DeprecatedOutputFlagWarning
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        with pytest.warns(DeprecatedOutputFlagWarning, match="no marketing artifact is produced"):
+            orchestrator = _create_orchestrator(tmp_path, emit_marketing=True)
+        test_image = _make_test_image(tmp_path, "source.png")
+
+        result = orchestrator.enhance_image(ImageInput(path=test_image), input_root=tmp_path)
+
+        assert Path(result["manifest"]).is_file()
+        assert not [path for path in tmp_path.rglob("*") if "marketing" in path.name.lower()]
+
+
 class TestInputMetadata:
     """Test input metadata in manifests."""
 
