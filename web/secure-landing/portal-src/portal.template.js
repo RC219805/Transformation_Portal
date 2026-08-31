@@ -340,8 +340,6 @@ const els = {
     emits: {
         master16: _domId('emitMaster16'),
         upscaled16: _domId('emitUpscaled16'),
-        marketing: _domId('emitMarketing'),
-        report: _domId('emitReport'),
         runCard: _domId('emitRunCard'),
         runCardVersion: _domId('runCardVersion'),
         runCardIncludeProofs: _domId('emitRunCardIncludeProofs')
@@ -1214,8 +1212,35 @@ function _managedLoginUrlForCurrentRoute() {
     return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;
 }
 
+function _migrateDeprecatedLuxOutputConfig(config) {
+    if (config !== Object(config)) return config;
+    const emits = Object(config.emits);
+    let deprecated = false;
+    // Bounded compatibility for profiles and drafts created before the next major release.
+    for (const [field, camelField, nestedField] of [
+        ['emit_marketing', 'emitMarketing', 'marketing'],
+        ['emit_report', 'emitReport', 'report']
+    ]) {
+        if (
+            field in config
+            || camelField in config
+            || nestedField in emits
+        ) deprecated = true;
+        delete config[field];
+        delete config[camelField];
+        delete emits[nestedField];
+    }
+    if (deprecated) createToast(
+        '[deprecated_output_flag] Report on; no marketing.'
+    );
+    return config;
+}
+
 function _copyTransientDraftConfig(config = state.config) {
-    return JSON.parse(JSON.stringify(config && typeof config === 'object' ? config : portalInternals.createPortalConfigState()));
+    const copied = JSON.parse(JSON.stringify(
+        config && typeof config === 'object' ? config : portalInternals.createPortalConfigState()
+    ));
+    return _migrateDeprecatedLuxOutputConfig(copied);
 }
 
 function _captureUnprofiledProfileBaseline() {
@@ -9095,12 +9120,6 @@ function buildCanonicalLuxDepthArgs(config) {
     const emitUpscaled16 = els.emits.upscaled16
         ? Boolean(els.emits.upscaled16.checked)
         : parseBoolLike(config.emits?.upscaled16, true);
-    const emitMarketing = els.emits.marketing
-        ? Boolean(els.emits.marketing.checked)
-        : parseBoolLike(config.emits?.marketing, false);
-    const emitReport = els.emits.report
-        ? Boolean(els.emits.report.checked)
-        : parseBoolLike(config.emits?.report, true);
     const emitRunCard = els.emits.runCard
         ? Boolean(els.emits.runCard.checked)
         : parseBoolLike(config.emits?.runCard, true);
@@ -9229,8 +9248,6 @@ function buildCanonicalLuxDepthArgs(config) {
         v2_preset: v2Preset,
         emit_master16: emitMaster16,
         emit_upscaled16: emitUpscaled16,
-        emit_marketing: emitMarketing,
-        emit_report: emitReport,
         emit_run_card: emitRunCard,
         run_card_version: runCardVersion,
         run_card_include_proofs: emitRunCardIncludeProofs,
@@ -9386,8 +9403,6 @@ function applyPresetRecommendedArgs(presetName) {
     c.emits = c.emits || {};
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_master16')) c.emits.master16 = parseBoolLike(recommended.emit_master16, c.emits.master16);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_upscaled16')) c.emits.upscaled16 = parseBoolLike(recommended.emit_upscaled16, c.emits.upscaled16);
-    if (Object.prototype.hasOwnProperty.call(recommended, 'emit_marketing')) c.emits.marketing = parseBoolLike(recommended.emit_marketing, c.emits.marketing);
-    if (Object.prototype.hasOwnProperty.call(recommended, 'emit_report')) c.emits.report = parseBoolLike(recommended.emit_report, c.emits.report);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
     if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_version')) {
         c.emits.runCardVersion = _resolveRunCardVersion(recommended.run_card_version);
@@ -9619,6 +9634,7 @@ function _focusInvalidBuildControl(control, options = {}) {
 
 function updateUIFromState() {
     if (!els.pipelineSelect) return;
+    state.config = _migrateDeprecatedLuxOutputConfig(state.config);
     els.pipelineSelect.value = state.pipeline;
 
     if (state.pipeline === 'lux-depth-v3') {
@@ -9676,8 +9692,6 @@ function updateUIFromState() {
     c.emits = c.emits || {};
     c.emits.master16 = parseBoolLike(c.emits.master16, true);
     c.emits.upscaled16 = parseBoolLike(c.emits.upscaled16, true);
-    c.emits.marketing = parseBoolLike(c.emits.marketing, false);
-    c.emits.report = parseBoolLike(c.emits.report, true);
     c.emits.runCard = parseBoolLike(c.emits.runCard, true);
     c.emits.runCardVersion = _resolveRunCardVersion(c.emits.runCardVersion);
     c.emits.runCardIncludeProofs = parseBoolLike(c.emits.runCardIncludeProofs, false);
@@ -9794,8 +9808,6 @@ function updateUIFromState() {
 
     safeSyncCheck(els.emits.master16, c.emits.master16);
     safeSyncCheck(els.emits.upscaled16, c.emits.upscaled16);
-    safeSyncCheck(els.emits.marketing, c.emits.marketing);
-    safeSyncCheck(els.emits.report, c.emits.report);
     safeSyncCheck(els.emits.runCard, c.emits.runCard);
     if (els.emits.runCardVersion) els.emits.runCardVersion.value = c.emits.runCardVersion;
     safeSyncCheck(els.emits.runCardIncludeProofs, c.emits.runCardIncludeProofs);
@@ -10206,8 +10218,6 @@ function renderCLI() {
         cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
         cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
         cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
-        cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
-        cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
         cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
         cliLines.push(`  --run-card-version ${q(payload.args.run_card_version || 'v1')}`);
         cliLines.push(`  --run-card-include-proofs ${onoff(payload.args.run_card_include_proofs)}`);
@@ -10533,8 +10543,6 @@ function bindInputs() {
 
     safeBindCheck(els.emits.master16, 'emits', 'master16');
     safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
-    safeBindCheck(els.emits.marketing, 'emits', 'marketing');
-    safeBindCheck(els.emits.report, 'emits', 'report');
     safeBindCheck(els.emits.runCard, 'emits', 'runCard');
     safeBindText(els.emits.runCardVersion, 'emits', 'runCardVersion');
     safeBindCheck(els.emits.runCardIncludeProofs, 'emits', 'runCardIncludeProofs');
@@ -11761,6 +11769,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         const data = JSON.parse(await file.text());
         if (data.pipeline) state.pipeline = data.pipeline;
         if (data.args) {
+            _migrateDeprecatedLuxOutputConfig(data.args);
             const c = state.config;
             c.inputDir = data.args.archive_root || data.args.input_dir || c.inputDir;
             c.outputDir = data.args.output_dir || c.outputDir;
@@ -11820,8 +11829,6 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
 
             c.emits.master16 = parseBoolLike(data.args.emit_master16, c.emits.master16);
             c.emits.upscaled16 = parseBoolLike(data.args.emit_upscaled16, c.emits.upscaled16);
-            c.emits.marketing = parseBoolLike(data.args.emit_marketing, c.emits.marketing);
-            c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
             c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
             c.emits.runCardIncludeProofs = parseBoolLike(

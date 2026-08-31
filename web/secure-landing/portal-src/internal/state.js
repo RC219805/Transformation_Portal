@@ -42,8 +42,6 @@ export function createPortalConfigState() {
     emits: {
       master16: true,
       upscaled16: true,
-      marketing: false,
-      report: true,
       runCard: true,
       runCardVersion: "v1",
       runCardIncludeProofs: false

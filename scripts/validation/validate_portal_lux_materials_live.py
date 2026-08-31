@@ -331,14 +331,12 @@ def _build_lux_materials_payload(
         "segmentation_backend": backend,
         "strict_segmentation": True,
         "pbr": True,
-        "emit_report": True,
         "emit_run_card": True,
         "run_card_version": "v2",
         "enable_v2": False,
         "non_commercial_ok": True,
         "emit_master16": True,
         "emit_upscaled16": False,
-        "emit_marketing": False,
         "cache_depth": False,
         "save_float_depth": False,
     }
@@ -393,7 +391,6 @@ def _validate_lux_preview(preview: Dict[str, Any], *, expected_backend: str) -> 
             "segmentation_backend": expected_backend,
             "strict_segmentation": True,
             "pbr": True,
-            "emit_report": True,
             "emit_run_card": True,
             "run_card_version": "v2",
             "enable_v2": False,
@@ -403,6 +400,12 @@ def _validate_lux_preview(preview: Dict[str, Any], *, expected_backend: str) -> 
             if surface.get(key) != expected:
                 raise SmokeFailure(
                     f"Preview {surface_name}.{key}={surface.get(key)!r}, expected {expected!r}",
+                    kind="contract",
+                )
+        for deprecated_key in ("emit_marketing", "emitMarketing", "emit_report", "emitReport"):
+            if deprecated_key in surface:
+                raise SmokeFailure(
+                    f"Preview {surface_name} retained deprecated key {deprecated_key}",
                     kind="contract",
                 )
 
@@ -418,6 +421,9 @@ def _validate_lux_preview(preview: Dict[str, Any], *, expected_backend: str) -> 
             raise SmokeFailure(f"Preview argv missing {flag} {value}: {tokens}", kind="contract")
     if "--strict-segmentation" not in tokens:
         raise SmokeFailure(f"Preview argv missing --strict-segmentation: {tokens}", kind="contract")
+    for deprecated_flag in ("--emit-marketing", "--emit-report"):
+        if deprecated_flag in tokens:
+            raise SmokeFailure(f"Preview argv retained deprecated flag {deprecated_flag}: {tokens}", kind="contract")
 
 
 def _preview_job(

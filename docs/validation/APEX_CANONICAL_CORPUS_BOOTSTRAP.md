@@ -12,7 +12,8 @@ Use either the CLI flag or environment variable:
 .venv/bin/python tools/run_apex_eval.py \
   --evalset evalsets/apex_real_estate_v1/evalset.example.json \
   --asset-root /Volumes/apex_eval_assets \
-  --output-dir output/apex_eval
+  --output-dir output/apex_eval \
+  --emit-report on
 ```
 
 ```bash

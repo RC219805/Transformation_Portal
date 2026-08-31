@@ -556,7 +556,7 @@ export function createDeferredProfileSurfaceApi(host) {
         protectRestoredUnprofiledDraft = false;
         setActiveName(name);
         state.pipeline = profiles[name].pipeline;
-        state.config = JSON.parse(JSON.stringify(profiles[name].config));
+        state.config = copyDraftConfig(profiles[name].config);
         updateUIFromState();
         persistTransientDraft();
         void fetchPresetsForPipeline(state.pipeline, true);

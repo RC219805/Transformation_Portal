@@ -132,14 +132,12 @@ def _build_captioning_payload(
             "materials_v3": False,
             "enable_segmentation": False,
             "pbr": False,
-            "emit_report": True,
             "emit_run_card": True,
             "run_card_version": "v2",
             "enable_v2": False,
             "non_commercial_ok": True,
             "emit_master16": True,
             "emit_upscaled16": False,
-            "emit_marketing": False,
             "cache_depth": False,
             "save_float_depth": False,
             "vlm_captioning_enabled": True,
@@ -200,6 +198,12 @@ def _preview_captioning_job(base_url: str, *, api_key: str, payload: Dict[str, A
                 f"Preview {surface_name}.vlm_captioning_model={surface.get('vlm_captioning_model')!r}",
                 kind="contract",
             )
+        for deprecated_key in ("emit_marketing", "emitMarketing", "emit_report", "emitReport"):
+            if deprecated_key in surface:
+                raise SmokeFailure(
+                    f"Preview {surface_name} retained deprecated key {deprecated_key}",
+                    kind="contract",
+                )
 
     tokens = _argv_preview_tokens(data)
     required_pairs = {
@@ -211,6 +215,9 @@ def _preview_captioning_job(base_url: str, *, api_key: str, payload: Dict[str, A
     for flag, value in required_pairs.items():
         if not _tokens_contain_pair(tokens, flag, value):
             raise SmokeFailure(f"Preview argv missing {flag} {value}: {tokens}", kind="contract")
+    for deprecated_flag in ("--emit-marketing", "--emit-report"):
+        if deprecated_flag in tokens:
+            raise SmokeFailure(f"Preview argv retained deprecated flag {deprecated_flag}: {tokens}", kind="contract")
     return data
 
 

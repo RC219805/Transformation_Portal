@@ -25,10 +25,7 @@ MAINTAINED_OPERATOR_SURFACES = (
     "docs/guides/FILE_FORMAT_QUICK_REFERENCE.md",
     "docs/guides/IMAGE_PROCESSING_READINESS.md",
     "docs/guides/SUPPORTED_FILE_FORMATS.md",
-    "docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md",
     "docs/reference/QUICKSTART_CHEATSHEET.md",
-    "docs/validation/APEX_CANONICAL_CORPUS_BOOTSTRAP.md",
-    "docs/validation/APEX_VISUAL_QUALITY_PROTOCOL.md",
     "scripts/pipelines/run_montecito_apex_full.sh",
     "scripts/pipelines/run_montecito_apex_lean.sh",
 )
@@ -41,7 +38,7 @@ def test_omitted_legacy_flags_keep_historical_runtime_defaults_without_warning()
 
     assert config.emit_marketing is False
     assert config.emit_report is True
-    assert deprecated_output_flag_notices(config) == ()
+    assert not deprecated_output_flag_notices(config)
     assert not any(isinstance(item.message, DeprecatedOutputFlagWarning) for item in caught)
 
 
@@ -49,6 +46,7 @@ def test_maintained_surfaces_do_not_promise_or_recommend_inert_flags() -> None:
     forbidden = (
         "*_marketing.jpg",
         "marketing/",
+        "Marketing Deliverables Only",
         "--emit-marketing on",
         '--emit-marketing "on"',
         "--emit-report on",

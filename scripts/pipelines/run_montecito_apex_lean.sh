@@ -44,7 +44,7 @@ echo ""
 echo "Input:  ${INPUT_DIR}"
 echo "Output: ${OUTPUT_DIR}"
 echo ""
-echo "Features: APEX Quality + Materials V3 + Marketing Deliverables Only"
+echo "Features: APEX Quality + Materials V3 + Standard Outputs"
 echo "Est. Time: ~7s per image"
 echo ""
 

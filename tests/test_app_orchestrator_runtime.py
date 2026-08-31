@@ -418,8 +418,6 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
             "cache_depth": True,
             "emit_master16": True,
             "emit_upscaled16": True,
-            "emit_marketing": False,
-            "emit_report": True,
             "emit_run_card": True,
         },
     }
@@ -431,7 +429,8 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
     assert _flag_value(argv, "--cache-depth") == "on"
     assert _flag_value(argv, "--depth-backend") == "da3"
     assert _flag_value(argv, "--depth-device") == "cuda"
-    assert _flag_value(argv, "--emit-report") == "on"
+    assert "--emit-marketing" not in argv
+    assert "--emit-report" not in argv
     assert _flag_value(argv, "--run-card-version") == "v1"
 
 
@@ -460,6 +459,60 @@ def test_argv_normalization_accepts_legacy_keys() -> None:
     assert _flag_value(argv, "--depth-device") == "cpu"
     assert _flag_value(argv, "--enable-v2") == "on"
     assert _flag_value(argv, "--v2-preset") == "default"
+
+
+@pytest.mark.parametrize(
+    ("marketing_key", "marketing_value", "report_key", "report_value"),
+    [
+        ("emit_marketing", True, "emit_report", False),
+        ("emitMarketing", False, "emitReport", True),
+    ],
+)
+def test_deprecated_portal_output_keys_warn_and_never_reach_cli(
+    tmp_path: Path,
+    marketing_key: str,
+    marketing_value: bool,
+    report_key: str,
+    report_value: bool,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    args: Dict[str, object] = {
+        "input_dir": str(input_dir),
+        "output_dir": str(tmp_path / "output"),
+        marketing_key: marketing_value,
+        report_key: report_value,
+    }
+
+    preview = orchestrator_app._build_lux_config_preview(
+        args,
+        readiness_snapshot={
+            "status": "ready",
+            "canonical_command": "lux-depth-v3",
+            "missing_prerequisites": [],
+            "runner_details": {},
+            "notes": [],
+        },
+    )
+
+    assert preview["field_errors"] == []
+    warnings_by_field = {warning["field"]: warning for warning in preview["field_warnings"]}
+    assert warnings_by_field["emit_marketing"]["code"] == "deprecated_output_flag"
+    assert "no marketing artifact is produced" in warnings_by_field["emit_marketing"]["message"]
+    assert warnings_by_field["emit_report"]["code"] == "deprecated_output_flag"
+    assert "combined processing manifest is always emitted" in warnings_by_field["emit_report"]["message"]
+    for surface_name in ("normalized_args", "execution_args"):
+        surface = preview[surface_name]
+        assert "emit_marketing" not in surface
+        assert "emitMarketing" not in surface
+        assert "emit_report" not in surface
+        assert "emitReport" not in surface
+    assert "--emit-marketing" not in preview["argv_preview"]
+    assert "--emit-report" not in preview["argv_preview"]
+
+    argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
+    assert "--emit-marketing" not in argv
+    assert "--emit-report" not in argv
 
 
 def test_argv_normalization_honors_explicit_v2_disable() -> None:
@@ -508,8 +561,6 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
             "enable_v2": "off",
             "emit_master16": "true",
             "emit_upscaled16": "1",
-            "emit_marketing": "0",
-            "emit_report": "yes",
             "emit_run_card": "no",
         },
     }
@@ -525,8 +576,8 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
     assert _flag_value(argv, "--cache-depth") == "off"
     assert _flag_value(argv, "--enable-v2") == "off"
     assert "--v2-preset" not in argv
-    assert _flag_value(argv, "--emit-marketing") == "off"
-    assert _flag_value(argv, "--emit-report") == "on"
+    assert "--emit-marketing" not in argv
+    assert "--emit-report" not in argv
     assert _flag_value(argv, "--emit-run-card") == "off"
     assert _flag_value(argv, "--run-card-version") == "v1"
 
@@ -551,6 +602,8 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     content = _portal_bundle_content()
     assert "--emit-manifest" not in content
     assert "--emit-provenance" not in content
+    assert "--emit-marketing" not in content
+    assert "--emit-report" not in content
     assert "--enable-segmentation" in content
     assert "--segmentation-backend" in content
     assert "--sam2-model-size" in content
@@ -2689,6 +2742,11 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     legacy_cleanup_body = _extract_js_function_body(profile_content, "cleanupLegacyProfiles")
     get_profiles_body = _extract_js_function_body(profile_content, "getProfiles")
     import_legacy_body = _extract_js_function_body(profile_content, "importLegacyProfiles")
+    apply_profile_body = _extract_js_function_body(profile_content, "applySelectedProfile")
+    migrate_output_body = _extract_js_function_body(content, "_migrateDeprecatedLuxOutputConfig")
+    copy_draft_body = _extract_js_function_body(content, "_copyTransientDraftConfig")
+    read_draft_body = _extract_js_function_body(content, "_readTransientPortalDraft")
+    apply_draft_body = _extract_js_function_body(content, "_applyTransientPortalDraft")
     loader_body = _extract_js_function_body(content, "_loadDeferredProfileSurface")
     host_body = _extract_js_function_body(content, "_createDeferredProfileSurfaceHost")
     primer_body = _extract_js_function_body(content, "_primeDeferredProfileSurface")
@@ -2733,6 +2791,17 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     assert "data-profile-state" not in profile_content  # state is set through dataset, not duplicated markup
     assert "dataset.profileState" in profile_content
     assert "dataset.draftState" in profile_content
+    assert "['emit_marketing', 'emitMarketing', 'marketing']" in migrate_output_body
+    assert "['emit_report', 'emitReport', 'report']" in migrate_output_body
+    assert "delete config[field];" in migrate_output_body
+    assert "delete config[camelField];" in migrate_output_body
+    assert "delete emits[nestedField];" in migrate_output_body
+    assert "'[deprecated_output_flag] Report on; no marketing.'" in migrate_output_body
+    assert "return _migrateDeprecatedLuxOutputConfig(copied);" in copy_draft_body
+    assert "if (deprecated) createToast(" in migrate_output_body
+    assert "const profiles = getProfiles();" in apply_profile_body
+    assert "state.config = copyDraftConfig(profiles[name].config);" in apply_profile_body
+    assert "config: _copyTransientDraftConfig(config)" in read_draft_body
     assert "window.prompt" not in profile_content
     assert "window.confirm" not in profile_content
     assert "prompt(" not in profile_content
@@ -3111,8 +3180,6 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "v2_preset": "--v2-preset",
         "emit_master16": "--emit-master16",
         "emit_upscaled16": "--emit-upscaled16",
-        "emit_marketing": "--emit-marketing",
-        "emit_report": "--emit-report",
         "emit_run_card": "--emit-run-card",
         "run_card_version": "--run-card-version",
         "run_card_include_proofs": "--run-card-include-proofs",
@@ -3181,8 +3248,6 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "cache_depth": False,
             "emit_master16": True,
             "emit_upscaled16": False,
-            "emit_marketing": False,
-            "emit_report": True,
             "emit_run_card": True,
             "run_card_version": "v2",
             "run_card_include_proofs": True,
@@ -3250,8 +3315,8 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--cache-depth") == "off"
     assert _flag_value(argv, "--emit-master16") == "on"
     assert _flag_value(argv, "--emit-upscaled16") == "off"
-    assert _flag_value(argv, "--emit-marketing") == "off"
-    assert _flag_value(argv, "--emit-report") == "on"
+    assert "--emit-marketing" not in argv
+    assert "--emit-report" not in argv
     assert _flag_value(argv, "--emit-run-card") == "on"
     assert _flag_value(argv, "--run-card-version") == "v2"
     assert _flag_value(argv, "--enable-v2") == "on"
@@ -3325,8 +3390,6 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
             "cache_depth": False,
             "emit_master16": True,
             "emit_upscaled16": False,
-            "emit_marketing": False,
-            "emit_report": True,
             "emit_run_card": True,
             "run_card_version": "v2",
             "run_card_include_proofs": False,
@@ -3372,10 +3435,6 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "1",
         "--emit-upscaled16",
         "off",
-        "--emit-marketing",
-        "false",
-        "--emit-report",
-        "on",
         "--emit-run-card",
         "on",
         "--run-card-version",
