@@ -5,3 +5,6 @@
 -r base.in
 -r dev.in
 -r ci.in
+
+# Keep repository lock/install environments compatible with the governed compiler.
+click>=8.4.2,<8.5

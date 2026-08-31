@@ -8,6 +8,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNED_PIP_PIN = "pip==26.2.1"
+GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.15.0"
 PYPDF_LOCK_PIN = "pypdf==6.16.2"
@@ -51,7 +52,7 @@ def test_lock_generation_workflows_use_pip_tools_with_pip_26_support(
     workflow = (REPO_ROOT / workflow_path).read_text(encoding="utf-8")
 
     assert f'{pip_command} install --upgrade "{GOVERNED_PIP_PIN}"' in workflow
-    assert f'{pip_command} install "pip-tools==7.6.1"' in workflow
+    assert f'{pip_command} install "pip-tools==7.6.1" "{GOVERNED_LOCK_CLICK_PIN}"' in workflow
     assert '"pip-tools==7.6.0"' not in workflow
     assert '"pip-tools==7.5.3"' not in workflow
     assert '"pip-tools==7.5.2"' not in workflow

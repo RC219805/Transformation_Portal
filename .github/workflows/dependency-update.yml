@@ -31,7 +31,7 @@ jobs:
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: |
           "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install --upgrade "pip==26.2.1"
-          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install "pip-tools==7.6.1"
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install "pip-tools==7.6.1" "click==8.4.2"
           # Install pip-audit from governed security lockfile
           "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install -r requirements/security.txt
 

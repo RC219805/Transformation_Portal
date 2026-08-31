@@ -26,6 +26,14 @@ def _target_body(name: str) -> str:
     return match.group("body")
 
 
+def test_generic_aggregate_owns_pip_tools_click_compatibility_bound() -> None:
+    all_input = (PROJECT_ROOT / "requirements" / "all.in").read_text(encoding="utf-8")
+    base_input = (PROJECT_ROOT / "requirements" / "base.in").read_text(encoding="utf-8")
+
+    assert "click>=8.4.2,<8.5" in all_input
+    assert not any(line.lstrip().startswith("click") for line in base_input.splitlines())
+
+
 def test_generic_targets_do_not_reference_target_owned_ml_locks() -> None:
     text = _read_makefile()
     assert "compile: compile-generic" in text
@@ -194,11 +202,20 @@ path.write_text("\\n".join(header + body) + "\\n", encoding="utf-8")
     path.chmod(0o755)
 
 
-def _write_fake_pip_python(path: Path, *, version: str = "26.2.1") -> None:
+def _write_fake_pip_python(
+    path: Path,
+    *,
+    version: str = "26.2.1",
+    click_version: str = "8.4.2",
+) -> None:
     path.write_text(
         "#!/bin/sh\n"
         'if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "--version" ]; then\n'
         f'  echo "pip {version} from /test/site-packages/pip (python 3.11)"\n'
+        "  exit 0\n"
+        "fi\n"
+        'if [ "$1" = "-c" ]; then\n'
+        f'  echo "{click_version}"\n'
         "  exit 0\n"
         "fi\n"
         "exit 2\n",
@@ -259,6 +276,33 @@ def test_require_pip_compile_rejects_stale_pip_runtime(tmp_path: Path) -> None:
     output = result.stdout + result.stderr
     assert "requires pip==26.2.1" in output
     assert "pip 26.1.2 from /test/site-packages/pip" in output
+
+
+@pytest.mark.security
+def test_require_pip_compile_rejects_incompatible_click_runtime(tmp_path: Path) -> None:
+    fake_pip_compile = tmp_path / "pip-compile"
+    fake_pip_python = tmp_path / "python"
+    _write_fake_pip_compile(fake_pip_compile)
+    _write_fake_pip_python(fake_pip_python, click_version="8.5.0")
+
+    result = subprocess.run(
+        [
+            "make",
+            "require-pip-compile",
+            f"PIP_COMPILE_BIN={fake_pip_compile}",
+            f"PIP_PYTHON_BIN={fake_pip_python}",
+        ],
+        cwd=MAKEFILE_PATH.parent,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    output = result.stdout + result.stderr
+    assert "requires click==8.4.2 for pip-tools command provenance" in output
+    assert "reported Click '8.5.0'" in output
 
 
 @pytest.mark.security

@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.78
+boto3==1.43.83
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.78
+botocore==1.43.83
     # via
     #   -c all.txt
     #   boto3
@@ -47,6 +47,10 @@ click==8.4.2
     # via
     #   -c all.txt
     #   uvicorn
+cloudpickle==3.1.2
+    # via
+    #   -c all.txt
+    #   joblib
 fastapi==0.141.1
     # via
     #   -c all.txt
@@ -72,7 +76,7 @@ jmespath==1.1.0
     #   -c all.txt
     #   boto3
     #   botocore
-joblib==1.5.3
+joblib==1.6.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -125,12 +129,12 @@ pillow==12.3.0
     # via
     #   -c all.txt
     #   -r base.in
-pydantic==2.13.4
+pydantic==2.13.5
     # via
     #   -c all.txt
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.4
+pydantic-core==2.46.5
     # via
     #   -c all.txt
     #   pydantic
@@ -204,7 +208,7 @@ tqdm==4.70.0
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.27.1
+typer==0.27.2
     # via
     #   -c all.txt
     #   -r base.in

@@ -216,22 +216,28 @@ workflow:
 
 - `pip==26.2.1`
 - `pip-tools==7.6.1`
+- `click==8.4.2`
 
-That pairing includes the CVE-2026-13346 correction and the subsequent
+That toolchain includes the CVE-2026-13346 correction and the subsequent
 26.2.1 keyring fix while retaining the repository-validated pip-tools compiler.
 To match the workflow locally:
 
 ```bash
 python -m pip install --upgrade "pip==26.2.1"
-python -m pip install "pip-tools==7.6.1"
+python -m pip install "pip-tools==7.6.1" "click==8.4.2"
 ```
 
 `pip-tools 7.6.1` is the first compiler release compatible with pip 26.2 and
 replaces the pip-26.1-only 7.6.0 baseline. The workflow in
 `.github/workflows/secure-install-pilot.yml` applies this toolchain
 automatically. The requirements Makefile fails closed when `pip-compile`
-or its paired pip interpreter reports any other version, so local runs must use
-the same versions.
+or its paired pip/Click runtime reports any other version, so local runs must
+use the same versions. Pip-tools 7.6.1 under Click 8.5 falsely records
+`--no-index` in an online solve's generated command. The compiler therefore
+uses Click 8.4.2, while the aggregate `all.in` input keeps repository
+lock/install environments on `click>=8.4.2,<8.5` without narrowing public
+package metadata. Remove the upper bound only with a compatible pip-tools
+compiler; staged lock publication rejects that false offline provenance.
 
 Pip 26.2 separates normal constraints from isolated-build constraints. Live
 `pip install` commands that use `requirements/constraints.txt` therefore pass
@@ -535,7 +541,9 @@ Each ML layer has a specific contract:
 
 ### Relationship to pyproject.toml
 
-The `pyproject.toml` file contains the same dependencies as the `.in` files, with version ranges. This ensures:
+The `pyproject.toml` file contains the same product dependencies as the `.in`
+files, with version ranges. Aggregate lock inputs may add repository-toolchain
+compatibility bounds that do not narrow public package metadata. This ensures:
 
 - The package can be installed with `pip install -e .`
 - Extras like `[ml-core]`, `[sam2]`, `[raw]`, `[ml]`, `[dev]`, `[ci]`, and `[all]` work as expected
