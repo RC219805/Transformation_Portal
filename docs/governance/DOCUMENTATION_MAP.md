@@ -97,7 +97,7 @@ operator guidance unless they are linked here as canonical documents.
 | Deterministic RAW ingest | [ADR-030](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | Maintained |
 | Schema contracts and topology | [Schema Contracts](../../schemas/README.md), [docs/schemas](../schemas/) | Maintained boundary for root runtime schema/profile contracts versus published schema contracts under docs |
 | Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
-| Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Proposed; not yet an enforceable repository gate. If accepted, designation precedes new scheduler, ledger, or artifact-store abstractions |
+| Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Accepted; authoritative repository designation. Implementation activation remains subject to the ADR's vertical-slice gates |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
 ## APEX And Archive Gates

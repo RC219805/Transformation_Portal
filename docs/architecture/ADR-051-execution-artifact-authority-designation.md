@@ -1,6 +1,6 @@
 # ADR-051: Execution and Artifact Authority Designation
 
-**Status:** Proposed — design complete; exact-head owner sign-off pending
+**Status:** Accepted — owner-approved design; implementation activation remains gated
 **Date:** 2026-08-28
 **Last reviewed:** 2026-08-30
 **Decision Makers:** Repository owner (acceptance) + Architect (designation) + Specialist (migration)
@@ -582,9 +582,9 @@ The design-complete checklist is:
       `Supersedes` field, and Production Hardening Gap section-4 refresh are in this PR.
 - [x] No decision markers or verification placeholders remain; missing capabilities are explicit
       activation prerequisites, and current open issues are not described as complete.
-- [ ] Repository owner has recorded role-qualified Architect and Specialist approval of the exact
-      Proposed head. The acceptance-only commit must replace this line with a checked item citing the
-      approval comment and SHA.
+- [x] Repository owner recorded role-qualified Architect and Specialist approval of Proposed head
+      `564d2df9208857fc94c8cf5d5f1e70e89293d374` in
+      [PR comment #5473351060](https://github.com/RC219805/Transformation_Portal/pull/2069#issuecomment-5473351060).
 
 Independent execution, storage/security, and governance audits inform these matrices but do not
 replace owner approval. Because the PR author cannot self-approve a GitHub review, the two exact-head

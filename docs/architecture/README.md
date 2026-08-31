@@ -75,7 +75,7 @@ These ADRs remain active support material. Keep them in this directory, and revi
 | [ADR-046-app-path-security-helper-extraction.md](ADR-046-app-path-security-helper-extraction.md) | current-support-adr |
 | [ADR-047-managed-sam2-checkpoint-security-extraction.md](ADR-047-managed-sam2-checkpoint-security-extraction.md) | current-support-adr |
 | [ADR-049-plugin-manifest-trust.md](ADR-049-plugin-manifest-trust.md) | current-support-adr |
-| [ADR-051-execution-artifact-authority-designation.md](ADR-051-execution-artifact-authority-designation.md) | current-support-adr (Proposed; design complete, exact-head owner sign-off pending) |
+| [ADR-051-execution-artifact-authority-designation.md](ADR-051-execution-artifact-authority-designation.md) | current-support-adr (Accepted; implementation activation remains gated) |
 | [templates/ADR-vjepa2-separate-repo-TEMPLATE.md](templates/ADR-vjepa2-separate-repo-TEMPLATE.md) | template (relocated 2026-05-16 out of the numbered ADR series; not a real ADR) |
 
 ## Review-Required Planning Docs
