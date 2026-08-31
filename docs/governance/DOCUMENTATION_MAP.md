@@ -3,7 +3,7 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-08-30
+**Last Updated:** 2026-08-31
 **Maintainer:** Repository Architect
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
@@ -73,6 +73,7 @@ operator guidance unless they are linked here as canonical documents.
 | Dependency pinning | [ADR-032 Dependency Pinning Strategy](../architecture/ADR-032-dependency-pinning-strategy.md) | Maintained |
 | Retired ML lock lanes | [Retired ML Lock Lanes - 2026-04-30](RETIRED_ML_LOCK_LANES_2026-04-30.md) | Maintained governance record for unsupported Linux/macOS Intel ML lanes |
 | Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands and Phase 5.A local validation status |
+| Repository closeout plan (open-issue backlog) | [Repository Closeout Plan - 2026-08-31](REPOSITORY_CLOSEOUT_PLAN_2026-08-31.md) | Verified execution plan for closing issues #1814, #2063, #2064, #2065, #2067, #2068: merge sequencing, per-issue closure gates, governance-gate inventory, and corrections recorded against `main` @ `3e494a8` |
 | Repo-wide audit baseline | [Portal Repo-Wide Audit - 2026-05-18](PORTAL_AUDIT_REPO_WIDE_2026-05-18.md) | Static repo-wide audit baseline as of 2026-05-18 covering CI/typing/coverage enforcement, ML runtime hotspots (SAM2, Gaussian rasterizer, segmentation cache hashing), container and plugin isolation, dependency/security governance, and software/model licensing |
 | Repo-wide audit backlog | [Portal Audit Backlog - 2026-05-18](audit/PORTAL_AUDIT_2026-05-18_backlog.md) | Companion remediation backlog for the 2026-05-18 audit: 12 actionable items across immediate / near-term / medium-term / long-term tiers with file targets and acceptance criteria |
 | Performance gate policy | [Performance Gate Policy](../performance/GATE_POLICY.md) | Maintained authority for PR-blocking, nightly-blocking, and advisory performance signals |
