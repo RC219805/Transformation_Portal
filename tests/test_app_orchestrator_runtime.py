@@ -416,8 +416,7 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
             "materials_v3": True,
             "pbr": True,
             "cache_depth": True,
-            "emit_master16": True,
-            "emit_upscaled16": True,
+            "output_bit_depth": 16,
             "emit_run_card": True,
         },
     }
@@ -431,6 +430,9 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
     assert _flag_value(argv, "--depth-device") == "cuda"
     assert "--emit-marketing" not in argv
     assert "--emit-report" not in argv
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
     assert _flag_value(argv, "--run-card-version") == "v1"
 
 
@@ -448,6 +450,7 @@ def test_argv_normalization_accepts_legacy_keys() -> None:
             "pbr": False,
             "enableV2": True,
             "v2Preset": "default",
+            "emitMaster16": True,
         },
     }
 
@@ -459,6 +462,162 @@ def test_argv_normalization_accepts_legacy_keys() -> None:
     assert _flag_value(argv, "--depth-device") == "cpu"
     assert _flag_value(argv, "--enable-v2") == "on"
     assert _flag_value(argv, "--v2-preset") == "default"
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+
+
+def test_argv_normalization_maps_disabled_legacy_bit_depth_aliases_to_8() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "emit_master16": False,
+            "emit_upscaled16": "off",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--output-bit-depth") == "8"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
+
+
+def test_argv_normalization_treats_null_legacy_bit_depth_aliases_as_omitted() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "emit_master16": None,
+            "emitUpscaled16": None,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
+
+
+@pytest.mark.parametrize("canonical_key", ["output_bit_depth", "outputBitDepth"])
+@pytest.mark.parametrize("alias_key", ["emit_master16", "emitMaster16"])
+@pytest.mark.parametrize(
+    ("alias_present", "alias_value", "expected_depth"),
+    [
+        (False, None, "16"),
+        (True, None, "16"),
+        (True, False, "8"),
+        (True, True, "16"),
+    ],
+)
+def test_argv_normalization_treats_null_canonical_depth_as_omitted(
+    canonical_key: str,
+    alias_key: str,
+    alias_present: bool,
+    alias_value: object,
+    expected_depth: str,
+) -> None:
+    args: Dict[str, object] = {
+        "input_dir": "./input_images",
+        "output_dir": "./output",
+        canonical_key: None,
+    }
+    if alias_present:
+        args[alias_key] = alias_value
+
+    argv = orchestrator_app._argv_from_request(
+        {
+            "pipeline": "lux-depth-v3",
+            "args": args,
+        }
+    )
+
+    assert _flag_value(argv, "--output-bit-depth") == expected_depth
+    assert "--emit-master16" not in argv
+
+
+@pytest.mark.parametrize(
+    ("snake_value", "camel_value", "expected_depth"),
+    [
+        (None, 8, "8"),
+        (None, "16", "16"),
+        (8, None, "8"),
+        ("16", None, "16"),
+    ],
+)
+def test_argv_normalization_selects_non_null_canonical_bit_depth(
+    snake_value: object,
+    camel_value: object,
+    expected_depth: str,
+) -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": snake_value,
+            "outputBitDepth": camel_value,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--output-bit-depth") == expected_depth
+
+
+@pytest.mark.parametrize("invalid", [True, 8.0, "invalid"])
+def test_argv_rejects_non_null_camel_depth_when_snake_depth_is_null(invalid: object) -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": None,
+            "outputBitDepth": invalid,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Output bit depth must be 8 or 16"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_preview_maps_legacy_bit_depth_alias_and_reports_one_warning(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output"),
+            "emit_master16": True,
+            "emit_upscaled16": "on",
+        }
+    )
+
+    assert preview["normalized_args"]["output_bit_depth"] == 16
+    bit_depth_warnings = [warning for warning in preview["field_warnings"] if warning["field"] == "output_bit_depth"]
+    assert [warning["code"] for warning in bit_depth_warnings] == ["deprecated_output_flag"]
+
+
+def test_preview_ignores_null_legacy_bit_depth_aliases(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output"),
+            "emit_master16": None,
+            "emitUpscaled16": None,
+        }
+    )
+
+    assert preview["normalized_args"]["output_bit_depth"] == 16
+    bit_depth_warnings = [warning for warning in preview["field_warnings"] if warning["field"] == "output_bit_depth"]
+    assert bit_depth_warnings == []
 
 
 @pytest.mark.parametrize(
@@ -513,6 +672,9 @@ def test_deprecated_portal_output_keys_warn_and_never_reach_cli(
     argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
     assert "--emit-marketing" not in argv
     assert "--emit-report" not in argv
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
 
 
 def test_argv_normalization_honors_explicit_v2_disable() -> None:
@@ -580,6 +742,77 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
     assert "--emit-report" not in argv
     assert _flag_value(argv, "--emit-run-card") == "off"
     assert _flag_value(argv, "--run-card-version") == "v1"
+
+
+@pytest.mark.parametrize("invalid", [True, 8.0, 8.9, "8.9", "eight"])
+def test_argv_rejects_non_integer_output_bit_depth_without_truncation(invalid: object) -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": invalid,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Output bit depth must be 8 or 16"):
+        orchestrator_app._argv_from_request(payload)
+
+
+@pytest.mark.parametrize("invalid", [True, 8.0, 8.9, "8.9", "eight"])
+def test_preview_reports_non_integer_output_bit_depth_without_truncation(
+    tmp_path: Path,
+    invalid: object,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output"),
+            "output_bit_depth": invalid,
+        }
+    )
+
+    assert any(
+        error["field"] == "output_bit_depth" and error["code"] == "invalid_output_bit_depth"
+        for error in preview["field_errors"]
+    )
+
+
+def test_argv_rejects_explicit_8_with_truthy_legacy_bit_depth_alias() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": 8,
+            "emit_master16": True,
+        },
+    }
+
+    with pytest.raises(ValueError, match="conflicts with a truthy deprecated"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_preview_rejects_explicit_8_with_truthy_legacy_bit_depth_alias(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output"),
+            "output_bit_depth": 8,
+            "emit_master16": True,
+        }
+    )
+
+    assert any(
+        error["field"] == "output_bit_depth" and error["code"] == "conflicting_output_bit_depth"
+        for error in preview["field_errors"]
+    )
 
 
 def test_argv_normalization_trims_pipeline_name() -> None:
@@ -3178,8 +3411,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "cache_depth": "--cache-depth",
         "enable_v2": "--enable-v2",
         "v2_preset": "--v2-preset",
-        "emit_master16": "--emit-master16",
-        "emit_upscaled16": "--emit-upscaled16",
+        "output_bit_depth": "--output-bit-depth",
         "emit_run_card": "--emit-run-card",
         "run_card_version": "--run-card-version",
         "run_card_include_proofs": "--run-card-include-proofs",
@@ -3246,8 +3478,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "pbr": True,
             "save_float_depth": True,
             "cache_depth": False,
-            "emit_master16": True,
-            "emit_upscaled16": False,
+            "output_bit_depth": 16,
             "emit_run_card": True,
             "run_card_version": "v2",
             "run_card_include_proofs": True,
@@ -3313,8 +3544,9 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--pbr") == "on"
     assert _flag_value(argv, "--save-float-depth") == "on"
     assert _flag_value(argv, "--cache-depth") == "off"
-    assert _flag_value(argv, "--emit-master16") == "on"
-    assert _flag_value(argv, "--emit-upscaled16") == "off"
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
     assert "--emit-marketing" not in argv
     assert "--emit-report" not in argv
     assert _flag_value(argv, "--emit-run-card") == "on"
@@ -3388,8 +3620,7 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
             "materials_v3": True,
             "pbr": True,
             "cache_depth": False,
-            "emit_master16": True,
-            "emit_upscaled16": False,
+            "output_bit_depth": 16,
             "emit_run_card": True,
             "run_card_version": "v2",
             "run_card_include_proofs": False,
@@ -3431,10 +3662,8 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "true",
         "--cache-depth",
         "0",
-        "--emit-master16",
-        "1",
-        "--emit-upscaled16",
-        "off",
+        "--output-bit-depth",
+        "16",
         "--emit-run-card",
         "on",
         "--run-card-version",

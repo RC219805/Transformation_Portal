@@ -173,6 +173,23 @@ def infer_v2_output_bit_depth(input_path: Path, *, allow_8bit_output: bool = Fal
     return 8
 
 
+def _convert_alpha_to_target_dtype(alpha: np.ndarray, target_dtype: np.dtype[Any]) -> np.ndarray:
+    """Scale an alpha plane into the selected output encoding range."""
+
+    if alpha.dtype == target_dtype:
+        return alpha
+    if target_dtype not in {np.dtype(np.uint8), np.dtype(np.uint16)}:
+        raise V2EnhancementError(f"Unsupported alpha target dtype: {target_dtype}")
+    if np.issubdtype(alpha.dtype, np.integer):
+        normalized = alpha.astype(np.float32) / float(np.iinfo(alpha.dtype).max)
+    elif np.issubdtype(alpha.dtype, np.floating):
+        normalized = alpha.astype(np.float32)
+    else:
+        raise V2EnhancementError(f"Unsupported alpha dtype: {alpha.dtype}")
+    target_max = float(np.iinfo(target_dtype).max)
+    return (np.clip(normalized, 0.0, 1.0) * target_max + 0.5).astype(target_dtype)
+
+
 def _coerce_to_stem_preserving_dots(input_path_or_stem: str) -> str:
     """Treat value as a stem by default; only strip extensions for path-like inputs."""
     raw = str(input_path_or_stem).strip()
@@ -567,6 +584,7 @@ def enhance_image(
     config: Optional[V2EnhancementConfig] = None,
     device: str = "cpu",
     allow_8bit_output: bool = False,
+    output_bit_depth: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
@@ -575,8 +593,8 @@ def enhance_image(
     processing.
 
     **BIT-DEPTH PRESERVATION GUARANTEE:**
-    - 16-bit input → 16-bit output (unless allow_8bit_output=True)
-    - 8-bit input → 8-bit output
+    - Omitted output_bit_depth preserves input precision
+    - Explicit output_bit_depth selects 8-bit PNG or 16-bit TIFF
     - Processing always done in float32 [0,1] to preserve precision
 
     Args:
@@ -587,6 +605,7 @@ def enhance_image(
         config: Enhancement configuration (uses default if None)
         device: Processing device (cpu/cuda/mps) - currently only cpu supported
         allow_8bit_output: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
+        output_bit_depth: Explicit target encoding depth (8 or 16)
 
     Returns:
         Dict containing processing metadata:
@@ -618,10 +637,18 @@ def enhance_image(
 
     logger.info(f"V2 Enhancement: {input_path.name} with preset '{config.preset}'")
 
-    # Check for "none" preset (skip enhancement)
-    if config.preset == "none" or (
-        config.enhancement_strength == 0.0 and config.clarity_strength == 0.0 and config.material_strength == 0.0
+    if output_bit_depth is not None and (
+        isinstance(output_bit_depth, bool) or not isinstance(output_bit_depth, int) or output_bit_depth not in {8, 16}
     ):
+        raise V2EnhancementError("output_bit_depth must be 8 or 16")
+
+    passthrough_requested = config.preset == "none" or (
+        config.enhancement_strength == 0.0 and config.clarity_strength == 0.0 and config.material_strength == 0.0
+    )
+    # Without an explicit encoding contract, retain the historical exact-copy
+    # passthrough. An explicit depth must flow through the canonical encoder so
+    # the emitted bytes, suffix, and manifest all agree.
+    if passthrough_requested and output_bit_depth is None:
         logger.info("Preset 'none' - skipping enhancement (passthrough)")
         # True passthrough: preserve metadata and pixel data exactly (no re-encoding)
         output_path = Path(output_path)
@@ -652,10 +679,16 @@ def enhance_image(
                 "stage_has_depth": None,
             },
         }
+    if passthrough_requested:
+        logger.info("Preset 'none' - skipping adjustments and applying requested output encoding")
 
     try:
         # Load input image with bit-depth preservation
-        image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_output)
+        allow_8bit_load = output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output)
+        image, input_bits, metadata = load_image_preserve_bit_depth(
+            input_path,
+            allow_8bit_load,
+        )
         icc_profile = metadata.get("icc_profile")
         exif_data = metadata.get("exif")
         load_backend = str(metadata.get("load_backend") or "pil")
@@ -673,8 +706,11 @@ def enhance_image(
         # Quality Firewall: Enforce bit-depth preservation
         # 16-bit input MUST produce 16-bit output unless explicitly allowed
         # Decide target dtype up front to ensure consistency throughout pipeline
-        if input_bits == 16 and allow_8bit_output:
-            target_dtype: np.dtype[Any] = np.dtype(np.uint8)
+        if output_bit_depth is not None:
+            target_bits = int(output_bit_depth)
+            target_dtype = np.dtype(np.uint16 if target_bits == 16 else np.uint8)
+        elif input_bits == 16 and allow_8bit_output:
+            target_dtype = np.dtype(np.uint8)
             target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
         else:
@@ -683,15 +719,15 @@ def enhance_image(
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
 
-        if input_bits != target_bits:
+        if input_bits == 16 and target_bits == 8:
             save_degraded = True
-            save_degradation_reason = "allow_8bit_output"
+            save_degradation_reason = "explicit_output_bit_depth" if output_bit_depth is not None else "allow_8bit_output"
 
         # Handle RGBA inputs: extract RGB, enhance, restore alpha
         alpha_channel = None
         if image.ndim == 3 and image.shape[2] == 4:
             logger.debug("RGBA input detected - extracting alpha channel for preservation")
-            alpha_channel = image[:, :, 3]  # Extract alpha
+            alpha_channel = _convert_alpha_to_target_dtype(image[:, :, 3], target_dtype)
             image = image[:, :, :3]  # RGB only for enhancement
 
         # Enforce RGB (H, W, 3) contract for EnhancementStage
@@ -707,45 +743,58 @@ def enhance_image(
         # depth-aware tone mapping when a depth map is present. To disable depth effects,
         # simply don't provide a depth map or use preset="none".
         depth_map = None
-        if depth_map_path and depth_map_path.exists():
+        if not passthrough_requested and depth_map_path and depth_map_path.exists():
             depth_map = load_depth_map(depth_map_path)
             logger.debug(f"Loaded depth map: {depth_map.shape}")
-        elif depth_map_path:
+        elif not passthrough_requested and depth_map_path:
             logger.warning(f"Depth map path provided but not found: {depth_map_path}")
 
-        # Apply enhancement using existing EnhancementStage
-        enhancer = EnhancementStage(
-            enhancement_strength=config.enhancement_strength,
-            clarity_strength=config.clarity_strength,
-            material_strength=config.material_strength,
-            version=config.version,
-            output_dtype=target_dtype,  # Use consistent target dtype
-            tone_low_tex_strength=getattr(config, "tone_low_tex_strength", 0.6),
-            tone_depth_smoothing=getattr(config, "tone_depth_smoothing", True),
-        )
+        stage_metadata: Dict[str, Any] = {}
+        enhancement_metadata: Dict[str, Any] = {}
+        enhanced_image: np.ndarray
+        if passthrough_requested:
+            enhanced_image = image
+        else:
+            # Apply enhancement using existing EnhancementStage
+            enhancer = EnhancementStage(
+                enhancement_strength=config.enhancement_strength,
+                clarity_strength=config.clarity_strength,
+                material_strength=config.material_strength,
+                version=config.version,
+                output_dtype=target_dtype,  # Use consistent target dtype
+                tone_low_tex_strength=getattr(config, "tone_low_tex_strength", 0.6),
+                tone_depth_smoothing=getattr(config, "tone_depth_smoothing", True),
+            )
 
-        # Create minimal context for stage execution
-        context = StageContext(device=device)
-        context.set_artifact("image", image)
+            # Create minimal context for stage execution
+            context = StageContext(device=device)
+            context.set_artifact("image", image)
 
-        if depth_map is not None:
-            context.set_artifact("depth_map", depth_map)
+            if depth_map is not None:
+                context.set_artifact("depth_map", depth_map)
 
-        if material_masks:
-            context.set_artifact("material_masks", material_masks)
+            if material_masks:
+                context.set_artifact("material_masks", material_masks)
 
-        # Execute enhancement
-        logger.debug("Executing EnhancementStage...")
-        result = enhancer.compute(context)
+            # Execute enhancement
+            logger.debug("Executing EnhancementStage...")
+            result = enhancer.compute(context)
 
-        if result.status != StageStatus.COMPLETED:
-            error_msg = result.error or "Unknown error"
-            raise V2EnhancementError(f"Enhancement failed: {error_msg}")
+            if result.status != StageStatus.COMPLETED:
+                error_msg = result.error or "Unknown error"
+                raise V2EnhancementError(f"Enhancement failed: {error_msg}")
 
-        # Extract enhanced image
-        enhanced_image = result.artifacts.get("enhanced_image")
-        if enhanced_image is None:
-            raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
+            # Extract enhanced image
+            raw_enhanced_image = result.artifacts.get("enhanced_image")
+            if raw_enhanced_image is None:
+                raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
+            if not isinstance(raw_enhanced_image, np.ndarray):
+                raise V2EnhancementError("EnhancementStage produced a non-array 'enhanced_image' artifact")
+            enhanced_image = raw_enhanced_image
+            stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
+            raw_enhancement_metadata = result.artifacts.get("enhancement_metadata", {})
+            if isinstance(raw_enhancement_metadata, dict):
+                enhancement_metadata = raw_enhancement_metadata
 
         # Ensure output dtype matches target (handle potential mismatches)
         if enhanced_image.dtype != target_dtype:
@@ -784,10 +833,6 @@ def enhance_image(
                         )
                         from PIL import Image as PILImage
 
-                        # Convert alpha to uint16 if needed
-                        if alpha_channel.dtype != np.uint16:
-                            alpha_channel = (alpha_channel.astype(np.float32) / 255.0 * 65535.0).astype(np.uint16)
-
                         alpha_pil = PILImage.fromarray(alpha_channel, mode="I;16")
                         alpha_resized = alpha_pil.resize(
                             (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS
@@ -825,37 +870,10 @@ def enhance_image(
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 
             except Exception as e:
-                # Check Quality Firewall before degrading
-                if input_bits == 16 and not allow_8bit_output:
-                    raise V2EnhancementError(
-                        f"Cannot save 16-bit output with tifffile (error: {e}). "
-                        f"Fallback to 8-bit blocked by Quality Firewall. "
-                        f"Use --allow-8bit to explicitly permit downgrade."
-                    )
-
-                # Only fall back to 8-bit if explicitly allowed
-                logger.warning(f"tifffile save failed, falling back to 8-bit PIL: {e}")
-                save_backend = "pil"
-                save_degraded = True
-                save_degradation_reason = str(e)
-                # Convert to 8-bit and save with PIL
-                enhanced_8bit = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
-                output_image = Image.fromarray(enhanced_8bit)
-                save_kwargs = {}
-                if icc_profile:
-                    save_kwargs["icc_profile"] = icc_profile
-                    icc_preserved = True
-                if exif_data:
-                    save_kwargs["exif"] = exif_data
-                    if load_exif_preservation_mode in {"normalized", "partial"}:
-                        exif_preservation_mode = load_exif_preservation_mode
-                    else:
-                        exif_preservation_mode = "full"
-                elif source_had_exif:
-                    exif_preservation_mode = "none"
-                output_image.save(output_path, **save_kwargs)
-                logger.warning(f"Saved as 8-bit (16-bit save failed): {output_path}")
-                # Note: target_bits stays 8 (was set via allow_8bit_output)
+                raise V2EnhancementError(
+                    f"Cannot save requested 16-bit output with tifffile (error: {e}); "
+                    "publishing an 8-bit file under a 16-bit contract is forbidden"
+                ) from e
 
         else:
             # Save 8-bit with PIL (standard path)
@@ -904,12 +922,14 @@ def enhance_image(
 
         runtime_s = time.perf_counter() - start_time
 
-        stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
         stage_has_depth = stage_metadata.get("has_depth") if isinstance(stage_metadata, dict) else None
         exif_orientation_normalized = bool(metadata.get("exif_orientation_applied"))
 
         # Determine depth consumption semantics
-        if stage_has_depth is not None:
+        if passthrough_requested:
+            depth_consumed = False
+            consumption_source = "passthrough"
+        elif stage_has_depth is not None:
             depth_consumed = bool(stage_has_depth)
             consumption_source = "stage_metadata"
         elif depth_map is not None:
@@ -945,7 +965,7 @@ def enhance_image(
             "runtime_s": runtime_s,
             "timestamp": time.time(),
             "stage_metadata": stage_metadata,
-            "enhancement_metadata": result.artifacts.get("enhancement_metadata", {}),
+            "enhancement_metadata": enhancement_metadata,
             "io": {
                 "load_backend": load_backend,
                 "save_backend": save_backend,
@@ -963,9 +983,11 @@ def enhance_image(
                 "output_bits_per_sample": target_bits,
                 "input_dtype": str(image.dtype),
                 "output_dtype": str(enhanced_image.dtype),
-                "quality_firewall_active": input_bits == 16 and not allow_8bit_output,
+                "quality_firewall_active": input_bits == 16 and target_bits == 16,
                 "bit_depth_preserved": input_bits == target_bits,
-                "downgrade_allowed": allow_8bit_output,
+                "downgrade_allowed": bool(
+                    input_bits == 16 and target_bits == 8 and (allow_8bit_output or output_bit_depth == 8)
+                ),
             },
             # STRUCTURED DEPTH RESOLUTION SEMANTICS
             "depth": {

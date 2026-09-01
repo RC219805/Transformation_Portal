@@ -52,7 +52,7 @@ echo "  ✓ Materials V3: Surface-aware finishing (glass, stone, water, foliage)
 echo "  ✓ PBR Maps: Normal, Roughness, Ambient Occlusion"
 echo "  ✓ V2 Enhancement: AI-powered color grading"
 echo "  ✓ Content-Addressable Cache: SHA256-based deduplication"
-echo "  ✓ All Deliverables: Master16, Upscaled16, Marketing, Reports"
+echo "  ✓ Governed Outputs: 16-bit enhanced images, PBR maps, combined report, run card"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -92,8 +92,7 @@ python -m transformation_portal.lux_depth_v3 \
   --pbr on \
   --cache-depth on \
   \
-  --emit-master16 on \
-  --emit-upscaled16 on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   \
   --enable-v2 on \
@@ -117,9 +116,7 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "Deliverables:"
     echo "  📁 depth/         - 16-bit depth maps + visualizations"
     echo "  📁 pbr/           - Normal, Roughness, AO maps"
-    echo "  📁 v2/            - AI-enhanced images"
-    echo "  📁 master16/      - Audit-grade 16-bit linear TIFFs"
-    echo "  📁 upscaled16/    - 2x resolution 16-bit TIFFs"
+    echo "  📁 v2/            - Enhanced images (16-bit TIFF encoding)"
     echo "  📁 manifests/     - Processing metadata + run card"
     echo "  📁 logs/          - Pipeline execution logs"
     echo ""

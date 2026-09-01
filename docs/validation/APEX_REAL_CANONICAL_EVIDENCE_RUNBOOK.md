@@ -89,7 +89,7 @@ python -m transformation_portal.lux_depth_v3 \
   --materials-v3 on \
   --enable-segmentation on \
   --strict-segmentation \
-  --emit-master16 on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   --keep-intermediates \
   --overwrite
@@ -99,7 +99,7 @@ Copy extracted artifacts to stable external baseline paths under
 `baselines/materials_v3`:
 
 ```text
-$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_master16.tif
+$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_16bit.tif
 $APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_evidence.json
 ```
 
@@ -113,7 +113,7 @@ export APEX_EVAL_ASSET_ROOT="$HOME/apex_eval_assets"
   --evalset evalsets/apex_real_estate_v1/evalset.json \
   --asset-root "$APEX_EVAL_ASSET_ROOT" \
   --output-dir output/apex_eval_real \
-  --candidate-output materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_master16.tif" \
+  --candidate-output materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_16bit.tif" \
   --candidate-evidence materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_evidence.json" \
   --run-scope-asset-id pool_water_stone_001 \
   --emit-evidence-bundle on \
@@ -142,11 +142,11 @@ export APEX_EVAL_ASSET_ROOT="$HOME/apex_eval_assets"
   --evalset evalsets/apex_real_estate_v1/evalset.json \
   --asset-root "$APEX_EVAL_ASSET_ROOT" \
   --output-dir output/apex_eval_real \
-  --candidate-output materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_master16.tif" \
+  --candidate-output materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_16bit.tif" \
   --candidate-evidence materials_v3:pool_water_stone_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/pool_water_stone_001_materials_v3_evidence.json" \
-  --candidate-output materials_v3:kitchen_glass_metal_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/kitchen_glass_metal_001_materials_v3_master16.tif" \
+  --candidate-output materials_v3:kitchen_glass_metal_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/kitchen_glass_metal_001_materials_v3_16bit.tif" \
   --candidate-evidence materials_v3:kitchen_glass_metal_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/kitchen_glass_metal_001_materials_v3_evidence.json" \
-  --candidate-output materials_v3:exterior_foliage_sky_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/exterior_foliage_sky_001_materials_v3_master16.tif" \
+  --candidate-output materials_v3:exterior_foliage_sky_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/exterior_foliage_sky_001_materials_v3_16bit.tif" \
   --candidate-evidence materials_v3:exterior_foliage_sky_001="$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/exterior_foliage_sky_001_materials_v3_evidence.json" \
   --emit-evidence-bundle on \
   --synthetic-data off

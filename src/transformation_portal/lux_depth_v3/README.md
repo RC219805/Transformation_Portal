@@ -26,7 +26,7 @@ lux-depth-v3 \
   --pbr "on" \
   --enable-v2 "off" \
   --run-card-version "v2" \
-  --emit-master16 "on"
+  --output-bit-depth 16
 ```
 
 ### Commercial Production (With Enhancement)
@@ -41,8 +41,7 @@ lux-depth-v3 \
   --depth-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on"
+  --output-bit-depth 16
 ```
 
 ### Research Experiment
@@ -145,14 +144,12 @@ lux-depth-v3 \
   --enable-v2 "off" \
   --cache-depth "on" \
   --run-card-version "v2" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on"
+  --output-bit-depth 16
 ```
 
 **Outputs:**
 - All PBR maps
-- `*_master16.tiff` - Master 16-bit output
-- `*_upscaled16.tiff` - Upscaled 16-bit output
+- `*_v2_enhanced.tif` / `*_materials_v3_enhanced.tif` - enhanced image encoded as 16-bit TIFF
 - `*_combined.json` - Unconditional processing manifest
 - `*_run_card.json` - Reproducibility card
 
@@ -451,8 +448,8 @@ output_dir/
 │   ├── normal/
 │   ├── roughness/
 │   └── ao/
-├── master16/                 # Master 16-bit outputs (when --emit-master16 on)
-├── upscaled16/               # Upscaled outputs (when --emit-upscaled16 on)
+├── v2/                       # Enhanced images and V2 reports
+├── temp/                     # Retained intermediates when requested
 └── manifests/                # Unconditional processing metadata
 ```
 

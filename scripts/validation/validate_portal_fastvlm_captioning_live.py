@@ -92,8 +92,7 @@ def _validate_runtime_ready(model_role: str, *, expected_base_python: Path) -> N
     )
     if evidence["errors"]:
         raise SmokeFailure(
-            "FastVLM runtime prerequisites are not ready; "
-            f"audited validation reported {evidence['error_count']} error(s)",
+            "FastVLM runtime prerequisites are not ready; " f"audited validation reported {evidence['error_count']} error(s)",
             kind="environment",
         )
 
@@ -136,8 +135,7 @@ def _build_captioning_payload(
             "run_card_version": "v2",
             "enable_v2": False,
             "non_commercial_ok": True,
-            "emit_master16": True,
-            "emit_upscaled16": False,
+            "output_bit_depth": 16,
             "cache_depth": False,
             "save_float_depth": False,
             "vlm_captioning_enabled": True,

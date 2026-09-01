@@ -222,6 +222,7 @@ class TestEnhanceBatch:
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
             enable_v2=False,
+            output_bit_depth=16,
         )
 
         import numpy as np
@@ -963,6 +964,7 @@ class TestEnhanceBatch:
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
             enable_v2=False,
+            output_bit_depth=16,
         )
 
         import numpy as np
@@ -1017,6 +1019,7 @@ class TestEnhanceBatch:
                         assert manifest["config"]["device"] == "cpu"
                         assert manifest["config"]["quality_tier"] == "standard"
                         assert manifest["config"]["depth_png_encoding"] == "normalized_u16_png"
+                        assert manifest["config"]["output_bit_depth"] == 16
                         assert len(manifest["config"]["config_fingerprint_sha256"]) == 64
                         assert "results" in manifest
                         assert "stats" in manifest

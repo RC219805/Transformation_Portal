@@ -470,8 +470,7 @@ class TestMetadataEdgeCases:
         assert depth_only.materials_config == {"enable_materials_v3": True}
         assert depth_only.pbr_config == {"generate_pbr": True}
         assert depth_only.apex_depth_gate_config == {"min_upper_iqr": 1e-4}
-        assert depth_only.emit_master16 is True
-        assert depth_only.emit_upscaled16 is False
+        assert depth_only.output_bit_depth == 16
         assert depth_only.v2_preset is None
         assert depth_only.v2_device is None
         assert depth_only.v2_upscaler_backend is None
@@ -510,6 +509,5 @@ class TestMetadataEdgeCases:
         assert v2_only.v2_preset == "enhance"
         assert v2_only.v2_device == "cuda"
         assert v2_only.v2_upscaler_backend == "realesrgan"
-        assert v2_only.emit_master16 is True
-        assert v2_only.emit_upscaled16 is False
+        assert v2_only.output_bit_depth == 16
         assert v2_only.enable_v2 is True

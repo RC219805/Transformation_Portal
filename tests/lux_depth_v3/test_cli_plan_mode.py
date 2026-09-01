@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,70 @@ def _extract_plan_json(stdout: str) -> dict:
 
 
 class TestPlanMode:
+    @pytest.mark.parametrize(
+        ("args", "expected_depth", "expected_warning_count"),
+        [
+            ([], 8, 0),
+            (["--output-bit-depth", "8"], 8, 0),
+            (["--output-bit-depth", "16"], 16, 0),
+            (["--emit-master16", "on"], 16, 1),
+            (["--emit-upscaled16", "on"], 16, 1),
+            (["--emit-master16", "on", "--emit-upscaled16", "on"], 16, 1),
+            (["--output-bit-depth", "16", "--emit-master16", "on"], 16, 1),
+        ],
+    )
+    def test_output_bit_depth_cli_compatibility_matrix(
+        self,
+        tmp_path: Path,
+        args: list[str],
+        expected_depth: int,
+        expected_warning_count: int,
+    ) -> None:
+        input_dir = _make_input_dir(tmp_path)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--model-key",
+                    "da3-metric",
+                    *args,
+                    "--plan",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        payload = _extract_plan_json(result.output)
+        assert payload["output_bit_depth"] == expected_depth
+        assert "bit_depth_16_intermediates" not in payload["requested_artifacts"]
+        deprecations = [item for item in caught if isinstance(item.message, DeprecatedOutputFlagWarning)]
+        assert len(deprecations) == expected_warning_count
+
+    @pytest.mark.parametrize("legacy_flag", ["--emit-master16", "--emit-upscaled16"])
+    def test_explicit_8_bit_rejects_truthy_legacy_cli_alias(self, tmp_path: Path, legacy_flag: str) -> None:
+        input_dir = _make_input_dir(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--output-bit-depth",
+                "8",
+                legacy_flag,
+                "on",
+                "--plan",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "conflicts with a truthy deprecated" in result.output
+
     @pytest.mark.parametrize(
         ("flag", "value", "config_field", "config_value"),
         [

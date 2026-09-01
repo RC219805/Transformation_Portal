@@ -10,7 +10,7 @@
 
 The **Quality Firewall** ensures that image processing operations preserve or enhance quality, never degrade it. For bit-depth specifically, the contract is:
 
-> **16-bit input SHALL produce 16-bit output unless explicitly bypassed.**
+> **16-bit input SHALL produce 16-bit output unless 8-bit encoding is explicitly selected.**
 
 This is a **blocking contract**: violations are not warnings—they are failures.
 
@@ -23,7 +23,8 @@ This is a **blocking contract**: violations are not warnings—they are failures
 ```
 IF input_bits_per_sample == 16
 THEN output_bits_per_sample == 16
-UNLESS allow_8bit_output == True
+UNLESS output_bit_depth == 8
+   OR (output_bit_depth IS OMITTED AND allow_8bit_output == True)
 ```
 
 ### Enforcement Mechanisms
@@ -34,28 +35,41 @@ UNLESS allow_8bit_output == True
 def enhance_image(
     input_path: Path,
     output_path: Path,
-    allow_8bit_output: bool = False,  # Default: firewall active
+    allow_8bit_output: bool = False,  # Legacy compatibility authority
+    output_bit_depth: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Quality Firewall: 16-bit input → 16-bit output
-    unless allow_8bit_output=True (explicit bypass).
+    unless output_bit_depth=8, or an omitted output_bit_depth with
+    allow_8bit_output=True, explicitly authorizes an 8-bit encoding.
     """
 ```
+
+The direct V2 API preserves input precision when `output_bit_depth` is omitted.
+Lux orchestration always supplies the canonical `output_bit_depth` selector;
+its runtime default is 8.
 
 #### 2. **Runtime: Validation and Logging**
 
 ```python
-image, input_bits, metadata = load_image_preserve_bit_depth(input_path)
+image, input_bits, metadata = load_image_preserve_bit_depth(
+    input_path,
+    output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output),
+)
 
 # Quality Firewall check
-if input_bits == 16 and not allow_8bit_output:
-    logger.info("Quality Firewall ACTIVE: 16-bit preservation enforced")
-    output_bits = 16
+if output_bit_depth is not None:
+    output_bits = output_bit_depth
 elif input_bits == 16 and allow_8bit_output:
     logger.warning("Quality Firewall BYPASSED: --allow-8bit flag set")
-    output_bits = 8  # Explicit downgrade allowed
+    output_bits = 8
 else:
-    output_bits = input_bits  # 8-bit → 8-bit
+    output_bits = input_bits
+
+if input_bits == 16 and output_bits == 16:
+    logger.info("Quality Firewall ACTIVE: 16-bit preservation enforced")
+elif input_bits == 16 and output_bits == 8:
+    logger.warning("Quality Firewall downgrade explicitly authorized")
 ```
 
 #### 3. **CI: Automated Regression Test**
@@ -83,7 +97,7 @@ def test_16bit_preservation_enforced():
 
 
 def test_16bit_downgrade_requires_explicit_bypass():
-    """16-bit → 8-bit downgrade requires explicit allow_8bit_output flag."""
+    """16-bit → 8-bit downgrade requires an explicit authority."""
 
     # Process 16-bit image with bypass flag
     report = enhance_image(
@@ -96,6 +110,14 @@ def test_16bit_downgrade_requires_explicit_bypass():
     assert report['bit_depth']['downgrade_allowed'] == True
     assert report['bit_depth']['output_bits_per_sample'] == 8
     assert report['bit_depth']['quality_firewall_active'] == False
+
+    canonical_report = enhance_image(
+        input_path="tests/fixtures/test_16bit.tiff",
+        output_path="test_output.png",
+        output_bit_depth=8,
+    )
+    assert canonical_report['bit_depth']['downgrade_allowed'] == True
+    assert canonical_report['bit_depth']['output_bits_per_sample'] == 8
 ```
 
 **CI Requirement:** This test MUST pass on every commit.
@@ -129,7 +151,7 @@ Every enhancement operation produces a JSON report with bit-depth metadata:
 
 ## CLI Interface
 
-### Default Behavior (Firewall Active)
+### Direct V2 Default (Firewall Active)
 
 ```bash
 # 16-bit input → 16-bit output (firewall enforced)
@@ -139,28 +161,28 @@ python scripts/enhance_image.py input_16bit.tiff --output-dir out/
 **Log output:**
 ```
 Quality Firewall ACTIVE: 16-bit input detected - will preserve 16-bit output
-Saved 16-bit TIFF: out/input_16bit.tiff
+Saved 16-bit TIFF: out/input_16bit_v2_enhanced.tif
 ```
 
-### Explicit Bypass (Downgrade Allowed)
+### Explicit 8-bit Selection (Downgrade Allowed)
 
 ```bash
-# 16-bit input → 8-bit output (explicit bypass)
-python scripts/enhance_image.py input_16bit.tiff --output-dir out/ --allow-8bit
+# 16-bit input → 8-bit output (canonical selection)
+python scripts/enhance_image.py input_16bit.tiff \
+  --output-dir out/ \
+  --output-bit-depth 8
 ```
 
-**Log output:**
-```
-Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed by --allow-8bit flag
-Saved as 8-bit: out/input_16bit.tiff
-```
+`--allow-8bit` remains a legacy compatibility authority for callers that have
+not migrated to `--output-bit-depth 8`.
 
 **Use cases for bypass:**
 - Web delivery where file size matters
 - Compatibility with legacy 8-bit pipelines
 - Intentional quality-size trade-off
 
-**Requirement:** Bypass must be **explicit** (not default).
+**Requirement:** The downgrade must be **explicit**, through the canonical
+selector or the legacy compatibility flag.
 
 ---
 
@@ -186,8 +208,9 @@ Saved as 8-bit: out/input_16bit.tiff
 ┌─────────────────────────────────────────────────────────────┐
 │ QUALITY FIREWALL CHECK                                      │
 │  - input_bits == 16 ?                                       │
-│  - allow_8bit_output == False ?                             │
-│  → ENFORCE: output_bits = 16                                │
+│  - explicit output_bit_depth, if present                    │
+│  - otherwise legacy allow_8bit_output, if true              │
+│  - otherwise preserve input_bits                            │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
@@ -221,9 +244,10 @@ Saved as 8-bit: out/input_16bit.tiff
    - Reads TIFF tag 258 (BitsPerSample)
    - Returns 8 or 16
 
-2. **`load_image_preserve_bit_depth(input_path)`**
+2. **`load_image_preserve_bit_depth(input_path, allow_8bit_output=False)`**
    - Uses `tifffile.imread()` for 16-bit TIFFs
-   - Falls back to PIL for 8-bit or non-TIFF
+   - Falls back to PIL for 8-bit/non-TIFF inputs, or when an 8-bit output was
+     explicitly authorized
 
 3. **`EnhancementStage(output_dtype=np.uint16)`**
    - Processes in float32 [0, 1]
@@ -246,7 +270,7 @@ python scripts/enhance_image.py test_16bit.tiff --output-dir out/
 # 2. Check output bit-depth
 python -c "
 from PIL import Image
-img = Image.open('out/test_16bit.tiff')
+img = Image.open('out/test_16bit_v2_enhanced.tif')
 bits = img.tag_v2.get(258)  # BitsPerSample tag
 assert bits == (16, 16, 16), f'Expected (16,16,16), got {bits}'
 print('✅ Output is 16-bit')
@@ -298,7 +322,7 @@ jobs:
           from PIL import Image
 
           # Check output file
-          img = Image.open('test_output/test_16bit.tiff')
+          img = Image.open('test_output/test_16bit_v2_enhanced.tif')
           bits = img.tag_v2.get(258)
           assert bits == (16, 16, 16), f'OUTPUT BIT-DEPTH VIOLATION: {bits}'
 
@@ -320,8 +344,9 @@ jobs:
 ### For Developers
 
 1. **Never bypass Quality Firewall without explicit intent**
-   - Default: `allow_8bit_output=False`
-   - Bypass only when required and documented
+   - Direct V2 API default: omit `output_bit_depth` and keep `allow_8bit_output=False`
+   - Canonical selection: set `output_bit_depth` to 8 or 16 deliberately
+   - Legacy compatibility: use `allow_8bit_output=True` only when required and documented
 
 2. **Always check bit-depth metadata in reports**
    - Verify `bit_depth_preserved == True` for 16-bit inputs
@@ -339,7 +364,8 @@ jobs:
    - Runs on every commit
 
 2. **Report all Quality Firewall bypasses**
-   - Log warnings for `--allow-8bit` usage
+   - Audit canonical `--output-bit-depth 8` selections and warnings for legacy
+     `--allow-8bit` usage
    - Track bypass frequency in metrics
 
 3. **Audit reports for violations**
@@ -354,11 +380,13 @@ jobs:
 
 **Symptom:** `ImportError: No module named 'tifffile'`
 
-**Impact:** 16-bit loading falls back to PIL → auto-converts to 8-bit
+**Impact:** A 16-bit load fails closed with `V2EnhancementError` unless 8-bit
+output was explicitly authorized. Only an authorized 8-bit operation may fall
+back to PIL and down-convert the input.
 
 **Recovery:**
 ```bash
-pip install tifffile
+make install-core
 ```
 
 **Prevention:** Add `tifffile` to `requirements.txt` (already done)
@@ -367,18 +395,19 @@ pip install tifffile
 
 **Symptom:** Exception during `tifffile.imwrite()`
 
-**Impact:** Fallback to PIL save → converts to 8-bit with warning
+**Impact:** The requested 16-bit operation fails closed. The V2 save path raises
+`V2EnhancementError` instead of publishing an 8-bit fallback under a 16-bit
+contract.
 
 **Recovery:**
 - Check tifffile version (should be >= 2024.x)
 - Check disk space (16-bit TIFFs are large)
 - Check write permissions
 
-**Logging:**
+**Error surfaced to the caller:**
 ```
-ERROR: Failed to save 16-bit TIFF with tifffile: [error]
-WARNING: Falling back to PIL (will convert to 8-bit)
-WARNING: Saved as 8-bit (16-bit save failed): output.tiff
+ERROR: Cannot save requested 16-bit output with tifffile: [error];
+       publishing an 8-bit file under a 16-bit contract is forbidden
 ```
 
 ### Failure Mode 3: Quality Firewall Bypassed Accidentally
@@ -386,11 +415,15 @@ WARNING: Saved as 8-bit (16-bit save failed): output.tiff
 **Symptom:** `bit_depth_preserved == False` in report, but bypass not intended
 
 **Detection:**
-- CI scans for `downgrade_allowed == True` in reports
+- CI scans successful reports for a 16-bit input and 8-bit output paired with
+  `downgrade_allowed == False`
+- Audits distinguish an explicit `output_bit_depth=8` selection (or the legacy
+  `allow_8bit_output` compatibility path) from a failed 16-bit save
 - Manual audit of JSON reports
 
 **Recovery:**
-- Re-process without `--allow-8bit` flag
+- Re-process with `--output-bit-depth 16`; remove any accidental
+  `--output-bit-depth 8` selection or legacy `--allow-8bit` flag
 - Verify output is 16-bit
 
 ---
@@ -431,6 +464,12 @@ WARNING: Saved as 8-bit (16-bit save failed): output.tiff
 ---
 
 ## Changelog
+
+### 2026-09-01: Canonical Output Encoding Selector
+
+- ✅ `output_bit_depth=8|16` is the canonical encoding authority
+- ✅ Omitted direct-V2 selection still preserves input precision
+- ✅ Requested 16-bit save failures fail closed without an 8-bit fallback
 
 ### 2026-02-10: Bit-Depth Preservation Implemented
 

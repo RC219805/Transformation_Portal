@@ -13,6 +13,7 @@
     "license_acknowledgements",
     "license_evaluation",
     "quality_tier",
+    "output_bit_depth",
     "stages",
     "requested_artifacts",
     "input_dir",
@@ -84,6 +85,7 @@
       }
     },
     "quality_tier": { "type": "string" },
+    "output_bit_depth": { "type": "integer", "enum": [8, 16] },
     "preset_requested": { "type": ["string", "null"] },
     "preset_resolved": { "type": ["string", "null"] },
     "stages": { "type": "array", "items": { "type": "string" }, "minItems": 1 },

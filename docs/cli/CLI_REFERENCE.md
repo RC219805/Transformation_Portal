@@ -117,8 +117,7 @@ Commercial APEX runs should use the Apache-2.0 DA3 selector:
   --materials-v3 on \
   --pbr on \
   --cache-depth on \
-  --emit-master16 on \
-  --emit-upscaled16 on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite
@@ -142,7 +141,7 @@ Current option groups include:
   `--vlm-captioning-model`, `--vlm-captioning-proxy-format`,
   `--vlm-captioning-max-side-px`, `--fastvlm-python`,
   `--fastvlm-mlx-vlm-dir`, and `--fastvlm-timeout-seconds`.
-- Reproducibility: emit flags, `--emit-run-card`, `--run-card-version`,
+- Reproducibility: output encoding, `--emit-run-card`, `--run-card-version`,
   `--keep-intermediates`, and run-card signing/verifier tools.
 - Safety and execution: `--strict-inputs`, `--verify-images`,
   `--allow-semantic-fallback`, `--max-workers`, `--max-gpu-workers`,

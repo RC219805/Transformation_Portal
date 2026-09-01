@@ -95,6 +95,7 @@ class V2Runner:
         timeout: Optional[float] = None,
         masks_file: Optional[Path] = None,
         asset_key: Optional[str] = None,
+        output_bit_depth: Optional[int] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -112,6 +113,7 @@ class V2Runner:
             asset_key: Canonical asset key for depth/report resolution (optional,
                 defaults to input_path.stem if not provided). When provided, aligns
                 depth lookup and report naming with orchestrator's canonical identity.
+            output_bit_depth: Explicit enhanced-image encoding depth (8 or 16).
             **kwargs: Additional arguments (reserved)
 
         Returns:
@@ -230,6 +232,10 @@ class V2Runner:
         # This aligns V2 depth lookup and report naming with orchestrator's canonical identity
         if validated_asset_key is not None:
             cmd.extend(["--asset-key", validated_asset_key])
+        if output_bit_depth is not None:
+            if isinstance(output_bit_depth, bool) or not isinstance(output_bit_depth, int) or output_bit_depth not in {8, 16}:
+                raise ValueError("output_bit_depth must be 8 or 16")
+            cmd.extend(["--output-bit-depth", str(output_bit_depth)])
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 

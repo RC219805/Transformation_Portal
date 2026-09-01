@@ -310,6 +310,98 @@ class TestEnhanceImage:
             assert report["io"]["save_degraded"] is False
             assert "runtime_s" in report
             assert expected_output.exists()
+            reopened = np.asarray(Image.open(expected_output))
+            assert reopened.dtype == np.uint8
+
+    def test_explicit_16_bit_output_reopens_with_uint16_samples(self, tmp_path):
+        """The canonical V2 setting must control encoded bytes, not metadata only."""
+        tifffile = pytest.importorskip("tifffile")
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        Image.fromarray(np.full((4, 5, 3), 128, dtype=np.uint8), mode="RGB").save(input_path)
+        enhanced = np.linspace(0, 65535, 60, dtype=np.uint16).reshape((4, 5, 3))
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as stage_cls:
+            result = Mock(status=StageStatus.COMPLETED, metadata={})
+            result.artifacts = {"enhanced_image": enhanced}
+            stage_cls.return_value.compute.return_value = result
+            report = enhance_image(input_path, output_path, output_bit_depth=16)
+
+        reopened = tifffile.imread(report["output"])
+        assert Path(report["output"]).suffix == ".tif"
+        assert reopened.dtype == np.uint16
+        assert int(reopened.max()) > 255
+        assert report["bit_depth"]["output_bits_per_sample"] == 16
+        assert report["bit_depth"]["output_dtype"] == "uint16"
+
+    def test_explicit_8_bit_output_downconverts_16_bit_input(self, tmp_path):
+        """The canonical 8-bit setting explicitly authorizes and encodes a downgrade."""
+        tifffile = pytest.importorskip("tifffile")
+        input_path = tmp_path / "input.tif"
+        caller_path = tmp_path / "output.tif"
+        source = np.linspace(0, 65535, 60, dtype=np.uint16).reshape((4, 5, 3))
+        tifffile.imwrite(input_path, source, photometric="rgb")
+        config = V2EnhancementConfig.from_preset("none")
+
+        report = enhance_image(
+            input_path,
+            caller_path,
+            config=config,
+            output_bit_depth=8,
+        )
+
+        emitted_path = Path(report["output"])
+        with Image.open(emitted_path) as reopened_image:
+            reopened = np.asarray(reopened_image)
+            assert reopened_image.format == "PNG"
+        assert emitted_path.suffix == ".png"
+        assert reopened.dtype == np.uint8
+        assert int(reopened.max()) == 255
+        assert report["bit_depth"]["input_bits_per_sample"] == 16
+        assert report["bit_depth"]["output_bits_per_sample"] == 8
+        assert report["bit_depth"]["downgrade_allowed"] is True
+        assert report["io"]["save_degraded"] is True
+        assert report["io"]["save_degradation_reason"] == "explicit_output_bit_depth"
+
+    def test_explicit_16_bit_output_fails_closed_when_tiff_write_fails(self, tmp_path):
+        """A failed TIFF write must never publish an 8-bit file under a 16-bit claim."""
+        pytest.importorskip("tifffile")
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        Image.fromarray(np.full((3, 4, 3), 128, dtype=np.uint8), mode="RGB").save(input_path)
+        enhanced = np.full((3, 4, 3), 32768, dtype=np.uint16)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=16, materials_enabled=False)
+
+        with (
+            patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as stage_cls,
+            patch("tifffile.imwrite", side_effect=RuntimeError("simulated disk failure")),
+        ):
+            result = Mock(status=StageStatus.COMPLETED, metadata={})
+            result.artifacts = {"enhanced_image": enhanced}
+            stage_cls.return_value.compute.return_value = result
+            with pytest.raises(V2EnhancementError, match="publishing an 8-bit file"):
+                enhance_image(input_path, output_path, output_bit_depth=16)
+
+        assert not expected_output.exists()
+
+    def test_explicit_16_bit_rgba_scales_alpha_to_uint16_range(self, tmp_path):
+        """Up-encoding RGBA must scale alpha with RGB instead of leaving 8-bit values."""
+        tifffile = pytest.importorskip("tifffile")
+        input_path = tmp_path / "input_rgba.png"
+        output_path = tmp_path / "output.png"
+        alpha = np.array([[0, 64], [128, 255]], dtype=np.uint8)
+        rgba = np.dstack([np.full((2, 2, 3), 127, dtype=np.uint8), alpha])
+        Image.fromarray(rgba, mode="RGBA").save(input_path)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as stage_cls:
+            result = Mock(status=StageStatus.COMPLETED, metadata={})
+            result.artifacts = {"enhanced_image": np.full((2, 2, 3), 32768, dtype=np.uint16)}
+            stage_cls.return_value.compute.return_value = result
+            report = enhance_image(input_path, output_path, output_bit_depth=16)
+
+        reopened = tifffile.imread(report["output"])
+        assert reopened.dtype == np.uint16
+        np.testing.assert_array_equal(reopened[:, :, 3], alpha.astype(np.uint16) * 257)
 
     def test_enhance_image_reports_no_material_masks_supplied(self, tmp_path):
         """V2 metadata should separate mask handoff from pixel adjustments."""
@@ -685,6 +777,44 @@ class TestEnhanceImage:
             # Verify output file exists (copied from input)
             assert output_path.exists()
             assert not resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False).exists()
+
+    @pytest.mark.parametrize("output_bit_depth", [8, 16])
+    def test_none_preset_explicit_output_depth_uses_canonical_encoding(self, tmp_path, output_bit_depth):
+        """Preset none skips adjustments, but never bypasses an explicit encoding contract."""
+        input_path = tmp_path / "input.png"
+        source = np.linspace(0, 255, 60, dtype=np.uint8).reshape((4, 5, 3))
+        Image.fromarray(source, mode="RGB").save(input_path)
+        caller_path = tmp_path / "output.tif"
+        config = V2EnhancementConfig.from_preset("none")
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as stage_cls:
+            report = enhance_image(
+                input_path,
+                caller_path,
+                config=config,
+                output_bit_depth=output_bit_depth,
+            )
+
+        stage_cls.assert_not_called()
+        emitted_path = Path(report["output"])
+        assert report["status"] == "success"
+        assert report["artifact_contract"] == "canonical_v2_emitted_artifact"
+        assert report["is_canonical_emitted_artifact"] is True
+        assert report["bit_depth"]["output_bits_per_sample"] == output_bit_depth
+        if output_bit_depth == 16:
+            tifffile = pytest.importorskip("tifffile")
+            reopened = tifffile.imread(emitted_path)
+            assert emitted_path.suffix == ".tif"
+            assert reopened.dtype == np.uint16
+            assert int(reopened.max()) > 255
+            assert emitted_path.read_bytes()[:4] in {b"II*\x00", b"MM\x00*"}
+        else:
+            with Image.open(emitted_path) as reopened_image:
+                reopened = np.asarray(reopened_image)
+                assert reopened_image.format == "PNG"
+            assert emitted_path.suffix == ".png"
+            assert reopened.dtype == np.uint8
+            assert emitted_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
     def test_enhance_image_normalizes_inherited_raw_suffix_for_8bit_output(self, tmp_path):
         """8-bit enhancement should overwrite inherited RAW suffixes before save."""

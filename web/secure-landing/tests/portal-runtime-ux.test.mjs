@@ -151,7 +151,14 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
     "function _migrateDeprecatedLuxOutputConfig",
     "function _copyTransientDraftConfig",
   );
-  const migrate = new Function(`function createToast() {} ${migrationSource}; return _migrateDeprecatedLuxOutputConfig;`)();
+  const migrate = new Function(`
+    function createToast() {}
+    function parseBoolLike(value, fallback = false) {
+      if (typeof value === 'boolean') return value;
+      return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase()) || fallback;
+    }
+    ${migrationSource}; return _migrateDeprecatedLuxOutputConfig;
+  `)();
   const legacyConfig = {
     emits: { master16: true, marketing: true, report: false, runCard: true },
     emit_marketing: true,
@@ -162,14 +169,54 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
 
   const migrated = migrate(structuredClone(legacyConfig));
 
-  assert.deepEqual(migrated.emits, { master16: true, runCard: true });
+  assert.deepEqual(migrated.emits, { runCard: true });
+  assert.equal(migrated.outputBitDepth, 16);
   for (const key of ["emit_marketing", "emit_report", "emitMarketing", "emitReport"]) {
     assert.equal(Object.hasOwn(migrated, key), false);
   }
+  const conflicting = migrate({ output_bit_depth: 8, emit_master16: true });
+  assert.equal(conflicting.emit_master16, true);
+  const disabled = migrate({ emit_upscaled16: false });
+  assert.equal(disabled.output_bit_depth, 8);
+  assert.equal(disabled.emit_master16, false);
+  const camelCase = migrate({ emitUpscaled16: "on" });
+  assert.equal(camelCase.output_bit_depth, 16);
+  assert.equal(camelCase.emit_master16, true);
+  assert.equal(Object.hasOwn(camelCase, "emitUpscaled16"), false);
+  for (const nullLegacyConfig of [
+    { emit_master16: null },
+    { emitMaster16: null },
+    { emit_upscaled16: null },
+    { emitUpscaled16: null },
+    { emits: { master16: null } },
+    { emits: { upscaled16: null } },
+  ]) {
+    const nullMigrated = migrate(structuredClone(nullLegacyConfig));
+    assert.equal(Object.hasOwn(nullMigrated, "output_bit_depth"), false);
+    assert.equal(Object.hasOwn(nullMigrated, "outputBitDepth"), false);
+    assert.equal(Object.hasOwn(nullMigrated, "emit_master16"), false);
+  }
+  for (const [canonicalKey, aliasKey, aliasValue, expectedDepth] of [
+    ["output_bit_depth", "emit_master16", false, 8],
+    ["output_bit_depth", "emit_master16", true, 16],
+    ["outputBitDepth", "emitMaster16", false, 8],
+    ["outputBitDepth", "emitMaster16", true, 16],
+  ]) {
+    const canonicalNull = migrate({ [canonicalKey]: null, [aliasKey]: aliasValue });
+    assert.equal(canonicalNull[canonicalKey], expectedDepth);
+    assert.equal(canonicalNull.emit_master16, aliasValue);
+  }
+  for (const expectedDepth of [8, 16]) {
+    const mixedCanonical = migrate({ output_bit_depth: null, outputBitDepth: expectedDepth });
+    assert.equal(mixedCanonical.outputBitDepth, expectedDepth);
+  }
   assert.match(profile, /state\.config = copyDraftConfig\(profiles\[name\]\.config\)/);
   assert.match(portal, /\[deprecated_output_flag\] Report on; no marketing\./);
-  assert.match(portal, /if \(deprecated\) createToast\(/);
   assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(data\.args\)/);
+  assert.match(
+    portal,
+    /data\.args\.output_bit_depth \?\? data\.args\.outputBitDepth \?\? c\.outputBitDepth/,
+  );
 
   const canonicalArgs = between(portal, "function buildCanonicalLuxDepthArgs", "function generatePayload");
   const cliPreview = between(portal, "function renderCLI", "function bindInputs");

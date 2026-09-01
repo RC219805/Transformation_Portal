@@ -67,8 +67,7 @@ Use the current lock-backed targets and runtime scripts above.
   --materials-v3 on \
   --pbr on \
   --cache-depth on \
-  --emit-master16 on \
-  --emit-upscaled16 on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite

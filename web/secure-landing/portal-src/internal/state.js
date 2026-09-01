@@ -39,9 +39,8 @@ export function createPortalConfigState() {
       quiet: false
     },
     v2Preset: "default",
+    outputBitDepth: 16,
     emits: {
-      master16: true,
-      upscaled16: true,
       runCard: true,
       runCardVersion: "v1",
       runCardIncludeProofs: false

@@ -11,7 +11,7 @@ import importlib.util
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple, cast
 
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
 from .security import HashMode
@@ -30,6 +30,38 @@ def deprecated_output_flag_notices(config: Any) -> Tuple[str, ...]:
     """Return notices captured while normalizing legacy output flags."""
 
     return tuple(getattr(config, "_deprecated_output_flag_notices", ()))
+
+
+def _parse_legacy_output_bool(value: Any, field_name: str) -> bool:
+    """Parse a legacy on/off value without treating non-empty strings as true."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{field_name} must be a boolean or on/off value")
+
+
+class _ImplicitOutputBitDepth(int):
+    """Private marker that keeps the public default equal to integer 8."""
+
+
+_IMPLICIT_OUTPUT_BIT_DEPTH = _ImplicitOutputBitDepth(8)
+
+
+def _normalize_output_bit_depth(value: Any) -> Literal[8, 16]:
+    """Return the canonical output encoding depth (8 or 16)."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("output_bit_depth must be 8 or 16")
+    if value not in {8, 16}:
+        raise ValueError("output_bit_depth must be 8 or 16")
+    return cast(Literal[8, 16], int(value))
 
 
 class ModelVariant(Enum):
@@ -464,9 +496,15 @@ class EnhanceConfig:
     # whose digest differs from the canonical Meta release.
     sam_vit_h_expected_sha256: Optional[str] = None
 
-    # Emit flags (deliverables)
-    emit_master16: bool = False  # Emit master 16-bit output
-    emit_upscaled16: bool = False  # Emit upscaled 16-bit output
+    # Output encoding. The private integer-subclass default preserves omission
+    # detection for legacy aliases while keeping the public contract exactly
+    # typed and defaulted as an integer 8. ``__post_init__`` always replaces
+    # the marker with a plain canonical integer.
+    output_bit_depth: Literal[8, 16] = cast(Literal[8, 16], _IMPLICIT_OUTPUT_BIT_DEPTH)
+    # Deprecated compatibility aliases. They never create separate master or
+    # upscaled deliverables; truthy values select the canonical 16-bit lane.
+    emit_master16: Optional[bool] = None
+    emit_upscaled16: Optional[bool] = None
     # Deprecated compatibility inputs. ``None`` means the caller omitted the
     # legacy field; ``__post_init__`` normalizes these to their historical
     # runtime values (False/True) without warning. Explicit True or False is
@@ -513,6 +551,35 @@ class EnhanceConfig:
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
         deprecated_output_notices = []
+        output_bit_depth_explicit = self.output_bit_depth is not _IMPLICIT_OUTPUT_BIT_DEPTH
+        normalized_output_bit_depth = _normalize_output_bit_depth(self.output_bit_depth)
+        legacy_bit_depth_fields = []
+        legacy_bit_depth_truthy = False
+        for field_name in ("emit_master16", "emit_upscaled16"):
+            value = getattr(self, field_name)
+            if value is None:
+                setattr(self, field_name, False)
+                continue
+            parsed = _parse_legacy_output_bool(value, field_name)
+            setattr(self, field_name, parsed)
+            legacy_bit_depth_fields.append(field_name)
+            legacy_bit_depth_truthy = legacy_bit_depth_truthy or parsed
+
+        if legacy_bit_depth_truthy and output_bit_depth_explicit and normalized_output_bit_depth == 8:
+            aliases = ", ".join(legacy_bit_depth_fields)
+            raise ValueError("output_bit_depth=8 conflicts with truthy deprecated 16-bit " f"alias(es): {aliases}")
+        if legacy_bit_depth_truthy:
+            normalized_output_bit_depth = 16
+        self.output_bit_depth = normalized_output_bit_depth
+        if legacy_bit_depth_fields:
+            aliases = ", ".join(legacy_bit_depth_fields)
+            deprecated_output_notices.append(
+                f"{aliases} is deprecated and will be removed in the next major "
+                "release; use output_bit_depth=16 / --output-bit-depth 16. These "
+                "aliases select encoding depth and do not create separate master "
+                "or upscaled deliverables"
+            )
+
         if self.emit_marketing is None:
             self.emit_marketing = False
         else:

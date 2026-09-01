@@ -134,11 +134,9 @@ v2_enhancement:
 # ============================================================================
 
 output:
-  # Emit master 16-bit output (linear RGB, archival quality)
-  emit_master16: false
-
-  # Emit upscaled 16-bit output
-  emit_upscaled16: false
+  # Canonical enhanced-image encoding depth (8-bit PNG or 16-bit TIFF).
+  # This does not imply a separate master or upscaled deliverable.
+  output_bit_depth: 8
 
   # PBR map generation
   generate_pbr: false

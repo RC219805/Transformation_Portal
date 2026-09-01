@@ -19,8 +19,7 @@ Usage:
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
-        --emit-master16 "on" \\
-        --emit-upscaled16 "on" \\
+        --output-bit-depth 16 \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -32,7 +31,7 @@ Usage:
         --enable-v2 "off" \\
         --pbr "on" \\
         --depth-device "mps" \\
-        --emit-master16 "on"
+        --output-bit-depth 16
 
     # Material segmentation with EfficientSAM backend
     lux-depth-v3 \\
@@ -55,8 +54,7 @@ Usage:
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
-        --emit-master16 "on" \\
-        --emit-upscaled16 "on" \\
+        --output-bit-depth 16 \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -73,8 +71,7 @@ Usage:
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
-        --emit-master16 "on" \\
-        --emit-upscaled16 "on" \\
+        --output-bit-depth 16 \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -143,7 +140,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional, cast
 
 try:
     import typer
@@ -497,15 +494,20 @@ def main(
         ),
     ),
     # Emit Options (Deliverables)
-    emit_master16: str = typer.Option(
-        "off",
-        "--emit-master16",
-        help="Emit master 16-bit output: on/off",
+    output_bit_depth: Optional[int] = typer.Option(
+        None,
+        "--output-bit-depth",
+        help="Canonical enhanced-image encoding depth: 8 (PNG) or 16 (TIFF). Default: 8.",
     ),
-    emit_upscaled16: str = typer.Option(
-        "off",
+    emit_master16: Optional[str] = typer.Option(
+        None,
+        "--emit-master16",
+        help="DEPRECATED alias for --output-bit-depth 16: on/off.",
+    ),
+    emit_upscaled16: Optional[str] = typer.Option(
+        None,
         "--emit-upscaled16",
-        help="Emit upscaled 16-bit output: on/off",
+        help="DEPRECATED alias for --output-bit-depth 16: on/off.",
     ),
     emit_marketing: Optional[str] = typer.Option(
         None,
@@ -767,8 +769,23 @@ def main(
     enable_pbr = _parse_bool_flag(pbr)
     enable_cache_depth = _parse_bool_flag(cache_depth)
     enable_v2_bool = _parse_bool_flag(enable_v2)
-    enable_emit_master16 = _parse_bool_flag(emit_master16)
-    enable_emit_upscaled16 = _parse_bool_flag(emit_upscaled16)
+    if output_bit_depth is not None and output_bit_depth not in {8, 16}:
+        error_msg = "Invalid --output-bit-depth. Must be one of: 8, 16"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+    enable_emit_master16 = None if emit_master16 is None else _parse_bool_flag(emit_master16)
+    enable_emit_upscaled16 = None if emit_upscaled16 is None else _parse_bool_flag(emit_upscaled16)
+    if output_bit_depth == 8 and (enable_emit_master16 or enable_emit_upscaled16):
+        error_msg = "--output-bit-depth 8 conflicts with a truthy deprecated " "--emit-master16/--emit-upscaled16 alias"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+    # The guards above ensure output_bit_depth is 8 or 16 when provided.
+    normalized_output_bit_depth = cast(
+        Literal[8, 16],
+        output_bit_depth if output_bit_depth is not None else (16 if enable_emit_master16 or enable_emit_upscaled16 else 8),
+    )
     enable_emit_marketing = False if emit_marketing is None else _parse_bool_flag(emit_marketing)
     enable_emit_report = True if emit_report is None else _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
@@ -1070,6 +1087,7 @@ def main(
         sam2_crop_n_layers=sam2_crop_n_layers,
         strict_backend=strict_segmentation,
         material_segmentation_cache_policy=normalized_segmentation_cache,
+        output_bit_depth=normalized_output_bit_depth,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
         emit_marketing=(enable_emit_marketing if emit_marketing is not None else None),

@@ -423,6 +423,7 @@ def run_v2_stage(
             masks_file=masks_path,
             # Pass canonical asset key for depth/report identity alignment
             asset_key=output_key.name,
+            output_bit_depth=config.output_bit_depth,
         )
         v2_runtime_s = v2_result.get("runtime_s", 0.0)
 
@@ -630,7 +631,7 @@ def persist_enhanced_image(
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if config.emit_master16 or config.emit_upscaled16:
+        if config.output_bit_depth == 16:
             # 16-bit TIFF output
             import tifffile
 
@@ -847,7 +848,7 @@ class ExecutionEngine:
             EnhancedImageResult with persistence outcomes
         """
         temp_dir = self.output_root / "temp"
-        extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
+        extension = ".tif" if self.config.output_bit_depth == 16 else ".png"
         # Preserve output_key.parent structure to match orchestrator path layout
         output_path = temp_dir / output_key.parent / f"{output_key.name}_materials_v3_enhanced{extension}"
 
