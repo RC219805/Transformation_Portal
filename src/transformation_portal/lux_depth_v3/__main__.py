@@ -140,7 +140,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional, cast
 
 try:
     import typer
@@ -781,8 +781,10 @@ def main(
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
-    normalized_output_bit_depth = (
-        output_bit_depth if output_bit_depth is not None else (16 if enable_emit_master16 or enable_emit_upscaled16 else 8)
+    # The guards above ensure output_bit_depth is 8 or 16 when provided.
+    normalized_output_bit_depth = cast(
+        Literal[8, 16],
+        output_bit_depth if output_bit_depth is not None else (16 if enable_emit_master16 or enable_emit_upscaled16 else 8),
     )
     enable_emit_marketing = False if emit_marketing is None else _parse_bool_flag(emit_marketing)
     enable_emit_report = True if emit_report is None else _parse_bool_flag(emit_report)
