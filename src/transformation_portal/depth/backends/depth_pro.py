@@ -28,10 +28,12 @@ import numpy as np
 from PIL import Image
 
 from ...core.platform_matrix import CURRENT_PLATFORM
+from ...lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
 from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
+    from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
     from ...stage_graph.stages.depth_pro import DepthProStage
 
 logger = logging.getLogger(__name__)
@@ -59,14 +61,45 @@ class DepthProBackend:
     EXPECTED_SHA256 = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb" "2686259c80685c0ce"
     WORKER_MODULE = "transformation_portal.depth.backends.depth_pro_worker"
 
-    def __init__(self, config: Optional["EnhanceConfig"] = None):
+    def __init__(
+        self,
+        config: Optional["EnhanceConfig"] = None,
+        *,
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
+    ):
         """Initialize Depth Pro backend."""
+        if (candidate_authority is None) != (canonical_plan_bytes is None):
+            raise ValueError("candidate_authority and canonical_plan_bytes must be provided together")
+        carried_contract = candidate_authority.model_contract if candidate_authority is not None else None
+        if candidate_authority is not None:
+            if config is None:
+                raise ValueError("Canonical Depth Pro authority requires its projected runtime config")
+            if (
+                candidate_authority.backend_id != self.name
+                or carried_contract is None
+                or carried_contract.backend_id != self.name
+            ):
+                raise ValueError("Canonical Depth Pro authority does not select a Depth Pro model contract")
+            if carried_contract.artifact_path is None:
+                raise ValueError("Canonical Depth Pro authority lacks a checkpoint path")
+            if carried_contract.artifact_sha256 != self.EXPECTED_SHA256:
+                raise ValueError("Canonical Depth Pro authority carries an unexpected checkpoint digest")
+            if type(canonical_plan_bytes) is not bytes or not canonical_plan_bytes:
+                raise ValueError("Canonical Depth Pro authority requires non-empty immutable plan bytes")
         self._config = config
+        self._candidate_authority = candidate_authority
+        self._canonical_plan_bytes = canonical_plan_bytes
         self._stage: Optional["DepthProStage"] = None
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
-        self._device = self._resolve_device(config)
-        self._checkpoint_path = self._resolve_checkpoint_path(config)
+        self._device = self._resolve_device(config, candidate_authority)
+        if carried_contract is not None:
+            if carried_contract.artifact_path is None:  # pragma: no cover - narrowed above
+                raise ValueError("Canonical Depth Pro authority lacks a checkpoint path")
+            self._checkpoint_path = Path(carried_contract.artifact_path)
+        else:
+            self._checkpoint_path = self._resolve_checkpoint_path(config)
         self._checkpoint_hash_cached: Optional[str] = None
         self._python_executable = self._resolve_python_executable(config)
         self._subprocess_available_devices: set[str] = set()
@@ -90,7 +123,11 @@ class DepthProBackend:
             return self._repo_root
         return Path.cwd()
 
-    def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
+    def _resolve_device(
+        self,
+        config: Optional["EnhanceConfig"],
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+    ) -> str:
         """Resolve device from config, defaulting to CPU.
 
         This method does NOT auto-detect accelerators (MPS/CUDA) because
@@ -102,6 +139,10 @@ class DepthProBackend:
         workflows always get the correct device. CPU is the safe default
         for ad-hoc or test instantiation.
         """
+        if candidate_authority is not None:
+            carried = self._normalize_device(candidate_authority.device)
+            if carried != "auto":
+                return carried
         if config is not None:
             device = getattr(config, "depth_device", None)
             if device:
@@ -145,6 +186,11 @@ class DepthProBackend:
                     configured_path = ""
                 if configured_path:
                     candidate = configured_path
+
+        if candidate is None and config is not None and getattr(config, "execution_plan_authority", None) is not None:
+            # Execution-complete plans freeze absence as well as presence.
+            # A later environment mutation cannot add a subprocess runtime.
+            return None
 
         if candidate is None:
             env_candidate = os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON")
@@ -195,6 +241,55 @@ class DepthProBackend:
             *args,
         ]
 
+    def _canonical_worker_args(self) -> list[str]:
+        """Return the closed argv carrier for canonical subprocess mode."""
+
+        authority = self._candidate_authority
+        if authority is None:
+            return []
+        args = [
+            "--execution-plan-stdin",
+            "--candidate-id",
+            authority.candidate_id,
+        ]
+        if authority.constituent_backend_id is not None:
+            args.extend(["--model-backend-id", authority.constituent_backend_id])
+        return args
+
+    def _canonical_worker_input(self) -> Optional[str]:
+        """Return exact canonical JSON text for the subprocess stdin pipe."""
+
+        if self._candidate_authority is None:
+            return None
+        if type(self._canonical_plan_bytes) is not bytes:
+            raise RuntimeError("Canonical Depth Pro execution is missing immutable plan bytes")
+        return self._canonical_plan_bytes.decode("utf-8", errors="strict")
+
+    def _effective_device(self, override: Optional[str]) -> str:
+        """Reject runtime overrides that disagree with carried authority."""
+
+        if override is None:
+            return self._device
+        normalized = self._normalize_device(override)
+        if self._candidate_authority is not None and normalized != self._device:
+            raise ValueError(f"Depth Pro device override {normalized!r} disagrees with carried authority {self._device!r}")
+        return normalized
+
+    def _verify_worker_authority_echo(self, payload: Any) -> None:
+        """Verify worker authority before loading or accepting its array."""
+
+        authority = self._candidate_authority
+        if authority is None:
+            return
+        expected = {
+            "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+            "candidate_id": authority.candidate_id,
+            "model_backend_id": authority.constituent_backend_id,
+            "executed_backend_id": self.name,
+        }
+        if not isinstance(payload, dict) or payload.get("execution_authority") != expected:
+            raise LuxExecutionPlanAuthorityError("Depth Pro worker execution-authority echo does not match the carried plan")
+
     def _ensure_checkpoint_exists(self) -> None:
         """Ensure the Depth Pro checkpoint exists locally."""
         if not self._checkpoint_path.exists():
@@ -231,20 +326,25 @@ class DepthProBackend:
         if use_device in self._subprocess_available_devices:
             return
 
-        command = self._build_worker_command(
-            "--check",
-            "--checkpoint",
-            str(self._checkpoint_path.resolve()),
-            "--device",
-            use_device,
-        )
+        if self._candidate_authority is not None:
+            command = self._build_worker_command("--check", *self._canonical_worker_args())
+        else:
+            command = self._build_worker_command(
+                "--check",
+                "--checkpoint",
+                str(self._checkpoint_path.resolve()),
+                "--device",
+                use_device,
+            )
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=self._worker_cwd(),
             env=self._build_worker_env(),
             check=False,
+            input=self._canonical_worker_input(),
         )
         if result.returncode != 0:
             output = self._format_subprocess_output(result.stdout, result.stderr)
@@ -293,7 +393,7 @@ class DepthProBackend:
     ) -> DepthResult:
         """Estimate metric depth from image."""
         self._validate_license_runtime()
-        use_device = self._normalize_device(device or self._device)
+        use_device = self._effective_device(device)
         self._ensure_runtime_available(device=use_device)
 
         if self._uses_subprocess():
@@ -331,7 +431,7 @@ class DepthProBackend:
 
         from ...stage_graph.stage import StageContext, StageStatus
 
-        use_device = self._normalize_device(device or self._device)
+        use_device = self._effective_device(device)
         context = StageContext(
             artifacts={"image": image_pil},
             device=use_device,
@@ -351,6 +451,13 @@ class DepthProBackend:
             python_executable=sys.executable,
         )
         self._cache_checkpoint_hash_from_metadata(metric_metadata)
+        if self._candidate_authority is not None:
+            metric_metadata["execution_authority"] = {
+                "plan_fingerprint_sha256": self._candidate_authority.plan_fingerprint_sha256,
+                "candidate_id": self._candidate_authority.candidate_id,
+                "model_backend_id": self._candidate_authority.constituent_backend_id,
+                "executed_backend_id": self.name,
+            }
 
         return DepthResult(
             depth_map=depth_map.astype(np.float32),
@@ -372,7 +479,7 @@ class DepthProBackend:
     ) -> DepthResult:
         """Run Depth Pro inference in a dedicated Python subprocess."""
         image_pil, image_array = self._prepare_image(image)
-        use_device = self._normalize_device(device or self._device)
+        use_device = self._effective_device(device)
 
         with tempfile.TemporaryDirectory(prefix="tp_depth_pro_") as tmpdir:
             tmp_root = Path(tmpdir)
@@ -381,27 +488,35 @@ class DepthProBackend:
             output_json_path = tmp_root / "result.json"
             image_pil.save(input_path)
 
-            command = self._build_worker_command(
+            common_args = [
                 "--input-image",
                 str(input_path),
                 "--output-depth",
                 str(output_depth_path),
                 "--output-json",
                 str(output_json_path),
-                "--checkpoint",
-                str(self._checkpoint_path.resolve()),
-                "--device",
-                use_device,
-            )
+            ]
+            if self._candidate_authority is not None:
+                command = self._build_worker_command(*common_args, *self._canonical_worker_args())
+            else:
+                command = self._build_worker_command(
+                    *common_args,
+                    "--checkpoint",
+                    str(self._checkpoint_path.resolve()),
+                    "--device",
+                    use_device,
+                )
 
             try:
                 subprocess.run(
                     command,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                     cwd=self._worker_cwd(),
                     env=self._build_worker_env(),
                     check=True,
+                    input=self._canonical_worker_input(),
                 )
             except subprocess.CalledProcessError as exc:
                 output = self._format_subprocess_output(exc.stdout or "", exc.stderr or "")
@@ -417,6 +532,7 @@ class DepthProBackend:
 
             with output_json_path.open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)
+            self._verify_worker_authority_echo(payload)
             depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
 
         metric_metadata = self._build_metric_metadata(
@@ -425,6 +541,8 @@ class DepthProBackend:
             python_executable=self._python_executable or "",
         )
         self._cache_checkpoint_hash_from_metadata(metric_metadata)
+        if self._candidate_authority is not None:
+            metric_metadata["execution_authority"] = payload["execution_authority"]
 
         input_size = payload.get("input_size")
         normalized_input_size = (image_array.shape[0], image_array.shape[1])

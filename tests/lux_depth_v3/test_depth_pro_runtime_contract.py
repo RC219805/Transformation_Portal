@@ -190,7 +190,7 @@ class TestDepthProWorkerArgvContract:
         args = parser.parse_args(["--check", "--checkpoint", str(tmp_path / "checkpoint.pt")])
         assert args.check is True
         assert args.checkpoint == tmp_path / "checkpoint.pt"
-        assert args.device == "cpu"
+        assert args.device is None
         # Inference args are optional in --check mode.
         assert args.input_image is None
         assert args.output_depth is None
@@ -220,12 +220,15 @@ class TestDepthProWorkerArgvContract:
 
     def test_checkpoint_is_required(self):
         parser = self._parser()
+        args = parser.parse_args(["--check"])
         with pytest.raises(SystemExit):
-            parser.parse_args(["--check"])
+            from transformation_portal.depth.backends import depth_pro_worker  # type: ignore[attr-defined]
+
+            depth_pro_worker._validate_execution_mode(parser, args)
 
     def test_device_default_is_cpu(self, tmp_path: Path):
         # CPU is the safe default — the orchestrator always passes an
         # explicit device, but ad-hoc smoke invocations rely on this.
         parser = self._parser()
         args = parser.parse_args(["--check", "--checkpoint", str(tmp_path / "ck.pt")])
-        assert args.device == "cpu"
+        assert args.device is None

@@ -349,7 +349,7 @@ ValueError: Depth contains NaN or Inf values
 **Test configuration:**
 - Image size: 24MP (6000×4000)
 - Hardware: Apple M4 Max, 48GB RAM
-- Depth model: METRIC_LARGE
+- Depth model: `da3-metric` (commercial-safe)
 
 | Workflow | Time (ms) | Throughput (img/hr) |
 |----------|-----------|---------------------|
@@ -407,13 +407,18 @@ PBRProcessor complements the full orchestrator pipeline:
 ```python
 from pathlib import Path
 from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, PBRProcessor, get_preset
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Step 1: Run orchestrator for depth only
 config = get_preset("premium")
 config.generate_pbr = False  # Skip PBR in orchestrator
 
-orchestrator = EnhanceOrchestrator(config, output_root=Path("output/"))
-manifest = orchestrator.enhance_image(Path("input/scene1.jpg"))
+input_root = Path("input")
+image_path = input_root / "scene1.jpg"
+prepared = prepare_lux_execution(config, input_root, [image_path])
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=Path("output/"))
+manifest = orchestrator.enhance_image(ImageInput(image_path), input_root=input_root)
 
 # Step 2: Generate PBR separately (allows parameter iteration)
 pbr_config = config.to_pbr_config()

@@ -251,6 +251,7 @@ class EnhanceConfig:
     # Fail if depth artifacts found in input
     # directory (validation mode)
     strict_inputs: bool = False
+    verify_images: bool = False
     # Preserve the Materials V3 intermediate TIFF/PNG in
     # <output>/temp/*_materials_v3_enhanced.* after V2 runs. Use this to
     # bisect a banding / color regression: compare the Materials V3
@@ -278,6 +279,9 @@ class EnhanceConfig:
     # RAW demosaic algorithm
     # (legacy_linear_srgb: "AHD" only)
     raw_demosaic: str = "AHD"
+    # Frozen by native execution-plan preparation so later consumers do not
+    # re-read the debug escape environment at an execution boundary.
+    raw_preview_escape_enabled: bool = False
 
     # Depth backend selection
     # None = auto (DA3), "depth_pro",
@@ -331,6 +335,11 @@ class EnhanceConfig:
     # Auto-detect if None
     # (default: cpu_count - 1)
     max_parallel_workers: Optional[int] = None
+    # Native execution plans freeze the effective worker counts.  These were
+    # historically accepted as dynamic attributes by the CLI; explicit fields
+    # preserve that compatibility while making projection deterministic.
+    max_workers: Optional[int] = None
+    max_gpu_workers: Optional[int] = None
     # Content-addressable depth cache
     # (opt-in, requires storage)
     enable_depth_cache: bool = False
@@ -357,6 +366,9 @@ class EnhanceConfig:
 
     # Float depth saving for high-precision PBR
     save_float_depth: bool = False
+    # Native execution-plan projection carries the resolved postprocessing
+    # policy independently of mutable preset/source configuration.
+    depth_postprocessing: Optional[PostprocessingConfig] = None
 
     # PBR map generation
     generate_pbr: bool = False
@@ -524,8 +536,15 @@ class EnhanceConfig:
     vlm_captioning_model: str = "default"
     vlm_captioning_proxy_format: str = "png"
     vlm_captioning_max_side_px: int = 1600
+    # Optional FastVLM runtime overrides. Native plan preparation freezes the
+    # effective environment values onto these fields; ``None`` is itself an
+    # authoritative choice for prepared executions.
+    fastvlm_model_path: Optional[str] = None
+    fastvlm_review_model_path: Optional[str] = None
     fastvlm_python_executable: Optional[str] = None
     fastvlm_mlx_vlm_dir: Optional[str] = None
+    fastvlm_max_tokens: Optional[int] = None
+    fastvlm_temperature: Optional[float] = None
     fastvlm_timeout_seconds: int = 180
 
     # Phase B1: optional scene-level reconstruction (off by default)
@@ -538,6 +557,15 @@ class EnhanceConfig:
     # Emit per-scene debug bundle for
     # reconstruction triage
     emit_scene_debug_bundle: bool = False
+    reconstruction_risk_threshold: float = 0.65
+    cameras_sidecar_sha256: Optional[str] = None
+
+    # Frozen ensemble policy used by the native execution-plan path.  Legacy
+    # callers keep the current defaults.
+    ensemble_fusion_method: str = "variance_weighted"
+    ensemble_max_variance_threshold: float = 0.15
+    ensemble_temporal_filter_mode: str = "off"
+    ensemble_temporal_filter_alpha: float = 0.3
 
     # Authoritative single-resolution invocation (P0-1, issue #2065).
     # Set by the CLI after the shared plan/run resolution pass; consumers
@@ -547,6 +575,13 @@ class EnhanceConfig:
     # module import-light; the concrete type is
     # lux_depth_v3.resolved_invocation.ResolvedInvocation.
     resolved_invocation: Optional[Any] = None
+    # Immutable core plan carried by the A2 native lifecycle.  It is typed as
+    # Any to keep this low-level configuration module import-light.
+    execution_plan_authority: Optional[Any] = None
+    # Exact canonical bytes paired with ``execution_plan_authority``.  Runtime
+    # backend factories forward this immutable carrier to subprocess workers;
+    # a plan object without its exact bytes is not execution authority.
+    execution_plan_canonical_bytes: Optional[bytes] = None
 
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""

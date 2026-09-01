@@ -20,6 +20,7 @@ class UnknownDepthBackendError(ValueError):
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
+    from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,9 @@ class DepthBackendRegistry:
         self,
         backend_name: str,
         config: Optional["EnhanceConfig"] = None,
+        *,
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
     ) -> DepthBackend:
         """Get depth backend with license validation.
 
@@ -214,6 +218,10 @@ class DepthBackendRegistry:
             backend_name: Backend identifier (e.g., "depth_pro").
             config: EnhanceConfig for license
                 validation and backend configuration.
+            candidate_authority: Exact immutable plan candidate selected by
+                the lifecycle boundary. Must be paired with canonical bytes.
+            canonical_plan_bytes: Exact canonical plan bytes sent to isolated
+                workers. Must be paired with candidate authority.
 
         Returns:
             Instantiated backend.
@@ -228,14 +236,56 @@ class DepthBackendRegistry:
             available = ", ".join(sorted(self._backends.keys())) or "(none)"
             raise ValueError(f"Unknown depth backend:" f" '{backend_name}'." f" Available backends: {available}")
 
+        if (candidate_authority is None) != (canonical_plan_bytes is None):
+            raise ValueError("candidate_authority and canonical_plan_bytes must be provided together")
+        if candidate_authority is not None:
+            if type(canonical_plan_bytes) is not bytes or not canonical_plan_bytes:
+                raise ValueError("canonical_plan_bytes must be non-empty immutable bytes")
+            if normalize_backend_id(candidate_authority.backend_id) != normalized_backend_name:
+                raise ValueError(
+                    "Carried backend authority does not match requested backend "
+                    f"({candidate_authority.backend_id!r} != {normalized_backend_name!r})"
+                )
+            if candidate_authority.constituent_backend_id is None:
+                if candidate_authority.candidate_id != normalized_backend_name:
+                    raise ValueError("Top-level candidate authority does not match the requested backend")
+            elif normalize_backend_id(candidate_authority.constituent_backend_id) != normalized_backend_name:
+                raise ValueError("Constituent authority does not match the requested backend")
+            from ...lux_depth_v3.execution_lifecycle import backend_candidate_authority as select_candidate_authority
+            from ...lux_depth_v3.execution_lifecycle import (
+                consume_lux_worker_execution_plan,
+            )
+
+            carried_plan = consume_lux_worker_execution_plan(canonical_plan_bytes)
+            reselected = select_candidate_authority(
+                carried_plan,
+                candidate_authority.candidate_id,
+                model_backend_id=candidate_authority.constituent_backend_id,
+            )
+            if reselected != candidate_authority:
+                raise ValueError("Carried backend authority does not match the exact canonical plan bytes")
+
         # Layer 2: License enforcement at factory level
         self._validate_license(normalized_backend_name or backend_name, backend_cls, config)
 
-        # Instantiate backend
+        # Instantiate backend. The canonical-aware built-ins accept the exact
+        # carrier explicitly; legacy/custom backends retain their historical
+        # constructor shape and receive inert provenance attributes only.
+        if candidate_authority is not None:
+            if normalized_backend_name in {"da2", "da3", "depth_pro", "ensemble"}:
+                canonical_backend_cls: Any = backend_cls
+                return canonical_backend_cls(
+                    config,
+                    candidate_authority=candidate_authority,
+                    canonical_plan_bytes=canonical_plan_bytes,
+                )
+            backend = backend_cls(config) if config is not None else backend_cls()
+            setattr(backend, "_candidate_authority", candidate_authority)
+            setattr(backend, "_canonical_plan_bytes", canonical_plan_bytes)
+            return backend
         if config is not None:
             return backend_cls(config)
-        else:
-            return backend_cls()
+        return backend_cls()
 
     def _validate_license(
         self,

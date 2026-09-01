@@ -42,7 +42,7 @@ Expected Outputs (per image):
 Performance Expectations:
     - First run: 6-8 seconds (includes depth estimation)
     - Subsequent runs: 0.3-0.5 seconds (depth cached via LRU)
-    - Memory peak: ~5.5 GB with METRIC_LARGE model
+    - Memory peak: ~5.5 GB with the da3-metric model
     - GPU/MPS recommended for optimal performance
 
 Integration Notes:
@@ -93,6 +93,7 @@ try:
         get_preset,
         list_presets,
     )
+    from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
     from transformation_portal.lux_depth_v3.input_manager import ImageInput
 except ImportError as e:
     print(f"❌ Error: Could not import lux_depth_v3 module: {e}")
@@ -201,7 +202,7 @@ def print_preset_config(config, preset_name: str):
     print()
 
     # Depth model
-    print(f"Depth Model: {config.model_variant.value.display_name}")
+    print(f"Depth Model: {config.model_key or 'default'}")
     print(f"Device: {config.depth_device}")
     print(
         f"Float Depth: {config.save_float_depth} {'✓ High-precision' if config.save_float_depth else '⚠ Standard precision'}"
@@ -344,14 +345,12 @@ def process_image(
         print_material_recommendations()
         return 0
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     # Initialize orchestrator
     print("⚙️  INITIALIZING ORCHESTRATOR")
     print("-" * 80)
     try:
-        orchestrator = EnhanceOrchestrator(config, output_dir)
+        prepared = prepare_lux_execution(config, input_path.parent, [input_path])
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_dir)
         print("✓ Orchestrator initialized")
         print("✓ Depth model loaded (or will be loaded on first use)")
         print("-" * 80 + "\n")

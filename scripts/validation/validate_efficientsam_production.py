@@ -57,6 +57,8 @@ def run_validation():
     logger.info("Importing pipeline components...")
     try:
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
     except ImportError as e:
         logger.error(f"Failed to import pipeline components: {e}")
@@ -107,13 +109,11 @@ def run_validation():
     print(f"  PBR generation: {config.generate_pbr}")
     print()
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     # Create orchestrator
     logger.info("Initializing orchestrator...")
     try:
-        orchestrator = EnhanceOrchestrator(config, output_dir)
+        prepared = prepare_lux_execution(config, input_dir, sorted(input_images))
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_dir)
     except Exception as e:
         logger.error(f"Failed to create orchestrator: {e}")
         return 1
@@ -134,7 +134,7 @@ def run_validation():
 
         try:
             # Process single image
-            result = orchestrator.enhance_image(image_path)
+            result = orchestrator.enhance_image(ImageInput(path=image_path))
 
             image_elapsed = time.time() - image_start
 

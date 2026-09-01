@@ -312,7 +312,8 @@ def run_apex_for_config(
     import hashlib
     import signal
 
-    from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+    from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
     from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
     from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS
@@ -344,14 +345,12 @@ def run_apex_for_config(
 
     # Create workflow-specific output directory
     workflow_output = output_dir / f"{run_spec.workflow_version}_{zone}"
-    workflow_output.mkdir(parents=True, exist_ok=True)
 
     # Configure pipeline based on workflow version
     # V1 = depth only, V2 = depth + enhancement
     enable_v2 = run_spec.workflow_version == "v2"
 
     config = EnhanceConfig(
-        model_variant=ModelVariant.METRIC_LARGE,
         model_key=_model_key_for_backend(run_spec.backend_id),
         depth_device=run_spec.device,
         v2_device=run_spec.device,
@@ -363,9 +362,14 @@ def run_apex_for_config(
         v2_preset="default" if enable_v2 else None,
     )
 
-    # Initialize orchestrator
-    orchestrator = EnhanceOrchestrator(
-        config=config,
+    # Freeze exact inputs/runtime authority before orchestrator initialization.
+    prepared = prepare_lux_execution(config, input_dir, images)
+    # Use the carrier's canonical real paths for every subsequent direct read.
+    # The discovery paths may contain aliases that can be retargeted after the
+    # plan boundary; ``prepared.input_files`` is the exact frozen selection.
+    images = list(prepared.input_files)
+    orchestrator = EnhanceOrchestrator.from_prepared(
+        prepared,
         output_root=workflow_output,
         verify_outputs=False,  # Speed up for benchmarking
     )
@@ -431,7 +435,7 @@ def run_apex_for_config(
                         pixel_count=pixel_count,
                         dimension_adjustment=compute_dimension_adjustment(original_shape, enforced_shape),
                         backend_id=run_spec.backend_id,
-                        model_variant=config.model_variant.value.name,
+                        model_variant=config.model_key or run_spec.backend_id,
                         device=run_spec.device,
                         dtype="float32",
                         timings=timings,

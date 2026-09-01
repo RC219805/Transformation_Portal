@@ -1,4 +1,4 @@
-"""CLI tests for the resolver-only ``--plan`` mode (P0-1, #2065).
+"""CLI tests for the canonical ``--plan`` mode (#2065-A2).
 
 ``--plan`` must run the same validation and resolution a real run performs,
 emit the canonical plan JSON, and stop before orchestrator construction —
@@ -70,6 +70,10 @@ def _extract_plan_json(stdout: str) -> dict:
     raise AssertionError(f"no JSON object found in stdout: {stdout!r}")
 
 
+def _output_configuration(payload: dict) -> dict:
+    return next(node["configuration"] for node in payload["nodes"] if node["stage_registry_id"] == "tp.stage.lux.output.v1")
+
+
 class TestPlanMode:
     @pytest.mark.parametrize(
         ("args", "expected_depth", "expected_warning_count"),
@@ -109,8 +113,8 @@ class TestPlanMode:
 
         assert result.exit_code == 0, result.output
         payload = _extract_plan_json(result.output)
-        assert payload["output_bit_depth"] == expected_depth
-        assert "bit_depth_16_intermediates" not in payload["requested_artifacts"]
+        assert _output_configuration(payload)["output_bit_depth"] == expected_depth
+        assert "bit_depth_16_intermediates" not in payload["requested_outputs"]
         deprecations = [item for item in caught if isinstance(item.message, DeprecatedOutputFlagWarning)]
         assert len(deprecations) == expected_warning_count
 
@@ -178,8 +182,8 @@ class TestPlanMode:
         assert [str(item.message) for item in cli_warnings] == [expected_notice]
         payload = _extract_plan_json(result.output)
         assert payload["warnings"].count(expected_notice) == 1
-        assert payload["requested_artifacts"].count("combined_manifest_json") == 1
-        assert all("marketing" not in artifact for artifact in payload["requested_artifacts"])
+        assert payload["requested_outputs"].count("combined_manifest_json") == 1
+        assert all("marketing" not in artifact for artifact in payload["requested_outputs"])
         assert not (tmp_path / "out").exists()
 
     def test_plan_emits_canonical_json_and_writes_nothing(self, tmp_path: Path) -> None:
@@ -199,9 +203,10 @@ class TestPlanMode:
         )
         assert result.exit_code == 0, result.output
         payload = _extract_plan_json(result.output)
-        assert payload["schema"] == "tp.lux.resolved_invocation.v1"
+        assert payload["schema"] == "tp.execution.plan.v1"
+        assert payload["configuration_completeness"] == "execution_complete"
         assert payload["resolved_model"]["canonical_key"] == "da3_metric"
-        assert payload["input_files"] == ["sample.png"]
+        assert [item["path"] for item in payload["input_selection"]["files"]] == ["sample.png"]
         assert "executed_backend" not in payload
         # Resolver-only: the orchestrator was never constructed, so the
         # output root must not exist and the input dir must be untouched.
@@ -265,18 +270,18 @@ class TestPlanMode:
         assert result.exit_code == 1
         assert "APEX strict gate" in result.output
 
-    def test_run_mode_attaches_invocation_to_config(self, tmp_path: Path, monkeypatch) -> None:
-        """Without --plan, the run path attaches the exact invocation object
-        to the config before orchestrator construction (the single-resolution
-        invariant's consumption side)."""
+    def test_run_mode_consumes_exact_prepared_plan(self, tmp_path: Path, monkeypatch) -> None:
+        """Run mode hands the exact prepared carrier to the live executor."""
         import transformation_portal.lux_depth_v3.__main__ as cli_module
 
         captured: dict = {}
 
         class _StubOrchestrator:
-            def __init__(self, config, output_root):
-                captured["invocation"] = config.resolved_invocation
+            @classmethod
+            def from_prepared(cls, prepared, output_root):
+                captured["prepared"] = prepared
                 captured["output_root"] = output_root
+                return cls()
 
             def enhance_batch(self, input_dir, image_extensions, input_files=None):
                 captured["input_files"] = input_files
@@ -297,16 +302,17 @@ class TestPlanMode:
             ],
         )
         assert result.exit_code == 0, result.output
-        invocation = captured["invocation"]
-        assert invocation is not None
-        assert invocation.schema == "tp.lux.resolved_invocation.v1"
-        assert invocation.resolved_model.canonical_key == "da3_metric"
+        prepared = captured["prepared"]
+        assert prepared.plan.schema == "tp.execution.plan.v1"
+        assert prepared.plan.configuration_completeness == "execution_complete"
+        assert prepared.plan.resolved_model.canonical_key == "da3_metric"
+        assert prepared.canonical_plan_bytes == prepared.plan.to_canonical_json().encode("utf-8")
         # Run mode (unlike --plan) does create the output root.
         assert output_dir.exists()
-        # The run consumes the plan's frozen input selection — the same
-        # files the invocation recorded, not a rediscovered list.
-        assert captured["input_files"] is not None
-        assert [p.name for p in captured["input_files"]] == list(invocation.input_files)
+        # The orchestrator owns the frozen selection; the CLI does not pass a
+        # second mutable list that could drift from the carrier.
+        assert captured["input_files"] is None
+        assert [p.name for p in prepared.input_files] == ["sample.png"]
 
     def test_cli_invocation_mutates_then_fixture_restores_root_logging(self, tmp_path: Path) -> None:
         """Regression guard for the session-wide logging leak.

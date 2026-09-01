@@ -175,5 +175,8 @@ class TestDA3WorkerArgvContract:
 
     def test_model_variant_is_required(self):
         parser = self._parser()
+        args = parser.parse_args(["--check"])
         with pytest.raises(SystemExit):
-            parser.parse_args(["--check"])
+            from transformation_portal.depth.backends import da3_worker  # type: ignore[attr-defined]
+
+            da3_worker._validate_execution_mode(parser, args)

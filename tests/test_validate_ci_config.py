@@ -108,6 +108,7 @@ def test_build_workflow_wheel_smoke_loads_both_execution_plan_schemas() -> None:
     assert "UnsupportedExecutionPlanSchema" in workflow_source
     assert "ResolvedInvocationCompatibilityError" in workflow_source
     assert "parse_execution_plan_json(plan.to_canonical_json())" in workflow_source
+    assert 'frozen_fastvlm_fields = {"model_path", "review_model_path", "max_tokens", "temperature"}' in workflow_source
     assert "execution plan installed-wheel contract smoke passed" in workflow_source
 
 

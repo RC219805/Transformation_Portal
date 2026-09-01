@@ -47,7 +47,9 @@ def _normalized_ingest_mode(config: "EnhanceConfig") -> str:
     return mode
 
 
-def _preview_escape_enabled() -> bool:
+def _preview_escape_enabled(config: "EnhanceConfig" | None = None) -> bool:
+    if config is not None and getattr(config, "execution_plan_authority", None) is not None:
+        return bool(getattr(config, "raw_preview_escape_enabled", False))
     val = (
         os.getenv(
             RAW_PREVIEW_ESCAPE_ENV,
@@ -112,7 +114,7 @@ def raw_ingest_summary(
         "no_auto_scale": options.no_auto_scale,
         "gamma_mode": options.gamma_mode,
         "preview_escape_env": RAW_PREVIEW_ESCAPE_ENV,
-        "preview_escape_enabled": _preview_escape_enabled(),
+        "preview_escape_enabled": _preview_escape_enabled(config),
     }
     payload["settings_hash"] = hashlib.sha256(
         canonicalize_json(payload),
@@ -180,7 +182,7 @@ def decode_for_lux_depth(
         raise ValueError(message)
 
     mode = _normalized_ingest_mode(config)
-    preview_allowed = _preview_escape_enabled()
+    preview_allowed = _preview_escape_enabled(config)
 
     if mode == "force_preview":
         if not preview_allowed:

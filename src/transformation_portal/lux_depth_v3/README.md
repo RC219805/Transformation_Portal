@@ -460,6 +460,7 @@ output_dir/
 ```python
 from pathlib import Path
 from transformation_portal.lux_depth_v3 import EnhanceConfig, EnhanceOrchestrator
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 
 config = EnhanceConfig(
     quality_tier="apex",
@@ -468,13 +469,13 @@ config = EnhanceConfig(
     depth_device="mps"
 )
 
-orchestrator = EnhanceOrchestrator(
-    config=config,
-    output_root=Path("./output")
-)
+input_root = Path("./input_images")
+input_files = sorted(input_root.glob("*.jpg")) + sorted(input_root.glob("*.png"))
+prepared = prepare_lux_execution(config, input_root, input_files)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 
 results = orchestrator.enhance_batch(
-    input_dir=Path("./input_images"),
+    input_dir=input_root,
     image_extensions=[".jpg", ".png"]
 )
 ```

@@ -2,7 +2,8 @@
 
 import pytest
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.lux_depth_v3.pbr_presets import (
     FABRIC_OPTIMIZED,
     FAST_PREVIEW,
@@ -72,9 +73,42 @@ class TestPresetConfiguration:
             FABRIC_OPTIMIZED,
         ],
     )
-    def test_preset_has_valid_model_variant(self, preset):
-        """All presets should have valid model variant."""
-        assert isinstance(preset.model_variant, ModelVariant)
+    def test_preset_has_explicit_commercial_model_selector(self, preset):
+        """All maintained presets should avoid implicit research selection."""
+        assert preset.model_key in {"da3-metric", "da3-base"}
+        assert preset.model_variant is None
+
+    @pytest.mark.parametrize(
+        ("preset", "expected_model_key"),
+        [
+            (STANDARD_QUALITY, "da3_metric"),
+            (PREMIUM_QUALITY, "da3_metric"),
+            (FAST_PREVIEW, "da3_base"),
+            (WOOD_OPTIMIZED, "da3_metric"),
+            (METAL_OPTIMIZED, "da3_metric"),
+            (GLASS_OPTIMIZED, "da3_metric"),
+            (STONE_OPTIMIZED, "da3_metric"),
+            (FABRIC_OPTIMIZED, "da3_metric"),
+        ],
+    )
+    def test_preset_prepares_without_research_acknowledgement(
+        self,
+        preset,
+        expected_model_key,
+        tmp_path,
+    ):
+        """Maintained PBR presets must compile under commercial-safe policy."""
+
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "scene.jpg"
+        image.write_bytes(b"plan preparation does not decode inputs")
+
+        prepared = prepare_lux_execution(preset, input_root, [image])
+
+        assert prepared.plan.resolved_model is not None
+        assert prepared.plan.resolved_model.canonical_key == expected_model_key
+        assert prepared.plan.license_acknowledgements.non_commercial_ok is False
 
 
 class TestPresetParameterRanges:
@@ -147,7 +181,7 @@ class TestStandardQualityPreset:
 
     def test_standard_uses_large_model(self):
         """Standard should use large model for quality."""
-        assert STANDARD_QUALITY.model_variant == ModelVariant.METRIC_LARGE
+        assert STANDARD_QUALITY.model_key == "da3-metric"
 
     def test_standard_balanced_parameters(self):
         """Standard should have balanced parameters."""
@@ -169,7 +203,7 @@ class TestPremiumQualityPreset:
 
     def test_premium_uses_large_model(self):
         """Premium should use large model for best quality."""
-        assert PREMIUM_QUALITY.model_variant == ModelVariant.METRIC_LARGE
+        assert PREMIUM_QUALITY.model_key == "da3-metric"
 
     def test_premium_no_normal_blur(self):
         """Premium should preserve all normal detail."""
@@ -195,7 +229,7 @@ class TestFastPreviewPreset:
 
     def test_draft_uses_base_model(self):
         """Draft should use base model for speed."""
-        assert FAST_PREVIEW.model_variant == ModelVariant.METRIC_BASE
+        assert FAST_PREVIEW.model_key == "da3-base"
 
     def test_draft_blur_budget_stays_below_standard(self):
         """Draft should keep a lighter blur budget than standard for speed."""
@@ -302,8 +336,8 @@ class TestPresetConsistency:
             assert preset.generate_pbr is True, f"{preset_name} should enable PBR"
 
     def test_quality_tier_uses_same_model(self):
-        """Standard and Premium should use same model variant."""
-        assert STANDARD_QUALITY.model_variant == PREMIUM_QUALITY.model_variant
+        """Standard and Premium should use the same model selector."""
+        assert STANDARD_QUALITY.model_key == PREMIUM_QUALITY.model_key
 
     def test_material_presets_enable_float_depth(self):
         """All material-optimized presets should enable float depth."""
@@ -313,7 +347,7 @@ class TestPresetConsistency:
     def test_material_presets_use_large_model(self):
         """All material-optimized presets should use large model."""
         for preset in [WOOD_OPTIMIZED, METAL_OPTIMIZED, GLASS_OPTIMIZED, STONE_OPTIMIZED, FABRIC_OPTIMIZED]:
-            assert preset.model_variant == ModelVariant.METRIC_LARGE
+            assert preset.model_key == "da3-metric"
 
 
 class TestPresetPerformanceCharacteristics:
@@ -334,7 +368,7 @@ class TestPresetPerformanceCharacteristics:
     def test_draft_optimized_for_speed(self):
         """Draft should prioritize speed over quality."""
         # Smaller model
-        assert FAST_PREVIEW.model_variant == ModelVariant.METRIC_BASE
+        assert FAST_PREVIEW.model_key == "da3-base"
         # No float depth (faster I/O)
         assert FAST_PREVIEW.save_float_depth is False
         # Lower strength (less computation)
@@ -345,7 +379,7 @@ class TestPresetPerformanceCharacteristics:
     def test_premium_optimized_for_quality(self):
         """Premium should prioritize quality over speed."""
         # Largest model
-        assert PREMIUM_QUALITY.model_variant == ModelVariant.METRIC_LARGE
+        assert PREMIUM_QUALITY.model_key == "da3-metric"
         # Float depth for precision
         assert PREMIUM_QUALITY.save_float_depth is True
         # No normal blur (preserve detail)

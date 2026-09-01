@@ -106,6 +106,8 @@ def resolve_effective_da3_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "da3_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -139,6 +141,8 @@ def resolve_effective_raw_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "raw_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -172,6 +176,8 @@ def resolve_effective_depth_pro_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "depth_pro_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -192,6 +198,26 @@ def apply_effective_depth_pro_runtime_config(
     """Persist the effective Depth Pro runtime choice onto the config object."""
     config.depth_pro_python_executable = resolve_effective_depth_pro_python_executable(config)
     return config
+
+
+def resolve_effective_depth_pro_checkpoint_path(config: EnhanceConfig) -> str:
+    """Resolve and return the checkpoint path that execution would consume.
+
+    Native plan preparation calls this once and persists the result on the
+    projected config.  Runtime consumers therefore do not add an environment
+    choice after the plan fingerprint has been fixed.
+    """
+
+    configured = _normalize_python_executable(getattr(config, "depth_pro_checkpoint_path", None))
+    if configured:
+        return configured
+    env_candidate = _normalize_python_executable(os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT"))
+    if env_candidate:
+        return env_candidate
+
+    from ..depth.backends.depth_pro import DepthProBackend
+
+    return str(DepthProBackend.DEFAULT_CHECKPOINT)
 
 
 @dataclass
@@ -606,8 +632,15 @@ def build_depth_cache_payload(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
-    effective_da3_python = resolve_effective_da3_python_executable(config)
-    effective_raw_python = resolve_effective_raw_python_executable(config)
+    if getattr(config, "execution_plan_authority", None) is not None:
+        # Native plans already froze these executable choices. Re-reading the
+        # process environment here would make fingerprint verification drift
+        # after the authority boundary was fixed.
+        effective_da3_python = config.da3_python_executable
+        effective_raw_python = config.raw_python_executable
+    else:
+        effective_da3_python = resolve_effective_da3_python_executable(config)
+        effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
         "model_variant": resolved_model_identity_for_backend(
@@ -680,8 +713,15 @@ def compute_config_fingerprint(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
-    effective_da3_python = resolve_effective_da3_python_executable(config)
-    effective_raw_python = resolve_effective_raw_python_executable(config)
+    if getattr(config, "execution_plan_authority", None) is not None:
+        # Native plans already froze these executable choices. Re-reading the
+        # process environment here would make fingerprint verification drift
+        # after the authority boundary was fixed.
+        effective_da3_python = config.da3_python_executable
+        effective_raw_python = config.raw_python_executable
+    else:
+        effective_da3_python = resolve_effective_da3_python_executable(config)
+        effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return ConfigFingerprint(
         model_variant=resolved_model_identity_for_backend(
@@ -929,12 +969,16 @@ class ConfigResolver:
         source_selector_state = direct_model_source_selector_state(config)
 
         # Resolve preset and model variant
-        apply_effective_da3_runtime_config(config)
-        apply_effective_raw_runtime_config(config)
+        execution_plan_authority = getattr(config, "execution_plan_authority", None)
+        if execution_plan_authority is None:
+            apply_effective_da3_runtime_config(config)
+            apply_effective_raw_runtime_config(config)
         da3_config, resolved_model = resolve_preset(
             config.preset,
             config.model_variant,
         )
+        if config.depth_postprocessing is not None:
+            da3_config.postprocessing = config.depth_postprocessing
         preset_model_key = preset_model_key_for_selection(
             config,
             resolved_model,
@@ -964,6 +1008,11 @@ class ConfigResolver:
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
             )
+        elif execution_plan_authority is not None:
+            # A native plan without a DA3 candidate intentionally carries no
+            # DA3 model.  Do not manufacture one merely to populate legacy
+            # compatibility metadata.
+            resolved_model_contract = None
         else:
             # A pure default carries no selection on any plane: the
             # resolved default must then be pinned onto the config BEFORE
@@ -1023,7 +1072,11 @@ class ConfigResolver:
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
-        if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+        if (
+            invocation is None
+            and resolved_model_contract is not None
+            and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}
+        ):
             carry_direct_model_contract(
                 config,
                 resolved_model_contract,

@@ -34,7 +34,7 @@ This guide provides **three production-tested EnhanceConfig presets** for genera
 **Processing Time**: ~3-5 seconds per image (M-series Mac, 2048px width)
 
 ```python
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 # Standard Quality - Balanced preset
 config_standard = EnhanceConfig(
@@ -56,7 +56,7 @@ config_standard = EnhanceConfig(
     pbr_ao_bias=0.45,  # Slightly darker than default for depth
 
     # Depth Model - Large for quality
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",  # Apple Silicon acceleration
 )
 ```
@@ -81,7 +81,7 @@ config_standard = EnhanceConfig(
 **Processing Time**: ~5-8 seconds per image (M-series Mac, 2048px width)
 
 ```python
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 # High Quality - Premium preset
 config_premium = EnhanceConfig(
@@ -103,7 +103,7 @@ config_premium = EnhanceConfig(
     pbr_ao_bias=0.40,  # Darker bias for dramatic depth
 
     # Depth Model - Large for best accuracy
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 ```
@@ -133,7 +133,7 @@ config_premium = EnhanceConfig(
 **Processing Time**: ~1-2 seconds per image (M-series Mac, 2048px width)
 
 ```python
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 # Fast Preview - Draft preset
 config_draft = EnhanceConfig(
@@ -155,7 +155,7 @@ config_draft = EnhanceConfig(
     pbr_ao_bias=0.50,  # Neutral bias (default)
 
     # Depth Model - Base for speed
-    model_variant=ModelVariant.METRIC_BASE,  # Faster inference
+    model_key="da3-base",  # Faster commercial-safe model
     depth_device="mps",
 )
 ```
@@ -180,7 +180,8 @@ config_draft = EnhanceConfig(
 ```python
 from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Configure for standard quality
@@ -194,17 +195,20 @@ config = EnhanceConfig(
     pbr_ao_strength=1.0,
     pbr_ao_blur_radius=5,
     pbr_ao_bias=0.45,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
-# Initialize orchestrator
+# Freeze the exact input selection before initializing the orchestrator
+input_root = Path("./input_images")
+image_path = input_root / "luxury_interior.jpg"
 output_root = Path("./output")
-orchestrator = EnhanceOrchestrator(config, output_root)
+prepared = prepare_lux_execution(config, input_root, [image_path])
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
 # Process image
-image_input = ImageInput(path=Path("./input_images/luxury_interior.jpg"))
-result = orchestrator.enhance_image(image_input, input_root=Path("./input_images"))
+image_input = ImageInput(path=image_path)
+result = orchestrator.enhance_image(image_input, input_root=input_root)
 
 # Expected outputs in output_root:
 # - luxury_interior_depth.png (16-bit depth visualization)
@@ -220,7 +224,8 @@ result = orchestrator.enhance_image(image_input, input_root=Path("./input_images
 ```python
 from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from tqdm import tqdm
 
@@ -235,20 +240,20 @@ config = EnhanceConfig(
     pbr_ao_strength=1.2,
     pbr_ao_blur_radius=7,
     pbr_ao_bias=0.40,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
 # Setup paths
 input_root = Path("./input_estate_photos")
 output_root = Path("./output_pbr_premium")
-output_root.mkdir(exist_ok=True)
+image_paths = sorted(input_root.glob("*.jpg"))
 
-# Initialize orchestrator
-orchestrator = EnhanceOrchestrator(config, output_root)
+# Freeze the exact batch before any output initialization
+prepared = prepare_lux_execution(config, input_root, image_paths)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
 # Batch process with progress tracking
-image_paths = sorted(input_root.glob("*.jpg"))
 for img_path in tqdm(image_paths, desc="Generating PBR maps"):
     image_input = ImageInput(path=img_path)
     try:
@@ -266,7 +271,8 @@ print(f"Outputs: {output_root}")
 ```python
 from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Draft config for rapid iteration
@@ -280,16 +286,18 @@ config = EnhanceConfig(
     pbr_ao_strength=0.8,
     pbr_ao_blur_radius=8,
     pbr_ao_bias=0.50,
-    model_variant=ModelVariant.METRIC_BASE,  # Faster model
+    model_key="da3-base",  # Faster commercial-safe model
     depth_device="mps",
 )
 
-output_root = Path("./preview_pbr")
-orchestrator = EnhanceOrchestrator(config, output_root)
-
 # Quick preview of single image
-image_input = ImageInput(path=Path("./test_scene.jpg"))
-result = orchestrator.enhance_image(image_input, input_root=Path("."))
+input_root = Path(".")
+image_path = input_root / "test_scene.jpg"
+output_root = Path("./preview_pbr")
+prepared = prepare_lux_execution(config, input_root, [image_path])
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+image_input = ImageInput(path=image_path)
+result = orchestrator.enhance_image(image_input, input_root=input_root)
 
 print(f"Preview PBR maps generated in: {output_root}")
 print("Review depth quality before running premium preset on full batch")

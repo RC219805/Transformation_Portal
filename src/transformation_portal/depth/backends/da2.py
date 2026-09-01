@@ -25,6 +25,7 @@ from .protocol import DepthResult, LicenseType
 if TYPE_CHECKING:
     from ...depth.models.depth_anything_v2 import DepthAnythingV2Model  # noqa: F401
     from ...lux_depth_v3.config import EnhanceConfig
+    from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,39 @@ class DA2Backend:
     license_type = LicenseType.COMMERCIAL
     requires_checkpoint = False
 
-    def __init__(self, config: Optional["EnhanceConfig"] = None):
+    def __init__(
+        self,
+        config: Optional["EnhanceConfig"] = None,
+        *,
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
+    ):
+        if (candidate_authority is None) != (canonical_plan_bytes is None):
+            raise ValueError("candidate_authority and canonical_plan_bytes must be provided together")
+        carried_contract = candidate_authority.model_contract if candidate_authority is not None else None
+        if candidate_authority is not None:
+            if (
+                candidate_authority.backend_id != self.name
+                or carried_contract is None
+                or carried_contract.backend_id != self.name
+            ):
+                raise ValueError("Canonical DA2 authority does not select a DA2 model contract")
+            if carried_contract.model.canonical_key != "da2_small":
+                raise ValueError("Canonical DA2 authority does not select the supported Small model")
+            if type(canonical_plan_bytes) is not bytes or not canonical_plan_bytes:
+                raise ValueError("Canonical DA2 authority requires non-empty immutable plan bytes")
         self._config = config
-        self._device = self._resolve_device(config)
+        self._candidate_authority = candidate_authority
+        self._canonical_plan_bytes = canonical_plan_bytes
+        self._model_revision = carried_contract.model.revision if carried_contract is not None else None
+        self._device = self._resolve_device(config, candidate_authority)
         self._model: Optional[DepthAnythingV2Model] = None
 
-    def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
+    def _resolve_device(
+        self,
+        config: Optional["EnhanceConfig"],
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+    ) -> str:
         """Resolve device from config, defaulting to CPU.
 
         This method does NOT auto-detect accelerators (MPS/CUDA) because
@@ -54,6 +82,15 @@ class DA2Backend:
         for ad-hoc or test instantiation. Device validation happens at
         compute() time when torch is actually needed.
         """
+        if candidate_authority is not None:
+            carried = str(candidate_authority.device or "").strip().lower()
+            if carried and carried != "auto":
+                if carried == "cuda":
+                    raise ValueError("Canonical DA2 authority cannot select unsupported CUDA execution")
+                if carried not in {"cpu", "mps"}:
+                    raise ValueError(f"Canonical DA2 authority selects unsupported device {carried!r}")
+                return carried
+
         if config is not None:
             requested = getattr(config, "depth_device", None)
             if isinstance(requested, str):
@@ -110,14 +147,22 @@ class DA2Backend:
             try:
                 import torch
 
-                if not torch.backends.mps.is_available():
+                mps_available = bool(torch.backends.mps.is_available())
+            except OPTIONAL_IMPORT_EXCEPTIONS as exc:
+                if self._candidate_authority is not None:
+                    raise RuntimeError(
+                        "Canonical DA2 candidate planned device='mps', but MPS availability could not be verified"
+                    ) from exc
+                logger.warning("PyTorch not available; DA2 falling back to CPU.")
+                self._device = "cpu"
+            else:
+                if not mps_available:
+                    if self._candidate_authority is not None:
+                        raise RuntimeError("Canonical DA2 candidate planned device='mps', but MPS is unavailable")
                     logger.warning(
                         "Requested DA2 device=mps" " but MPS is unavailable;" " falling back to cpu.",
                     )
                     self._device = "cpu"
-            except OPTIONAL_IMPORT_EXCEPTIONS:
-                logger.warning("PyTorch not available; DA2 falling back to CPU.")
-                self._device = "cpu"
 
         if self._device == "mps":
             backend = ModelBackend.PYTORCH_MPS
@@ -126,11 +171,19 @@ class DA2Backend:
             backend = ModelBackend.PYTORCH_CPU
             model_device = "cpu"
 
-        self._model = DepthAnythingV2Model(
-            variant=ModelVariant.SMALL,
-            backend=backend,
-            device=model_device,
-        )
+        if self._model_revision is not None:
+            self._model = DepthAnythingV2Model(
+                variant=ModelVariant.SMALL,
+                backend=backend,
+                device=model_device,
+                model_revision=self._model_revision,
+            )
+        else:
+            self._model = DepthAnythingV2Model(
+                variant=ModelVariant.SMALL,
+                backend=backend,
+                device=model_device,
+            )
         logger.info(
             "Loaded DA2 backend:" " variant=SMALL device=%s",
             model_device,
@@ -146,6 +199,8 @@ class DA2Backend:
 
         if device is not None:
             requested_device = str(device).lower()
+            if self._candidate_authority is not None and requested_device != self._device:
+                raise ValueError(f"DA2 device override {requested_device!r} disagrees with carried authority {self._device!r}")
             if requested_device not in {"cpu", "mps", "cuda"}:
                 logger.warning(
                     "Unknown DA2 override" " device=%s;" " falling back to cpu.",
@@ -182,6 +237,13 @@ class DA2Backend:
         metadata["source_depth_units"] = "relative"
         metadata["output_depth_units"] = "relative"
         metadata["output_normalization"] = "native_relative_0_1"
+        if self._candidate_authority is not None:
+            metadata["execution_authority"] = {
+                "plan_fingerprint_sha256": self._candidate_authority.plan_fingerprint_sha256,
+                "candidate_id": self._candidate_authority.candidate_id,
+                "model_backend_id": self._candidate_authority.constituent_backend_id,
+                "executed_backend_id": self.name,
+            }
 
         return DepthResult(
             depth_map=depth,

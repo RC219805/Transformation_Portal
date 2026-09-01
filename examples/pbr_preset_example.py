@@ -23,6 +23,7 @@ from typing import Optional
 
 try:
     from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, get_preset, list_presets
+    from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
     from transformation_portal.lux_depth_v3.input_manager import ImageInput
 except ImportError as e:
     print(f"Error: Could not import lux_depth_v3 module: {e}")
@@ -120,8 +121,6 @@ Examples:
     else:
         output_root = Path(f"./pbr_output_{args.preset}")
 
-    output_root.mkdir(parents=True, exist_ok=True)
-
     # Find images
     image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
     image_paths = [p for p in args.input.iterdir() if p.is_file() and p.suffix.lower() in image_extensions]
@@ -153,11 +152,12 @@ Examples:
     print(f"  AO blur:            {config.pbr_ao_blur_radius}")
     print(f"  AO bias:            {config.pbr_ao_bias}")
     print(f"  Float depth:        {config.save_float_depth}")
-    print(f"  Model:              {config.model_variant.value.display_name}")
+    print(f"  Model:              {config.model_key or 'default'}")
     print(f"{'='*60}\n")
 
-    # Initialize orchestrator
-    orchestrator = EnhanceOrchestrator(config, output_root)
+    # Freeze the exact input/model/runtime authority before initialization.
+    prepared = prepare_lux_execution(config, args.input, image_paths)
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
     # Process images
     successful = 0
