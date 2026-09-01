@@ -484,6 +484,24 @@ def test_argv_normalization_maps_disabled_legacy_bit_depth_aliases_to_8() -> Non
     assert "--emit-upscaled16" not in argv
 
 
+def test_argv_normalization_treats_null_legacy_bit_depth_aliases_as_omitted() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "emit_master16": None,
+            "emitUpscaled16": None,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--output-bit-depth") == "16"
+    assert "--emit-master16" not in argv
+    assert "--emit-upscaled16" not in argv
+
+
 def test_preview_maps_legacy_bit_depth_alias_and_reports_one_warning(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
@@ -500,6 +518,24 @@ def test_preview_maps_legacy_bit_depth_alias_and_reports_one_warning(tmp_path: P
     assert preview["normalized_args"]["output_bit_depth"] == 16
     bit_depth_warnings = [warning for warning in preview["field_warnings"] if warning["field"] == "output_bit_depth"]
     assert [warning["code"] for warning in bit_depth_warnings] == ["deprecated_output_flag"]
+
+
+def test_preview_ignores_null_legacy_bit_depth_aliases(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output"),
+            "emit_master16": None,
+            "emitUpscaled16": None,
+        }
+    )
+
+    assert preview["normalized_args"]["output_bit_depth"] == 16
+    bit_depth_warnings = [warning for warning in preview["field_warnings"] if warning["field"] == "output_bit_depth"]
+    assert bit_depth_warnings == []
 
 
 @pytest.mark.parametrize(

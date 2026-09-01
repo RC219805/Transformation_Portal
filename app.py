@@ -4052,7 +4052,10 @@ def _adapt_deprecated_lux_output_args(
     used_bit_depth_aliases: List[str] = []
     legacy_16 = False
     for field_name, aliases in LUX_DEPRECATED_BIT_DEPTH_ALIASES.items():
-        matching = [alias for alias in aliases if alias in request_args]
+        # A null alias means the caller omitted the legacy field (same
+        # None-skipping contract as _pick and EnhanceConfig's alias shims);
+        # only non-null values count as supplied.
+        matching = [alias for alias in aliases if request_args.get(alias) is not None]
         if matching:
             used_bit_depth_aliases.append(field_name)
             legacy_16 = legacy_16 or any(_as_bool(request_args[alias], default=False) for alias in matching)
