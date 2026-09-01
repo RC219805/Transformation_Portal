@@ -149,7 +149,13 @@ class BackendSelection:
 
 @dataclass
 class ExecutionPlan:
-    """Execution plan for pipeline processing.
+    """Legacy flat execution-plan projection for pipeline processing.
+
+    This public name is retained for import compatibility.  It is not the
+    canonical ``tp.execution.plan.v1`` contract; new contract consumers must
+    import ``core.execution_plan.ExecutionPlan`` (or
+    ``core.CanonicalExecutionPlan``).  The live Lux executor continues to use
+    this flat rollback-path projection until ADR-051's activation gate passes.
 
     Describes the planned execution stages and their configuration.
 
@@ -172,6 +178,11 @@ class ExecutionPlan:
     enable_materials_v3: bool = False
     enable_reconstruction: bool = False
     quality_tier: str = "standard"
+
+
+# Explicit alias lets migration code name the old surface without breaking
+# callers that import ``pipeline_coordinator.ExecutionPlan``.
+LegacyExecutionPlan = ExecutionPlan
 
 
 @dataclass
@@ -1066,7 +1077,9 @@ class PipelineCoordinator:
         if enable_depth:
             stages.append("depth")
 
-        # PBR generation (depends on depth)
+        # PBR generation (depends on depth). This historical flat projection
+        # remains unchanged for compatibility; canonical ordering is owned by
+        # ResolvedInvocation and the tp.execution.plan.v1 adapter.
         if self._config.generate_pbr and enable_depth:
             stages.append("pbr")
 

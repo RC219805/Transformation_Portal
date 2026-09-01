@@ -192,6 +192,51 @@ jobs:
           TP_FILE="$(python -c "import pathlib, tp; print(pathlib.Path(tp.__file__).resolve())")"
           echo "tp wheel import path: ${TP_FILE}"
           python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
+          python - <<'PY'
+          from pathlib import Path
+
+          from transformation_portal.core.execution_plan import (
+              UnsupportedExecutionPlanSchema,
+              load_execution_plan_schema,
+              parse_execution_plan_json,
+          )
+          from transformation_portal.lux_depth_v3.config import EnhanceConfig
+          from transformation_portal.lux_depth_v3.execution_plan_adapter import (
+              ResolvedInvocationCompatibilityError,
+              adapt_resolved_invocation,
+              adapt_resolved_invocation_json,
+          )
+          from transformation_portal.lux_depth_v3.resolved_invocation import (
+              build_resolved_invocation,
+              load_resolved_invocation_schema,
+          )
+
+          assert load_execution_plan_schema()["$id"] == "tp.execution.plan.v1"
+          assert load_resolved_invocation_schema()["$id"] == "tp.lux.resolved_invocation.v1"
+          invocation = build_resolved_invocation(
+              EnhanceConfig(depth_backend="synthetic"),
+              Path("/tmp/tp-wheel-input"),
+              [Path("/tmp/tp-wheel-input/sample.jpg")],
+          )
+          plan = adapt_resolved_invocation(invocation)
+          assert plan.configuration_completeness == "structural_legacy"
+          assert parse_execution_plan_json(plan.to_canonical_json()).plan_fingerprint_sha256 == plan.plan_fingerprint_sha256
+          for parser, unknown_payload, expected_error in (
+              (parse_execution_plan_json, b'{"schema":"tp.execution.plan.v2"}', UnsupportedExecutionPlanSchema),
+              (
+                  adapt_resolved_invocation_json,
+                  b'{"schema":"tp.lux.resolved_invocation.v2"}',
+                  ResolvedInvocationCompatibilityError,
+              ),
+          ):
+              try:
+                  parser(unknown_payload)
+              except expected_error:
+                  pass
+              else:
+                  raise AssertionError("unknown execution-plan schema did not fail closed")
+          print("execution plan installed-wheel contract smoke passed")
+          PY
 
       - name: Relocatability proof (temp checkout + contained outputs)
         run: |

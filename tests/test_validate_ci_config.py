@@ -98,6 +98,19 @@ def test_build_workflow_ci_gate_contract_passes_repo_config() -> None:
     assert validator.errors == []
 
 
+def test_build_workflow_wheel_smoke_loads_both_execution_plan_schemas() -> None:
+    workflow_source = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "from transformation_portal.core.execution_plan import (" in workflow_source
+    assert "load_execution_plan_schema" in workflow_source
+    assert "load_resolved_invocation_schema" in workflow_source
+    assert "adapt_resolved_invocation_json" in workflow_source
+    assert "UnsupportedExecutionPlanSchema" in workflow_source
+    assert "ResolvedInvocationCompatibilityError" in workflow_source
+    assert "parse_execution_plan_json(plan.to_canonical_json())" in workflow_source
+    assert "execution plan installed-wheel contract smoke passed" in workflow_source
+
+
 def test_build_workflow_ci_gate_rejects_duplicate_check_publisher(tmp_path: Path) -> None:
     workflow_path = _mutated_build_workflow(
         tmp_path,

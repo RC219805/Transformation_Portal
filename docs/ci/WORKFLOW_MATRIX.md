@@ -21,7 +21,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 
 | # | File | Name | Triggers | Blocking? | Approx. LOC | Recommendation |
 |---|------|------|----------|-----------|-------------|----------------|
-| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1202 | **Keep** — primary PR gate; aggregated `CI Gate` check |
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1247 | **Keep** — primary PR gate; aggregated `CI Gate` check |
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 595 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-merge | 942 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 230 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
