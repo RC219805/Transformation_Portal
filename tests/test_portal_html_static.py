@@ -115,6 +115,15 @@ def test_portal_html_defaults_match_default_preset_recommended_args() -> None:
     ), f"depthDevice default {device_selected!r} does not match LUX_PORTAL_DEFAULT_ARGS['depth_device']"
 
 
+def test_portal_html_exposes_unconditional_manifest_without_legacy_output_controls() -> None:
+    markup = _read_portal_markup()
+
+    assert 'id="emitMarketing"' not in markup
+    assert 'id="emitReport"' not in markup
+    assert 'data-ui="combined-manifest-contract"' in markup
+    assert "Combined processing manifest is always emitted" in markup
+
+
 def test_portal_html_buttons_all_have_type_attribute() -> None:
     markup = _read_portal_markup()
     missing_type: List[str] = []

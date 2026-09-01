@@ -278,10 +278,12 @@ Output Deliverables
 ```bash
 --emit-master16 on|off    # 16-bit master output
 --emit-upscaled16 on|off  # Upscaled 16-bit output
---emit-marketing on|off   # Marketing-ready 8-bit JPEG
---emit-report on|off      # Processing report (default: on)
 --emit-run-card on|off    # Reproducibility card (default: on)
 ```
+
+`--emit-marketing` and `--emit-report` are deprecated compatibility flags
+scheduled for removal in the next major release. No marketing artifact is
+created, and the combined processing report is always emitted.
 
 ### Hardware Acceleration
 
@@ -555,8 +557,7 @@ lux-depth-v3 \
   --enable-v2 "off" \
   --cache-depth "on" \
   --emit-master16 "on" \
-  --emit-upscaled16 "on" \
-  --emit-marketing "on"
+  --emit-upscaled16 "on"
 ```
 
 **Key Points:**
@@ -579,8 +580,7 @@ lux-depth-v3 \
   --quality-tier "apex" \
   --depth-device "cuda" \
   --pbr "on" \
-  --cache-depth "on" \
-  --emit-report "on"
+  --cache-depth "on"
 ```
 
 **Key Points:**
@@ -599,8 +599,7 @@ lux-depth-v3 \
   --quality-tier "standard" \
   --depth-device "cpu" \
   --pbr "off" \
-  --enable-v2 "off" \
-  --emit-report "on"
+  --enable-v2 "off"
 ```
 
 **Key Points:**

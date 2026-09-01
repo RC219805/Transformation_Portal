@@ -620,7 +620,8 @@ def test_portal_lux_materials_payload_enforces_required_efficientsam_contract(tm
     assert args["segmentation_backend"] == "efficientsam"
     assert args["strict_segmentation"] is True
     assert args["pbr"] is True
-    assert args["emit_report"] is True
+    assert "emit_marketing" not in args
+    assert "emit_report" not in args
     assert args["emit_run_card"] is True
     assert args["run_card_version"] == "v2"
     assert args["enable_v2"] is False

@@ -21,8 +21,6 @@ Usage:
         --cache-depth "on" \\
         --emit-master16 "on" \\
         --emit-upscaled16 "on" \\
-        --emit-marketing "on" \\
-        --emit-report "on" \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -59,8 +57,6 @@ Usage:
         --cache-depth "on" \\
         --emit-master16 "on" \\
         --emit-upscaled16 "on" \\
-        --emit-marketing "on" \\
-        --emit-report "on" \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -79,8 +75,6 @@ Usage:
         --cache-depth "on" \\
         --emit-master16 "on" \\
         --emit-upscaled16 "on" \\
-        --emit-marketing "on" \\
-        --emit-report "on" \\
         --emit-run-card "on" \\
         --overwrite
 
@@ -513,15 +507,21 @@ def main(
         "--emit-upscaled16",
         help="Emit upscaled 16-bit output: on/off",
     ),
-    emit_marketing: str = typer.Option(
-        "off",
+    emit_marketing: Optional[str] = typer.Option(
+        None,
         "--emit-marketing",
-        help="Emit marketing-ready output: on/off",
+        help=(
+            "DEPRECATED: accepted for compatibility but produces no marketing "
+            "artifact; removal is planned for the next major release."
+        ),
     ),
-    emit_report: str = typer.Option(
-        "on",
+    emit_report: Optional[str] = typer.Option(
+        None,
         "--emit-report",
-        help="Emit processing report: on/off",
+        help=(
+            "DEPRECATED: accepted for compatibility but the combined report "
+            "is always emitted; removal is planned for the next major release."
+        ),
     ),
     emit_run_card: str = typer.Option(
         "on",
@@ -769,8 +769,8 @@ def main(
     enable_v2_bool = _parse_bool_flag(enable_v2)
     enable_emit_master16 = _parse_bool_flag(emit_master16)
     enable_emit_upscaled16 = _parse_bool_flag(emit_upscaled16)
-    enable_emit_marketing = _parse_bool_flag(emit_marketing)
-    enable_emit_report = _parse_bool_flag(emit_report)
+    enable_emit_marketing = False if emit_marketing is None else _parse_bool_flag(emit_marketing)
+    enable_emit_report = True if emit_report is None else _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
     enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
     enable_vlm_captioning = _parse_bool_flag(vlm_captioning)
@@ -1072,8 +1072,8 @@ def main(
         material_segmentation_cache_policy=normalized_segmentation_cache,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
-        emit_marketing=enable_emit_marketing,
-        emit_report=enable_emit_report,
+        emit_marketing=(enable_emit_marketing if emit_marketing is not None else None),
+        emit_report=(enable_emit_report if emit_report is not None else None),
         emit_run_card=enable_emit_run_card,
         run_card_version=normalized_run_card_version,
         run_card_include_proofs=enable_run_card_include_proofs,

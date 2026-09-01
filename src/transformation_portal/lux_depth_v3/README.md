@@ -146,16 +146,14 @@ lux-depth-v3 \
   --cache-depth "on" \
   --run-card-version "v2" \
   --emit-master16 "on" \
-  --emit-upscaled16 "on" \
-  --emit-marketing "on"
+  --emit-upscaled16 "on"
 ```
 
 **Outputs:**
 - All PBR maps
 - `*_master16.tiff` - Master 16-bit output
 - `*_upscaled16.tiff` - Upscaled 16-bit output
-- `*_marketing.jpg` - Marketing-ready 8-bit JPEG
-- `*_combined.json` - Processing manifest
+- `*_combined.json` - Unconditional processing manifest
 - `*_run_card.json` - Reproducibility card
 
 ### Run Card Trust Layers
@@ -455,8 +453,7 @@ output_dir/
 │   └── ao/
 ├── master16/                 # Master 16-bit outputs (when --emit-master16 on)
 ├── upscaled16/               # Upscaled outputs (when --emit-upscaled16 on)
-├── marketing/                # Marketing-ready JPEGs (when --emit-marketing on)
-└── manifests/                # Processing metadata (when --emit-report on)
+└── manifests/                # Unconditional processing metadata
 ```
 
 ## Python API

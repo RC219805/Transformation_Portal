@@ -145,6 +145,40 @@ test("deferred profile manager validates names and confirms destructive and lega
   assert.doesNotMatch(profile, /\b(?:prompt|confirm)\s*\(/);
 });
 
+test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and CLI previews", () => {
+  const migrationSource = between(
+    portal,
+    "function _migrateDeprecatedLuxOutputConfig",
+    "function _copyTransientDraftConfig",
+  );
+  const migrate = new Function(`function createToast() {} ${migrationSource}; return _migrateDeprecatedLuxOutputConfig;`)();
+  const legacyConfig = {
+    emits: { master16: true, marketing: true, report: false, runCard: true },
+    emit_marketing: true,
+    emit_report: false,
+    emitMarketing: true,
+    emitReport: false,
+  };
+
+  const migrated = migrate(structuredClone(legacyConfig));
+
+  assert.deepEqual(migrated.emits, { master16: true, runCard: true });
+  for (const key of ["emit_marketing", "emit_report", "emitMarketing", "emitReport"]) {
+    assert.equal(Object.hasOwn(migrated, key), false);
+  }
+  assert.match(profile, /state\.config = copyDraftConfig\(profiles\[name\]\.config\)/);
+  assert.match(portal, /\[deprecated_output_flag\] Report on; no marketing\./);
+  assert.match(portal, /if \(deprecated\) createToast\(/);
+  assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(data\.args\)/);
+
+  const canonicalArgs = between(portal, "function buildCanonicalLuxDepthArgs", "function generatePayload");
+  const cliPreview = between(portal, "function renderCLI", "function bindInputs");
+  for (const deprecatedToken of ["emit_marketing", "emit_report", "--emit-marketing", "--emit-report"]) {
+    assert.doesNotMatch(canonicalArgs, new RegExp(deprecatedToken));
+    assert.doesNotMatch(cliPreview, new RegExp(deprecatedToken));
+  }
+});
+
 test("bundle compaction preserves diagnostic names and property keys", () => {
   const compact = between(buildScript, "const compactPortalBundle", "const portalChanged");
   const operateBuild = between(buildScript, "const deferredOperateSurfaceBuild", "const deferredBuildSurfaceBuild");

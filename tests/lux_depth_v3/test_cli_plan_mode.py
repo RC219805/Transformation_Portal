@@ -15,6 +15,10 @@ import pytest
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import app
+from transformation_portal.lux_depth_v3.config import (
+    DeprecatedOutputFlagWarning,
+    EnhanceConfig,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -66,6 +70,53 @@ def _extract_plan_json(stdout: str) -> dict:
 
 
 class TestPlanMode:
+    @pytest.mark.parametrize(
+        ("flag", "value", "config_field", "config_value"),
+        [
+            ("--emit-marketing", "on", "emit_marketing", True),
+            ("--emit-marketing", "off", "emit_marketing", False),
+            ("--emit-report", "on", "emit_report", True),
+            ("--emit-report", "off", "emit_report", False),
+        ],
+    )
+    def test_deprecated_output_flag_warning_matches_direct_python_and_plan(
+        self,
+        tmp_path: Path,
+        flag: str,
+        value: str,
+        config_field: str,
+        config_value: bool,
+    ) -> None:
+        with pytest.warns(DeprecatedOutputFlagWarning) as direct_warnings:
+            EnhanceConfig(model_key="da3-metric", **{config_field: config_value})
+        assert len(direct_warnings) == 1
+        expected_notice = str(direct_warnings[0].message)
+
+        input_dir = _make_input_dir(tmp_path)
+        with pytest.warns(DeprecatedOutputFlagWarning) as cli_warnings:
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--model-key",
+                    "da3-metric",
+                    flag,
+                    value,
+                    "--plan",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert [str(item.message) for item in cli_warnings] == [expected_notice]
+        payload = _extract_plan_json(result.output)
+        assert payload["warnings"].count(expected_notice) == 1
+        assert payload["requested_artifacts"].count("combined_manifest_json") == 1
+        assert all("marketing" not in artifact for artifact in payload["requested_artifacts"])
+        assert not (tmp_path / "out").exists()
+
     def test_plan_emits_canonical_json_and_writes_nothing(self, tmp_path: Path) -> None:
         input_dir = _make_input_dir(tmp_path)
         output_dir = tmp_path / "out"

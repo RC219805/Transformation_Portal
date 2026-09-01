@@ -958,11 +958,9 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "pbr": True,
                 "emit_master16": True,
                 "emit_upscaled16": True,
-                "emit_report": True,
                 "emit_run_card": True,
                 "run_card_version": "v1",
                 "run_card_include_proofs": False,
-                "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
             },
@@ -985,11 +983,9 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "pbr": False,
                 "emit_master16": True,
                 "emit_upscaled16": False,
-                "emit_report": True,
                 "emit_run_card": True,
                 "run_card_version": "v1",
                 "run_card_include_proofs": False,
-                "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
             },
@@ -1012,11 +1008,9 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "pbr": True,
                 "emit_master16": True,
                 "emit_upscaled16": True,
-                "emit_report": True,
                 "emit_run_card": True,
                 "run_card_version": "v2",
                 "run_card_include_proofs": False,
-                "emit_marketing": False,
                 "enable_v2": True,
                 "v2_preset": "default",
                 "enable_reconstruction": False,
@@ -1039,11 +1033,9 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "pbr": True,
                 "emit_master16": True,
                 "emit_upscaled16": True,
-                "emit_report": True,
                 "emit_run_card": True,
                 "run_card_version": "v2",
                 "run_card_include_proofs": False,
-                "emit_marketing": False,
                 "enable_v2": True,
                 "v2_preset": "default",
                 "enable_reconstruction": False,
@@ -2010,8 +2002,6 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "v2_preset": "default",
     "emit_master16": True,
     "emit_upscaled16": True,
-    "emit_marketing": False,
-    "emit_report": True,
     "emit_run_card": True,
     "run_card_version": "v1",
     "run_card_include_proofs": False,
@@ -2055,6 +2045,10 @@ LUX_RECONSTRUCTION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
     "reconstruction_iterations": ("reconstruction_iterations", "reconstructionIterations"),
     "reconstruction_tier": ("reconstruction_tier", "reconstructionTier"),
     "emit_scene_debug_bundle": ("emit_scene_debug_bundle", "emitSceneDebugBundle"),
+}
+LUX_DEPRECATED_OUTPUT_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "emit_marketing": ("emit_marketing", "emitMarketing"),
+    "emit_report": ("emit_report", "emitReport"),
 }
 LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
@@ -4013,6 +4007,36 @@ def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     return any(key in payload for key in keys)
 
 
+def _adapt_deprecated_lux_output_args(
+    request_args: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """Accept legacy output keys through the next major release, but ignore them."""
+    adapted = dict(request_args)
+    warnings: List[Dict[str, Any]] = []
+    messages = {
+        "emit_marketing": "emit_marketing is deprecated and ignored; no marketing artifact is produced.",
+        "emit_report": (
+            "emit_report is deprecated and ignored; the combined processing manifest is always emitted."
+        ),
+    }
+    for field_name, aliases in LUX_DEPRECATED_OUTPUT_FIELD_ALIASES.items():
+        if _portal_payload_has_any_key(request_args, aliases):
+            warnings.append(
+                _portal_issue(
+                    field_name,
+                    "deprecated_output_flag",
+                    messages[field_name],
+                    suggestion=(
+                        f"Remove {field_name} from saved profiles and requests; compatibility support ends "
+                        "at the next major release."
+                    ),
+                )
+            )
+        for alias in aliases:
+            adapted.pop(alias, None)
+    return adapted, warnings
+
+
 def _portal_inactive_reconstruction_field_value(
     request_args: Dict[str, Any],
     defaults: Dict[str, Any],
@@ -5037,9 +5061,10 @@ def _build_lux_config_preview(
     portal_actor: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     args, path_warnings, path_errors = _normalize_operator_payload_paths("lux-depth-v3", args)
+    args, deprecated_output_warnings = _adapt_deprecated_lux_output_args(args)
     defaults = _lux_portal_defaults(args)
     errors: List[Dict[str, Any]] = []
-    warnings: List[Dict[str, Any]] = list(path_warnings)
+    warnings: List[Dict[str, Any]] = [*path_warnings, *deprecated_output_warnings]
     inactive_fields: List[Dict[str, Any]] = []
     path_errors_by_field = _preview_path_errors_by_field(path_errors)
 
@@ -5304,8 +5329,6 @@ def _build_lux_config_preview(
         "enable_v2",
         "emit_master16",
         "emit_upscaled16",
-        "emit_marketing",
-        "emit_report",
         "emit_run_card",
         "non_commercial_ok",
         "accept_apple_depth_pro_research_license",
@@ -8157,6 +8180,8 @@ def _argv_from_request(
                 "Path shorthand traversal disallowed",
                 reason="path_shorthand_traversal_disallowed",
             )
+    if pipeline == "lux-depth-v3":
+        args, _ = _adapt_deprecated_lux_output_args(args)
 
     input_dir_raw = str(
         _pick(args, "input_dir", "inputDir", default=""),
@@ -8614,24 +8639,6 @@ def _argv_from_request(
                         args,
                         "emit_upscaled16",
                         "emitUpscaled16",
-                        default=True,
-                    )
-                ),
-                "--emit-marketing",
-                onoff(
-                    _pick(
-                        args,
-                        "emit_marketing",
-                        "emitMarketing",
-                        default=False,
-                    )
-                ),
-                "--emit-report",
-                onoff(
-                    _pick(
-                        args,
-                        "emit_report",
-                        "emitReport",
                         default=True,
                     )
                 ),

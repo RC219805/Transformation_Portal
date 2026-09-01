@@ -44,7 +44,7 @@ echo ""
 echo "Input:  ${INPUT_DIR}"
 echo "Output: ${OUTPUT_DIR}"
 echo ""
-echo "Features: APEX Quality + Materials V3 + Marketing Deliverables Only"
+echo "Features: APEX Quality + Materials V3 + Standard Outputs"
 echo "Est. Time: ~7s per image"
 echo ""
 
@@ -54,7 +54,6 @@ python -m transformation_portal.lux_depth_v3 \
   --quality-tier apex \
   --depth-device mps \
   --materials-v3 on \
-  --emit-marketing on \
   --cache-depth on \
   --verbose
 
