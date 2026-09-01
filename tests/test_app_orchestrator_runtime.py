@@ -502,6 +502,88 @@ def test_argv_normalization_treats_null_legacy_bit_depth_aliases_as_omitted() ->
     assert "--emit-upscaled16" not in argv
 
 
+@pytest.mark.parametrize("canonical_key", ["output_bit_depth", "outputBitDepth"])
+@pytest.mark.parametrize("alias_key", ["emit_master16", "emitMaster16"])
+@pytest.mark.parametrize(
+    ("alias_present", "alias_value", "expected_depth"),
+    [
+        (False, None, "16"),
+        (True, None, "16"),
+        (True, False, "8"),
+        (True, True, "16"),
+    ],
+)
+def test_argv_normalization_treats_null_canonical_depth_as_omitted(
+    canonical_key: str,
+    alias_key: str,
+    alias_present: bool,
+    alias_value: object,
+    expected_depth: str,
+) -> None:
+    args: Dict[str, object] = {
+        "input_dir": "./input_images",
+        "output_dir": "./output",
+        canonical_key: None,
+    }
+    if alias_present:
+        args[alias_key] = alias_value
+
+    argv = orchestrator_app._argv_from_request(
+        {
+            "pipeline": "lux-depth-v3",
+            "args": args,
+        }
+    )
+
+    assert _flag_value(argv, "--output-bit-depth") == expected_depth
+    assert "--emit-master16" not in argv
+
+
+@pytest.mark.parametrize(
+    ("snake_value", "camel_value", "expected_depth"),
+    [
+        (None, 8, "8"),
+        (None, "16", "16"),
+        (8, None, "8"),
+        ("16", None, "16"),
+    ],
+)
+def test_argv_normalization_selects_non_null_canonical_bit_depth(
+    snake_value: object,
+    camel_value: object,
+    expected_depth: str,
+) -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": snake_value,
+            "outputBitDepth": camel_value,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--output-bit-depth") == expected_depth
+
+
+@pytest.mark.parametrize("invalid", [True, 8.0, "invalid"])
+def test_argv_rejects_non_null_camel_depth_when_snake_depth_is_null(invalid: object) -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "output_bit_depth": None,
+            "outputBitDepth": invalid,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Output bit depth must be 8 or 16"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_preview_maps_legacy_bit_depth_alias_and_reports_one_warning(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()

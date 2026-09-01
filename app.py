@@ -4072,8 +4072,8 @@ def _adapt_deprecated_lux_output_args(
             )
         )
 
-    canonical_explicit = _portal_payload_has_any_key(request_args, ("output_bit_depth", "outputBitDepth"))
     canonical_raw = _pick(request_args, "output_bit_depth", "outputBitDepth", default=None)
+    canonical_explicit = canonical_raw is not None
     try:
         canonical_depth = _parse_lux_output_bit_depth(canonical_raw) if canonical_explicit else None
     except ValueError:
@@ -4090,7 +4090,7 @@ def _adapt_deprecated_lux_output_args(
     elif used_bit_depth_aliases and not canonical_explicit:
         adapted["output_bit_depth"] = 16 if legacy_16 else 8
     adapted.pop("outputBitDepth", None)
-    if canonical_explicit and "output_bit_depth" not in adapted:
+    if canonical_explicit:
         adapted["output_bit_depth"] = canonical_raw
     return adapted, warnings, errors
 
