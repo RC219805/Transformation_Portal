@@ -684,9 +684,10 @@ def enhance_image(
 
     try:
         # Load input image with bit-depth preservation
+        allow_8bit_load = output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output)
         image, input_bits, metadata = load_image_preserve_bit_depth(
             input_path,
-            allow_8bit_output or output_bit_depth == 8,
+            allow_8bit_load,
         )
         icc_profile = metadata.get("icc_profile")
         exif_data = metadata.get("exif")

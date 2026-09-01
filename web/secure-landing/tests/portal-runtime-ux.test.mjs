@@ -183,9 +183,40 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
   assert.equal(camelCase.output_bit_depth, 16);
   assert.equal(camelCase.emit_master16, true);
   assert.equal(Object.hasOwn(camelCase, "emitUpscaled16"), false);
+  for (const nullLegacyConfig of [
+    { emit_master16: null },
+    { emitMaster16: null },
+    { emit_upscaled16: null },
+    { emitUpscaled16: null },
+    { emits: { master16: null } },
+    { emits: { upscaled16: null } },
+  ]) {
+    const nullMigrated = migrate(structuredClone(nullLegacyConfig));
+    assert.equal(Object.hasOwn(nullMigrated, "output_bit_depth"), false);
+    assert.equal(Object.hasOwn(nullMigrated, "outputBitDepth"), false);
+    assert.equal(Object.hasOwn(nullMigrated, "emit_master16"), false);
+  }
+  for (const [canonicalKey, aliasKey, aliasValue, expectedDepth] of [
+    ["output_bit_depth", "emit_master16", false, 8],
+    ["output_bit_depth", "emit_master16", true, 16],
+    ["outputBitDepth", "emitMaster16", false, 8],
+    ["outputBitDepth", "emitMaster16", true, 16],
+  ]) {
+    const canonicalNull = migrate({ [canonicalKey]: null, [aliasKey]: aliasValue });
+    assert.equal(canonicalNull[canonicalKey], expectedDepth);
+    assert.equal(canonicalNull.emit_master16, aliasValue);
+  }
+  for (const expectedDepth of [8, 16]) {
+    const mixedCanonical = migrate({ output_bit_depth: null, outputBitDepth: expectedDepth });
+    assert.equal(mixedCanonical.outputBitDepth, expectedDepth);
+  }
   assert.match(profile, /state\.config = copyDraftConfig\(profiles\[name\]\.config\)/);
   assert.match(portal, /\[deprecated_output_flag\] Report on; no marketing\./);
   assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(data\.args\)/);
+  assert.match(
+    portal,
+    /data\.args\.output_bit_depth \?\? data\.args\.outputBitDepth \?\? c\.outputBitDepth/,
+  );
 
   const canonicalArgs = between(portal, "function buildCanonicalLuxDepthArgs", "function generatePayload");
   const cliPreview = between(portal, "function renderCLI", "function bindInputs");

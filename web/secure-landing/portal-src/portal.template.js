@@ -1232,7 +1232,7 @@ function _migrateDeprecatedLuxOutputConfig(config) {
         emits.master16,
         emits.upscaled16
     ];
-    const used16 = old16.some((value) => value !== undefined);
+    const used16 = old16.some((value) => value !== undefined && value !== null);
     const legacy16 = old16.some((value) => parseBoolLike(value, false));
     delete config.emit_master16;
     delete config.emitMaster16;
@@ -1243,8 +1243,11 @@ function _migrateDeprecatedLuxOutputConfig(config) {
     const outputDepth = config.output_bit_depth ?? config.outputBitDepth;
     if (used16) {
         config.emit_master16 = legacy16;
-        if (outputDepth === undefined) {
-            config['emits' in config ? 'outputBitDepth' : 'output_bit_depth'] = legacy16 ? 16 : 8;
+        if (outputDepth === undefined || outputDepth === null) {
+            const outputDepthKey = 'outputBitDepth' in config || 'emits' in config
+                ? 'outputBitDepth'
+                : 'output_bit_depth';
+            config[outputDepthKey] = legacy16 ? 16 : 8;
         }
     }
     if (deprecated) createToast('[deprecated_output_flag] Report on; no marketing.');
@@ -11838,7 +11841,9 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             _normalizeVerboseQuietFlags(c.flags, true);
             c.v2Preset = data.args.v2_preset || c.v2Preset;
 
-            c.outputBitDepth = Number(data.args.output_bit_depth ?? c.outputBitDepth) === 8 ? 8 : 16;
+            c.outputBitDepth = Number(
+                data.args.output_bit_depth ?? data.args.outputBitDepth ?? c.outputBitDepth
+            ) === 8 ? 8 : 16;
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
             c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
             c.emits.runCardIncludeProofs = parseBoolLike(

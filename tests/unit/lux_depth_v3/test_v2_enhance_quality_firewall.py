@@ -95,6 +95,22 @@ class TestQualityFirewallLoad:
             except V2EnhancementError:
                 pytest.fail("Should not raise when allow_8bit_output=True")
 
+    def test_explicit_16_bit_output_overrides_legacy_downgrade_permission(self, temp_16bit_tiff, tmp_path):
+        """Canonical 16-bit output must fail closed even with the legacy flag."""
+        pytest.importorskip("tifffile")
+        output_path = tmp_path / "output.tif"
+
+        with patch("tifffile.imread", side_effect=RuntimeError("Mock tifffile load failure")):
+            with pytest.raises(V2EnhancementError, match="blocked by Quality Firewall"):
+                enhance_image(
+                    temp_16bit_tiff,
+                    output_path,
+                    allow_8bit_output=True,
+                    output_bit_depth=16,
+                )
+
+        assert not output_path.exists()
+
 
 class TestQualityFirewallMetadata:
     """Test metadata consistency and reporting."""
