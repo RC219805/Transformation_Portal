@@ -2108,6 +2108,28 @@ def test_emit_run_card_preserves_requested_backend_defect(tmp_path: Path):
     assert run_card["backend_summary"]["requested_backend_status"] == "not_honored"
     assert run_card["backend_summary"]["requested_backend_defect"] == defect
 
+    from transformation_portal.ingest.canonical_json import dumps_json
+
+    run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    run_card_bytes = run_card_path.read_bytes()
+    sidecar = json.loads(sidecar_path.read_bytes())
+    assert run_card_bytes == dumps_json(
+        run_card,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    assert sidecar_path.read_bytes() == dumps_json(
+        sidecar,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    assert sidecar["final_run_card_sha256"] == hashlib.sha256(run_card_bytes).hexdigest()
+
 
 def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
     config = EnhanceConfig(
@@ -2164,7 +2186,17 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
     build_tree.assert_called_once()
 
 
-def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_path: Path):
+@pytest.mark.parametrize("failure_stage", ["invalidate", "run_card", "sidecar"])
+def test_emit_run_card_failure_never_deletes_completed_card_or_leaves_stale_attestation(
+    tmp_path: Path,
+    failure_stage: str,
+):
+    """Pair failures preserve a completed card and never retain a false sidecar."""
+    from contextlib import nullcontext
+
+    from transformation_portal.lux_depth_v3 import io_atomic as io_atomic_module
+    from transformation_portal.lux_depth_v3.io_atomic import atomic_write_bytes as real_atomic_write_bytes
+
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
         model_key="da3-metric",
@@ -2176,15 +2208,34 @@ def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_pat
     artifact_path.write_bytes(b"depth")
     run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
     sidecar_path = run_card_path.with_suffix(".self.json")
-    real_open = open
-    sidecar_write_attempted = False
+    prior_run_card = b'{"completed":"prior"}'
+    prior_sidecar = json.dumps(
+        {
+            "run_card_path": run_card_path.name,
+            "self_indexing": "excluded_self_hash_cycle",
+            "final_run_card_sha256": hashlib.sha256(prior_run_card).hexdigest(),
+            "hash_algorithm": "sha256",
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    run_card_path.write_bytes(prior_run_card)
+    sidecar_path.write_bytes(prior_sidecar)
+    write_attempts: list[Path] = []
 
-    def fail_sidecar_open(path: Any, *args: Any, **kwargs: Any):
-        nonlocal sidecar_write_attempted
-        if str(path).endswith(".self.json") and args and "w" in str(args[0]):
-            sidecar_write_attempted = True
+    def controlled_write(path: Path, payload: bytes, **write_kwargs: Any) -> Path:
+        path = Path(path)
+        write_attempts.append(path)
+        if failure_stage == "run_card" and path == run_card_path:
+            raise OSError("simulated run-card write failure")
+        if failure_stage == "sidecar" and path == sidecar_path:
             raise OSError("simulated sidecar write failure")
-        return real_open(path, *args, **kwargs)
+        return real_atomic_write_bytes(path, payload, **write_kwargs)
+
+    invalidate_context = (
+        patch.object(io_atomic_module, "durable_unlink", side_effect=OSError("simulated invalidation failure"))
+        if failure_stage == "invalidate"
+        else nullcontext()
+    )
 
     with (
         patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
@@ -2212,7 +2263,8 @@ def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_pat
             },
         ),
         patch.object(orch, "_build_run_card_model_contract", return_value=None),
-        patch("transformation_portal.lux_depth_v3.orchestrator.open", side_effect=fail_sidecar_open, create=True),
+        invalidate_context,
+        patch.object(io_atomic_module, "atomic_write_bytes", side_effect=controlled_write),
     ):
         orch._emit_run_card(
             batch_id="2026-04-10_120000",
@@ -2230,9 +2282,19 @@ def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_pat
             outliers=[],
         )
 
-    assert sidecar_write_attempted is True
-    assert not run_card_path.exists()
-    assert not sidecar_path.exists()
+    if failure_stage == "invalidate":
+        assert write_attempts == []
+        assert run_card_path.read_bytes() == prior_run_card
+        assert sidecar_path.read_bytes() == prior_sidecar
+    elif failure_stage == "run_card":
+        assert write_attempts == [run_card_path]
+        assert run_card_path.read_bytes() == prior_run_card
+        assert not sidecar_path.exists()
+    else:
+        assert write_attempts == [run_card_path, sidecar_path]
+        assert json.loads(run_card_path.read_bytes())["batch_id"] == "2026-04-10_120000"
+        assert run_card_path.read_bytes() != prior_run_card
+        assert not sidecar_path.exists()
 
 
 def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:

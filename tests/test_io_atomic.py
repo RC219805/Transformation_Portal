@@ -7,7 +7,17 @@ Validates:
 - No file descriptor leaks
 """
 
+import errno
+import gc
+import hashlib
+import json
+import multiprocessing
 import os
+import signal
+import stat
+import threading
+import time
+from pathlib import Path
 
 import pytest
 from PIL import Image  # pylint: disable=possibly-used-before-assignment
@@ -17,6 +27,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.lux_depth_v3 import io_atomic
 from transformation_portal.lux_depth_v3.io_atomic import (
     HAS_PIL,
     atomic_temp_file,
@@ -24,6 +35,119 @@ from transformation_portal.lux_depth_v3.io_atomic import (
     atomic_write_pil_png,
     atomic_write_with_fd,
 )
+
+
+def _atomic_byte_temp_paths(directory: Path, destination: Path) -> list[Path]:
+    """Return temp files owned by one atomic byte destination."""
+    return list(directory.glob(f".{destination.name}.*.tmp"))
+
+
+def _crash_boundary_writer(
+    output_path: str,
+    payload: bytes,
+    boundary: str,
+    connection,
+) -> None:
+    """Stop a child writer at a real publication boundary for crash tests."""
+    from transformation_portal.lux_depth_v3 import io_atomic as child_io_atomic
+
+    if boundary == "before_replace":
+        real_replace = child_io_atomic.os.replace
+
+        def stop_before_replace(source, destination):
+            connection.send(boundary)
+            os.kill(os.getpid(), signal.SIGSTOP)
+            real_replace(source, destination)
+
+        child_io_atomic.os.replace = stop_before_replace
+    elif boundary == "after_replace":
+
+        def stop_before_directory_fsync(_directory):
+            connection.send(boundary)
+            os.kill(os.getpid(), signal.SIGSTOP)
+
+        child_io_atomic._fsync_directory = stop_before_directory_fsync
+    else:  # pragma: no cover - test helper contract
+        raise ValueError(f"unsupported crash boundary: {boundary}")
+
+    try:
+        child_io_atomic.atomic_write_bytes(Path(output_path), payload)
+    finally:
+        connection.close()
+
+
+def _umask_thread_worker(directory: str, connection) -> None:
+    """Exercise concurrent writes without exposing umask changes to pytest."""
+    from transformation_portal.lux_depth_v3 import io_atomic as child_io_atomic
+
+    original_umask = os.umask(0o077)
+    errors: list[str] = []
+    observed_umask = -1
+    modes: list[int] = []
+    try:
+
+        def write_one(index: int) -> None:
+            try:
+                child_io_atomic.atomic_write_bytes(
+                    Path(directory) / f"thread-{index}.json",
+                    f'{{"index":{index}}}'.encode("utf-8"),
+                )
+            except BaseException as exc:  # pragma: no cover - returned to parent
+                errors.append(repr(exc))
+
+        threads = [threading.Thread(target=write_one, args=(index,)) for index in range(12)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+            if thread.is_alive():
+                errors.append("writer thread did not finish")
+
+        modes = [stat.S_IMODE((Path(directory) / f"thread-{index}.json").stat().st_mode) for index in range(12)]
+        observed_umask = os.umask(0o077)
+    finally:
+        os.umask(original_umask)
+
+    connection.send((observed_umask, modes, errors))
+    connection.close()
+
+
+def _publication_lock_worker(destination: str, entered, release) -> None:
+    """Hold one publication lock until the parent permits release."""
+    from transformation_portal.lux_depth_v3 import io_atomic as child_io_atomic
+
+    with child_io_atomic.publication_lock(Path(destination)):
+        entered.set()
+        release.wait(timeout=10)
+
+
+def _evidence_pair_worker(primary: str, sidecar: str, writer_id: int, start) -> None:
+    """Publish one internally matching pair from a child process."""
+    from transformation_portal.lux_depth_v3 import io_atomic as child_io_atomic
+
+    primary_bytes = json.dumps({"writer": writer_id}, sort_keys=True).encode("utf-8")
+    sidecar_bytes = json.dumps(
+        {"sha256": hashlib.sha256(primary_bytes).hexdigest()},
+        sort_keys=True,
+    ).encode("utf-8")
+    if not start.wait(timeout=10):
+        raise TimeoutError("pair publication start signal timed out")
+    child_io_atomic.atomic_write_evidence_pair(
+        Path(primary),
+        primary_bytes,
+        Path(sidecar),
+        sidecar_bytes,
+    )
+
+
+def _fork_context():
+    """Return a fork context or skip tests that require POSIX crash control."""
+    if os.name != "posix" or not hasattr(signal, "SIGSTOP"):
+        pytest.skip("requires POSIX process signals")
+    try:
+        return multiprocessing.get_context("fork")
+    except ValueError:
+        pytest.skip("multiprocessing fork start method is unavailable")
 
 
 class TestAtomicTempFile:
@@ -113,8 +237,7 @@ class TestAtomicWriteBytes:
         assert output_path.read_bytes() == data
 
         # No temp files should remain
-        temp_files = list(tmp_path.glob(".tmp_*"))
-        assert len(temp_files) == 0
+        assert _atomic_byte_temp_paths(tmp_path, output_path) == []
 
     def test_overwrites_existing_file(self, tmp_path):
         """Should atomically overwrite existing file."""
@@ -148,32 +271,571 @@ class TestAtomicWriteBytes:
         assert output_path.exists()
         assert len(output_path.read_bytes()) == len(data)
 
-    def test_preserves_readable_permissions(self, tmp_path):
-        """Should create files with readable permissions (not 0600)."""
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX mode contract")
+    def test_new_file_uses_fixed_permissions(self, tmp_path):
+        """New files should use 0644 independent of the ambient umask."""
         output_path = tmp_path / "permissions.bin"
 
         atomic_write_bytes(output_path, b"test data")
 
-        # File should exist
-        assert output_path.exists()
+        assert stat.S_IMODE(output_path.stat().st_mode) == 0o644
 
-        # Should be readable by group/others (not 0600)
-        stat_info = output_path.stat()
-        # Check that group or others have read permission
-        # 0o044 = group read (0o040) | others read (0o004)
-        assert stat_info.st_mode & 0o044 != 0, f"File has restrictive permissions: {oct(stat_info.st_mode)}"
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX mode contract")
+    def test_overwrite_preserves_existing_permissions(self, tmp_path):
+        """Replacing a destination should preserve its prior mode."""
+        output_path = tmp_path / "permissions.bin"
+        output_path.write_bytes(b"old")
+        output_path.chmod(0o640)
 
-    def test_respects_process_umask(self, tmp_path):
-        """Should honor process umask instead of forcing fixed permissions."""
-        output_path = tmp_path / "umask.bin"
-        original_umask = os.umask(0o077)
+        atomic_write_bytes(output_path, b"new")
+
+        assert output_path.read_bytes() == b"new"
+        assert stat.S_IMODE(output_path.stat().st_mode) == 0o640
+
+    def test_concurrent_writes_do_not_change_process_umask(self, tmp_path):
+        """Threaded writes must never inspect or mutate the process umask."""
+        context = _fork_context()
+        parent_connection, child_connection = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_umask_thread_worker,
+            args=(str(tmp_path), child_connection),
+        )
+        process.start()
+        child_connection.close()
         try:
-            atomic_write_bytes(output_path, b"test data")
+            assert parent_connection.poll(10), "concurrent umask worker timed out"
+            observed_umask, modes, errors = parent_connection.recv()
         finally:
-            os.umask(original_umask)
+            parent_connection.close()
+            process.join(timeout=5)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=5)
 
-        mode = output_path.stat().st_mode & 0o777
-        assert mode == 0o600
+        assert process.exitcode == 0
+        assert errors == []
+        assert observed_umask == 0o077
+        assert modes == [0o644] * 12
+
+    def test_file_fsync_replace_and_directory_fsync_order(self, tmp_path, monkeypatch):
+        """Durability calls must fence replacement in the required order."""
+        output_path = tmp_path / "ordered.bin"
+        events: list[str] = []
+        real_replace = io_atomic.os.replace
+        real_apply_file_mode = io_atomic._apply_file_mode
+
+        def record_fsync(_descriptor):
+            events.append("fsync")
+
+        def record_mode(path, descriptor, mode):
+            events.append("chmod")
+            real_apply_file_mode(path, descriptor, mode)
+
+        def record_replace(source, destination):
+            events.append("replace")
+            real_replace(source, destination)
+
+        monkeypatch.setattr(io_atomic.os, "fsync", record_fsync)
+        monkeypatch.setattr(io_atomic, "_apply_file_mode", record_mode)
+        monkeypatch.setattr(io_atomic.os, "replace", record_replace)
+
+        atomic_write_bytes(output_path, b"ordered")
+
+        assert events == ["fsync", "chmod", "fsync", "replace", "fsync"]
+
+    def test_new_parent_entries_are_fsynced_before_file_publication(self, tmp_path, monkeypatch):
+        """Every newly created directory entry must be durable before use."""
+        output_path = tmp_path / "first" / "second" / "evidence.bin"
+        fsynced_directories: list[Path] = []
+        real_fsync_directory = io_atomic._fsync_directory
+
+        def record_directory_fsync(directory):
+            fsynced_directories.append(directory)
+            real_fsync_directory(directory)
+
+        monkeypatch.setattr(io_atomic, "_fsync_directory", record_directory_fsync)
+
+        atomic_write_bytes(output_path, b"durable hierarchy")
+
+        assert fsynced_directories == [tmp_path, tmp_path / "first", tmp_path / "first" / "second"]
+        assert output_path.read_bytes() == b"durable hierarchy"
+
+    def test_partial_write_failure_never_replaces_destination(self, tmp_path, monkeypatch):
+        """A failed partial temp write must leave the old destination intact."""
+        output_path = tmp_path / "partial.bin"
+        output_path.write_bytes(b"old-complete")
+
+        def fail_after_partial_write(handle, data):
+            handle.write(data[:5])
+            handle.flush()
+            raise OSError(errno.ENOSPC, "simulated full disk")
+
+        monkeypatch.setattr(io_atomic, "_write_all", fail_after_partial_write)
+
+        with pytest.raises(IOError, match="Failed to write"):
+            atomic_write_bytes(output_path, b"new-complete-payload")
+
+        assert output_path.read_bytes() == b"old-complete"
+        assert _atomic_byte_temp_paths(tmp_path, output_path) == []
+
+    def test_replace_failure_cleans_temp_and_preserves_destination(self, tmp_path, monkeypatch):
+        """A failed rename must clean the complete temp file without publishing it."""
+        output_path = tmp_path / "replace.bin"
+        output_path.write_bytes(b"old-complete")
+
+        def fail_replace(_source, _destination):
+            raise OSError(errno.EIO, "simulated replace failure")
+
+        monkeypatch.setattr(io_atomic.os, "replace", fail_replace)
+
+        for _ in range(8):
+            with pytest.raises(IOError, match="Failed to write"):
+                atomic_write_bytes(output_path, b"new-complete")
+
+        assert output_path.read_bytes() == b"old-complete"
+        assert _atomic_byte_temp_paths(tmp_path, output_path) == []
+
+    def test_directory_fsync_failure_reports_unproven_durability(self, tmp_path, monkeypatch):
+        """A real directory fsync failure is reported after complete replacement."""
+        output_path = tmp_path / "directory-fsync.bin"
+        output_path.write_bytes(b"old-complete")
+
+        def fail_directory_fsync(_directory):
+            raise OSError(errno.EIO, "simulated directory fsync failure")
+
+        monkeypatch.setattr(io_atomic, "_fsync_directory", fail_directory_fsync)
+
+        with pytest.raises(IOError, match="Failed to write"):
+            atomic_write_bytes(output_path, b"new-complete")
+
+        assert output_path.read_bytes() == b"new-complete"
+        assert _atomic_byte_temp_paths(tmp_path, output_path) == []
+
+    @pytest.mark.parametrize("boundary", ["before_replace", "after_replace"])
+    def test_process_crash_never_exposes_partial_destination(self, tmp_path, boundary):
+        """A killed writer exposes the old file before replace or full new file after."""
+        context = _fork_context()
+        output_path = tmp_path / f"crash-{boundary}.bin"
+        old_payload = b"old-complete"
+        new_payload = b"new-complete" * 131_072
+        output_path.write_bytes(old_payload)
+        parent_connection, child_connection = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_crash_boundary_writer,
+            args=(str(output_path), new_payload, boundary, child_connection),
+        )
+        process.start()
+        child_connection.close()
+        try:
+            assert parent_connection.poll(10), f"writer did not reach {boundary}"
+            assert parent_connection.recv() == boundary
+            expected = old_payload if boundary == "before_replace" else new_payload
+            assert output_path.read_bytes() == expected
+        finally:
+            parent_connection.close()
+            if process.is_alive():
+                process.kill()
+            process.join(timeout=5)
+
+        assert not process.is_alive()
+        expected = old_payload if boundary == "before_replace" else new_payload
+        assert output_path.read_bytes() == expected
+
+    def test_concurrent_same_destination_has_one_complete_winner(self, tmp_path):
+        """Concurrent replacement of one path must never expose mixed bytes."""
+        output_path = tmp_path / "winner.bin"
+        old_payload = b"old-complete"
+        payload_a = b"A" * (1024 * 1024)
+        payload_b = b"B" * (1024 * 1024)
+        output_path.write_bytes(old_payload)
+        barrier = threading.Barrier(3)
+        errors: list[BaseException] = []
+
+        def publish(payload: bytes) -> None:
+            try:
+                barrier.wait(timeout=5)
+                atomic_write_bytes(output_path, payload)
+            except BaseException as exc:  # pragma: no cover - asserted below
+                errors.append(exc)
+
+        writers = [
+            threading.Thread(target=publish, args=(payload_a,)),
+            threading.Thread(target=publish, args=(payload_b,)),
+        ]
+        for writer in writers:
+            writer.start()
+        barrier.wait(timeout=5)
+
+        observed = {old_payload}
+        deadline = time.monotonic() + 10
+        while any(writer.is_alive() for writer in writers) and time.monotonic() < deadline:
+            observed.add(output_path.read_bytes())
+        for writer in writers:
+            writer.join(timeout=5)
+
+        assert errors == []
+        assert all(not writer.is_alive() for writer in writers)
+        observed.add(output_path.read_bytes())
+        assert observed <= {old_payload, payload_a, payload_b}
+        assert output_path.read_bytes() in {payload_a, payload_b}
+        assert _atomic_byte_temp_paths(tmp_path, output_path) == []
+
+
+class TestDirectoryFsync:
+    """Test the narrow platform/error policy for directory durability."""
+
+    def test_explicit_unsupported_error_is_tolerated(self, tmp_path, monkeypatch):
+        """Only a recognized unsupported errno may degrade to rename-only."""
+
+        def unsupported_fsync(_descriptor):
+            raise OSError(errno.EINVAL, "directory fsync unsupported")
+
+        monkeypatch.setattr(io_atomic, "_IS_WINDOWS", False)
+        monkeypatch.setattr(io_atomic.os, "fsync", unsupported_fsync)
+
+        io_atomic._fsync_directory(tmp_path)
+
+    def test_genuine_io_error_propagates(self, tmp_path, monkeypatch):
+        """Directory I/O failures must fail closed."""
+
+        def failed_fsync(_descriptor):
+            raise OSError(errno.EIO, "directory I/O failure")
+
+        monkeypatch.setattr(io_atomic, "_IS_WINDOWS", False)
+        monkeypatch.setattr(io_atomic.os, "fsync", failed_fsync)
+
+        with pytest.raises(OSError) as exc_info:
+            io_atomic._fsync_directory(tmp_path)
+
+        assert exc_info.value.errno == errno.EIO
+
+    def test_windows_is_an_explicit_noop(self, tmp_path, monkeypatch):
+        """The Windows branch must not try to open a directory descriptor."""
+
+        def unexpected_open(*_args, **_kwargs):
+            raise AssertionError("directory open should not run on Windows")
+
+        monkeypatch.setattr(io_atomic, "_IS_WINDOWS", True)
+        monkeypatch.setattr(io_atomic.os, "open", unexpected_open)
+
+        io_atomic._fsync_directory(tmp_path)
+
+
+class TestDurableUnlink:
+    """Test stale-evidence invalidation used by paired run-card writes."""
+
+    def test_existing_file_is_removed_before_directory_fsync(self, tmp_path, monkeypatch):
+        path = tmp_path / "stale.self.json"
+        path.write_bytes(b"stale")
+        observed: list[tuple[Path, bool]] = []
+
+        def record_directory_fsync(directory):
+            observed.append((directory, path.exists()))
+
+        monkeypatch.setattr(io_atomic, "_fsync_directory", record_directory_fsync)
+
+        io_atomic.durable_unlink(path)
+
+        assert observed == [(tmp_path, False)]
+
+    def test_missing_file_requires_no_directory_update(self, tmp_path, monkeypatch):
+        path = tmp_path / "missing.self.json"
+        calls: list[Path] = []
+        monkeypatch.setattr(io_atomic, "_fsync_directory", calls.append)
+
+        io_atomic.durable_unlink(path)
+
+        assert calls == []
+
+
+class TestEvidencePairPublication:
+    """Test pair-level locking for a primary file and verifying sidecar."""
+
+    def test_pair_rejects_two_paths_that_resolve_to_one_file(self, tmp_path):
+        """A parent traversal alias cannot collapse the primary and sidecar."""
+        primary_path = tmp_path / "run_card.json"
+        primary_path.write_bytes(b"old-primary")
+        alias_parent = tmp_path / "alias-parent"
+        alias_parent.mkdir()
+        sidecar_alias = alias_parent / ".." / primary_path.name
+
+        with pytest.raises(ValueError, match="must differ"):
+            io_atomic.atomic_write_evidence_pair(
+                primary_path,
+                b"new-primary",
+                sidecar_alias,
+                b"sidecar",
+            )
+
+        assert primary_path.read_bytes() == b"old-primary"
+
+    def test_pair_rejects_fresh_unicode_normalization_aliases(self, tmp_path):
+        """Fresh NFC/NFD-equivalent names must fail before either path is written."""
+        primary_path = tmp_path / "caf\N{LATIN SMALL LETTER E WITH ACUTE}.json"
+        sidecar_path = tmp_path / "cafe\N{COMBINING ACUTE ACCENT}.json"
+
+        with pytest.raises(ValueError, match="Unicode normalization"):
+            io_atomic.atomic_write_evidence_pair(
+                primary_path,
+                b"primary",
+                sidecar_path,
+                b"sidecar",
+            )
+
+        assert not primary_path.exists()
+        assert not sidecar_path.exists()
+
+    def test_publication_lock_rejects_precreated_symlink(self, tmp_path):
+        """A predictable lock path must not chmod or write through a symlink."""
+        destination = tmp_path / "run_card.json"
+        lock_path = destination.with_name(f".{destination.name}.publication.lock")
+        victim = tmp_path / "victim.bin"
+        victim.write_bytes(b"unchanged")
+        victim.chmod(0o600)
+        try:
+            lock_path.symlink_to(victim)
+        except OSError:
+            pytest.skip("symlink creation is unavailable")
+
+        with pytest.raises(OSError):
+            with io_atomic.publication_lock(destination):
+                pytest.fail("unsafe lock path was accepted")
+
+        assert victim.read_bytes() == b"unchanged"
+        assert stat.S_IMODE(victim.stat().st_mode) == 0o600
+
+    def test_publication_lock_rejects_precreated_hardlink(self, tmp_path):
+        """A lock inode shared with another pathname must fail closed."""
+        destination = tmp_path / "run_card.json"
+        lock_path = destination.with_name(f".{destination.name}.publication.lock")
+        victim = tmp_path / "victim.bin"
+        victim.write_bytes(b"unchanged")
+        victim.chmod(0o600)
+        try:
+            os.link(victim, lock_path)
+        except OSError:
+            pytest.skip("hardlink creation is unavailable")
+
+        with pytest.raises(OSError):
+            with io_atomic.publication_lock(destination):
+                pytest.fail("multiply-linked lock inode was accepted")
+
+        assert victim.read_bytes() == b"unchanged"
+        assert stat.S_IMODE(victim.stat().st_mode) == 0o600
+
+    def test_inactive_thread_locks_do_not_accumulate(self, tmp_path):
+        """Unique batch destinations must not grow a permanent lock registry."""
+        gc.collect()
+        baseline = len(io_atomic._PUBLICATION_THREAD_LOCKS)
+        for index in range(20):
+            with io_atomic.publication_lock(tmp_path / f"run-card-{index}.json"):
+                pass
+        gc.collect()
+        assert len(io_atomic._PUBLICATION_THREAD_LOCKS) == baseline
+
+    def test_forked_child_discards_inherited_thread_lock(self, tmp_path):
+        """A child forked inside a held lock can proceed after the parent unlocks."""
+        context = _fork_context()
+        destination = tmp_path / "run_card.json"
+        entered = context.Event()
+        release = context.Event()
+        child = None
+        try:
+            with io_atomic.publication_lock(destination):
+                child = context.Process(
+                    target=_publication_lock_worker,
+                    args=(str(destination), entered, release),
+                )
+                child.start()
+                assert not entered.wait(timeout=0.25)
+            assert entered.wait(timeout=5)
+            release.set()
+            child.join(timeout=5)
+        finally:
+            release.set()
+            if child is not None:
+                if child.is_alive():
+                    child.kill()
+                child.join(timeout=5)
+
+        assert child is not None
+        assert child.exitcode == 0
+
+    def test_publication_lock_serializes_processes(self, tmp_path):
+        """A second process cannot enter the same destination lock early."""
+        context = _fork_context()
+        destination = tmp_path / "run_card.json"
+        entered_first = context.Event()
+        release_first = context.Event()
+        entered_second = context.Event()
+        release_second = context.Event()
+        first = context.Process(
+            target=_publication_lock_worker,
+            args=(str(destination), entered_first, release_first),
+        )
+        second = context.Process(
+            target=_publication_lock_worker,
+            args=(str(destination), entered_second, release_second),
+        )
+
+        try:
+            first.start()
+            assert entered_first.wait(timeout=5)
+            second.start()
+            assert not entered_second.wait(timeout=0.25)
+            release_first.set()
+            assert entered_second.wait(timeout=5)
+            release_second.set()
+            first.join(timeout=5)
+            second.join(timeout=5)
+        finally:
+            release_first.set()
+            release_second.set()
+            for process in (first, second):
+                if process.is_alive():
+                    process.kill()
+                process.join(timeout=5)
+
+        assert first.exitcode == 0
+        assert second.exitcode == 0
+
+    def test_concurrent_pairs_leave_one_matching_winner(self, tmp_path):
+        """Concurrent pair writers cannot mix one writer's sidecar with another's bytes."""
+        primary_path = tmp_path / "run_card.json"
+        sidecar_path = tmp_path / "run_card.self.json"
+        writer_count = 8
+        barrier = threading.Barrier(writer_count + 1)
+        errors: list[BaseException] = []
+
+        def publish(writer_id: int) -> None:
+            primary_bytes = json.dumps({"writer": writer_id}, sort_keys=True).encode("utf-8")
+            sidecar_bytes = json.dumps(
+                {"sha256": hashlib.sha256(primary_bytes).hexdigest()},
+                sort_keys=True,
+            ).encode("utf-8")
+            try:
+                barrier.wait(timeout=5)
+                io_atomic.atomic_write_evidence_pair(
+                    primary_path,
+                    primary_bytes,
+                    sidecar_path,
+                    sidecar_bytes,
+                )
+            except BaseException as exc:  # pragma: no cover - asserted below
+                errors.append(exc)
+
+        writers = [threading.Thread(target=publish, args=(writer_id,)) for writer_id in range(writer_count)]
+        for writer in writers:
+            writer.start()
+        barrier.wait(timeout=5)
+        for writer in writers:
+            writer.join(timeout=10)
+
+        assert errors == []
+        assert all(not writer.is_alive() for writer in writers)
+        primary_bytes = primary_path.read_bytes()
+        sidecar = json.loads(sidecar_path.read_bytes())
+        assert sidecar["sha256"] == hashlib.sha256(primary_bytes).hexdigest()
+        assert _atomic_byte_temp_paths(tmp_path, primary_path) == []
+        assert _atomic_byte_temp_paths(tmp_path, sidecar_path) == []
+
+    def test_concurrent_process_pairs_leave_one_matching_winner(self, tmp_path):
+        """Cross-process pair writers leave one internally consistent winner."""
+        context = _fork_context()
+        primary_path = tmp_path / "run_card.json"
+        sidecar_path = tmp_path / "run_card.self.json"
+        start = context.Event()
+        processes = [
+            context.Process(
+                target=_evidence_pair_worker,
+                args=(str(primary_path), str(sidecar_path), writer_id, start),
+            )
+            for writer_id in range(4)
+        ]
+        try:
+            for process in processes:
+                process.start()
+            start.set()
+            for process in processes:
+                process.join(timeout=10)
+        finally:
+            start.set()
+            for process in processes:
+                if process.is_alive():
+                    process.kill()
+                process.join(timeout=5)
+
+        assert [process.exitcode for process in processes] == [0] * len(processes)
+        primary_bytes = primary_path.read_bytes()
+        sidecar = json.loads(sidecar_path.read_bytes())
+        assert sidecar["sha256"] == hashlib.sha256(primary_bytes).hexdigest()
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX mode contract")
+    def test_pair_preserves_existing_primary_and_sidecar_modes(self, tmp_path):
+        """Invalidating a stale sidecar must not lose its governed mode."""
+        primary_path = tmp_path / "run_card.json"
+        sidecar_path = tmp_path / "run_card.self.json"
+        primary_path.write_bytes(b"old-primary")
+        sidecar_path.write_bytes(b"old-sidecar")
+        primary_path.chmod(0o600)
+        sidecar_path.chmod(0o640)
+
+        io_atomic.atomic_write_evidence_pair(
+            primary_path,
+            b"new-primary",
+            sidecar_path,
+            b"new-sidecar",
+        )
+
+        assert stat.S_IMODE(primary_path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(sidecar_path.stat().st_mode) == 0o640
+
+    @pytest.mark.parametrize(
+        ("failed_directory_fsync", "sidecar_exists"),
+        [(2, False), (3, True)],
+    )
+    def test_pair_reports_post_replace_durability_failures(
+        self,
+        tmp_path,
+        monkeypatch,
+        failed_directory_fsync,
+        sidecar_exists,
+    ):
+        """A post-replace failure leaves only complete, fail-closed evidence."""
+        primary_path = tmp_path / "run_card.json"
+        sidecar_path = tmp_path / "run_card.self.json"
+        primary_path.write_bytes(b"old-primary")
+        sidecar_path.write_bytes(b"old-sidecar")
+        new_primary = b"new-primary"
+        new_sidecar = json.dumps(
+            {"sha256": hashlib.sha256(new_primary).hexdigest()},
+            sort_keys=True,
+        ).encode("utf-8")
+        real_fsync_directory = io_atomic._fsync_directory
+        fsync_calls = 0
+
+        def controlled_fsync(directory):
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == failed_directory_fsync:
+                raise OSError(errno.EIO, "simulated directory fsync failure")
+            real_fsync_directory(directory)
+
+        monkeypatch.setattr(io_atomic, "_fsync_directory", controlled_fsync)
+
+        with pytest.raises(IOError, match="Failed to write"):
+            io_atomic.atomic_write_evidence_pair(
+                primary_path,
+                new_primary,
+                sidecar_path,
+                new_sidecar,
+            )
+
+        assert primary_path.read_bytes() == new_primary
+        assert sidecar_path.exists() is sidecar_exists
+        if sidecar_exists:
+            sidecar = json.loads(sidecar_path.read_bytes())
+            assert sidecar["sha256"] == hashlib.sha256(new_primary).hexdigest()
 
 
 @pytest.mark.skipif(not HAS_PIL, reason="Pillow not installed")

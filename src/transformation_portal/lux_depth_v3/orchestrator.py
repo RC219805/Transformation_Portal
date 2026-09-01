@@ -47,7 +47,7 @@ from ..core.ml_dependency_health import (
 )
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
 from ..depth.backends.registry import DepthBackendRegistry
-from ..ingest.canonical_json import canonicalize_json, dump_json, dumps_json
+from ..ingest.canonical_json import canonicalize_json, dumps_json
 from ..reporting.contracts import (
     build_orchestrator_result_capability_report,
     build_quality_gate_report,
@@ -120,7 +120,7 @@ from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
-from .io_atomic import atomic_temp_file, atomic_write_pil_png
+from .io_atomic import atomic_temp_file, atomic_write_bytes, atomic_write_evidence_pair, atomic_write_pil_png
 from .manifest import (
     BackendSelectionMetadata,
     BatchManifest,
@@ -1979,21 +1979,20 @@ class EnhanceOrchestrator:
 
                 # 4. Write depth metadata JSON
                 depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-                with open(depth_metadata_path, "w", encoding="utf-8") as f:
-                    dump_json(
-                        {
-                            "model": depth_metadata.model,
-                            "depth_path": depth_metadata.depth_path,
-                            "runtime_seconds": (depth_metadata.runtime_seconds),
-                            "scaling": depth_metadata.scaling,
-                            "stats": depth_metadata.stats,
-                        },
-                        f,
-                        indent=2,
-                        sort_keys=True,
-                        ensure_ascii=False,
-                        allow_nan=False,
-                    )
+                depth_metadata_bytes = dumps_json(
+                    {
+                        "model": depth_metadata.model,
+                        "depth_path": depth_metadata.depth_path,
+                        "runtime_seconds": (depth_metadata.runtime_seconds),
+                        "scaling": depth_metadata.scaling,
+                        "stats": depth_metadata.stats,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+                atomic_write_bytes(depth_metadata_path, depth_metadata_bytes)
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
                 # 5. PBR map generation (optional)
@@ -6833,8 +6832,6 @@ class EnhanceOrchestrator:
             # --- Final deterministic fallback ---
             return str(obj)
 
-        run_card_write_attempted = False
-        sidecar_write_attempted = False
         run_card_self_attestation_path = run_card_path.with_suffix(".self.json")
         try:
             run_card_integrity_payload = {
@@ -6848,21 +6845,6 @@ class EnhanceOrchestrator:
             integrity_payload_bytes = canonicalize_json(integrity_canonical_payload)
             run_card_integrity_payload["canonical_payload_sha256"] = hashlib.sha256(integrity_payload_bytes).hexdigest()
             run_card["run_card_integrity"] = run_card_integrity_payload
-            serialized_run_card = json.loads(
-                dumps_json(
-                    run_card,
-                    default=_json_default,
-                    sort_keys=True,
-                    ensure_ascii=False,
-                    allow_nan=False,
-                )
-            )
-            _validate_run_card_payload(
-                serialized_run_card,
-                schema_version=run_card_version,
-            )
-            _validate_run_card_backend_semantics(serialized_run_card)
-
             run_card_text = dumps_json(
                 run_card,
                 indent=2,
@@ -6871,10 +6853,17 @@ class EnhanceOrchestrator:
                 ensure_ascii=False,
                 allow_nan=False,
             )
+            run_card_bytes = run_card_text.encode("utf-8")
+            serialized_run_card = json.loads(run_card_bytes)
+            _validate_run_card_payload(
+                serialized_run_card,
+                schema_version=run_card_version,
+            )
+            _validate_run_card_backend_semantics(serialized_run_card)
             run_card_self_attestation = {
                 "run_card_path": self._run_card_output_relative_path(str(run_card_path)),
                 "self_indexing": "excluded_self_hash_cycle",
-                "final_run_card_sha256": hashlib.sha256(run_card_text.encode("utf-8")).hexdigest(),
+                "final_run_card_sha256": hashlib.sha256(run_card_bytes).hexdigest(),
                 "hash_algorithm": "sha256",
             }
             sidecar_text = dumps_json(
@@ -6884,27 +6873,17 @@ class EnhanceOrchestrator:
                 ensure_ascii=False,
                 allow_nan=False,
             )
-            run_card_write_attempted = True
-            with open(run_card_path, "w", encoding="utf-8") as f:
-                f.write(run_card_text)
-            sidecar_write_attempted = True
-            with open(run_card_self_attestation_path, "w", encoding="utf-8") as f:
-                f.write(sidecar_text)
+            sidecar_bytes = sidecar_text.encode("utf-8")
+            atomic_write_evidence_pair(
+                run_card_path,
+                run_card_bytes,
+                run_card_self_attestation_path,
+                sidecar_bytes,
+            )
         except (OSError, TypeError, ValueError, RuntimeError):
-            if run_card_write_attempted or sidecar_write_attempted:
-                for partial_path in (run_card_path, run_card_self_attestation_path):
-                    try:
-                        partial_path.unlink()
-                    except FileNotFoundError:
-                        pass
-                    except OSError:
-                        logger.warning(
-                            "Failed to remove partial run-card artifact after emission failure: %s",
-                            partial_path,
-                            exc_info=True,
-                        )
             logger.exception(
-                "Run card emission failed" " for batch_id=%s" " (output: %s)." " Continuing without" " run card.",
+                "Run-card evidence publication failed for batch_id=%s (output: %s). "
+                "Continuing without a confirmed durable run-card/self-attestation pair.",
                 batch_id,
                 run_card_path,
             )
