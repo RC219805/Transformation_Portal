@@ -9,17 +9,13 @@ the machine-mode wire serializer: machine-mode rendering intentionally uses
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from enum import Enum
+from importlib import import_module
 from pathlib import Path
 from typing import Any, TextIO
-
-try:
-    import numpy as np
-except Exception:  # pragma: no cover
-    # numpy is expected but keep helper import-safe
-    np = None  # type: ignore[assignment]
 
 TP_CANONICAL_JSON_PROFILE = "tp.canonical.json.v1"
 _CANONICAL_JSON_KWARGS: dict[str, Any] = {
@@ -38,6 +34,20 @@ def _set_sort_key(value: Any) -> str:
         return f"{type(value).__name__}:{value!r}"
 
 
+def _numpy_module_for(payload: Any) -> Any:
+    """Return NumPy only when normalization actually sees a NumPy value."""
+
+    numpy_module = sys.modules.get("numpy")
+    if numpy_module is not None:
+        return numpy_module
+    if type(payload).__module__.partition(".")[0] != "numpy":
+        return None
+    try:
+        return import_module("numpy")
+    except Exception:  # pragma: no cover - optional import failure
+        return None
+
+
 def to_jsonable(payload: Any) -> Any:
     """Recursively normalize payload to JSON-safe primitive/container types."""
     if payload is None or isinstance(payload, (str, int, float, bool)):
@@ -52,6 +62,7 @@ def to_jsonable(payload: Any) -> Any:
     if isinstance(payload, Enum):
         return to_jsonable(payload.value)
 
+    np = _numpy_module_for(payload)
     if np is not None:
         if isinstance(payload, np.ndarray):
             return [to_jsonable(item) for item in payload.tolist()]

@@ -190,6 +190,7 @@ exclude = ["tests*", "data*", "docs*", "scripts"]
 [tool.setuptools.package-data]
 "transformation_portal.schemas.run_card" = ["*.json"]
 "transformation_portal.schemas.lux" = ["*.json"]
+"transformation_portal.schemas.execution" = ["*.json"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

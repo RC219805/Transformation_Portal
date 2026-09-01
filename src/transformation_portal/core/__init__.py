@@ -68,6 +68,17 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "resolve_platform_lockfile": (".execution_identity", "resolve_platform_lockfile"),
     "should_execute": (".execution_identity", "should_execute"),
     "verify_determinism": (".execution_identity", "verify_determinism"),
+    # Canonical execution plan (ADR-051, non-activating contract)
+    "BackendCandidateIntent": (".execution_plan", "BackendCandidateIntent"),
+    "BackendModelIntent": (".execution_plan", "BackendModelIntent"),
+    "CanonicalExecutionPlan": (".execution_plan", "CanonicalExecutionPlan"),
+    "EXECUTION_COMPLETE": (".execution_plan", "EXECUTION_COMPLETE"),
+    "EXECUTION_PLAN_SCHEMA": (".execution_plan", "EXECUTION_PLAN_SCHEMA"),
+    "ExecutionPlanError": (".execution_plan", "ExecutionPlanError"),
+    "load_execution_plan_schema": (".execution_plan", "load_execution_plan_schema"),
+    "parse_execution_plan_json": (".execution_plan", "parse_execution_plan_json"),
+    "STRUCTURAL_LEGACY": (".execution_plan", "STRUCTURAL_LEGACY"),
+    "validate_execution_plan_payload": (".execution_plan", "validate_execution_plan_payload"),
     # Execution Wrapper (Phase 2)
     "CacheResult": (".execution_wrapper", "CacheResult"),
     "CASExecutor": (".execution_wrapper", "CASExecutor"),
@@ -133,6 +144,18 @@ __all__ = [
     "resolve_platform_lockfile",
     "should_execute",
     "verify_determinism",
+    # Canonical execution plan (named explicitly to avoid collision with the
+    # retained Lux flat pipeline_coordinator.ExecutionPlan compatibility type)
+    "BackendCandidateIntent",
+    "BackendModelIntent",
+    "CanonicalExecutionPlan",
+    "EXECUTION_COMPLETE",
+    "EXECUTION_PLAN_SCHEMA",
+    "ExecutionPlanError",
+    "load_execution_plan_schema",
+    "parse_execution_plan_json",
+    "STRUCTURAL_LEGACY",
+    "validate_execution_plan_payload",
     # Execution Wrapper (Phase 2)
     "CacheResult",
     "CASExecutor",
