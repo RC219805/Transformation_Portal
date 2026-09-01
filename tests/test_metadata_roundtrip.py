@@ -12,6 +12,7 @@ These tests prevent silent corruption bugs by verifying that:
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -398,6 +399,44 @@ class TestCombinedManifestRoundtrip:
             assert segmentation["coverage"] == pytest.approx(0.75, rel=1e-6, abs=1e-6)
             assert segmentation["strict"] is True
             assert segmentation["indices"] == [1, 3, 7]
+
+    def test_save_routes_legacy_json_bytes_through_atomic_writer(self, tmp_path):
+        """The durable migration must retain exact existing JSON formatting."""
+        manifest_path = tmp_path / "combined_manifest.json"
+        manifest = CombinedManifest(
+            input=InputMetadata(image_path="/图像.jpg"),
+            start_time="2026-08-31T00:00:00Z",
+        )
+        expected = """{
+  "input": {
+    "image_dimensions": null,
+    "image_path": "/图像.jpg",
+    "image_sha256": null,
+    "image_size_bytes": null,
+    "schema_version": "1.0"
+  },
+  "start_time": "2026-08-31T00:00:00Z"
+}""".encode("utf-8")
+
+        with patch("src.transformation_portal.lux_depth_v3.manifest.atomic_write_bytes") as durable_write:
+            manifest.save(manifest_path)
+
+        durable_write.assert_called_once_with(manifest_path, expected)
+
+    def test_serialization_failure_preserves_prior_manifest(self, tmp_path):
+        """Invalid JSON must fail before invoking the durable writer."""
+        manifest_path = tmp_path / "combined_manifest.json"
+        manifest_path.write_bytes(b"prior-valid-manifest")
+        manifest = CombinedManifest(environment={"invalid": float("nan")})
+
+        with (
+            patch("src.transformation_portal.lux_depth_v3.manifest.atomic_write_bytes") as durable_write,
+            pytest.raises(ValueError, match="Out of range float values"),
+        ):
+            manifest.save(manifest_path)
+
+        durable_write.assert_not_called()
+        assert manifest_path.read_bytes() == b"prior-valid-manifest"
 
 
 # Edge case tests for robustness

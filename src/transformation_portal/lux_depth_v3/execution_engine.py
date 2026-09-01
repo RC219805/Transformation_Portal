@@ -44,9 +44,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from ..ingest.canonical_json import dumps_json
 from .config import EnhanceConfig
 from .depth_writer import atomic_write_depth_u16_png_with_stats
-from .io_atomic import atomic_temp_file, atomic_write_pil_png
+from .io_atomic import atomic_temp_file, atomic_write_bytes, atomic_write_pil_png
 from .manifest import BackendSelectionMetadata, DepthMetadata
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
@@ -521,8 +522,6 @@ def persist_depth_artifacts(
     Returns:
         DepthArtifactResult with persistence outcomes
     """
-    from ..ingest.canonical_json import dump_json
-
     try:
         # Ensure parent directories exist
         depth_path.parent.mkdir(parents=True, exist_ok=True)
@@ -545,21 +544,20 @@ def persist_depth_artifacts(
         # Write depth metadata JSON sidecar
         # Use actual computed values to ensure sidecar matches persisted artifacts
         metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-        with open(metadata_path, "w", encoding="utf-8") as f:
-            dump_json(
-                {
-                    "model": depth_metadata.model,
-                    "depth_path": str(depth_path),
-                    "runtime_seconds": depth_metadata.runtime_seconds,
-                    "scaling": depth_stats._asdict() if depth_stats else depth_metadata.scaling,
-                    "stats": depth_stats._asdict() if depth_stats else depth_metadata.stats,
-                },
-                f,
-                indent=2,
-                sort_keys=True,
-                ensure_ascii=False,
-                allow_nan=False,
-            )
+        metadata_bytes = dumps_json(
+            {
+                "model": depth_metadata.model,
+                "depth_path": str(depth_path),
+                "runtime_seconds": depth_metadata.runtime_seconds,
+                "scaling": depth_stats._asdict() if depth_stats else depth_metadata.scaling,
+                "stats": depth_stats._asdict() if depth_stats else depth_metadata.stats,
+            },
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        atomic_write_bytes(metadata_path, metadata_bytes)
         logger.debug("Wrote depth metadata: %s", metadata_path)
 
         return DepthArtifactResult(

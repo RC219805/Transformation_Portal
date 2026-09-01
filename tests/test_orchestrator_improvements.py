@@ -332,6 +332,61 @@ class TestBatchManifest:
         assert loaded.end_time == "2025-01-31T00:10:00Z"
         assert loaded.stats["batch_runtime_seconds"] == 600
 
+    def test_batch_manifest_routes_legacy_json_bytes_through_atomic_writer(self, tmp_path):
+        """The durable migration must not change the prior UTF-8 JSON bytes."""
+        manifest_path = tmp_path / "batch_manifest.json"
+        manifest = BatchManifest(
+            batch_id="batch-α",
+            start_time="2026-08-31T00:00:00Z",
+            end_time="2026-08-31T00:01:00Z",
+            config={"preset": "café"},
+            results=[{"status": "ok"}],
+            stats={"total": 1},
+        )
+        expected = """{
+  "batch_id": "batch-α",
+  "config": {
+    "preset": "café"
+  },
+  "end_time": "2026-08-31T00:01:00Z",
+  "results": [
+    {
+      "status": "ok"
+    }
+  ],
+  "start_time": "2026-08-31T00:00:00Z",
+  "stats": {
+    "total": 1
+  }
+}""".encode("utf-8")
+
+        with patch("transformation_portal.lux_depth_v3.manifest.atomic_write_bytes") as durable_write:
+            manifest.write(manifest_path)
+
+        durable_write.assert_called_once_with(manifest_path, expected)
+
+    def test_batch_manifest_serialization_failure_preserves_prior_file(self, tmp_path):
+        """Serialization must complete before the destination can be touched."""
+        manifest_path = tmp_path / "batch_manifest.json"
+        manifest_path.write_bytes(b"prior-valid-manifest")
+        manifest = BatchManifest(
+            batch_id="bad",
+            start_time="start",
+            end_time="end",
+            config={"invalid": float("nan")},
+            results=[],
+            stats={},
+        )
+
+        with (
+            patch("transformation_portal.lux_depth_v3.manifest.atomic_write_bytes") as durable_write,
+            pytest.raises(ValueError, match="Out of range float values"),
+        ):
+            manifest.write(manifest_path)
+
+        durable_write.assert_not_called()
+        assert manifest_path.read_bytes() == b"prior-valid-manifest"
+
 
 class TestV2MetadataFields:
     """Tests for V2Metadata additional fields."""
@@ -703,6 +758,7 @@ class TestFingerprintDrivenSkipInvalidation:
                 "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
                 return_value=(None, None, depth_stats),
             ),
+            patch("transformation_portal.lux_depth_v3.orchestrator.atomic_write_bytes") as durable_write,
             patch.object(
                 orchestrator,
                 "_enforce_apex_depth_validity_gate",
@@ -741,6 +797,23 @@ class TestFingerprintDrivenSkipInvalidation:
         assert depth_attempts[0]["output_normalization"] == "cache_reuse"
         backend.compute.assert_not_called()
         mock_generate_pbr.assert_called_once()
+        from transformation_portal.ingest.canonical_json import dumps_json
+
+        expected_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
+        expected_metadata_bytes = dumps_json(
+            {
+                "model": depth_metadata.model,
+                "depth_path": depth_metadata.depth_path,
+                "runtime_seconds": depth_metadata.runtime_seconds,
+                "scaling": depth_metadata.scaling,
+                "stats": depth_metadata.stats,
+            },
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        durable_write.assert_called_once_with(expected_metadata_path, expected_metadata_bytes)
         assert "Stage A depth cache lookup" in caplog.text
         assert "Cache hit: using cached depth" in caplog.text
 

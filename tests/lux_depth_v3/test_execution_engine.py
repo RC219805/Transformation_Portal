@@ -835,6 +835,121 @@ class TestPersistDepthArtifacts:
         assert "stale_key" not in written_metadata.get("scaling", {})
         assert "stale_stats" not in written_metadata.get("stats", {})
 
+    def test_metadata_routes_exact_json_bytes_through_atomic_writer(self, tmp_path):
+        """The public persistence helper must use the durable JSON primitive."""
+        from unittest.mock import patch
+
+        import numpy as np
+
+        from transformation_portal.ingest.canonical_json import dumps_json
+        from transformation_portal.lux_depth_v3 import execution_engine
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.depth_writer import DepthWriteStats
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        depth_path = tmp_path / "depth" / "exact_depth.png"
+        metadata_path = depth_path.parent / "exact_depth_metadata.json"
+        depth_stats = DepthWriteStats(
+            min=0.0,
+            max=1.0,
+            mean=0.5,
+            std=0.25,
+            shape=(2, 2),
+            dtype="float32",
+            method="u16",
+        )
+        depth_metadata = DepthMetadata(
+            model="modèle-α",
+            depth_path="/stale.png",
+            runtime_seconds=1.25,
+            scaling={"stale": True},
+            stats={"stale": True},
+        )
+        expected = dumps_json(
+            {
+                "model": "modèle-α",
+                "depth_path": str(depth_path),
+                "runtime_seconds": 1.25,
+                "scaling": depth_stats._asdict(),
+                "stats": depth_stats._asdict(),
+            },
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+
+        with (
+            patch.object(
+                execution_engine,
+                "atomic_write_depth_u16_png_with_stats",
+                return_value=(depth_path, None, depth_stats),
+            ),
+            patch.object(execution_engine, "atomic_write_bytes") as durable_write,
+        ):
+            result = execution_engine.persist_depth_artifacts(
+                depth_map=np.zeros((2, 2), dtype=np.float32),
+                depth_path=depth_path,
+                float_depth_path=None,
+                depth_metadata=depth_metadata,
+                config=EnhanceConfig(depth_quantization="u16", verify_depth_writes=False),
+            )
+
+        assert result.success is True
+        durable_write.assert_called_once_with(metadata_path, expected)
+
+    def test_metadata_serialization_failure_preserves_prior_sidecar(self, tmp_path):
+        """Invalid metadata must not replace an existing valid sidecar."""
+        from unittest.mock import patch
+
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3 import execution_engine
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.depth_writer import DepthWriteStats
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        depth_path = tmp_path / "depth" / "invalid_depth.png"
+        metadata_path = depth_path.parent / "invalid_depth_metadata.json"
+        metadata_path.parent.mkdir(parents=True)
+        metadata_path.write_bytes(b"prior-valid-metadata")
+        depth_stats = DepthWriteStats(
+            min=0.0,
+            max=1.0,
+            mean=0.5,
+            std=0.25,
+            shape=(2, 2),
+            dtype="float32",
+            method="u16",
+        )
+        depth_metadata = DepthMetadata(
+            model="da3",
+            depth_path=str(depth_path),
+            runtime_seconds=float("nan"),
+            scaling={},
+            stats={},
+        )
+
+        with (
+            patch.object(
+                execution_engine,
+                "atomic_write_depth_u16_png_with_stats",
+                return_value=(depth_path, None, depth_stats),
+            ),
+            patch.object(execution_engine, "atomic_write_bytes") as durable_write,
+        ):
+            result = execution_engine.persist_depth_artifacts(
+                depth_map=np.zeros((2, 2), dtype=np.float32),
+                depth_path=depth_path,
+                float_depth_path=None,
+                depth_metadata=depth_metadata,
+                config=EnhanceConfig(depth_quantization="u16", verify_depth_writes=False),
+            )
+
+        assert result.success is False
+        durable_write.assert_not_called()
+        assert metadata_path.read_bytes() == b"prior-valid-metadata"
+
 
 class TestPersistEnhancedImage:
     """Test persist_enhanced_image function."""

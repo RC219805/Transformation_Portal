@@ -16,8 +16,9 @@ from dataclasses import InitVar, asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from transformation_portal.ingest.canonical_json import dump_json, to_jsonable
+from transformation_portal.ingest.canonical_json import dumps_json, to_jsonable
 from transformation_portal.lux_depth_v3._backend_contract import normalize_backend_id, normalize_backend_provenance
+from transformation_portal.lux_depth_v3.io_atomic import atomic_write_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -424,9 +425,14 @@ class BatchManifest:
 
     def write(self, path: Path) -> None:
         """Write batch manifest to JSON file."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            dump_json(asdict(self), f, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        payload = dumps_json(
+            asdict(self),
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        atomic_write_bytes(path, payload)
 
     @classmethod
     def load(cls, path: Path) -> BatchManifest:
@@ -473,8 +479,6 @@ class CombinedManifest:
 
         Serializes all fields including timestamps for accurate execution tracking.
         """
-        path.parent.mkdir(parents=True, exist_ok=True)
-
         # Convert dataclasses to dict
         data = {}
         for field_name in [
@@ -504,8 +508,14 @@ class CombinedManifest:
         if self.end_time:
             data["end_time"] = self.end_time
 
-        with open(path, "w", encoding="utf-8") as f:
-            dump_json(data, f, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        payload = dumps_json(
+            data,
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        atomic_write_bytes(path, payload)
 
     @classmethod
     def load(cls, path: Path) -> CombinedManifest:
