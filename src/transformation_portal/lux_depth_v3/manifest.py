@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import InitVar, asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -319,9 +319,31 @@ class ConfigFingerprint:
     materials_config: Optional[Dict[str, Any]] = None
     pbr_config: Optional[Dict[str, Any]] = None
     apex_depth_gate_config: Optional[Dict[str, Any]] = None
-    emit_master16: Optional[bool] = None
-    emit_upscaled16: Optional[bool] = None
+    output_bit_depth: Optional[int] = None
+    # Init-only aliases let historical manifest payloads deserialize while
+    # ensuring all newly serialized fingerprints contain only the canonical
+    # output_bit_depth field.
+    emit_master16: InitVar[Optional[bool]] = None
+    emit_upscaled16: InitVar[Optional[bool]] = None
     enable_v2: Optional[bool] = None
+
+    def __post_init__(
+        self,
+        emit_master16: Optional[bool],
+        emit_upscaled16: Optional[bool],
+    ) -> None:
+        explicit = self.output_bit_depth is not None
+        if self.output_bit_depth is not None and (
+            isinstance(self.output_bit_depth, bool) or not isinstance(self.output_bit_depth, int)
+        ):
+            raise ValueError("output_bit_depth must be 8 or 16")
+        depth = 8 if self.output_bit_depth is None else self.output_bit_depth
+        if depth not in {8, 16}:
+            raise ValueError("output_bit_depth must be 8 or 16")
+        legacy_16 = bool(emit_master16) or bool(emit_upscaled16)
+        if explicit and depth == 8 and legacy_16:
+            raise ValueError("output_bit_depth=8 conflicts with legacy 16-bit fingerprint aliases")
+        self.output_bit_depth = 16 if legacy_16 else depth
 
     def depth_only(self) -> ConfigFingerprint:
         """Return fingerprint for Stage A reuse validation.
@@ -344,8 +366,7 @@ class ConfigFingerprint:
             materials_config=self.materials_config,
             pbr_config=self.pbr_config,
             apex_depth_gate_config=self.apex_depth_gate_config,
-            emit_master16=self.emit_master16,
-            emit_upscaled16=self.emit_upscaled16,
+            output_bit_depth=self.output_bit_depth,
             v2_preset=None,
             v2_device=None,
             v2_upscaler_backend=None,
@@ -371,8 +392,7 @@ class ConfigFingerprint:
             materials_config=None,
             pbr_config=None,
             apex_depth_gate_config=None,
-            emit_master16=self.emit_master16,
-            emit_upscaled16=self.emit_upscaled16,
+            output_bit_depth=self.output_bit_depth,
             enable_v2=self.enable_v2,
         )
 

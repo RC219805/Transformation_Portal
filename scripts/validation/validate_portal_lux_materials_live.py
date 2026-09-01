@@ -42,7 +42,6 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, Optional
 
-
 DEFAULT_API_KEY = "contract-secret"
 DEFAULT_ORCHESTRATOR_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_SAM2_CHECKPOINT = "./checkpoints/sam2_hiera_base_plus.pt"
@@ -335,8 +334,7 @@ def _build_lux_materials_payload(
         "run_card_version": "v2",
         "enable_v2": False,
         "non_commercial_ok": True,
-        "emit_master16": True,
-        "emit_upscaled16": False,
+        "output_bit_depth": 16,
         "cache_depth": False,
         "save_float_depth": False,
     }
@@ -970,9 +968,8 @@ def main(argv: list[str] | None = None) -> int:
             _terminate_runtime(backend_runtime)
         if input_dir is not None and input_dir_is_temp and not bool(args.keep_output):
             shutil.rmtree(input_dir, ignore_errors=True)
-        if (
-            output_dir is not None
-            and _should_cleanup_output_dir(keep_output=bool(args.keep_output), output_dir_is_temp=output_dir_is_temp)
+        if output_dir is not None and _should_cleanup_output_dir(
+            keep_output=bool(args.keep_output), output_dir_is_temp=output_dir_is_temp
         ):
             shutil.rmtree(output_dir, ignore_errors=True)
 

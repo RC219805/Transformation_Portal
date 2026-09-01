@@ -704,8 +704,7 @@ def compute_config_fingerprint(
         materials_config=build_materials_fingerprint_payload(config),
         pbr_config=build_pbr_fingerprint_payload(config),
         apex_depth_gate_config=build_apex_depth_gate_fingerprint_payload(config),
-        emit_master16=bool(config.emit_master16),
-        emit_upscaled16=bool(config.emit_upscaled16),
+        output_bit_depth=int(config.output_bit_depth),
         enable_v2=bool(config.enable_v2),
     )
 
@@ -765,6 +764,7 @@ def build_run_card_config_fingerprint(
         "v2_preset": base.v2_preset,
         "v2_device": base.v2_device,
         "v2_upscaler_backend": base.v2_upscaler_backend,
+        "output_bit_depth": base.output_bit_depth,
         "depth_pro_python_executable": base.depth_pro_python_executable,
         "raw_python_executable": base.raw_python_executable,
         "da3_python_executable": base.da3_python_executable,

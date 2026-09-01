@@ -299,8 +299,7 @@ def has_expanded_stage_a_fingerprint(
             "materials_config",
             "pbr_config",
             "apex_depth_gate_config",
-            "emit_master16",
-            "emit_upscaled16",
+            "output_bit_depth",
         )
     )
 

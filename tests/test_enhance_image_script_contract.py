@@ -65,7 +65,9 @@ def test_run_v2_enhancement_uses_canonical_emitted_artifact_name(
         config: Any,
         device: str,
         allow_8bit_output: bool,
+        output_bit_depth: int | None,
     ) -> dict[str, Any]:
+        assert output_bit_depth is None
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"enhanced")
         return {

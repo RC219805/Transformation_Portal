@@ -167,6 +167,13 @@ def parse_arguments() -> argparse.Namespace:
         help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
     )
     parser.add_argument(
+        "--output-bit-depth",
+        type=int,
+        choices=(8, 16),
+        default=None,
+        help="Explicit enhanced-image encoding depth (8-bit PNG or 16-bit TIFF)",
+    )
+    parser.add_argument(
         "--asset-key",
         default=None,
         help="Canonical asset key for depth/report resolution; defaults to input_path.stem",
@@ -268,6 +275,7 @@ def run_v2_enhancement(
     device: str,
     upscaler: str,
     allow_8bit: bool = False,
+    output_bit_depth: int | None = None,
     masks_file: Path | None = None,
     asset_key: str | None = None,
 ) -> dict[str, Any]:
@@ -281,6 +289,7 @@ def run_v2_enhancement(
         device: Processing device (cpu/cuda/mps)
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
+        output_bit_depth: Explicit enhanced-image encoding depth (8 or 16)
         masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
         asset_key: Canonical asset key for depth/report resolution (optional,
             defaults to input_path.stem if not provided)
@@ -299,7 +308,10 @@ def run_v2_enhancement(
 
     # Build emitted artifact path from canonical identity rather than source suffix.
     lookup_key = resolve_asset_key(asset_key, input_path.stem)
-    candidate_bit_depth = infer_v2_output_bit_depth(input_path, allow_8bit_output=allow_8bit)
+    candidate_bit_depth = output_bit_depth or infer_v2_output_bit_depth(
+        input_path,
+        allow_8bit_output=allow_8bit,
+    )
     output_path = resolve_v2_emitted_artifact_path(
         safe_join_under(output_dir, lookup_key),
         bit_depth=candidate_bit_depth,
@@ -343,6 +355,7 @@ def run_v2_enhancement(
         config=config,
         device=device,
         allow_8bit_output=allow_8bit,
+        output_bit_depth=output_bit_depth,
     )
 
     # Add upscaler info to report (currently unused but maintained for compatibility)
@@ -404,6 +417,7 @@ def main() -> int:
             device=args.device,
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
+            output_bit_depth=args.output_bit_depth,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
             asset_key=resolved_asset_key,
         )

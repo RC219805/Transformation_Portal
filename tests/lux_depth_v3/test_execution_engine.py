@@ -846,11 +846,10 @@ class TestPersistEnhancedImage:
             persist_enhanced_image,
         )
 
-        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        config = EnhanceConfig(output_bit_depth=8)
         import numpy as np
 
-        # Create RGB image
-        enhanced_image = np.random.rand(100, 100, 3).astype(np.float32)
+        enhanced_image = np.linspace(0.0, 1.0, 300, dtype=np.float32).reshape((10, 10, 3))
         output_path = tmp_path / "temp" / "test_enhanced.png"
 
         result = persist_enhanced_image(
@@ -866,6 +865,35 @@ class TestPersistEnhancedImage:
         assert result.n_operations_applied == 5
         assert result.output_path is not None
         assert result.output_path.exists()
+        from PIL import Image
+
+        reopened = np.asarray(Image.open(result.output_path))
+        assert reopened.dtype == np.uint8
+        assert int(reopened.max()) == 255
+
+    def test_persist_enhanced_image_tiff_contains_real_uint16_samples(self, tmp_path):
+        """The canonical 16-bit setting must affect encoded pixels, not metadata only."""
+        import numpy as np
+        import tifffile
+
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import persist_enhanced_image
+
+        enhanced_image = np.linspace(0.0, 1.0, 300, dtype=np.float32).reshape((10, 10, 3))
+        result = persist_enhanced_image(
+            enhanced_image=enhanced_image,
+            output_path=tmp_path / "temp" / "test_enhanced.png",
+            config=EnhanceConfig(output_bit_depth=16),
+        )
+
+        assert result.success is True
+        assert result.format == "tiff"
+        assert result.bit_depth == 16
+        assert result.output_path is not None
+        assert result.output_path.suffix == ".tif"
+        reopened = tifffile.imread(result.output_path)
+        assert reopened.dtype == np.uint16
+        assert int(reopened.max()) > 255
 
 
 class TestExecutionEngineNewMethods:
@@ -943,7 +971,7 @@ class TestExecutionEngineNewMethods:
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
         from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
 
-        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        config = EnhanceConfig(output_bit_depth=8)
         engine = ExecutionEngine(config=config, output_root=tmp_path)
 
         import numpy as np
@@ -966,7 +994,7 @@ class TestExecutionEngineNewMethods:
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
         from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
 
-        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        config = EnhanceConfig(output_bit_depth=8)
         engine = ExecutionEngine(config=config, output_root=tmp_path)
 
         import numpy as np

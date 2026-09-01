@@ -561,8 +561,7 @@ def test_apex_materials_stage_invokes_zero_pixel_ops_gate(
         apply_pixel_ops=True,
         depth_device="cpu",
         enable_v2=False,
-        emit_master16=False,
-        emit_upscaled16=False,
+        output_bit_depth=8,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
     mask = np.ones((32, 32), dtype=np.float32)

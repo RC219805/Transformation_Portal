@@ -988,13 +988,12 @@ Contract notes:
                     <fieldset class="mt-4 group-bare">
                         <legend class="sr-only">Emit outputs</legend>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitMaster16" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">master16</span>
-                        </label>
-                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitUpscaled16" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">upscaled16</span>
+                        <label class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2" for="outputBitDepth">
+                            <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Output depth</span>
+                            <select id="outputBitDepth" class="mt-1 w-full bg-slate-50 dark:bg-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-200">
+                                <option value="8">8-bit PNG</option>
+                                <option value="16" selected>16-bit TIFF</option>
+                            </select>
                         </label>
                         <div data-ui="combined-manifest-contract" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2" aria-label="Combined processing manifest is always emitted">
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">combined_manifest</span>

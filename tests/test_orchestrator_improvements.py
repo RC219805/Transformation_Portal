@@ -144,8 +144,7 @@ class TestConfigFingerprint:
             materials_config={"enable_materials_v3": True},
             pbr_config={"generate_pbr": True},
             apex_depth_gate_config={"min_upper_iqr": 1e-4},
-            emit_master16=True,
-            emit_upscaled16=False,
+            output_bit_depth=16,
             enable_v2=True,
         )
 
@@ -161,8 +160,7 @@ class TestConfigFingerprint:
         assert depth_fp.materials_config == {"enable_materials_v3": True}
         assert depth_fp.pbr_config == {"generate_pbr": True}
         assert depth_fp.apex_depth_gate_config == {"min_upper_iqr": 1e-4}
-        assert depth_fp.emit_master16 is True
-        assert depth_fp.emit_upscaled16 is False
+        assert depth_fp.output_bit_depth == 16
 
         # V2 fields should be None/empty
         assert depth_fp.v2_preset is None
@@ -185,8 +183,7 @@ class TestConfigFingerprint:
             materials_config={"enable_materials_v3": True},
             pbr_config={"generate_pbr": True},
             apex_depth_gate_config={"min_upper_iqr": 1e-4},
-            emit_master16=True,
-            emit_upscaled16=False,
+            output_bit_depth=16,
             enable_v2=True,
         )
 
@@ -196,8 +193,7 @@ class TestConfigFingerprint:
         assert v2_fp.v2_preset == "hdr"
         assert v2_fp.v2_device == "mps"
         assert v2_fp.v2_upscaler_backend == "realesrgan"
-        assert v2_fp.emit_master16 is True
-        assert v2_fp.emit_upscaled16 is False
+        assert v2_fp.output_bit_depth == 16
         assert v2_fp.enable_v2 is True
 
         # Stage A fields should be empty
@@ -853,8 +849,8 @@ class TestFingerprintDrivenSkipInvalidation:
         v2_report.write_text('{"status":"ok"}', encoding="utf-8")
         manifest_path = tmpdir / "emit_change_manifest.json"
 
-        base_config = EnhanceConfig(emit_master16=False, enable_v2=False, v2_preset="default")
-        changed_config = EnhanceConfig(emit_master16=True, enable_v2=False, v2_preset="default")
+        base_config = EnhanceConfig(output_bit_depth=8, enable_v2=False, v2_preset="default")
+        changed_config = EnhanceConfig(output_bit_depth=16, enable_v2=False, v2_preset="default")
 
         with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)

@@ -2227,7 +2227,7 @@ class EnhanceOrchestrator:
     ) -> Path:
         """Return canonical Materials V3 enhanced path."""
         temp_dir = self.output_root / "temp"
-        extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
+        extension = ".tif" if self.config.output_bit_depth == 16 else ".png"
         return temp_dir / f"{output_key.stem}" f"_materials_v3_enhanced" f"{extension}"
 
     def _segmentation_mask_artifact_path(
@@ -2526,7 +2526,7 @@ class EnhanceOrchestrator:
                         output_key,
                     )
 
-                    if self.config.emit_master16 or self.config.emit_upscaled16:
+                    if self.config.output_bit_depth == 16:
                         import tifffile
 
                         enhanced_uint16 = (
@@ -3113,6 +3113,7 @@ class EnhanceOrchestrator:
                 masks_file=masks_path,
                 # Pass canonical asset key for depth/report identity alignment
                 asset_key=output_key.name,
+                output_bit_depth=self.config.output_bit_depth,
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             report_path_value = v2_result.get("report_path")
@@ -3293,7 +3294,7 @@ class EnhanceOrchestrator:
             if materials_v3_result
             else None
         )
-        _emit_16 = self.config.emit_master16 or self.config.emit_upscaled16
+        _emit_16 = self.config.output_bit_depth == 16
         v2_input_bit_depth = 16 if _emit_16 and materials_v3_enhanced_image is not None else 8
         v2_output_bit_depth = 16 if _emit_16 else 8
         v2_report_path_value = (
@@ -3410,7 +3411,7 @@ class EnhanceOrchestrator:
             # emit flags and enhanced image
             materials_v3_bit_depth = None
             if materials_v3_enhanced_image is not None:
-                materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+                materials_v3_bit_depth = self.config.output_bit_depth
 
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,
@@ -5919,6 +5920,7 @@ class EnhanceOrchestrator:
             "depth_quantization": getattr(self.config, "depth_quantization", None),
             "depth_png_encoding": config_fingerprint.get("depth_png_encoding"),
             "output_depth_units": config_fingerprint.get("output_depth_units"),
+            "output_bit_depth": config_fingerprint.get("output_bit_depth"),
             "enable_materials_v3": bool(getattr(self.config, "enable_materials_v3", False)),
             "generate_pbr": bool(getattr(self.config, "generate_pbr", False)),
             "emit_run_card": bool(getattr(self.config, "emit_run_card", False)),

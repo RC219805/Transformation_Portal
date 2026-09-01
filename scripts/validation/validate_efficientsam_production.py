@@ -91,7 +91,7 @@ def run_validation():
         enable_parallel_processing=True,
         max_parallel_workers=1,  # Serial for controlled validation
         # Emit flags
-        emit_master16=True,
+        output_bit_depth=16,
         emit_run_card=True,
     )
 

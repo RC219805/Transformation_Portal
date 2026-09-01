@@ -338,8 +338,7 @@ const els = {
     v2PresetField: _domId('v2PresetField'),
 
     emits: {
-        master16: _domId('emitMaster16'),
-        upscaled16: _domId('emitUpscaled16'),
+        outputBitDepth: _domId('outputBitDepth'),
         runCard: _domId('emitRunCard'),
         runCardVersion: _domId('runCardVersion'),
         runCardIncludeProofs: _domId('emitRunCardIncludeProofs')
@@ -1216,23 +1215,39 @@ function _migrateDeprecatedLuxOutputConfig(config) {
     if (config !== Object(config)) return config;
     const emits = Object(config.emits);
     let deprecated = false;
-    // Bounded compatibility for profiles and drafts created before the next major release.
     for (const [field, camelField, nestedField] of [
         ['emit_marketing', 'emitMarketing', 'marketing'],
         ['emit_report', 'emitReport', 'report']
     ]) {
-        if (
-            field in config
-            || camelField in config
-            || nestedField in emits
-        ) deprecated = true;
+        if (field in config || camelField in config || nestedField in emits) deprecated = true;
         delete config[field];
         delete config[camelField];
         delete emits[nestedField];
     }
-    if (deprecated) createToast(
-        '[deprecated_output_flag] Report on; no marketing.'
-    );
+    const old16 = [
+        config.emit_master16,
+        config.emitMaster16,
+        config.emit_upscaled16,
+        config.emitUpscaled16,
+        emits.master16,
+        emits.upscaled16
+    ];
+    const used16 = old16.some((value) => value !== undefined);
+    const legacy16 = old16.some((value) => parseBoolLike(value, false));
+    delete config.emit_master16;
+    delete config.emitMaster16;
+    delete config.emit_upscaled16;
+    delete config.emitUpscaled16;
+    delete emits.master16;
+    delete emits.upscaled16;
+    const outputDepth = config.output_bit_depth ?? config.outputBitDepth;
+    if (used16) {
+        config.emit_master16 = legacy16;
+        if (outputDepth === undefined) {
+            config['emits' in config ? 'outputBitDepth' : 'output_bit_depth'] = legacy16 ? 16 : 8;
+        }
+    }
+    if (deprecated) createToast('[deprecated_output_flag] Report on; no marketing.');
     return config;
 }
 
@@ -3526,7 +3541,7 @@ function artifactHeroScore(artifact) {
 
     if (artifactIsPreviewable(artifact)) score += 500;
     if (artifactMediaKind(artifact) === 'image') score += 180;
-    if (/(master16|upscaled16|final|result|render|beauty|marketing|depth)/.test(name)) score += 80;
+    if (/(final|result|render|beauty|depth)/.test(name)) score += 80;
     if (/(mask|thumb|preview|debug)/.test(name)) score -= 15;
     if (/(run[_-]?card|manifest|report|metadata|json|yaml|yml|txt|csv|log)/.test(name)) score -= 55;
     if (Number.isFinite(artifact.size_bytes)) score += Math.min(40, Math.round(artifact.size_bytes / 500000));
@@ -3571,7 +3586,7 @@ function findCompareArtifact(primaryArtifact, artifacts) {
         if (info.parent && info.parent === primary.parent) score += 30;
         if (ext && ext === primaryExt) score += 20;
         if (info.stem && primary.stem && (info.stem.includes(primary.stem) || primary.stem.includes(info.stem))) score += 35;
-        if (/(master16|upscaled16|final|result|render|beauty|marketing|depth)/.test(info.fileName.toLowerCase())) score += 10;
+        if (/(final|result|render|beauty|depth)/.test(info.fileName.toLowerCase())) score += 10;
         if (score > bestScore) {
             bestScore = score;
             best = candidate;
@@ -9114,12 +9129,9 @@ function buildCanonicalLuxDepthArgs(config) {
         ? Boolean(els.flags.quiet.checked)
         : parseBoolLike(config.flags?.quiet, false);
 
-    const emitMaster16 = els.emits.master16
-        ? Boolean(els.emits.master16.checked)
-        : parseBoolLike(config.emits?.master16, true);
-    const emitUpscaled16 = els.emits.upscaled16
-        ? Boolean(els.emits.upscaled16.checked)
-        : parseBoolLike(config.emits?.upscaled16, true);
+    const outputBitDepth = Number(els.emits.outputBitDepth
+        ? els.emits.outputBitDepth.value
+        : config.outputBitDepth) === 8 ? 8 : 16;
     const emitRunCard = els.emits.runCard
         ? Boolean(els.emits.runCard.checked)
         : parseBoolLike(config.emits?.runCard, true);
@@ -9246,8 +9258,7 @@ function buildCanonicalLuxDepthArgs(config) {
         cache_depth: cacheDepth,
         enable_v2: enableV2,
         v2_preset: v2Preset,
-        emit_master16: emitMaster16,
-        emit_upscaled16: emitUpscaled16,
+        output_bit_depth: outputBitDepth,
         emit_run_card: emitRunCard,
         run_card_version: runCardVersion,
         run_card_include_proofs: emitRunCardIncludeProofs,
@@ -9268,6 +9279,7 @@ function buildCanonicalLuxDepthArgs(config) {
         verbose,
         quiet
     };
+    if ('emit_master16' in config) args.emit_master16 = config.emit_master16;
     if (depthDevice) args.depth_device = depthDevice;
     if (sam2Active) {
         args.sam2_model_size = sam2ModelSize;
@@ -9401,8 +9413,9 @@ function applyPresetRecommendedArgs(presetName) {
     if (Object.prototype.hasOwnProperty.call(recommended, 'v2_preset')) c.v2Preset = _textOrFallback(recommended.v2_preset, c.v2Preset || 'default');
 
     c.emits = c.emits || {};
-    if (Object.prototype.hasOwnProperty.call(recommended, 'emit_master16')) c.emits.master16 = parseBoolLike(recommended.emit_master16, c.emits.master16);
-    if (Object.prototype.hasOwnProperty.call(recommended, 'emit_upscaled16')) c.emits.upscaled16 = parseBoolLike(recommended.emit_upscaled16, c.emits.upscaled16);
+    if (Object.prototype.hasOwnProperty.call(recommended, 'output_bit_depth')) {
+        c.outputBitDepth = Number(recommended.output_bit_depth) === 8 ? 8 : 16;
+    }
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
     if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_version')) {
         c.emits.runCardVersion = _resolveRunCardVersion(recommended.run_card_version);
@@ -9690,8 +9703,7 @@ function updateUIFromState() {
     c.flags.quiet = parseBoolLike(c.flags.quiet, false);
     _normalizeVerboseQuietFlags(c.flags, false);
     c.emits = c.emits || {};
-    c.emits.master16 = parseBoolLike(c.emits.master16, true);
-    c.emits.upscaled16 = parseBoolLike(c.emits.upscaled16, true);
+    c.outputBitDepth = Number(c.outputBitDepth) === 8 ? 8 : 16;
     c.emits.runCard = parseBoolLike(c.emits.runCard, true);
     c.emits.runCardVersion = _resolveRunCardVersion(c.emits.runCardVersion);
     c.emits.runCardIncludeProofs = parseBoolLike(c.emits.runCardIncludeProofs, false);
@@ -9806,8 +9818,7 @@ function updateUIFromState() {
     safeSyncCheck(els.segmentation.sam2TilingEnabled, c.segmentation.sam2TilingEnabled);
     safeSyncCheck(els.segmentation.strict, c.segmentation.strict);
 
-    safeSyncCheck(els.emits.master16, c.emits.master16);
-    safeSyncCheck(els.emits.upscaled16, c.emits.upscaled16);
+    if (els.emits.outputBitDepth) els.emits.outputBitDepth.value = String(c.outputBitDepth);
     safeSyncCheck(els.emits.runCard, c.emits.runCard);
     if (els.emits.runCardVersion) els.emits.runCardVersion.value = c.emits.runCardVersion;
     safeSyncCheck(els.emits.runCardIncludeProofs, c.emits.runCardIncludeProofs);
@@ -10216,8 +10227,7 @@ function renderCLI() {
         cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
         cliLines.push(`  --save-float-depth ${onoff(payload.args.save_float_depth)}`);
         cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
-        cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
-        cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
+        cliLines.push(`  --output-bit-depth ${q(payload.args.output_bit_depth)}`);
         cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
         cliLines.push(`  --run-card-version ${q(payload.args.run_card_version || 'v1')}`);
         cliLines.push(`  --run-card-include-proofs ${onoff(payload.args.run_card_include_proofs)}`);
@@ -10384,6 +10394,7 @@ function bindInputs() {
             if (category) state.config[category][key] = e.target.value;
             else if (key in state.config) state.config[key] = e.target.value;
             else state[key] = e.target.value;
+            if (!category && key === 'outputBitDepth') delete state.config.emit_master16;
             if (key === 'pipeline') {
                 updateUIFromState();
                 _persistTransientPortalDraft();
@@ -10541,8 +10552,7 @@ function bindInputs() {
     safeBindCheck(els.reconstruction.emitSceneDebugBundle, 'reconstruction', 'emitSceneDebugBundle');
     safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');
 
-    safeBindCheck(els.emits.master16, 'emits', 'master16');
-    safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
+    safeBindText(els.emits.outputBitDepth, null, 'outputBitDepth');
     safeBindCheck(els.emits.runCard, 'emits', 'runCard');
     safeBindText(els.emits.runCardVersion, 'emits', 'runCardVersion');
     safeBindCheck(els.emits.runCardIncludeProofs, 'emits', 'runCardIncludeProofs');
@@ -11771,6 +11781,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         if (data.args) {
             _migrateDeprecatedLuxOutputConfig(data.args);
             const c = state.config;
+            if ('emit_master16' in data.args) c.emit_master16 = data.args.emit_master16;
             c.inputDir = data.args.archive_root || data.args.input_dir || c.inputDir;
             c.outputDir = data.args.output_dir || c.outputDir;
             c.preset = data.args.preset || c.preset;
@@ -11827,8 +11838,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             _normalizeVerboseQuietFlags(c.flags, true);
             c.v2Preset = data.args.v2_preset || c.v2Preset;
 
-            c.emits.master16 = parseBoolLike(data.args.emit_master16, c.emits.master16);
-            c.emits.upscaled16 = parseBoolLike(data.args.emit_upscaled16, c.emits.upscaled16);
+            c.outputBitDepth = Number(data.args.output_bit_depth ?? c.outputBitDepth) === 8 ? 8 : 16;
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
             c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
             c.emits.runCardIncludeProofs = parseBoolLike(

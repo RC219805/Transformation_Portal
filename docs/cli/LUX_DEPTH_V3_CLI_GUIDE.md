@@ -64,8 +64,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on" \
+  --output-bit-depth 16 \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -83,8 +82,7 @@ lux-depth-v3 \
   --depth-device "cuda" \
   --materials-v3 "on" \
   --pbr "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on"
+  --output-bit-depth 16
 ```
 
 ### APEX with Apple Silicon (MPS)
@@ -122,8 +120,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on" \
+  --output-bit-depth 16 \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -169,8 +166,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on" \
+  --output-bit-depth 16 \
   --emit-run-card "on" \
   --run-card-version "v2" \
   --overwrite
@@ -261,8 +257,7 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 
 ### Output Deliverables
 
-- `--emit-master16 TEXT`: Emit master 16-bit output (default: `off`)
-- `--emit-upscaled16 TEXT`: Emit upscaled 16-bit output (default: `off`)
+- `--output-bit-depth INTEGER`: Encode enhanced images as 8-bit PNG (default) or 16-bit TIFF
 - `--emit-run-card TEXT`: Emit run card for reproducibility (default: `on`)
 - `--run-card-version TEXT`: Run card contract version (default: `v1`)
   - Options: `v1`, `v2`
@@ -272,6 +267,10 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 flags and will be removed in the next major release. Either value emits a
 visible warning. No marketing artifact is produced, and the combined processing
 manifest is always emitted.
+
+`--emit-master16` and `--emit-upscaled16` are deprecated compatibility
+aliases for `--output-bit-depth 16`. They emit one warning per invocation,
+do not create separate deliverables, and will be removed in the next major release.
 
 ### License Acknowledgements
 
@@ -362,7 +361,7 @@ APEX mode enforces fail-closed quality gates with two explicit recovery paths:
 
 ## Output Deliverables
 
-When APEX mode is enabled with all emit flags, the following outputs are generated:
+When APEX mode is enabled with governed outputs, the following artifacts are generated:
 
 ### Depth Assets
 - `*_depth.png`: 16-bit PNG depth map (quantized for compatibility)
@@ -374,8 +373,8 @@ When APEX mode is enabled with all emit flags, the following outputs are generat
 - `*_ao.png`: Ambient occlusion map for contact shadows
 
 ### Enhanced Images
-- `*_master16.tiff`: Master 16-bit output (when `--emit-master16 on`)
-- `*_upscaled16.tiff`: Upscaled 16-bit output (when `--emit-upscaled16 on`)
+- `*_v2_enhanced.png` / `*_materials_v3_enhanced.png`: 8-bit output
+- `*_v2_enhanced.tif` / `*_materials_v3_enhanced.tif`: 16-bit output
 
 ### Metadata
 - `*_combined.json`: Unconditional processing manifest with provenance
@@ -462,8 +461,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on" \
+  --output-bit-depth 16 \
   --emit-run-card "on"
 ```
 
@@ -495,7 +493,7 @@ lux-depth-v3 \
   --model-key "da3-metric" \
   --pbr "on" \
   --enable-v2 "off" \
-  --emit-master16 "on"
+  --output-bit-depth 16
 ```
 
 **Key Points:**
@@ -516,8 +514,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on"
+  --output-bit-depth 16
 ```
 
 **Note:** Using `--quality-tier apex` automatically enables appropriate features for commercial production. The `--preset` flag is optional and provides additional fine-tuning.

@@ -115,8 +115,7 @@ HDR video support is handled by the video grader's FFmpeg tone-mapping options.
   --model-key da3-metric \
   --materials-v3 on \
   --pbr on \
-  --emit-master16 on \
-  --emit-upscaled16 on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite
@@ -200,7 +199,7 @@ quality-gate evidence.
 |----------|-------|--------------|---------------|
 | Minimal image operations | Yes | Limited by Pillow path | Output path dependent |
 | TIFF batch | Yes | Yes | Yes where supported |
-| Lux Depth V3 | Yes | Accepted for supported image types | Controlled by emit flags |
+| Lux Depth V3 | Yes | Accepted for supported image types | Controlled by `--output-bit-depth` |
 | Lux render | Yes | Accepted, converted for model path | PNG output by default |
 | Video grading | Codec dependent | HDR video supported | Codec/flag dependent |
 

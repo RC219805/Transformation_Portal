@@ -2,8 +2,8 @@
 """Validate Lux Depth V3 16-bit output path behavior.
 
 Validates:
-1. Materials V3 outputs 16-bit TIFF when emit flags enabled
-2. Materials V3 outputs 8-bit PNG when emit flags disabled (Golden Path)
+1. Materials V3 outputs 16-bit TIFF at output bit depth 16
+2. Materials V3 outputs 8-bit PNG at output bit depth 8 (Golden Path)
 3. Bit depth tracking in manifest
 4. File format and dtype verification
 """
@@ -14,6 +14,28 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+
+
+def validate_encoded_image(path: Path, expected_bits: int) -> bool:
+    """Reopen an emitted image and verify its actual sample encoding."""
+    if not path.is_file():
+        print(f"✗ Expected encoded image is missing: {path}")
+        return False
+    if expected_bits == 16:
+        import tifffile
+
+        pixels = tifffile.imread(path)
+        valid = pixels.dtype == np.uint16 and int(pixels.max()) > 255
+    else:
+        from PIL import Image
+
+        pixels = np.asarray(Image.open(path))
+        valid = pixels.dtype == np.uint8
+    if not valid:
+        print(f"✗ {path} has dtype={pixels.dtype}, max={int(pixels.max())}; expected {expected_bits}-bit samples")
+        return False
+    print(f"✓ Reopened {path.name}: dtype={pixels.dtype}, max={int(pixels.max())}")
+    return True
 
 
 def create_test_image(output_path: Path, size=(512, 512)):
@@ -31,7 +53,7 @@ def create_test_image(output_path: Path, size=(512, 512)):
 
 
 def validate_16bit_path():
-    """Validate 16-bit output path with emit flags enabled."""
+    """Validate the canonical 16-bit output path."""
     print("\n=== Validation 1: 16-Bit TIFF Path ===")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -44,7 +66,7 @@ def validate_16bit_path():
         test_img = input_dir / "test.png"
         create_test_image(test_img)
 
-        # Run pipeline with 16-bit flags
+        # Run the pipeline with canonical 16-bit output.
         import subprocess
 
         cmd = [
@@ -67,10 +89,9 @@ def validate_16bit_path():
             "stub",
             "--enable-v2",
             "off",  # Disable V2 for faster test
-            "--emit-master16",
-            "on",
-            "--emit-upscaled16",
-            "on",
+            "--output-bit-depth",
+            "16",
+            "--keep-intermediates",
         ]
 
         print(f"Running command: {' '.join(cmd)}")
@@ -92,10 +113,11 @@ def validate_16bit_path():
 
         tiff_files = list(temp_dir.glob("*_materials_v3_enhanced.tif"))
         if not tiff_files:
-            print(f"ℹ No 16-bit TIFF handoff file found in {temp_dir}")
+            print(f"✗ No 16-bit TIFF handoff file found in {temp_dir}")
             print(f"Files in temp dir: {list(temp_dir.iterdir())}")
-            # This is expected since V2 is disabled - file gets cleaned up
-            print("ℹ Note: File may have been cleaned up (V2 disabled)")
+            return False
+        if not validate_encoded_image(tiff_files[0], 16):
+            return False
 
         # Check manifest for bit depth tracking
         manifest_files = list(output_dir.glob("manifests/*_combined.json"))
@@ -134,7 +156,7 @@ def validate_16bit_path():
 
 
 def validate_8bit_golden_path():
-    """Validate 8-bit PNG output when emit flags are disabled."""
+    """Validate canonical 8-bit PNG output."""
     print("\n=== Validation 2: 8-Bit PNG Golden Path ===")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -147,7 +169,7 @@ def validate_8bit_golden_path():
         test_img = input_dir / "test.png"
         create_test_image(test_img)
 
-        # Run pipeline WITHOUT 16-bit flags
+        # Run the pipeline with canonical 8-bit output.
         import subprocess
 
         cmd = [
@@ -170,7 +192,9 @@ def validate_8bit_golden_path():
             "stub",
             "--enable-v2",
             "off",
-            # No --emit-master16 or --emit-upscaled16 flags
+            "--output-bit-depth",
+            "8",
+            "--keep-intermediates",
         ]
 
         print(f"Running command: {' '.join(cmd)}")
@@ -183,6 +207,10 @@ def validate_8bit_golden_path():
             return False
 
         print(f"✓ Pipeline completed successfully")
+
+        png_files = list((output_dir / "temp").glob("*_materials_v3_enhanced.png"))
+        if len(png_files) != 1 or not validate_encoded_image(png_files[0], 8):
+            return False
 
         # Check manifest for bit depth tracking
         manifest_files = list(output_dir.glob("manifests/*_combined.json"))
@@ -227,7 +255,7 @@ def validate_bit_depth_tracking():
         test_img = input_dir / "test.png"
         create_test_image(test_img)
 
-        # Run pipeline with V2 enabled and 16-bit flags
+        # Run the pipeline with V2 enabled and canonical 16-bit output.
         import subprocess
 
         cmd = [
@@ -252,8 +280,8 @@ def validate_bit_depth_tracking():
             "on",
             "--v2-preset",
             "default",  # Use default preset
-            "--emit-master16",
-            "on",
+            "--output-bit-depth",
+            "16",
         ]
 
         print(f"Running command: {' '.join(cmd)}")
@@ -296,6 +324,13 @@ def validate_bit_depth_tracking():
                 print(f"✓ V2 output_bit_depth = 16 (correct)")
             else:
                 print(f"✗ V2 output_bit_depth = {output_bit_depth} (expected 16)")
+                return False
+            output_paths = [Path(path) for path in (v2_meta.get("output_paths") or [])]
+            if not output_paths:
+                print("✗ V2 manifest contains no emitted output path")
+                return False
+            resolved_outputs = [path if path.is_absolute() else output_dir / path for path in output_paths]
+            if not any(validate_encoded_image(path, 16) for path in resolved_outputs):
                 return False
         else:
             print(f"✗ No v2 metadata in manifest")

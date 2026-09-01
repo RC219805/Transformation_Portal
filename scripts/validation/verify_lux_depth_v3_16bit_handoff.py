@@ -48,7 +48,7 @@ def main():
         # Run pipeline with V2 ENABLED but with a hook to inspect the TIFF
         # We'll run with --enable-v2 on and capture the temp file
         # Run with V2 disabled to preserve temp/ handoff file for inspection
-        print("Running pipeline with 16-bit flags enabled...")
+        print("Running pipeline at output bit depth 16...")
         cmd = [
             sys.executable,
             "-m",
@@ -69,10 +69,9 @@ def main():
             "stub",
             "--enable-v2",
             "off",  # V2 disabled to keep temp file for verification
-            "--emit-master16",
-            "on",
-            "--emit-upscaled16",
-            "on",
+            "--output-bit-depth",
+            "16",
+            "--keep-intermediates",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -115,12 +114,12 @@ def main():
             if tiff_data.max() > 255:
                 print(f"✓ Using 16-bit value range (max > 255)")
             else:
-                print(f"⚠ Warning: Max value {tiff_data.max()} suggests 8-bit data in 16-bit container")
+                print(f"✗ Max value {tiff_data.max()} does not prove 16-bit sample use")
+                return False
 
         else:
-            # This is expected since V2 is disabled and file gets cleaned up
-            print("ℹ No TIFF file in temp/ (already cleaned up)")
-            print("  This is expected when V2 is disabled.")
+            print("✗ Required TIFF handoff file is missing")
+            return False
 
         # Check manifest
         print("\n" + "=" * 70)
@@ -179,7 +178,9 @@ def main():
             "stub",
             "--enable-v2",
             "off",
-            # No emit flags - should use 8-bit PNG
+            "--output-bit-depth",
+            "8",
+            "--keep-intermediates",
         ]
 
         result = subprocess.run(cmd_8bit, capture_output=True, text=True, timeout=60)
@@ -188,6 +189,14 @@ def main():
             return False
 
         print("✓ Pipeline completed (8-bit mode)")
+        png_files = list((output_dir_8bit / "temp").glob("*_materials_v3_enhanced.png"))
+        if len(png_files) != 1:
+            print("✗ Required 8-bit PNG handoff file is missing")
+            return False
+        png_data = np.asarray(Image.open(png_files[0]))
+        if png_data.dtype != np.uint8:
+            print(f"✗ Expected uint8 PNG samples, got {png_data.dtype}")
+            return False
 
         manifest_files_8bit = list(output_dir_8bit.glob("manifests/*_combined.json"))
         if manifest_files_8bit:
@@ -207,8 +216,8 @@ def main():
         print("✓ ALL VERIFICATIONS PASSED")
         print("=" * 70)
         print("\nSummary:")
-        print("  - Materials V3 outputs 16-bit TIFF when emit flags enabled")
-        print("  - Materials V3 outputs 8-bit PNG when emit flags disabled")
+        print("  - Materials V3 outputs 16-bit TIFF at output bit depth 16")
+        print("  - Materials V3 outputs 8-bit PNG at output bit depth 8")
         print("  - Manifest correctly tracks bit depth")
         print("  - Schema version 1.1 used for Materials V3 metadata")
         return True

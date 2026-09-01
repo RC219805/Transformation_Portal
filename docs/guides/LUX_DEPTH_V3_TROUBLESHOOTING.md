@@ -273,11 +273,10 @@ Output Deliverables
 --cache-depth on|off      # Enable depth caching
 ```
 
-### Output Deliverables (On/Off Flags)
+### Output Encoding and Deliverables
 
 ```bash
---emit-master16 on|off    # 16-bit master output
---emit-upscaled16 on|off  # Upscaled 16-bit output
+--output-bit-depth 8|16   # 8-bit PNG (default) or 16-bit TIFF
 --emit-run-card on|off    # Reproducibility card (default: on)
 ```
 
@@ -556,8 +555,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --enable-v2 "off" \
   --cache-depth "on" \
-  --emit-master16 "on" \
-  --emit-upscaled16 "on"
+  --output-bit-depth 16
 ```
 
 **Key Points:**

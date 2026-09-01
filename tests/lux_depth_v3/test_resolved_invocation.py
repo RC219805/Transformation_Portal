@@ -246,8 +246,7 @@ class TestNonDa3AndOptionalStages:
             v2_preset="signature",
             enable_reconstruction=True,
             save_float_depth=True,
-            emit_master16=True,
-            emit_upscaled16=True,
+            output_bit_depth=16,
         )
         invocation = _build(config, tmp_path)
         assert invocation.stages == (
@@ -266,9 +265,9 @@ class TestNonDa3AndOptionalStages:
             "pbr_maps",
             "v2_enhanced_image",
             "reconstruction_bundle",
-            "bit_depth_16_intermediates",
         } <= artifacts
-        assert any("bit-depth switch" in warning for warning in invocation.warnings)
+        assert invocation.output_bit_depth == 16
+        assert "bit_depth_16_intermediates" not in artifacts
 
     def test_input_file_outside_input_dir_kept_as_posix_path(self, tmp_path: Path) -> None:
         input_dir = tmp_path / "inputs"

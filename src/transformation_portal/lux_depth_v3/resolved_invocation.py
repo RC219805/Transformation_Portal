@@ -75,6 +75,7 @@ class ResolvedInvocation:
     license_acknowledgements: LicenseAcknowledgements
     license_enforced: bool
     quality_tier: str
+    output_bit_depth: int
     preset_requested: Optional[str]
     preset_resolved: Optional[str]
     stages: Tuple[str, ...]
@@ -122,6 +123,7 @@ class ResolvedInvocation:
                 "status": ("allowed" if self.license_enforced else "deferred_to_backend_gates"),
             },
             "quality_tier": self.quality_tier,
+            "output_bit_depth": self.output_bit_depth,
             "preset_requested": self.preset_requested,
             "preset_resolved": self.preset_resolved,
             "stages": list(self.stages),
@@ -222,10 +224,6 @@ def _requested_artifacts(config: "EnhanceConfig") -> Tuple[str, ...]:
         artifacts.append("reconstruction_bundle")
     if getattr(config, "emit_run_card", False):
         artifacts.append("run_card")
-    if getattr(config, "emit_master16", False) or getattr(config, "emit_upscaled16", False):
-        # The two flags currently act as one joint bit-depth switch; the
-        # honest plannable artifact is the 16-bit intermediate lane.
-        artifacts.append("bit_depth_16_intermediates")
     return tuple(artifacts)
 
 
@@ -236,11 +234,6 @@ def _plan_warnings(
     from .config import deprecated_output_flag_notices
 
     warnings: List[str] = list(deprecated_output_flag_notices(config))
-    if getattr(config, "emit_master16", False) and getattr(config, "emit_upscaled16", False):
-        warnings.append(
-            "--emit-master16 and --emit-upscaled16 currently act as a single "
-            "bit-depth switch (disposition tracked in issue #2068)"
-        )
     warnings.extend(
         model_selection_migration_notices(
             resolved_model,
@@ -363,6 +356,7 @@ def build_resolved_invocation(
         ),
         license_enforced=license_enforced,
         quality_tier=str(getattr(config, "quality_tier", "standard")),
+        output_bit_depth=int(getattr(config, "output_bit_depth", 8)),
         preset_requested=getattr(config, "preset_requested", None),
         preset_resolved=preset_resolved,
         stages=_planned_stages(config),

@@ -956,8 +956,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "strict_segmentation": True,
                 "materials_v3": True,
                 "pbr": True,
-                "emit_master16": True,
-                "emit_upscaled16": True,
+                "output_bit_depth": 16,
                 "emit_run_card": True,
                 "run_card_version": "v1",
                 "run_card_include_proofs": False,
@@ -981,8 +980,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "strict_segmentation": False,
                 "materials_v3": False,
                 "pbr": False,
-                "emit_master16": True,
-                "emit_upscaled16": False,
+                "output_bit_depth": 16,
                 "emit_run_card": True,
                 "run_card_version": "v1",
                 "run_card_include_proofs": False,
@@ -1006,8 +1004,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "strict_segmentation": True,
                 "materials_v3": True,
                 "pbr": True,
-                "emit_master16": True,
-                "emit_upscaled16": True,
+                "output_bit_depth": 16,
                 "emit_run_card": True,
                 "run_card_version": "v2",
                 "run_card_include_proofs": False,
@@ -1031,8 +1028,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "strict_segmentation": True,
                 "materials_v3": True,
                 "pbr": True,
-                "emit_master16": True,
-                "emit_upscaled16": True,
+                "output_bit_depth": 16,
                 "emit_run_card": True,
                 "run_card_version": "v2",
                 "run_card_include_proofs": False,
@@ -2000,8 +1996,7 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "cache_depth": True,
     "enable_v2": False,
     "v2_preset": "default",
-    "emit_master16": True,
-    "emit_upscaled16": True,
+    "output_bit_depth": 16,
     "emit_run_card": True,
     "run_card_version": "v1",
     "run_card_include_proofs": False,
@@ -2049,6 +2044,10 @@ LUX_RECONSTRUCTION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
 LUX_DEPRECATED_OUTPUT_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
     "emit_marketing": ("emit_marketing", "emitMarketing"),
     "emit_report": ("emit_report", "emitReport"),
+}
+LUX_DEPRECATED_BIT_DEPTH_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "emit_master16": ("emit_master16", "emitMaster16"),
+    "emit_upscaled16": ("emit_upscaled16", "emitUpscaled16"),
 }
 LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
@@ -4007,17 +4006,32 @@ def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     return any(key in payload for key in keys)
 
 
+def _parse_lux_output_bit_depth(value: Any) -> int:
+    """Parse the bounded portal/API representation without numeric truncation."""
+
+    if isinstance(value, bool):
+        raise ValueError("Output bit depth must be 8 or 16.")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str) and value.strip() in {"8", "16"}:
+        parsed = int(value.strip())
+    else:
+        raise ValueError("Output bit depth must be 8 or 16.")
+    if parsed not in {8, 16}:
+        raise ValueError("Output bit depth must be 8 or 16.")
+    return parsed
+
+
 def _adapt_deprecated_lux_output_args(
     request_args: Dict[str, Any],
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Accept legacy output keys through the next major release, but ignore them."""
     adapted = dict(request_args)
     warnings: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
     messages = {
         "emit_marketing": "emit_marketing is deprecated and ignored; no marketing artifact is produced.",
-        "emit_report": (
-            "emit_report is deprecated and ignored; the combined processing manifest is always emitted."
-        ),
+        "emit_report": ("emit_report is deprecated and ignored; the combined processing manifest is always emitted."),
     }
     for field_name, aliases in LUX_DEPRECATED_OUTPUT_FIELD_ALIASES.items():
         if _portal_payload_has_any_key(request_args, aliases):
@@ -4034,7 +4048,48 @@ def _adapt_deprecated_lux_output_args(
             )
         for alias in aliases:
             adapted.pop(alias, None)
-    return adapted, warnings
+
+    used_bit_depth_aliases: List[str] = []
+    legacy_16 = False
+    for field_name, aliases in LUX_DEPRECATED_BIT_DEPTH_ALIASES.items():
+        matching = [alias for alias in aliases if alias in request_args]
+        if matching:
+            used_bit_depth_aliases.append(field_name)
+            legacy_16 = legacy_16 or any(_as_bool(request_args[alias], default=False) for alias in matching)
+        for alias in aliases:
+            adapted.pop(alias, None)
+    if used_bit_depth_aliases:
+        warnings.append(
+            _portal_issue(
+                "output_bit_depth",
+                "deprecated_output_flag",
+                f"{', '.join(used_bit_depth_aliases)} is deprecated; use output_bit_depth=16. "
+                "The aliases select encoding depth and do not create separate deliverables.",
+                suggestion="Remove the deprecated aliases before the next major release.",
+            )
+        )
+
+    canonical_explicit = _portal_payload_has_any_key(request_args, ("output_bit_depth", "outputBitDepth"))
+    canonical_raw = _pick(request_args, "output_bit_depth", "outputBitDepth", default=None)
+    try:
+        canonical_depth = _parse_lux_output_bit_depth(canonical_raw) if canonical_explicit else None
+    except ValueError:
+        canonical_depth = None
+    if legacy_16 and canonical_explicit and canonical_depth == 8:
+        errors.append(
+            _portal_issue(
+                "output_bit_depth",
+                "conflicting_output_bit_depth",
+                "output_bit_depth=8 conflicts with a truthy deprecated 16-bit alias.",
+                suggestion="Remove the alias or set output_bit_depth to 16.",
+            )
+        )
+    elif used_bit_depth_aliases and not canonical_explicit:
+        adapted["output_bit_depth"] = 16 if legacy_16 else 8
+    adapted.pop("outputBitDepth", None)
+    if canonical_explicit and "output_bit_depth" not in adapted:
+        adapted["output_bit_depth"] = canonical_raw
+    return adapted, warnings, errors
 
 
 def _portal_inactive_reconstruction_field_value(
@@ -5061,9 +5116,9 @@ def _build_lux_config_preview(
     portal_actor: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     args, path_warnings, path_errors = _normalize_operator_payload_paths("lux-depth-v3", args)
-    args, deprecated_output_warnings = _adapt_deprecated_lux_output_args(args)
+    args, deprecated_output_warnings, deprecated_output_errors = _adapt_deprecated_lux_output_args(args)
     defaults = _lux_portal_defaults(args)
-    errors: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = [*deprecated_output_errors]
     warnings: List[Dict[str, Any]] = [*path_warnings, *deprecated_output_warnings]
     inactive_fields: List[Dict[str, Any]] = []
     path_errors_by_field = _preview_path_errors_by_field(path_errors)
@@ -5321,14 +5376,31 @@ def _build_lux_config_preview(
         default=bool(defaults["strict_segmentation"]),
     )
 
+    output_bit_depth_raw = _pick(
+        args,
+        "output_bit_depth",
+        "outputBitDepth",
+        default=defaults["output_bit_depth"],
+    )
+    try:
+        output_bit_depth = _parse_lux_output_bit_depth(output_bit_depth_raw)
+    except ValueError:
+        errors.append(
+            _portal_issue(
+                "output_bit_depth",
+                "invalid_output_bit_depth",
+                "Output bit depth must be 8 or 16.",
+            )
+        )
+        output_bit_depth = int(defaults["output_bit_depth"])
+    normalized_args["output_bit_depth"] = output_bit_depth
+
     for field_name in (
         "materials_v3",
         "pbr",
         "save_float_depth",
         "cache_depth",
         "enable_v2",
-        "emit_master16",
-        "emit_upscaled16",
         "emit_run_card",
         "non_commercial_ok",
         "accept_apple_depth_pro_research_license",
@@ -8181,7 +8253,25 @@ def _argv_from_request(
                 reason="path_shorthand_traversal_disallowed",
             )
     if pipeline == "lux-depth-v3":
-        args, _ = _adapt_deprecated_lux_output_args(args)
+        args, _, output_errors = _adapt_deprecated_lux_output_args(args)
+        if output_errors:
+            raise _PortalValidationReasonError(
+                output_errors[0]["message"],
+                reason=output_errors[0]["code"],
+            )
+        try:
+            output_bit_depth = _parse_lux_output_bit_depth(_pick(args, "output_bit_depth", "outputBitDepth", default=16))
+        except ValueError as exc:
+            raise _PortalValidationReasonError(
+                "Output bit depth must be 8 or 16.",
+                reason="invalid_output_bit_depth",
+            ) from exc
+        if output_bit_depth not in {8, 16}:
+            raise _PortalValidationReasonError(
+                "Output bit depth must be 8 or 16.",
+                reason="invalid_output_bit_depth",
+            )
+        args["output_bit_depth"] = output_bit_depth
 
     input_dir_raw = str(
         _pick(args, "input_dir", "inputDir", default=""),
@@ -8624,24 +8714,8 @@ def _argv_from_request(
 
         argv.extend(
             [
-                "--emit-master16",
-                onoff(
-                    _pick(
-                        args,
-                        "emit_master16",
-                        "emitMaster16",
-                        default=True,
-                    )
-                ),
-                "--emit-upscaled16",
-                onoff(
-                    _pick(
-                        args,
-                        "emit_upscaled16",
-                        "emitUpscaled16",
-                        default=True,
-                    )
-                ),
+                "--output-bit-depth",
+                str(_pick(args, "output_bit_depth", "outputBitDepth", default=16)),
                 "--emit-run-card",
                 onoff(
                     _pick(
