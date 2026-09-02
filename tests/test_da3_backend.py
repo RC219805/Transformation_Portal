@@ -270,6 +270,9 @@ def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_
         PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
     )
     monkeypatch.setenv("KMP_DUPLICATE_LIB_OK", "True")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "attacker-python"))
+    monkeypatch.setenv("PYTHONSTARTUP", str(tmp_path / "attacker-startup.py"))
+    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "attacker-venv"))
 
     backend = DA3Backend(
         _licensed_da3_config(
@@ -282,7 +285,11 @@ def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_
 
     env = backend._build_worker_env()
 
-    assert env["PYTHONPATH"].split(":")[0] == str(backend._repo_src)
+    assert env["PYTHONPATH"] == str(backend._repo_src)
+    assert env["PYTHONSAFEPATH"] == "1"
+    assert env["PYTHONNOUSERSITE"] == "1"
+    assert "PYTHONSTARTUP" not in env
+    assert "VIRTUAL_ENV" not in env
     assert env["KMP_DUPLICATE_LIB_OK"] == "TRUE"
     assert env["MPLCONFIGDIR"].endswith(".runtime/mplconfig")
     assert env["TP_MODEL_LOCK_MANIFEST"] == str(tmp_path / "model-lock.yaml")

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +51,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="Only validate that DA3 imports are available.",
+    )
+    parser.add_argument(
+        "--prepare-runtime-identity",
+        action="store_true",
+        help="Prepare local-only, fail-closed runtime evidence without inference.",
     )
     parser.add_argument(
         "--model-variant",
@@ -108,11 +115,52 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Output JSON path for structured metadata.",
     )
+    parser.add_argument(
+        "--output-runtime-identity",
+        type=Path,
+        help="Output JSON path for prepared DA3 runtime evidence.",
+    )
+    parser.add_argument(
+        "--expected-runtime-identity-sha256",
+        help="Prepared runtime digest that inference must re-materialize and echo.",
+    )
+    parser.add_argument(
+        "--runtime-verification-token",
+        type=Path,
+        help="Canonical stat token produced by the parent-verified preparation worker.",
+    )
+    parser.add_argument(
+        "--runtime-verification-token-sha256",
+        help="Parent-verified canonical digest of --runtime-verification-token.",
+    )
     return parser
 
 
 def _validate_execution_mode(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     """Enforce a closed canonical mode while preserving the legacy argv path."""
+
+    if args.check and args.prepare_runtime_identity:
+        parser.error("--check and --prepare-runtime-identity are mutually exclusive")
+    if args.prepare_runtime_identity and args.output_runtime_identity is None:
+        parser.error("--output-runtime-identity is required with --prepare-runtime-identity")
+    if args.output_runtime_identity is not None and not args.prepare_runtime_identity:
+        parser.error("--output-runtime-identity requires --prepare-runtime-identity")
+    expected_runtime_identity = args.expected_runtime_identity_sha256
+    if expected_runtime_identity is not None:
+        normalized = str(expected_runtime_identity)
+        if len(normalized) != 64 or any(character not in "0123456789abcdef" for character in normalized):
+            parser.error("--expected-runtime-identity-sha256 must be a lowercase SHA-256 digest")
+        if args.check or args.prepare_runtime_identity:
+            parser.error("--expected-runtime-identity-sha256 is only valid for inference")
+        if args.runtime_verification_token is None or args.runtime_verification_token_sha256 is None:
+            parser.error("prepared inference requires the runtime verification token and its digest")
+    elif args.runtime_verification_token is not None or args.runtime_verification_token_sha256 is not None:
+        parser.error("runtime verification token arguments require --expected-runtime-identity-sha256")
+    token_sha256 = args.runtime_verification_token_sha256
+    if token_sha256 is not None and (
+        len(token_sha256) != 64 or any(character not in "0123456789abcdef" for character in token_sha256)
+    ):
+        parser.error("--runtime-verification-token-sha256 must be a lowercase SHA-256 digest")
 
     if args.execution_plan_stdin:
         if not args.candidate_id:
@@ -214,6 +262,126 @@ def _check_availability(model_variant_name: str) -> int:
     return 0
 
 
+def _build_inference_engine(
+    *,
+    model_variant_name: str,
+    model_key: str | None,
+    model_revision: str | None,
+    device: str,
+    use_coreml: bool,
+    non_commercial_ok: bool,
+    canonical_authority: _CanonicalWorkerAuthority | None,
+) -> Any:
+    """Construct the lazy DA3 engine without materializing model tensors."""
+
+    from ...lux_depth_v3.config import DA3Config, DeviceConfig
+    from ...lux_depth_v3.inference import DA3InferenceEngine
+
+    model_variant = _resolve_model_variant(model_variant_name)
+    config = DA3Config(
+        model_variant=model_variant,
+        model_key=model_key,
+        non_commercial_ok=non_commercial_ok,
+        model_revision=model_revision,
+        resolved_model_contract=(canonical_authority.resolved_model_contract if canonical_authority is not None else None),
+        device=DeviceConfig(device=device, use_coreml=use_coreml),
+    )
+    return DA3InferenceEngine(
+        config=config,
+        commercial_use=True,
+        validate_license_strict=False,
+        model_key=model_key,
+        non_commercial_ok=non_commercial_ok,
+    )
+
+
+def _prepare_worker_runtime_identity(
+    *,
+    engine: Any,
+    model_key: str | None,
+    model_revision: str | None,
+    requested_device: str,
+    use_coreml: bool,
+    canonical_authority: _CanonicalWorkerAuthority | None,
+) -> Any:
+    """Prepare local-only worker evidence and adapt canonical plans to core."""
+
+    from .da3_runtime_identity import (
+        build_prepared_cache_runtime_evidence,
+        prepare_da3_runtime_identity_with_verification_token,
+    )
+
+    if canonical_authority is not None:
+        resolved = canonical_authority.resolved_model_contract
+    else:
+        resolved = engine._resolve_model_contract(use_coreml_backend=use_coreml)  # noqa: SLF001
+    if model_revision and resolved.revision != model_revision:
+        raise RuntimeError("DA3 runtime preparation resolved a different model revision")
+
+    backend_value = getattr(getattr(engine, "backend", None), "value", None)
+    executed_backend = str(backend_value or getattr(engine, "backend", "unknown"))
+    actual_device = str(getattr(engine, "device", "unknown"))
+    evidence, verification_token = prepare_da3_runtime_identity_with_verification_token(
+        model_canonical_key=str(resolved.canonical_key),
+        model_repo_id=str(resolved.spec.repo_id),
+        model_lock_revision=resolved.revision,
+        requested_device=requested_device,
+        actual_device=actual_device,
+        executed_backend=executed_backend,
+    )
+    prepared = None
+    if canonical_authority is not None:
+        prepared = build_prepared_cache_runtime_evidence(
+            evidence,
+            plan=canonical_authority.plan,
+            candidate_authority=canonical_authority.candidate,
+        )
+    return evidence, prepared, verification_token
+
+
+def _require_cache_authorized_engine_runtime(engine: Any, *, expected_device: str) -> tuple[str, str]:
+    """Reject a fresh inference engine that differs from prepared authority."""
+
+    expected_backends = {"cpu": "pytorch_cpu", "mps": "pytorch_mps"}
+    expected_backend = expected_backends.get(expected_device)
+    backend_value = getattr(getattr(engine, "backend", None), "value", None)
+    actual_backend = str(backend_value or getattr(engine, "backend", "unknown"))
+    actual_device = str(getattr(engine, "device", "unknown"))
+    if expected_backend is None or actual_device != expected_device or actual_backend != expected_backend:
+        raise RuntimeError(
+            "DA3 inference engine differs from prepared cache authority: "
+            f"expected {expected_backend or 'unsupported'}/{expected_device}, "
+            f"observed {actual_backend}/{actual_device}"
+        )
+    return actual_backend, actual_device
+
+
+def _write_runtime_identity_report(
+    output_path: Path,
+    *,
+    evidence: Any,
+    prepared: Any | None,
+    verification_token: Any | None,
+) -> None:
+    """Write the closed worker preparation response."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    from .da3_runtime_identity import runtime_verification_token_sha256
+
+    payload = {
+        "schema": "tp.da3.worker-runtime-handshake.v1",
+        "runtime_evidence": evidence.to_mapping(),
+        "prepared_cache_runtime": None if prepared is None else prepared.to_payload(),
+        "runtime_identity_sha256": None if prepared is None else prepared.runtime_identity_sha256,
+        "runtime_verification_token": verification_token,
+        "runtime_verification_token_sha256": (
+            None if verification_token is None else runtime_verification_token_sha256(verification_token)
+        ),
+    }
+    with output_path.open("w", encoding="utf-8") as handle:
+        dump_json(payload, handle, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
 def _run_inference(
     *,
     input_image: Path,
@@ -226,33 +394,107 @@ def _run_inference(
     use_coreml: bool,
     non_commercial_ok: bool,
     canonical_authority: _CanonicalWorkerAuthority | None = None,
+    expected_runtime_identity_sha256: str | None = None,
+    runtime_verification_token_path: Path | None = None,
+    runtime_verification_token_sha256: str | None = None,
 ) -> int:
     """Run DA3 inference and persist structured outputs."""
-    from ...lux_depth_v3.config import DA3Config, DeviceConfig
-    from ...lux_depth_v3.inference import DA3InferenceEngine
+    verification_token = None
+    bound_runtime_identity_sha256: str | None = None
+    expected_bound_backend = {"cpu": "pytorch_cpu", "mps": "pytorch_mps"}.get(device)
+    if expected_runtime_identity_sha256 is not None:
+        from .da3_runtime_identity import (
+            load_da3_worker_runtime_handshake,
+            verify_runtime_verification_token,
+        )
+
+        if runtime_verification_token_path is None or runtime_verification_token_sha256 is None:
+            raise RuntimeError("DA3 inference is missing its runtime verification token")
+        verification_token = load_da3_worker_runtime_handshake(
+            runtime_verification_token_path,
+            maximum_bytes=32 * 1024 * 1024,
+        )
+        worker_runtime_digest = verification_token.get("worker_runtime_identity_sha256")
+        if (
+            expected_bound_backend is None
+            or not isinstance(worker_runtime_digest, str)
+            or not verify_runtime_verification_token(
+                verification_token,
+                expected_token_sha256=runtime_verification_token_sha256,
+                expected_worker_runtime_identity_sha256=worker_runtime_digest,
+                expected_prepared_runtime_identity_sha256=expected_runtime_identity_sha256,
+                expected_requested_device=device,
+                expected_actual_device=device,
+                expected_executed_backend=expected_bound_backend,
+                revalidate_worker_import_environment=True,
+            )
+        ):
+            raise RuntimeError("DA3 worker runtime verification token is stale or invalid")
+        bound_runtime_identity_sha256 = str(verification_token["prepared_runtime"]["runtime_identity_sha256"])
 
     image = Image.open(input_image).convert("RGB")
-    model_variant = _resolve_model_variant(model_variant_name)
-    config = DA3Config(
-        model_variant=model_variant,
+    engine = _build_inference_engine(
+        model_variant_name=model_variant_name,
         model_key=model_key,
-        non_commercial_ok=non_commercial_ok,
         model_revision=model_revision,
-        resolved_model_contract=(canonical_authority.resolved_model_contract if canonical_authority is not None else None),
-        device=DeviceConfig(device=device, use_coreml=use_coreml),
-    )
-    engine = DA3InferenceEngine(
-        config=config,
-        commercial_use=True,
-        validate_license_strict=False,
-        model_key=model_key,
+        device=device,
+        use_coreml=use_coreml,
         non_commercial_ok=non_commercial_ok,
+        canonical_authority=canonical_authority,
     )
+
+    expected_engine_runtime: tuple[str, str] | None = None
+    if expected_runtime_identity_sha256 is not None:
+        expected_engine_runtime = _require_cache_authorized_engine_runtime(engine, expected_device=device)
+
+    if expected_runtime_identity_sha256 is not None:
+        # The preparation path is deliberately local-only.  Once it has
+        # authorized a miss execution, prevent the normal loader from changing
+        # the snapshot over the network between preparation and inference.
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
     result = engine.predict(image)
+
+    if expected_runtime_identity_sha256 is not None:
+        from .da3_runtime_identity import verify_runtime_verification_token
+
+        if verification_token is None or runtime_verification_token_sha256 is None:
+            raise RuntimeError("DA3 worker runtime verification token was not retained")
+        worker_runtime_digest = str(verification_token["worker_runtime_identity_sha256"])
+        if not verify_runtime_verification_token(
+            verification_token,
+            expected_token_sha256=runtime_verification_token_sha256,
+            expected_worker_runtime_identity_sha256=worker_runtime_digest,
+            expected_prepared_runtime_identity_sha256=expected_runtime_identity_sha256,
+            expected_requested_device=device,
+            expected_actual_device=device,
+            expected_executed_backend=expected_bound_backend,
+            revalidate_worker_import_environment=True,
+        ):
+            raise RuntimeError("DA3 worker runtime identity changed during inference")
+        observed_engine_runtime = _require_cache_authorized_engine_runtime(engine, expected_device=device)
+        result_metadata = getattr(result, "metadata", None)
+        if (
+            expected_engine_runtime != observed_engine_runtime
+            or not isinstance(result_metadata, dict)
+            or result_metadata.get("backend") != expected_engine_runtime[0]
+            or result_metadata.get("device") != expected_engine_runtime[1]
+        ):
+            raise RuntimeError("DA3 inference result differs from prepared cache authority")
 
     output_depth.parent.mkdir(parents=True, exist_ok=True)
     output_json.parent.mkdir(parents=True, exist_ok=True)
-    np.save(output_depth, np.asarray(result.depth_map, dtype=np.float32), allow_pickle=False)
+    depth_array = np.asarray(result.depth_map, dtype=np.float32)
+    np.save(output_depth, depth_array, allow_pickle=False)
+    depth_digest = hashlib.sha256()
+    with output_depth.open("rb") as depth_handle:
+        while True:
+            chunk = depth_handle.read(1024 * 1024)
+            if not chunk:
+                break
+            depth_digest.update(chunk)
+    depth_size_bytes = output_depth.stat().st_size
 
     payload = {
         "metadata": result.metadata,
@@ -270,12 +512,23 @@ def _run_inference(
             "model_backend_id": canonical_authority.model_backend_id,
             "executed_backend_id": "da3",
         }
+    if expected_runtime_identity_sha256 is not None:
+        if bound_runtime_identity_sha256 is None:
+            raise RuntimeError("DA3 inference did not retain its authenticated runtime identity")
+        payload["runtime_identity_sha256"] = bound_runtime_identity_sha256
+        payload["depth_artifact"] = {
+            "sha256": depth_digest.hexdigest(),
+            "size_bytes": depth_size_bytes,
+            "shape": [int(value) for value in depth_array.shape],
+            "dtype": str(depth_array.dtype),
+            "fortran_order": bool(depth_array.flags.f_contiguous and not depth_array.flags.c_contiguous),
+        }
     with output_json.open("w", encoding="utf-8") as handle:
         dump_json(
             payload,
             handle,
-            indent=2,
             sort_keys=True,
+            separators=(",", ":"),
             ensure_ascii=False,
             allow_nan=False,
         )
@@ -319,8 +572,39 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         return _check_availability(model_variant_name)
 
+    if args.prepare_runtime_identity:
+        engine = _build_inference_engine(
+            model_variant_name=model_variant_name,
+            model_key=model_key,
+            model_revision=model_revision,
+            device=device,
+            use_coreml=use_coreml,
+            non_commercial_ok=non_commercial_ok,
+            canonical_authority=canonical_authority,
+        )
+        evidence, prepared, verification_token = _prepare_worker_runtime_identity(
+            engine=engine,
+            model_key=model_key,
+            model_revision=model_revision,
+            requested_device=device,
+            use_coreml=use_coreml,
+            canonical_authority=canonical_authority,
+        )
+        if args.output_runtime_identity is None:  # pragma: no cover - parser enforces this
+            parser.error("--output-runtime-identity is required with --prepare-runtime-identity")
+        _write_runtime_identity_report(
+            args.output_runtime_identity.expanduser(),
+            evidence=evidence,
+            prepared=prepared,
+            verification_token=verification_token,
+        )
+        return 0
+
     if args.input_image is None or args.output_depth is None or args.output_json is None:
-        parser.error("--input-image, --output-depth, and --output-json are required unless --check is used.")
+        parser.error(
+            "--input-image, --output-depth, and --output-json are required unless "
+            "--check or --prepare-runtime-identity is used."
+        )
 
     return _run_inference(
         input_image=args.input_image.expanduser(),
@@ -333,6 +617,15 @@ def main(argv: list[str] | None = None) -> int:
         use_coreml=use_coreml,
         non_commercial_ok=non_commercial_ok,
         canonical_authority=canonical_authority,
+        expected_runtime_identity_sha256=(
+            str(args.expected_runtime_identity_sha256) if args.expected_runtime_identity_sha256 else None
+        ),
+        runtime_verification_token_path=(
+            args.runtime_verification_token.expanduser() if args.runtime_verification_token else None
+        ),
+        runtime_verification_token_sha256=(
+            str(args.runtime_verification_token_sha256) if args.runtime_verification_token_sha256 else None
+        ),
     )
 
 

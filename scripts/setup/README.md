@@ -35,10 +35,15 @@ contract and by explicit `--da3-python` overrides.
 - Fetches the validated PR #110 runtime-contract ref by default, then synchronizes
   the checkout to the pinned commit unless `--ref` / `DA3_RUNTIME_REF` and
   `--fetch-ref` / `DA3_RUNTIME_FETCH_REF` override it
-- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
-- Creates the isolated DA3 venv at `.runtime/Depth-Anything-3/.venv-da3`
-- Installs the pinned DA3-compatible baseline dependency profile without
-  `pycolmap` or `xformers`
+- Prefers an exact Python 3.11 executable for the cache-authorizing runtime,
+  even when the repository `.venv` uses a newer supported interpreter. Use
+  `--bootstrap-python` or `DA3_BOOTSTRAP_PYTHON` to select another Python 3.11+
+  interpreter explicitly; newer versions remain inference-only.
+- Creates the isolated DA3 venv at `.runtime/Depth-Anything-3/.venv-da3`.
+  A baseline reinstall verifies and clears an existing venv first so optional
+  profile packages cannot survive into an authority-enabled runtime.
+- Installs `requirements/da3-runtime-darwin-arm64.txt` plus governed bootstrap
+  tools and the pinned DA3 source without dependency expansion
 - Supports explicit `colmap` and `xformers` profiles when those optional
   feature lanes are requested. `pycolmap` is pinned by the script. `xformers`
   is intentionally operator-managed by default because compatible wheels vary
@@ -46,6 +51,15 @@ contract and by explicit `--da3-python` overrides.
   environment has a known-good wheel.
 - Uses the PR #110-style dependency contract for the default ref: NumPy 2,
   optional `pycolmap`, optional `xformers`, and baseline `open3d`
+- Writes cache-authority evidence only for the default `baseline` profile,
+  exact source revision, exact lock, native Darwin arm64, and Python 3.11.
+  Optional profiles and overrides remain usable for inference but bypass cache
+  reads and writes.
+- Binds worker import roots, executable `.pth`/editable-path configuration,
+  resolved dependency origins, output-affecting portal source, and live parent
+  hardware into cache authority. If any retained runtime input drifts, that
+  backend continues uncached and cannot regain cache authority until the
+  process restarts.
 - Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
 - Runs the DA3 worker readiness check used by the subprocess adapter
 
@@ -60,8 +74,12 @@ lux-depth-v3 --input-dir ./input_images --output-dir ./output --da3-python ~/ven
 ```
 
 **Requirements:**
-- Git repository
-- Bash shell (Linux, macOS, or Windows with WSL/Git Bash)
+- Python 3.11+, Git, and Bash
+
+Linux/WSL and non-3.11 environments remain inference-capable but are marked
+non-authorizing. Depth-cache authority additionally requires native Apple
+Silicon macOS, exact Python 3.11, the baseline profile, and no legacy
+`DA3_NUMPY_SPEC` or `DA3_RUNTIME_CONTRACT` override.
 
 ### `install_depth_pro_runtime.sh`
 

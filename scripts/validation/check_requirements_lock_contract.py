@@ -30,6 +30,8 @@ They exist for documentation but install path is via bootstrap script.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -45,6 +47,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_ROOT / "requirements"
 MAKEFILE_PATH = REQUIREMENTS_DIR / "Makefile"
 LOCK_OWNERSHIP_PATH = REQUIREMENTS_DIR / "lock_ownership.yml"
+DA3_RUNTIME_GOVERNANCE_PATH = REPO_ROOT / "config" / "da3_runtime_identity_contract.json"
+DA3_RUNTIME_INSTALLER_PATH = REPO_ROOT / "scripts" / "setup" / "install_da3_runtime.sh"
 
 # Core lockfiles that must always exist
 CORE_LOCK_FILES = (
@@ -58,7 +62,8 @@ CORE_LOCK_FILES = (
 
 # Target-owned ML core lockfiles (pip-compile multi-platform fix)
 PLATFORM_ML_CORE_LOCK_FILES = ("ml-core-darwin-arm64.txt",)
-GOVERNED_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES
+DA3_RUNTIME_LOCK_FILES = ("da3-runtime-darwin-arm64.txt",)
+GOVERNED_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES + DA3_RUNTIME_LOCK_FILES
 
 # Non-core optional ML lockfiles are not part of the checked-in contract.
 # If they appear in the repository state, validation fails so accidental
@@ -87,6 +92,10 @@ SCRIPTED_ONLY_ML_LAYERS = ("ml-sam2.txt",)
 # All lockfiles for header validation (includes scripted for consistency checking)
 ALL_LOCK_FILES = GOVERNED_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS
 PLATFORM_LOCK_FORBIDDEN_PATTERNS = {
+    "da3-runtime-darwin-arm64.txt": (
+        r"""platform_system\s*==\s*["']Linux["']""",
+        r"""platform_system\s*!=\s*["']Darwin["']""",
+    ),
     "ml-core-darwin-arm64.txt": (
         r"""platform_system\s*==\s*["']Linux["']""",
         r"""platform_system\s*!=\s*["']Darwin["']""",
@@ -98,6 +107,7 @@ FORBIDDEN_GENERIC_PROVENANCE_OPTIONS = ("--no-index",)
 PACKAGE_PIN_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s;#]+)")
 NUMERIC_VERSION_PATTERN = re.compile(r"\d+")
 REQUIREMENT_NAME_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)")
+DA3_INSTALLER_LOCK_SHA_PATTERN = re.compile(r'^DA3_LOCK_SHA256="([0-9a-f]{64})"$', re.MULTILINE)
 
 DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
 DARWIN_LOCKFILE_FORBIDDEN_PACKAGES = ("triton",)
@@ -255,6 +265,7 @@ def validate_ml_layer_structure() -> list[str]:
     errors: list[str] = []
     # Platform-specific lockfile layers (must exist)
     platform_in_files = [
+        "da3-runtime-darwin-arm64.in",
         "ml-core-darwin-arm64.in",
     ]
     # Standard/stub layer inputs (must exist; not all produce supported locks)
@@ -414,7 +425,7 @@ def validate_darwin_lock_purity() -> list[str]:
     """Fail if Darwin lockfiles contain Linux/CUDA-only packages."""
     errors: list[str] = []
 
-    for lock_name in ("ml-core-darwin-arm64.txt",):
+    for lock_name in ("da3-runtime-darwin-arm64.txt", "ml-core-darwin-arm64.txt"):
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
             continue
@@ -427,6 +438,51 @@ def validate_darwin_lock_purity() -> list[str]:
                     f"{lock_path} contains forbidden Darwin package {package_name!r}. "
                     "Darwin platform-core lockfiles must not contain Linux/CUDA-only packages."
                 )
+
+    return errors
+
+
+def validate_da3_runtime_governance_digest(
+    *,
+    lock_path: Path | None = None,
+    governance_path: Path | None = None,
+    installer_path: Path | None = None,
+) -> list[str]:
+    """Bind every DA3 lock-digest consumer to the checked-in lock bytes."""
+
+    resolved_lock = lock_path or REQUIREMENTS_DIR / "da3-runtime-darwin-arm64.txt"
+    resolved_governance = governance_path or DA3_RUNTIME_GOVERNANCE_PATH
+    resolved_installer = installer_path or DA3_RUNTIME_INSTALLER_PATH
+    errors: list[str] = []
+
+    try:
+        actual_sha256 = hashlib.sha256(resolved_lock.read_bytes()).hexdigest()
+    except OSError as exc:
+        return [f"Unable to hash governed DA3 runtime lock {resolved_lock}: {exc}"]
+
+    try:
+        governance = json.loads(resolved_governance.read_text(encoding="utf-8"))
+        governance_sha256 = governance.get("dependency_lock_sha256") if isinstance(governance, dict) else None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        errors.append(f"Unable to read DA3 runtime governance contract {resolved_governance}: {exc}")
+        governance_sha256 = None
+    if governance_sha256 != actual_sha256:
+        errors.append(
+            f"{resolved_governance} must bind dependency_lock_sha256={actual_sha256!r} "
+            f"for {resolved_lock}; observed {governance_sha256!r}"
+        )
+
+    try:
+        installer_text = resolved_installer.read_text(encoding="utf-8")
+        installer_matches = DA3_INSTALLER_LOCK_SHA_PATTERN.findall(installer_text)
+    except (OSError, UnicodeDecodeError) as exc:
+        errors.append(f"Unable to read DA3 runtime installer {resolved_installer}: {exc}")
+        installer_matches = []
+    if installer_matches != [actual_sha256]:
+        errors.append(
+            f"{resolved_installer} must declare exactly one DA3_LOCK_SHA256={actual_sha256!r} "
+            f"for {resolved_lock}; observed {installer_matches!r}"
+        )
 
     return errors
 
@@ -554,9 +610,24 @@ def main() -> int:
         "--expected-python",
         help="Expected pip-compile Python header for --staged-generic-dir",
     )
+    parser.add_argument(
+        "--da3-runtime-digest-only",
+        action="store_true",
+        help="Validate only the governed DA3 lock digest and both checked-in consumers",
+    )
     args = parser.parse_args()
 
     errors: list[str] = []
+
+    if args.da3_runtime_digest_only:
+        errors.extend(validate_da3_runtime_governance_digest())
+        if errors:
+            print("ERROR: DA3 runtime lock digest validation failed:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return 1
+        print("DA3 runtime lock digest contract passed: governance and installer consumers match the lock bytes.")
+        return 0
 
     try:
         expected_python = read_expected_lock_python_version()
@@ -589,7 +660,9 @@ def main() -> int:
     errors.extend(validate_darwin_input_guards())
     errors.extend(validate_platform_lock_divergence())
     errors.extend(validate_darwin_lock_purity())
+    errors.extend(validate_da3_runtime_governance_digest())
     errors.extend(validate_platform_lock_runtime_compatibility())
+    errors.extend(find_violations([REQUIREMENTS_DIR / name for name in DA3_RUNTIME_LOCK_FILES]))
 
     if errors:
         print("ERROR: requirements lock contract validation failed:", file=sys.stderr)

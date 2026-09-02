@@ -27,8 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
             ),
         ),
         (
-            "scripts/setup/install_da3_runtime.sh",
-            ('"pillow==12.3.0"', '"torch==2.13.0"', '"torchvision==0.28.0"', '"transformers==5.5.0"'),
+            "requirements/da3-runtime-darwin-arm64.txt",
+            ("pillow==12.3.0", "torch==2.13.0", "torchvision==0.28.0", "transformers==5.5.0"),
         ),
         (
             "scripts/setup/install_depth_pro_runtime.sh",

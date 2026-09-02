@@ -68,17 +68,30 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "resolve_platform_lockfile": (".execution_identity", "resolve_platform_lockfile"),
     "should_execute": (".execution_identity", "should_execute"),
     "verify_determinism": (".execution_identity", "verify_determinism"),
-    # Execution Identity v3 seed (ADR-051, intentionally non-cacheable)
+    # Execution Identity v3 (ADR-051)
+    "BackendRuntimeIdentity": (".execution_identity_v3", "BackendRuntimeIdentity"),
     "EXECUTION_IDENTITY_V3_INCOMPLETE": (
         ".execution_identity_v3",
         "EXECUTION_IDENTITY_V3_INCOMPLETE",
     ),
     "EXECUTION_IDENTITY_V3_SCHEMA": (".execution_identity_v3", "EXECUTION_IDENTITY_V3_SCHEMA"),
+    "EXECUTION_IDENTITY_V3_MATERIALIZED": (
+        ".execution_identity_v3",
+        "EXECUTION_IDENTITY_V3_MATERIALIZED",
+    ),
     "ExecutionIdentityV3": (".execution_identity_v3", "ExecutionIdentityV3"),
     "ExecutionIdentityV3SeedError": (".execution_identity_v3", "ExecutionIdentityV3SeedError"),
     "IncompleteExecutionIdentityV3Error": (
         ".execution_identity_v3",
         "IncompleteExecutionIdentityV3Error",
+    ),
+    "MaterializedExecutionIdentityV3": (
+        ".execution_identity_v3",
+        "MaterializedExecutionIdentityV3",
+    ),
+    "MaterializedExecutionIdentityV3Error": (
+        ".execution_identity_v3",
+        "MaterializedExecutionIdentityV3Error",
     ),
     # Canonical execution plan (ADR-051, non-activating contract)
     "BackendCandidateIntent": (".execution_plan", "BackendCandidateIntent"),
@@ -156,12 +169,16 @@ __all__ = [
     "resolve_platform_lockfile",
     "should_execute",
     "verify_determinism",
-    # Execution Identity v3 seed (non-cacheable until runtime materialization)
+    # Execution Identity v3
+    "BackendRuntimeIdentity",
     "EXECUTION_IDENTITY_V3_INCOMPLETE",
+    "EXECUTION_IDENTITY_V3_MATERIALIZED",
     "EXECUTION_IDENTITY_V3_SCHEMA",
     "ExecutionIdentityV3",
     "ExecutionIdentityV3SeedError",
     "IncompleteExecutionIdentityV3Error",
+    "MaterializedExecutionIdentityV3",
+    "MaterializedExecutionIdentityV3Error",
     # Canonical execution plan (named explicitly to avoid collision with the
     # retained Lux flat pipeline_coordinator.ExecutionPlan compatibility type)
     "BackendCandidateIntent",

@@ -410,6 +410,7 @@ make compile
 ```bash
 cd requirements/
 make compile-ml-darwin-arm64      # native Darwin arm64 only
+make compile-da3-runtime-darwin-arm64  # native Darwin arm64 + Python 3.11 only
 ```
 
 5. Commit the `.in` file and any `.txt` files that are part of the checked-in contract for that layer
@@ -453,6 +454,7 @@ For target-owned ML locks, use the explicit authoritative-lane command instead:
 ```bash
 cd requirements/
 make update-ml-darwin-arm64
+make update-da3-runtime-darwin-arm64
 ```
 
 These commands respect the version constraints in the `.in` files but only the explicit target-owned commands may regenerate governed ML target locks.
@@ -468,15 +470,27 @@ make check
 
 `make clean` recovers any stale publication and removes the complete six-file
 generic set while holding the same destination writer lock used by publication.
-Target-owned ML lock cleanup remains a separate explicit step after the generic
-lock operation.
+Target-owned ML and DA3 runtime lock cleanup remains a separate explicit step
+after the generic lock operation.
 
 For target-owned ML locks, use:
 
 ```bash
 cd requirements/
 make check-ml-darwin-arm64
+make check-da3-runtime-darwin-arm64
 ```
+
+`da3-runtime-darwin-arm64.txt` is the complete exact closure consumed by the
+isolated DA3 baseline installer. It is authoritative only when generated and
+checked on native Darwin arm64 with the pinned Python 3.11/pip-tools toolchain.
+The compile, update, and check commands also hash the resulting lock and verify
+that both `config/da3_runtime_identity_contract.json` and
+`scripts/setup/install_da3_runtime.sh` carry that exact digest. A lock rotation
+must update both consumers in the same change; the public command fails before
+reporting success when either digest is stale.
+Optional `colmap` or `xformers` additions remain inference-only and cannot
+authorize depth-cache reuse.
 
 ## 🔧 Makefile Targets
 
@@ -496,6 +510,9 @@ Target-owned ML commands:
   compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only
   update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only
   check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only
+  compile-da3-runtime-darwin-arm64 Compile the isolated DA3 lock on native Darwin arm64/Python 3.11
+  update-da3-runtime-darwin-arm64  Update the isolated DA3 lock on native Darwin arm64/Python 3.11
+  check-da3-runtime-darwin-arm64   Verify the isolated DA3 lock on native Darwin arm64/Python 3.11
   compile-ml-linux-x86_64    Retired unsupported lane - always fails closed
   update-ml-linux-x86_64     Retired unsupported lane - always fails closed
   check-ml-linux-x86_64      Retired unsupported lane - always fails closed
@@ -505,6 +522,7 @@ Target-owned ML commands:
 
 Target-owned ML lockfiles:
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
+  da3-runtime-darwin-arm64.txt Isolated cache-authorizing DA3 runtime closure
   macOS Intel/Linux          retired unsupported lanes; no checked-in installable ML lock
 
 Forbidden checked-in optional ML lock targets:

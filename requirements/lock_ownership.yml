@@ -42,3 +42,9 @@ locks:
     status: active
     allowed_contexts:
       - local-darwin-arm64
+  da3-runtime-darwin-arm64.txt:
+    target_id: da3-runtime-darwin-arm64
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - local-darwin-arm64

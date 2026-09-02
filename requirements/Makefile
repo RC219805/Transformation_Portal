@@ -60,10 +60,11 @@ PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 .PHONY: all compile compile-all compile-generic compile-ml-layers compile-accel compile-hash-pilot check-hash-pilot \
 	update update-generic help clean check check-generic \
 	compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
+	compile-da3-runtime-darwin-arm64 update-da3-runtime-darwin-arm64 check-da3-runtime-darwin-arm64 \
 	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
 	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
 	_publish-generic-lock-set _prepare-generic-lock-set \
-	require-pip-compile require-darwin-arm64-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
+	require-pip-compile require-darwin-arm64-authority require-da3-runtime-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
@@ -89,6 +90,9 @@ help:
 	@echo "  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only"
+	@echo "  compile-da3-runtime-darwin-arm64 Compile the isolated DA3 runtime lock on native Darwin arm64/Python 3.11"
+	@echo "  update-da3-runtime-darwin-arm64  Update the isolated DA3 runtime lock on native Darwin arm64/Python 3.11"
+	@echo "  check-da3-runtime-darwin-arm64   Verify the isolated DA3 runtime lock on native Darwin arm64/Python 3.11"
 	@echo "  compile-ml-linux-x86_64    Retired unsupported lane - always fails closed"
 	@echo "  update-ml-linux-x86_64     Retired unsupported lane - always fails closed"
 	@echo "  check-ml-linux-x86_64      Retired unsupported lane - always fails closed"
@@ -98,6 +102,7 @@ help:
 	@echo ""
 	@echo "Target-owned ML lockfiles:"
 	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
+	@echo "  da3-runtime-darwin-arm64.txt Isolated DA3 cache-authorizing runtime closure"
 	@echo "  macOS Intel/Linux          retired unsupported lanes; no checked-in installable ML lock"
 	@echo ""
 	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
@@ -253,6 +258,14 @@ require-darwin-arm64-authority:
 		exit 1; \
 	fi
 
+require-da3-runtime-authority: require-darwin-arm64-authority require-pip-compile
+	@reported_python_version="$$($(PIP_PYTHON_BIN) -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)"; \
+	if [ "$$reported_python_version" != "3.11" ]; then \
+		echo "ERROR: DA3 runtime lock authority requires the pip-compile toolchain to run under Python 3.11."; \
+		echo "ERROR: $(PIP_PYTHON_BIN) reported Python $${reported_python_version:-unknown}."; \
+		exit 1; \
+	fi
+
 refuse-darwin-x86_64-authority:
 	@echo "ERROR: macOS Intel ML lockfiles are retired unsupported manifests."
 	@echo "ERROR: Do not regenerate or reinstall retired vulnerable torch baselines."
@@ -302,6 +315,44 @@ check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile check-
 		exit 1; \
 	fi; \
 	echo "✓ Darwin arm64 ML lock is up-to-date"
+
+da3-runtime-darwin-arm64.txt: require-da3-runtime-authority da3-runtime-darwin-arm64.in
+	@echo "Compiling da3-runtime-darwin-arm64.txt (isolated DA3 baseline)..."
+	@$(PIP_COMPILE) da3-runtime-darwin-arm64.in -o da3-runtime-darwin-arm64.txt
+	@$(PIP_PYTHON_BIN) ../scripts/validation/check_requirements_lock_contract.py --da3-runtime-digest-only
+
+compile-da3-runtime-darwin-arm64: da3-runtime-darwin-arm64.txt
+	@$(PIP_PYTHON_BIN) ../scripts/validation/check_requirements_lock_contract.py --da3-runtime-digest-only
+	@echo "✓ Darwin arm64 DA3 runtime lock compiled successfully"
+
+update-da3-runtime-darwin-arm64: require-da3-runtime-authority
+	@echo "Updating da3-runtime-darwin-arm64.txt on authoritative Darwin arm64/Python 3.11 lane..."
+	@$(PIP_COMPILE) --upgrade da3-runtime-darwin-arm64.in -o da3-runtime-darwin-arm64.txt
+	@$(PIP_PYTHON_BIN) ../scripts/validation/check_requirements_lock_contract.py --da3-runtime-digest-only
+	@echo "✓ Darwin arm64 DA3 runtime lock updated successfully"
+
+check-da3-runtime-darwin-arm64: require-da3-runtime-authority
+	@echo "Checking Darwin arm64 DA3 runtime lock..."
+	@set -euo pipefail; \
+	repo_dir="$$(pwd)"; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp da3-runtime-darwin-arm64.in "$$tmp_dir"/; \
+	if [ ! -f "$$repo_dir/da3-runtime-darwin-arm64.txt" ]; then \
+		echo "ERROR: Required lockfile missing: da3-runtime-darwin-arm64.txt"; \
+		exit 1; \
+	fi; \
+	cd "$$tmp_dir"; \
+	$(PIP_COMPILE) da3-runtime-darwin-arm64.in -o da3-runtime-darwin-arm64.txt >/dev/null; \
+	normalize_req() { \
+		awk '!/^[[:space:]]*#/ && !/^[[:space:]]*$$/ { print }' "$$1"; \
+	}; \
+	if ! diff -u <(normalize_req "$$tmp_dir/da3-runtime-darwin-arm64.txt") <(normalize_req "$$repo_dir/da3-runtime-darwin-arm64.txt") >/dev/null; then \
+		echo "❌ da3-runtime-darwin-arm64.txt is out of date. Run 'make compile-da3-runtime-darwin-arm64' on native Darwin arm64 with Python 3.11."; \
+		exit 1; \
+	fi; \
+	echo "✓ Darwin arm64 DA3 runtime lock is up-to-date"
+	@$(PIP_PYTHON_BIN) ../scripts/validation/check_requirements_lock_contract.py --da3-runtime-digest-only
 
 compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64: refuse-linux-x86_64-authority
 
@@ -374,5 +425,5 @@ clean:
 	@echo "Removing compiled .txt files..."
 	@python3 ../scripts/utilities/publish_requirement_locks.py \
 		--destination-dir "$(CURDIR)" --clean-generic
-	@rm -f ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt ml-sam2.txt
+	@rm -f ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt ml-sam2.txt da3-runtime-darwin-arm64.txt
 	@echo "✓ Cleanup complete"

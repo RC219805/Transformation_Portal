@@ -34,6 +34,7 @@ PHASE6_SMOKE_TESTS := \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
         compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
+        compile-da3-runtime-darwin-arm64 update-da3-runtime-darwin-arm64 check-da3-runtime-darwin-arm64 \
         compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
         compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64
 
@@ -107,6 +108,9 @@ help:
 	@echo "  compile-ml-darwin-arm64  Compile target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  update-ml-darwin-arm64   Update target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  check-ml-darwin-arm64    Verify target-owned Darwin arm64 ML lock via requirements/"
+	@echo "  compile-da3-runtime-darwin-arm64 Compile isolated DA3 runtime lock via requirements/"
+	@echo "  update-da3-runtime-darwin-arm64  Update isolated DA3 runtime lock via requirements/"
+	@echo "  check-da3-runtime-darwin-arm64   Verify isolated DA3 runtime lock via requirements/"
 	@echo "  compile-ml-linux-x86_64  Retired unsupported Linux ML lane (fails closed)"
 	@echo "  update-ml-linux-x86_64   Retired unsupported Linux ML lane (fails closed)"
 	@echo "  check-ml-linux-x86_64    Retired unsupported Linux ML lane (fails closed)"
@@ -830,6 +834,15 @@ update-ml-darwin-arm64:
 
 check-ml-darwin-arm64:
 	@$(MAKE) -C requirements check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+compile-da3-runtime-darwin-arm64:
+	@$(MAKE) -C requirements compile-da3-runtime-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+update-da3-runtime-darwin-arm64:
+	@$(MAKE) -C requirements update-da3-runtime-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+check-da3-runtime-darwin-arm64:
+	@$(MAKE) -C requirements check-da3-runtime-darwin-arm64 LOCK_PYTHON_VERSION=3.11
 
 compile-ml-linux-x86_64:
 	@$(MAKE) -C requirements compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11
