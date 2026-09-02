@@ -284,6 +284,10 @@ class TestCLIValidation:
             def __init__(self, *_args, **_kwargs):
                 pass
 
+            @classmethod
+            def from_prepared(cls, *_args, **_kwargs):
+                return cls()
+
             def enhance_batch(self, *_args, **_kwargs):
                 return [{"status": "ok"}]
 
@@ -574,16 +578,18 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
-            nonlocal captured_config
-            captured_config = config
-            mock_orch = MagicMock()
-            mock_orch.enhance_batch.return_value = [{"status": "ok"}]
-            return mock_orch
+        class CapturingOrchestrator:
+            @classmethod
+            def from_prepared(cls, prepared, output_root):
+                nonlocal captured_config
+                captured_config = prepared.runtime_config
+                mock_orch = MagicMock()
+                mock_orch.enhance_batch.return_value = [{"status": "ok"}]
+                return mock_orch
 
         with patch(
             "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
-            side_effect=mock_orch_init,
+            CapturingOrchestrator,
         ):
             result = runner.invoke(
                 app,
@@ -660,9 +666,9 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = [
                 {"status": "ok"},
@@ -670,7 +676,7 @@ class TestCLIConfiguration:
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -740,15 +746,15 @@ class TestCLIConfiguration:
         # Mock EnhanceOrchestrator to capture config
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -779,15 +785,15 @@ class TestCLIConfiguration:
         # Mock EnhanceOrchestrator to capture config
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -817,15 +823,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             runner.invoke(
@@ -856,15 +862,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = [{"status": "ok"}]
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -935,15 +941,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -972,15 +978,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1009,15 +1015,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1047,6 +1053,10 @@ class TestCLIConfiguration:
         class FakeOrchestrator:
             def __init__(self, *_args, **_kwargs):
                 pass
+
+            @classmethod
+            def from_prepared(cls, *_args, **_kwargs):
+                return cls()
 
             def enhance_batch(self, *_args, **_kwargs):
                 return [{"status": "ok"}]
@@ -1084,15 +1094,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1119,15 +1129,15 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1159,16 +1169,16 @@ class TestCLIConfiguration:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             del output_root
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = [{"status": "ok"}]
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -1265,16 +1275,16 @@ class TestSegmentationCLI:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             del output_root
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = [{"status": "ok"}]
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             result = runner.invoke(
@@ -1294,7 +1304,8 @@ class TestSegmentationCLI:
 
         assert result.exit_code == 0
         assert captured_config is not None
-        assert captured_config.material_segmentation_backend == "efficientsam"
+        assert captured_config.enable_material_segmentation is False
+        assert captured_config.material_segmentation_backend == "stub"
 
     def test_segmentation_config_defaults(self, tmp_path):
         """Test segmentation config with default values."""
@@ -1306,15 +1317,15 @@ class TestSegmentationCLI:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1343,15 +1354,15 @@ class TestSegmentationCLI:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(
@@ -1387,15 +1398,15 @@ class TestSegmentationCLI:
 
         captured_config = None
 
-        def mock_orch_init(config, output_root):
+        def mock_orch_init(prepared, output_root):
             nonlocal captured_config
-            captured_config = config
+            captured_config = prepared.runtime_config
             mock_orch = MagicMock()
             mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
 
         with patch(
-            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
             side_effect=mock_orch_init,
         ):
             _result = runner.invoke(

@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from scripts.validation import validate_efficientsam_production
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 pytestmark = pytest.mark.unit
+
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts/validation/validate_efficientsam_production.py"
+SCRIPT_SPEC = importlib.util.spec_from_file_location("validate_efficientsam_production_under_test", SCRIPT_PATH)
+assert SCRIPT_SPEC is not None and SCRIPT_SPEC.loader is not None
+validate_efficientsam_production = importlib.util.module_from_spec(SCRIPT_SPEC)
+SCRIPT_SPEC.loader.exec_module(validate_efficientsam_production)
 
 
 def test_validation_wraps_planned_paths_as_image_inputs(
