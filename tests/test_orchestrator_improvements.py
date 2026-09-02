@@ -678,12 +678,13 @@ class TestFingerprintDrivenSkipInvalidation:
 
         assert should_skip is False
 
-    def test_downstream_only_change_denies_manifest_reuse_but_reuses_cached_depth(self, temp_workspace, caplog):
-        """Downstream-only changes should rerun Stage A from cached depth without inference."""
+    def test_unprepared_downstream_change_denies_manifest_and_cache_reuse(self, temp_workspace, caplog):
+        """Legacy unprepared runs must bypass identity-v3 cache reads and writes."""
         import logging
 
         import numpy as np
 
+        from transformation_portal.depth.backends.protocol import DepthResult
         from transformation_portal.lux_depth_v3.input_manager import ImageInput
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
@@ -722,22 +723,23 @@ class TestFingerprintDrivenSkipInvalidation:
                 self.license_type = Mock(value="commercial")
                 self.model_id = "depth-anything/Depth-Anything-V3-Large"
                 self.compute = Mock(
-                    side_effect=AssertionError("Depth inference should not run on cache hit"),
+                    return_value=DepthResult(
+                        depth_map=cached_depth,
+                        original_image=np.zeros((4, 4, 3), dtype=np.uint8),
+                        metadata={},
+                        depth_units="relative",
+                        backend_id="da3",
+                        device="cpu",
+                        dtype="float32",
+                        input_size=(4, 4),
+                    )
                 )
 
         backend = StubBackend()
         orchestrator.depth_backend = backend
         orchestrator._depth_backend_cache["da3"] = backend
-
-        image_sha256 = orchestrator._compute_or_skip_hash(
-            test_image,
-            manifest_exists=False,
-            for_manifest_write=True,
-        )
-        assert image_sha256 is not None
-        cache_fingerprint = orchestrator._build_depth_cache_fingerprint("da3")
+        orchestrator.postprocessor.process.side_effect = lambda result: result
         assert orchestrator.depth_cache is not None
-        orchestrator.depth_cache.store(image_sha256, cache_fingerprint, cached_depth)
 
         image_input = ImageInput(test_image)
         assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
@@ -769,6 +771,8 @@ class TestFingerprintDrivenSkipInvalidation:
                 "_generate_pbr_stage",
                 return_value={"normal": "generated"},
             ) as mock_generate_pbr,
+            patch.object(orchestrator.depth_cache, "get", wraps=orchestrator.depth_cache.get) as cache_get,
+            patch.object(orchestrator.depth_cache, "store", wraps=orchestrator.depth_cache.store) as cache_store,
             caplog.at_level(logging.DEBUG),
         ):
             (
@@ -793,9 +797,10 @@ class TestFingerprintDrivenSkipInvalidation:
         assert pbr_assets == {"normal": "generated"}
         assert backend_selection.resolved_backend == "da3"
         assert depth_attempts
-        assert depth_attempts[0]["cached"] is True
-        assert depth_attempts[0]["output_normalization"] == "cache_reuse"
-        backend.compute.assert_not_called()
+        assert depth_attempts[0]["cached"] is False
+        backend.compute.assert_called_once()
+        cache_get.assert_not_called()
+        cache_store.assert_not_called()
         mock_generate_pbr.assert_called_once()
         from transformation_portal.ingest.canonical_json import dumps_json
 
@@ -814,11 +819,10 @@ class TestFingerprintDrivenSkipInvalidation:
             allow_nan=False,
         ).encode("utf-8")
         durable_write.assert_called_once_with(expected_metadata_path, expected_metadata_bytes)
-        assert "Stage A depth cache lookup" in caplog.text
-        assert "Cache hit: using cached depth" in caplog.text
+        assert "depth cache lookup skipped" in caplog.text
 
-    def test_stage_a_cache_miss_logs_diagnostic(self, temp_workspace, caplog):
-        """Stage A should emit a cache-miss diagnostic before falling back to inference."""
+    def test_stage_a_unprepared_cache_bypass_logs_diagnostic(self, temp_workspace, caplog):
+        """Stage A should explain why an unprepared run bypasses cache lookup."""
         import logging
 
         import numpy as np
@@ -908,7 +912,7 @@ class TestFingerprintDrivenSkipInvalidation:
             )
 
         backend.compute.assert_called_once()
-        assert "Stage A depth cache miss" in caplog.text
+        assert "depth cache lookup skipped" in caplog.text
 
     def test_should_skip_v2_invalidates_on_emit_bit_depth_change(self, temp_workspace):
         """Changing V2 output bit-depth flags should invalidate V2 reuse."""

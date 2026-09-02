@@ -986,8 +986,8 @@ def test_runtime_license_restriction_does_not_fallback(tmp_path):
     assert da3_backend.compute.call_count == 0
 
 
-def test_runtime_depth_cache_fingerprint_is_backend_scoped(tmp_path):
-    """Cache lookups should use different fingerprints per backend attempt."""
+def test_unprepared_runtime_depth_cache_bypasses_all_backend_attempts(tmp_path):
+    """Incomplete unprepared identities must never authorize cache access."""
     from PIL import Image
 
     from transformation_portal.lux_depth_v3.input_manager import ImageInput
@@ -1029,16 +1029,14 @@ def test_runtime_depth_cache_fingerprint_is_backend_scoped(tmp_path):
         result = orchestrator.enhance_image(ImageInput(path=test_image))
 
     assert result["status"] == "ok"
-    assert cache.get.call_count == 2
-    first_fp = cache.get.call_args_list[0].args[1]
-    second_fp = cache.get.call_args_list[1].args[1]
-    assert first_fp != second_fp
-    assert cache.store.call_count == 1
-    assert cache.store.call_args.args[1] == second_fp
+    assert da3_backend.compute.call_count == 1
+    assert da2_backend.compute.call_count == 1
+    cache.get.assert_not_called()
+    cache.store.assert_not_called()
 
 
-def test_runtime_depth_cache_hit_uses_uint8_original_image_for_depth_result(tmp_path):
-    """Cached depth path should construct DepthResult.original_image as uint8 RGB."""
+def test_unprepared_runtime_depth_cache_never_authorizes_legacy_hit(tmp_path):
+    """A populated legacy cache cannot be read without complete v3 authority."""
     from PIL import Image
 
     from transformation_portal.lux_depth_v3.input_manager import ImageInput
@@ -1057,33 +1055,24 @@ def test_runtime_depth_cache_hit_uses_uint8_original_image_for_depth_result(tmp_
     backend.name = "da3"
     backend.license_type = Mock(value="commercial")
     backend.ensure_available.return_value = None
+    backend.compute.return_value = _make_depth_result()
 
     registry = Mock()
     registry.get_backend.return_value = backend
 
-    observed_original_dtype = {}
-    original_depth_result = depth_protocol_module.DepthResult
-
-    def _capturing_depth_result(*args, **kwargs):
-        original_image = kwargs.get("original_image")
-        if original_image is None and len(args) >= 2:
-            original_image = args[1]
-        observed_original_dtype["dtype"] = str(original_image.dtype)
-        return original_depth_result(*args, **kwargs)
-
     with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
-        with patch("transformation_portal.depth.backends.protocol.DepthResult", side_effect=_capturing_depth_result):
-            orchestrator = EnhanceOrchestrator(config, tmp_path)
-            orchestrator.postprocessor = Mock(process=lambda result: result)
-            cache = Mock()
-            cache.get.return_value = np.full((64, 64), 0.5, dtype=np.float32)
-            orchestrator.depth_cache = cache
-            output = orchestrator.enhance_image(ImageInput(path=test_image))
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        cache = Mock()
+        cache.get.return_value = np.full((64, 64), 0.5, dtype=np.float32)
+        orchestrator.depth_cache = cache
+        output = orchestrator.enhance_image(ImageInput(path=test_image))
 
     assert output["status"] == "ok"
-    assert observed_original_dtype["dtype"] == "uint8"
-    assert output["attempts"][0]["device"] == "cache"
-    assert backend.compute.call_count == 0
+    cache.get.assert_not_called()
+    cache.store.assert_not_called()
+    assert backend.compute.call_count == 1
+    assert output["attempts"][0]["device"] != "cache"
 
 
 def test_runtime_attempt_device_records_actual_backend_device(tmp_path):

@@ -1,291 +1,424 @@
-"""Thread-safety and concurrency tests for DepthCache.
-
-These tests verify:
-1. Concurrent same-key writes don't produce failures
-2. Concurrent different-key writes are isolated
-3. Concurrent reads during writes are safe
-4. Stats collection is thread-safe
-5. Cache eviction under concurrent load is safe
-6. Clear operation is thread-safe
-"""
+"""Concurrency contracts for the identity-v3 depth cache."""
 
 from __future__ import annotations
 
-import logging
+import json
+import multiprocessing
+import os
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+from tests.lux_depth_v3.test_depth_cache_identity_v3 import _identity as _materialized_identity
+from transformation_portal.core.execution_identity_v3 import MaterializedExecutionIdentityV3
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 
 pytestmark = pytest.mark.unit
 
 
-class TestDepthCacheConcurrencySameKey:
-    """Tests for concurrent operations on the same cache key."""
+def _identity(index: int = 0) -> MaterializedExecutionIdentityV3:
+    return _materialized_identity(input_label=f"input-{index}")
 
-    def test_concurrent_same_key_writes_no_failures(self, tmp_path, caplog) -> None:
-        """Concurrent same-key writes should not produce internal store-failure warnings."""
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
 
-        def store_depth(value: int) -> None:
-            depth = np.full((100, 100), value, dtype=np.float32)
-            cache.store("same_image", "same_config", depth)
+def _multiprocess_writer(cache_dir: str, start_index: int, start_event) -> None:
+    if not start_event.wait(timeout=10):
+        raise TimeoutError("multiprocess cache test did not start")
+    cache = DepthCache(Path(cache_dir), max_size_gb=1.0)
+    for index in range(start_index, start_index + 16):
+        depth = np.full((12, 12), index, dtype=np.float32)
+        if not cache.store(_identity(index), depth):
+            raise AssertionError(f"multiprocess cache store failed for identity {index}")
+        time.sleep(0.001)
 
-        with caplog.at_level(logging.WARNING, logger="transformation_portal.lux_depth_v3.depth_cache"):
-            threads = [threading.Thread(target=store_depth, args=(i,)) for i in range(10)]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
 
-        assert not any("Failed to cache depth" in record.message for record in caplog.records)
+def _multiprocess_housekeeper(cache_dir: str, start_event) -> None:
+    if not start_event.wait(timeout=10):
+        raise TimeoutError("multiprocess cache test did not start")
+    cache = DepthCache(Path(cache_dir), max_size_gb=1.0)
+    for _ in range(8):
+        cache.stats()
+        cache.clear()
+        time.sleep(0.002)
 
-        cached = cache.get("same_image", "same_config")
+
+def _hard_killed_temp_publisher(cache_dir: str, destination_suffix: str, ready_connection) -> None:
+    """Pause a child after fsyncing a temp so the parent can kill it."""
+
+    import transformation_portal.lux_depth_v3.depth_cache as depth_cache_module
+
+    cache = DepthCache(Path(cache_dir), max_size_gb=1.0)
+    real_replace = os.replace
+
+    def pause_before_replace(source, destination, *, src_dir_fd=None, dst_dir_fd=None):
+        destination_name = os.fspath(destination)
+        if destination_name != depth_cache_module._QUOTA_STATE_NAME and destination_name.endswith(destination_suffix):
+            ready_connection.send(destination_suffix)
+            while True:
+                time.sleep(1)
+        return real_replace(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+
+    depth_cache_module.os.replace = pause_before_replace
+    cache.store(_identity(), np.ones((64, 64), dtype=np.float32))
+
+
+def _directory_lock_waiter(cache_dir: str, ready_event, start_event, acquired_event) -> None:
+    cache = DepthCache(Path(cache_dir), max_size_gb=1.0)
+    ready_event.set()
+    if not start_event.wait(timeout=10):
+        raise TimeoutError("directory-lock waiter did not start")
+    with cache._fixed_shard_lock(7):
+        acquired_event.set()
+
+
+def _replacement_namespace_constructor(cache_dir: str, start_event, attempting_event, acquired_event) -> None:
+    import transformation_portal.lux_depth_v3.depth_cache as depth_cache_module
+
+    if not start_event.wait(timeout=10):
+        raise TimeoutError("replacement namespace constructor did not start")
+    real_acquire = depth_cache_module._acquire_platform_file_lock
+
+    def reporting_acquire(descriptor):
+        attempting_event.set()
+        return real_acquire(descriptor)
+
+    depth_cache_module._acquire_platform_file_lock = reporting_acquire
+    DepthCache(Path(cache_dir), max_size_gb=1.0)
+    acquired_event.set()
+
+
+def _preinitialized_quota_writer(
+    cache_dir: str, index: int, max_size_gb: float, ready_queue, start_event, result_queue
+) -> None:
+    cache = DepthCache(Path(cache_dir), max_size_gb=max_size_gb)
+    ready_queue.put(index)
+    if not start_event.wait(timeout=10):
+        raise TimeoutError("quota writer did not start")
+    outcome = cache.store(_identity(index), np.full((16, 16), index, dtype=np.float32))
+    result_queue.put((index, outcome))
+
+
+def test_concurrent_same_identity_writers_publish_one_verified_result(tmp_path) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=1.0)
+    identity = _identity()
+    outcomes: list[bool] = []
+    outcome_lock = threading.Lock()
+
+    def write(value: int) -> None:
+        stored = cache.store(identity, np.full((32, 32), value, dtype=np.float32))
+        with outcome_lock:
+            outcomes.append(stored)
+
+    threads = [threading.Thread(target=write, args=(index,)) for index in range(12)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    # The first complete publication wins. Different bytes for the same
+    # authoritative identity are rejected as nondeterministic output.
+    assert sum(outcomes) == 1
+    cached = cache.get(identity)
+    assert cached is not None
+    assert cached.shape == (32, 32)
+    assert np.unique(cached).size == 1
+
+
+def test_concurrent_same_bytes_are_idempotent_across_cache_instances(tmp_path) -> None:
+    identity = _identity()
+    depth = np.arange(1024, dtype=np.float32).reshape(32, 32)
+    caches = [DepthCache(tmp_path, max_size_gb=1.0) for _ in range(8)]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        outcomes = list(executor.map(lambda cache: cache.store(identity, depth), caches))
+
+    assert all(outcomes)
+    cached = caches[0].get(identity)
+    assert cached is not None
+    np.testing.assert_array_equal(cached, depth)
+    assert len(list((tmp_path / ".depth_cache" / "v1" / "objects").glob("*/*.npy"))) == 1
+
+
+def test_concurrent_different_identity_writes_are_isolated(tmp_path) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=1.0)
+
+    def write(index: int) -> bool:
+        return cache.store(_identity(index), np.full((20, 20), index, dtype=np.float32))
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        outcomes = list(executor.map(write, range(40)))
+
+    assert all(outcomes)
+    for index in range(40):
+        cached = cache.get(_identity(index))
         assert cached is not None
-
-    def test_concurrent_same_key_writes_produces_valid_result(self, tmp_path) -> None:
-        """Concurrent same-key writes should produce a valid cached result."""
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
-        results: List[bool] = []
-
-        def store_and_verify(value: int) -> None:
-            depth = np.full((50, 50), float(value), dtype=np.float32)
-            cache.store("key1", "config1", depth)
-            # Immediately try to read back
-            cached = cache.get("key1", "config1")
-            results.append(cached is not None and cached.shape == (50, 50))
-
-        threads = [threading.Thread(target=store_and_verify, args=(i,)) for i in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        # All stores should succeed
-        assert all(results)
-        # Final cached value should be valid
-        final = cache.get("key1", "config1")
-        assert final is not None
-        assert final.dtype == np.float32
+        assert np.all(cached == index)
+    assert cache.stats()["entry_count"] == 40
 
 
-class TestDepthCacheConcurrencyDifferentKeys:
-    """Tests for concurrent operations on different cache keys."""
+def test_concurrent_reads_never_observe_partial_publication(tmp_path) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=1.0)
+    identity = _identity()
+    depth = np.arange(4096, dtype=np.float32).reshape(64, 64)
+    observations: list[np.ndarray | None] = []
+    observation_lock = threading.Lock()
+    start = threading.Barrier(9)
 
-    def test_concurrent_different_key_writes_isolated(self, tmp_path) -> None:
-        """Concurrent writes to different keys should be isolated."""
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
-        num_keys = 20
+    def reader() -> None:
+        start.wait()
+        result = cache.get(identity)
+        with observation_lock:
+            observations.append(result)
 
-        def store_unique_key(idx: int) -> None:
-            depth = np.full((30, 30), float(idx), dtype=np.float32)
-            cache.store(f"image_{idx}", "config", depth)
+    threads = [threading.Thread(target=reader) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    start.wait()
+    assert cache.store(identity, depth)
+    for thread in threads:
+        thread.join()
 
-        threads = [threading.Thread(target=store_unique_key, args=(i,)) for i in range(num_keys)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        # All keys should be stored correctly
-        for i in range(num_keys):
-            cached = cache.get(f"image_{i}", "config")
-            assert cached is not None, f"Key image_{i} not found"
-            assert cached.shape == (30, 30)
-            # Values should match what was stored
-            assert np.allclose(cached, float(i))
-
-    def test_concurrent_mixed_operations(self, tmp_path) -> None:
-        """Concurrent mixed read/write operations should be safe."""
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
-
-        # Pre-populate some entries
-        for i in range(5):
-            depth = np.full((25, 25), float(i), dtype=np.float32)
-            cache.store(f"pre_{i}", "config", depth)
-
-        errors: List[Exception] = []
-
-        def read_operation(idx: int) -> None:
-            try:
-                cached = cache.get(f"pre_{idx % 5}", "config")
-                # Should be either the original value or None if evicted
-                if cached is not None:
-                    assert cached.shape == (25, 25)
-            except Exception as e:
-                errors.append(e)
-
-        def write_operation(idx: int) -> None:
-            try:
-                depth = np.full((25, 25), float(idx + 100), dtype=np.float32)
-                cache.store(f"new_{idx}", "config", depth)
-            except Exception as e:
-                errors.append(e)
-
-        threads = []
-        for i in range(10):
-            threads.append(threading.Thread(target=read_operation, args=(i,)))
-            threads.append(threading.Thread(target=write_operation, args=(i,)))
-
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert len(errors) == 0, f"Errors during concurrent operations: {errors}"
+    for observation in observations:
+        if observation is not None:
+            np.testing.assert_array_equal(observation, depth)
+    final = cache.get(identity)
+    assert final is not None
+    np.testing.assert_array_equal(final, depth)
 
 
-class TestDepthCacheConcurrencyStats:
-    """Tests for thread-safe statistics collection."""
+def test_stats_and_clear_are_pair_safe_during_writes(tmp_path) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=1.0)
+    errors: list[BaseException] = []
 
-    def test_stats_during_concurrent_writes(self, tmp_path) -> None:
-        """Stats collection should be thread-safe during concurrent writes."""
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
-        stats_results: List[dict] = []
-        errors: List[Exception] = []
+    def writer(offset: int) -> None:
+        try:
+            for index in range(offset, offset + 8):
+                cache.store(_identity(index), np.full((12, 12), index, dtype=np.float32))
+        except BaseException as exc:  # pragma: no cover - assertion reports worker failures
+            errors.append(exc)
 
-        def store_entry(idx: int) -> None:
-            try:
-                depth = np.full((20, 20), float(idx), dtype=np.float32)
-                cache.store(f"key_{idx}", "config", depth)
-            except Exception as e:
-                errors.append(e)
+    def housekeeper() -> None:
+        try:
+            cache.stats()
+            cache.clear()
+            cache.stats()
+        except BaseException as exc:  # pragma: no cover - assertion reports worker failures
+            errors.append(exc)
 
-        def collect_stats() -> None:
-            try:
-                for _ in range(5):
-                    stats = cache.stats()
-                    stats_results.append(stats)
-            except Exception as e:
-                errors.append(e)
+    threads = [threading.Thread(target=writer, args=(index * 10,)) for index in range(4)]
+    threads.append(threading.Thread(target=housekeeper))
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
 
-        threads = []
-        for i in range(15):
-            threads.append(threading.Thread(target=store_entry, args=(i,)))
-        threads.append(threading.Thread(target=collect_stats))
-        threads.append(threading.Thread(target=collect_stats))
-
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert len(errors) == 0, f"Errors during concurrent stats: {errors}"
-        # All stats should have valid structure
-        for stats in stats_results:
-            assert "entry_count" in stats
-            assert "size_gb" in stats
-            assert "max_size_gb" in stats
-            assert stats["entry_count"] >= 0
-            assert stats["size_gb"] >= 0.0
+    assert errors == []
+    final_identity = _identity(999)
+    final_depth = np.full((4, 4), 999, dtype=np.float32)
+    assert cache.store(final_identity, final_depth)
+    np.testing.assert_array_equal(cache.get(final_identity), final_depth)
 
 
-class TestDepthCacheConcurrencyClear:
-    """Tests for thread-safe cache clearing."""
+def test_multiprocess_writers_and_housekeeper_preserve_verified_pairs(tmp_path) -> None:
+    context = multiprocessing.get_context("spawn")
+    start_event = context.Event()
+    cache_dir = str(tmp_path / "cache")
+    processes = [
+        context.Process(target=_multiprocess_writer, args=(cache_dir, 0, start_event)),
+        context.Process(target=_multiprocess_writer, args=(cache_dir, 100, start_event)),
+        context.Process(target=_multiprocess_housekeeper, args=(cache_dir, start_event)),
+    ]
+    for process in processes:
+        process.start()
+    start_event.set()
+    for process in processes:
+        process.join(timeout=30)
 
-    def test_clear_during_concurrent_writes(self, tmp_path) -> None:
-        """Clear operation should not corrupt cache state during concurrent writes.
+    alive = [process for process in processes if process.is_alive()]
+    for process in alive:
+        process.terminate()
+        process.join(timeout=5)
+    assert alive == []
+    assert [process.exitcode for process in processes] == [0, 0, 0]
 
-        When clear() runs concurrently with store operations, some stores may
-        fail gracefully (logged as warnings). This test verifies:
-        1. No uncaught exceptions propagate from threads
-        2. The cache remains usable after concurrent operations
-        3. Stats remain consistent and valid
-        """
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
-        exceptions_raised: List[Exception] = []
+    cache = DepthCache(Path(cache_dir), max_size_gb=1.0)
+    stats = cache.stats()
+    pointer_paths = list((cache.cache_dir / "v1" / "entries").glob("*/*.json"))
+    object_paths = list((cache.cache_dir / "v1" / "objects").glob("*/*.npy"))
+    referenced_digests = {json.loads(path.read_bytes())["npy_sha256"] for path in pointer_paths}
+    assert stats["entry_count"] == len(pointer_paths)
+    assert referenced_digests == {path.stem for path in object_paths}
+    for index in (*range(16), *range(100, 116)):
+        cached = cache.get(_identity(index))
+        if cached is not None:
+            np.testing.assert_array_equal(cached, np.full((12, 12), index, dtype=np.float32))
 
-        def store_entries(idx: int) -> None:
-            try:
-                for j in range(3):
-                    depth = np.full((15, 15), float(idx * 10 + j), dtype=np.float32)
-                    cache.store(f"key_{idx}_{j}", "config", depth)
-            except Exception as e:
-                # Store operations may fail during concurrent clear - this is OK
-                # as long as exceptions are caught and logged, not propagated
-                exceptions_raised.append(e)
-
-        def clear_cache() -> None:
-            try:
-                cache.clear()
-            except Exception as e:
-                exceptions_raised.append(e)
-
-        threads = []
-        for i in range(5):
-            threads.append(threading.Thread(target=store_entries, args=(i,)))
-        threads.append(threading.Thread(target=clear_cache))
-
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        # Verification 1: No uncaught exceptions should propagate from threads
-        assert len(exceptions_raised) == 0, f"Uncaught exceptions during concurrent clear: {exceptions_raised}"
-
-        # Verification 2: Cache remains usable - can still perform operations
-        test_depth = np.full((10, 10), 42.0, dtype=np.float32)
-        cache.store("post_clear_key", "config", test_depth)
-        retrieved = cache.get("post_clear_key", "config")
-        assert retrieved is not None, "Cache should be usable after concurrent clear"
-        assert np.allclose(retrieved, test_depth), "Retrieved value should match stored value"
-
-        # Verification 3: Stats remain consistent and valid
-        stats = cache.stats()
-        assert stats["entry_count"] >= 1, "At least our post-clear entry should exist"
-        assert stats["size_gb"] >= 0.0, "Cache size should be non-negative"
-        assert stats["max_size_gb"] == 1.0, "Max size should be unchanged"
+    identity = _identity(999)
+    depth = np.full((4, 4), 999, dtype=np.float32)
+    assert cache.store(identity, depth)
+    np.testing.assert_array_equal(cache.get(identity), depth)
+    assert cache.stats()["entry_count"] >= 1
 
 
-class TestDepthCacheConcurrencyThreadPool:
-    """Tests using ThreadPoolExecutor for high-concurrency scenarios."""
+def test_lock_authority_uses_directory_inode_without_lock_files(tmp_path) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=1.0)
+    for index in range(4):
+        assert cache.store(_identity(index), np.array([[index]], dtype=np.float32))
 
-    def test_high_concurrency_with_thread_pool(self, tmp_path) -> None:
-        """High-concurrency operations using ThreadPoolExecutor should be safe.
+    cache.stats()
+    lock_files = list((tmp_path / ".depth_cache" / "v1" / "locks").glob("*.publication.lock"))
+    assert lock_files == []
 
-        With a 1GB cache and 50 small operations (10x10 float32 = 400 bytes each),
-        no eviction should occur, so all operations should succeed.
-        """
-        cache = DepthCache(tmp_path, max_size_gb=1.0)
 
-        def operation(idx: int) -> bool:
-            depth = np.full((10, 10), float(idx), dtype=np.float32)
-            cache.store(f"pool_key_{idx}", "config", depth)
-            cached = cache.get(f"pool_key_{idx}", "config")
-            return cached is not None
+def test_replaced_fixed_lock_name_cannot_split_directory_lease(tmp_path) -> None:
+    context = multiprocessing.get_context("spawn")
+    cache_dir = tmp_path / "cache"
+    cache = DepthCache(cache_dir, max_size_gb=1.0)
+    ready_event = context.Event()
+    start_event = context.Event()
+    acquired_event = context.Event()
+    process = context.Process(
+        target=_directory_lock_waiter,
+        args=(str(cache_dir), ready_event, start_event, acquired_event),
+    )
+    process.start()
+    assert ready_event.wait(timeout=15)
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(operation, i) for i in range(50)]
-            results = [f.result() for f in as_completed(futures)]
+    lock_path = cache._locks_dir / ".shard-07.publication.lock"
+    backup_path = cache._locks_dir / ".shard-07.original.lock"
+    with cache._fixed_shard_lock(7):
+        if lock_path.exists():
+            os.replace(lock_path, backup_path)
+        lock_path.write_bytes(b"replacement-inode")
+        start_event.set()
+        assert not acquired_event.wait(timeout=0.5)
 
-        # All operations should succeed - total size is only ~20KB, well under 1GB limit
-        success_count = sum(1 for r in results if r)
-        assert success_count == 50, f"Only {success_count}/50 operations succeeded"
+    assert acquired_event.wait(timeout=10)
+    process.join(timeout=10)
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=5)
+    assert not process.is_alive()
+    assert process.exitcode == 0
 
-    def test_concurrent_approximate_size_tracking(self, tmp_path) -> None:
-        """Approximate size tracking should remain consistent under concurrent load."""
-        cache = DepthCache(tmp_path, max_size_gb=10.0)
 
-        def store_entry(idx: int) -> None:
-            depth = np.full((50, 50), float(idx), dtype=np.float32)
-            cache.store(f"size_key_{idx}", "config", depth)
+def test_v1_replacement_cannot_split_base_directory_lease(tmp_path) -> None:
+    context = multiprocessing.get_context("spawn")
+    cache_dir = tmp_path / "cache"
+    cache = DepthCache(cache_dir, max_size_gb=1.0)
+    start_event = context.Event()
+    attempting_event = context.Event()
+    acquired_event = context.Event()
+    process = context.Process(
+        target=_replacement_namespace_constructor,
+        args=(str(cache_dir), start_event, attempting_event, acquired_event),
+    )
+    process.start()
+    moved_v1 = tmp_path / "v1-moved-outside"
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            list(executor.map(store_entry, range(40)))
+    with pytest.raises(OSError, match="namespace root"):
+        with cache._fixed_shard_lock(7):
+            cache._v1_dir.rename(moved_v1)
+            cache._v1_dir.mkdir()
+            for child in ("entries", "objects", "locks"):
+                (cache._v1_dir / child).mkdir()
+            start_event.set()
+            assert attempting_event.wait(timeout=15)
+            assert not acquired_event.wait(timeout=0.5)
 
-        # Stats should reflect stored entries
-        stats = cache.stats()
-        assert stats["entry_count"] == 40
+    assert acquired_event.wait(timeout=10)
+    process.join(timeout=10)
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=5)
+    assert not process.is_alive()
+    assert process.exitcode == 0
 
-        # Expected size calculation:
-        # 40 entries * (50*50*4 bytes per entry) = 400,000 bytes ≈ 0.000373 GB
-        expected_size_gb = 40 * (50 * 50 * 4) / (1024**3)
 
-        # Use relative tolerance (10%) rather than absolute, as it's more robust
-        # for varying cache sizes and accounts for filesystem overhead
-        assert stats["size_gb"] == pytest.approx(expected_size_gb, rel=0.1)
+def test_preinitialized_cache_instances_enforce_limit_on_every_publication(tmp_path) -> None:
+    max_bytes = 3_000
+    caches = [DepthCache(tmp_path, max_size_gb=max_bytes / (1024**3)) for _ in range(20)]
+    for index, cache in enumerate(caches):
+        assert cache.store(_identity(index), np.full((16, 16), index, dtype=np.float32))
+        pointer_paths = list(cache._entries_dir.glob("*/*.json"))
+        object_paths = list(cache._objects_dir.glob("*/*.npy"))
+        physical_bytes = sum(path.stat().st_size for path in pointer_paths + object_paths)
+        referenced = {json.loads(path.read_bytes())["npy_sha256"] for path in pointer_paths}
+        assert physical_bytes <= max_bytes
+        assert referenced == {path.stem for path in object_paths}
+
+
+def test_preinitialized_processes_enforce_shared_limit(tmp_path) -> None:
+    context = multiprocessing.get_context("spawn")
+    max_bytes = 3_000
+    max_size_gb = max_bytes / (1024**3)
+    cache_dir = tmp_path / "cache"
+    ready_queue = context.Queue()
+    result_queue = context.Queue()
+    start_event = context.Event()
+    processes = [
+        context.Process(
+            target=_preinitialized_quota_writer,
+            args=(str(cache_dir), index, max_size_gb, ready_queue, start_event, result_queue),
+        )
+        for index in range(3)
+    ]
+    for process in processes:
+        process.start()
+    assert sorted(ready_queue.get(timeout=15) for _ in processes) == [0, 1, 2]
+    start_event.set()
+    results = sorted(result_queue.get(timeout=15) for _ in processes)
+    for process in processes:
+        process.join(timeout=15)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+
+    assert results == [(0, True), (1, True), (2, True)]
+    assert [process.exitcode for process in processes] == [0, 0, 0]
+    cache = DepthCache(cache_dir, max_size_gb=max_size_gb)
+    pointer_paths = list(cache._entries_dir.glob("*/*.json"))
+    object_paths = list(cache._objects_dir.glob("*/*.npy"))
+    physical_bytes = sum(path.stat().st_size for path in pointer_paths + object_paths)
+    referenced = {json.loads(path.read_bytes())["npy_sha256"] for path in pointer_paths}
+    assert physical_bytes <= max_bytes
+    assert referenced == {path.stem for path in object_paths}
+
+
+@pytest.mark.parametrize("destination_suffix", [".npy", ".json"])
+def test_restart_cleans_temp_left_by_hard_killed_publisher(tmp_path, destination_suffix) -> None:
+    context = multiprocessing.get_context("spawn")
+    cache_dir = tmp_path / "cache"
+    receiving_connection, sending_connection = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_hard_killed_temp_publisher,
+        args=(str(cache_dir), destination_suffix, sending_connection),
+    )
+    process.start()
+    sending_connection.close()
+    try:
+        assert receiving_connection.poll(15), "publisher did not reach the pre-replace boundary"
+        assert receiving_connection.recv() == destination_suffix
+    finally:
+        receiving_connection.close()
+        if process.is_alive():
+            process.kill()
+        process.join(timeout=5)
+
+    assert not process.is_alive()
+    assert process.exitcode is not None and process.exitcode != 0
+    stale_temps = list((cache_dir / ".depth_cache" / "v1").glob("*/*/*.tmp-*"))
+    assert len(stale_temps) == 1
+
+    restarted = DepthCache(cache_dir, max_size_gb=1.0)
+    assert list((cache_dir / ".depth_cache" / "v1").glob("*/*/*.tmp-*")) == []
+    assert restarted.stats()["entry_count"] == 0
+    assert list((cache_dir / ".depth_cache" / "v1" / "objects").glob("*/*.npy")) == []
