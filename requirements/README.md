@@ -362,6 +362,26 @@ pip install -e ".[ml]"
 pip install -e ".[all]"
 ```
 
+#### Hosted ML CI baseline
+
+The hosted CPU/ML test jobs deliberately resolve a narrower contract than the
+operator-facing extras above. When `TP_CI_ML_LOCKFILE` is unset,
+`scripts/ci/install_ml_test_dependencies.sh` installs `torch==2.13.0` and
+`torchvision==0.28.0` before installing the `[ml-core]` metadata extra. The
+Layer 2 ML job in `.github/workflows/enforcement.yml` applies the same exact
+pair before `[ml]`. This prevents a newly published PyTorch minor from changing
+exact-state golden output without any repository change.
+
+`TP_CI_ML_LOCKFILE` may point the shared installer at a complete, exact,
+target-correct lock; when set, that lock replaces the fallback pair and
+`[ml-core]` resolution. It does not alter the separate Enforcement job. Rotate
+the hosted baseline only after validating the new pair, then update the shared
+installer, the Enforcement job, and
+`tests/security/test_ci_bootstrap_security_baselines.py` together. Hosted proof
+must include the Ubuntu ML matrix and its reconstruction golden test. Do not
+narrow the package extras merely to repair CI; those remain compatibility
+metadata for operator-managed environments.
+
 ### For Contributors
 
 #### Installing Development Environment
