@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
 RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
 DA3_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_da3_runtime.sh"
+DA3_RUNTIME_LOCK_PATH = PROJECT_ROOT / "requirements" / "da3-runtime-darwin-arm64.txt"
 RAW_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_raw_runtime.sh"
 VALIDATION_SUITE_PATH = PROJECT_ROOT / "scripts" / "validation" / "run_full_validation_suite.sh"
 ML_STACK_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "bootstrap" / "install_ml_stack.sh"
@@ -39,6 +40,18 @@ def _copy_repo_file(source: Path, destination: Path) -> Path:
 
 def _dry_run_pip_install_lines(output: str) -> list[str]:
     return [line for line in output.splitlines() if " -m pip install " in line]
+
+
+def _prepare_da3_installer_fixture(repo_root: Path, fakebin: Path) -> Path:
+    lock_path = _copy_repo_file(
+        DA3_RUNTIME_LOCK_PATH,
+        repo_root / "requirements" / "da3-runtime-darwin-arm64.txt",
+    )
+    _write_executable(
+        fakebin / "uname",
+        '#!/bin/sh\ncase "$1" in\n  -s) echo Darwin ;;\n  -m) echo arm64 ;;\n  *) exit 1 ;;\nesac\n',
+    )
+    return lock_path
 
 
 def _write_fake_python(path: Path, *, version: str, real_python: str) -> Path:
@@ -513,6 +526,7 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
 
     fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     # Provide fake python3.12-3.15 that report unsupported versions to isolate from system
     _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
@@ -543,14 +557,68 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     assert result.returncode == 0, result.stdout + result.stderr
     default_venv = repo_root / ".runtime" / "Depth-Anything-3" / ".venv-da3"
     assert f"Using bootstrap interpreter: {python311}" in result.stdout
-    assert f"+ {python311} -m venv {default_venv}" in result.stdout
-    assert "DA3 runtime contract: pr110-numpy2-optional-colmap-xformers" in result.stdout
+    assert "env -u PYTHONHOME -u PYTHONPATH -u VIRTUAL_ENV -u __PYVENV_LAUNCHER__" in result.stdout
+    assert f" {python311} -m venv {default_venv}" in result.stdout
+    assert "DA3 runtime authority: Darwin arm64 / Python 3.11 / baseline profile only" in result.stdout
     assert "DA3 runtime ref: 95a2adea1a8180104bf51937409034bdec70a244" in result.stdout
     assert "DA3 runtime fetch ref: refs/pull/110/head" in result.stdout
     assert "DA3 dependency profile: baseline" in result.stdout
-    assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
+    assert "da3-runtime-darwin-arm64.txt" in result.stdout
     assert "Preserving DA3 venv during checkout clean: .venv-da3" in result.stdout
     assert f"+ git -C {repo_root / '.runtime' / 'Depth-Anything-3'} clean -fd -e .venv-da3" in result.stdout
+
+
+def test_install_da3_runtime_prefers_exact_python311_over_newer_repo_venv(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_fake_python(repo_root / ".venv" / "bin" / "python", version="3.12.1", real_python=sys.executable)
+    python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+
+    result = subprocess.run(
+        ["bash", str(script_path), "--dry-run", "--skip-verify"],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"Using bootstrap interpreter: {python311}" in result.stdout
+    assert f" {python311} -m venv" in result.stdout
+
+
+def test_install_da3_runtime_explicit_bootstrap_python_wins(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_fake_python(fakebin / "python3.11", version="3.11.14", real_python=sys.executable)
+    selected = _write_fake_python(tmp_path / "selected-python", version="3.11.15", real_python=sys.executable)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(script_path),
+            "--dry-run",
+            "--skip-verify",
+            "--bootstrap-python",
+            str(selected),
+        ],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"Using bootstrap interpreter: {selected}" in result.stdout
+    assert f" {selected} -m venv" in result.stdout
 
 
 def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path) -> None:
@@ -559,6 +627,7 @@ def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path
     _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
 
     fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
     _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
     result = subprocess.run(
@@ -577,10 +646,10 @@ def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path
 
     assert result.returncode == 0, result.stdout + result.stderr
     pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
-    assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
-    assert "cryptography==50.0.0" in pip_install_lines
-    assert "cryptography==48.0.1" not in pip_install_lines
-    assert "numpy==1.26.4" not in pip_install_lines
+    assert "pip==26.2.1" in pip_install_lines
+    assert "setuptools==82.0.0" in pip_install_lines
+    assert "--requirement" in pip_install_lines
+    assert "da3-runtime-darwin-arm64.txt" in pip_install_lines
     assert "pycolmap==" not in pip_install_lines
     assert "xformers" not in pip_install_lines
 
@@ -591,6 +660,7 @@ def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path
     _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
 
     fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
     _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
     result = subprocess.run(
@@ -617,6 +687,7 @@ def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path
     assert "DA3 runtime ref: custom-da3-ref" in result.stdout
     assert "DA3 runtime fetch ref: refs/heads/custom-contract" in result.stdout
     assert "DA3 dependency profile: colmap,xformers" in result.stdout
+    assert "optional profile disables cache authority" in result.stdout
     assert (
         "DA3 optional xformers spec: xformers "
         "(operator-managed; intentionally unpinned by default for platform wheel resolution)"
@@ -626,12 +697,256 @@ def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path
     assert "xformers" in pip_install_lines
 
 
+def test_install_da3_runtime_cross_platform_install_is_non_authorizing(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_executable(
+        fakebin / "uname",
+        '#!/bin/sh\ncase "$1" in\n  -s) echo Linux ;;\n  -m) echo x86_64 ;;\n  *) exit 1 ;;\nesac\n',
+    )
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    result = subprocess.run(
+        ["bash", str(script_path), "--dry-run", "--skip-verify"],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Linux/x86_64" in result.stdout
+    assert "inference-only and cannot authorize cache reuse" in result.stdout
+    assert "cache authority marker enabled" not in result.stdout
+
+
+def test_install_da3_runtime_reused_venv_uses_actual_python_for_authority(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    checkout = repo_root / ".runtime" / "Depth-Anything-3"
+    (checkout / ".git").mkdir(parents=True)
+    reused_venv = checkout / ".venv-da3"
+    _write_fake_python(reused_venv / "bin" / "python", version="3.12.1", real_python=sys.executable)
+
+    result = subprocess.run(
+        ["bash", str(script_path), "--dry-run", "--skip-verify"],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Recreating existing DA3 baseline venv to remove non-governed distributions" in result.stdout
+    assert f" -m venv {reused_venv}" in result.stdout
+    assert " -m venv --clear " not in result.stdout
+    assert "runtime Python 3.12.1 is inference-only" in result.stdout
+    assert "cache authority marker enabled" not in result.stdout
+
+
+def test_install_da3_runtime_recreates_real_baseline_venv_without_loading_old_site(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    checkout = repo_root / ".runtime" / "Depth-Anything-3"
+    (checkout / ".git").mkdir(parents=True)
+    reused_venv = checkout / ".venv-da3"
+    subprocess.run([sys.executable, "-m", "venv", str(reused_venv)], check=True)
+    optional_profile_sentinel = reused_venv / "pycolmap-profile-leftover"
+    optional_profile_sentinel.write_text("must not survive baseline reinstall", encoding="utf-8")
+    external_target = tmp_path / "external-target"
+    external_target.mkdir()
+    external_sentinel = external_target / "must-survive"
+    external_sentinel.write_text("safe", encoding="utf-8")
+    (reused_venv / "external-link").symlink_to(external_target, target_is_directory=True)
+
+    fake_pip = tmp_path / "fake-modules" / "pip"
+    fake_pip.mkdir(parents=True)
+    (fake_pip / "__init__.py").write_text("", encoding="utf-8")
+    (fake_pip / "__main__.py").write_text("", encoding="utf-8")
+    _write_executable(
+        fakebin / "git",
+        '#!/bin/sh\ncase " $* " in\n  *" rev-parse HEAD "*) '
+        "echo 95a2adea1a8180104bf51937409034bdec70a244 ;;\nesac\nexit 0\n",
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(script_path),
+            "--skip-verify",
+            "--bootstrap-python",
+            sys.executable,
+        ],
+        cwd=repo_root,
+        env={
+            **os.environ,
+            "PATH": f"{fakebin}:/usr/bin:/bin",
+            "PYTHONPATH": str(tmp_path / "fake-modules"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not optional_profile_sentinel.exists()
+    assert external_sentinel.read_text(encoding="utf-8") == "safe"
+    prefix = subprocess.run(
+        [str(reused_venv / "bin" / "python"), "-c", "import sys; print(sys.prefix)"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert Path(prefix).resolve() == reused_venv.resolve()
+
+
+def test_install_da3_runtime_refuses_symlinked_venv_without_clearing_target(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    checkout = repo_root / ".runtime" / "Depth-Anything-3"
+    (checkout / ".git").mkdir(parents=True)
+    external_target = tmp_path / "external-venv"
+    subprocess.run([sys.executable, "-m", "venv", str(external_target)], check=True)
+    external_sentinel = external_target / "must-survive"
+    external_sentinel.write_text("safe", encoding="utf-8")
+    (checkout / ".venv-da3").symlink_to(external_target, target_is_directory=True)
+    _write_executable(fakebin / "git", "#!/bin/sh\nexit 0\n")
+
+    result = subprocess.run(
+        ["bash", str(script_path), "--skip-verify", "--bootstrap-python", sys.executable],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Refusing to clear an unverified DA3 venv" in result.stderr
+    assert external_sentinel.read_text(encoding="utf-8") == "safe"
+
+
+def test_install_da3_runtime_rejects_venv_swap_between_identity_probe_and_safe_open(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    checkout = repo_root / ".runtime" / "Depth-Anything-3"
+    (checkout / ".git").mkdir(parents=True)
+    reused_venv = checkout / ".venv-da3"
+    subprocess.run([sys.executable, "-m", "venv", str(reused_venv)], check=True)
+    original_sentinel = reused_venv / "original-sentinel"
+    original_sentinel.write_text("old runtime", encoding="utf-8")
+    moved_venv = checkout / ".venv-before-swap"
+    external_target = tmp_path / "external-target"
+    external_target.mkdir()
+    external_sentinel = external_target / "must-survive"
+    external_sentinel.write_text("safe", encoding="utf-8")
+    swapping_python = _write_executable(
+        tmp_path / "swapping-python",
+        f"""#!/bin/sh
+REAL_PYTHON={shlex.quote(sys.executable)}
+VENV_DIR={shlex.quote(str(reused_venv))}
+MOVED_VENV={shlex.quote(str(moved_venv))}
+EXTERNAL_TARGET={shlex.quote(str(external_target))}
+if [ "$1" = "-I" ] && [ "$2" = "-S" ] && [ "$3" = "-c" ]; then
+    case "$4" in
+        *"value = os.lstat"*)
+            OUTPUT="$("$REAL_PYTHON" "$@")"
+            STATUS=$?
+            if [ "$STATUS" -eq 0 ]; then
+                /bin/mv "$VENV_DIR" "$MOVED_VENV"
+                /bin/ln -s "$EXTERNAL_TARGET" "$VENV_DIR"
+            fi
+            printf '%s\n' "$OUTPUT"
+            exit "$STATUS"
+            ;;
+    esac
+fi
+exec "$REAL_PYTHON" "$@"
+""",
+    )
+    _write_executable(fakebin / "git", "#!/bin/sh\nexit 0\n")
+
+    result = subprocess.run(
+        ["bash", str(script_path), "--skip-verify", "--bootstrap-python", str(swapping_python)],
+        cwd=repo_root,
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert reused_venv.is_symlink()
+    assert (moved_venv / original_sentinel.name).read_text(encoding="utf-8") == "old runtime"
+    assert external_sentinel.read_text(encoding="utf-8") == "safe"
+
+
+def test_install_da3_runtime_bootstrap_python_requires_option_value(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+
+    result = subprocess.run(
+        ["bash", str(script_path), "--bootstrap-python"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "--bootstrap-python requires a value" in result.stderr
+
+
+def test_install_da3_runtime_legacy_override_disables_cache_authority(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    result = subprocess.run(
+        ["bash", str(script_path), "--dry-run", "--skip-verify"],
+        cwd=repo_root,
+        env={
+            **os.environ,
+            "PATH": f"{fakebin}:/usr/bin:/bin",
+            "DA3_NUMPY_SPEC": "numpy==2.4.6",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Deprecated DA3 runtime/NumPy compatibility override detected" in result.stdout
+    assert "cache authority marker enabled" not in result.stdout
+    assert "numpy==2.4.6" in "\n".join(_dry_run_pip_install_lines(result.stdout))
+
+
 def test_install_da3_runtime_can_checkout_remote_only_fetch_ref(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
     _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
 
     fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
     _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
     result = subprocess.run(

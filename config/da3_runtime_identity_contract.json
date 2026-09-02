@@ -1,0 +1,16 @@
+{
+  "schema": "tp.da3.runtime-governance.v1",
+  "cache_authority_enabled": true,
+  "source_repository": "https://github.com/ByteDance-Seed/Depth-Anything-3",
+  "source_revision": "95a2adea1a8180104bf51937409034bdec70a244",
+  "dependency_closure_complete": true,
+  "dependency_lock_path": "requirements/da3-runtime-darwin-arm64.txt",
+  "dependency_lock_sha256": "2520dfc2c4b0c2b4a0f5405175dd7db1dce8f76a5cc31d451bc62f70238f7c2c",
+  "governed_additional_distributions": {
+    "depth-anything-3": "0.0.0",
+    "pip": "26.2.1",
+    "setuptools": "82.0.0"
+  },
+  "runtime_marker_filename": ".tp-da3-runtime-authority.json",
+  "non_authorizing_reason": ""
+}

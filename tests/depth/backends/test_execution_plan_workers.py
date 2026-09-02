@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,7 +14,7 @@ import numpy as np
 import pytest
 
 from transformation_portal.depth.backends import da3_worker, depth_pro_worker
-from transformation_portal.depth.backends.da3 import DA3Backend
+from transformation_portal.depth.backends.da3 import DA3Backend, _load_verified_worker_depth
 from transformation_portal.depth.backends.depth_pro import DepthProBackend
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 from transformation_portal.ingest.canonical_json import canonicalize_json
@@ -27,6 +29,48 @@ from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecuti
 from transformation_portal.lux_depth_v3.pipeline_coordinator import select_backend
 
 pytestmark = pytest.mark.unit
+
+
+def _write_bound_runtime_token(
+    path: Path,
+    *,
+    runtime_identity_sha256: str,
+    device: str,
+    executed_backend: str,
+) -> tuple[Path, str]:
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    observed_path = path.with_name("runtime-token-input")
+    observed_path.write_bytes(b"stable")
+    observed = observed_path.stat()
+    import_environment = identity_module._worker_import_environment_payload()
+    payload = {
+        "schema": "tp.da3.runtime-verification-token.v1",
+        "worker_runtime_identity_sha256": "b" * 64,
+        "worker_import_environment_sha256": identity_module._sha256_payload(import_environment),
+        "worker_import_environment": import_environment,
+        "prepared_runtime": {
+            "schema": "tp.da3.prepared-runtime-binding.v1",
+            "runtime_identity_sha256": runtime_identity_sha256,
+            "requested_device": device,
+            "actual_device": device,
+            "executed_backend": executed_backend,
+        },
+        "source_revision_probe": None,
+        "entries": [
+            {
+                "path": str(observed_path.resolve()),
+                "kind": "file",
+                "device": observed.st_dev,
+                "inode": observed.st_ino,
+                "size_bytes": observed.st_size,
+                "mtime_ns": observed.st_mtime_ns,
+                "ctime_ns": observed.st_ctime_ns,
+            }
+        ],
+    }
+    path.write_bytes(canonicalize_json(payload))
+    return path, identity_module.runtime_verification_token_sha256(payload)
 
 
 @pytest.fixture()
@@ -207,6 +251,195 @@ def test_parent_accepts_exact_worker_authority_echo(backend_cls, backend_id: str
     backend._verify_worker_authority_echo(payload)
 
 
+def test_da3_parent_rejects_runtime_identity_echo_mismatch() -> None:
+    backend = DA3Backend.__new__(DA3Backend)
+    backend._candidate_authority = SimpleNamespace(
+        plan_fingerprint_sha256="a" * 64,
+        candidate_id="da3",
+        constituent_backend_id=None,
+    )
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="b" * 64)
+
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="runtime-identity echo"):
+        backend._verify_worker_authority_echo(
+            {
+                "execution_authority": {
+                    "plan_fingerprint_sha256": "a" * 64,
+                    "candidate_id": "da3",
+                    "model_backend_id": None,
+                    "executed_backend_id": "da3",
+                },
+                "runtime_identity_sha256": "c" * 64,
+            }
+        )
+
+
+def test_da3_cache_boundary_verifier_requires_exact_prepared_identity_and_live_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = DA3Backend.__new__(DA3Backend)
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="a" * 64)
+    backend._prepared_cache_runtime_verification_token = {"token": "retained"}
+    backend._prepared_cache_runtime_verification_token_sha256 = "b" * 64
+    backend._prepared_worker_runtime_identity_sha256 = "c" * 64
+    backend._prepared_parent_runtime_identity = {"parent": "retained"}
+    backend._device = "cpu"
+    backend._cache_runtime_authority_disabled = False
+
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    observed = []
+
+    def verify(payload, **kwargs):
+        observed.append((payload, kwargs))
+        return True
+
+    monkeypatch.setattr(identity_module, "verify_runtime_verification_token", verify)
+    monkeypatch.setattr(
+        identity_module, "verify_parent_output_runtime_identity", lambda evidence: evidence == {"parent": "retained"}
+    )
+
+    assert backend.verify_prepared_cache_runtime_identity(runtime_identity_sha256="d" * 64) is False
+    assert observed == []
+    assert backend.verify_prepared_cache_runtime_identity(runtime_identity_sha256="a" * 64) is True
+    assert observed == [
+        (
+            {"token": "retained"},
+            {
+                "expected_token_sha256": "b" * 64,
+                "expected_worker_runtime_identity_sha256": "c" * 64,
+                "expected_prepared_runtime_identity_sha256": "a" * 64,
+                "expected_requested_device": "cpu",
+                "expected_actual_device": "cpu",
+                "expected_executed_backend": "pytorch_cpu",
+            },
+        )
+    ]
+
+    monkeypatch.setattr(identity_module, "verify_runtime_verification_token", lambda *_args, **_kwargs: False)
+    assert backend.verify_prepared_cache_runtime_identity(runtime_identity_sha256="a" * 64) is False
+    assert backend._cache_runtime_authority_disabled is True
+    assert backend._prepared_cache_runtime_identity is None
+
+
+def test_da3_parent_runtime_drift_requires_restart_before_reauthorization(
+    prepared_da3,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="a" * 64)
+    backend._prepared_cache_runtime_verification_token = {"token": "retained"}
+    backend._prepared_cache_runtime_verification_token_sha256 = "b" * 64
+    backend._prepared_worker_runtime_identity_sha256 = "c" * 64
+    backend._prepared_parent_runtime_identity = {"parent": "retained"}
+
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    monkeypatch.setattr(identity_module, "verify_runtime_verification_token", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(identity_module, "verify_parent_output_runtime_identity", lambda _evidence: False)
+
+    assert backend.verify_prepared_cache_runtime_identity(runtime_identity_sha256="a" * 64) is False
+    assert backend._cache_runtime_authority_disabled is True
+    assert (
+        backend.prepare_cache_runtime_identity(
+            execution_plan=prepared_da3.plan,
+            candidate_id=authority.candidate_id,
+            canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+        )
+        is None
+    )
+    backend._python_executable = "/usr/bin/python-worker"
+
+    def fake_run(command, **kwargs):
+        assert "--execution-plan-stdin" in command
+        assert kwargs["input"] == prepared_da3.canonical_plan_bytes.decode("utf-8")
+        output_json = Path(command[command.index("--output-json") + 1])
+        output_depth = Path(command[command.index("--output-depth") + 1])
+        np.save(output_depth, np.ones((2, 2), dtype=np.float32), allow_pickle=False)
+        output_json.write_bytes(
+            canonicalize_json(
+                {
+                    "metadata": {"device": "cpu"},
+                    "device": "cpu",
+                    "dtype": "float32",
+                    "input_size": [2, 2],
+                    "execution_authority": {
+                        "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+                        "candidate_id": authority.candidate_id,
+                        "model_backend_id": authority.constituent_backend_id,
+                        "executed_backend_id": "da3",
+                    },
+                }
+            )
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(da3_module.subprocess, "run", fake_run)
+    result = backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
+
+    assert result.depth_map.shape == (2, 2)
+    assert backend._cache_runtime_authority_disabled is True
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"candidate_id": "depth_pro"}, "different candidate"),
+        ({"canonical_plan_bytes": b"{}"}, "different canonical plan bytes"),
+    ],
+)
+def test_da3_cache_runtime_preparation_rejects_integration_authority_mismatch(
+    prepared_da3,
+    overrides: dict[str, Any],
+    message: str,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+    backend._python_executable = "/usr/bin/python-worker"
+    arguments = {
+        "execution_plan": prepared_da3.plan,
+        "candidate_id": "da3",
+        "canonical_plan_bytes": prepared_da3.canonical_plan_bytes,
+    }
+    arguments.update(overrides)
+
+    with pytest.raises(LuxExecutionPlanAuthorityError, match=message):
+        backend.prepare_cache_runtime_identity(**arguments)
+
+
+def test_da3_cache_runtime_preparation_rejects_different_execution_plan(
+    prepared_da3,
+    prepared_fallback_chain,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="different execution plan"):
+        backend.prepare_cache_runtime_identity(
+            execution_plan=prepared_fallback_chain.plan,
+            candidate_id="da3",
+            canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+        )
+
+
 def test_worker_consumer_rejects_noncanonical_plan_bytes(prepared_da3) -> None:
     with pytest.raises(ValueError, match="exact canonical serialization"):
         consume_lux_worker_execution_plan(b" " + prepared_da3.canonical_plan_bytes)
@@ -296,6 +529,226 @@ def test_da3_worker_consumes_default_metric_authority_without_legacy_provenance(
     assert authority.resolved_model_contract.canonical_key == "da3_metric"
     assert authority.resolved_model_contract.legacy_model_variant_name is None
     assert authority.device == prepared_da3.runtime_config.depth_device
+
+
+def test_da3_worker_rejects_prepared_runtime_mismatch_before_inference(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_image = tmp_path / "input.png"
+    from PIL import Image
+
+    Image.new("RGB", (2, 2), color="white").save(input_image)
+    predicted = False
+
+    class FakeEngine:
+        def predict(self, _image):
+            nonlocal predicted
+            predicted = True
+            raise AssertionError("inference ran before runtime identity validation")
+
+    monkeypatch.setattr(da3_worker, "_build_inference_engine", lambda **_kwargs: FakeEngine())
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    token_path = tmp_path / "runtime-token.json"
+    token_path.write_bytes(
+        canonicalize_json(
+            {
+                "schema": "tp.da3.runtime-verification-token.v1",
+                "worker_runtime_identity_sha256": "b" * 64,
+                "prepared_runtime": {
+                    "schema": "tp.da3.prepared-runtime-binding.v1",
+                    "runtime_identity_sha256": "a" * 64,
+                    "requested_device": "cpu",
+                    "actual_device": "cpu",
+                    "executed_backend": "pytorch_cpu",
+                },
+                "source_revision_probe": None,
+                "entries": [],
+            }
+        )
+    )
+    monkeypatch.setattr(identity_module, "verify_runtime_verification_token", lambda *_args, **_kwargs: False)
+
+    with pytest.raises(RuntimeError, match="verification token is stale or invalid"):
+        da3_worker._run_inference(
+            input_image=input_image,
+            output_depth=tmp_path / "depth.npy",
+            output_json=tmp_path / "result.json",
+            model_variant_name="METRIC_LARGE",
+            model_key="da3_metric",
+            model_revision="4" * 40,
+            device="cpu",
+            use_coreml=False,
+            non_commercial_ok=False,
+            expected_runtime_identity_sha256="a" * 64,
+            runtime_verification_token_path=token_path,
+            runtime_verification_token_sha256="c" * 64,
+        )
+    assert predicted is False
+
+
+def test_da3_worker_rejects_cross_token_runtime_identity_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image
+
+    input_image = tmp_path / "input.png"
+    Image.new("RGB", (2, 2), color="white").save(input_image)
+    token_path, token_sha256 = _write_bound_runtime_token(
+        tmp_path / "runtime-token.json",
+        runtime_identity_sha256="a" * 64,
+        device="cpu",
+        executed_backend="pytorch_cpu",
+    )
+    predicted = False
+
+    def forbidden_engine(**_kwargs):
+        nonlocal predicted
+        predicted = True
+        raise AssertionError("engine constructed before cross-token replay rejection")
+
+    monkeypatch.setattr(da3_worker, "_build_inference_engine", forbidden_engine)
+
+    with pytest.raises(RuntimeError, match="verification token is stale or invalid"):
+        da3_worker._run_inference(
+            input_image=input_image,
+            output_depth=tmp_path / "depth.npy",
+            output_json=tmp_path / "result.json",
+            model_variant_name="METRIC_LARGE",
+            model_key="da3_metric",
+            model_revision="4" * 40,
+            device="cpu",
+            use_coreml=False,
+            non_commercial_ok=False,
+            expected_runtime_identity_sha256="c" * 64,
+            runtime_verification_token_path=token_path,
+            runtime_verification_token_sha256=token_sha256,
+        )
+    assert predicted is False
+
+
+def test_da3_worker_rejects_prepared_mps_runtime_with_fresh_cpu_engine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image
+
+    input_image = tmp_path / "input.png"
+    Image.new("RGB", (2, 2), color="white").save(input_image)
+    token_path, token_sha256 = _write_bound_runtime_token(
+        tmp_path / "runtime-token.json",
+        runtime_identity_sha256="a" * 64,
+        device="mps",
+        executed_backend="pytorch_mps",
+    )
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    monkeypatch.setattr(identity_module, "_verify_source_revision_probe", lambda _payload: True)
+
+    class FreshCpuEngine:
+        backend = SimpleNamespace(value="pytorch_cpu")
+        device = "cpu"
+
+        def predict(self, _image):
+            raise AssertionError("inference ran with a drifted fresh engine")
+
+    monkeypatch.setattr(da3_worker, "_build_inference_engine", lambda **_kwargs: FreshCpuEngine())
+
+    with pytest.raises(RuntimeError, match="differs from prepared cache authority"):
+        da3_worker._run_inference(
+            input_image=input_image,
+            output_depth=tmp_path / "depth.npy",
+            output_json=tmp_path / "result.json",
+            model_variant_name="METRIC_LARGE",
+            model_key="da3_metric",
+            model_revision="4" * 40,
+            device="mps",
+            use_coreml=False,
+            non_commercial_ok=False,
+            expected_runtime_identity_sha256="a" * 64,
+            runtime_verification_token_path=token_path,
+            runtime_verification_token_sha256=token_sha256,
+        )
+    assert not (tmp_path / "depth.npy").exists()
+
+
+@pytest.mark.parametrize("drift_phase", ("before", "after", "result"))
+def test_da3_worker_rejects_fresh_engine_runtime_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift_phase: str,
+) -> None:
+    from PIL import Image
+
+    input_image = tmp_path / "input.png"
+    Image.new("RGB", (2, 2), color="white").save(input_image)
+    token_path = tmp_path / "runtime-token.json"
+    token_path.write_bytes(
+        canonicalize_json(
+            {
+                "schema": "tp.da3.runtime-verification-token.v1",
+                "worker_runtime_identity_sha256": "b" * 64,
+                "prepared_runtime": {
+                    "schema": "tp.da3.prepared-runtime-binding.v1",
+                    "runtime_identity_sha256": "a" * 64,
+                    "requested_device": "cpu",
+                    "actual_device": "cpu",
+                    "executed_backend": "pytorch_cpu",
+                },
+                "source_revision_probe": None,
+                "entries": [],
+            }
+        )
+    )
+    predicted = False
+
+    class BackendValue:
+        value = "pytorch_mps" if drift_phase == "before" else "pytorch_cpu"
+
+    class FakeEngine:
+        backend = BackendValue()
+        device = "mps" if drift_phase == "before" else "cpu"
+
+        def predict(self, _image):
+            nonlocal predicted
+            predicted = True
+            if drift_phase == "after":
+                self.backend = SimpleNamespace(value="pytorch_mps")
+                self.device = "mps"
+            metadata = {
+                "backend": "pytorch_mps" if drift_phase == "result" else "pytorch_cpu",
+                "device": "mps" if drift_phase == "result" else "cpu",
+            }
+            return SimpleNamespace(
+                depth_map=np.ones((2, 2), dtype=np.float32),
+                original_image=np.zeros((2, 2, 3), dtype=np.uint8),
+                metadata=metadata,
+            )
+
+    monkeypatch.setattr(da3_worker, "_build_inference_engine", lambda **_kwargs: FakeEngine())
+    import transformation_portal.depth.backends.da3_runtime_identity as identity_module
+
+    monkeypatch.setattr(identity_module, "verify_runtime_verification_token", lambda *_args, **_kwargs: True)
+
+    with pytest.raises(RuntimeError, match="differs from prepared cache authority"):
+        da3_worker._run_inference(
+            input_image=input_image,
+            output_depth=tmp_path / "depth.npy",
+            output_json=tmp_path / "result.json",
+            model_variant_name="METRIC_LARGE",
+            model_key="da3_metric",
+            model_revision="4" * 40,
+            device="cpu",
+            use_coreml=False,
+            non_commercial_ok=False,
+            expected_runtime_identity_sha256="a" * 64,
+            runtime_verification_token_path=token_path,
+            runtime_verification_token_sha256="c" * 64,
+        )
+    assert predicted is (drift_phase != "before")
+    assert not (tmp_path / "depth.npy").exists()
 
 
 @pytest.mark.parametrize(
@@ -394,6 +847,192 @@ def test_parent_verifies_worker_echo_before_loading_array(
     with pytest.raises(LuxExecutionPlanAuthorityError, match="execution-authority echo"):
         backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
     assert loaded is False
+
+
+def test_da3_parent_verifies_runtime_echo_before_loading_array(
+    prepared_da3,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+    backend._python_executable = "/usr/bin/python-worker"
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="a" * 64)
+    backend._prepared_cache_runtime_verification_token = {
+        "schema": "tp.da3.runtime-verification-token.v1",
+        "worker_runtime_identity_sha256": "d" * 64,
+        "source_revision_probe": None,
+        "entries": [],
+    }
+    backend._prepared_cache_runtime_verification_token_sha256 = "e" * 64
+    loaded = False
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        assert command[command.index("--expected-runtime-identity-sha256") + 1] == "a" * 64
+        output_json = command[command.index("--output-json") + 1]
+        output_depth = command[command.index("--output-depth") + 1]
+        payload = {
+            "execution_authority": {
+                "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+                "candidate_id": "da3",
+                "model_backend_id": None,
+                "executed_backend_id": "da3",
+            },
+            "runtime_identity_sha256": "b" * 64,
+        }
+        with open(output_json, "wb") as handle:
+            handle.write(canonicalize_json(payload))
+        with open(output_depth, "wb") as handle:
+            handle.write(b"not-an-array")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def forbidden_array_load(*args, **kwargs):
+        nonlocal loaded
+        loaded = True
+        raise AssertionError("array was loaded before runtime identity verification")
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(da3_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(da3_module.np, "load", forbidden_array_load)
+
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="runtime-identity echo"):
+        backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
+    assert loaded is False
+
+
+def test_da3_parent_records_verified_runtime_identity_after_inference(
+    prepared_da3,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+    backend._python_executable = "/usr/bin/python-worker"
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="a" * 64)
+    backend._prepared_cache_runtime_verification_token = {
+        "schema": "tp.da3.runtime-verification-token.v1",
+        "worker_runtime_identity_sha256": "d" * 64,
+        "source_revision_probe": None,
+        "entries": [],
+    }
+    backend._prepared_cache_runtime_verification_token_sha256 = "e" * 64
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        output_json = command[command.index("--output-json") + 1]
+        output_depth = command[command.index("--output-depth") + 1]
+        payload = {
+            "metadata": {"device": "cpu"},
+            "device": "cpu",
+            "dtype": "float32",
+            "input_size": [2, 2],
+            "execution_authority": {
+                "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+                "candidate_id": "da3",
+                "model_backend_id": None,
+                "executed_backend_id": "da3",
+            },
+            "runtime_identity_sha256": "a" * 64,
+        }
+        np.save(output_depth, np.ones((2, 2), dtype=np.float32), allow_pickle=False)
+        depth_bytes = Path(output_depth).read_bytes()
+        payload["depth_artifact"] = {
+            "sha256": hashlib.sha256(depth_bytes).hexdigest(),
+            "size_bytes": len(depth_bytes),
+            "shape": [2, 2],
+            "dtype": "float32",
+            "fortran_order": False,
+        }
+        with open(output_json, "wb") as handle:
+            handle.write(canonicalize_json(payload))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(da3_module.subprocess, "run", fake_run)
+
+    result = backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
+
+    assert result.metadata["runtime_identity_sha256"] == "a" * 64
+
+
+def test_da3_depth_artifact_is_loaded_from_digest_verified_open_handle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "depth.npy"
+    np.save(path, np.ones((2, 3), dtype=np.float32), allow_pickle=False)
+    raw = path.read_bytes()
+    artifact = {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+        "shape": [2, 3],
+        "dtype": "float32",
+        "fortran_order": False,
+    }
+    original_load = np.load
+    observed_open_handle = False
+
+    def checked_load(value, **kwargs):
+        nonlocal observed_open_handle
+        observed_open_handle = hasattr(value, "read") and hasattr(value, "fileno")
+        return original_load(value, **kwargs)
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(da3_module.np, "load", checked_load)
+    loaded = _load_verified_worker_depth(path, artifact)
+
+    assert observed_open_handle is True
+    assert loaded.shape == (2, 3)
+    path.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
+    with pytest.raises(ValueError, match="digest mismatch"):
+        _load_verified_worker_depth(path, artifact)
+
+
+def test_da3_depth_artifact_rejects_forged_huge_header_before_np_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    buffer = io.BytesIO()
+    np.lib.format.write_array_header_1_0(
+        buffer,
+        {
+            "descr": np.lib.format.dtype_to_descr(np.dtype(np.float32)),
+            "fortran_order": False,
+            "shape": (1_000_000_000, 1_000_000_000),
+        },
+    )
+    raw = buffer.getvalue()
+    path = tmp_path / "forged.npy"
+    path.write_bytes(raw)
+    artifact = {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+        "shape": [1, 1],
+        "dtype": "float32",
+        "fortran_order": False,
+    }
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(
+        da3_module.np,
+        "load",
+        lambda *_args, **_kwargs: pytest.fail("np.load ran before bounded NPY header validation"),
+    )
+    with pytest.raises(ValueError, match="header disagrees"):
+        _load_verified_worker_depth(path, artifact)
 
 
 def test_ensemble_preserves_exact_constituent_order_and_contracts(prepared_ensemble) -> None:

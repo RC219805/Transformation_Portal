@@ -1,0 +1,32 @@
+# Isolated Depth Anything 3 baseline runtime for macOS Apple Silicon.
+#
+# This target-owned input is intentionally separate from the umbrella ML
+# environment.  The DA3 subprocess cache boundary needs one exact dependency
+# closure that can be hashed and verified before ExecutionIdentity v3 is
+# materialized.  Optional colmap/xformers profiles remain non-authorizing.
+
+torch==2.13.0  # Governed DA3 baseline
+torchvision==0.28.0  # Governed DA3 baseline
+transformers==5.5.0  # Governed DA3 baseline
+cryptography==50.0.0  # Governed DA3 baseline
+moviepy==1.0.3  # Governed DA3 baseline
+einops==0.8.2  # Governed DA3 baseline
+huggingface-hub==1.9.0  # Governed DA3 baseline
+imageio==2.37.3  # Governed DA3 baseline
+numpy>=2.0,<3
+opencv-python==4.11.0.86  # Governed DA3 baseline
+open3d==0.19.0  # Governed DA3 baseline
+fastapi==0.135.3  # Governed DA3 baseline
+uvicorn==0.43.0  # Governed DA3 baseline
+requests==2.33.1  # Governed DA3 baseline
+typer==0.24.1  # Governed DA3 baseline
+pillow==12.3.0  # Governed DA3 baseline
+omegaconf==2.3.0  # Governed DA3 baseline
+evo==1.34.3  # Governed DA3 baseline
+e3nn==0.6.0  # Governed DA3 baseline
+plyfile==1.1.3  # Governed DA3 baseline
+pillow-heif==1.3.0  # Governed DA3 baseline
+safetensors==0.7.0  # Governed DA3 baseline
+trimesh==4.11.5  # Governed DA3 baseline
+addict==2.4.0  # Governed DA3 baseline
+pre-commit==4.5.1  # Governed DA3 baseline

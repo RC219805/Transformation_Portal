@@ -21,6 +21,7 @@ GENERIC_LOCK_FILES = (
     "tools-archive.txt",
 )
 TARGET_OWNED_LOCK_FILES = (
+    "da3-runtime-darwin-arm64.txt",
     "ml-core-darwin-arm64.txt",
 )
 GOVERNED_LOCK_FILES = GENERIC_LOCK_FILES + TARGET_OWNED_LOCK_FILES

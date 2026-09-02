@@ -30,6 +30,11 @@ def manifest_fixture() -> dict[str, dict[str, object]]:
         "ci.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
         "security.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
         "tools-archive.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
+        "da3-runtime-darwin-arm64.txt": _entry(
+            target_id="da3-runtime-darwin-arm64",
+            status="active",
+            allowed_contexts=["local-darwin-arm64"],
+        ),
         "ml-core-darwin-arm64.txt": _entry(
             target_id="darwin-arm64",
             status="active",

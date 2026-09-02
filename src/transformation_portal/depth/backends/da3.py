@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -52,6 +53,7 @@ from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig, ModelVariant
+    from ...lux_depth_v3.depth_cache_runtime import PreparedDepthCacheRuntimeEvidence
     from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
     from ...lux_depth_v3.inference import DA3InferenceEngine
 
@@ -60,6 +62,8 @@ logger = logging.getLogger(__name__)
 DA3_RECOMMENDED_VENV = REPO_LOCAL_DA3_PYTHON
 DA3_SETUP_SCRIPT = "./scripts/setup/install_da3_runtime.sh"
 DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS = 900
+_MAX_DA3_DEPTH_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
+_MAX_NPY_HEADER_BYTES = 64 * 1024
 
 _DEPENDENCY_FAILURE_MARKERS = (
     "modulenotfounderror",
@@ -87,6 +91,97 @@ def _subprocess_text(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def _load_verified_worker_depth(path: Path, artifact: Any) -> np.ndarray:
+    """Digest, validate, and load one NPY from the same open regular file."""
+
+    expected_keys = {"sha256", "size_bytes", "shape", "dtype", "fortran_order"}
+    if not isinstance(artifact, dict) or set(artifact) != expected_keys:
+        raise ValueError("DA3 worker depth artifact has an unknown shape")
+    expected_sha256 = artifact.get("sha256")
+    expected_size = artifact.get("size_bytes")
+    expected_shape = artifact.get("shape")
+    if (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in expected_sha256)
+        or type(expected_size) is not int
+        or expected_size <= 0
+        or expected_size > _MAX_DA3_DEPTH_ARTIFACT_BYTES
+        or not isinstance(expected_shape, list)
+        or len(expected_shape) != 2
+        or any(type(value) is not int or value <= 0 for value in expected_shape)
+        or artifact.get("dtype") != "float32"
+        or type(artifact.get("fortran_order")) is not bool
+    ):
+        raise ValueError("DA3 worker depth artifact is incomplete or unbounded")
+    expected_data_bytes = expected_shape[0] * expected_shape[1] * np.dtype(np.float32).itemsize
+    if expected_size < expected_data_bytes or expected_size - expected_data_bytes > _MAX_NPY_HEADER_BYTES:
+        raise ValueError("DA3 worker depth artifact has an invalid NPY header or payload size")
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        before = os.fstat(handle.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size != expected_size:
+            raise ValueError("DA3 worker depth artifact is not the expected regular file")
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+        if digest.hexdigest() != expected_sha256:
+            raise ValueError("DA3 worker depth artifact digest mismatch")
+        handle.seek(0)
+        version = np.lib.format.read_magic(handle)
+        if version == (1, 0):
+            actual_shape, actual_fortran_order, actual_dtype = np.lib.format.read_array_header_1_0(
+                handle,
+                max_header_size=_MAX_NPY_HEADER_BYTES,
+            )
+        elif version == (2, 0):
+            actual_shape, actual_fortran_order, actual_dtype = np.lib.format.read_array_header_2_0(
+                handle,
+                max_header_size=_MAX_NPY_HEADER_BYTES,
+            )
+        else:
+            raise ValueError("DA3 worker depth artifact uses an unsupported NPY version")
+        actual_header_bytes = handle.tell()
+        if (
+            list(actual_shape) != expected_shape
+            or actual_dtype != np.dtype(np.float32)
+            or actual_fortran_order is not artifact["fortran_order"]
+            or actual_header_bytes + expected_data_bytes != expected_size
+        ):
+            raise ValueError("DA3 worker depth artifact header disagrees with its bounded echo")
+        handle.seek(0)
+        depth_map = np.load(
+            handle,
+            allow_pickle=False,
+            max_header_size=_MAX_NPY_HEADER_BYTES,
+        )
+        if handle.tell() != expected_size:
+            raise ValueError("DA3 worker depth artifact contains trailing or unread bytes")
+        after = os.fstat(handle.fileno())
+    before_projection = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    after_projection = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if before_projection != after_projection:
+        raise ValueError("DA3 worker depth artifact changed while loading")
+    if depth_map.dtype != np.dtype(np.float32) or list(depth_map.shape) != expected_shape:
+        raise ValueError("DA3 worker depth artifact disagrees with its dtype or shape echo")
+    return depth_map
 
 
 def _model_id_for_variant(model_variant: "ModelVariant") -> str:
@@ -247,6 +342,26 @@ class DA3Backend:
         self._python_executable = self._resolve_python_executable(config)
         self._subprocess_timeout_seconds = self._resolve_subprocess_timeout_seconds(config)
         self._subprocess_available_checked = False
+        self._prepared_cache_runtime_identity: Optional["PreparedDepthCacheRuntimeEvidence"] = None
+        self._prepared_cache_runtime_verification_token: Optional[dict[str, Any]] = None
+        self._prepared_cache_runtime_verification_token_sha256: Optional[str] = None
+        self._prepared_worker_runtime_identity_sha256: Optional[str] = None
+        self._prepared_parent_runtime_identity: Any = None
+        self._cache_runtime_authority_disabled = False
+
+    def _clear_prepared_cache_runtime_identity(self) -> None:
+        self._prepared_cache_runtime_identity = None
+        self._prepared_cache_runtime_verification_token = None
+        self._prepared_cache_runtime_verification_token_sha256 = None
+        self._prepared_worker_runtime_identity_sha256 = None
+        self._prepared_parent_runtime_identity = None
+
+    def _disable_cache_runtime_authority(self, reason: str) -> None:
+        """Require a process restart after retained runtime materialization drifts."""
+
+        logger.warning("DA3 cache runtime authority disabled until restart: %s", reason)
+        self._cache_runtime_authority_disabled = True
+        self._clear_prepared_cache_runtime_identity()
 
     def _find_repo_root(self) -> Optional[Path]:
         """Find repository root by walking parent directories when in a checkout."""
@@ -367,11 +482,21 @@ class DA3Backend:
         return timeout_seconds
 
     def _build_worker_env(self) -> dict[str, str]:
-        """Build environment for the subprocess worker."""
-        env = os.environ.copy()
+        """Build a deterministic import environment for the subprocess worker."""
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
+        }
+        env.update(
+            {
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONSAFEPATH": "1",
+            }
+        )
         if self._repo_src is not None and self._repo_src.exists():
-            existing = env.get("PYTHONPATH")
-            env["PYTHONPATH"] = f"{self._repo_src}{os.pathsep}{existing}" if existing else str(self._repo_src)
+            env["PYTHONPATH"] = str(self._repo_src)
         if "MPLCONFIGDIR" not in env:
             if self._repo_root is not None:
                 mpl_config_dir = self._repo_root / ".runtime" / "mplconfig"
@@ -428,20 +553,27 @@ class DA3Backend:
             raise ValueError(f"DA3 device override {normalized!r} disagrees with carried authority {self._device!r}")
         return normalized
 
-    def _verify_worker_authority_echo(self, payload: Any) -> None:
+    def _verify_worker_authority_echo(self, payload: Any) -> Optional[str]:
         """Verify worker authority before loading or accepting its array."""
 
         authority = self._candidate_authority
-        if authority is None:
-            return
-        expected = {
-            "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
-            "candidate_id": authority.candidate_id,
-            "model_backend_id": authority.constituent_backend_id,
-            "executed_backend_id": self.name,
-        }
-        if not isinstance(payload, dict) or payload.get("execution_authority") != expected:
-            raise LuxExecutionPlanAuthorityError("DA3 worker execution-authority echo does not match the carried plan")
+        if authority is not None:
+            expected = {
+                "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+                "candidate_id": authority.candidate_id,
+                "model_backend_id": authority.constituent_backend_id,
+                "executed_backend_id": self.name,
+            }
+            if not isinstance(payload, dict) or payload.get("execution_authority") != expected:
+                raise LuxExecutionPlanAuthorityError("DA3 worker execution-authority echo does not match the carried plan")
+
+        prepared = getattr(self, "_prepared_cache_runtime_identity", None)
+        if prepared is None:
+            return None
+        expected_runtime_identity = prepared.runtime_identity_sha256
+        if not isinstance(payload, dict) or payload.get("runtime_identity_sha256") != expected_runtime_identity:
+            raise LuxExecutionPlanAuthorityError("DA3 worker runtime-identity echo does not match cache preparation")
+        return expected_runtime_identity
 
     def _apple_coreml_opt_in_enabled(self) -> bool:
         """Return whether this backend is configured to prefer Apple CoreML."""
@@ -665,6 +797,299 @@ class DA3Backend:
 
         logger.debug("DA3 backend dependencies available")
 
+    def prepare_cache_runtime_identity(
+        self,
+        *,
+        execution_plan: Optional[Any] = None,
+        candidate_id: Optional[str] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
+    ) -> Optional["PreparedDepthCacheRuntimeEvidence"]:
+        """Prepare isolated-worker evidence before a depth-cache lookup.
+
+        This is an optional capability.  Missing local model bytes, a missing
+        governed dependency lock, unsupported in-process execution, or any
+        malformed worker report returns ``None`` and therefore cannot authorize
+        either a cache read or write.  Carried-plan mismatches remain authority
+        errors.
+        """
+
+        if self._candidate_authority is None:
+            return None
+        if self._cache_runtime_authority_disabled:
+            return None
+
+        from ...lux_depth_v3.depth_cache_runtime import PreparedDepthCacheRuntimeEvidence
+        from ...lux_depth_v3.execution_lifecycle import consume_lux_worker_execution_plan
+        from .da3_runtime_identity import (
+            DA3RuntimeIdentityEvidence,
+            bind_parent_output_dependency_identity,
+            build_prepared_cache_runtime_evidence,
+            da3_cache_runtime_governance_identity,
+            load_da3_worker_runtime_handshake,
+            merge_runtime_verification_entries,
+            prepare_parent_output_runtime_identity,
+            runtime_verification_token_sha256,
+            verify_parent_output_runtime_identity,
+            verify_runtime_verification_token,
+        )
+
+        carried_bytes = self._canonical_plan_bytes
+        if type(carried_bytes) is not bytes:
+            raise LuxExecutionPlanAuthorityError("DA3 cache runtime preparation is missing carried canonical plan bytes")
+        if canonical_plan_bytes is not None and (
+            type(canonical_plan_bytes) is not bytes or canonical_plan_bytes != carried_bytes
+        ):
+            raise LuxExecutionPlanAuthorityError("DA3 cache runtime preparation received different canonical plan bytes")
+        if candidate_id is not None and candidate_id != self._candidate_authority.candidate_id:
+            raise LuxExecutionPlanAuthorityError("DA3 cache runtime preparation received a different candidate")
+        carried_plan = consume_lux_worker_execution_plan(carried_bytes)
+        if execution_plan is not None:
+            try:
+                supplied_bytes = execution_plan.to_canonical_json().encode("utf-8")
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise LuxExecutionPlanAuthorityError(
+                    "DA3 cache runtime preparation received an invalid execution plan"
+                ) from exc
+            if supplied_bytes != carried_bytes:
+                raise LuxExecutionPlanAuthorityError("DA3 cache runtime preparation received a different execution plan")
+            consume_lux_worker_execution_plan(supplied_bytes)
+
+        # Production stays cheap and fail-closed until the checked-in contract
+        # points at a real repo-confined exact dependency lock whose bytes match
+        # the declared digest.  In-process DA3 cannot provide a worker echo.
+        governance_identity = (
+            da3_cache_runtime_governance_identity(self._python_executable)
+            if self._uses_subprocess() and self._python_executable is not None
+            else None
+        )
+        if governance_identity is None:
+            self._clear_prepared_cache_runtime_identity()
+            return None
+
+        prepared = self._prepared_cache_runtime_identity
+        verification_token = self._prepared_cache_runtime_verification_token
+        verification_token_sha256 = self._prepared_cache_runtime_verification_token_sha256
+        worker_runtime_sha256 = self._prepared_worker_runtime_identity_sha256
+        parent_runtime_identity = self._prepared_parent_runtime_identity
+        if prepared is not None:
+            expected_backend = {"cpu": "pytorch_cpu", "mps": "pytorch_mps"}.get(self._device)
+            retained_is_valid = (
+                verification_token is not None
+                and verification_token_sha256 is not None
+                and worker_runtime_sha256 is not None
+                and parent_runtime_identity is not None
+                and expected_backend is not None
+                and verify_runtime_verification_token(
+                    verification_token,
+                    expected_token_sha256=verification_token_sha256,
+                    expected_worker_runtime_identity_sha256=worker_runtime_sha256,
+                    expected_prepared_runtime_identity_sha256=prepared.runtime_identity_sha256,
+                    expected_requested_device=self._device,
+                    expected_actual_device=self._device,
+                    expected_executed_backend=expected_backend,
+                )
+                and verify_parent_output_runtime_identity(parent_runtime_identity)
+            )
+            if retained_is_valid:
+                return prepared
+            self._disable_cache_runtime_authority("retained runtime evidence changed after preparation")
+            return None
+
+        self._clear_prepared_cache_runtime_identity()
+
+        with tempfile.TemporaryDirectory(prefix="tp_da3_identity_") as tmpdir:
+            output_path = Path(tmpdir) / "runtime_identity.json"
+            command = self._build_worker_command(
+                "--prepare-runtime-identity",
+                "--output-runtime-identity",
+                str(output_path),
+                *self._canonical_worker_args(),
+            )
+            try:
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    cwd=self._worker_cwd(),
+                    env=self._build_worker_env(),
+                    check=True,
+                    timeout=self._subprocess_timeout_seconds,
+                    input=self._canonical_worker_input(),
+                )
+                payload = load_da3_worker_runtime_handshake(output_path)
+            except (FileNotFoundError, OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
+                logger.warning("DA3 cache runtime preparation is non-authorizing: %s", exc)
+                return None
+
+        expected_keys = {
+            "schema",
+            "runtime_evidence",
+            "prepared_cache_runtime",
+            "runtime_identity_sha256",
+            "runtime_verification_token",
+            "runtime_verification_token_sha256",
+        }
+        if not isinstance(payload, dict) or set(payload) != expected_keys:
+            logger.warning("DA3 cache runtime preparation returned an unknown report shape")
+            return None
+        if payload.get("schema") != "tp.da3.worker-runtime-handshake.v1":
+            logger.warning("DA3 cache runtime preparation returned an unsupported schema")
+            return None
+
+        try:
+            evidence = DA3RuntimeIdentityEvidence.from_mapping(payload["runtime_evidence"])
+        except (TypeError, ValueError) as exc:
+            logger.warning("DA3 cache runtime evidence is non-authorizing: %s", exc)
+            return None
+        if not evidence.cacheable:
+            reasons = evidence.to_mapping().get("incomplete_reasons", [])
+            logger.info("DA3 cache runtime identity unavailable: %s", ",".join(reasons))
+            return None
+
+        verification_token = payload.get("runtime_verification_token")
+        verification_token_sha256 = payload.get("runtime_verification_token_sha256")
+        worker_runtime_sha256 = evidence.runtime_identity_sha256
+        if (
+            not isinstance(verification_token, dict)
+            or not isinstance(verification_token_sha256, str)
+            or worker_runtime_sha256 is None
+            or not verify_runtime_verification_token(
+                verification_token,
+                expected_token_sha256=verification_token_sha256,
+                expected_worker_runtime_identity_sha256=worker_runtime_sha256,
+            )
+        ):
+            logger.warning("DA3 cache runtime preparation returned a stale or invalid verification token")
+            return None
+
+        evidence_payload = evidence.to_mapping()
+        backend_identity = evidence_payload["backend_identity"]
+        expected_contract = self._resolved_model_contract
+        detailed_evidence = evidence_payload["evidence"]
+        interpreter_evidence = detailed_evidence["interpreter"]
+        platform_evidence = detailed_evidence["platform"]
+        runtime_baseline = governance_identity.runtime_baseline
+        if (
+            backend_identity.get("model_canonical_key") != expected_contract.canonical_key
+            or backend_identity.get("model_repo_id") != expected_contract.spec.repo_id
+            or backend_identity.get("model_lock_revision") != expected_contract.revision
+            or backend_identity.get("requested_device") != self._device
+            or backend_identity.get("actual_device") != self._device
+            or evidence_payload.get("governance_contract_sha256") != governance_identity.governance_contract_sha256
+            or evidence_payload.get("dependency_lock_sha256") != governance_identity.dependency_lock_sha256
+            or detailed_evidence.get("source_revision") != governance_identity.source_revision
+            or interpreter_evidence.get("runtime_authority_sha256") != governance_identity.runtime_authority_sha256
+            or interpreter_evidence.get("implementation") != runtime_baseline["implementation"]
+            or interpreter_evidence.get("version") != runtime_baseline["python_version"]
+            or interpreter_evidence.get("executable_sha256") != runtime_baseline["executable_sha256"]
+            or interpreter_evidence.get("executable_size_bytes") != runtime_baseline["executable_size_bytes"]
+            or platform_evidence.get("system") != runtime_baseline["system"]
+            or platform_evidence.get("release") != runtime_baseline["release"]
+            or platform_evidence.get("version") != runtime_baseline["platform_version"]
+            or platform_evidence.get("machine") != runtime_baseline["machine"]
+        ):
+            raise LuxExecutionPlanAuthorityError("DA3 prepared runtime evidence disagrees with carried model/device authority")
+
+        try:
+            expected_prepared = build_prepared_cache_runtime_evidence(
+                evidence,
+                plan=carried_plan,
+                candidate_authority=self._candidate_authority,
+            )
+            reported_payload = payload["prepared_cache_runtime"]
+            if not isinstance(reported_payload, dict):
+                return None
+            reported_prepared = PreparedDepthCacheRuntimeEvidence.from_payload(reported_payload)
+        except (TypeError, ValueError) as exc:
+            logger.warning("DA3 cache runtime preparation cannot complete core evidence: %s", exc)
+            return None
+        if (
+            expected_prepared is None
+            or reported_prepared != expected_prepared
+            or payload.get("runtime_identity_sha256") != expected_prepared.runtime_identity_sha256
+        ):
+            raise LuxExecutionPlanAuthorityError("DA3 worker prepared runtime evidence does not match the carried plan")
+
+        try:
+            parent_runtime_identity = prepare_parent_output_runtime_identity()
+            final_prepared = bind_parent_output_dependency_identity(
+                expected_prepared,
+                parent_runtime_identity=parent_runtime_identity,
+            )
+            prepared_runtime_binding = {
+                "schema": "tp.da3.prepared-runtime-binding.v1",
+                "runtime_identity_sha256": final_prepared.runtime_identity_sha256,
+                "requested_device": str(backend_identity["requested_device"]),
+                "actual_device": str(backend_identity["actual_device"]),
+                "executed_backend": str(backend_identity["executed_backend"]),
+            }
+            verification_token = merge_runtime_verification_entries(
+                verification_token,
+                parent_runtime_identity.verification_entries,
+                prepared_runtime_binding=prepared_runtime_binding,
+            )
+            verification_token_sha256 = runtime_verification_token_sha256(verification_token)
+            if not verify_runtime_verification_token(
+                verification_token,
+                expected_token_sha256=verification_token_sha256,
+                expected_worker_runtime_identity_sha256=worker_runtime_sha256,
+                expected_prepared_runtime_identity_sha256=final_prepared.runtime_identity_sha256,
+                expected_requested_device=str(backend_identity["requested_device"]),
+                expected_actual_device=str(backend_identity["actual_device"]),
+                expected_executed_backend=str(backend_identity["executed_backend"]),
+            ):
+                raise ValueError("DA3 final runtime verification token is inconsistent")
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning("DA3 parent output runtime identity is non-authorizing: %s", exc)
+            return None
+
+        self._prepared_cache_runtime_identity = final_prepared
+        self._prepared_cache_runtime_verification_token = verification_token
+        self._prepared_cache_runtime_verification_token_sha256 = verification_token_sha256
+        self._prepared_worker_runtime_identity_sha256 = worker_runtime_sha256
+        self._prepared_parent_runtime_identity = parent_runtime_identity
+        return final_prepared
+
+    def verify_prepared_cache_runtime_identity(
+        self,
+        *,
+        runtime_identity_sha256: str,
+    ) -> bool:
+        """Revalidate retained DA3 materialization at cache get/store boundaries."""
+
+        prepared = self._prepared_cache_runtime_identity
+        verification_token = self._prepared_cache_runtime_verification_token
+        verification_token_sha256 = self._prepared_cache_runtime_verification_token_sha256
+        worker_runtime_sha256 = self._prepared_worker_runtime_identity_sha256
+        parent_runtime_identity = getattr(self, "_prepared_parent_runtime_identity", None)
+        if prepared is None or prepared.runtime_identity_sha256 != runtime_identity_sha256:
+            return False
+        from .da3_runtime_identity import verify_parent_output_runtime_identity, verify_runtime_verification_token
+
+        expected_backend = {"cpu": "pytorch_cpu", "mps": "pytorch_mps"}.get(self._device)
+        runtime_inputs_valid = (
+            verification_token is not None
+            and verification_token_sha256 is not None
+            and worker_runtime_sha256 is not None
+            and parent_runtime_identity is not None
+            and expected_backend is not None
+            and verify_runtime_verification_token(
+                verification_token,
+                expected_token_sha256=verification_token_sha256,
+                expected_worker_runtime_identity_sha256=worker_runtime_sha256,
+                expected_prepared_runtime_identity_sha256=prepared.runtime_identity_sha256,
+                expected_requested_device=self._device,
+                expected_actual_device=self._device,
+                expected_executed_backend=expected_backend,
+            )
+            and verify_parent_output_runtime_identity(parent_runtime_identity)
+        )
+        if not runtime_inputs_valid:
+            self._disable_cache_runtime_authority("runtime evidence changed at a cache boundary")
+            return False
+        return True
+
     @classmethod
     def required_packages(cls) -> list[str]:
         """Return required import module names for the active DA3 runtime mode."""
@@ -785,6 +1210,25 @@ class DA3Backend:
                     command.append("--non-commercial-ok")
                 if self._apple_coreml_opt_in_enabled():
                     command.append("--use-coreml")
+            if self._prepared_cache_runtime_identity is not None:
+                from ...ingest.canonical_json import canonicalize_json
+
+                verification_token_path = tmp_root / "runtime-verification-token.json"
+                verification_token = self._prepared_cache_runtime_verification_token
+                verification_token_sha256 = self._prepared_cache_runtime_verification_token_sha256
+                if verification_token is None or verification_token_sha256 is None:
+                    raise LuxExecutionPlanAuthorityError("DA3 cache runtime identity is missing its verification token")
+                verification_token_path.write_bytes(canonicalize_json(verification_token))
+                command.extend(
+                    [
+                        "--expected-runtime-identity-sha256",
+                        self._prepared_cache_runtime_identity.runtime_identity_sha256,
+                        "--runtime-verification-token",
+                        str(verification_token_path),
+                        "--runtime-verification-token-sha256",
+                        verification_token_sha256,
+                    ]
+                )
 
             try:
                 result = subprocess.run(
@@ -881,10 +1325,18 @@ class DA3Backend:
                 )
 
             try:
-                with output_json_path.open("r", encoding="utf-8") as handle:
-                    payload = json.load(handle)
-                self._verify_worker_authority_echo(payload)
-                depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
+                if self._prepared_cache_runtime_identity is not None:
+                    from .da3_runtime_identity import load_da3_worker_runtime_handshake
+
+                    payload = load_da3_worker_runtime_handshake(output_json_path)
+                else:
+                    with output_json_path.open("r", encoding="utf-8") as handle:
+                        payload = json.load(handle)
+                verified_runtime_identity = self._verify_worker_authority_echo(payload)
+                if verified_runtime_identity is not None:
+                    depth_map = _load_verified_worker_depth(output_depth_path, payload.get("depth_artifact"))
+                else:
+                    depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
             except LuxExecutionPlanAuthorityError:
                 raise
             except (json.JSONDecodeError, OSError, ValueError) as exc:
@@ -911,10 +1363,14 @@ class DA3Backend:
         if isinstance(input_size, (list, tuple)) and len(input_size) == 2:
             normalized_input_size = (int(input_size[0]), int(input_size[1]))
 
+        result_metadata = dict(payload.get("metadata", {})) if isinstance(payload.get("metadata"), dict) else {}
+        if verified_runtime_identity is not None:
+            result_metadata["runtime_identity_sha256"] = verified_runtime_identity
+
         return self._build_depth_result(
             depth_map=depth_map,
             image_array=image_array,
-            metadata=payload.get("metadata", {}),
+            metadata=result_metadata,
             use_device=str(payload.get("device") or use_device),
             runner_mode="subprocess",
             python_executable=self._python_executable or "",

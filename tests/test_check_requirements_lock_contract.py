@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 from pathlib import Path
 
@@ -97,6 +98,12 @@ def write_lock_ownership_manifest(tmp_path: Path) -> None:
                 "    status: active",
                 "    allowed_contexts:",
                 "      - local-darwin-arm64",
+                "  da3-runtime-darwin-arm64.txt:",
+                "    target_id: da3-runtime-darwin-arm64",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - local-darwin-arm64",
             ]
         )
         + "\n",
@@ -120,6 +127,7 @@ def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
         "3.11",
         body="torch==2.13.0\ntorchvision==0.28.0\ndiffusers==0.38.0\ntransformers==5.5.0\ncoremltools==9.0\n",
     )
+    write_input_file(tmp_path, "da3-runtime-darwin-arm64.in", "torch==2.13.0")
     return tmp_path
 
 
@@ -230,6 +238,39 @@ def test_staged_generic_contract_rejects_floating_line_among_exact_pins(tmp_path
 def test_headers_match_expected_python(isolated_repo: Path) -> None:
     expected = contract.read_expected_lock_python_version()
     assert contract.validate_lockfile_headers(expected) == []
+
+
+def test_current_da3_runtime_governance_digest_matches_lock() -> None:
+    assert contract.validate_da3_runtime_governance_digest() == []
+
+
+def test_da3_runtime_governance_digest_rejects_stale_consumers(tmp_path: Path) -> None:
+    lock_path = tmp_path / "da3-runtime-darwin-arm64.txt"
+    governance_path = tmp_path / "da3-runtime-governance.json"
+    installer_path = tmp_path / "install-da3.sh"
+    lock_path.write_bytes(b"torch==2.13.0\n")
+    actual_sha256 = hashlib.sha256(lock_path.read_bytes()).hexdigest()
+    stale_sha256 = "f" * 64
+    governance_path.write_text(f'{{"dependency_lock_sha256":"{stale_sha256}"}}\n', encoding="utf-8")
+    installer_path.write_text(f'DA3_LOCK_SHA256="{stale_sha256}"\n', encoding="utf-8")
+
+    errors = contract.validate_da3_runtime_governance_digest(
+        lock_path=lock_path,
+        governance_path=governance_path,
+        installer_path=installer_path,
+    )
+
+    assert errors == [
+        f"{governance_path} must bind dependency_lock_sha256={actual_sha256!r} " f"for {lock_path}; observed {stale_sha256!r}",
+        f"{installer_path} must declare exactly one DA3_LOCK_SHA256={actual_sha256!r} "
+        f"for {lock_path}; observed {[stale_sha256]!r}",
+    ]
+
+
+def test_da3_runtime_make_targets_validate_digest_consumers() -> None:
+    makefile = (PROJECT_ROOT / "requirements" / "Makefile").read_text(encoding="utf-8")
+
+    assert makefile.count("check_requirements_lock_contract.py --da3-runtime-digest-only") == 4
 
 
 def test_header_mismatch_is_reported(isolated_repo: Path) -> None:
