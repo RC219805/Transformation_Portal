@@ -49,7 +49,7 @@ def _prepare_da3_installer_fixture(repo_root: Path, fakebin: Path) -> Path:
     )
     _write_executable(
         fakebin / "uname",
-        '#!/bin/sh\ncase "$1" in\n  -s) echo Darwin ;;\n  -m) echo arm64 ;;\n  *) exit 1 ;;\nesac\n',
+        '#!/bin/sh\ncase "$1" in\n  -s) echo Darwin ;;\n  -m) echo arm64 ;;\n  *) exec /usr/bin/uname "$@" ;;\nesac\n',
     )
     return lock_path
 
