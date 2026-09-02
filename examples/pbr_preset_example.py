@@ -156,7 +156,12 @@ Examples:
     print(f"{'='*60}\n")
 
     # Freeze the exact input/model/runtime authority before initialization.
-    prepared = prepare_lux_execution(config, args.input, image_paths)
+    prepared = prepare_lux_execution(
+        config,
+        args.input,
+        [image_path.absolute() for image_path in image_paths],
+    )
+    image_paths = list(prepared.input_files)
     orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
     # Process images
@@ -168,7 +173,7 @@ Examples:
 
         try:
             image_input = ImageInput(path=img_path)
-            result = orchestrator.enhance_image(image_input, input_root=args.input)
+            result = orchestrator.enhance_image(image_input, input_root=prepared.input_root)
 
             # Report outputs
             stem = img_path.stem

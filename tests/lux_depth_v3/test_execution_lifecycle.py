@@ -578,6 +578,185 @@ def test_carried_backend_selection_never_reapplies_runtime_environment(
     assert selection.resolved_backend == "da2"
 
 
+@pytest.mark.parametrize(
+    "selector_source",
+    ["explicit_relative", "environment_relative", "path_name", "repo_local"],
+)
+def test_prepare_freezes_runtime_interpreters_against_cwd_and_path_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selector_source: str,
+) -> None:
+    import transformation_portal.lux_depth_v3.config_resolver as config_resolver_module
+
+    preparation_cwd = tmp_path / "preparation"
+    runtime_dir = preparation_cwd / "runtime"
+    runtime_dir.mkdir(parents=True)
+    runtime_specs = {
+        "da3_python_executable": (
+            "TRANSFORMATION_PORTAL_DA3_PYTHON",
+            "da3-python",
+            "_repo_local_da3_python_path",
+        ),
+        "depth_pro_python_executable": (
+            "TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON",
+            "depth-pro-python",
+            "_repo_local_depth_pro_python_path",
+        ),
+        "raw_python_executable": (
+            "TRANSFORMATION_PORTAL_RAW_PYTHON",
+            "raw-python",
+            "_repo_local_raw_python_path",
+        ),
+    }
+    expected: dict[str, str] = {}
+    for field_name, (environment_name, filename, _repo_resolver_name) in runtime_specs.items():
+        executable = runtime_dir / filename
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(0o755)
+        expected[field_name] = str(executable.absolute())
+        monkeypatch.delenv(environment_name, raising=False)
+
+    config = _synthetic_config()
+    for field_name, (environment_name, filename, repo_resolver_name) in runtime_specs.items():
+        executable = runtime_dir / filename
+        monkeypatch.setattr(config_resolver_module, repo_resolver_name, lambda: None)
+        if selector_source == "explicit_relative":
+            setattr(config, field_name, str(Path("runtime") / filename))
+        elif selector_source == "environment_relative":
+            monkeypatch.setenv(environment_name, str(Path("runtime") / filename))
+        elif selector_source == "path_name":
+            setattr(config, field_name, filename)
+        else:
+            monkeypatch.setattr(
+                config_resolver_module,
+                repo_resolver_name,
+                lambda executable=executable: executable,
+            )
+    if selector_source == "path_name":
+        monkeypatch.setenv("PATH", str(runtime_dir))
+
+    root, image = _input_tree(tmp_path)
+    monkeypatch.chdir(preparation_cwd)
+    prepared = prepare_lux_execution(config, root, [image])
+
+    worker_cwd = tmp_path / "worker"
+    worker_cwd.mkdir()
+    forged_path = worker_cwd / "forged-bin"
+    forged_path.mkdir()
+    monkeypatch.chdir(worker_cwd)
+    monkeypatch.setenv("PATH", str(forged_path))
+    for environment_name, _filename, _repo_resolver_name in runtime_specs.values():
+        monkeypatch.setenv(environment_name, "forged-python")
+
+    runtime = runtime_config_from_execution_plan(prepared.plan)
+    assert runtime.da3_python_executable == expected["da3_python_executable"]
+    assert runtime.depth_pro_python_executable == expected["depth_pro_python_executable"]
+    assert runtime.raw_python_executable == expected["raw_python_executable"]
+    assert config_resolver_module.resolve_effective_da3_python_executable(runtime) == expected["da3_python_executable"]
+    assert (
+        config_resolver_module.resolve_effective_depth_pro_python_executable(runtime)
+        == expected["depth_pro_python_executable"]
+    )
+    assert config_resolver_module.resolve_effective_raw_python_executable(runtime) == expected["raw_python_executable"]
+
+    preprocess = next(
+        node.configuration for node in prepared.plan.nodes if node.stage_registry_id.value == "tp.stage.lux.preprocess.v1"
+    )
+    depth = next(node.configuration for node in prepared.plan.nodes if node.stage_registry_id.value == "tp.stage.lux.depth.v1")
+    assert preprocess["raw_python_executable"] == expected["raw_python_executable"]
+    assert depth["da3_python_executable"] == expected["da3_python_executable"]
+    assert depth["depth_pro_python_executable"] == expected["depth_pro_python_executable"]
+
+
+def test_prepare_rejects_unresolved_path_name_runtime_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformation_portal.lux_depth_v3.config_resolver as config_resolver_module
+
+    empty_path = tmp_path / "empty-path"
+    empty_path.mkdir()
+    monkeypatch.setenv("PATH", str(empty_path))
+    monkeypatch.setattr(config_resolver_module, "_repo_local_da3_python_path", lambda: None)
+    root, image = _input_tree(tmp_path)
+
+    with pytest.raises(ExecutionPlanError, match="not found on preparation PATH"):
+        prepare_lux_execution(
+            _synthetic_config(da3_python_executable="missing-da3-python"),
+            root,
+            [image],
+        )
+
+
+@pytest.mark.parametrize("checkpoint_source", ["explicit", "environment", "default"])
+def test_prepare_freezes_depth_pro_checkpoint_and_worker_consumes_exact_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    checkpoint_source: str,
+) -> None:
+    import io
+    from types import SimpleNamespace
+
+    from transformation_portal.depth.backends import depth_pro_worker
+    from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+    preparation_cwd = tmp_path / "preparation"
+    preparation_cwd.mkdir()
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT", raising=False)
+    config = EnhanceConfig(
+        depth_backend="depth_pro",
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+        enable_v2=False,
+    )
+    if checkpoint_source == "explicit":
+        target = preparation_cwd / "checkpoint-target.pt"
+        target.write_bytes(b"checkpoint")
+        checkpoint = preparation_cwd / "models" / "depth-pro-link.pt"
+        checkpoint.parent.mkdir()
+        checkpoint.symlink_to(target)
+        config.depth_pro_checkpoint_path = "models/depth-pro-link.pt"
+    elif checkpoint_source == "environment":
+        checkpoint = preparation_cwd / "environment" / "depth-pro.pt"
+        checkpoint.parent.mkdir()
+        checkpoint.write_bytes(b"checkpoint")
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT", "environment/depth-pro.pt")
+    else:
+        checkpoint = preparation_cwd / DepthProBackend.DEFAULT_CHECKPOINT
+
+    root, image = _input_tree(tmp_path)
+    monkeypatch.chdir(preparation_cwd)
+    prepared = prepare_lux_execution(config, root, [image])
+    expected = str(checkpoint.absolute())
+    authority = backend_candidate_authority(prepared.plan, "depth_pro")
+
+    assert authority.model_contract is not None
+    assert authority.model_contract.artifact_path == expected
+    assert prepared.runtime_config.depth_pro_checkpoint_path == expected
+    if checkpoint_source == "explicit":
+        assert Path(expected).is_symlink()
+        assert expected != str(Path(expected).resolve())
+
+    worker_cwd = tmp_path / "worker"
+    worker_cwd.mkdir()
+    monkeypatch.chdir(worker_cwd)
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT", "forged-checkpoint.pt")
+    projected = runtime_config_from_execution_plan(prepared.plan, candidate_authority=authority)
+    assert projected.depth_pro_checkpoint_path == expected
+
+    monkeypatch.setattr(
+        depth_pro_worker.sys,
+        "stdin",
+        SimpleNamespace(buffer=io.BytesIO(prepared.canonical_plan_bytes)),
+    )
+    worker_authority = depth_pro_worker._consume_canonical_worker_authority(
+        candidate_id="depth_pro",
+        model_backend_id=None,
+    )
+    assert worker_authority.checkpoint == Path(expected)
+
+
 def test_frozen_none_runtime_choices_ignore_post_plan_environment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

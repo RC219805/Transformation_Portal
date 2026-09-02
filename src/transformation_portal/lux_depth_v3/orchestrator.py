@@ -57,6 +57,7 @@ from ..reporting.contracts import (
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
+from ..stage_graph.registry import StageRegistryIdentifier
 from ..vlm_captioning import (
     FASTVLM_MODEL_ROLES,
     FastVLMRuntimeConfig,
@@ -5376,9 +5377,38 @@ class EnhanceOrchestrator:
                 " constraints."
             )
 
-        sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+        prepared = self._prepared_execution
+        if prepared is None:
+            sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+            expected_sidecar_sha256 = None
+        else:
+            reconstruction_nodes = tuple(
+                node for node in prepared.plan.nodes if node.stage_registry_id == StageRegistryIdentifier.LUX_RECONSTRUCTION
+            )
+            if len(reconstruction_nodes) != 1:
+                raise LuxExecutionPlanAuthorityError(
+                    "Prepared reconstruction requires exactly one authoritative reconstruction node"
+                )
+            reconstruction_config = reconstruction_nodes[0].configuration
+            sidecar_value = reconstruction_config.get("cameras_sidecar_path")
+            expected_sidecar_sha256 = reconstruction_config.get("cameras_sidecar_sha256")
+            if sidecar_value is None:
+                if expected_sidecar_sha256 is not None:
+                    raise LuxExecutionPlanAuthorityError(
+                        "Prepared reconstruction carries a camera sidecar digest without a path"
+                    )
+            elif not isinstance(sidecar_value, str) or not sidecar_value:
+                raise LuxExecutionPlanAuthorityError("Prepared reconstruction camera sidecar path is invalid")
+            elif not isinstance(expected_sidecar_sha256, str) or not expected_sidecar_sha256:
+                raise LuxExecutionPlanAuthorityError(
+                    "Prepared reconstruction is missing its authoritative camera sidecar SHA-256"
+                )
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
-        sidecar_payload = load_sidecar_payload(sidecar_path)
+        sidecar_source_file = str(sidecar_path) if prepared is not None and sidecar_path is not None else None
+        sidecar_payload = load_sidecar_payload(
+            sidecar_path,
+            expected_sha256=expected_sidecar_sha256,
+        )
         reconstruction_tier = str(
             getattr(
                 self.config,
@@ -5416,6 +5446,7 @@ class EnhanceOrchestrator:
                 dataset_root=dataset_root,
                 sidecar_path=sidecar_path,
                 sidecar_payload=sidecar_payload,
+                sidecar_source_file=sidecar_source_file,
             )
             if not cameras:
                 logger.info(

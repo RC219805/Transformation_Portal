@@ -363,11 +363,16 @@ def run_apex_for_config(
     )
 
     # Freeze exact inputs/runtime authority before orchestrator initialization.
-    prepared = prepare_lux_execution(config, input_dir, images)
+    prepared = prepare_lux_execution(
+        config,
+        input_dir,
+        [image_path.absolute() for image_path in images],
+    )
     # Use the carrier's canonical real paths for every subsequent direct read.
     # The discovery paths may contain aliases that can be retargeted after the
     # plan boundary; ``prepared.input_files`` is the exact frozen selection.
     images = list(prepared.input_files)
+    input_dir = prepared.input_root
     orchestrator = EnhanceOrchestrator.from_prepared(
         prepared,
         output_root=workflow_output,

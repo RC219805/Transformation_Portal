@@ -1174,6 +1174,7 @@ def main(
     # #2065-A2: prepare one execution-complete canonical plan. Both --plan
     # and run consume this exact prepared object; trust-boundary consumers
     # may revalidate its bytes but may never select a different model.
+    from ..core.execution_plan import ExecutionPlanError
     from ..depth.backends.protocol import LicenseRestrictionError
     from ..depth.backends.registry import UnknownDepthBackendError
     from .execution_lifecycle import prepare_lux_execution
@@ -1192,6 +1193,7 @@ def main(
     except (
         ModelLicenseError,
         UnknownModelError,
+        ExecutionPlanError,
         LicenseRestrictionError,
         UnknownDepthBackendError,
     ) as exc:

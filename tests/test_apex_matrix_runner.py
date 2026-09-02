@@ -23,9 +23,11 @@ def test_real_da3_run_uses_governed_metric_model_key(monkeypatch, tmp_path, back
     from transformation_portal.metrics.contracts import RunSpec
 
     captured = {}
-    input_dir = tmp_path / "inputs"
+    monkeypatch.chdir(tmp_path)
+    input_dir = Path("inputs")
     input_dir.mkdir()
-    (input_dir / "sample.jpg").touch()
+    image_path = input_dir / "sample.jpg"
+    image_path.touch()
 
     # The public wrapper re-exports functions defined in the canonical module,
     # so patch the delegated function's globals rather than the wrapper module.
@@ -93,7 +95,8 @@ def test_real_da3_run_uses_governed_metric_model_key(monkeypatch, tmp_path, back
     assert config.model_key == "da3-metric"
     assert config.model_variant is None
     assert config.non_commercial_ok is False
-    assert captured["prepared"].input_files == (input_dir / "sample.jpg",)
+    assert captured["prepared"].input_root == input_dir.resolve()
+    assert captured["prepared"].input_files == (image_path.resolve(),)
     assert captured["verify_outputs"] is False
 
 

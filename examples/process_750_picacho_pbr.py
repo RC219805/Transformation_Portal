@@ -349,7 +349,8 @@ def process_image(
     print("⚙️  INITIALIZING ORCHESTRATOR")
     print("-" * 80)
     try:
-        prepared = prepare_lux_execution(config, input_path.parent, [input_path])
+        prepared = prepare_lux_execution(config, input_path.parent, [input_path.absolute()])
+        input_path = prepared.input_files[0]
         orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_dir)
         print("✓ Orchestrator initialized")
         print("✓ Depth model loaded (or will be loaded on first use)")
@@ -368,7 +369,7 @@ def process_image(
         print()
 
         image_input = ImageInput(path=input_path)
-        result = orchestrator.enhance_image(image_input, input_root=input_path.parent)
+        result = orchestrator.enhance_image(image_input, input_root=prepared.input_root)
 
         elapsed = time.time() - start_time
 

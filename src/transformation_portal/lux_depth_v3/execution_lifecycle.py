@@ -11,6 +11,7 @@ import copy
 import hashlib
 import math
 import os
+import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,15 +35,16 @@ from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import TP_CANONICAL_JSON_PROFILE
 from ..stage_graph.registry import StageRegistryIdentifier, get_output_definition, get_stage_definition
 from ._backend_contract import normalize_backend_id
+from .camera_metadata_loader import SCENE_CAMERA_SIDECAR_MAX_BYTES
 from .config import EnhanceConfig, ModelVariant, PostprocessingConfig, Preset, deprecated_output_flag_notices
 from .config_resolver import (
-    apply_effective_da3_runtime_config,
-    apply_effective_depth_pro_runtime_config,
-    apply_effective_raw_runtime_config,
     build_materials_fingerprint_payload,
     compute_config_fingerprint,
     preset_model_key_for_selection,
-    resolve_effective_depth_pro_checkpoint_path,
+    resolve_prepared_da3_python_executable,
+    resolve_prepared_depth_pro_checkpoint_path,
+    resolve_prepared_depth_pro_python_executable,
+    resolve_prepared_raw_python_executable,
     resolve_preset,
     with_typed_preset_provenance,
 )
@@ -330,20 +332,31 @@ def _effective_worker_counts(config: EnhanceConfig) -> tuple[int, int]:
     return max_workers, max_gpu_workers
 
 
-def _file_sha256(path_value: Optional[str]) -> Optional[str]:
+def _freeze_camera_sidecar(
+    path_value: Optional[str],
+    *,
+    preparation_cwd: Path,
+) -> tuple[Optional[str], Optional[str]]:
+    """Freeze and hash one bounded sidecar without dereferencing its name."""
+
     if path_value is None:
-        return None
+        return None, None
     try:
-        path = Path(path_value).expanduser().resolve(strict=True)
+        path = Path(path_value).expanduser()
+        if not path.is_absolute():
+            path = preparation_cwd / path
+        path = Path(os.path.abspath(os.fspath(path)))
+        open_flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
+        file_descriptor = os.open(path, open_flags)
+        with os.fdopen(file_descriptor, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise ExecutionPlanError(f"Referenced sidecar is not a regular file: {path}")
+            sidecar_bytes = handle.read(SCENE_CAMERA_SIDECAR_MAX_BYTES + 1)
     except (OSError, RuntimeError) as exc:
         raise ExecutionPlanError(f"Referenced sidecar cannot be resolved: {path_value}") from exc
-    if not path.is_file():
-        raise ExecutionPlanError(f"Referenced sidecar is not a regular file: {path}")
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    if len(sidecar_bytes) > SCENE_CAMERA_SIDECAR_MAX_BYTES:
+        raise ExecutionPlanError(f"Referenced sidecar exceeds {SCENE_CAMERA_SIDECAR_MAX_BYTES} bytes: {path}")
+    return str(path), hashlib.sha256(sidecar_bytes).hexdigest()
 
 
 def _backend_model_contract(
@@ -854,10 +867,26 @@ def _prepare_working_config(config: EnhanceConfig) -> EnhanceConfig:
     working.execution_plan_authority = None
     working.execution_plan_canonical_bytes = None
     working.resolved_invocation = None
-    apply_effective_da3_runtime_config(working)
-    apply_effective_raw_runtime_config(working)
-    apply_effective_depth_pro_runtime_config(working)
-    working.depth_pro_checkpoint_path = resolve_effective_depth_pro_checkpoint_path(working)
+    preparation_cwd = Path.cwd()
+    try:
+        working.da3_python_executable = resolve_prepared_da3_python_executable(
+            working,
+            preparation_cwd=preparation_cwd,
+        )
+        working.raw_python_executable = resolve_prepared_raw_python_executable(
+            working,
+            preparation_cwd=preparation_cwd,
+        )
+        working.depth_pro_python_executable = resolve_prepared_depth_pro_python_executable(
+            working,
+            preparation_cwd=preparation_cwd,
+        )
+        working.depth_pro_checkpoint_path = resolve_prepared_depth_pro_checkpoint_path(
+            working,
+            preparation_cwd=preparation_cwd,
+        )
+    except (OSError, RuntimeError) as exc:
+        raise ExecutionPlanError(f"Runtime path selection failed: {exc}") from exc
 
     if working.vlm_captioning_enabled:
         for field_name, environment_name in (
@@ -923,7 +952,10 @@ def _prepare_working_config(config: EnhanceConfig) -> EnhanceConfig:
     if not 0 <= working.reconstruction_risk_threshold <= 1:
         raise ExecutionPlanError("reconstruction_risk_threshold must be between 0 and 1")
     if working.enable_reconstruction:
-        working.cameras_sidecar_sha256 = _file_sha256(working.cameras_sidecar_path)
+        working.cameras_sidecar_path, working.cameras_sidecar_sha256 = _freeze_camera_sidecar(
+            working.cameras_sidecar_path,
+            preparation_cwd=preparation_cwd,
+        )
     defaults = EnhanceConfig()
     if not working.enable_v2 or working.v2_preset is None:
         working.enable_v2 = False

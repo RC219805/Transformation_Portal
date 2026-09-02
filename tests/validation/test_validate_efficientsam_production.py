@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -13,10 +14,55 @@ from transformation_portal.lux_depth_v3.input_manager import ImageInput
 pytestmark = pytest.mark.unit
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts/validation/validate_efficientsam_production.py"
-SCRIPT_SPEC = importlib.util.spec_from_file_location("validate_efficientsam_production_under_test", SCRIPT_PATH)
-assert SCRIPT_SPEC is not None and SCRIPT_SPEC.loader is not None
-validate_efficientsam_production = importlib.util.module_from_spec(SCRIPT_SPEC)
-SCRIPT_SPEC.loader.exec_module(validate_efficientsam_production)
+
+
+def _load_script(module_name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, SCRIPT_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+validate_efficientsam_production = _load_script("validate_efficientsam_production_under_test")
+
+
+def test_import_does_not_configure_process_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test collection must not mutate the process-wide root logger."""
+
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setattr(
+        logging,
+        "basicConfig",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    _load_script("validate_efficientsam_production_logging_test")
+
+    assert not calls
+
+
+def test_direct_execution_logging_configuration_is_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setattr(
+        logging,
+        "basicConfig",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    validate_efficientsam_production._configure_logging()
+
+    assert calls == [
+        (
+            (),
+            {
+                "level": logging.INFO,
+                "format": "%(asctime)s - %(levelname)s - %(message)s",
+            },
+        )
+    ]
 
 
 def test_validation_wraps_planned_paths_as_image_inputs(
@@ -36,6 +82,7 @@ def test_validation_wraps_planned_paths_as_image_inputs(
     captured: dict[str, object] = {}
 
     def prepare(config: object, root: Path, files: list[Path]) -> SimpleNamespace:
+        assert all(path.is_absolute() for path in files)
         captured["prepared_files"] = tuple(files)
         return SimpleNamespace(runtime_config=config, input_files=tuple(path.resolve() for path in files))
 
@@ -58,7 +105,7 @@ def test_validation_wraps_planned_paths_as_image_inputs(
     monkeypatch.setattr(orchestrator_module, "EnhanceOrchestrator", CapturingOrchestrator)
 
     assert validate_efficientsam_production.run_validation() == 0
-    assert captured["prepared_files"] == (Path("input_images/800 Picacho/sample.jpg"),)
+    assert captured["prepared_files"] == (image_path.absolute(),)
     image_input = captured["image_input"]
     assert isinstance(image_input, ImageInput)
     assert image_input.path == image_path.resolve()

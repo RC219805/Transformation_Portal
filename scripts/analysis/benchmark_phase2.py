@@ -28,7 +28,10 @@ from typing import Any, Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
-from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from transformation_portal.lux_depth_v3.execution_lifecycle import (
+    PreparedLuxExecution,
+    prepare_lux_execution,
+)
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
@@ -41,14 +44,21 @@ def _prepared_orchestrator(
     output_root: Path,
     input_root: Path,
     image_paths: List[Path],
-) -> EnhanceOrchestrator:
+) -> tuple[EnhanceOrchestrator, PreparedLuxExecution]:
     """Build a benchmark executor from one frozen input/runtime plan."""
 
-    prepared = prepare_lux_execution(config, input_root, image_paths)
-    return EnhanceOrchestrator.from_prepared(
+    prepared = prepare_lux_execution(
+        config,
+        input_root,
+        [image_path.absolute() for image_path in image_paths],
+    )
+    return (
+        EnhanceOrchestrator.from_prepared(
+            prepared,
+            output_root,
+            verify_outputs=False,
+        ),
         prepared,
-        output_root,
-        verify_outputs=False,
     )
 
 
@@ -239,9 +249,19 @@ def benchmark_worker_scalability(
             enable_v2=False,
         )
 
-        orchestrator = _prepared_orchestrator(config, run_output, input_root, image_paths)
+        orchestrator, prepared = _prepared_orchestrator(
+            config,
+            run_output,
+            input_root,
+            image_paths,
+        )
 
-        benchmark = benchmark_parallel(orchestrator, image_paths, input_root, workers)
+        benchmark = benchmark_parallel(
+            orchestrator,
+            list(prepared.input_files),
+            prepared.input_root,
+            workers,
+        )
         results.append(benchmark)
 
     return results
@@ -304,8 +324,17 @@ def main():
         enable_parallel_processing=False,
         enable_v2=False,
     )
-    seq_orchestrator = _prepared_orchestrator(seq_config, seq_output, input_root, image_paths)
-    seq_results = benchmark_sequential(seq_orchestrator, image_paths, input_root)
+    seq_orchestrator, seq_prepared = _prepared_orchestrator(
+        seq_config,
+        seq_output,
+        input_root,
+        image_paths,
+    )
+    seq_results = benchmark_sequential(
+        seq_orchestrator,
+        list(seq_prepared.input_files),
+        seq_prepared.input_root,
+    )
     all_results.append(seq_results)
 
     logger.info(f"Sequential: {seq_results['throughput_images_per_second']:.2f} images/sec")
@@ -334,8 +363,17 @@ def main():
             depth_cache_max_size_gb=5.0,
             enable_v2=False,
         )
-        cache_orchestrator = _prepared_orchestrator(cache_config, cache_output, input_root, image_paths)
-        cache_results = benchmark_cache_effectiveness(cache_orchestrator, image_paths, input_root)
+        cache_orchestrator, cache_prepared = _prepared_orchestrator(
+            cache_config,
+            cache_output,
+            input_root,
+            image_paths,
+        )
+        cache_results = benchmark_cache_effectiveness(
+            cache_orchestrator,
+            list(cache_prepared.input_files),
+            cache_prepared.input_root,
+        )
         all_results.append(cache_results)
 
         logger.info(f"Cache speedup: {cache_results.get('speedup_ratio', 0):.2f}x")

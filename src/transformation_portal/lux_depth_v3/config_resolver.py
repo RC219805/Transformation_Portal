@@ -35,9 +35,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
 from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
@@ -93,6 +94,107 @@ def _normalize_python_executable(value: Any) -> Optional[str]:
     except TypeError:
         normalized = str(value).strip()
     return normalized or None
+
+
+def _absolute_lexical_path(value: str, *, preparation_cwd: Path) -> str:
+    """Anchor a path without dereferencing its final symlink spelling."""
+
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = preparation_cwd / path
+    return os.path.abspath(os.fspath(path))
+
+
+def _freeze_prepared_python_executable(
+    value: str,
+    *,
+    preparation_cwd: Path,
+    runtime_name: str,
+) -> str:
+    """Freeze a Python selector into one preparation-time absolute path."""
+
+    has_separator = os.sep in value or (os.altsep is not None and os.altsep in value)
+    if value.startswith(".") or value.startswith("~") or has_separator:
+        return _absolute_lexical_path(value, preparation_cwd=preparation_cwd)
+
+    resolved = shutil.which(value, path=os.environ.get("PATH"))
+    if resolved is None:
+        raise FileNotFoundError(f"{runtime_name} Python executable not found on preparation PATH: {value}")
+    return _absolute_lexical_path(resolved, preparation_cwd=preparation_cwd)
+
+
+def _resolve_prepared_python_executable(
+    *,
+    configured: Any,
+    environment_name: str,
+    repo_local_path: Callable[[], Optional[Path]],
+    preparation_cwd: Path,
+    runtime_name: str,
+) -> Optional[str]:
+    """Apply runtime precedence and freeze the selected executable path."""
+
+    selected = _normalize_python_executable(configured)
+    if selected is None:
+        selected = _normalize_python_executable(os.environ.get(environment_name))
+    if selected is None:
+        repo_local = repo_local_path()
+        if repo_local is not None and repo_local.exists():
+            selected = os.fspath(repo_local)
+    if selected is None:
+        return None
+    return _freeze_prepared_python_executable(
+        selected,
+        preparation_cwd=preparation_cwd,
+        runtime_name=runtime_name,
+    )
+
+
+def resolve_prepared_da3_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the DA3 interpreter selected during native plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "da3_python_executable", None),
+        environment_name="TRANSFORMATION_PORTAL_DA3_PYTHON",
+        repo_local_path=_repo_local_da3_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="DA3",
+    )
+
+
+def resolve_prepared_raw_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the RAW interpreter selected during native plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "raw_python_executable", None),
+        environment_name=RAW_RUNTIME_ENV_VAR,
+        repo_local_path=_repo_local_raw_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="RAW",
+    )
+
+
+def resolve_prepared_depth_pro_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the Depth Pro interpreter selected during plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "depth_pro_python_executable", None),
+        environment_name="TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON",
+        repo_local_path=_repo_local_depth_pro_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="Depth Pro",
+    )
 
 
 def resolve_effective_da3_python_executable(
@@ -218,6 +320,23 @@ def resolve_effective_depth_pro_checkpoint_path(config: EnhanceConfig) -> str:
     from ..depth.backends.depth_pro import DepthProBackend
 
     return str(DepthProBackend.DEFAULT_CHECKPOINT)
+
+
+def resolve_prepared_depth_pro_checkpoint_path(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> str:
+    """Freeze the effective checkpoint as an absolute lexical path.
+
+    ``abspath`` normalizes relative components against the preparation
+    directory but intentionally does not dereference a checkpoint symlink.
+    The exact carried spelling can therefore be re-used by parent and worker
+    processes even when their current working directories differ.
+    """
+
+    selected = resolve_effective_depth_pro_checkpoint_path(config)
+    return _absolute_lexical_path(selected, preparation_cwd=preparation_cwd)
 
 
 @dataclass

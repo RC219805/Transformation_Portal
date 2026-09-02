@@ -22,12 +22,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Configure logging for direct command-line execution."""
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
 
 def run_validation():
@@ -112,7 +116,12 @@ def run_validation():
     # Create orchestrator
     logger.info("Initializing orchestrator...")
     try:
-        prepared = prepare_lux_execution(config, input_dir, sorted(input_images))
+        prepared = prepare_lux_execution(
+            config,
+            input_dir,
+            [image_path.absolute() for image_path in sorted(input_images)],
+        )
+        input_images = list(prepared.input_files)
         orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_dir)
     except Exception as e:
         logger.error(f"Failed to create orchestrator: {e}")
@@ -267,4 +276,5 @@ def run_validation():
 
 
 if __name__ == "__main__":
+    _configure_logging()
     sys.exit(run_validation())

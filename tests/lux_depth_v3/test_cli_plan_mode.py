@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from transformation_portal.core.execution_plan import ExecutionPlanError
 from transformation_portal.lux_depth_v3.__main__ import app
 from transformation_portal.lux_depth_v3.config import (
     DeprecatedOutputFlagWarning,
@@ -274,8 +273,8 @@ class TestPlanMode:
         )
 
         assert result.exit_code == 1
-        assert isinstance(result.exception, ExecutionPlanError)
-        assert "escapes the authorized root" in str(result.exception)
+        assert "escapes the authorized root" in result.output
+        assert "traceback" not in result.output.lower()
         assert not output_dir.exists()
 
     def test_plan_default_model_resolves_commercial_safe(self, tmp_path: Path) -> None:
