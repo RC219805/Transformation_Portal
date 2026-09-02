@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from transformation_portal.core.execution_plan import ExecutionPlanError
 from transformation_portal.lux_depth_v3.__main__ import app
 from transformation_portal.lux_depth_v3.config import (
     DeprecatedOutputFlagWarning,
@@ -212,6 +213,70 @@ class TestPlanMode:
         # output root must not exist and the input dir must be untouched.
         assert not output_dir.exists()
         assert sorted(p.name for p in input_dir.iterdir()) == ["sample.png"]
+
+    def test_plan_accepts_relative_input_directory_discovery_paths(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from PIL import Image
+
+        monkeypatch.chdir(tmp_path)
+        input_dir = Path("output/run_card_gate_input")
+        input_dir.mkdir(parents=True)
+        Image.new("RGB", (2, 2), color=(128, 128, 128)).save(input_dir / "minimal.png")
+        output_dir = Path("output/run_card_gate_output")
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+                "--model-key",
+                "da3-metric",
+                "--plan",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = _extract_plan_json(result.output)
+        assert payload["input_selection"]["root"] == input_dir.resolve().as_posix()
+        assert [item["path"] for item in payload["input_selection"]["files"]] == ["minimal.png"]
+        assert not output_dir.exists()
+
+    @pytest.mark.security
+    def test_relative_input_directory_cannot_discover_symlink_escape(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        input_dir = Path("output/run_card_gate_input")
+        input_dir.mkdir(parents=True)
+        outside = tmp_path / "outside.png"
+        outside.write_bytes(b"outside")
+        (input_dir / "escape.png").symlink_to(outside)
+        output_dir = Path("output/run_card_gate_output")
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+                "--model-key",
+                "da3-metric",
+                "--plan",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, ExecutionPlanError)
+        assert "escapes the authorized root" in str(result.exception)
+        assert not output_dir.exists()
 
     def test_plan_default_model_resolves_commercial_safe(self, tmp_path: Path) -> None:
         # Repair 1.2 (#2066, option A): the bare default plans the Apache-2.0

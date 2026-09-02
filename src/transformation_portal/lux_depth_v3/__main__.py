@@ -1182,7 +1182,12 @@ def main(
         prepared = prepare_lux_execution(
             config,
             input_root=input_dir,
-            input_files=image_files,
+            # ``Path.rglob`` preserves a relative input directory prefix.
+            # Anchor discovery results at the CLI boundary so lifecycle
+            # relative paths remain unambiguously relative to ``input_root``.
+            # Do not resolve here: lifecycle authority owns symlink and root
+            # containment validation.
+            input_files=[image_path.absolute() for image_path in image_files],
         )
     except (
         ModelLicenseError,
