@@ -12,6 +12,8 @@ GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.15.0"
 PYPDF_LOCK_PIN = "pypdf==6.16.2"
+GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
+GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
 
 
 @pytest.mark.parametrize(
@@ -158,6 +160,34 @@ def test_firewall_resolver_matrix_uses_governed_pip_on_supported_python_versions
 
     assert 'python-version: ["3.11", "3.12"]' in workflow
     assert f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}"' in resolver_step
+
+
+def test_ml_ci_fallbacks_install_the_governed_torch_pair_before_metadata_extras() -> None:
+    installer = (REPO_ROOT / "scripts/ci/install_ml_test_dependencies.sh").read_text(encoding="utf-8")
+    fallback = installer.split(
+        'echo "No TP_CI_ML_LOCKFILE set; installing the governed CI torch baseline before ML core extras."',
+        1,
+    )[1].split("project_installed=1", 1)[0]
+    enforcement = (REPO_ROOT / ".github/workflows/enforcement.yml").read_text(encoding="utf-8")
+    layer2_install = enforcement.split("- name: Install ML dependencies with constraints", 1)[1].split("- name:", 1)[0]
+
+    installer_torch = fallback.index(f'"{GOVERNED_CI_TORCH_PIN}"')
+    installer_torchvision = fallback.index(f'"{GOVERNED_CI_TORCHVISION_PIN}"')
+    installer_extra = fallback.index('".[ml-core]"')
+    assert installer_torch < installer_extra
+    assert installer_torchvision < installer_extra
+
+    enforcement_torch = layer2_install.index(f'"{GOVERNED_CI_TORCH_PIN}"')
+    enforcement_torchvision = layer2_install.index(f'"{GOVERNED_CI_TORCHVISION_PIN}"')
+    enforcement_extra = layer2_install.index('".[ml]"')
+    assert enforcement_torch < enforcement_extra
+    assert enforcement_torchvision < enforcement_extra
+
+    dependency_docs = (REPO_ROOT / "requirements" / "README.md").read_text(encoding="utf-8")
+    assert "#### Hosted ML CI baseline" in dependency_docs
+    assert "`TP_CI_ML_LOCKFILE`" in dependency_docs
+    assert f"`{GOVERNED_CI_TORCH_PIN}`" in dependency_docs
+    assert f"`{GOVERNED_CI_TORCHVISION_PIN}`" in dependency_docs
 
 
 def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:

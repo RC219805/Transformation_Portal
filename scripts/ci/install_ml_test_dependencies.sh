@@ -48,7 +48,14 @@ if [[ -n "${ml_lockfile}" ]]; then
   fi
   "${python_bin}" -m pip install -r "${ml_lockfile}"
 else
-  echo "No TP_CI_ML_LOCKFILE set; installing secure pyproject ML core extras for CI."
+  echo "No TP_CI_ML_LOCKFILE set; installing the governed CI torch baseline before ML core extras."
+  # The package extras intentionally expose compatible lower bounds for
+  # operators. Hosted golden tests need the repository's audited baseline,
+  # otherwise a newly published torch/torchvision minor can change numeric
+  # output without any repository change.
+  "${python_bin}" -m pip install \
+    "torch==2.13.0" \
+    "torchvision==0.28.0"
   "${python_bin}" -m pip install -e ".[ml-core]"
   project_installed=1
 fi
