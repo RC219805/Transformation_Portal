@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, cast
 import numpy as np
 
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as load_model_lock_manifest_payload
+from transformation_portal.core.execution_plan import CanonicalExecutionPlan
 from transformation_portal.core.security.model_lock import is_pinned_revision
 
 from ..core.ml_dependency_health import (
@@ -56,6 +57,7 @@ from ..reporting.contracts import (
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
+from ..stage_graph.registry import StageRegistryIdentifier
 from ..vlm_captioning import (
     FASTVLM_MODEL_ROLES,
     FastVLMRuntimeConfig,
@@ -240,6 +242,13 @@ from .execution_engine import (
     persist_enhanced_image,
     run_v2_stage,
 )
+from .execution_lifecycle import (
+    PreparedLuxExecution,
+    authorize_prepared_input,
+    runtime_config_from_execution_plan,
+    validate_prepared_lux_execution,
+)
+from .execution_plan_adapter import LuxExecutionPlanAuthorityError
 
 logger = logging.getLogger(__name__)
 
@@ -433,6 +442,8 @@ class EnhanceOrchestrator:
         config: EnhanceConfig,
         output_root: Path,
         verify_outputs: bool = True,
+        *,
+        _prepared_execution: Optional[PreparedLuxExecution] = None,
     ):
         """Initialize the orchestrator.
 
@@ -443,11 +454,33 @@ class EnhanceOrchestrator:
                 cached outputs exist before
                 skipping (default: True)
         """
+        # The compatibility constructor remains available for legacy direct
+        # callers. A prepared constructor path must derive every runtime field
+        # from its validated carrier; the separately supplied config may not
+        # weaken or alter that authority.
+        self._prepared_execution: Optional[PreparedLuxExecution]
+        if _prepared_execution is not None:
+            prepared = validate_prepared_lux_execution(_prepared_execution)
+            projected_config = runtime_config_from_execution_plan(prepared.plan)
+            if config != projected_config:
+                raise LuxExecutionPlanAuthorityError(
+                    "Prepared orchestrator config does not match the authoritative plan projection"
+                )
+            config = projected_config
+            self._prepared_execution = prepared
+        else:
+            if config.execution_plan_authority is not None or config.execution_plan_canonical_bytes is not None:
+                raise LuxExecutionPlanAuthorityError(
+                    "A config carrying execution-plan authority must be constructed with from_prepared"
+                )
+            self._prepared_execution = None
+            config = apply_effective_da3_runtime_config(config)
+            config = apply_effective_raw_runtime_config(config)
+
         # Log dependency status on first initialization
         _log_dependency_status()
 
-        self.config = apply_effective_da3_runtime_config(config)
-        self.config = apply_effective_raw_runtime_config(self.config)
+        self.config = config
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
 
@@ -603,6 +636,62 @@ class EnhanceOrchestrator:
         self._active_depth_attempts: List[Dict[str, Any]] = []
         self._active_selected_attempt_index: Optional[int] = None
         self._active_run_card_segmentation_metadata: Dict[str, Dict[str, Any]] = {}
+
+    @classmethod
+    def from_prepared(
+        cls,
+        prepared: PreparedLuxExecution,
+        output_root: Path,
+        verify_outputs: bool = True,
+    ) -> "EnhanceOrchestrator":
+        """Construct the live Lux executor from one authoritative plan.
+
+        The runtime config is projected from the carried plan rather than
+        resolving selectors again. The prepared object is retained so input
+        discovery and ad-hoc image injection cannot diverge from that plan.
+        """
+
+        prepared = validate_prepared_lux_execution(prepared)
+        config = runtime_config_from_execution_plan(prepared.plan)
+        if config.execution_plan_canonical_bytes != prepared.canonical_plan_bytes:
+            raise ValueError("Prepared execution bytes changed during runtime projection")
+        return cls(
+            config=config,
+            output_root=output_root,
+            verify_outputs=verify_outputs,
+            _prepared_execution=prepared,
+        )
+
+    @property
+    def execution_plan(self) -> Optional[CanonicalExecutionPlan]:
+        """Return the exact carried canonical plan, when this is a planned run."""
+
+        prepared = self._prepared_execution
+        return None if prepared is None else prepared.plan
+
+    def _require_prepared_input(self, path: Path) -> Path:
+        """Recheck exact plan membership and real-path containment before I/O."""
+
+        prepared = self._prepared_execution
+        candidate = Path(path)
+        if prepared is None:
+            return candidate
+
+        return authorize_prepared_input(prepared, candidate)
+
+    def _authorize_prepared_image_input(self, image_input: ImageInput) -> ImageInput:
+        """Return an image input pinned to the path authorized for access.
+
+        ``authorize_prepared_input`` resolves aliases before returning.  Keep
+        that resolved path for every later operation so a caller-supplied
+        symlink cannot be retargeted after the authority check and then opened
+        through its original lexical path.
+        """
+
+        authorized_path = self._require_prepared_input(image_input.path)
+        if self._prepared_execution is None:
+            return image_input
+        return ImageInput(path=authorized_path, metadata=image_input.metadata)
 
     @property
     def _model_variant(self) -> ModelVariant:
@@ -1747,6 +1836,21 @@ class EnhanceOrchestrator:
                         native_depth_shape = current_shape
                         break
 
+                    except LuxExecutionPlanAuthorityError as authority_error:
+                        attempt_record.update(
+                            {
+                                "status": "failed",
+                                "failure_kind": "authority",
+                                "error_code": "EXECUTION_AUTHORITY_REJECTED",
+                                "error_message": str(authority_error),
+                                "apex_gate_passed": False,
+                                "duration_s": time.time() - attempt_start,
+                            }
+                        )
+                        depth_attempts.append(attempt_record)
+                        last_error = authority_error
+                        raise
+
                     except LicenseRestrictionError as license_error:
                         attempt_record.update(
                             {
@@ -2011,6 +2115,9 @@ class EnhanceOrchestrator:
                         e.code,
                         e.details,
                     )
+                    raise
+                if isinstance(e, LuxExecutionPlanAuthorityError):
+                    logger.error("Execution authority failure; runtime fallback is forbidden")
                     raise
                 if self.config.depth_fallback == "fail":
                     raise
@@ -3523,6 +3630,10 @@ class EnhanceOrchestrator:
         Returns:
             Dictionary with processing status and output paths
         """
+        # A prepared run may only access its frozen selection. Rechecking here
+        # ensures caller aliases are not reopened after the access check.
+        image_input = self._authorize_prepared_image_input(image_input)
+
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
         # Reset per-image active state up front so early exceptions cannot leak
@@ -3818,15 +3929,58 @@ class EnhanceOrchestrator:
     def _resolve_vlm_captioning_model_path(self, selector: str) -> tuple[Path, Optional[str], str]:
         normalized = str(selector or "default").strip()
         role = normalized.lower()
-        if role == "review":
-            env_path = os.getenv("TP_FASTVLM_REVIEW_MODEL")
-        elif role in {"default", "smoke"}:
-            env_path = os.getenv("TP_FASTVLM_MODEL") if role == "default" else None
+        if getattr(self.config, "execution_plan_authority", None) is not None:
+            if role == "review":
+                override_path = getattr(self.config, "fastvlm_review_model_path", None)
+            elif role == "default":
+                override_path = getattr(self.config, "fastvlm_model_path", None)
+            else:
+                override_path = None
         else:
-            env_path = None
-        model_path = resolve_fastvlm_runtime_path(env_path) if env_path else resolve_fastvlm_model_path(normalized)
+            if role == "review":
+                override_path = os.getenv("TP_FASTVLM_REVIEW_MODEL")
+            elif role == "default":
+                override_path = os.getenv("TP_FASTVLM_MODEL")
+            else:
+                override_path = None
+        model_path = resolve_fastvlm_runtime_path(override_path) if override_path else resolve_fastvlm_model_path(normalized)
         model_role = role if role in FASTVLM_MODEL_ROLES else None
         return model_path, model_role, resolve_fastvlm_model_id(model_path, model_role)
+
+    def _fastvlm_runtime_config(self, model_path: Path) -> FastVLMRuntimeConfig:
+        """Build FastVLM runtime settings from plan authority or legacy env."""
+
+        runtime_root = default_fastvlm_runtime_root()
+        if getattr(self.config, "execution_plan_authority", None) is not None:
+            python_config = getattr(self.config, "fastvlm_python_executable", None)
+            mlx_vlm_config = getattr(self.config, "fastvlm_mlx_vlm_dir", None)
+            max_tokens = getattr(self.config, "fastvlm_max_tokens", 120)
+            temperature = getattr(self.config, "fastvlm_temperature", 0.0)
+        else:
+            # Compatibility callers retain the historical ambient overrides.
+            python_config = getattr(self.config, "fastvlm_python_executable", None) or os.getenv("TP_FASTVLM_PYTHON")
+            mlx_vlm_config = getattr(self.config, "fastvlm_mlx_vlm_dir", None) or os.getenv("TP_FASTVLM_MLX_VLM_DIR")
+            configured_max_tokens = getattr(self.config, "fastvlm_max_tokens", None)
+            configured_temperature = getattr(self.config, "fastvlm_temperature", None)
+            max_tokens = (
+                configured_max_tokens if configured_max_tokens is not None else int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120"))
+            )
+            temperature = (
+                configured_temperature
+                if configured_temperature is not None
+                else float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0"))
+            )
+        python_path = Path(str(python_config).strip()) if python_config else runtime_root / ".venv-fastvlm/bin/python"
+        mlx_vlm_dir = resolve_fastvlm_runtime_path(str(mlx_vlm_config)) if mlx_vlm_config else runtime_root / "mlx-vlm"
+        return FastVLMRuntimeConfig(
+            enabled=True,
+            python_path=python_path,
+            mlx_vlm_dir=mlx_vlm_dir,
+            model_path=model_path,
+            max_tokens=int(120 if max_tokens is None else max_tokens),
+            temperature=float(0.0 if temperature is None else temperature),
+            timeout_seconds=int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180),
+        )
 
     def _run_vlm_captioning(
         self,
@@ -3896,23 +4050,7 @@ class EnhanceOrchestrator:
                 "raw_path": str(raw_path),
             }
 
-        runtime_root = default_fastvlm_runtime_root()
-        python_config = getattr(self.config, "fastvlm_python_executable", None) or os.getenv("TP_FASTVLM_PYTHON")
-        mlx_vlm_config = getattr(self.config, "fastvlm_mlx_vlm_dir", None) or os.getenv("TP_FASTVLM_MLX_VLM_DIR")
-        python_path = Path(str(python_config).strip()) if python_config else runtime_root / ".venv-fastvlm/bin/python"
-        mlx_vlm_dir = resolve_fastvlm_runtime_path(str(mlx_vlm_config)) if mlx_vlm_config else runtime_root / "mlx-vlm"
-        max_tokens = int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120"))
-        temperature = float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0"))
-        timeout_seconds = int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180)
-        runtime_config = FastVLMRuntimeConfig(
-            enabled=True,
-            python_path=python_path,
-            mlx_vlm_dir=mlx_vlm_dir,
-            model_path=model_path,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            timeout_seconds=timeout_seconds,
-        )
+        runtime_config = self._fastvlm_runtime_config(model_path)
         runtime_result = run_fastvlm_caption(runtime_config, proxy.proxy_path, model_role=model_role)
         raw_text = runtime_result.raw_stdout or runtime_result.raw_stderr or runtime_result.error or ""
         raw_path.write_text(raw_text, encoding="utf-8")
@@ -4767,6 +4905,8 @@ class EnhanceOrchestrator:
         Returns:
             Dictionary with preprocessing metadata
         """
+        image_input = self._authorize_prepared_image_input(image_input)
+
         use_xxhash = getattr(self.config, "use_xxhash", False)
         output_key = (
             make_output_key(
@@ -4968,7 +5108,22 @@ class EnhanceOrchestrator:
         # Use input discovery to exclude depth artifacts and derived outputs
         # ROBUSTNESS FIX (#6): Pass output_root
         # to explicitly exclude output directory
-        if input_files is not None:
+        prepared = self._prepared_execution
+        if prepared is not None:
+            try:
+                requested_root = Path(input_dir).resolve(strict=True)
+                authorized_root = prepared.input_root.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError("Prepared input root is unavailable") from exc
+            if requested_root != authorized_root:
+                raise ValueError("enhance_batch input_dir must equal the authoritative " "execution-plan input root")
+            planned_images = [self._require_prepared_input(path) for path in prepared.input_files]
+            if input_files is not None:
+                supplied_images = [self._require_prepared_input(path) for path in input_files]
+                if supplied_images != planned_images:
+                    raise ValueError("input_files must exactly match the authoritative execution-plan selection")
+            images = planned_images
+        elif input_files is not None:
             # P0-1: the plan's frozen selection is authoritative — no rescan.
             images = [Path(f) for f in input_files]
         else:
@@ -5167,6 +5322,22 @@ class EnhanceOrchestrator:
             # Invalid path or symlink loop - return None
             return None
 
+    def _effective_reconstruction_risk_threshold(self) -> float:
+        """Return the carried threshold or the legacy ambient override."""
+
+        if getattr(self.config, "execution_plan_authority", None) is not None:
+            return float(getattr(self.config, "reconstruction_risk_threshold", 0.65))
+
+        threshold_raw = os.getenv("TP_RECONSTRUCTION_RISK_THRESHOLD", "0.65")
+        try:
+            return float(threshold_raw or "0.65")
+        except ValueError:
+            logger.warning(
+                "Invalid TP_RECONSTRUCTION_RISK_THRESHOLD=%r; using default 0.65",
+                threshold_raw,
+            )
+            return 0.65
+
     def _run_scene_reconstruction_stage(
         self,
         *,
@@ -5206,9 +5377,38 @@ class EnhanceOrchestrator:
                 " constraints."
             )
 
-        sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+        prepared = self._prepared_execution
+        if prepared is None:
+            sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+            expected_sidecar_sha256 = None
+        else:
+            reconstruction_nodes = tuple(
+                node for node in prepared.plan.nodes if node.stage_registry_id == StageRegistryIdentifier.LUX_RECONSTRUCTION
+            )
+            if len(reconstruction_nodes) != 1:
+                raise LuxExecutionPlanAuthorityError(
+                    "Prepared reconstruction requires exactly one authoritative reconstruction node"
+                )
+            reconstruction_config = reconstruction_nodes[0].configuration
+            sidecar_value = reconstruction_config.get("cameras_sidecar_path")
+            expected_sidecar_sha256 = reconstruction_config.get("cameras_sidecar_sha256")
+            if sidecar_value is None:
+                if expected_sidecar_sha256 is not None:
+                    raise LuxExecutionPlanAuthorityError(
+                        "Prepared reconstruction carries a camera sidecar digest without a path"
+                    )
+            elif not isinstance(sidecar_value, str) or not sidecar_value:
+                raise LuxExecutionPlanAuthorityError("Prepared reconstruction camera sidecar path is invalid")
+            elif not isinstance(expected_sidecar_sha256, str) or not expected_sidecar_sha256:
+                raise LuxExecutionPlanAuthorityError(
+                    "Prepared reconstruction is missing its authoritative camera sidecar SHA-256"
+                )
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
-        sidecar_payload = load_sidecar_payload(sidecar_path)
+        sidecar_source_file = str(sidecar_path) if prepared is not None and sidecar_path is not None else None
+        sidecar_payload = load_sidecar_payload(
+            sidecar_path,
+            expected_sha256=expected_sidecar_sha256,
+        )
         reconstruction_tier = str(
             getattr(
                 self.config,
@@ -5246,6 +5446,7 @@ class EnhanceOrchestrator:
                 dataset_root=dataset_root,
                 sidecar_path=sidecar_path,
                 sidecar_payload=sidecar_payload,
+                sidecar_source_file=sidecar_source_file,
             )
             if not cameras:
                 logger.info(
@@ -5269,21 +5470,7 @@ class EnhanceOrchestrator:
                 continue
             try:
                 dataset_health = check_camera_geometry_sanity(cameras)
-                threshold_raw: Optional[str] = os.getenv(
-                    "TP_RECONSTRUCTION" + "_RISK_THRESHOLD",
-                    "0.65",
-                )
-                risk_threshold: float = 0.65
-                try:
-                    risk_threshold = float(
-                        threshold_raw or "0.65",
-                    )
-                except ValueError:
-                    logger.warning(
-                        "Invalid" " TP_RECONSTRUCTION" "_RISK_THRESHOLD=%r;" " using default 0.65",
-                        threshold_raw,
-                    )
-                    risk_threshold = 0.65
+                risk_threshold = self._effective_reconstruction_risk_threshold()
                 risk_score = float(dataset_health["risk_score"])
                 if risk_score > risk_threshold:
                     message = (

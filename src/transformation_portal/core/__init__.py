@@ -68,6 +68,18 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "resolve_platform_lockfile": (".execution_identity", "resolve_platform_lockfile"),
     "should_execute": (".execution_identity", "should_execute"),
     "verify_determinism": (".execution_identity", "verify_determinism"),
+    # Execution Identity v3 seed (ADR-051, intentionally non-cacheable)
+    "EXECUTION_IDENTITY_V3_INCOMPLETE": (
+        ".execution_identity_v3",
+        "EXECUTION_IDENTITY_V3_INCOMPLETE",
+    ),
+    "EXECUTION_IDENTITY_V3_SCHEMA": (".execution_identity_v3", "EXECUTION_IDENTITY_V3_SCHEMA"),
+    "ExecutionIdentityV3": (".execution_identity_v3", "ExecutionIdentityV3"),
+    "ExecutionIdentityV3SeedError": (".execution_identity_v3", "ExecutionIdentityV3SeedError"),
+    "IncompleteExecutionIdentityV3Error": (
+        ".execution_identity_v3",
+        "IncompleteExecutionIdentityV3Error",
+    ),
     # Canonical execution plan (ADR-051, non-activating contract)
     "BackendCandidateIntent": (".execution_plan", "BackendCandidateIntent"),
     "BackendModelIntent": (".execution_plan", "BackendModelIntent"),
@@ -144,6 +156,12 @@ __all__ = [
     "resolve_platform_lockfile",
     "should_execute",
     "verify_determinism",
+    # Execution Identity v3 seed (non-cacheable until runtime materialization)
+    "EXECUTION_IDENTITY_V3_INCOMPLETE",
+    "EXECUTION_IDENTITY_V3_SCHEMA",
+    "ExecutionIdentityV3",
+    "ExecutionIdentityV3SeedError",
+    "IncompleteExecutionIdentityV3Error",
     # Canonical execution plan (named explicitly to avoid collision with the
     # retained Lux flat pipeline_coordinator.ExecutionPlan compatibility type)
     "BackendCandidateIntent",

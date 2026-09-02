@@ -309,11 +309,12 @@ do not create separate deliverables, and will be removed in the next major relea
 
 - `--plan`: Resolver-only mode. Runs the same argument parsing, configuration
   and model/license resolution, input selection, and cross-field validation a
-  real run performs, then prints the resolved invocation
-  (`tp.lux.resolved_invocation.v1`) as canonical JSON and exits — without
+  real run performs, then prints the execution-complete canonical plan
+  (`tp.execution.plan.v1`) as canonical JSON and exits — without
   loading models, creating the output directory, or writing any files. A
   command that would fail validation or resolution fails `--plan` with the
-  same error and exit code. The emitted plan includes the authoritative
+  same error and exit code. The emitted plan includes stable typed stage nodes,
+  dependency edges, resource/output declarations, and the authoritative
   resolved model contract, the planned backend and candidate fallback chain
   (the backend actually executed at runtime is recorded in manifests, not in
   the plan), license acknowledgements, planned stages, requested artifacts,

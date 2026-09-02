@@ -11,6 +11,7 @@ Usage:
     python scripts/benchmark_phase2.py --input-dir <dir> --workers 4
     python scripts/benchmark_phase2.py --synthetic --num-images 100
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,12 +27,39 @@ from typing import Any, Dict, List
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import (
+    PreparedLuxExecution,
+    prepare_lux_execution,
+)
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _prepared_orchestrator(
+    config: EnhanceConfig,
+    output_root: Path,
+    input_root: Path,
+    image_paths: List[Path],
+) -> tuple[EnhanceOrchestrator, PreparedLuxExecution]:
+    """Build a benchmark executor from one frozen input/runtime plan."""
+
+    prepared = prepare_lux_execution(
+        config,
+        input_root,
+        [image_path.absolute() for image_path in image_paths],
+    )
+    return (
+        EnhanceOrchestrator.from_prepared(
+            prepared,
+            output_root,
+            verify_outputs=False,
+        ),
+        prepared,
+    )
 
 
 def create_synthetic_images(output_dir: Path, count: int) -> List[Path]:
@@ -214,16 +242,26 @@ def benchmark_worker_scalability(
         run_output = output_dir / f"workers_{workers}"
 
         config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_LARGE,
+            model_key="da3-metric",
             enable_parallel_processing=True,
             max_parallel_workers=workers,
             enable_depth_cache=False,
             enable_v2=False,
         )
 
-        orchestrator = EnhanceOrchestrator(config, run_output, verify_outputs=False)
+        orchestrator, prepared = _prepared_orchestrator(
+            config,
+            run_output,
+            input_root,
+            image_paths,
+        )
 
-        benchmark = benchmark_parallel(orchestrator, image_paths, input_root, workers)
+        benchmark = benchmark_parallel(
+            orchestrator,
+            list(prepared.input_files),
+            prepared.input_root,
+            workers,
+        )
         results.append(benchmark)
 
     return results
@@ -282,12 +320,21 @@ def main():
     logger.info("\n" + "=" * 60)
     seq_output = output_base / "sequential"
     seq_config = EnhanceConfig(
-        model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
         enable_parallel_processing=False,
         enable_v2=False,
     )
-    seq_orchestrator = EnhanceOrchestrator(seq_config, seq_output, verify_outputs=False)
-    seq_results = benchmark_sequential(seq_orchestrator, image_paths, input_root)
+    seq_orchestrator, seq_prepared = _prepared_orchestrator(
+        seq_config,
+        seq_output,
+        input_root,
+        image_paths,
+    )
+    seq_results = benchmark_sequential(
+        seq_orchestrator,
+        list(seq_prepared.input_files),
+        seq_prepared.input_root,
+    )
     all_results.append(seq_results)
 
     logger.info(f"Sequential: {seq_results['throughput_images_per_second']:.2f} images/sec")
@@ -309,15 +356,24 @@ def main():
         logger.info("\n" + "=" * 60)
         cache_output = output_base / "cache_test"
         cache_config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_LARGE,
+            model_key="da3-metric",
             enable_parallel_processing=True,
             max_parallel_workers=4,
             enable_depth_cache=True,
             depth_cache_max_size_gb=5.0,
             enable_v2=False,
         )
-        cache_orchestrator = EnhanceOrchestrator(cache_config, cache_output, verify_outputs=False)
-        cache_results = benchmark_cache_effectiveness(cache_orchestrator, image_paths, input_root)
+        cache_orchestrator, cache_prepared = _prepared_orchestrator(
+            cache_config,
+            cache_output,
+            input_root,
+            image_paths,
+        )
+        cache_results = benchmark_cache_effectiveness(
+            cache_orchestrator,
+            list(cache_prepared.input_files),
+            cache_prepared.input_root,
+        )
         all_results.append(cache_results)
 
         logger.info(f"Cache speedup: {cache_results.get('speedup_ratio', 0):.2f}x")

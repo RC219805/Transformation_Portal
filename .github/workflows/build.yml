@@ -211,7 +211,12 @@ jobs:
               load_resolved_invocation_schema,
           )
 
-          assert load_execution_plan_schema()["$id"] == "tp.execution.plan.v1"
+          execution_schema = load_execution_plan_schema()
+          assert execution_schema["$id"] == "tp.execution.plan.v1"
+          captioning_schema = execution_schema["$defs"]["captioningConfiguration"]
+          frozen_fastvlm_fields = {"model_path", "review_model_path", "max_tokens", "temperature"}
+          assert frozen_fastvlm_fields <= set(captioning_schema["properties"])
+          assert frozen_fastvlm_fields.isdisjoint(captioning_schema["required"])
           assert load_resolved_invocation_schema()["$id"] == "tp.lux.resolved_invocation.v1"
           invocation = build_resolved_invocation(
               EnhanceConfig(depth_backend="synthetic"),

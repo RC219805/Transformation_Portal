@@ -290,19 +290,21 @@ def _capture_lux_cli_config_from_args(cli_args: list[str]) -> object:
     from typer.testing import CliRunner
 
     from transformation_portal.lux_depth_v3.__main__ import app as lux_cli_app
+    from transformation_portal.lux_depth_v3.execution_lifecycle import validate_prepared_lux_execution
 
     captured: Dict[str, object] = {}
 
-    def _mock_orchestrator_init(config, output_root):
-        del output_root
-        captured["config"] = config
+    def _mock_orchestrator_from_prepared(prepared, output_root, verify_outputs=True):
+        del output_root, verify_outputs
+        prepared = validate_prepared_lux_execution(prepared)
+        captured["config"] = prepared.runtime_config
         mock_orchestrator = MagicMock()
         mock_orchestrator.enhance_batch.return_value = [{"status": "ok"}]
         return mock_orchestrator
 
     with patch(
-        "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
-        side_effect=_mock_orchestrator_init,
+        "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
+        side_effect=_mock_orchestrator_from_prepared,
     ):
         result = CliRunner().invoke(lux_cli_app, cli_args)
     assert result.exit_code == 0, result.stdout

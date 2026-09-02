@@ -35,9 +35,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
 from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
@@ -95,6 +96,107 @@ def _normalize_python_executable(value: Any) -> Optional[str]:
     return normalized or None
 
 
+def _absolute_lexical_path(value: str, *, preparation_cwd: Path) -> str:
+    """Anchor a path without dereferencing its final symlink spelling."""
+
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = preparation_cwd / path
+    return os.path.abspath(os.fspath(path))
+
+
+def _freeze_prepared_python_executable(
+    value: str,
+    *,
+    preparation_cwd: Path,
+    runtime_name: str,
+) -> str:
+    """Freeze a Python selector into one preparation-time absolute path."""
+
+    has_separator = os.sep in value or (os.altsep is not None and os.altsep in value)
+    if value.startswith(".") or value.startswith("~") or has_separator:
+        return _absolute_lexical_path(value, preparation_cwd=preparation_cwd)
+
+    resolved = shutil.which(value, path=os.environ.get("PATH"))
+    if resolved is None:
+        raise FileNotFoundError(f"{runtime_name} Python executable not found on preparation PATH: {value}")
+    return _absolute_lexical_path(resolved, preparation_cwd=preparation_cwd)
+
+
+def _resolve_prepared_python_executable(
+    *,
+    configured: Any,
+    environment_name: str,
+    repo_local_path: Callable[[], Optional[Path]],
+    preparation_cwd: Path,
+    runtime_name: str,
+) -> Optional[str]:
+    """Apply runtime precedence and freeze the selected executable path."""
+
+    selected = _normalize_python_executable(configured)
+    if selected is None:
+        selected = _normalize_python_executable(os.environ.get(environment_name))
+    if selected is None:
+        repo_local = repo_local_path()
+        if repo_local is not None and repo_local.exists():
+            selected = os.fspath(repo_local)
+    if selected is None:
+        return None
+    return _freeze_prepared_python_executable(
+        selected,
+        preparation_cwd=preparation_cwd,
+        runtime_name=runtime_name,
+    )
+
+
+def resolve_prepared_da3_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the DA3 interpreter selected during native plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "da3_python_executable", None),
+        environment_name="TRANSFORMATION_PORTAL_DA3_PYTHON",
+        repo_local_path=_repo_local_da3_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="DA3",
+    )
+
+
+def resolve_prepared_raw_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the RAW interpreter selected during native plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "raw_python_executable", None),
+        environment_name=RAW_RUNTIME_ENV_VAR,
+        repo_local_path=_repo_local_raw_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="RAW",
+    )
+
+
+def resolve_prepared_depth_pro_python_executable(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> Optional[str]:
+    """Freeze the Depth Pro interpreter selected during plan preparation."""
+
+    return _resolve_prepared_python_executable(
+        configured=getattr(config, "depth_pro_python_executable", None),
+        environment_name="TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON",
+        repo_local_path=_repo_local_depth_pro_python_path,
+        preparation_cwd=preparation_cwd,
+        runtime_name="Depth Pro",
+    )
+
+
 def resolve_effective_da3_python_executable(
     config: EnhanceConfig,
 ) -> Optional[str]:
@@ -106,6 +208,8 @@ def resolve_effective_da3_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "da3_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -139,6 +243,8 @@ def resolve_effective_raw_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "raw_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -172,6 +278,8 @@ def resolve_effective_depth_pro_python_executable(
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "depth_pro_python_executable", None))
+    if getattr(config, "execution_plan_authority", None) is not None:
+        return configured
     if configured:
         return configured
 
@@ -192,6 +300,43 @@ def apply_effective_depth_pro_runtime_config(
     """Persist the effective Depth Pro runtime choice onto the config object."""
     config.depth_pro_python_executable = resolve_effective_depth_pro_python_executable(config)
     return config
+
+
+def resolve_effective_depth_pro_checkpoint_path(config: EnhanceConfig) -> str:
+    """Resolve and return the checkpoint path that execution would consume.
+
+    Native plan preparation calls this once and persists the result on the
+    projected config.  Runtime consumers therefore do not add an environment
+    choice after the plan fingerprint has been fixed.
+    """
+
+    configured = _normalize_python_executable(getattr(config, "depth_pro_checkpoint_path", None))
+    if configured:
+        return configured
+    env_candidate = _normalize_python_executable(os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT"))
+    if env_candidate:
+        return env_candidate
+
+    from ..depth.backends.depth_pro import DepthProBackend
+
+    return str(DepthProBackend.DEFAULT_CHECKPOINT)
+
+
+def resolve_prepared_depth_pro_checkpoint_path(
+    config: EnhanceConfig,
+    *,
+    preparation_cwd: Path,
+) -> str:
+    """Freeze the effective checkpoint as an absolute lexical path.
+
+    ``abspath`` normalizes relative components against the preparation
+    directory but intentionally does not dereference a checkpoint symlink.
+    The exact carried spelling can therefore be re-used by parent and worker
+    processes even when their current working directories differ.
+    """
+
+    selected = resolve_effective_depth_pro_checkpoint_path(config)
+    return _absolute_lexical_path(selected, preparation_cwd=preparation_cwd)
 
 
 @dataclass
@@ -606,8 +751,15 @@ def build_depth_cache_payload(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
-    effective_da3_python = resolve_effective_da3_python_executable(config)
-    effective_raw_python = resolve_effective_raw_python_executable(config)
+    if getattr(config, "execution_plan_authority", None) is not None:
+        # Native plans already froze these executable choices. Re-reading the
+        # process environment here would make fingerprint verification drift
+        # after the authority boundary was fixed.
+        effective_da3_python = config.da3_python_executable
+        effective_raw_python = config.raw_python_executable
+    else:
+        effective_da3_python = resolve_effective_da3_python_executable(config)
+        effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
         "model_variant": resolved_model_identity_for_backend(
@@ -680,8 +832,15 @@ def compute_config_fingerprint(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
-    effective_da3_python = resolve_effective_da3_python_executable(config)
-    effective_raw_python = resolve_effective_raw_python_executable(config)
+    if getattr(config, "execution_plan_authority", None) is not None:
+        # Native plans already froze these executable choices. Re-reading the
+        # process environment here would make fingerprint verification drift
+        # after the authority boundary was fixed.
+        effective_da3_python = config.da3_python_executable
+        effective_raw_python = config.raw_python_executable
+    else:
+        effective_da3_python = resolve_effective_da3_python_executable(config)
+        effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return ConfigFingerprint(
         model_variant=resolved_model_identity_for_backend(
@@ -929,12 +1088,16 @@ class ConfigResolver:
         source_selector_state = direct_model_source_selector_state(config)
 
         # Resolve preset and model variant
-        apply_effective_da3_runtime_config(config)
-        apply_effective_raw_runtime_config(config)
+        execution_plan_authority = getattr(config, "execution_plan_authority", None)
+        if execution_plan_authority is None:
+            apply_effective_da3_runtime_config(config)
+            apply_effective_raw_runtime_config(config)
         da3_config, resolved_model = resolve_preset(
             config.preset,
             config.model_variant,
         )
+        if config.depth_postprocessing is not None:
+            da3_config.postprocessing = config.depth_postprocessing
         preset_model_key = preset_model_key_for_selection(
             config,
             resolved_model,
@@ -964,6 +1127,11 @@ class ConfigResolver:
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
             )
+        elif execution_plan_authority is not None:
+            # A native plan without a DA3 candidate intentionally carries no
+            # DA3 model.  Do not manufacture one merely to populate legacy
+            # compatibility metadata.
+            resolved_model_contract = None
         else:
             # A pure default carries no selection on any plane: the
             # resolved default must then be pinned onto the config BEFORE
@@ -1023,7 +1191,11 @@ class ConfigResolver:
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
-        if invocation is None and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+        if (
+            invocation is None
+            and resolved_model_contract is not None
+            and normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}
+        ):
             carry_direct_model_contract(
                 config,
                 resolved_model_contract,

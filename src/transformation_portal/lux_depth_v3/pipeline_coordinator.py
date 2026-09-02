@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.execution_plan import EXECUTION_COMPLETE, CanonicalExecutionPlan
 from ..core.platform_matrix import CURRENT_PLATFORM, PlatformMatrix
 from ..depth.backends.protocol import LicenseRestrictionError
 
@@ -55,6 +56,54 @@ from .manifest import BackendSelectionMetadata
 from .model_resolution import BackendCapabilityError, ModelLicenseError, ModelRequest, resolve_model_contract
 
 logger = logging.getLogger(__name__)
+
+
+def _carried_execution_plan(config: EnhanceConfig) -> Optional[CanonicalExecutionPlan]:
+    """Return a validated native plan carried by a projected runtime config."""
+
+    plan = getattr(config, "execution_plan_authority", None)
+    if plan is None:
+        return None
+    if not isinstance(plan, CanonicalExecutionPlan) or plan.configuration_completeness != EXECUTION_COMPLETE:
+        raise ValueError("execution_plan_authority must be an execution-complete CanonicalExecutionPlan")
+    canonical_plan_bytes = getattr(config, "execution_plan_canonical_bytes", None)
+    expected_bytes = plan.to_canonical_json().encode("utf-8")
+    if type(canonical_plan_bytes) is not bytes or canonical_plan_bytes != expected_bytes:
+        raise ValueError("execution_plan_authority must be paired with its exact canonical bytes")
+    return plan
+
+
+def _carried_candidate_context(
+    config: EnhanceConfig,
+    backend_id: str,
+) -> Optional[tuple[EnhanceConfig, Any, bytes]]:
+    """Project one exact candidate and its immutable backend carrier."""
+
+    plan = _carried_execution_plan(config)
+    if plan is None:
+        return None
+    from .execution_lifecycle import backend_candidate_authority, runtime_config_from_execution_plan
+
+    authority = backend_candidate_authority(plan, backend_id)
+    candidate_config = runtime_config_from_execution_plan(
+        plan,
+        candidate_authority=authority,
+    )
+    canonical_plan_bytes = getattr(config, "execution_plan_canonical_bytes")
+    if candidate_config.execution_plan_canonical_bytes != canonical_plan_bytes:
+        raise ValueError("Candidate projection changed the exact canonical execution-plan bytes")
+    return candidate_config, authority, canonical_plan_bytes
+
+
+def _carried_candidate_device(config: EnhanceConfig, backend_id: str) -> Optional[str]:
+    """Return the exact planned device for one carried backend candidate."""
+
+    plan = _carried_execution_plan(config)
+    if plan is None:
+        return None
+    from .execution_lifecycle import backend_candidate_authority
+
+    return backend_candidate_authority(plan, backend_id).device
 
 
 def _apple_silicon_depth_pro_opt_in(config: EnhanceConfig) -> bool:
@@ -79,6 +128,16 @@ def resolve_requested_backend(
     platform: Optional[PlatformMatrix] = None,
 ) -> str:
     """Resolve the effective requested backend for the current platform."""
+    carried_plan = _carried_execution_plan(config)
+    if carried_plan is not None:
+        normalized_requested = normalize_backend_id(requested)
+        if normalized_requested is not None and normalized_requested != carried_plan.planned_backend:
+            raise ValueError(
+                f"Requested backend {normalized_requested!r} disagrees with carried plan "
+                f"backend {carried_plan.planned_backend!r}"
+            )
+        return carried_plan.planned_backend
+
     normalized_requested = normalize_backend_id(requested) or normalize_backend_id(config.depth_backend)
     if normalized_requested:
         return normalized_requested
@@ -223,6 +282,17 @@ def resolve_runtime_backend_chain(
         Ordered list of backend IDs to attempt
     """
     normalized_primary = normalize_backend_id(primary_backend_id) or "da3"
+    carried_plan = _carried_execution_plan(config)
+    if carried_plan is not None:
+        carried_chain = list(carried_plan.candidate_fallback_chain)
+        try:
+            start = carried_chain.index(normalized_primary)
+        except ValueError as exc:
+            raise ValueError(
+                f"Backend {normalized_primary!r} is absent from carried candidate chain {carried_chain!r}"
+            ) from exc
+        return carried_chain[start:]
+
     chain: List[str] = [normalized_primary]
 
     configured_chain = getattr(
@@ -268,6 +338,15 @@ def default_model_id_for_backend(
         Canonical model identifier string
     """
     normalized_backend = normalize_backend_id(backend_id) or ""
+
+    carried_plan = _carried_execution_plan(config) if config is not None else None
+    if carried_plan is not None:
+        from .execution_lifecycle import backend_candidate_authority
+
+        authority = backend_candidate_authority(carried_plan, normalized_backend)
+        if authority.model_contract is not None:
+            model = authority.model_contract.model
+            return model.repo_id or model.canonical_key
 
     if normalized_backend == "depth_pro":
         return "apple/ml-depth-pro"
@@ -606,11 +685,19 @@ def seed_depth_attempts_from_selection_fallback(
     }
 
     if requested_backend == "depth_pro":
-        checkpoint_path = Path(
-            getattr(config, "depth_pro_checkpoint_path", None)
-            or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
-            or "checkpoints/depth_pro.pt"
-        )
+        carried_plan = _carried_execution_plan(config)
+        if carried_plan is not None:
+            from .execution_lifecycle import backend_candidate_authority
+
+            authority = backend_candidate_authority(carried_plan, requested_backend)
+            artifact_path = None if authority.model_contract is None else authority.model_contract.artifact_path
+            checkpoint_path = Path(artifact_path or "checkpoints/depth_pro.pt")
+        else:
+            checkpoint_path = Path(
+                getattr(config, "depth_pro_checkpoint_path", None)
+                or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
+                or "checkpoints/depth_pro.pt"
+            )
         attempt["model_artifact_filename"] = checkpoint_path.name
 
     return [attempt]
@@ -625,6 +712,18 @@ def get_or_create_depth_backend(
     config: EnhanceConfig,
 ) -> Any:
     """Fetch backend from cache or registry."""
+    carried_context = _carried_candidate_context(config, backend_id)
+    expected_authority = None if carried_context is None else carried_context[1]
+    canonical_plan_bytes = None if carried_context is None else carried_context[2]
+
+    def _matches_carried_authority(backend: Any) -> bool:
+        if carried_context is None:
+            return True
+        return (
+            getattr(backend, "_candidate_authority", None) == expected_authority
+            and getattr(backend, "_canonical_plan_bytes", None) == canonical_plan_bytes
+        )
+
     if (
         active_backend is not None
         and getattr(
@@ -633,15 +732,25 @@ def get_or_create_depth_backend(
             None,
         )
         == backend_id
+        and _matches_carried_authority(active_backend)
     ):
         backend_cache[backend_id] = active_backend
         return active_backend
 
     cached = backend_cache.get(backend_id)
-    if cached is not None:
+    if cached is not None and _matches_carried_authority(cached):
         return cached
 
-    backend = registry.get_backend(backend_id, config)
+    if carried_context is None:
+        backend = registry.get_backend(backend_id, config)
+    else:
+        candidate_config, authority, exact_bytes = carried_context
+        backend = registry.get_backend(
+            backend_id,
+            candidate_config,
+            candidate_authority=authority,
+            canonical_plan_bytes=exact_bytes,
+        )
     backend.ensure_available()
     backend_cache[backend_id] = backend
     return backend
@@ -723,13 +832,14 @@ def build_backend_metadata_for_attempts(
             backend=effective_backend_cache.get(normalized_selected_backend),
         )
 
+    resolved_device = _carried_candidate_device(config, normalized_selected_backend) or config.depth_device
     return BackendSelectionMetadata(
         requested_backend=requested,
         resolved_backend=normalized_selected_backend,
         resolution_status=resolution_status,
         resolution_reason=resolution_reason,
         model_id=str(model_id),
-        device=config.depth_device,
+        device=resolved_device,
         attempts=attempts,
     )
 
@@ -757,16 +867,22 @@ def select_backend(
     Returns:
         BackendSelection with result
     """
-    apply_effective_da3_runtime_config(config)
-    explicit_backend_request = (
+    carried_plan = _carried_execution_plan(config)
+    if carried_plan is None:
+        apply_effective_da3_runtime_config(config)
+    explicit_backend_request = carried_plan is None and (
         normalize_backend_id(requested) is not None or normalize_backend_id(config.depth_backend) is not None
     )
     normalized_requested = resolve_requested_backend(requested, config)
-    if normalized_requested == "depth_pro":
+    if carried_plan is None and normalized_requested == "depth_pro":
         apply_effective_depth_pro_runtime_config(config)
     strict_explicit_da3_request = explicit_backend_request and normalized_requested == "da3"
 
-    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+    allow_synthetic = (
+        "synthetic" in carried_plan.candidate_fallback_chain
+        if carried_plan is not None
+        else bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+    )
 
     # Derive operational fallback chain from config to keep behavior consistent with
     # depth_operational_fallback_chain setting in EnhanceConfig
@@ -775,7 +891,7 @@ def select_backend(
     # Optionally extend with synthetic backend for test environments.
     # Convert to tuple for immutable concatenation, then to list for normalize_backend_sequence.
     full_chain = list(operational_chain)
-    if allow_synthetic and "synthetic" not in full_chain:
+    if carried_plan is None and allow_synthetic and "synthetic" not in full_chain:
         full_chain.append("synthetic")
 
     candidate_chain = list(normalize_backend_sequence(full_chain))
@@ -785,13 +901,26 @@ def select_backend(
     status = "error"
     reason = None
     init_errors: Dict[str, str] = {}
+    selected_runtime_config = config
 
     for index, backend_id in enumerate(candidate_chain):
         try:
-            candidate_backend = registry.get_backend(backend_id, config)
+            carried_context = _carried_candidate_context(config, backend_id)
+            if carried_context is None:
+                candidate_runtime_config = config
+                candidate_backend = registry.get_backend(backend_id, candidate_runtime_config)
+            else:
+                candidate_runtime_config, authority, canonical_plan_bytes = carried_context
+                candidate_backend = registry.get_backend(
+                    backend_id,
+                    candidate_runtime_config,
+                    candidate_authority=authority,
+                    canonical_plan_bytes=canonical_plan_bytes,
+                )
             candidate_backend.ensure_available()
             backend = candidate_backend
             resolved = backend_id
+            selected_runtime_config = candidate_runtime_config
 
             if index == 0:
                 status = "success"
@@ -807,13 +936,14 @@ def select_backend(
 
         except (LicenseRestrictionError, ModelLicenseError, BackendCapabilityError):
             # Never bypass explicit license restrictions on requested backend
-            if index == 0:
+            if carried_plan is not None or index == 0:
                 raise
             init_errors[backend_id] = "license_restriction"
 
         except ValueError:
-            # Unknown requested backend should remain a hard error
-            if index == 0:
+            # A carried-plan mismatch is an authority failure, never an
+            # operational reason to fall through to another candidate.
+            if carried_plan is not None or index == 0:
                 raise
             init_errors[backend_id] = "unknown_backend"
 
@@ -843,7 +973,7 @@ def select_backend(
         reason=reason,
         backend=backend,
         model_id=model_id,
-        device=config.depth_device,
+        device=selected_runtime_config.depth_device,
         init_errors=init_errors,
     )
 
@@ -864,7 +994,12 @@ def initialize_depth_backend_state(
     registry = registry_factory()
     backend_cache: Dict[str, Any] = {}
     init_errors: Dict[str, str] = {}
-    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+    carried_plan = _carried_execution_plan(config)
+    allow_synthetic = (
+        "synthetic" in carried_plan.candidate_fallback_chain
+        if carried_plan is not None
+        else bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+    )
 
     try:
         selection = select_backend(
@@ -907,7 +1042,7 @@ def initialize_depth_backend_state(
                 selection.resolved_backend,
                 backend=selection.backend,
             ),
-            device=config.depth_device,
+            device=selection.device,
             attempts=[],
         )
 
@@ -915,7 +1050,7 @@ def initialize_depth_backend_state(
             "Depth backend:" " requested=%s" " resolved=%s device=%s",
             selection.requested_backend,
             selection.resolved_backend,
-            config.depth_device,
+            selection.device,
         )
         return InitializedDepthBackendState(
             registry=registry,
@@ -1031,11 +1166,16 @@ class PipelineCoordinator:
             self._registry = DepthBackendRegistry()
 
         try:
-            backend = self._registry.get_backend(backend_id, self._config)
-            backend.ensure_available()
-            self._backend_cache[backend_id] = backend
-            return backend
+            return get_or_create_depth_backend(
+                backend_id,
+                active_backend=None,
+                backend_cache=self._backend_cache,
+                registry=self._registry,
+                config=self._config,
+            )
         except Exception as e:
+            if getattr(self._config, "execution_plan_authority", None) is not None:
+                raise
             logger.debug("Failed to create backend %s: %s", backend_id, e)
             return None
 

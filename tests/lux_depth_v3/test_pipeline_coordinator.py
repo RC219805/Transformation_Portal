@@ -556,6 +556,79 @@ class TestRuntimeBackendStateHelpers:
         assert metadata.attempts == attempts
         resolve_model_id.assert_not_called()
 
+    def test_carried_da2_device_drives_startup_and_per_image_metadata(self, tmp_path):
+        """Canonical DA2 CPU normalization remains truthful in emitted metadata."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.execution_lifecycle import (
+            backend_candidate_authority,
+            prepare_lux_execution,
+        )
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            build_backend_metadata_for_attempts,
+            initialize_depth_backend_state,
+        )
+
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "sample.jpg"
+        image.write_bytes(b"not-decoded-during-plan-preparation")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                model_key="da3-metric",
+                depth_device="cuda",
+                enable_v2=False,
+            ),
+            input_root,
+            [image],
+        )
+
+        class Backend:
+            def __init__(self, name: str, available: bool) -> None:
+                self.name = name
+                self.available = available
+
+            def ensure_available(self) -> None:
+                if not self.available:
+                    raise ImportError("primary unavailable")
+
+        class Registry:
+            @staticmethod
+            def get_backend(
+                backend_id,
+                config,
+                *,
+                candidate_authority,
+                canonical_plan_bytes,
+            ):
+                assert canonical_plan_bytes == prepared.canonical_plan_bytes
+                if backend_id == "da2":
+                    assert candidate_authority == backend_candidate_authority(prepared.plan, "da2")
+                    assert config.depth_device == "cpu"
+                return Backend(backend_id, available=backend_id == "da2")
+
+        state = initialize_depth_backend_state(
+            prepared.runtime_config,
+            ModelVariant.METRIC_LARGE,
+            lambda backend_id, **_kwargs: f"model/{backend_id}",
+            registry_factory=Registry,
+        )
+
+        assert prepared.runtime_config.depth_device == "cuda"
+        assert state.backend_metadata.resolved_backend == "da2"
+        assert state.backend_metadata.device == "cpu"
+
+        attempts = [{"backend": "da2", "status": "success", "model_id": "model/da2", "device": "cpu"}]
+        per_image = build_backend_metadata_for_attempts(
+            "da2",
+            attempts,
+            state.backend_metadata,
+            prepared.runtime_config,
+            lambda backend_id, **_kwargs: f"model/{backend_id}",
+            selected_attempt_index=0,
+        )
+
+        assert per_image.device == "cpu"
+
 
 class TestBackendSelection:
     """Test BackendSelection data class."""

@@ -9,10 +9,14 @@ from transformation_portal.lux_depth_v3 import (
     EnhanceOrchestrator,
     STANDARD_QUALITY,  # or PREMIUM_QUALITY, FAST_PREVIEW
 )
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from pathlib import Path
 
-# Use preset directly
-orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root=Path("./output"))
+# Use the preset with one exact prepared input selection
+input_root = Path("./input_images")
+input_files = sorted(input_root.glob("*.jpg"))
+prepared = prepare_lux_execution(STANDARD_QUALITY, input_root, input_files)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=Path("./output"))
 ```
 
 ## Available Presets
@@ -41,13 +45,18 @@ orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root=Path("./output"
 
 ```python
 from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, STANDARD_QUALITY
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from pathlib import Path
 
+input_root = Path("./input_images")
+image_paths = sorted(input_root.glob("*.jpg"))
 output_root = Path("./pbr_output")
-orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root)
+prepared = prepare_lux_execution(STANDARD_QUALITY, input_root, image_paths)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
-for img_path in Path("./input_images").glob("*.jpg"):
-    result = orchestrator.enhance_image(img_path, input_root=Path("./input_images"))
+for img_path in image_paths:
+    result = orchestrator.enhance_image(ImageInput(img_path), input_root=input_root)
     print(f"✓ {img_path.name}")
 ```
 
@@ -55,10 +64,15 @@ for img_path in Path("./input_images").glob("*.jpg"):
 
 ```python
 from transformation_portal.lux_depth_v3 import get_preset, EnhanceOrchestrator
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from pathlib import Path
 
 # Load preset dynamically
 config = get_preset("premium")  # or "standard", "draft", "wood", etc.
-orchestrator = EnhanceOrchestrator(config, output_root)
+input_root = Path("./input_images")
+input_files = sorted(input_root.glob("*.jpg"))
+prepared = prepare_lux_execution(config, input_root, input_files)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 ```
 
 ### Example 3: List Available Presets
@@ -75,7 +89,9 @@ for name in list_presets():
 
 ```python
 from transformation_portal.lux_depth_v3 import STANDARD_QUALITY, EnhanceOrchestrator
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from dataclasses import replace
+from pathlib import Path
 
 # Customize preset
 custom_config = replace(
@@ -84,7 +100,10 @@ custom_config = replace(
     pbr_ao_bias=0.40,         # Darker AO
 )
 
-orchestrator = EnhanceOrchestrator(custom_config, output_root)
+input_root = Path("./input_images")
+input_files = sorted(input_root.glob("*.jpg"))
+prepared = prepare_lux_execution(custom_config, input_root, input_files)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 ```
 
 ## Key Parameters

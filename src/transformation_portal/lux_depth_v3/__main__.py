@@ -710,7 +710,7 @@ def main(
         help=(
             "Resolver-only mode: run argument parsing, configuration and "
             "model/license resolution, input selection, and cross-field "
-            "validation, then print the resolved invocation as canonical "
+            "validation, then print the canonical tp.execution.plan.v1 "
             "JSON and exit without loading models or writing any files. "
             "Exits with the same errors a real run would raise at "
             "validation/resolution time."
@@ -845,11 +845,6 @@ def main(
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
-
-    # Create output directory (skipped in resolver-only --plan mode, which
-    # must perform no filesystem writes).
-    if not plan:
-        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Validate quality tier
     valid_quality_tiers = ["standard", "premium", "apex"]
@@ -1176,22 +1171,29 @@ def main(
         config.raw_python_executable,
     )
 
-    # P0-1 (issue #2065): the single shared resolution pass. Both plan and
-    # run consume this exact object; the run path attaches it to the config
-    # so ConfigResolver and the depth backends do not re-resolve.
+    # #2065-A2: prepare one execution-complete canonical plan. Both --plan
+    # and run consume this exact prepared object; trust-boundary consumers
+    # may revalidate its bytes but may never select a different model.
+    from ..core.execution_plan import ExecutionPlanError
     from ..depth.backends.protocol import LicenseRestrictionError
     from ..depth.backends.registry import UnknownDepthBackendError
-    from .resolved_invocation import build_resolved_invocation
+    from .execution_lifecycle import prepare_lux_execution
 
     try:
-        invocation = build_resolved_invocation(
+        prepared = prepare_lux_execution(
             config,
-            input_dir=input_dir,
-            input_files=image_files,
+            input_root=input_dir,
+            # ``Path.rglob`` preserves a relative input directory prefix.
+            # Anchor discovery results at the CLI boundary so lifecycle
+            # relative paths remain unambiguously relative to ``input_root``.
+            # Do not resolve here: lifecycle authority owns symlink and root
+            # containment validation.
+            input_files=[image_path.absolute() for image_path in image_files],
         )
     except (
         ModelLicenseError,
         UnknownModelError,
+        ExecutionPlanError,
         LicenseRestrictionError,
         UnknownDepthBackendError,
     ) as exc:
@@ -1200,26 +1202,26 @@ def main(
         raise typer.Exit(code=1)
 
     if plan:
-        # Resolver-only mode: emit the canonical plan and stop before any
-        # orchestrator construction, model loading, or filesystem writes.
-        print(invocation.to_canonical_json())
+        # Resolver-only mode: emit the exact bytes that execution would
+        # consume, then stop before output creation or runtime initialization.
+        print(prepared.canonical_plan_bytes.decode("utf-8"))
         return
 
-    config.resolved_invocation = invocation
+    # Output publication is authorized only after preparation succeeds.
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create orchestrator only after input discovery and RAW preflight succeed.
+    # Create the live Lux rollback executor from the authoritative plan. ADR-051
+    # does not authorize a StageGraph/CASDAGExecutor cutover in this slice.
     logger.info(
         "Initializing orchestrator with" f" output dir: {output_dir}",
     )
-    orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=output_dir)
 
     # Process batch
     try:
         results = orchestrator.enhance_batch(
             input_dir=input_dir,
             image_extensions=image_extensions,
-            # P0-1: the run consumes the plan's frozen input selection.
-            input_files=sorted(image_files),
         )
 
         # Summary (Note: orchestrator returns "ok" not "success")

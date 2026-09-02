@@ -212,9 +212,11 @@ lux-depth-v3 \
 
 **Python API:**
 ```python
-from transformation_portal.lux_depth_v3 import EnhanceConfig
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from pathlib import Path
+
+from transformation_portal.lux_depth_v3 import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Using Depth Pro
 config = EnhanceConfig(
@@ -227,8 +229,17 @@ config = EnhanceConfig(
     enable_v2=False,
 )
 
-orchestrator = EnhanceOrchestrator(config, Path("./output"))
+input_root = Path("./input_images")
+input_files = [input_root / "scene.tif"]
+prepared = prepare_lux_execution(config, input_root, input_files)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
+results = orchestrator.enhance_batch(input_root)
 ```
+
+`PreparedLuxExecution` is the direct-Python execution authority used by the
+CLI as well. It freezes the canonical plan, model and license contract,
+fallback candidates, typed stage configuration, and exact input selection
+before the orchestrator initializes a backend or creates output artifacts.
 
 **DA3 live model tests remain opt-in:** set `TP_RUN_HF_MODEL_TESTS=1` before running the
 real Hugging Face DA3 integration tests.

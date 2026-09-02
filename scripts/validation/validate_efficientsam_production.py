@@ -22,12 +22,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Configure logging for direct command-line execution."""
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
 
 def run_validation():
@@ -57,6 +61,8 @@ def run_validation():
     logger.info("Importing pipeline components...")
     try:
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
     except ImportError as e:
         logger.error(f"Failed to import pipeline components: {e}")
@@ -107,13 +113,16 @@ def run_validation():
     print(f"  PBR generation: {config.generate_pbr}")
     print()
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     # Create orchestrator
     logger.info("Initializing orchestrator...")
     try:
-        orchestrator = EnhanceOrchestrator(config, output_dir)
+        prepared = prepare_lux_execution(
+            config,
+            input_dir,
+            [image_path.absolute() for image_path in sorted(input_images)],
+        )
+        input_images = list(prepared.input_files)
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_dir)
     except Exception as e:
         logger.error(f"Failed to create orchestrator: {e}")
         return 1
@@ -134,7 +143,7 @@ def run_validation():
 
         try:
             # Process single image
-            result = orchestrator.enhance_image(image_path)
+            result = orchestrator.enhance_image(ImageInput(path=image_path))
 
             image_elapsed = time.time() - image_start
 
@@ -267,4 +276,5 @@ def run_validation():
 
 
 if __name__ == "__main__":
+    _configure_logging()
     sys.exit(run_validation())

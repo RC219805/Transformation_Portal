@@ -7,20 +7,27 @@ architectural visualization workflows:
 2. PREMIUM_QUALITY: Maximum quality for hero shots and client deliverables
 3. FAST_PREVIEW: Quick iteration and internal review
 
-All presets are tuned for Lux Depth V3 with Depth Anything V3 metric models
-on Apple Silicon (MPS) or CUDA GPUs.
+All presets use explicit commercial-safe Depth Anything V3 registry models on
+Apple Silicon (MPS) or CUDA GPUs.
 
 Example:
+    >>> from pathlib import Path
     >>> from transformation_portal.lux_depth_v3.pbr_presets import (
     ...     STANDARD_QUALITY,
+    ... )
+    >>> from transformation_portal.lux_depth_v3.execution_lifecycle import (
+    ...     prepare_lux_execution,
     ... )
     >>> from transformation_portal.lux_depth_v3.orchestrator import (
     ...     EnhanceOrchestrator,
     ... )
-    >>> orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root)
+    >>> input_root = Path("./input_images")
+    >>> input_files = sorted(input_root.glob("*.jpg"))
+    >>> prepared = prepare_lux_execution(STANDARD_QUALITY, input_root, input_files)
+    >>> orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 """
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 # Standard Quality - Balanced preset for typical real estate imagery
 # Throughput: ~200-250 images/hour
@@ -40,8 +47,8 @@ STANDARD_QUALITY = EnhanceConfig(
     pbr_ao_strength=1.0,
     pbr_ao_blur_radius=5,
     pbr_ao_bias=0.45,
-    # Depth Model - Large for quality
-    model_variant=ModelVariant.METRIC_LARGE,
+    # Commercial-safe DA3 metric model
+    model_key="da3-metric",
     depth_device="mps",  # Use "cuda" for NVIDIA GPUs
 )
 
@@ -64,8 +71,8 @@ PREMIUM_QUALITY = EnhanceConfig(
     pbr_ao_strength=1.2,
     pbr_ao_blur_radius=7,
     pbr_ao_bias=0.40,
-    # Depth Model - Large for best accuracy
-    model_variant=ModelVariant.METRIC_LARGE,
+    # Commercial-safe DA3 metric model
+    model_key="da3-metric",
     depth_device="mps",
 )
 
@@ -89,8 +96,8 @@ FAST_PREVIEW = EnhanceConfig(
     pbr_ao_strength=0.8,
     pbr_ao_blur_radius=4,
     pbr_ao_bias=0.50,
-    # Depth Model - Base for speed
-    model_variant=ModelVariant.METRIC_BASE,
+    # Commercial-safe DA3 Base model for speed
+    model_key="da3-base",
     depth_device="mps",
 )
 
@@ -112,7 +119,7 @@ WOOD_OPTIMIZED = EnhanceConfig(
     pbr_ao_strength=1.0,
     pbr_ao_blur_radius=5,
     pbr_ao_bias=0.45,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
@@ -130,7 +137,7 @@ METAL_OPTIMIZED = EnhanceConfig(
     pbr_ao_strength=1.1,
     pbr_ao_blur_radius=6,
     pbr_ao_bias=0.48,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
@@ -148,7 +155,7 @@ GLASS_OPTIMIZED = EnhanceConfig(
     pbr_ao_strength=1.2,
     pbr_ao_blur_radius=7,
     pbr_ao_bias=0.55,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
@@ -166,7 +173,7 @@ STONE_OPTIMIZED = EnhanceConfig(
     pbr_ao_strength=1.1,
     pbr_ao_blur_radius=5,
     pbr_ao_bias=0.42,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 
@@ -184,7 +191,7 @@ FABRIC_OPTIMIZED = EnhanceConfig(
     pbr_ao_strength=1.0,
     pbr_ao_blur_radius=6,
     pbr_ao_bias=0.47,
-    model_variant=ModelVariant.METRIC_LARGE,
+    model_key="da3-metric",
     depth_device="mps",
 )
 

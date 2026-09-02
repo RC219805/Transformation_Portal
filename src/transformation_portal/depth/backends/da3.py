@@ -35,9 +35,11 @@ from ...core.ml_dependency_health import (
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
 from ...lux_depth_v3.config_resolver import (
+    _compat_model_variant_for_resolved_key,
     preset_model_key_for_selection,
     with_typed_preset_provenance,
 )
+from ...lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
 from ...lux_depth_v3.model_resolution import (
     ModelRequest,
     direct_model_contract,
@@ -50,6 +52,7 @@ from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig, ModelVariant
+    from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
     from ...lux_depth_v3.inference import DA3InferenceEngine
 
 logger = logging.getLogger(__name__)
@@ -74,6 +77,16 @@ _STARTUP_FAILURE_MARKERS = (
     "abort trap",
     "dyld:",
 )
+
+
+def _subprocess_text(value: str | bytes | None) -> str:
+    """Normalize timeout output while retaining UTF-8 diagnostics."""
+
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _model_id_for_variant(model_variant: "ModelVariant") -> str:
@@ -160,19 +173,37 @@ class DA3Backend:
     requires_checkpoint = False
     WORKER_MODULE = "transformation_portal.depth.backends.da3_worker"
 
-    def __init__(self, config: Optional["EnhanceConfig"] = None):
+    def __init__(
+        self,
+        config: Optional["EnhanceConfig"] = None,
+        *,
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
+    ):
         """Initialize DA3 backend."""
+        if (candidate_authority is None) != (canonical_plan_bytes is None):
+            raise ValueError("candidate_authority and canonical_plan_bytes must be provided together")
+        if candidate_authority is not None and config is None:
+            raise ValueError("Canonical DA3 authority requires its projected runtime config")
         self._config = config
+        self._candidate_authority = candidate_authority
+        self._canonical_plan_bytes = canonical_plan_bytes
         self._engine: Optional[DA3InferenceEngine] = None
-        self._device = self._resolve_device(config)
-        self._model_variant = self._resolve_model_variant(config)
+        self._device = self._resolve_device(config, candidate_authority)
         # P0-1 (issue #2065): consume the authoritative single-resolution
         # contract when the invocation carries one, instead of re-resolving.
         # Re-resolution here is the seam where the legacy model_variant
         # compatibility mapping could silently turn a commercial selection
         # (da3_metric) back into the research model (da3_research).
-        authoritative_contract = None
-        if config is not None:
+        authoritative_contract = candidate_authority.resolved_model_contract if candidate_authority is not None else None
+        if candidate_authority is not None:
+            if candidate_authority.backend_id != self.name or candidate_authority.model_contract is None:
+                raise ValueError("Canonical DA3 authority does not select a DA3 model contract")
+            if candidate_authority.model_contract.backend_id != self.name:
+                raise ValueError("Canonical DA3 model contract names a different backend")
+            if authoritative_contract is None:
+                raise ValueError("Canonical DA3 authority lacks a re-anchored runtime model contract")
+        elif config is not None:
             restore_stale_direct_model_selection(config)
             refresh_direct_model_acknowledgement(config, stacklevel=3)
             invocation = getattr(config, "resolved_invocation", None)
@@ -209,6 +240,7 @@ class DA3Backend:
                     self._resolved_model_contract,
                     preset_model_key,
                 )
+        self._model_variant = self._resolve_model_variant(config, authoritative_contract=self._resolved_model_contract)
         self._model_id = self._resolved_model_contract.spec.repo_id
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
@@ -226,16 +258,31 @@ class DA3Backend:
             return self._repo_root
         return Path.cwd()
 
-    def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
+    def _resolve_device(
+        self,
+        config: Optional["EnhanceConfig"],
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+    ) -> str:
         """Resolve device from config or auto-detect."""
+        if candidate_authority is not None:
+            carried = str(candidate_authority.device or "").strip().lower()
+            if carried and carried != "auto":
+                return carried
         if config is not None:
             device = getattr(config, "depth_device", None)
             if device:
                 return device
         return "cpu"
 
-    def _resolve_model_variant(self, config: Optional["EnhanceConfig"]) -> "ModelVariant":
+    def _resolve_model_variant(
+        self,
+        config: Optional["EnhanceConfig"],
+        *,
+        authoritative_contract: Any = None,
+    ) -> "ModelVariant":
         """Resolve model variant from config."""
+        if authoritative_contract is not None:
+            return _compat_model_variant_for_resolved_key(authoritative_contract.canonical_key)
         if config is not None:
             variant = getattr(config, "model_variant", None)
             if variant:
@@ -260,6 +307,11 @@ class DA3Backend:
                     configured_path = ""
                 if configured_path:
                     candidate = configured_path
+
+        if candidate is None and config is not None and getattr(config, "execution_plan_authority", None) is not None:
+            # Execution-complete plans freeze absence as well as presence.
+            # A later environment mutation cannot add a subprocess runtime.
+            return None
 
         if candidate is None:
             env_candidate = os.environ.get("TRANSFORMATION_PORTAL_DA3_PYTHON")
@@ -342,8 +394,60 @@ class DA3Backend:
             *args,
         ]
 
+    def _canonical_worker_args(self) -> list[str]:
+        """Return the closed argv carrier for canonical subprocess mode."""
+
+        authority = self._candidate_authority
+        if authority is None:
+            return []
+        args = [
+            "--execution-plan-stdin",
+            "--candidate-id",
+            authority.candidate_id,
+        ]
+        if authority.constituent_backend_id is not None:
+            args.extend(["--model-backend-id", authority.constituent_backend_id])
+        return args
+
+    def _canonical_worker_input(self) -> Optional[str]:
+        """Return exact canonical JSON text for the subprocess stdin pipe."""
+
+        if self._candidate_authority is None:
+            return None
+        if type(self._canonical_plan_bytes) is not bytes:
+            raise RuntimeError("Canonical DA3 execution is missing immutable plan bytes")
+        return self._canonical_plan_bytes.decode("utf-8", errors="strict")
+
+    def _effective_device(self, override: Optional[str]) -> str:
+        """Reject runtime overrides that disagree with carried authority."""
+
+        if override is None:
+            return self._device
+        normalized = str(override).strip().lower()
+        if self._candidate_authority is not None and normalized != self._device:
+            raise ValueError(f"DA3 device override {normalized!r} disagrees with carried authority {self._device!r}")
+        return normalized
+
+    def _verify_worker_authority_echo(self, payload: Any) -> None:
+        """Verify worker authority before loading or accepting its array."""
+
+        authority = self._candidate_authority
+        if authority is None:
+            return
+        expected = {
+            "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+            "candidate_id": authority.candidate_id,
+            "model_backend_id": authority.constituent_backend_id,
+            "executed_backend_id": self.name,
+        }
+        if not isinstance(payload, dict) or payload.get("execution_authority") != expected:
+            raise LuxExecutionPlanAuthorityError("DA3 worker execution-authority echo does not match the carried plan")
+
     def _apple_coreml_opt_in_enabled(self) -> bool:
         """Return whether this backend is configured to prefer Apple CoreML."""
+        if self._candidate_authority is not None:
+            contract = self._candidate_authority.model_contract
+            return bool(contract is not None and contract.model.accelerator_kind == "coreml")
         return bool(
             self._config is not None
             and getattr(self._config, "use_coreml_backend", False)
@@ -387,31 +491,36 @@ class DA3Backend:
         if self._subprocess_available_checked:
             return
 
-        command = self._build_worker_command(
-            "--check",
-            "--model-variant",
-            self._model_variant.name,
-            "--model-key",
-            self._resolved_model_contract.canonical_key,
-            "--device",
-            self._device,
-        )
-        if self._resolved_model_contract.revision:
-            command.extend(["--model-revision", self._resolved_model_contract.revision])
-        if self._non_commercial_opt_in_enabled():
-            command.append("--non-commercial-ok")
-        if self._apple_coreml_opt_in_enabled():
-            command.append("--use-coreml")
+        if self._candidate_authority is not None:
+            command = self._build_worker_command("--check", *self._canonical_worker_args())
+        else:
+            command = self._build_worker_command(
+                "--check",
+                "--model-variant",
+                self._model_variant.name,
+                "--model-key",
+                self._resolved_model_contract.canonical_key,
+                "--device",
+                self._device,
+            )
+            if self._resolved_model_contract.revision:
+                command.extend(["--model-revision", self._resolved_model_contract.revision])
+            if self._non_commercial_opt_in_enabled():
+                command.append("--non-commercial-ok")
+            if self._apple_coreml_opt_in_enabled():
+                command.append("--use-coreml")
 
         try:
             result = subprocess.run(
                 command,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 cwd=self._worker_cwd(),
                 env=self._build_worker_env(),
                 check=False,
                 timeout=self._subprocess_timeout_seconds,
+                input=self._canonical_worker_input(),
             )
         except FileNotFoundError as exc:
             raise ImportError(
@@ -438,10 +547,12 @@ class DA3Backend:
                 )
             ) from exc
         except subprocess.TimeoutExpired as exc:
+            timeout_stdout = _subprocess_text(exc.stdout)
+            timeout_stderr = _subprocess_text(exc.stderr)
             category, summary = _classify_subprocess_failure(
                 phase="availability_check",
-                stdout=exc.stdout or "",
-                stderr=exc.stderr or "",
+                stdout=timeout_stdout,
+                stderr=timeout_stderr,
                 timed_out=True,
             )
             raise ImportError(
@@ -451,8 +562,8 @@ class DA3Backend:
                     summary=summary,
                     python_executable=self._python_executable or "(unset)",
                     command=command,
-                    stdout=exc.stdout or "",
-                    stderr=exc.stderr or "",
+                    stdout=timeout_stdout,
+                    stderr=timeout_stderr,
                 )
             ) from exc
         if result.returncode != 0:
@@ -612,7 +723,7 @@ class DA3Backend:
         device: Optional[str] = None,
     ) -> DepthResult:
         """Run DA3 inference in the active Python process."""
-        use_device = device or self._device
+        use_device = self._effective_device(device)
         if self._engine is None or device is not None:
             self._load_engine(use_device)
 
@@ -639,7 +750,7 @@ class DA3Backend:
     ) -> DepthResult:
         """Run DA3 inference in a dedicated Python subprocess."""
         image_pil, image_array = self._prepare_image(image)
-        use_device = device or self._device
+        use_device = self._effective_device(device)
 
         with tempfile.TemporaryDirectory(prefix="tp_da3_") as tmpdir:
             tmp_root = Path(tmpdir)
@@ -648,36 +759,44 @@ class DA3Backend:
             output_json_path = tmp_root / "result.json"
             image_pil.save(input_path)
 
-            command = self._build_worker_command(
+            common_args = [
                 "--input-image",
                 str(input_path),
                 "--output-depth",
                 str(output_depth_path),
                 "--output-json",
                 str(output_json_path),
-                "--model-variant",
-                self._model_variant.name,
-                "--model-key",
-                self._resolved_model_contract.canonical_key,
-                "--device",
-                str(use_device),
-            )
-            if self._resolved_model_contract.revision:
-                command.extend(["--model-revision", self._resolved_model_contract.revision])
-            if self._non_commercial_opt_in_enabled():
-                command.append("--non-commercial-ok")
-            if self._apple_coreml_opt_in_enabled():
-                command.append("--use-coreml")
+            ]
+            if self._candidate_authority is not None:
+                command = self._build_worker_command(*common_args, *self._canonical_worker_args())
+            else:
+                command = self._build_worker_command(
+                    *common_args,
+                    "--model-variant",
+                    self._model_variant.name,
+                    "--model-key",
+                    self._resolved_model_contract.canonical_key,
+                    "--device",
+                    str(use_device),
+                )
+                if self._resolved_model_contract.revision:
+                    command.extend(["--model-revision", self._resolved_model_contract.revision])
+                if self._non_commercial_opt_in_enabled():
+                    command.append("--non-commercial-ok")
+                if self._apple_coreml_opt_in_enabled():
+                    command.append("--use-coreml")
 
             try:
                 result = subprocess.run(
                     command,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                     cwd=self._worker_cwd(),
                     env=self._build_worker_env(),
                     check=True,
                     timeout=self._subprocess_timeout_seconds,
+                    input=self._canonical_worker_input(),
                 )
             except FileNotFoundError as exc:
                 raise RuntimeError(
@@ -704,10 +823,12 @@ class DA3Backend:
                     )
                 ) from exc
             except subprocess.TimeoutExpired as exc:
+                timeout_stdout = _subprocess_text(exc.stdout)
+                timeout_stderr = _subprocess_text(exc.stderr)
                 category, summary = _classify_subprocess_failure(
                     phase="inference",
-                    stdout=exc.stdout or "",
-                    stderr=exc.stderr or "",
+                    stdout=timeout_stdout,
+                    stderr=timeout_stderr,
                     timed_out=True,
                 )
                 raise RuntimeError(
@@ -717,8 +838,8 @@ class DA3Backend:
                         summary=summary,
                         python_executable=self._python_executable or "(unset)",
                         command=command,
-                        stdout=exc.stdout or "",
-                        stderr=exc.stderr or "",
+                        stdout=timeout_stdout,
+                        stderr=timeout_stderr,
                     )
                 ) from exc
             except subprocess.CalledProcessError as exc:
@@ -762,7 +883,10 @@ class DA3Backend:
             try:
                 with output_json_path.open("r", encoding="utf-8") as handle:
                     payload = json.load(handle)
+                self._verify_worker_authority_echo(payload)
                 depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
+            except LuxExecutionPlanAuthorityError:
+                raise
             except (json.JSONDecodeError, OSError, ValueError) as exc:
                 category, summary = _classify_subprocess_failure(
                     phase="inference",
@@ -816,6 +940,13 @@ class DA3Backend:
             runner_mode=runner_mode,
             python_executable=python_executable,
         )
+        if self._candidate_authority is not None:
+            normalized_metadata["execution_authority"] = {
+                "plan_fingerprint_sha256": self._candidate_authority.plan_fingerprint_sha256,
+                "candidate_id": self._candidate_authority.candidate_id,
+                "model_backend_id": self._candidate_authority.constituent_backend_id,
+                "executed_backend_id": self.name,
+            }
 
         effective_device = normalized_metadata.get("device", use_device)
         if effective_device is not None:

@@ -8,6 +8,7 @@ loads a model, writes an artifact, or changes the live Lux executor.
 
 from __future__ import annotations
 
+import math
 from types import MappingProxyType, SimpleNamespace
 from typing import Any, Mapping, Optional
 
@@ -674,6 +675,115 @@ def _revalidate_candidate_model_contract(
     raise LuxExecutionPlanAuthorityError(f"Backend {backend_id!r} must not carry a model contract")
 
 
+def _runtime_node_configuration(
+    payload: Mapping[str, Any],
+    stage_registry_id: StageRegistryIdentifier,
+) -> Optional[Mapping[str, Any]]:
+    for node in payload["nodes"]:
+        if node["stage_registry_id"] == stage_registry_id.value:
+            return node["configuration"]
+    return None
+
+
+def _optional_nonempty_string(configuration: Mapping[str, Any], field_name: str) -> Optional[str]:
+    value = configuration.get(field_name)
+    if value is None:
+        return None
+    if type(value) is not str or not value.strip():
+        raise LuxExecutionPlanAuthorityError(f"Canonical field {field_name!r} must be null or a non-empty string")
+    return value
+
+
+def _revalidate_runtime_policy_nodes(payload: Mapping[str, Any]) -> None:
+    """Validate execution-complete policy fields consumed after preparation."""
+
+    output = _runtime_node_configuration(payload, StageRegistryIdentifier.LUX_OUTPUT)
+    if output is None or not isinstance(output.get("captioning"), Mapping):
+        raise LuxExecutionPlanAuthorityError("Canonical output authority is missing its captioning configuration")
+    captioning = output["captioning"]
+    required_captioning_fields = {
+        "enabled",
+        "backend",
+        "selector",
+        "model_id",
+        "model_revision",
+        "proxy_format",
+        "max_side_px",
+        "python_executable",
+        "mlx_vlm_dir",
+        "timeout_seconds",
+    }
+    missing_captioning_fields = required_captioning_fields.difference(captioning)
+    if missing_captioning_fields:
+        raise LuxExecutionPlanAuthorityError(
+            "Canonical captioning authority is missing fields: " + ", ".join(sorted(missing_captioning_fields))
+        )
+    if type(captioning["enabled"]) is not bool:
+        raise LuxExecutionPlanAuthorityError("Canonical captioning enabled must be an exact boolean")
+    for field_name in (
+        "model_path",
+        "review_model_path",
+        "python_executable",
+        "mlx_vlm_dir",
+    ):
+        _optional_nonempty_string(captioning, field_name)
+    if captioning["enabled"]:
+        if captioning["backend"] != "fastvlm":
+            raise LuxExecutionPlanAuthorityError("Enabled canonical captioning requires backend 'fastvlm'")
+        if type(captioning["selector"]) is not str or not captioning["selector"].strip():
+            raise LuxExecutionPlanAuthorityError("Canonical captioning selector must be a non-empty string")
+        if type(captioning["max_side_px"]) is not int or captioning["max_side_px"] <= 0:
+            raise LuxExecutionPlanAuthorityError("Canonical captioning max_side_px must be a positive integer")
+        if type(captioning["timeout_seconds"]) is not int or captioning["timeout_seconds"] <= 0:
+            raise LuxExecutionPlanAuthorityError("Canonical FastVLM timeout_seconds must be a positive integer")
+        max_tokens = captioning.get("max_tokens", 120)
+        if type(max_tokens) is not int or max_tokens <= 0:
+            raise LuxExecutionPlanAuthorityError("Canonical FastVLM max_tokens must be a positive integer")
+        temperature = captioning.get("temperature", 0.0)
+        if type(temperature) is not float or not math.isfinite(temperature) or temperature < 0:
+            raise LuxExecutionPlanAuthorityError("Canonical FastVLM temperature must be a finite non-negative float")
+
+    reconstruction = _runtime_node_configuration(payload, StageRegistryIdentifier.LUX_RECONSTRUCTION)
+    if reconstruction is None:
+        return
+    required_reconstruction_fields = {
+        "grouping_mode",
+        "cameras_sidecar_path",
+        "cameras_sidecar_sha256",
+        "iterations",
+        "tier",
+        "emit_scene_debug_bundle",
+        "risk_threshold",
+    }
+    missing_reconstruction_fields = required_reconstruction_fields.difference(reconstruction)
+    if missing_reconstruction_fields:
+        raise LuxExecutionPlanAuthorityError(
+            "Canonical reconstruction authority is missing fields: " + ", ".join(sorted(missing_reconstruction_fields))
+        )
+    if reconstruction["grouping_mode"] not in {"single", "parent_dir"}:
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction grouping_mode is unsupported")
+    cameras_path = _optional_nonempty_string(reconstruction, "cameras_sidecar_path")
+    cameras_sha256 = _optional_nonempty_string(reconstruction, "cameras_sidecar_sha256")
+    if cameras_path is None:
+        if cameras_sha256 is not None:
+            raise LuxExecutionPlanAuthorityError("Canonical reconstruction sidecar digest has no sidecar path")
+    elif (
+        cameras_sha256 is None
+        or len(cameras_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in cameras_sha256)
+    ):
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction sidecar SHA-256 is invalid")
+    if type(reconstruction["iterations"]) is not int or reconstruction["iterations"] <= 0:
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction iterations must be a positive integer")
+    if type(reconstruction["tier"]) is not str or not reconstruction["tier"].strip():
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction tier must be a non-empty string")
+    if type(reconstruction["emit_scene_debug_bundle"]) is not bool:
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction debug flag must be an exact boolean")
+    risk_threshold = reconstruction["risk_threshold"]
+    if type(risk_threshold) is not float or not math.isfinite(risk_threshold) or not 0 <= risk_threshold <= 1:
+        raise LuxExecutionPlanAuthorityError("Canonical reconstruction risk threshold must be between 0 and 1")
+
+
 def revalidate_lux_execution_plan_authority(
     plan: CanonicalExecutionPlan | Mapping[str, Any],
 ) -> CanonicalExecutionPlan:
@@ -693,6 +803,8 @@ def revalidate_lux_execution_plan_authority(
         raise LuxExecutionPlanAuthorityError(
             "A structural_legacy plan is parse-only and cannot become Lux execution authority"
         )
+
+    _revalidate_runtime_policy_nodes(validated_payload)
 
     try:
         candidate_chain = _revalidate_backend_chain(validated_payload)

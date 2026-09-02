@@ -24,10 +24,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
+    from ...core.execution_plan import BackendModelIntent
     from ...lux_depth_v3.config import EnhanceConfig
+    from ...lux_depth_v3.execution_lifecycle import BackendCandidateAuthority
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,7 @@ class ModelConfig:
     checkpoint: Optional[str] = None
     device: str = "auto"
     enabled: bool = True
+    model_contract: Optional["BackendModelIntent"] = None
 
 
 @dataclass
@@ -202,6 +206,9 @@ class DepthEnsembleBackend:
         fusion_method: str = "variance_weighted",
         max_variance_threshold: float = 0.15,
         temporal_post_filter: Optional[TemporalPostFilterConfig] = None,
+        *,
+        candidate_authority: Optional["BackendCandidateAuthority"] = None,
+        canonical_plan_bytes: Optional[bytes] = None,
     ):
         """Initialize depth ensemble backend.
 
@@ -216,13 +223,58 @@ class DepthEnsembleBackend:
             temporal_post_filter: Optional post-fusion
                 temporal filter config (ADR-026 §2.2).
         """
+        if (candidate_authority is None) != (canonical_plan_bytes is None):
+            raise ValueError("candidate_authority and canonical_plan_bytes must be provided together")
+        if candidate_authority is not None:
+            if config is None:
+                raise ValueError("Canonical ensemble authority requires its projected runtime config")
+            if (
+                candidate_authority.backend_id != self.name
+                or candidate_authority.candidate.backend_id != self.name
+                or candidate_authority.constituent_backend_id is not None
+            ):
+                raise ValueError("Canonical ensemble authority does not select the top-level ensemble candidate")
+            if candidate_authority.model_contract is not None:
+                raise ValueError("Top-level ensemble authority must not collapse to one constituent")
+            if models is not None:
+                raise ValueError("Canonical ensemble authority cannot be mixed with caller-supplied models")
+            if type(canonical_plan_bytes) is not bytes or not canonical_plan_bytes:
+                raise ValueError("Canonical ensemble authority requires non-empty immutable plan bytes")
+
         self._config = config
+        self._candidate_authority = candidate_authority
+        self._canonical_plan_bytes = canonical_plan_bytes
+        self._canonical_plan = None
+        if candidate_authority is not None:
+            from ...lux_depth_v3.execution_lifecycle import (
+                backend_candidate_authority,
+                consume_lux_worker_execution_plan,
+            )
+
+            if type(canonical_plan_bytes) is not bytes:  # pragma: no cover - narrowed above
+                raise ValueError("Canonical ensemble authority requires immutable plan bytes")
+            self._canonical_plan = consume_lux_worker_execution_plan(canonical_plan_bytes)
+            reselected = backend_candidate_authority(
+                self._canonical_plan,
+                candidate_authority.candidate_id,
+            )
+            if reselected != candidate_authority:
+                raise ValueError("Canonical ensemble authority does not match its exact plan bytes")
+        if candidate_authority is not None:
+            fusion_method = str(getattr(config, "ensemble_fusion_method", fusion_method))
+            max_variance_threshold = float(getattr(config, "ensemble_max_variance_threshold", max_variance_threshold))
+            temporal_post_filter = TemporalPostFilterConfig(
+                mode=str(getattr(config, "ensemble_temporal_filter_mode", "off")),
+                alpha=float(getattr(config, "ensemble_temporal_filter_alpha", 0.3)),
+            )
         self._fusion_method = fusion_method
         self._max_variance_threshold = max_variance_threshold
         self._temporal_post_filter = TemporalPostFilter(temporal_post_filter)
 
         # Initialize models
-        if models is None:
+        if candidate_authority is not None:
+            self._models = self._models_from_authority(candidate_authority)
+        elif models is None:
             self._models = self._get_default_models(config)
         else:
             self._models = models
@@ -232,6 +284,30 @@ class DepthEnsembleBackend:
 
         # Validate ensemble configuration
         self._validate_ensemble()
+
+    @staticmethod
+    def _models_from_authority(authority: "BackendCandidateAuthority") -> List[ModelConfig]:
+        """Project the exact ordered ensemble contracts without defaults."""
+
+        models: List[ModelConfig] = []
+        seen: set[str] = set()
+        for contract in authority.candidate.model_contracts:
+            if contract.backend_id in seen:
+                raise ValueError(f"Canonical ensemble repeats constituent {contract.backend_id!r}")
+            seen.add(contract.backend_id)
+            if contract.weight is None:
+                raise ValueError(f"Canonical ensemble constituent {contract.backend_id!r} lacks a weight")
+            models.append(
+                ModelConfig(
+                    name=contract.backend_id,
+                    weight=float(contract.weight),
+                    checkpoint=contract.artifact_path,
+                    device=contract.device,
+                    enabled=contract.enabled,
+                    model_contract=contract,
+                )
+            )
+        return models
 
     def _get_default_models(
         self,
@@ -292,6 +368,10 @@ class DepthEnsembleBackend:
         # Validate weights sum to 1.0
         total_weight = sum(m.weight for m in enabled_models)
         if abs(total_weight - 1.0) > 1e-6:
+            if self._candidate_authority is not None:
+                raise ValueError(
+                    f"Canonical ensemble weights must sum to 1.0 without runtime normalization (got {total_weight})"
+                )
             logger.warning(
                 "Model weights sum to %s, not 1.0. " "Normalizing weights automatically.",
                 total_weight,
@@ -317,7 +397,15 @@ class DepthEnsembleBackend:
         Raises:
             RuntimeError: If inference fails.
         """
-        enabled_count = len([m for m in self._models if m.enabled])
+        enabled_models = [m for m in self._models if m.enabled]
+        if self._candidate_authority is not None and device is not None:
+            requested = str(device).strip().lower()
+            mismatches = [model.name for model in enabled_models if model.device not in {"auto", requested}]
+            if mismatches:
+                raise ValueError(
+                    "Ensemble device override disagrees with carried constituent authority for " + ", ".join(mismatches)
+                )
+        enabled_count = len(enabled_models)
         logger.info(
             "Running depth ensemble with %d models",
             enabled_count,
@@ -336,6 +424,22 @@ class DepthEnsembleBackend:
             "model_agreement": fused_result.model_agreement,
             "variance_threshold": self._max_variance_threshold,
         }
+        if self._candidate_authority is not None:
+            fused_result.metadata["execution_authority"] = {
+                "plan_fingerprint_sha256": self._candidate_authority.plan_fingerprint_sha256,
+                "candidate_id": self._candidate_authority.candidate_id,
+                "model_backend_id": None,
+                "executed_backend_id": self.name,
+            }
+            fused_result.metadata["ensemble"]["constituents"] = [
+                {
+                    "backend_id": model.name,
+                    "weight": model.weight,
+                    "device": model.device,
+                    "enabled": model.enabled,
+                }
+                for model in self._models
+            ]
 
         # Quality gate: warn if high variance
         if fused_result.variance_map is not None and fused_result.variance_map.mean() > self._max_variance_threshold:
@@ -390,6 +494,10 @@ class DepthEnsembleBackend:
                 results[model_config.name] = result
 
             except Exception as e:
+                if self._candidate_authority is not None:
+                    raise LuxExecutionPlanAuthorityError(
+                        f"Canonical ensemble constituent {model_config.name!r} failed; " "exact planned membership is required"
+                    ) from e
                 logger.error(
                     "Model %s failed: %s. " "Excluding from ensemble.",
                     model_config.name,
@@ -399,6 +507,13 @@ class DepthEnsembleBackend:
 
         if not results:
             raise RuntimeError("All ensemble models failed. " "Cannot compute depth.")
+        if self._candidate_authority is not None:
+            planned = tuple(model.name for model in enabled_models)
+            executed = tuple(results)
+            if executed != planned:
+                raise LuxExecutionPlanAuthorityError(
+                    f"Canonical ensemble executed constituents {executed!r}; expected exact planned order {planned!r}"
+                )
 
         return results
 
@@ -427,7 +542,28 @@ class DepthEnsembleBackend:
         registry = get_registry()
 
         # Special handling for stubs
-        if model_config.name.endswith("_stub"):
+        if self._candidate_authority is not None:
+            contract = model_config.model_contract
+            if contract is None:
+                raise ValueError(f"Canonical ensemble constituent {model_config.name!r} lacks its exact contract")
+            if self._canonical_plan is None:
+                raise RuntimeError("Canonical ensemble plan is unavailable")
+            from ...lux_depth_v3.execution_lifecycle import backend_candidate_authority
+
+            child_authority = backend_candidate_authority(
+                self._canonical_plan,
+                self._candidate_authority.candidate_id,
+                model_backend_id=contract.backend_id,
+            )
+            if child_authority.model_contract != contract:
+                raise ValueError("Canonical ensemble constituent changed during exact selection")
+            backend = registry.get_backend(
+                model_config.name,
+                self._config,
+                candidate_authority=child_authority,
+                canonical_plan_bytes=self._canonical_plan_bytes,
+            )
+        elif model_config.name.endswith("_stub"):
             logger.debug(f"Using synthetic stub for {model_config.name}")
             backend = registry.get_backend("synthetic", self._config)
         else:
@@ -685,8 +821,15 @@ class DepthEnsembleBackend:
                 self._get_backend(model_config)
                 available_count += 1
             except Exception as e:
+                if self._candidate_authority is not None:
+                    raise LuxExecutionPlanAuthorityError(
+                        f"Canonical ensemble constituent {model_config.name!r} is unavailable; "
+                        "exact planned membership is required"
+                    ) from e
                 logger.warning(f"Model {model_config.name} unavailable: {e}")
 
+        if self._candidate_authority is not None and available_count != len(enabled_models):
+            raise LuxExecutionPlanAuthorityError("Canonical ensemble availability did not preserve exact planned membership")
         if available_count < 2:
             raise RuntimeError(
                 f"Ensemble requires ≥2 models, but " f"only {available_count} available. " "Cannot initialize ensemble."

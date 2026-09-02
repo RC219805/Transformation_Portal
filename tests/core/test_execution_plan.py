@@ -423,6 +423,10 @@ def test_packaged_schema_is_valid_and_closed() -> None:
     assert "output_bit_depth" in output_configuration["required"]
     assert {"bit_depth", "emit_master16", "emit_upscaled16"}.isdisjoint(output_configuration["properties"])
     assert "bit_depth_16_intermediates" not in schema["$defs"]["allArtifactKind"]["enum"]
+    captioning_configuration = schema["$defs"]["captioningConfiguration"]
+    frozen_fastvlm_fields = {"model_path", "review_model_path", "max_tokens", "temperature"}
+    assert frozen_fastvlm_fields.issubset(captioning_configuration["properties"])
+    assert frozen_fastvlm_fields.isdisjoint(captioning_configuration["required"])
     input_limit_properties = schema["$defs"]["inputLimits"]["properties"]
     assert input_limit_properties["max_decoded_pixels_per_input"]["maximum"] == MAX_DECODED_PIXELS_PER_INPUT
     assert input_limit_properties["max_total_decoded_pixels"]["maximum"] == MAX_TOTAL_DECODED_PIXELS
