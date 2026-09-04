@@ -35,7 +35,7 @@ Version: 1.0.0
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from transformation_portal.metrics.contracts import BucketStats
 from transformation_portal.metrics.performance_capsule import DEFAULT_BUCKETS, PerformanceBucket, PerformanceCapsule
@@ -99,7 +99,7 @@ def compute_bucket_stats(
 
     # Determine pass/fail status (only for n >= min_samples)
     if p95 > bucket.p95_threshold_sec:
-        pass_fail = "fail"
+        pass_fail: Literal["pass", "warn", "fail"] = "fail"
     elif p50 > bucket.p50_threshold_sec * 1.2:
         pass_fail = "warn"
     else:
@@ -158,7 +158,7 @@ def validate_workflow_version_consistency(
     # For now, just validate workflow_version consistency within each zone
     # (a proxy for detecting mixed-run contamination)
 
-    zones_workflows = {}
+    zones_workflows: Dict[str, set[str]] = {}
     for capsule in capsules:
         zone = capsule.zone or "unknown"
         wf_ver = getattr(capsule, "workflow_version", "v1")
@@ -275,7 +275,7 @@ def log_aggregated_stats_to_ledger(
     commit_sha: str,
     workflow_version: str,
     timestamp: str,
-    per_zone_stats: Dict[str, Dict[str, BucketStats]],
+    per_zone_stats: Mapping[Any, Mapping[str, BucketStats]],
     ledger_db_path: str,
 ) -> None:
     """Write aggregated stats to apex_runs table in ledger.

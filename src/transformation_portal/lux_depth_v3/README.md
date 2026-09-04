@@ -123,11 +123,17 @@ lux-depth-v3 \
 ```
 
 **Outputs:**
-- `*_depth.png` - 16-bit depth map
-- `*_depth.npy` - Float32 depth array
-- `*_normal.png` - Normal map
-- `*_roughness.png` - Roughness map
-- `*_ao.png` - Ambient occlusion map
+- `depth/<input-key>_depth.png` - 16-bit depth map
+- `depth/<input-key>_depth.npy` - Float32 depth array when requested
+- `depth/<input-key>_depth_metadata.json` - Depth provenance and statistics
+- `pbr/<input-key>_normal.png` - Normal map
+- `pbr/<input-key>_roughness.png` - Roughness map
+- `pbr/<input-key>_ao.png` - Ambient occlusion map
+- `manifests/<input-key>_combined.json` - Per-image processing manifest
+- `manifests/batch_<batch-id>.json` - Prepared-plan-bound batch manifest
+- `manifests/execution_evidence_<batch-id>.json` - Detached completion record
+- `run_card_<batch-id>.json` - Reproducibility card when enabled
+- `run_card_<batch-id>.self.json` - Run-card self-integrity sidecar when enabled
 
 ### Client Deliverable (APEX)
 
@@ -148,10 +154,21 @@ lux-depth-v3 \
 ```
 
 **Outputs:**
-- All PBR maps
-- `*_v2_enhanced.tif` / `*_materials_v3_enhanced.tif` - enhanced image encoded as 16-bit TIFF
-- `*_combined.json` - Unconditional processing manifest
-- `*_run_card.json` - Reproducibility card
+- `depth/<input-key>_depth.png` - 16-bit depth map
+- `depth/<input-key>_depth.npy` - Float32 depth array when requested
+- `depth/<input-key>_depth_metadata.json` - Depth provenance and statistics
+- All PBR maps listed above
+- Enhanced-image paths reported by the batch result and combined manifest when
+  the configured stages retain them
+- `manifests/<input-key>_combined.json` - Unconditional processing manifest
+- `manifests/batch_<batch-id>.json` - Prepared-plan-bound batch manifest
+- `manifests/execution_evidence_<batch-id>.json` - Detached completion record
+- `run_card_<batch-id>.json` - Reproducibility card when enabled
+- `run_card_<batch-id>.self.json` - Run-card self-integrity sidecar when enabled
+
+`<input-key>` contains the normalized source extension and a stable path hash.
+Consume the paths returned by `enhance_batch` and recorded in the combined
+manifest instead of reconstructing filenames from the source stem.
 
 ### Run Card Trust Layers
 
@@ -443,14 +460,22 @@ filtered = cv2.bilateralFilter(depth.astype(np.float32), ...)
 
 ```
 output_dir/
-├── depth/                    # Depth maps (PNG and NPY)
+├── depth/
+│   ├── <input-key>_depth.png # Depth visualization
+│   ├── <input-key>_depth.npy # Optional float depth
+│   └── <input-key>_depth_metadata.json # Depth provenance and statistics
 ├── pbr/                      # PBR maps (when --pbr on)
-│   ├── normal/
-│   ├── roughness/
-│   └── ao/
+│   ├── <input-key>_normal.png
+│   ├── <input-key>_roughness.png
+│   └── <input-key>_ao.png
 ├── v2/                       # Enhanced images and V2 reports
 ├── temp/                     # Retained intermediates when requested
-└── manifests/                # Unconditional processing metadata
+├── manifests/
+│   ├── <input-key>_combined.json
+│   ├── batch_<batch-id>.json
+│   └── execution_evidence_<batch-id>.json # Detached completion record
+├── run_card_<batch-id>.json  # Reproducibility card when requested
+└── run_card_<batch-id>.self.json # Run-card self-integrity sidecar
 ```
 
 ## Python API
@@ -469,32 +494,31 @@ config = EnhanceConfig(
     depth_device="mps"
 )
 
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 input_files = sorted(input_root.glob("*.jpg")) + sorted(input_root.glob("*.png"))
 prepared = prepare_lux_execution(config, input_root, input_files)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 
 results = orchestrator.enhance_batch(
-    input_dir=input_root,
-    image_extensions=[".jpg", ".png"]
+    prepared.input_root,
+    input_files=list(prepared.input_files),
 )
 ```
 
 ### PBR-Only Processing
 
 ```python
+from pathlib import Path
 from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
 
-preset = get_preset("premium")
-processor = PBRProcessor(config=preset)
-
-# Process single image
-pbr_maps = processor.process_image(
-    image_path=Path("image.jpg"),
-    output_dir=Path("./output/pbr")
+pbr_paths = PBRProcessor.from_cached_depth(
+    depth_path=Path("output/depth/scene_depth.npy"),
+    config=get_preset("premium").to_pbr_config(),
+    output_dir=Path("output/pbr"),
+    base_name="scene",
 )
 
-# pbr_maps contains: normal_path, roughness_path, ao_path
+# pbr_paths contains: normal, roughness, ao
 ```
 
 ## Development

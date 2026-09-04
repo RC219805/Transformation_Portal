@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,6 +28,9 @@ except ImportError:
     opencv = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_DEPTH_PNG_DECODED_PIXELS = 67_108_864
 
 
 @dataclass(frozen=True)
@@ -254,6 +258,63 @@ def atomic_write_depth_u16_png_with_stats(
             logger.debug(f"Verification successful for {output_path}")
 
     return output_path, verification_path, stats
+
+
+def _validated_depth_png_header(payload: bytes, *, max_decoded_pixels: int) -> tuple[int, int]:
+    if isinstance(max_decoded_pixels, bool) or not isinstance(max_decoded_pixels, int) or max_decoded_pixels <= 0:
+        raise ValueError("max_decoded_pixels must be a positive integer")
+    if len(payload) < 29 or payload[:8] != _PNG_SIGNATURE:
+        raise IOError("Depth map payload is not a PNG")
+    if int.from_bytes(payload[8:12], "big") != 13 or payload[12:16] != b"IHDR":
+        raise IOError("Depth map payload has no canonical PNG IHDR")
+    width = int.from_bytes(payload[16:20], "big")
+    height = int.from_bytes(payload[20:24], "big")
+    bit_depth = payload[24]
+    color_type = payload[25]
+    if width <= 0 or height <= 0 or width * height > max_decoded_pixels:
+        raise IOError(f"Depth map decoded pixels exceed the bounded limit of {max_decoded_pixels}")
+    if bit_depth != 16 or color_type != 0:
+        raise IOError("Depth map payload must be a 16-bit grayscale PNG")
+    return height, width
+
+
+def read_depth_u16_png_bytes(
+    payload: bytes,
+    *,
+    max_decoded_pixels: int = MAX_DEPTH_PNG_DECODED_PIXELS,
+) -> np.ndarray:
+    """Decode a depth PNG from the exact supplied bytes.
+
+    Returns a normalized float32 array using the same decoder-specific
+    normalization as :func:`read_depth_u16_png`.
+    """
+    try:
+        expected_shape = _validated_depth_png_header(payload, max_decoded_pixels=max_decoded_pixels)
+        if HAS_CV2:
+            encoded = np.frombuffer(payload, dtype=np.uint8)
+            img_u16 = opencv.imdecode(encoded, opencv.IMREAD_UNCHANGED)
+            if img_u16 is None:
+                raise IOError("Failed to decode depth map payload")
+            if img_u16.ndim != 2 or img_u16.dtype != np.uint16 or tuple(img_u16.shape) != expected_shape:
+                raise IOError("Decoded depth map is not the declared 16-bit grayscale image")
+            return img_u16.astype(np.float32) / 65535.0
+
+        from PIL import Image
+
+        with Image.open(BytesIO(payload)) as img:
+            if img.size != (expected_shape[1], expected_shape[0]):
+                raise IOError("Decoded depth map dimensions do not match PNG IHDR")
+            img_array = np.array(img)
+
+        if img_array.ndim != 2 or tuple(img_array.shape) != expected_shape or img_array.dtype.kind not in {"u", "i"}:
+            raise IOError("Decoded depth map is not a 16-bit grayscale image")
+        if img_array.size and (int(img_array.min()) < 0 or int(img_array.max()) > 65535):
+            raise IOError("Decoded depth map values exceed the uint16 range")
+        return img_array.astype(np.float32) / 65535.0
+    except IOError:
+        raise
+    except Exception as exc:
+        raise IOError("Failed to decode depth map payload") from exc
 
 
 def read_depth_u16_png(depth_path: Path) -> np.ndarray:

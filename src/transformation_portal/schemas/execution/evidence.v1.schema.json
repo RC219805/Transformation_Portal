@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tp.lux.execution.evidence.v1",
+  "title": "Lux prepared execution evidence v1",
+  "description": "Detached, plan-bound accounting for every requested artifact in a prepared Lux execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "canonicalization",
+    "evidence_fingerprint_sha256",
+    "plan_schema",
+    "plan_fingerprint",
+    "config_fingerprint_sha256",
+    "planned_backend",
+    "candidate_fallback_chain",
+    "executed_backend",
+    "requested_inputs",
+    "requested_artifacts",
+    "produced_artifacts",
+    "omitted_artifacts",
+    "failed_artifacts"
+  ],
+  "properties": {
+    "schema": { "const": "tp.lux.execution.evidence.v1" },
+    "canonicalization": { "const": "tp.canonical.json.v1" },
+    "evidence_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+    "plan_schema": { "const": "tp.execution.plan.v1" },
+    "plan_fingerprint": { "$ref": "#/$defs/sha256" },
+    "config_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+    "planned_backend": { "$ref": "#/$defs/backendId" },
+    "candidate_fallback_chain": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/backendId" },
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true
+    },
+    "executed_backend": { "$ref": "#/$defs/nullableBackendId" },
+    "requested_inputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/inputOutcome" },
+      "minItems": 1,
+      "maxItems": 4096
+    },
+    "requested_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/requestedArtifact" },
+      "minItems": 1,
+      "maxItems": 128
+    },
+    "produced_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/producedOutcome" },
+      "maxItems": 524288
+    },
+    "omitted_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonProducedOutcome" },
+      "maxItems": 524288
+    },
+    "failed_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/failedOutcome" },
+      "maxItems": 524288
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "backendId": {
+      "enum": ["da3", "depth_pro", "synthetic", "da2", "depthcrafter", "ensemble"]
+    },
+    "nullableBackendId": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/backendId" }
+      ]
+    },
+    "nullableShortString": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "minLength": 1, "maxLength": 1024 }
+      ]
+    },
+    "inputOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_id", "path", "status", "executed_backend", "error_code"],
+      "properties": {
+        "input_id": { "$ref": "#/$defs/identifier" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "status": { "enum": ["ok", "error", "skipped", "missing"] },
+        "executed_backend": { "$ref": "#/$defs/nullableBackendId" },
+        "error_code": { "$ref": "#/$defs/nullableShortString" }
+      }
+    },
+    "requestedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaration_id",
+        "stage_registry_id",
+        "artifact_kind",
+        "scope",
+        "cardinality",
+        "required"
+      ],
+      "properties": {
+        "declaration_id": { "$ref": "#/$defs/identifier" },
+        "stage_registry_id": { "$ref": "#/$defs/identifier" },
+        "artifact_kind": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["per_input", "per_run"] },
+        "cardinality": { "enum": ["one", "many"] },
+        "required": { "type": "boolean" }
+      }
+    },
+    "nullableInputId": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/identifier" }
+      ]
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*//)(?!.*\\\\)(?!.*\\u0000)(?!.*(?:^|/)\\.{1,2}(?:/|$)).*[^/]$"
+    },
+    "artifactFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "media_type", "file_extension"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size_bytes": { "type": "integer", "minimum": 0, "maximum": 68719476736 },
+        "media_type": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "file_extension": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[a-z0-9]+$" }
+          ]
+        }
+      }
+    },
+    "producedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaration_id",
+        "stage_registry_id",
+        "artifact_kind",
+        "scope",
+        "cardinality",
+        "required",
+        "input_id",
+        "artifacts"
+      ],
+      "properties": {
+        "declaration_id": { "$ref": "#/$defs/identifier" },
+        "stage_registry_id": { "$ref": "#/$defs/identifier" },
+        "artifact_kind": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["per_input", "per_run"] },
+        "cardinality": { "enum": ["one", "many"] },
+        "required": { "type": "boolean" },
+        "input_id": { "$ref": "#/$defs/nullableInputId" },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactFile" },
+          "minItems": 1,
+          "maxItems": 4096
+        }
+      }
+    },
+    "reasonCode": {
+      "enum": [
+        "required_output_missing",
+        "optional_stage_no_output",
+        "upstream_failed",
+        "upstream_not_executed",
+        "cardinality_mismatch",
+        "artifact_cardinality_limit_exceeded",
+        "output_root_unavailable",
+        "output_root_changed",
+        "secure_traversal_unavailable",
+        "path_escape",
+        "artifact_missing",
+        "symlink_forbidden",
+        "artifact_unreadable",
+        "artifact_too_large",
+        "not_regular_file",
+        "artifact_changed",
+        "duplicate_artifact_path",
+        "duplicate_artifact_inode",
+        "hardlink_forbidden",
+        "aggregate_artifact_bytes_exceeded",
+        "invalid_manifest_binding",
+        "artifact_input_mismatch",
+        "incomplete_reconstruction_bundle"
+      ]
+    },
+    "nonProducedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaration_id",
+        "stage_registry_id",
+        "artifact_kind",
+        "scope",
+        "cardinality",
+        "required",
+        "input_id",
+        "reason_code"
+      ],
+      "properties": {
+        "declaration_id": { "$ref": "#/$defs/identifier" },
+        "stage_registry_id": { "$ref": "#/$defs/identifier" },
+        "artifact_kind": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["per_input", "per_run"] },
+        "cardinality": { "enum": ["one", "many"] },
+        "required": { "type": "boolean" },
+        "input_id": { "$ref": "#/$defs/nullableInputId" },
+        "reason_code": { "$ref": "#/$defs/reasonCode" }
+      }
+    },
+    "failedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaration_id",
+        "stage_registry_id",
+        "artifact_kind",
+        "scope",
+        "cardinality",
+        "required",
+        "input_id",
+        "reason_code"
+      ],
+      "properties": {
+        "declaration_id": { "$ref": "#/$defs/identifier" },
+        "stage_registry_id": { "$ref": "#/$defs/identifier" },
+        "artifact_kind": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["per_input", "per_run"] },
+        "cardinality": { "enum": ["one", "many"] },
+        "required": { "type": "boolean" },
+        "input_id": { "$ref": "#/$defs/nullableInputId" },
+        "reason_code": { "$ref": "#/$defs/reasonCode" },
+        "observed_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

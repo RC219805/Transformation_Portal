@@ -27,6 +27,7 @@ MAINTAINED_OPERATOR_SURFACES = (
     "docs/guides/FILE_FORMAT_QUICK_REFERENCE.md",
     "docs/guides/IMAGE_PROCESSING_READINESS.md",
     "docs/guides/SUPPORTED_FILE_FORMATS.md",
+    "docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md",
     "docs/reference/QUICKSTART_CHEATSHEET.md",
     "docs/validation/APEX_REAL_CANONICAL_EVIDENCE_RUNBOOK.md",
     "config/materials_v3_production.yaml",
@@ -57,6 +58,7 @@ def test_maintained_surfaces_do_not_promise_or_recommend_inert_flags() -> None:
         '--emit-report "on"',
         "when --emit-report",
         "when `--emit-report",
+        "marketing exports",
     )
 
     for relative_path in MAINTAINED_OPERATOR_SURFACES:

@@ -62,6 +62,9 @@ lux-depth-v3 \
   --depth-backend "da3" \
   --model-key "da3-metric" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on" \
   --output-bit-depth 16 \
@@ -81,6 +84,9 @@ lux-depth-v3 \
   --model-key "da3-metric" \
   --depth-device "cuda" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --output-bit-depth 16
 ```
@@ -96,6 +102,9 @@ lux-depth-v3 \
   --model-key "da3-metric" \
   --depth-device "mps" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on"
 ```
@@ -118,6 +127,9 @@ lux-depth-v3 \
   --non-commercial-ok "true" \
   --depth-device "mps" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on" \
   --output-bit-depth 16 \
@@ -143,6 +155,9 @@ lux-depth-v3 \
   --model-key "da3-research" \
   --non-commercial-ok "true" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on"
 ```
 
@@ -164,6 +179,9 @@ lux-depth-v3 \
   --accept-apple-depth-pro-research-license "true" \
   --depth-device "mps" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on" \
   --output-bit-depth 16 \
@@ -324,6 +342,35 @@ do not create separate deliverables, and will be removed in the next major relea
   repeat those values as `model_contract.requested_model_selector` and
   `model_contract.resolution_reason`.
 
+Prepared runs bind the emitted plan to their combined manifests, batch
+manifest, and run card. They also publish
+`manifests/execution_evidence_<batch-id>.json`, a detached
+`tp.lux.execution.evidence.v1` record that accounts for every requested plan
+output as produced, omitted, or failed. Produced files use output-root-relative
+paths with complete SHA-256, byte-size, and media metadata. Missing required
+outputs fail the run after the evidence record is written. The legacy run-card
+`artifact_index` remains a compatibility catalog and does not authorize or
+prove complete execution. Treat a prepared manifest or run card as unconfirmed
+until its evidence pointer verifies against the carried plan and final files.
+For rollback compatibility, the full plan, runtime projection, and evidence
+path live in `environment.execution_contract` for combined manifests,
+`config.execution_contract` for batch manifests, and
+`effective_config.execution_contract` for run cards; frozen v1/v2 top-level
+schemas are unchanged.
+Evidence capture and sidecar publication use a descriptor-pinned output root;
+root ancestors, the publication parent, and the final directory entry are
+revalidated around publication, and combined-manifest output discovery uses
+the same no-follow, bounded reader. Symlinks, hardlinks, inode aliases,
+drive-qualified pointers, and unbounded artifact sets fail closed. Operators
+must deny other actors rename access to the output tree: portable descriptor
+checks detect namespace drift but cannot prevent a hostile rename from
+transiently relocating an open temporary file. When publication identity becomes
+uncertain, the publisher deliberately retains the orphan for explicit operator
+reconciliation rather than risk deleting a replacement through a racy unlink.
+Requested run cards
+additionally require their canonical payload digest and final self-integrity
+sidecar to verify.
+
 ### Logging
 
 - `--verbose` / `-v`: Enable verbose logging
@@ -365,24 +412,33 @@ APEX mode enforces fail-closed quality gates with two explicit recovery paths:
 When APEX mode is enabled with governed outputs, the following artifacts are generated:
 
 ### Depth Assets
-- `*_depth.png`: 16-bit PNG depth map (quantized for compatibility)
-- `*_depth.npy`: Float32 depth array (high-precision, used for PBR)
+- `depth/<input-key>_depth.png`: 16-bit PNG depth map (quantized for compatibility)
+- `depth/<input-key>_depth.npy`: Float32 depth array (high-precision, used for PBR)
+- `depth/<input-key>_depth_metadata.json`: Depth provenance and statistics
 
 ### PBR Maps (when `--pbr on`)
-- `*_normal.png`: Normal map for lighting calculations
-- `*_roughness.png`: Roughness map for material appearance
-- `*_ao.png`: Ambient occlusion map for contact shadows
+- `pbr/<input-key>_normal.png`: Normal map for lighting calculations
+- `pbr/<input-key>_roughness.png`: Roughness map for material appearance
+- `pbr/<input-key>_ao.png`: Ambient occlusion map for contact shadows
 
 ### Enhanced Images
-- `*_v2_enhanced.png` / `*_materials_v3_enhanced.png`: 8-bit output
-- `*_v2_enhanced.tif` / `*_materials_v3_enhanced.tif`: 16-bit output
+- `v2/<input-key>_v2_enhanced.png` / `v2/<input-key>_materials_v3_enhanced.png`: 8-bit V2 output
+- `v2/<input-key>_v2_enhanced.tif` / `v2/<input-key>_materials_v3_enhanced.tif`: 16-bit V2 output
+- `temp/<input-key>_materials_v3_enhanced.*`: retained Materials V3 intermediate when requested
 
 ### Metadata
-- `*_combined.json`: Unconditional processing manifest with provenance
-- `*_run_card.json`: Run card for reproducibility tracking (when `--emit-run-card on`)
+- `manifests/<input-key>_combined.json`: Unconditional processing manifest with provenance
+- `manifests/batch_*.json`: Batch manifest with the prepared-plan/runtime binding
+- `manifests/execution_evidence_*.json`: Detached, plan-bound requested-output accounting
+- `run_card_<batch-id>.json`: Run card for reproducibility tracking (when `--emit-run-card on`)
+- `run_card_<batch-id>.self.json`: Run-card self-integrity sidecar
 - `*.attestation.native.json`: Repo-native detached attestation for a v2 run card (when signed)
 - `*.attestation.dsse.json`: DSSE + in-toto detached attestation sidecar (when signed)
 - `*.attestation.dsse.sigstore.bundle.json`: Optional Sigstore verification bundle (when signed with `cosign`)
+
+`<input-key>` contains the normalized source extension and a stable path hash.
+Use the exact paths in the batch result, combined manifest, and execution
+evidence instead of reconstructing names from the source stem.
 
 V2 reports expose material handoff and actual V2 material adjustment separately under `enhancement_metadata`:
 
@@ -446,6 +502,7 @@ lux-depth-v3 \
   --output-dir "./output/draft" \
   --preset "default" \
   --quality-tier "standard" \
+  --model-key "da3-metric" \
   --depth-device "cpu"
 ```
 
@@ -460,6 +517,9 @@ lux-depth-v3 \
   --depth-device "cuda" \
   --model-key "da3-metric" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on" \
   --output-bit-depth 16 \
@@ -478,6 +538,9 @@ lux-depth-v3 \
   --non-commercial-ok "true" \
   --depth-device "cuda" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on"
 ```
 
@@ -513,6 +576,9 @@ lux-depth-v3 \
   --depth-device "mps" \
   --model-key "da3-metric" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
   --pbr "on" \
   --cache-depth "on" \
   --output-bit-depth 16

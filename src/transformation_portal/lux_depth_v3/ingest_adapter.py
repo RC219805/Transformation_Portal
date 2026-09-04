@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 
 import transformation_portal.spatial_ai.ingest.contracts as ingest_contracts
+from transformation_portal.core.raw_runtime import run_raw_worker
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
 from .raw_loader import is_raw_file
@@ -34,6 +35,59 @@ RAW_CAMERA_WB_NON_POSITIVE_TOKEN = "camera_whitebalance has zero or negative gai
 
 class RawIngestError(RuntimeError):
     """Raised when RAW ingest cannot satisfy deterministic policy."""
+
+
+def _validated_raw_dimensions(value: Any) -> tuple[int, int]:
+    if (
+        not isinstance(value, (list, tuple))
+        or len(value) != 2
+        or any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in value)
+    ):
+        raise RawIngestError(f"RAW dimension probe returned invalid input_size: {value!r}")
+    height, width = value
+    return width, height
+
+
+def probe_raw_dimensions(path: Path, config: "EnhanceConfig") -> tuple[int, int]:
+    """Return visible RAW dimensions without allocating a demosaiced frame."""
+
+    path = Path(path)
+    mode = _normalized_ingest_mode(config)
+    preview_allowed = _preview_escape_enabled(config)
+    if mode == "force_preview":
+        if not preview_allowed:
+            raise RawIngestError(
+                f"raw_ingest_mode=force_preview requires {RAW_PREVIEW_ESCAPE_ENV}=1 (debug-only escape hatch)."
+            )
+        with Image.open(path) as preview:
+            return _validated_raw_dimensions((preview.height, preview.width))
+
+    try:
+        python_executable = getattr(config, "raw_python_executable", None)
+        if python_executable:
+            _array, metadata = run_raw_worker(
+                python_executable=python_executable,
+                command_name="probe",
+                input_path=path,
+                payload={},
+                start=path,
+            )
+            return _validated_raw_dimensions(metadata.get("input_size"))
+
+        import rawpy
+
+        with rawpy.imread(str(path)) as raw:
+            return _validated_raw_dimensions((int(raw.sizes.height), int(raw.sizes.width)))
+    except Exception as exc:
+        if preview_allowed and mode == "auto":
+            try:
+                with Image.open(path) as preview:
+                    return _validated_raw_dimensions((preview.height, preview.width))
+            except Exception:
+                pass
+        if isinstance(exc, RawIngestError):
+            raise
+        raise RawIngestError(f"RAW dimension probe failed for {path.name}: {exc}") from exc
 
 
 def _normalized_ingest_mode(config: "EnhanceConfig") -> str:

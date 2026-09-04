@@ -347,6 +347,198 @@ def test_verify_run_card_integrity_rejects_schema_violation(tmp_path: Path):
     assert any("Schema validation failed" in error for error in errors)
 
 
+def test_verify_run_card_integrity_rejects_non_json_numbers(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_non_finite", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_non_finite.json"
+    payload = _valid_run_card_payload(module)
+    payload["runtime_stats"]["mean"] = float("nan")
+    run_card_path.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert len(errors) == 1
+    assert "forbidden non-finite number NaN" in errors[0]
+
+
+def test_verify_run_card_integrity_rejects_duplicate_members(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_duplicate_member", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_duplicate_member.json"
+    payload = json.dumps(_valid_run_card_payload(module))
+    run_card_path.write_text('{"batch_id":"forged",' + payload[1:], encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert len(errors) == 1
+    assert "duplicate JSON member 'batch_id'" in errors[0]
+
+
+def test_verify_run_card_integrity_bounds_schema_error_rendering(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_bounded_schema", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_oversized_value.json"
+    payload = _valid_run_card_payload(module)
+    payload["runtime_stats"]["count"] = "x" * 1_000_000
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    schema_errors = [error for error in errors if "schema validation failed" in error.casefold()]
+    assert schema_errors
+    assert max(len(error) for error in schema_errors) <= 1_024
+
+
+def test_verify_run_card_integrity_rejects_oversized_run_card_before_json_decode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_script_module("verify_run_card_integrity_run_card_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_oversized.json"
+    run_card_path.write_bytes(b"{}" + b" " * 32)
+    monkeypatch.setitem(
+        module.verify_run_card_integrity.__globals__,
+        "_MAX_RUN_CARD_BYTES",
+        16,
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert errors == [f"JSON file exceeds the bounded byte limit of 16: {run_card_path}"]
+
+
+@pytest.mark.parametrize(
+    ("raw_payload", "expected_error"),
+    [
+        pytest.param('{"value":' + "1" * 5_000 + "}", "Invalid JSON value", id="integer-digit-limit"),
+        pytest.param(
+            "[" * 20_000 + "0" + "]" * 20_000,
+            "nesting exceeds the decoder limit",
+            id="nesting-limit",
+        ),
+    ],
+)
+def test_verify_run_card_integrity_rejects_decoder_resource_limits(
+    tmp_path: Path,
+    raw_payload: str,
+    expected_error: str,
+):
+    module = _load_script_module("verify_run_card_integrity_decoder_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_decoder_limit.json"
+    run_card_path.write_text(raw_payload, encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert len(errors) == 1
+    assert expected_error in errors[0]
+    assert len(errors[0]) <= 1_024
+
+
+def test_verify_run_card_integrity_rejects_oversized_collection_before_schema_walk(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from transformation_portal.lux_depth_v3.validators import run_card_validator
+
+    module = _load_script_module("verify_run_card_integrity_collection_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_oversized_collection.json"
+    payload = _valid_run_card_payload(module)
+    payload["result_summary"] = [{}] * 4_097
+    _write_json(run_card_path, payload)
+    monkeypatch.setitem(
+        module.verify_run_card_integrity.__globals__,
+        "_load_validator",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("schema walk must not run")),
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert errors == ["Run card validation failed: result_summary exceeds the bounded limit of 4096"]
+    run_card_validator._load_validator.cache_clear()
+
+
+def test_verify_run_card_integrity_bounds_every_nested_collection_before_schema_walk(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from transformation_portal.lux_depth_v3.validators import run_card_validator
+
+    module = _load_script_module("verify_run_card_integrity_nested_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_oversized_outliers.json"
+    payload = _valid_run_card_payload(module)
+    payload["outliers"] = [{}] * 4_097
+    _write_json(run_card_path, payload)
+    monkeypatch.setitem(
+        module.verify_run_card_integrity.__globals__,
+        "_load_validator",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("schema walk must not run")),
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert errors == ["Run card validation failed: outliers exceeds the bounded limit of 4096"]
+    run_card_validator._load_validator.cache_clear()
+
+
+def test_verify_run_card_integrity_caps_schema_error_iteration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_script_module("verify_run_card_integrity_error_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_many_schema_errors.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+    observed: list[int] = []
+
+    class Error:
+        def __init__(self, index: int):
+            self.path = (index,)
+            self.validator = "type"
+            self.message = "injected schema failure"
+
+    class Validator:
+        @staticmethod
+        def iter_errors(_payload):
+            for index in range(1_000):
+                observed.append(index)
+                yield Error(index)
+
+    monkeypatch.setitem(
+        module.verify_run_card_integrity.__globals__,
+        "_load_validator",
+        lambda *_args, **_kwargs: Validator(),
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert len(observed) == 65
+    assert "stopped after the bounded limit of 64 errors" in errors[64]
+
+
+def test_verify_run_card_integrity_caps_total_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_script_module("verify_run_card_integrity_total_error_limit", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_many_integrity_errors.json"
+    payload = _valid_run_card_payload(module)
+    payload["artifact_index"] = [None] * 1_000
+    _write_json(run_card_path, payload)
+
+    class Validator:
+        @staticmethod
+        def iter_errors(_payload):
+            return iter(())
+
+    monkeypatch.setitem(
+        module.verify_run_card_integrity.__globals__,
+        "_load_validator",
+        lambda *_args, **_kwargs: Validator(),
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert len(errors) == 65
+    assert errors[-1] == "Run card integrity validation stopped after the bounded limit of 64 errors"
+
+
 def test_verify_run_card_integrity_reports_jsonschema_install_hint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Missing jsonschema is reported with the governed version/install hint."""
     from transformation_portal.lux_depth_v3.validators import run_card_validator
@@ -358,10 +550,10 @@ def test_verify_run_card_integrity_reports_jsonschema_install_hint(tmp_path: Pat
 
     original_import = builtins.__import__
 
-    def block_jsonschema_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    def block_jsonschema_import(name, global_vars=None, local_vars=None, fromlist=(), level=0):
         if name == "jsonschema" or name.startswith("jsonschema."):
             raise ImportError("simulated missing jsonschema")
-        return original_import(name, globals, locals, fromlist, level)
+        return original_import(name, global_vars, local_vars, fromlist, level)
 
     run_card_validator._load_validator.cache_clear()
     monkeypatch.setattr(builtins, "__import__", block_jsonschema_import)

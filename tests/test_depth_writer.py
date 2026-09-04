@@ -10,9 +10,11 @@ import pytest
 
 from transformation_portal.lux_depth_v3.depth_writer import (
     HAS_CV2,
+    MAX_DEPTH_PNG_DECODED_PIXELS,
     DepthWriteStats,
     atomic_write_depth_u16_png_with_stats,
     read_depth_u16_png,
+    read_depth_u16_png_bytes,
 )
 
 # Skip all tests if OpenCV is not installed
@@ -338,3 +340,34 @@ class TestDepthWriteStats:
 
         # Verify output file was not created
         assert not output_path.exists()
+
+
+def test_exact_byte_depth_decoder_accepts_u16_grayscale(tmp_path: Path) -> None:
+    depth_map = np.linspace(0.0, 1.0, 64, dtype=np.float32).reshape(8, 8)
+    path, _, _ = atomic_write_depth_u16_png_with_stats(tmp_path / "depth.png", depth_map)
+
+    decoded = read_depth_u16_png_bytes(path.read_bytes())
+
+    assert decoded.shape == (8, 8)
+    assert decoded.dtype == np.float32
+
+
+def test_exact_byte_depth_decoder_rejects_uint8_png(tmp_path: Path) -> None:
+    import cv2
+
+    path = tmp_path / "uint8.png"
+    assert cv2.imwrite(str(path), np.zeros((8, 8), dtype=np.uint8))
+
+    with pytest.raises(IOError, match="16-bit grayscale"):
+        read_depth_u16_png_bytes(path.read_bytes())
+
+
+def test_exact_byte_depth_decoder_bounds_declared_pixels_before_decode(tmp_path: Path) -> None:
+    depth_map = np.zeros((2, 2), dtype=np.float32)
+    path, _, _ = atomic_write_depth_u16_png_with_stats(tmp_path / "depth.png", depth_map)
+    payload = bytearray(path.read_bytes())
+    oversized_width = MAX_DEPTH_PNG_DECODED_PIXELS + 1
+    payload[16:20] = oversized_width.to_bytes(4, "big")
+
+    with pytest.raises(IOError, match="decoded pixels exceed the bounded limit"):
+        read_depth_u16_png_bytes(bytes(payload))

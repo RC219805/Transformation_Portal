@@ -98,11 +98,20 @@ def test_build_workflow_ci_gate_contract_passes_repo_config() -> None:
     assert validator.errors == []
 
 
-def test_build_workflow_wheel_smoke_loads_both_execution_plan_schemas() -> None:
+def test_build_workflow_wheel_smoke_loads_execution_plan_and_evidence_schemas() -> None:
     workflow_source = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "from transformation_portal.core.execution_plan import (" in workflow_source
     assert "load_execution_plan_schema" in workflow_source
+    assert "load_execution_evidence_schema" in workflow_source
+    assert "Draft202012Validator.check_schema(evidence_schema)" in workflow_source
+    assert "evidence_validator.validate(representative_evidence)" in workflow_source
+    assert 'invalid_evidence["schema"] = "tp.lux.execution.evidence.v2"' in workflow_source
+    assert "get_run_card_schema_path" in workflow_source
+    assert "load_run_card_schema" in workflow_source
+    assert 'for run_card_version in ("v1", "v2"):' in workflow_source
+    assert 'assert "site-packages" in run_card_schema_path.as_posix()' in workflow_source
+    assert "run-card installed-wheel schema smoke passed" in workflow_source
     assert "load_resolved_invocation_schema" in workflow_source
     assert "adapt_resolved_invocation_json" in workflow_source
     assert "UnsupportedExecutionPlanSchema" in workflow_source
@@ -308,7 +317,7 @@ def test_firewall_checkout_trust_contract_rejects_repository_override(tmp_path: 
         FIREWALL_WORKFLOW_PATH,
         tmp_path,
         "          ref: ${{ needs.preflight.outputs.head_sha }}\n",
-        "          repository: attacker/untrusted\n" "          ref: ${{ needs.preflight.outputs.head_sha }}\n",
+        "          repository: attacker/untrusted\n          ref: ${{ needs.preflight.outputs.head_sha }}\n",
     )
     validator, config = _load_config(workflow_path)
 

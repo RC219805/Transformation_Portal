@@ -231,6 +231,83 @@ def test_run_scene_reconstruction_uses_camera_centers_for_baseline(tmp_path: Pat
     assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
 
 
+@pytest.mark.parametrize("provide_manifest_context", [False, True])
+def test_run_scene_reconstruction_rejects_partial_prepared_authority(
+    tmp_path: Path,
+    provide_manifest_context: bool,
+) -> None:
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(_camera_with_provenance(0.0), _camera_with_provenance(0.2)),
+    )
+
+    with pytest.raises(ValueError, match="must be provided together"):
+        run_scene_reconstruction(
+            context=context,
+            manifest_context=context if provide_manifest_context else None,
+            image_sha256_overrides=None if provide_manifest_context else ("0" * 64, "1" * 64),
+            output_dir=tmp_path / "out",
+        )
+
+
+def test_run_scene_reconstruction_rejects_divergent_manifest_cameras(tmp_path: Path) -> None:
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(_camera_with_provenance(0.0), _camera_with_provenance(0.2)),
+    )
+    manifest_context = SceneContext(
+        scene_id=context.scene_id,
+        dataset_root=context.dataset_root,
+        images=context.images,
+        cameras=(_camera_with_provenance(0.0), _camera_with_provenance(0.3)),
+        metadata=context.metadata,
+    )
+
+    with pytest.raises(ValueError, match="cameras must align"):
+        run_scene_reconstruction(
+            context=context,
+            manifest_context=manifest_context,
+            image_sha256_overrides=("0" * 64, "1" * 64),
+            output_dir=tmp_path / "out",
+        )
+
+
+def test_run_scene_reconstruction_rejects_case_only_manifest_image_divergence(tmp_path: Path) -> None:
+    cameras = (_camera_with_provenance(0.0), _camera_with_provenance(0.2))
+    execution_root = tmp_path / "execution-input"
+    manifest_root = tmp_path / "manifest-input"
+    execution_context = SceneContext(
+        scene_id="casefolded-scene",
+        dataset_root=execution_root,
+        images=(execution_root / "Scene_A/View_1.JPG", execution_root / "Scene_A/View_2.JPG"),
+        cameras=cameras,
+        metadata={"grouping_mode": "parent_dir"},
+    )
+    manifest_context = SceneContext(
+        scene_id=execution_context.scene_id,
+        dataset_root=manifest_root,
+        images=(manifest_root / "scene_a/view_1.jpg", manifest_root / "scene_a/view_2.jpg"),
+        cameras=cameras,
+        metadata=execution_context.metadata,
+    )
+
+    with (
+        patch(
+            "transformation_portal.lux_depth_v3.reconstruction_runner._build_scene_builder",
+            side_effect=AssertionError("divergent paths must fail before builder initialization"),
+        ) as builder,
+        pytest.raises(ValueError, match="image identities must align"),
+    ):
+        run_scene_reconstruction(
+            context=execution_context,
+            manifest_context=manifest_context,
+            image_sha256_overrides=("0" * 64, "1" * 64),
+            output_dir=tmp_path / "out",
+        )
+
+    builder.assert_not_called()
+
+
 def test_write_scene_debug_bundle_writes_manifest_cameras_and_inputs(tmp_path: Path):
     sidecar_path = tmp_path / "scene_cameras.json"
     sidecar_path.write_text("{}", encoding="utf-8")

@@ -262,25 +262,64 @@ class TestPreprocessImage:
                 opened_file_stat_validator=reject_opened_file,
             )
 
-    def test_raw_snapshot_is_explicitly_non_cache_authorizing(self, tmp_path, monkeypatch):
+    def test_raw_snapshot_binds_opened_file_before_private_decode(self, tmp_path, monkeypatch):
         raw_path = tmp_path / "image.dng"
         raw_path.write_bytes(b"raw-fixture")
+        expected_stat = raw_path.stat()
         expected = np.zeros((14, 14, 3), dtype=np.float32)
+        decoded_paths = []
+
+        def decode_snapshot(snapshot_path, *_args, **_kwargs):
+            snapshot_path = Path(snapshot_path)
+            assert snapshot_path != raw_path
+            assert snapshot_path.read_bytes() == b"raw-fixture"
+            decoded_paths.append(snapshot_path)
+            return expected, (14, 14)
+
         monkeypatch.setattr(
             "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
-            lambda *_args, **_kwargs: (expected, (14, 14)),
+            decode_snapshot,
         )
+        opened_stats = []
 
         result, shape, digest = preprocess_image_snapshot(
             raw_path,
-            opened_file_stat_validator=lambda _opened_stat: pytest.fail(
-                "RAW inputs must not enter cache-authorizing opened-file validation"
-            ),
+            opened_file_stat_validator=opened_stats.append,
         )
 
         assert result is expected
         assert shape == (14, 14)
-        assert digest is None
+        assert digest == hashlib.sha256(b"raw-fixture").hexdigest()
+        assert len(opened_stats) == 1
+        assert (opened_stats[0].st_dev, opened_stats[0].st_ino, opened_stats[0].st_size) == (
+            expected_stat.st_dev,
+            expected_stat.st_ino,
+            expected_stat.st_size,
+        )
+        assert len(decoded_paths) == 1
+        assert not decoded_paths[0].exists()
+
+    def test_raw_snapshot_rejects_replacement_during_private_decode(self, tmp_path, monkeypatch):
+        raw_path = tmp_path / "image.dng"
+        raw_path.write_bytes(b"planned-raw-fixture")
+
+        def replace_snapshot(snapshot_path, *_args, **_kwargs):
+            snapshot_path = Path(snapshot_path)
+            snapshot_dir = snapshot_path.parent
+            os.chmod(snapshot_dir, 0o700)
+            snapshot_path.unlink()
+            snapshot_path.write_bytes(b"replacement-raw-fixture")
+            os.chmod(snapshot_path, 0o400)
+            os.chmod(snapshot_dir, 0o500)
+            return np.zeros((14, 14, 3), dtype=np.float32), (14, 14)
+
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+            replace_snapshot,
+        )
+
+        with pytest.raises(ValueError, match="RAW byte snapshot changed while it was decoded"):
+            preprocess_image_snapshot(raw_path)
 
     def test_grayscale_converted_to_rgb(self, tmp_path):
         """Test that grayscale images are converted to 3-channel RGB."""

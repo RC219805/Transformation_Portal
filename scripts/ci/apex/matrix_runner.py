@@ -44,10 +44,12 @@ import importlib
 import importlib.util
 import json
 import logging
+import math
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Mapping, Optional, Sequence
 
 from transformation_portal.lux_depth_v3._backend_contract import normalize_backend_id
 from transformation_portal.metrics.aggregator import (
@@ -58,10 +60,93 @@ from transformation_portal.metrics.aggregator import (
 )
 from transformation_portal.metrics.contracts import Observation, RunSpec
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
+from transformation_portal.metrics.timing import timing_context
 
 __version__ = "1.0.0"
 
 APEX_DA3_MODEL_KEY = "da3-metric"
+
+
+@dataclass(frozen=True)
+class _ValidatedApexBatchResult:
+    """One complete per-image result eligible for performance evidence."""
+
+    image_path: Path
+    original_shape: tuple[int, int]
+    enforced_shape: tuple[int, int]
+    pipeline_seconds: float
+    input_sha256: str
+
+
+def _validate_apex_batch_results(
+    images: Sequence[Path],
+    batch_results: Sequence[Mapping[str, Any]],
+    *,
+    batch_total_seconds: float,
+) -> tuple[list[_ValidatedApexBatchResult], float, float]:
+    """Validate complete batch evidence and compute measured shared overhead."""
+
+    if not images:
+        raise RuntimeError("APEX authoritative batch has no inputs")
+    if len(batch_results) != len(images):
+        raise RuntimeError("APEX authoritative batch returned an incomplete result set")
+    if not math.isfinite(batch_total_seconds) or batch_total_seconds < 0.0:
+        raise RuntimeError("APEX authoritative batch produced an invalid total timing")
+
+    validated: list[_ValidatedApexBatchResult] = []
+    for image_path, result in zip(images, batch_results):
+        if not isinstance(result, Mapping) or result.get("status") != "ok":
+            logger.warning("⚠️ %s: authoritative batch returned non-ok status", image_path.name)
+            continue
+
+        original_shape_value = result.get("original_shape")
+        if not (
+            isinstance(original_shape_value, (list, tuple))
+            and len(original_shape_value) == 2
+            and all(type(component) is int and component > 0 for component in original_shape_value)
+        ):
+            raise RuntimeError("authoritative batch result lacks a valid original_shape")
+        enforced_shape_value = result.get("enforced_shape")
+        if not (
+            isinstance(enforced_shape_value, (list, tuple))
+            and len(enforced_shape_value) == 2
+            and all(type(component) is int and component > 0 for component in enforced_shape_value)
+        ):
+            raise RuntimeError("authoritative batch result lacks a valid enforced_shape")
+
+        runtime_value = result.get("runtime_s")
+        if isinstance(runtime_value, bool) or not isinstance(runtime_value, (int, float)):
+            raise RuntimeError("authoritative batch result lacks a valid runtime_s")
+        pipeline_seconds = float(runtime_value)
+        if not math.isfinite(pipeline_seconds) or pipeline_seconds < 0.0:
+            raise RuntimeError("authoritative batch result lacks a valid runtime_s")
+
+        exact_input_sha256 = result.get("input_sha256")
+        if not (
+            isinstance(exact_input_sha256, str)
+            and len(exact_input_sha256) == 64
+            and all(character in "0123456789abcdef" for character in exact_input_sha256)
+        ):
+            raise RuntimeError("authoritative batch result lacks a valid input_sha256")
+
+        validated.append(
+            _ValidatedApexBatchResult(
+                image_path=image_path,
+                original_shape=(original_shape_value[0], original_shape_value[1]),
+                enforced_shape=(enforced_shape_value[0], enforced_shape_value[1]),
+                pipeline_seconds=pipeline_seconds,
+                input_sha256=exact_input_sha256,
+            )
+        )
+
+    if not validated:
+        raise RuntimeError("APEX authoritative batch produced no successful inputs")
+    inner_pipeline_total = math.fsum(row.pipeline_seconds for row in validated)
+    clock_tolerance = max(1e-6, batch_total_seconds * 1e-6)
+    if inner_pipeline_total - batch_total_seconds > clock_tolerance:
+        raise RuntimeError("APEX inner pipeline timings exceed the authoritative batch total")
+    shared_batch_overhead = max(0.0, batch_total_seconds - inner_pipeline_total)
+    return validated, inner_pipeline_total, shared_batch_overhead
 
 
 class ApexConfigError(ValueError):
@@ -190,7 +275,10 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     if hasattr(backend_cls, "runtime_required_packages"):
         try:
             backend_instance = backend_cls()
-            runtime_packages = list(backend_instance.runtime_required_packages())
+            runtime_package_resolver = getattr(backend_instance, "runtime_required_packages", None)
+            if not callable(runtime_package_resolver):
+                raise TypeError("runtime_required_packages must be callable")
+            runtime_packages = list(runtime_package_resolver())
         except FileNotFoundError as e:
             raise ApexConfigError(
                 f"Backend '{backend_id}' has an invalid isolated runtime configuration: {e}\n"
@@ -309,7 +397,6 @@ def run_apex_for_config(
         )
         raise RuntimeError(error_msg)
 
-    import hashlib
     import signal
 
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -317,14 +404,13 @@ def run_apex_for_config(
     from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
     from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS
-    from transformation_portal.metrics.timing import timing_context
 
     # Timeout handler for long-running operations
-    class TimeoutError(Exception):
+    class ApexBatchTimeout(BaseException):
         pass
 
-    def timeout_handler(signum, frame):
-        raise TimeoutError("Image processing timeout")
+    def timeout_handler(signum: int, frame: Any) -> None:
+        raise ApexBatchTimeout("Authoritative batch processing timeout")
 
     # Discover input images (standard + RAW formats)
     discovery_config = DiscoveryConfig(strict_mode=False)
@@ -358,6 +444,10 @@ def run_apex_for_config(
         generate_pbr=False,  # Disable PBR for performance testing
         save_float_depth=False,
         strict_inputs=False,
+        # Historical APEX collection invoked each image serially. Preserve
+        # that latency baseline under the required single prepared-batch call
+        # so lifecycle overhead can be attributed without overlapping work.
+        enable_parallel_processing=False,
         # V2 enhancement only for v2 workflow
         v2_preset="default" if enable_v2 else None,
     )
@@ -380,100 +470,89 @@ def run_apex_for_config(
     )
 
     capsules = []
-    timeout_seconds = 300  # 5 minutes per image max
+    per_input_timeout_seconds = 300
+    batch_timeout_seconds = per_input_timeout_seconds * max(1, len(images))
 
     # Cache pipeline version once (avoid repeated git/metadata lookups per image)
     pipeline_version = _get_pipeline_version()
 
-    # Process each image with timing instrumentation
-    for image_path in images:
-        try:
-            from transformation_portal.lux_depth_v3.input_manager import ImageInput
-            from transformation_portal.metrics.performance_capsule import compute_dimension_adjustment
+    from transformation_portal.metrics.performance_capsule import compute_dimension_adjustment
 
-            image_input = ImageInput(image_path)
+    # The public prepared API executes the whole frozen selection in one call.
+    # Bound that batch deterministically, scaled from the historical five-minute
+    # per-input allowance; individual signals cannot safely wrap work inside the
+    # authoritative batch implementation.
+    if hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(batch_timeout_seconds)
+    batch_timings: dict[str, float] = {}
+    try:
+        # The public batch call does not complete until prepared input
+        # snapshots are removed and every manifest, run card, and execution
+        # evidence carrier has been published. Keep ``total`` at that
+        # authoritative boundary; result ``runtime_s`` values cover only the
+        # inner per-image pipeline and omit contract-visible overhead.
+        with timing_context("total", batch_timings, device=run_spec.device):
+            batch_results = orchestrator.enhance_batch(
+                input_dir,
+                input_files=list(prepared.input_files),
+            )
+    except ApexBatchTimeout as exc:
+        logger.error("❌ Authoritative batch timed out after %d seconds", batch_timeout_seconds)
+        raise RuntimeError(f"APEX authoritative batch timed out after {batch_timeout_seconds} seconds") from exc
+    finally:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
 
-            # Set timeout alarm (Unix only)
-            if hasattr(signal, "SIGALRM"):
-                signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(timeout_seconds)
+    batch_total_seconds = float(batch_timings["total"])
+    validated_results, inner_pipeline_total, shared_batch_overhead_seconds = _validate_apex_batch_results(
+        images,
+        batch_results,
+        batch_total_seconds=batch_total_seconds,
+    )
 
-            try:
-                # Wrap processing in timing context
-                timings = {}
-
-                with timing_context("total", timings, device=run_spec.device):
-                    # Load and preprocess image
-                    with timing_context("load_decode", timings, device=run_spec.device):
-                        from PIL import Image
-
-                        with Image.open(image_path) as img:
-                            original_shape = (img.height, img.width)
-
-                    # Run pipeline (V1 = depth only, V2 = depth + enhancement)
-                    result = orchestrator.enhance_image(image_input, input_root=input_dir)
-
-                # Cancel timeout
-                if hasattr(signal, "SIGALRM"):
-                    signal.alarm(0)
-
-                # Extract metadata from result
-                if result and result.get("status") == "ok":
-                    # Compute input hash for reproducibility (chunked to handle large files)
-                    h = hashlib.sha256()
-                    with image_path.open("rb") as f:
-                        while chunk := f.read(8192):
-                            h.update(chunk)
-                    input_hash = h.hexdigest()[:16]
-
-                    # Get enforced shape from result or use original
-                    enforced_shape = result.get("enforced_shape", original_shape)
-                    pixel_count = enforced_shape[0] * enforced_shape[1]
-
-                    # Create performance capsule
-                    capsule = PerformanceCapsule(
-                        image_id=image_path.stem,
-                        image_path=str(image_path),
-                        input_hash=input_hash,
-                        original_shape=original_shape,
-                        enforced_shape=enforced_shape,
-                        pixel_count=pixel_count,
-                        dimension_adjustment=compute_dimension_adjustment(original_shape, enforced_shape),
-                        backend_id=run_spec.backend_id,
-                        model_variant=config.model_key or run_spec.backend_id,
-                        device=run_spec.device,
-                        dtype="float32",
-                        timings=timings,
-                        workflow_version=run_spec.workflow_version,
-                        zone=zone,
-                        scene_type=run_spec.scene_type,
-                        pipeline_version=pipeline_version,  # Cached from metadata/git
-                        is_synthetic=synthetic,  # Respects --synthetic flag
-                    )
-
-                    capsules.append(capsule)
-                    logger.info(f"✅ {image_path.name}: {timings['total']:.2f}s")
-                else:
-                    logger.warning(f"⚠️ {image_path.name}: processing returned non-ok status")
-
-            except TimeoutError:
-                logger.error(f"❌ {image_path.name}: timeout after {timeout_seconds}s")
-                if hasattr(signal, "SIGALRM"):
-                    signal.alarm(0)
-                continue
-
-        except Exception as e:
-            logger.error(f"❌ {image_path.name}: {e}")
-            # Continue processing other images
-            continue
-
-    if not capsules:
-        raise RuntimeError(f"No images successfully processed for {run_spec.workflow_version}/{zone}")
+    for row in validated_results:
+        # ``total`` is the contract-stable gate input. Every capsule carries
+        # the measured authoritative batch lifecycle so snapshot/probe and
+        # evidence-publication regressions cannot be diluted across images.
+        timings = {
+            "total": batch_total_seconds,
+            "pipeline": row.pipeline_seconds,
+            "batch_shared_overhead": shared_batch_overhead_seconds,
+        }
+        pixel_count = row.enforced_shape[0] * row.enforced_shape[1]
+        capsules.append(
+            PerformanceCapsule(
+                image_id=row.image_path.stem,
+                image_path=str(row.image_path),
+                input_hash=row.input_sha256[:16],
+                original_shape=row.original_shape,
+                enforced_shape=row.enforced_shape,
+                pixel_count=pixel_count,
+                dimension_adjustment=compute_dimension_adjustment(row.original_shape, row.enforced_shape),
+                backend_id=run_spec.backend_id,
+                model_variant=config.model_key or run_spec.backend_id,
+                device=run_spec.device,
+                dtype="float32",
+                timings=timings,
+                workflow_version=run_spec.workflow_version,
+                zone=zone,
+                scene_type=run_spec.scene_type,
+                pipeline_version=pipeline_version,
+                is_synthetic=synthetic,
+            )
+        )
+        logger.info("✅ %s: %.2fs", row.image_path.name, timings["total"])
 
     return Observation(
         run_spec=run_spec,
         zone=zone,
         capsules=capsules,
+        phase_timings={
+            "authoritative_batch_total": batch_total_seconds,
+            "inner_pipeline_total": inner_pipeline_total,
+            "shared_batch_overhead": shared_batch_overhead_seconds,
+        },
     )
 
 

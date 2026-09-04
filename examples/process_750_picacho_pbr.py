@@ -32,12 +32,12 @@ Quality Rationale:
     5. save_float_depth=True prevents quantization artifacts in multi-material scenes
 
 Expected Outputs (per image):
-    - {name}_depth.png: 16-bit depth visualization for inspection
-    - {name}_depth_float.npy: High-precision depth (critical for quality PBR)
-    - {name}_normal.png: RGB normal map (1.5x strength, no pre-blur)
-    - {name}_roughness.png: Grayscale roughness (1.3x for material variation)
-    - {name}_ao.png: Ambient occlusion (1.2x strength, 7px spread)
-    - {name}_manifest.json: Processing metadata and parameters
+    - depth/<input-key>_depth.png: 16-bit depth visualization for inspection
+    - depth/<input-key>_depth.npy: High-precision depth (critical for quality PBR)
+    - pbr/<input-key>_normal.png: RGB normal map (1.5x strength, no pre-blur)
+    - pbr/<input-key>_roughness.png: Grayscale roughness (1.3x for material variation)
+    - pbr/<input-key>_ao.png: Ambient occlusion (1.2x strength, 7px spread)
+    - manifests/<input-key>_combined.json: Processing metadata and parameters
 
 Performance Expectations:
     - First run: 6-8 seconds (includes depth estimation)
@@ -80,7 +80,7 @@ import sys
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 try:
     from transformation_portal.lux_depth_v3 import (
@@ -94,7 +94,7 @@ try:
         list_presets,
     )
     from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest
 except ImportError as e:
     print(f"❌ Error: Could not import lux_depth_v3 module: {e}")
     print("\nPlease ensure the transformation_portal package is installed:")
@@ -116,6 +116,33 @@ MATERIAL_PRESETS = {
     "glass": GLASS_OPTIMIZED,
     "fabric": FABRIC_OPTIMIZED,
 }
+
+
+def _authoritative_output_paths(result: Mapping[str, object]) -> dict[str, Path]:
+    """Return only paths carried by the result and its combined manifest."""
+
+    result_fields = {
+        "depth": "depth_path",
+        "depth_float": "depth_float_path",
+        "manifest": "manifest",
+    }
+    outputs: dict[str, Path] = {}
+    for label, field_name in result_fields.items():
+        value = result.get(field_name)
+        if not isinstance(value, str) or not value:
+            raise RuntimeError(f"successful result is missing {field_name}")
+        outputs[label] = Path(value)
+
+    combined_manifest = CombinedManifest.load(outputs["manifest"])
+    if not isinstance(combined_manifest.pbr_assets, dict):
+        raise RuntimeError("successful PBR result is missing combined-manifest PBR assets")
+    for label in ("normal", "roughness", "ao"):
+        value = combined_manifest.pbr_assets.get(f"{label}_path")
+        if not isinstance(value, str) or not value:
+            raise RuntimeError(f"combined manifest is missing {label}_path")
+        outputs[label] = Path(value)
+
+    return outputs
 
 
 def print_header():
@@ -234,19 +261,19 @@ def print_preset_config(config, preset_name: str):
     print("-" * 80 + "\n")
 
 
-def print_outputs(output_dir: Path, base_name: str):
+def print_outputs(output_dir: Path):
     """Print expected output files."""
     print("📦 EXPECTED OUTPUTS")
     print("-" * 80)
     print(f"Output Directory: {output_dir}")
     print()
     print("Generated Files:")
-    print(f"  ✓ {base_name}_depth.png          (16-bit depth visualization)")
-    print(f"  ✓ {base_name}_depth_float.npy    (high-precision depth array)")
-    print(f"  ✓ {base_name}_normal.png         (RGB normal map)")
-    print(f"  ✓ {base_name}_roughness.png      (grayscale roughness map)")
-    print(f"  ✓ {base_name}_ao.png             (grayscale ambient occlusion)")
-    print(f"  ✓ {base_name}_manifest.json      (processing metadata)")
+    print("  ✓ depth/<input-key>_depth.png        (16-bit depth visualization)")
+    print("  ✓ depth/<input-key>_depth.npy        (high-precision depth array)")
+    print("  ✓ pbr/<input-key>_normal.png         (RGB normal map)")
+    print("  ✓ pbr/<input-key>_roughness.png      (grayscale roughness map)")
+    print("  ✓ pbr/<input-key>_ao.png             (grayscale ambient occlusion)")
+    print("  ✓ manifests/<input-key>_combined.json (processing metadata)")
     print()
     print("Integration with 3D Workflows:")
     print("  • Normal maps: Use in PBR shaders for surface detail")
@@ -336,8 +363,7 @@ def process_image(
     print_preset_config(config, preset_name)
 
     # Print expected outputs
-    base_name = input_path.stem
-    print_outputs(output_dir, base_name)
+    print_outputs(output_dir)
 
     # Dry run mode
     if dry_run:
@@ -368,8 +394,12 @@ def process_image(
         print(f"Processing: {input_path.name}")
         print()
 
-        image_input = ImageInput(path=input_path)
-        result = orchestrator.enhance_image(image_input, input_root=prepared.input_root)
+        result = orchestrator.enhance_batch(
+            prepared.input_root,
+            input_files=list(prepared.input_files),
+        )[0]
+        if result.get("status") != "ok":
+            raise RuntimeError(result.get("error") or result.get("reason") or "pipeline returned non-ok status")
 
         elapsed = time.time() - start_time
 
@@ -381,14 +411,7 @@ def process_image(
         print("✅ OUTPUT VERIFICATION")
         print("-" * 80)
 
-        outputs = {
-            "depth": output_dir / f"{base_name}_depth.png",
-            "depth_float": output_dir / f"{base_name}_depth_float.npy",
-            "normal": output_dir / f"{base_name}_normal.png",
-            "roughness": output_dir / f"{base_name}_roughness.png",
-            "ao": output_dir / f"{base_name}_ao.png",
-            "manifest": output_dir / f"{base_name}_manifest.json",
-        }
+        outputs = _authoritative_output_paths(result)
 
         all_present = True
         for output_type, output_path in outputs.items():
@@ -412,7 +435,8 @@ def process_image(
         print("-" * 80 + "\n")
 
         if not all_present:
-            print("⚠️  Warning: Some expected outputs were not generated\n")
+            print("❌ Error: Some evidence-bound outputs were not generated\n")
+            return 1
 
         # Success summary
         print("=" * 80)

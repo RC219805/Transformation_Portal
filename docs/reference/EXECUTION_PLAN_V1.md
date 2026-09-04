@@ -90,11 +90,89 @@ Materials V3 is blocking, and run-card emission is nonblocking. A requested
 output therefore may truthfully declare `required: false`; an optional node
 must use `failure_policy: omit_outputs` and cannot declare required outputs.
 
+## Prepared execution evidence
+
+Native prepared runs publish a detached
+`tp.lux.execution.evidence.v1` sidecar after their per-image manifests, batch
+manifest, and optional run card. Existing manifests and run cards carry the
+exact `plan_schema`, plan/config fingerprints, planned backend, permitted
+fallback chain, per-input runtime backend outcomes, requested artifact kinds,
+and the confined relative path to that sidecar. The detached form avoids a
+self-hash cycle while allowing the sidecar to record the complete bytes of
+those requested manifest artifacts.
+
+`EnhanceOrchestrator.from_prepared(...)` must be entered through
+`enhance_batch(prepared.input_root, input_files=list(prepared.input_files))`.
+Prepared calls to `enhance_image(...)` or `enhance_batch_parallel(...)` fail
+closed because neither public shortcut owns the complete batch lifecycle or
+can publish authoritative final evidence. Unprepared compatibility execution
+retains the historical single-image API when governed cache authority is not
+required.
+
+The binding uses the existing round-tripped extension maps so frozen artifact
+formats remain readable by rollback tooling: `CombinedManifest.environment`,
+`BatchManifest.config`, and the run card's `effective_config` each contain an
+`execution_contract` object. That object carries the complete authoritative
+plan payload, the runtime projection, and the evidence path. No new top-level
+members were added to run-card v1/v2 or the legacy manifest dataclasses.
+
+The sidecar is the prepared run's completion record. A reader must treat a
+prepared manifest or run card as unconfirmed unless its pointer resolves to a
+canonical sidecar that verifies against the carried plan and the final bytes
+of every produced artifact. Capture and publication require descriptor-relative
+no-follow traversal under one pinned output root. Publication retains and
+revalidates every root ancestor plus the final parent and directory-entry
+identity before and after the atomic rename; namespace drift fails the API and
+leaves any uncertain temporary or final entry in place for explicit operator
+reconciliation. On an ordinary write or durability failure, the publisher
+revalidates the retained parent namespace and publisher-created inode before a
+descriptor-relative cleanup and parent-directory sync. An already missing name
+needs no action; a moved, linked, or replacement entry is retained rather than
+removed. Portable POSIX has no atomic compare-and-unlink operation, so this
+cleanup relies on the exclusive-writer boundary below. Platforms without the
+required secure primitives fail closed. Windows drive-qualified pointers,
+symlinks, hardlinks, duplicate inode aliases, and output-root escapes are not
+valid evidence.
+
+The process that owns this contract must also deny hostile rename access to the
+output root and its ancestors. Portable descriptor APIs can detect a directory
+that another actor moved during publication, but cannot prevent the temporary
+file from being transiently relocated by an actor that already has authority to
+rename those directories. Treat a retained orphan as untrusted until an operator
+reconciles its inode and contents; publication failure never authorizes it.
+
+Evidence starts from the exact requested output declarations in the carried
+execution-complete plan. Each declaration retains its stage-registry owner,
+scope, cardinality, and required bit, and is expanded across the frozen input
+selection. Every expanded output has exactly one outcome:
+
+- produced, with one or more output-root-confined relative paths, complete
+  SHA-256 digests, byte sizes, media types, and file extensions;
+- omitted, only for an optional declaration and with a typed reason; or
+- failed, with a typed reason. Any failed required output fails the run after
+  the evidence is durably published.
+
+Observation count, per-outcome cardinality, individual file size, and aggregate
+captured bytes are bounded before hashing. Known-oversize files are rejected
+from metadata without reading their contents. Per-input output discovery reads
+combined manifests only through that pinned, no-follow, bounded boundary.
+Successful batch rows must cover the frozen input selection and point to each
+input's verified combined manifest; combined-manifest backend selection must
+match the runtime projection.
+When a run card is requested, both its canonical payload digest and its final
+run-card self-integrity sidecar must verify before the run-card output is
+classified as produced.
+
+The existing run-card `artifact_index` remains a compatibility catalog. It is
+assembled through best-effort discovery and is not plan authority or proof of
+complete requested-output accounting.
+
 ## Lux v1 compatibility
 
-The live CLI continues to emit `tp.lux.resolved_invocation.v1`. The read-only
-adapter converts that payload into the canonical form without changing the
-current executor:
+The live CLI and native prepared lifecycle emit `tp.execution.plan.v1`.
+Historical `tp.lux.resolved_invocation.v1` payloads remain readable through a
+bounded, read-only adapter that converts them into the canonical structural
+form without granting execution authority:
 
 ```python
 from transformation_portal.lux_depth_v3.execution_plan_adapter import (
@@ -133,13 +211,12 @@ Promotion is deliberately partial where the old payload lacks authority. In
 particular, the adapter rejects the current Apple Silicon Depth Pro fallback
 shape when its chain permits DA3 but carries no DA3 model contract; it also
 rejects `ensemble`, whose constituent model identities are absent, and
-reconstruction without both required research acknowledgements. The live v1
-executor remains the rollback path for those payloads. These are explicit A2
-producer prerequisites: the direct producer must populate the already-defined
-execution-complete v1 candidate identities and typed stage configurations. It
-must not independently re-resolve or manufacture absent legacy identity. The
-current unpinned/unimplemented DepthCrafter model path is representable but is
-not Lux-authorizing until a trusted executable identity exists.
+reconstruction without both required research acknowledgements. The native
+prepared producer populates the execution-complete candidate identities and
+typed stage configurations directly; it does not independently re-resolve or
+manufacture absent legacy identity. The current unpinned/unimplemented
+DepthCrafter model path is representable but is not Lux-authorizing until a
+trusted executable identity exists.
 
 The legacy `lux_depth_v3.pipeline_coordinator.ExecutionPlan` import is also
 preserved as the flat live-executor projection and is explicitly aliased as
@@ -148,9 +225,9 @@ preserved as the flat live-executor projection and is explicitly aliased as
 
 ## Non-activation boundary
 
-This contract does not complete ExecutionIdentity v3, cache cutover, manifest
-propagation, direct-Python lifecycle migration, or documented-workflow parity.
-It is a partial, non-closing #2065 foundation and must not be compiled into
-`StageGraph`. A2 must add the native execution-complete producer and consumer,
-and the separate ADR-051 Phase C vertical slice must prove security, output,
-cancellation, cache, publication, and performance parity before activation.
+The native prepared lifecycle, runtime evidence propagation, and maintained
+documented-workflow parity complete the Lux #2065 contract surface. They do
+not activate `StageGraph` or `CASDAGExecutor`, complete ExecutionIdentity v3,
+or cut the verified depth cache over. The separate ADR-051 Phase C vertical
+slice must still prove security, output, cancellation, cache, publication, and
+performance parity before shared-executor activation.

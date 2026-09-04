@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
@@ -160,6 +161,32 @@ def _normalize_relative_path(path: Path, dataset_root: Path) -> str:
 def normalize_relative_path(path: Path, dataset_root: Path) -> str:
     """Public wrapper for stable path normalization used across scene modules."""
     return _normalize_relative_path(path, dataset_root)
+
+
+def lexical_relative_path(path: Path, dataset_root: Path) -> str:
+    """Return an exact-case relative path without consulting the filesystem.
+
+    Prepared execution has already canonicalized and confined its input paths.
+    Re-resolving those paths after snapshot capture could instead follow a
+    replacement filesystem namespace, so this helper deliberately performs
+    lexical normalization only and requires containment.
+    """
+
+    candidate = Path(path)
+    root = Path(dataset_root)
+    if not candidate.is_absolute() or not root.is_absolute():
+        raise ValueError("Canonical scene paths must be absolute")
+    normalized_candidate = Path(os.path.abspath(os.fspath(candidate)))
+    normalized_root = Path(os.path.abspath(os.fspath(root)))
+    if candidate != normalized_candidate or root != normalized_root:
+        raise ValueError("Canonical scene paths must be lexically normalized")
+    try:
+        relative = normalized_candidate.relative_to(normalized_root)
+    except ValueError as exc:
+        raise ValueError("Canonical scene image path must be contained by its dataset root") from exc
+    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError("Canonical scene image path must be a non-empty contained relative path")
+    return relative.as_posix()
 
 
 def _compute_scene_id(images: Tuple[Path, ...], dataset_root: Path) -> str:

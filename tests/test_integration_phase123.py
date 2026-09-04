@@ -175,7 +175,10 @@ class TestPhase123Integration:
         orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         # Process batch
-        results = orch.enhance_batch_parallel(test_images, input_root=tmp_path / "input")
+        results = orch.enhance_batch(
+            prepared.input_root,
+            input_files=list(prepared.input_files),
+        )
 
         # Verify: caching + parallelization work together
         assert len(results) == 5
@@ -214,7 +217,10 @@ class TestPhase123Integration:
         orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         # Process batch
-        results = orch.enhance_batch_parallel(test_images, input_root=tmp_path / "input")
+        results = orch.enhance_batch(
+            prepared.input_root,
+            input_files=list(prepared.input_files),
+        )
 
         # Verify: all optimizations coexist correctly
         assert len(results) == 5

@@ -1,0 +1,347 @@
+{
+  "schema": "tp.lux.documented_workflows.v1",
+  "source_document": "docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md",
+  "workflows": [
+    {
+      "id": "basic-apex",
+      "source_anchor": "#basic-apex-command",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/lux_depth_v3_apex",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--depth-backend", "da3",
+        "--model-key", "da3-metric",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on",
+        "--output-bit-depth", "16",
+        "--emit-run-card", "on",
+        "--run-card-version", "v2",
+        "--overwrite"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1",
+        "tp.stage.lux.depth.v1",
+        "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1",
+        "tp.stage.lux.v2.v1",
+        "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "apex-cuda",
+      "source_anchor": "#apex-with-gpu-acceleration-cuda",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/apex_cuda",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--model-key", "da3-metric",
+        "--depth-device", "cuda",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--output-bit-depth", "16"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "apex-mps",
+      "source_anchor": "#apex-with-apple-silicon-mps",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/apex_mps",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--model-key", "da3-metric",
+        "--depth-device", "mps",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "apex-da31-research",
+      "source_anchor": "#variant-a-depth-anything-v31-cc-by-nc-40",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/lux_depth_v3_apex_da31",
+        "--preset", "depth-anything-v3.1-research-m4",
+        "--quality-tier", "apex",
+        "--model-key", "da3-research",
+        "--non-commercial-ok", "true",
+        "--depth-device", "mps",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on",
+        "--output-bit-depth", "16",
+        "--emit-run-card", "on",
+        "--run-card-version", "v2",
+        "--overwrite"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_research",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "apex-da3-research",
+      "source_anchor": "#variant-a2-explicit-da3-research-model",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/lux_depth_v3_apex_da3_research",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--depth-backend", "da3",
+        "--model-key", "da3-research",
+        "--non-commercial-ok", "true",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_research",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "apex-depth-pro",
+      "source_anchor": "#variant-b-apple-depth-pro-amlr-research-license",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/lux_depth_v3_apex_depthpro",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--depth-backend", "depth_pro",
+        "--non-commercial-ok", "true",
+        "--accept-apple-depth-pro-research-license", "true",
+        "--depth-device", "mps",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on",
+        "--output-bit-depth", "16",
+        "--emit-run-card", "on",
+        "--run-card-version", "v2",
+        "--overwrite"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "depth_pro",
+      "expected_resolved_model": null,
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "draft-preview",
+      "source_anchor": "#workflow-1-draft-preview-fast",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/draft",
+        "--preset", "default",
+        "--quality-tier", "standard",
+        "--model-key", "da3-metric",
+        "--depth-device", "cpu"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1",
+        "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json",
+        "batch_manifest_json", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "client-deliverable-apex",
+      "source_anchor": "#workflow-2-client-deliverable-apex-commercial",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/client_deliverable",
+        "--preset", "premium",
+        "--quality-tier", "apex",
+        "--depth-device", "cuda",
+        "--model-key", "da3-metric",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on",
+        "--output-bit-depth", "16",
+        "--emit-run-card", "on"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "research-experiment-apex",
+      "source_anchor": "#workflow-3-research-experiment-apex-non-commercial",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/research",
+        "--preset", "depth-anything-v3.1-research-m4",
+        "--quality-tier", "apex",
+        "--model-key", "da3-research",
+        "--non-commercial-ok", "true",
+        "--depth-device", "cuda",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_research",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "pbr-only",
+      "source_anchor": "#workflow-4-pbr-only-skip-v2-enhancement",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/pbr_only",
+        "--quality-tier", "apex",
+        "--depth-device", "mps",
+        "--model-key", "da3-metric",
+        "--pbr", "on",
+        "--enable-v2", "off",
+        "--output-bit-depth", "16"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json",
+        "batch_manifest_json", "pbr_maps", "run_card"
+      ],
+      "expected_warnings": []
+    },
+    {
+      "id": "commercial-apex",
+      "source_anchor": "#workflow-5-commercial-apex-with-quality-tier-focus",
+      "argv": [
+        "--input-dir", "./input_images",
+        "--output-dir", "./output/commercial_apex",
+        "--quality-tier", "apex",
+        "--depth-device", "mps",
+        "--model-key", "da3-metric",
+        "--materials-v3", "on",
+        "--enable-segmentation", "on",
+        "--segmentation-backend", "efficientsam",
+        "--strict-segmentation",
+        "--pbr", "on",
+        "--cache-depth", "on",
+        "--output-bit-depth", "16"
+      ],
+      "expected_plan_status": "success",
+      "expected_planned_backend": "da3",
+      "expected_resolved_model": "da3_metric",
+      "expected_stage_registry_ids": [
+        "tp.stage.lux.preprocess.v1", "tp.stage.lux.depth.v1", "tp.stage.lux.materials_v3.v1",
+        "tp.stage.lux.pbr.v1", "tp.stage.lux.v2.v1", "tp.stage.lux.output.v1"
+      ],
+      "expected_requested_artifacts": [
+        "depth_u16_png", "depth_metadata_json", "combined_manifest_json", "batch_manifest_json",
+        "materials_v3_masks", "pbr_maps", "v2_enhanced_image", "run_card"
+      ],
+      "expected_warnings": []
+    }
+  ]
+}

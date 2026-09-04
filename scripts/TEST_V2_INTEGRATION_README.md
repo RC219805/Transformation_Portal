@@ -86,26 +86,28 @@ The script tests with a representative mix of formats:
 ```
 output/v2_integration_test/
 ├── depth/                      # Depth maps from DA3
-│   ├── 750Picacho_Kitchen_depth.png
-│   ├── 750Picacho_Pool_depth.png
-│   └── 750Picacho_PrimaryBedroom_Ultimate_depth.png
-├── pbr/                        # PBR material maps
-│   ├── 750Picacho_Kitchen_pbr.png
-│   ├── 750Picacho_Pool_pbr.png
-│   └── 750Picacho_PrimaryBedroom_Ultimate_pbr.png
+│   ├── <input-key>_depth.png
+│   ├── <input-key>_depth.npy   # When float depth is requested
+│   └── <input-key>_depth_metadata.json
+├── pbr/                        # Only when --pbr on
+│   ├── <input-key>_normal.png
+│   ├── <input-key>_roughness.png
+│   └── <input-key>_ao.png
 ├── v2/                         # V2 enhanced images ← NEW
-│   ├── 750Picacho_Kitchen.jpg
-│   ├── 750Picacho_Kitchen_report.json
-│   ├── 750Picacho_Pool.jpg
-│   ├── 750Picacho_Pool_report.json
-│   ├── 750Picacho_PrimaryBedroom_Ultimate.tif
-│   └── 750Picacho_PrimaryBedroom_Ultimate_report.json
+│   ├── <input-key>_v2_enhanced.{png,tif}
+│   └── <input-key>_report.json
 ├── manifests/                  # Combined manifests with V2 timing
-│   ├── 750Picacho_Kitchen_manifest.json
-│   ├── 750Picacho_Pool_manifest.json
-│   └── 750Picacho_PrimaryBedroom_Ultimate_manifest.json
+│   ├── <input-key>_combined.json
+│   ├── batch_<batch-id>.json
+│   └── execution_evidence_<batch-id>.json
+├── run_card_<batch-id>.json    # Reproducibility card when enabled
+├── run_card_<batch-id>.self.json # Run-card self-integrity sidecar
 └── test.log                    # Pipeline execution logs
 ```
+
+`<input-key>` is the orchestrator's `<stem>_<ext>_<hash8>` identity. Read the
+exact paths from the batch results and combined manifests; do not reconstruct
+them from the source filename.
 
 ## Exit Codes
 

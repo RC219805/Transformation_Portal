@@ -518,14 +518,8 @@ class CombinedManifest:
         atomic_write_bytes(path, payload)
 
     @classmethod
-    def load(cls, path: Path) -> CombinedManifest:
-        """Load manifest from JSON file.
-
-        Deserializes all fields including timestamps.
-        """
-        with open(path, "r") as f:
-            data = json.load(f)
-
+    def from_dict(cls, data: Dict[str, Any]) -> CombinedManifest:
+        """Build a manifest from an already-decoded JSON payload."""
         # Reconstruct dataclasses
         manifest = cls()
 
@@ -558,6 +552,16 @@ class CombinedManifest:
             manifest.end_time = data["end_time"]
 
         return manifest
+
+    @classmethod
+    def load(cls, path: Path) -> CombinedManifest:
+        """Load manifest from JSON file.
+
+        Deserializes all fields including timestamps.
+        """
+        with open(path, "r") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
 
     def write(self, path: Path) -> None:
         """Alias for save() for backward compatibility."""

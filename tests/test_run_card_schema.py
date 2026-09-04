@@ -45,7 +45,11 @@ from transformation_portal.lux_depth_v3.run_card_contract import (
     with_inferred_run_card_version,
 )
 from transformation_portal.lux_depth_v3.security import HashMode
-from transformation_portal.schemas.run_card import get_run_card_schema_uri, load_run_card_schema
+from transformation_portal.schemas.run_card import (
+    get_run_card_schema_path,
+    get_run_card_schema_uri,
+    load_run_card_schema,
+)
 
 
 def _payload_for_run_card_schema_version(version: str) -> dict:
@@ -195,9 +199,99 @@ def test_run_card_schema_validates_payload():
 
 
 def test_packaged_run_card_schemas_match_documented_copies() -> None:
+    docs_schema_root = Path(__file__).resolve().parents[1] / "docs" / "schemas" / "run_card"
     for version in ("v1", "v2"):
-        documented_schema = json.loads(_run_card_schema_path(version).read_text(encoding="utf-8"))
-        assert load_run_card_schema(version) == documented_schema
+        documented_path = docs_schema_root / f"run_card.{version}.schema.json"
+        assert get_run_card_schema_path(version).read_bytes() == documented_path.read_bytes()
+        assert load_run_card_schema(version) == json.loads(documented_path.read_text(encoding="utf-8"))
+
+
+def test_packaged_run_card_schema_load_is_mutation_safe() -> None:
+    poisoned = load_run_card_schema("v1")
+    poisoned["required"].clear()
+    poisoned["properties"].clear()
+
+    reloaded = load_run_card_schema("v1")
+
+    assert "artifact_index" in reloaded["required"]
+    assert "artifact_index" in reloaded["properties"]
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_published_collection_contract_remains_unnarrowed(version: str) -> None:
+    properties = load_run_card_schema(version)["properties"]
+
+    assert "maxItems" not in properties["inputs"]
+    assert "maxItems" not in properties["result_summary"]
+    assert "maxItems" not in properties["artifact_index"]
+    if version == "v2":
+        artifact_tree = properties["artifact_tree"]["properties"]
+        assert "maximum" not in artifact_tree["leaf_count"]
+        assert "maxItems" not in artifact_tree["artifacts"]
+        assert "maxItems" not in artifact_tree["proofs"]
+        assert "maxItems" not in artifact_tree["proofs"]["items"]["properties"]["path"]
+
+
+def test_run_card_rejects_extreme_integer_before_schema_walk() -> None:
+    payload = _valid_run_card_payload()
+    payload["runtime_stats"]["count"] = -(10**5_000)
+
+    with pytest.raises(RuntimeError, match="integer exceeds the bounded bit-length limit"):
+        _validate_run_card_payload(payload, schema_version="v1")
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_packaged_run_card_schema_path_resolves_installed_resource(version: str) -> None:
+    schema_path = get_run_card_schema_path(version)
+
+    assert schema_path.is_file()
+    assert schema_path.name == f"run_card.{version}.schema.json"
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == load_run_card_schema(version)
+
+
+def test_run_card_schema_error_message_is_bounded() -> None:
+    payload = _valid_run_card_payload()
+    payload["artifact_index"][0]["sha256"] = "x" * 1_000_000
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _validate_run_card_payload(payload, schema_version="v1")
+
+    message = str(exc_info.value)
+    assert len(message) <= 1_024
+    assert "artifact_index.0.sha256" in message
+
+
+def test_run_card_rejects_oversized_collection_before_schema_walk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformation_portal.lux_depth_v3.validators.run_card_validator as validator_module
+
+    payload = _valid_run_card_payload()
+    payload["artifact_index"].append(dict(payload["artifact_index"][0]))
+    original_collection_limit = validator_module._collection_limit
+    monkeypatch.setattr(
+        validator_module,
+        "_collection_limit",
+        lambda path: 1 if path == ("artifact_index",) else original_collection_limit(path),
+    )
+
+    with pytest.raises(RuntimeError, match="artifact_index exceeds the bounded limit of 1"):
+        _validate_run_card_payload(payload, schema_version="v1")
+
+
+@pytest.mark.parametrize("schema_version", ["v2", "V2"])
+def test_v2_run_card_rejects_artifact_tree_collection_before_schema_walk(
+    schema_version: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformation_portal.lux_depth_v3.validators.run_card_validator as validator_module
+
+    payload = _payload_for_run_card_schema_version("v2")
+    payload["artifact_tree"]["artifacts"] = [{}, {}]
+    monkeypatch.setattr(validator_module, "_V2_ARTIFACT_TREE_LIMIT", 1)
+
+    with pytest.raises(RuntimeError, match="artifact_tree.artifacts exceeds the bounded limit of 1"):
+        _validate_run_card_payload(payload, schema_version=schema_version)
 
 
 @pytest.mark.parametrize("version", ["v3", "legacy", 2])
@@ -370,8 +464,7 @@ def test_run_card_schema_rejects_invalid_merkle_root():
 def test_run_card_schema_rejects_result_summary_captioning_quality_gate_use() -> None:
     pytest.importorskip("jsonschema")
     for version in ("v1", "v2"):
-        payload = json.loads(json.dumps(_valid_run_card_payload()))
-        payload["run_card_version"] = version
+        payload = json.loads(json.dumps(_payload_for_run_card_schema_version(version)))
         payload["result_summary"] = [
             {
                 "image": "image.tif",
@@ -1020,7 +1113,7 @@ def test_run_card_segmentation_performance_warning_requires_sam2_backend() -> No
         materials_summary=materials_summary,
     )
 
-    assert warnings == []
+    assert not warnings
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
@@ -2283,7 +2376,7 @@ def test_emit_run_card_failure_never_deletes_completed_card_or_leaves_stale_atte
         )
 
     if failure_stage == "invalidate":
-        assert write_attempts == []
+        assert not write_attempts
         assert run_card_path.read_bytes() == prior_run_card
         assert sidecar_path.read_bytes() == prior_sidecar
     elif failure_stage == "run_card":
@@ -2309,7 +2402,7 @@ def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path
     input_path.write_bytes(b"pixels")
 
     with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256", side_effect=AssertionError("hashing")):
-        assert orch._build_run_card_inputs([{"image": str(input_path)}]) == []
+        assert not orch._build_run_card_inputs([{"image": str(input_path)}])
 
 
 def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> None:

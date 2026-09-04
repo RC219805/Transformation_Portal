@@ -19,12 +19,12 @@ Requirements:
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 try:
     from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, get_preset, list_presets
     from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest
 except ImportError as e:
     print(f"Error: Could not import lux_depth_v3 module: {e}")
     print("\nPlease ensure the package is installed:")
@@ -32,7 +32,40 @@ except ImportError as e:
     sys.exit(1)
 
 
-def main():
+def _authoritative_output_paths(
+    result: Mapping[str, object],
+    *,
+    require_float_depth: bool,
+) -> dict[str, Path]:
+    """Return only paths carried by the result and its combined manifest."""
+
+    result_fields = {
+        "depth": "depth_path",
+        "manifest": "manifest",
+    }
+    if require_float_depth:
+        result_fields["depth_float"] = "depth_float_path"
+
+    outputs: dict[str, Path] = {}
+    for label, field_name in result_fields.items():
+        value = result.get(field_name)
+        if not isinstance(value, str) or not value:
+            raise RuntimeError(f"successful result is missing {field_name}")
+        outputs[label] = Path(value)
+
+    combined_manifest = CombinedManifest.load(outputs["manifest"])
+    if not isinstance(combined_manifest.pbr_assets, dict):
+        raise RuntimeError("successful PBR result is missing combined-manifest PBR assets")
+    for label in ("normal", "roughness", "ao"):
+        value = combined_manifest.pbr_assets.get(f"{label}_path")
+        if not isinstance(value, str) or not value:
+            raise RuntimeError(f"combined manifest is missing {label}_path")
+        outputs[label] = Path(value)
+
+    return outputs
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate PBR maps using optimized presets for luxury real estate",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -90,7 +123,7 @@ Examples:
 
         print("\nFor detailed parameter info, see:")
         print("  docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md")
-        return
+        return 0
 
     # Validate required arguments
     if not args.input:
@@ -164,37 +197,41 @@ Examples:
     image_paths = list(prepared.input_files)
     orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
-    # Process images
+    # Process the complete frozen selection so final batch evidence is emitted.
+    batch_results = orchestrator.enhance_batch(
+        prepared.input_root,
+        input_files=list(prepared.input_files),
+    )
+    if len(batch_results) != len(image_paths):
+        raise RuntimeError(f"batch returned {len(batch_results)} results for {len(image_paths)} prepared inputs")
     successful = 0
     failed = 0
 
-    for i, img_path in enumerate(image_paths, 1):
-        print(f"[{i}/{len(image_paths)}] Processing: {img_path.name}")
+    for i, (img_path, result) in enumerate(zip(image_paths, batch_results), 1):
+        print(f"[{i}/{len(image_paths)}] Processed: {img_path.name}")
+        if result.get("status") != "ok":
+            print(f"  ✗ Failed: {result.get('error') or result.get('reason') or 'non-ok status'}")
+            failed += 1
+            continue
 
         try:
-            image_input = ImageInput(path=img_path)
-            result = orchestrator.enhance_image(image_input, input_root=prepared.input_root)
-
-            # Report outputs
-            stem = img_path.stem
-            outputs = []
-            if (output_root / f"{stem}_depth.png").exists():
-                outputs.append("depth")
-            if (output_root / f"{stem}_depth_float.npy").exists():
-                outputs.append("depth_float")
-            if (output_root / f"{stem}_normal.png").exists():
-                outputs.append("normal")
-            if (output_root / f"{stem}_roughness.png").exists():
-                outputs.append("roughness")
-            if (output_root / f"{stem}_ao.png").exists():
-                outputs.append("ao")
-
-            print(f"  ✓ Generated: {', '.join(outputs)}")
-            successful += 1
-
-        except Exception as e:
-            print(f"  ✗ Failed: {e}")
+            outputs = _authoritative_output_paths(
+                result,
+                require_float_depth=config.save_float_depth,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"  ✗ Invalid output evidence: {exc}")
             failed += 1
+            continue
+
+        missing = [label for label, path in outputs.items() if not path.is_file()]
+        if missing:
+            print(f"  ✗ Missing evidence-bound outputs: {', '.join(missing)}")
+            failed += 1
+            continue
+
+        print(f"  ✓ Generated: {', '.join(outputs)}")
+        successful += 1
 
     # Summary
     print(f"\n{'='*60}")
@@ -204,16 +241,10 @@ Examples:
     if failed > 0:
         print(f"Failed:     {failed}/{len(image_paths)}")
     print(f"Output:     {output_root}")
-    print(f"\nGenerated files for each image:")
-    print(f"  - <name>_depth.png (16-bit depth visualization)")
-    if config.save_float_depth:
-        print(f"  - <name>_depth_float.npy (high-precision depth)")
-    print(f"  - <name>_normal.png (RGB normal map)")
-    print(f"  - <name>_roughness.png (grayscale roughness)")
-    print(f"  - <name>_ao.png (grayscale ambient occlusion)")
-    print(f"  - <name>_manifest.json (processing metadata)")
+    print("\nExact output paths were read from each batch result and combined manifest.")
     print(f"{'='*60}\n")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import PurePosixPath
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from transformation_portal.schemas.run_card import (
     RUN_CARD_SCHEMA_URIS,
@@ -72,21 +72,35 @@ def render_run_card_output_relative_path(path_value: Any, output_root: Any) -> O
 def build_runtime_licensing_manifest(
     *,
     model_contract: Optional[Mapping[str, Any]] = None,
+    model_contracts: Optional[Sequence[Mapping[str, Any]]] = None,
     config: Any = None,
 ) -> dict[str, Any]:
     """Build machine-readable runtime licensing evidence for run cards/manifests."""
+    if model_contract is not None and model_contracts is not None:
+        raise ValueError("Provide either model_contract or model_contracts, not both")
+
     models: list[dict[str, Any]] = []
-    if isinstance(model_contract, Mapping):
+    contracts: Sequence[Mapping[str, Any]]
+    if model_contracts is not None:
+        contracts = model_contracts
+    elif isinstance(model_contract, Mapping):
+        contracts = (model_contract,)
+    else:
+        contracts = ()
+
+    for contract in contracts:
+        if not isinstance(contract, Mapping):
+            raise TypeError("model_contracts must contain mapping values")
         model_id = str(
-            model_contract.get("resolved_repo_id")
-            or model_contract.get("canonical_model_key")
-            or model_contract.get("requested_model_selector")
+            contract.get("resolved_repo_id")
+            or contract.get("canonical_model_key")
+            or contract.get("requested_model_selector")
             or ""
         ).strip()
-        license_id = str(model_contract.get("license_id") or "unknown").strip() or "unknown"
-        runtime_role = str(model_contract.get("backend_kind") or "depth").strip() or "depth"
-        usage_class = str(model_contract.get("usage_class") or "").strip()
-        requires_non_commercial_ok = bool(model_contract.get("requires_non_commercial_ok", False))
+        license_id = str(contract.get("license_id") or "unknown").strip() or "unknown"
+        runtime_role = str(contract.get("backend_kind") or "depth").strip() or "depth"
+        usage_class = str(contract.get("usage_class") or "").strip()
+        requires_non_commercial_ok = bool(contract.get("requires_non_commercial_ok", False))
         if model_id:
             models.append(
                 {
@@ -97,9 +111,6 @@ def build_runtime_licensing_manifest(
                     "requires_non_commercial_ok": requires_non_commercial_ok,
                 }
             )
-    else:
-        requires_non_commercial_ok = False
-
     non_commercial_ok = bool(getattr(config, "non_commercial_ok", False))
     apple_research_ack = bool(getattr(config, "accept_apple_depth_pro_research_license", False))
     research_tools_ack = bool(getattr(config, "accept_research_tools_license", False))

@@ -98,14 +98,15 @@ The maintained APEX depth workflow uses `lux-depth-v3` and the commercial-safe
   --materials-v3 on \
   --pbr on \
   --cache-depth on \
-  --emit-master16 on \
-  --emit-upscaled16 on \
-  --emit-marketing on \
-  --emit-report on \
+  --output-bit-depth 16 \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite
 ```
+
+The combined processing manifest is unconditional. Lux does not produce a
+separate marketing deliverable; create delivery derivatives in a separately
+specified downstream workflow.
 
 For research-only models, follow the license-acknowledgement flows in
 [LUX_DEPTH_V3_CLI_GUIDE.md](../cli/LUX_DEPTH_V3_CLI_GUIDE.md). Do not replace

@@ -193,7 +193,10 @@ jobs:
           echo "tp wheel import path: ${TP_FILE}"
           python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
           python - <<'PY'
+          from copy import deepcopy
           from pathlib import Path
+
+          from jsonschema import Draft202012Validator, ValidationError
 
           from transformation_portal.core.execution_plan import (
               UnsupportedExecutionPlanSchema,
@@ -201,6 +204,7 @@ jobs:
               parse_execution_plan_json,
           )
           from transformation_portal.lux_depth_v3.config import EnhanceConfig
+          from transformation_portal.lux_depth_v3.execution_evidence import load_execution_evidence_schema
           from transformation_portal.lux_depth_v3.execution_plan_adapter import (
               ResolvedInvocationCompatibilityError,
               adapt_resolved_invocation,
@@ -210,9 +214,69 @@ jobs:
               build_resolved_invocation,
               load_resolved_invocation_schema,
           )
+          from transformation_portal.schemas.run_card import (
+              get_run_card_schema_path,
+              load_run_card_schema,
+          )
 
           execution_schema = load_execution_plan_schema()
           assert execution_schema["$id"] == "tp.execution.plan.v1"
+          evidence_schema = load_execution_evidence_schema()
+          assert evidence_schema["$id"] == "tp.lux.execution.evidence.v1"
+          Draft202012Validator.check_schema(evidence_schema)
+          evidence_validator = Draft202012Validator(evidence_schema)
+          sha256 = "0" * 64
+          requested = {
+              "declaration_id": "lux.depth.u16",
+              "stage_registry_id": "lux.depth",
+              "artifact_kind": "depth_u16_png",
+              "scope": "per_input",
+              "cardinality": "one",
+              "required": True,
+          }
+          representative_evidence = {
+              "schema": "tp.lux.execution.evidence.v1",
+              "canonicalization": "tp.canonical.json.v1",
+              "evidence_fingerprint_sha256": sha256,
+              "plan_schema": "tp.execution.plan.v1",
+              "plan_fingerprint": sha256,
+              "config_fingerprint_sha256": sha256,
+              "planned_backend": "synthetic",
+              "candidate_fallback_chain": ["synthetic"],
+              "executed_backend": None,
+              "requested_inputs": [{
+                  "input_id": "sample.png",
+                  "path": "sample.png",
+                  "status": "error",
+                  "executed_backend": None,
+                  "error_code": "smoke_failure",
+              }],
+              "requested_artifacts": [requested],
+              "produced_artifacts": [],
+              "omitted_artifacts": [],
+              "failed_artifacts": [{
+                  **requested,
+                  "input_id": "sample.png",
+                  "reason_code": "required_output_missing",
+              }],
+          }
+          evidence_validator.validate(representative_evidence)
+          invalid_evidence = deepcopy(representative_evidence)
+          invalid_evidence["schema"] = "tp.lux.execution.evidence.v2"
+          try:
+              evidence_validator.validate(invalid_evidence)
+          except ValidationError:
+              pass
+          else:
+              raise AssertionError("installed-wheel evidence schema accepted an unknown version")
+          for run_card_version in ("v1", "v2"):
+              run_card_schema_path = get_run_card_schema_path(run_card_version)
+              assert run_card_schema_path.is_file()
+              assert "site-packages" in run_card_schema_path.as_posix()
+              run_card_schema = load_run_card_schema(run_card_version)
+              Draft202012Validator.check_schema(run_card_schema)
+              assert run_card_schema_path.read_text(encoding="utf-8")
+          print("run-card installed-wheel schema smoke passed")
           captioning_schema = execution_schema["$defs"]["captioningConfiguration"]
           frozen_fastvlm_fields = {"model_path", "review_model_path", "max_tokens", "temperature"}
           assert frozen_fastvlm_fields <= set(captioning_schema["properties"])

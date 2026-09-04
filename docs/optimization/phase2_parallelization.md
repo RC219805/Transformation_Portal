@@ -134,6 +134,10 @@ input_root = Path("input_images").resolve()
 inputs = sorted(input_root.glob("*.jpg"))
 prepared = prepare_lux_execution(config, input_root, inputs)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("output"))
+results = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)
 ```
 
 Depth caching requires `EnhanceOrchestrator.from_prepared(...)`. The direct

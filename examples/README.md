@@ -100,6 +100,7 @@ Image.fromarray(ao_adjusted).save("output/custom_ao.png")
 Override preset parameters for fine-tuning:
 
 ```python
+from pathlib import Path
 from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
 from transformation_portal.lux_depth_v3.pbr import PBRConfig
 
@@ -119,7 +120,7 @@ custom_config = PBRConfig(
 )
 
 # Process with custom config
-processor = PBRProcessor(config=custom_config, output_dir="output/custom_pbr/")
+processor = PBRProcessor(config=custom_config, output_dir=Path("output/custom_pbr/"))
 maps = processor.from_depth(depth, save=True, base_name="scene1")
 ```
 
@@ -190,13 +191,26 @@ python examples/process_750_picacho_pbr.py --list-presets
 **Expected Outputs:**
 ```
 output_750_picacho_pbr/
-├── 750Picacho_PrimaryBedroom_Ultimate_depth.png       # 16-bit depth visualization
-├── 750Picacho_PrimaryBedroom_Ultimate_depth_float.npy # High-precision depth array
-├── 750Picacho_PrimaryBedroom_Ultimate_normal.png      # RGB normal map
-├── 750Picacho_PrimaryBedroom_Ultimate_roughness.png   # Grayscale roughness
-├── 750Picacho_PrimaryBedroom_Ultimate_ao.png          # Ambient occlusion
-└── 750Picacho_PrimaryBedroom_Ultimate_manifest.json   # Processing metadata
+├── depth/
+│   ├── <input-key>_depth.png       # 16-bit depth visualization
+│   ├── <input-key>_depth.npy       # High-precision depth array
+│   └── <input-key>_depth_metadata.json # Depth provenance and statistics
+├── pbr/
+│   ├── <input-key>_normal.png      # RGB normal map
+│   ├── <input-key>_roughness.png   # Grayscale roughness
+│   └── <input-key>_ao.png          # Ambient occlusion
+├── manifests/
+│   ├── <input-key>_combined.json        # Processing metadata
+│   ├── batch_<batch-id>.json
+│   └── execution_evidence_<batch-id>.json # Detached completion record
+├── run_card_<batch-id>.json             # Reproducibility card
+└── run_card_<batch-id>.self.json        # Run-card self-integrity sidecar
 ```
+
+Per-image depth and manifest paths are returned by `enhance_batch`; PBR paths
+are recorded in each combined manifest, while the batch manifest, detached
+execution evidence, and optional run card are completion records. `<input-key>`
+includes the normalized source extension and a stable path hash.
 
 **Material Analysis:**
 The 750 Picacho Primary Bedroom contains:

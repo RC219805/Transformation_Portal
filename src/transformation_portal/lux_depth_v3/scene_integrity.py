@@ -14,7 +14,7 @@ from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
 from .manifest import compute_file_sha256
 from .scene_context import CameraWithProvenance, SceneContext
-from .scene_groups import normalize_relative_path
+from .scene_groups import lexical_relative_path, normalize_relative_path
 from .security import sanitize_path_component_nonlossy
 
 SCENE_MANIFEST_SCHEMA = "tp.scene_manifest.v1"
@@ -25,6 +25,35 @@ MIN_BASELINE = 1e-4
 DEFAULT_MAX_FORWARD_ANGLE_DEG = 60.0
 DEFAULT_MIN_PAIR_FRACTION = 0.3
 DEFAULT_WEAK_OVERLAP_THRESHOLD = 0.25
+
+
+def validate_image_sha256_overrides(
+    overrides: Optional[Sequence[str]],
+    *,
+    expected_count: int,
+) -> Optional[tuple[str, ...]]:
+    """Validate an aligned set of already-captured canonical SHA-256 digests."""
+
+    if overrides is None:
+        return None
+    if isinstance(overrides, (str, bytes, bytearray)):
+        raise ValueError("image_sha256_overrides must be a sequence of SHA-256 digests")
+    try:
+        values = tuple(overrides)
+    except TypeError as exc:
+        raise ValueError("image_sha256_overrides must be a sequence of SHA-256 digests") from exc
+    if len(values) != expected_count:
+        raise ValueError(
+            "image_sha256_overrides must align with context images: " f"expected {expected_count}, got {len(values)}"
+        )
+    for digest in values:
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise ValueError("image_sha256_overrides must contain lowercase 64-character hexadecimal digests")
+    return values
 
 
 def _camera_center_from_extrinsics(extrinsics: np.ndarray) -> np.ndarray:
@@ -46,18 +75,36 @@ def build_scene_manifest(
     output_root: Path,
     segmentation_artifact_paths: Sequence[Path],
     camera_sidecar_path: Optional[Path] = None,
+    camera_sidecar_sha256: Optional[str] = None,
+    image_sha256_overrides: Optional[Sequence[str]] = None,
+    paths_are_canonical: bool = False,
 ) -> Dict[str, Any]:
     """Build deterministic, hash-anchored scene manifest for reconstruction gating."""
     output_root_resolved = output_root.resolve()
+    validated_image_hashes = validate_image_sha256_overrides(
+        image_sha256_overrides,
+        expected_count=len(context.images),
+    )
+    if paths_are_canonical and validated_image_hashes is None:
+        raise ValueError("paths_are_canonical requires image_sha256_overrides")
 
     images_payload = []
-    for image_path in context.images:
-        resolved = image_path.resolve()
+    for index, image_path in enumerate(context.images):
+        if paths_are_canonical:
+            image_relative_path = lexical_relative_path(image_path, context.dataset_root)
+            serialized_path = Path(image_path)
+        else:
+            serialized_path = image_path.resolve()
+            image_relative_path = normalize_relative_path(serialized_path, context.dataset_root)
         images_payload.append(
             {
-                "path": str(resolved),
-                "relative_path": normalize_relative_path(resolved, context.dataset_root),
-                "sha256": compute_file_sha256(resolved),
+                "path": str(serialized_path),
+                "relative_path": image_relative_path if paths_are_canonical else image_relative_path.lower(),
+                "sha256": (
+                    validated_image_hashes[index]
+                    if validated_image_hashes is not None
+                    else compute_file_sha256(serialized_path)
+                ),
             }
         )
 
@@ -79,7 +126,19 @@ def build_scene_manifest(
         segmentation_payload.append(entry)
 
     camera_sidecar_payload: Optional[Dict[str, str]] = None
-    if camera_sidecar_path is not None and camera_sidecar_path.exists():
+    if camera_sidecar_sha256 is not None:
+        normalized_sidecar_sha256 = camera_sidecar_sha256.strip().lower()
+        if camera_sidecar_path is None:
+            raise ValueError("camera_sidecar_sha256 requires camera_sidecar_path")
+        if len(normalized_sidecar_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in normalized_sidecar_sha256
+        ):
+            raise ValueError("camera_sidecar_sha256 must be a SHA-256 hex digest")
+        camera_sidecar_payload = {
+            "path": str(camera_sidecar_path.absolute()),
+            "sha256": normalized_sidecar_sha256,
+        }
+    elif camera_sidecar_path is not None and camera_sidecar_path.exists():
         resolved_sidecar = camera_sidecar_path.resolve()
         camera_sidecar_payload = {
             "path": str(resolved_sidecar),
@@ -138,16 +197,32 @@ def verify_scene_integrity(
     *,
     artifact_index: Optional[Mapping[str, Mapping[str, Any]]] = None,
     base_dir: Optional[Path] = None,
+    image_verification_paths: Optional[Sequence[Path]] = None,
 ) -> None:
     """Verify scene manifest integrity before reconstruction executes."""
     images = scene_manifest.get("images", [])
     if not isinstance(images, list) or not images:
         raise RuntimeError("Scene integrity error: scene manifest must include non-empty images list")
 
-    for image in images:
+    verification_paths: Optional[tuple[Path, ...]] = None
+    if image_verification_paths is not None:
+        if isinstance(image_verification_paths, (str, bytes, bytearray)):
+            raise RuntimeError("Scene integrity error: image verification paths must be a sequence")
+        try:
+            verification_paths = tuple(Path(path) for path in image_verification_paths)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("Scene integrity error: image verification paths are invalid") from exc
+        if len(verification_paths) != len(images):
+            raise RuntimeError("Scene integrity error: image verification paths must align with images")
+
+    for index, image in enumerate(images):
         if not isinstance(image, dict):
             raise RuntimeError("Scene integrity error: image entries must be objects")
-        image_path = _resolve_manifest_path(image.get("path"), base_dir=base_dir)
+        image_path = (
+            verification_paths[index]
+            if verification_paths is not None
+            else _resolve_manifest_path(image.get("path"), base_dir=base_dir)
+        )
         if image_path is None or not image_path.exists():
             raise RuntimeError(f"Scene integrity error: missing image {image.get('path')}")
         expected_image_hash = image.get("sha256")
@@ -175,16 +250,23 @@ def verify_scene_integrity(
             if actual_segmentation_hash != expected_segmentation_hash:
                 raise RuntimeError(f"Scene integrity error: SHA256 mismatch for {segmentation_path}")
 
-    sidecar = scene_manifest.get("camera_sidecar")
-    if isinstance(sidecar, dict):
+    if "camera_sidecar" in scene_manifest:
+        sidecar = scene_manifest["camera_sidecar"]
+        if not isinstance(sidecar, Mapping):
+            raise RuntimeError("Scene integrity error: camera_sidecar must be an object")
         sidecar_path = _resolve_manifest_path(sidecar.get("path"), base_dir=base_dir)
         if sidecar_path is None or not sidecar_path.exists():
             raise RuntimeError(f"Scene integrity error: missing camera sidecar {sidecar.get('path')}")
         expected_sidecar_hash = sidecar.get("sha256")
-        if isinstance(expected_sidecar_hash, str):
-            actual_sidecar_hash = compute_file_sha256(sidecar_path)
-            if actual_sidecar_hash != expected_sidecar_hash:
-                raise RuntimeError(f"Scene integrity error: SHA256 mismatch for camera sidecar {sidecar_path}")
+        if (
+            not isinstance(expected_sidecar_hash, str)
+            or len(expected_sidecar_hash) != 64
+            or any(character not in "0123456789abcdef" for character in expected_sidecar_hash)
+        ):
+            raise RuntimeError("Scene integrity error: camera sidecar SHA256 must be lowercase hexadecimal")
+        actual_sidecar_hash = compute_file_sha256(sidecar_path)
+        if actual_sidecar_hash != expected_sidecar_hash:
+            raise RuntimeError(f"Scene integrity error: SHA256 mismatch for camera sidecar {sidecar_path}")
 
     if artifact_index:
         inputs = scene_manifest.get("inputs", [])

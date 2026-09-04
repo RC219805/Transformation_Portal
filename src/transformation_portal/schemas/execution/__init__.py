@@ -1,1 +1,1 @@
-"""Package-owned canonical execution-plan schema resources."""
+"""Package-owned canonical execution-plan and evidence schema resources."""

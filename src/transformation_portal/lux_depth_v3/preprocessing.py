@@ -206,29 +206,21 @@ def preprocess_image_snapshot(
 ) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
     """Decode one immutable source-byte snapshot and return its SHA-256.
 
-    Standard images are opened without following a final symlink when the
-    platform supports it, then copied once from that regular-file descriptor
-    into a spooled snapshot. The digest and decoded pixels therefore describe
-    the exact same bytes even if the source path is replaced after it is
-    opened. ``opened_file_stat_validator`` is invoked with the initial
-    descriptor stat before any source bytes are read, allowing a prepared-run
-    caller to bind the opened file to its own authority. ``verify_snapshot``
-    runs PIL's strict verifier against the same immutable snapshot before it is
-    reopened for decoding.
-
-    RAW decoding currently requires a filesystem path in the canonical ingest
-    adapter, so RAW inputs deliberately return no cache-authorizing digest and
-    do not invoke the opened-file validator.
+    Inputs are opened without following a final symlink when the platform
+    supports it, then copied once from that regular-file descriptor into an
+    immutable snapshot. Standard images decode from an in-memory spool. RAW
+    decoders require a pathname, so they consume a private, uniquely named
+    temporary copy with the original suffix. The digest and decoded pixels
+    therefore describe the exact same source bytes even if the source path is
+    replaced after it is opened. ``opened_file_stat_validator`` is invoked
+    before any source bytes are read. ``verify_snapshot`` runs PIL's strict
+    verifier for standard images against the same immutable snapshot.
     """
 
     path = Path(image_path)
     extension = path.suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported image format: {extension}. " f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
-    if is_raw_file(path):
-        processed, original_shape = preprocess_image(path, target_size=target_size, raw_config=raw_config)
-        return processed, original_shape, None
-
     path_stat = path.lstat()
     if not stat.S_ISREG(path_stat.st_mode):
         raise ValueError(f"Image input must be a regular non-symlink file: {path}")
@@ -270,7 +262,9 @@ def preprocess_image_snapshot(
 
     digest = hashlib.sha256()
     copied = 0
-    with source, tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024, mode="w+b") as snapshot:
+
+    def copy_source(snapshot: Any) -> None:
+        nonlocal copied
         while True:
             chunk = source.read(1024 * 1024)
             if not chunk:
@@ -281,23 +275,118 @@ def preprocess_image_snapshot(
         copied_stat = os.fstat(source.fileno())
         if copied != source_stat.st_size or _stable_identity(copied_stat) != _stable_identity(source_stat):
             raise ValueError(f"Image input changed while its byte snapshot was captured: {path}")
-        try:
-            snapshot.seek(0)
-            if verify_snapshot:
-                with Image.open(snapshot) as verified_image:
-                    verified_image.verify()
+
+    with source:
+        if is_raw_file(path):
+            with tempfile.TemporaryDirectory(prefix="tp-prepared-raw-") as snapshot_dir_name:
+                snapshot_dir = Path(snapshot_dir_name)
+                with tempfile.NamedTemporaryFile(
+                    mode="w+b",
+                    prefix="input-",
+                    suffix=path.suffix,
+                    dir=snapshot_dir,
+                    delete=False,
+                ) as raw_snapshot:
+                    snapshot_path = Path(raw_snapshot.name)
+                    copy_source(raw_snapshot)
+                    raw_snapshot.flush()
+                    os.fsync(raw_snapshot.fileno())
+                    os.fchmod(raw_snapshot.fileno(), 0o400)
+                    snapshot_stat = os.fstat(raw_snapshot.fileno())
+
+                # RAW decoders require a pathname. Keep that pathname in a
+                # non-writable private directory during decode, then reopen it
+                # without following symlinks and rehash the exact inode before
+                # allowing its pixels to authorize cache/evidence identity.
+                os.chmod(snapshot_dir, 0o500)
+                try:
+                    processed, original_shape = preprocess_image(
+                        snapshot_path,
+                        target_size=target_size,
+                        raw_config=raw_config,
+                    )
+
+                    snapshot_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+                    snapshot_flags |= getattr(os, "O_NOFOLLOW", 0)
+                    snapshot_descriptor = os.open(snapshot_path, snapshot_flags)
+                    try:
+                        reopened_snapshot_stat = os.fstat(snapshot_descriptor)
+                        if _stable_identity(reopened_snapshot_stat) != _stable_identity(snapshot_stat):
+                            raise ValueError(f"RAW byte snapshot changed while it was decoded: {path}")
+                        snapshot_digest = hashlib.sha256()
+                        with os.fdopen(snapshot_descriptor, "rb", closefd=True) as reopened_snapshot:
+                            snapshot_descriptor = -1
+                            while True:
+                                chunk = reopened_snapshot.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                snapshot_digest.update(chunk)
+                    finally:
+                        if snapshot_descriptor >= 0:
+                            os.close(snapshot_descriptor)
+
+                    if snapshot_digest.hexdigest() != digest.hexdigest():
+                        raise ValueError(f"RAW byte snapshot changed while it was decoded: {path}")
+                    final_stat = os.fstat(source.fileno())
+                    if _stable_identity(final_stat) != _stable_identity(source_stat):
+                        raise ValueError(f"Image input changed while its byte snapshot was decoded: {path}")
+                    return processed, original_shape, digest.hexdigest()
+                finally:
+                    os.chmod(snapshot_dir, 0o700)
+
+        with tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024, mode="w+b") as snapshot:
+            copy_source(snapshot)
+            try:
                 snapshot.seek(0)
-            with Image.open(snapshot) as image:
-                image.load()
-                rgb = np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
-        except Exception as exc:
-            raise ValueError(f"Image file corrupt or invalid: {path}") from exc
-        final_stat = os.fstat(source.fileno())
-        if _stable_identity(final_stat) != _stable_identity(source_stat):
-            raise ValueError(f"Image input changed while its byte snapshot was decoded: {path}")
+                if verify_snapshot:
+                    with Image.open(snapshot) as verified_image:
+                        verified_image.verify()
+                    snapshot.seek(0)
+                with Image.open(snapshot) as image:
+                    image.load()
+                    rgb = np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
+            except Exception as exc:
+                raise ValueError(f"Image file corrupt or invalid: {path}") from exc
+            final_stat = os.fstat(source.fileno())
+            if _stable_identity(final_stat) != _stable_identity(source_stat):
+                raise ValueError(f"Image input changed while its byte snapshot was decoded: {path}")
 
     processed, original_shape = preprocess_image(rgb, target_size=target_size, raw_config=raw_config)
     return processed, original_shape, digest.hexdigest()
+
+
+def probe_image_dimensions(
+    image_path: Union[str, Path],
+    *,
+    raw_config: Optional[Any] = None,
+) -> tuple[int, int]:
+    """Read exact image dimensions without allocating decoded RGB pixels."""
+
+    path = Path(image_path)
+    extension = path.suffix.lower()
+    if extension not in SUPPORTED_EXTENSIONS:
+        raise ValueError(f"Unsupported image format: {extension}. " f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
+    if is_raw_file(path):
+        if raw_config is None:
+            raise ValueError("RAW dimension probing requires the carried ingest configuration")
+        from .ingest_adapter import probe_raw_dimensions
+
+        return probe_raw_dimensions(path, cast(Any, raw_config))
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+    except Exception as exc:
+        raise ValueError(f"Image header corrupt or invalid: {path}") from exc
+    if (
+        isinstance(width, bool)
+        or not isinstance(width, int)
+        or width <= 0
+        or isinstance(height, bool)
+        or not isinstance(height, int)
+        or height <= 0
+    ):
+        raise ValueError(f"Image exposes invalid dimensions: {width}x{height}")
+    return width, height
 
 
 def preprocess_from_linear_ingest(

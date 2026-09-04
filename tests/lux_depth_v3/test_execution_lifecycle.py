@@ -133,7 +133,7 @@ def test_prepared_inputs_are_real_absolute_and_exactly_authorized(tmp_path: Path
 
 
 @pytest.mark.security
-@pytest.mark.parametrize("boundary", ["preprocess", "enhance_image"])
+@pytest.mark.parametrize("boundary", ["preprocess", "authorize_image"])
 def test_prepared_orchestrator_uses_authorized_path_after_alias_retarget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -182,28 +182,9 @@ def test_prepared_orchestrator_uses_authorized_path_after_alias_retarget(
         assert result["image_input"].path == image.resolve()
     else:
 
-        class AccessObserved(RuntimeError):
-            pass
-
-        def observe_depth_input(**kwargs: object) -> None:
-            authorized_input = kwargs["image_input"]
-            assert isinstance(authorized_input, ImageInput)
-            observed["path"] = authorized_input.path
-            observed["payload"] = authorized_input.path.read_bytes()
-            raise AccessObserved
-
-        monkeypatch.setattr(orchestrator, "_compute_depth_stage", observe_depth_input)
-        with pytest.raises(AccessObserved):
-            orchestrator.enhance_image(
-                ImageInput(alias),
-                input_root=root,
-                _precomputed_paths={
-                    "output_key": Path("scene"),
-                    "depth_path": orchestrator.depth_dir / "scene_depth.png",
-                    "manifest_path": orchestrator.manifests_dir / "scene_combined.json",
-                    "should_skip": False,
-                },
-            )
+        authorized_input = orchestrator._authorize_prepared_image_input(ImageInput(alias))
+        observed["path"] = authorized_input.path
+        observed["payload"] = authorized_input.path.read_bytes()
 
     assert alias.resolve() == outside.resolve()
     assert observed == {
