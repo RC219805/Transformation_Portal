@@ -10,12 +10,8 @@ Tests cover the 7 reliability and correctness improvements:
 7. Defensive check for output existence
 """
 
-import hashlib
-import json
-import os
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -33,7 +29,6 @@ from transformation_portal.lux_depth_v3.manifest import (
     DepthMetadata,
     InputMetadata,
     MaterialsV3Metadata,
-    TimingMetadata,
     V2Metadata,
 )
 from transformation_portal.lux_depth_v3.orchestrator import make_output_key
@@ -678,237 +673,21 @@ class TestFingerprintDrivenSkipInvalidation:
 
         assert should_skip is False
 
-    def test_downstream_only_change_denies_manifest_reuse_but_reuses_cached_depth(self, temp_workspace, caplog):
-        """Downstream-only changes should rerun Stage A from cached depth without inference."""
-        import logging
-
-        import numpy as np
-
-        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    def test_unprepared_cache_configuration_is_rejected(self, temp_workspace):
+        """Legacy direct construction cannot silently disable an enabled cache."""
+        from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
-        tmpdir = Path(temp_workspace["root"])
-        test_image = tmpdir / "downstream_only.jpg"
-        test_image.write_bytes(b"downstream-only-image")
-        depth_path = tmpdir / "downstream_only_depth.png"
-        depth_path.write_bytes(b"depth")
-        float_depth_path = tmpdir / "downstream_only_depth.npy"
-        manifest_path = tmpdir / "downstream_only_manifest.json"
-        output_key = Path("downstream_only")
-        cached_depth = np.full((4, 4), 0.5, dtype=np.float32)
-
-        base_config = EnhanceConfig(generate_pbr=False, enable_v2=False, enable_depth_cache=True)
-        changed_config = EnhanceConfig(generate_pbr=True, enable_v2=False, enable_depth_cache=True)
-
-        with (
-            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
-            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
-            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
-        ):
-            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
-            CombinedManifest(
-                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
-                depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
-                backend_selection=base_orchestrator._capture_backend_metadata(),
-            ).save(manifest_path)
-
-            orchestrator = EnhanceOrchestrator(changed_config, tmpdir / "output_changed", verify_outputs=False)
-
-        class StubBackend:
-            def __init__(self):
-                self.name = "da3"
-                self.device = "cpu"
-                self._device = "cpu"
-                self.license_type = Mock(value="commercial")
-                self.model_id = "depth-anything/Depth-Anything-V3-Large"
-                self.compute = Mock(
-                    side_effect=AssertionError("Depth inference should not run on cache hit"),
-                )
-
-        backend = StubBackend()
-        orchestrator.depth_backend = backend
-        orchestrator._depth_backend_cache["da3"] = backend
-
-        image_sha256 = orchestrator._compute_or_skip_hash(
-            test_image,
-            manifest_exists=False,
-            for_manifest_write=True,
-        )
-        assert image_sha256 is not None
-        cache_fingerprint = orchestrator._build_depth_cache_fingerprint("da3")
-        assert orchestrator.depth_cache is not None
-        orchestrator.depth_cache.store(image_sha256, cache_fingerprint, cached_depth)
-
-        image_input = ImageInput(test_image)
-        assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
-
-        depth_stats = Mock()
-        depth_stats._asdict.return_value = {}
-
-        with (
-            patch(
-                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
-                return_value=test_image,
-            ),
-            patch(
-                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
-                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
-            ),
-            patch(
-                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
-                return_value=(None, None, depth_stats),
-            ),
-            patch("transformation_portal.lux_depth_v3.orchestrator.atomic_write_bytes") as durable_write,
-            patch.object(
-                orchestrator,
-                "_enforce_apex_depth_validity_gate",
-                return_value=None,
-            ),
-            patch.object(
-                orchestrator,
-                "_generate_pbr_stage",
-                return_value={"normal": "generated"},
-            ) as mock_generate_pbr,
-            caplog.at_level(logging.DEBUG),
-        ):
-            (
-                depth_metadata,
-                _depth_runtime_s,
-                pbr_assets,
-                _materials_v3_result,
-                _materials_v3_runtime_s,
-                _enhanced_image_path,
-                backend_selection,
-                depth_attempts,
-            ) = orchestrator._compute_depth_stage(
-                image_input=image_input,
-                output_key=output_key,
-                depth_path=depth_path,
-                float_depth_path=float_depth_path,
-                manifest_path=manifest_path,
-                skip_depth=False,
-            )
-
-        assert depth_metadata is not None
-        assert pbr_assets == {"normal": "generated"}
-        assert backend_selection.resolved_backend == "da3"
-        assert depth_attempts
-        assert depth_attempts[0]["cached"] is True
-        assert depth_attempts[0]["output_normalization"] == "cache_reuse"
-        backend.compute.assert_not_called()
-        mock_generate_pbr.assert_called_once()
-        from transformation_portal.ingest.canonical_json import dumps_json
-
-        expected_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-        expected_metadata_bytes = dumps_json(
-            {
-                "model": depth_metadata.model,
-                "depth_path": depth_metadata.depth_path,
-                "runtime_seconds": depth_metadata.runtime_seconds,
-                "scaling": depth_metadata.scaling,
-                "stats": depth_metadata.stats,
-            },
-            indent=2,
-            sort_keys=True,
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
-        durable_write.assert_called_once_with(expected_metadata_path, expected_metadata_bytes)
-        assert "Stage A depth cache lookup" in caplog.text
-        assert "Cache hit: using cached depth" in caplog.text
-
-    def test_stage_a_cache_miss_logs_diagnostic(self, temp_workspace, caplog):
-        """Stage A should emit a cache-miss diagnostic before falling back to inference."""
-        import logging
-
-        import numpy as np
-
-        from transformation_portal.depth.backends.protocol import DepthResult
-        from transformation_portal.lux_depth_v3.input_manager import ImageInput
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-
-        tmpdir = Path(temp_workspace["root"])
-        test_image = tmpdir / "cache_miss.jpg"
-        test_image.write_bytes(b"cache-miss-image")
-        depth_path = tmpdir / "cache_miss_depth.png"
-        float_depth_path = tmpdir / "cache_miss_depth.npy"
-        manifest_path = tmpdir / "cache_miss_manifest.json"
-
-        with (
-            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
-            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
-            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
-        ):
-            orchestrator = EnhanceOrchestrator(
+        output_root = Path(temp_workspace["root"]) / "output"
+        with pytest.raises(LuxExecutionPlanAuthorityError, match="from_prepared"):
+            EnhanceOrchestrator(
                 EnhanceConfig(enable_v2=False, enable_depth_cache=True),
-                tmpdir / "output",
+                output_root,
                 verify_outputs=False,
             )
 
-        class StubBackend:
-            def __init__(self):
-                self.name = "da3"
-                self.device = "cpu"
-                self._device = "cpu"
-                self.license_type = Mock(value="commercial")
-                self.model_id = "depth-anything/Depth-Anything-V3-Large"
-                self.compute = Mock(
-                    return_value=DepthResult(
-                        depth_map=np.full((4, 4), 0.25, dtype=np.float32),
-                        original_image=np.zeros((4, 4, 3), dtype=np.uint8),
-                        metadata={},
-                        depth_units="relative",
-                        backend_id="da3",
-                        device="cpu",
-                        dtype="float32",
-                        input_size=(4, 4),
-                    )
-                )
-
-        backend = StubBackend()
-        orchestrator.depth_backend = backend
-        orchestrator._depth_backend_cache["da3"] = backend
-        orchestrator.postprocessor.process.side_effect = lambda result: result
-
-        depth_stats = Mock()
-        depth_stats._asdict.return_value = {}
-
-        with (
-            patch(
-                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
-                return_value=test_image,
-            ),
-            patch(
-                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
-                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
-            ),
-            patch(
-                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
-                return_value=(None, None, depth_stats),
-            ),
-            patch.object(
-                orchestrator,
-                "_enforce_apex_depth_validity_gate",
-                return_value=None,
-            ),
-            patch.object(
-                orchestrator,
-                "_generate_pbr_stage",
-                return_value=None,
-            ),
-            caplog.at_level(logging.DEBUG),
-        ):
-            orchestrator._compute_depth_stage(
-                image_input=ImageInput(test_image),
-                output_key=Path("cache_miss"),
-                depth_path=depth_path,
-                float_depth_path=float_depth_path,
-                manifest_path=manifest_path,
-                skip_depth=False,
-            )
-
-        backend.compute.assert_called_once()
-        assert "Stage A depth cache miss" in caplog.text
+        assert not (output_root / ".depth_cache").exists()
+        assert not (output_root / "manifests").exists()
 
     def test_should_skip_v2_invalidates_on_emit_bit_depth_change(self, temp_workspace):
         """Changing V2 output bit-depth flags should invalidate V2 reuse."""

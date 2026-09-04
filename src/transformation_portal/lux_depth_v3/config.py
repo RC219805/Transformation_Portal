@@ -340,8 +340,8 @@ class EnhanceConfig:
     # preserve that compatibility while making projection deterministic.
     max_workers: Optional[int] = None
     max_gpu_workers: Optional[int] = None
-    # Content-addressable depth cache
-    # (opt-in, requires storage)
+    # Identity-v3 content-addressable depth cache. Opt-in and authorized only
+    # through EnhanceOrchestrator.from_prepared(...).
     enable_depth_cache: bool = False
     # Maximum cache size before LRU eviction
     depth_cache_max_size_gb: float = 10.0

@@ -30,7 +30,7 @@ import os
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, cast
 import numpy as np
 
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as load_model_lock_manifest_payload
+from transformation_portal.core.execution_identity_v3 import MaterializedExecutionIdentityV3
 from transformation_portal.core.execution_plan import CanonicalExecutionPlan
 from transformation_portal.core.security.model_lock import is_pinned_revision
 
@@ -118,7 +119,8 @@ from .config_resolver import (
     require_model_variant,
     resolve_preset,
 )
-from .depth_cache import DepthCache
+from .depth_cache import DEPTH_CACHE_SCHEMA, DepthCache
+from .depth_cache_runtime import PreparedDepthCacheRuntimeEvidence
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
@@ -269,6 +271,14 @@ class ApexStrictGateError(RuntimeError):
 
 class _MaskSerializationRejected(RuntimeError):
     """Internal signal for non-fatal mask serialization rejection."""
+
+
+@dataclass(frozen=True)
+class _DepthCacheAuthority:
+    """One complete identity plus the runtime echo required on a miss."""
+
+    identity: MaterializedExecutionIdentityV3
+    runtime_evidence: PreparedDepthCacheRuntimeEvidence
 
 
 def _shape_2d(arr: np.ndarray) -> tuple[int, int]:
@@ -472,6 +482,11 @@ class EnhanceOrchestrator:
             if config.execution_plan_authority is not None or config.execution_plan_canonical_bytes is not None:
                 raise LuxExecutionPlanAuthorityError(
                     "A config carrying execution-plan authority must be constructed with from_prepared"
+                )
+            if config.enable_depth_cache:
+                raise LuxExecutionPlanAuthorityError(
+                    "enable_depth_cache requires EnhanceOrchestrator.from_prepared so every cache access "
+                    "is bound to a complete ExecutionIdentity v3"
                 )
             self._prepared_execution = None
             config = apply_effective_da3_runtime_config(config)
@@ -693,6 +708,31 @@ class EnhanceOrchestrator:
             return image_input
         return ImageInput(path=authorized_path, metadata=image_input.metadata)
 
+    def _validate_opened_prepared_image_input(
+        self,
+        image_path: Path,
+        opened_stat: os.stat_result,
+    ) -> None:
+        """Bind one already-open source handle back to the carried plan path.
+
+        The second authority check closes the race between pathname
+        authorization and descriptor open.  Decoding continues from the same
+        descriptor, so later path replacement cannot change the authorized
+        bytes.
+        """
+
+        if self._prepared_execution is None:
+            return
+        authorized_path = self._require_prepared_input(image_path)
+        try:
+            current_stat = os.stat(authorized_path, follow_symlinks=False)
+        except OSError as exc:
+            raise LuxExecutionPlanAuthorityError(f"Prepared image input changed after it was opened: {image_path}") from exc
+        if not os.path.samestat(opened_stat, current_stat):
+            raise LuxExecutionPlanAuthorityError(
+                f"Opened image input is no longer the file bound to the carried execution plan: {image_path}"
+            )
+
     @property
     def _model_variant(self) -> ModelVariant:
         """Return model_variant; guaranteed set after __init__."""
@@ -871,6 +911,173 @@ class EnhanceOrchestrator:
             registry=self._depth_registry,
             config=self.config,
         )
+
+    def _prepared_input_id(self, image_path: Path) -> Optional[str]:
+        """Return the carried input id for one already-authorized path."""
+
+        prepared = self._prepared_execution
+        if prepared is None:
+            return None
+        prepared = validate_prepared_lux_execution(prepared)
+        candidate = Path(image_path)
+        for planned_input, bound_path in zip(prepared.plan.inputs, prepared.input_files):
+            if candidate == bound_path:
+                return planned_input.input_id
+        raise LuxExecutionPlanAuthorityError("Authorized image path is not bound to a carried execution-plan input")
+
+    def _prepare_depth_cache_authority(
+        self,
+        *,
+        backend: Any,
+        backend_id: str,
+        image_path: Path,
+        input_content_sha256: str,
+    ) -> Optional[_DepthCacheAuthority]:
+        """Materialize complete identity-v3 evidence before a cache lookup.
+
+        A backend without the explicit preparation capability is still allowed
+        to execute under its existing operational contract, but it cannot read
+        or write the production depth cache.
+        """
+
+        prepared = self._prepared_execution
+        input_id = self._prepared_input_id(image_path)
+        if prepared is None or input_id is None:
+            return None
+        prepare_runtime = getattr(backend, "prepare_cache_runtime_identity", None)
+        verify_runtime = getattr(backend, "verify_prepared_cache_runtime_identity", None)
+        if not callable(prepare_runtime) or not callable(verify_runtime):
+            logger.debug(
+                "Depth cache bypass for backend=%s: runtime identity preparation or verification capability is unavailable",
+                backend_id,
+            )
+            return None
+
+        evidence = prepare_runtime(
+            execution_plan=prepared.plan,
+            candidate_id=backend_id,
+            canonical_plan_bytes=prepared.canonical_plan_bytes,
+        )
+        if evidence is None:
+            logger.debug(
+                "Depth cache bypass for backend=%s: runtime identity is incomplete",
+                backend_id,
+            )
+            return None
+        if not isinstance(evidence, PreparedDepthCacheRuntimeEvidence):
+            raise LuxExecutionPlanAuthorityError(f"Backend {backend_id!r} returned malformed depth-cache runtime evidence")
+
+        depth_nodes = [node for node in prepared.plan.nodes if node.stage_registry_id is StageRegistryIdentifier.LUX_DEPTH]
+        if len(depth_nodes) != 1:
+            raise LuxExecutionPlanAuthorityError("Execution plan must carry exactly one Lux depth node")
+        try:
+            identity = MaterializedExecutionIdentityV3.from_plan(
+                prepared.plan,
+                stage_node_id=depth_nodes[0].node_id,
+                candidate_id=backend_id,
+                input_id=input_id,
+                executed_backend=backend_id,
+                input_content_sha256=input_content_sha256,
+                backend_runtime_identities=evidence.backend_runtime_identities,
+                dependency_lock_sha256=evidence.dependency_lock_sha256,
+                interpreter_identity_sha256=evidence.interpreter_identity_sha256,
+                platform_identity_sha256=evidence.platform_identity_sha256,
+                accelerator_identity_sha256=evidence.accelerator_identity_sha256,
+                source_identity_sha256=evidence.source_identity_sha256,
+            )
+        except (TypeError, ValueError) as exc:
+            raise LuxExecutionPlanAuthorityError(
+                f"Backend {backend_id!r} runtime evidence does not match the carried execution plan"
+            ) from exc
+        aggregate_fields = (
+            "dependency_lock_sha256",
+            "interpreter_identity_sha256",
+            "platform_identity_sha256",
+            "accelerator_identity_sha256",
+            "source_identity_sha256",
+        )
+        if any(getattr(identity, field_name) != getattr(evidence, field_name) for field_name in aggregate_fields):
+            raise LuxExecutionPlanAuthorityError(
+                f"Backend {backend_id!r} runtime aggregate does not match its constituent evidence"
+            )
+        authority = _DepthCacheAuthority(identity=identity, runtime_evidence=evidence)
+        if not self._verify_depth_cache_runtime_state(
+            backend,
+            authority,
+            backend_id=backend_id,
+        ):
+            logger.debug(
+                "Depth cache bypass for backend=%s: prepared runtime identity is no longer live",
+                backend_id,
+            )
+            return None
+        return authority
+
+    @staticmethod
+    def _verify_depth_cache_runtime_state(
+        backend: Any,
+        authority: _DepthCacheAuthority,
+        *,
+        backend_id: str,
+    ) -> bool:
+        """Revalidate live runtime evidence without making cache health fatal.
+
+        Cache reuse is an optional optimization.  A missing, malformed, stale,
+        or failing verifier therefore revokes this authority instead of
+        weakening the successful non-cache execution path.
+        """
+
+        verify_runtime = getattr(backend, "verify_prepared_cache_runtime_identity", None)
+        if not callable(verify_runtime):
+            return False
+        try:
+            verified = verify_runtime(
+                runtime_identity_sha256=authority.runtime_evidence.runtime_identity_sha256,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Depth cache runtime verification failed for backend=%s: %s",
+                backend_id,
+                exc,
+            )
+            return False
+        if verified is not True:
+            logger.warning(
+                "Depth cache runtime verification rejected backend=%s",
+                backend_id,
+            )
+            return False
+        return True
+
+    def _authorize_legacy_depth_resume(self, requested: bool) -> bool:
+        """Keep identity-v3 as the sole prepared-run depth reuse authority.
+
+        Existing manifests do not carry complete materialized runtime evidence.
+        Until that versioned evidence exists, a prepared run with the production
+        cache enabled must recompute or take a verified identity-v3 cache hit.
+        """
+
+        if requested and self._prepared_execution is not None and self.depth_cache is not None:
+            logger.info(
+                "Ignoring legacy manifest depth reuse for a prepared cache-enabled run; identity-v3 evidence is required"
+            )
+            return False
+        return requested
+
+    @staticmethod
+    def _verify_depth_cache_runtime_echo(
+        result: Any,
+        authority: _DepthCacheAuthority,
+        *,
+        backend_id: str,
+    ) -> None:
+        """Require a miss execution to echo the exact prepared runtime."""
+
+        metadata = getattr(result, "metadata", None)
+        echoed = metadata.get("runtime_identity_sha256") if isinstance(metadata, Mapping) else None
+        expected = authority.runtime_evidence.runtime_identity_sha256
+        if echoed != expected:
+            raise LuxExecutionPlanAuthorityError(f"Backend {backend_id!r} did not echo the prepared runtime identity")
 
     @staticmethod
     def _infer_operational_error_code(
@@ -1470,42 +1677,64 @@ class EnhanceOrchestrator:
         depth_attempts: List[Dict[str, Any]] = self._seed_depth_attempts_from_selection_fallback()
         active_backend_metadata = self._backend_metadata
         self._active_selected_attempt_index = None
+        skip_depth = self._authorize_legacy_depth_resume(skip_depth)
 
         if not skip_depth:
             # Lazy preprocessing: Only validate
             # and preprocess if running depth
-            from .preprocessing import preprocess_image, validate_image_format
+            from .preprocessing import preprocess_image, preprocess_image_snapshot, validate_image_format
+            from .raw_loader import is_raw_file
 
             # Check for strict verification flag (forward-compatible)
             verify_strict = getattr(self.config, "verify_images", False)
+            image_sha256: Optional[str] = None
+            cache_snapshot_required = self.depth_cache is not None and self._prepared_execution is not None
+            if cache_snapshot_required and not is_raw_file(image_input.path):
+                validated_path = image_input.path
+                preprocessed_array, original_shape, image_sha256 = preprocess_image_snapshot(
+                    validated_path,
+                    raw_config=self.config,
+                    opened_file_stat_validator=lambda opened_stat: self._validate_opened_prepared_image_input(
+                        validated_path,
+                        opened_stat,
+                    ),
+                    verify_snapshot=verify_strict,
+                )
+            else:
+                validated_path = validate_image_format(image_input.path)
 
-            validated_path = validate_image_format(image_input.path)
+                # Optional strict verification for legacy/unprepared and RAW
+                # paths. Prepared standard inputs verify the immutable spool.
+                if verify_strict:
+                    from PIL import Image
 
-            # Optional: strict PIL.verify() for CI/ingest validation
-            if verify_strict:
-                from PIL import Image
+                    try:
+                        with Image.open(validated_path) as img_verify:
+                            img_verify.verify()
+                        logger.debug(
+                            "Strict verification" " passed: %s",
+                            validated_path.name,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "Strict verification" " failed: %s - %s",
+                            validated_path.name,
+                            e,
+                        )
+                        raise ValueError(
+                            "Image failed strict" " verification:" f" {validated_path}",
+                        ) from e
 
-                try:
-                    with Image.open(validated_path) as img_verify:
-                        img_verify.verify()
-                    logger.debug(
-                        "Strict verification" " passed: %s",
-                        validated_path.name,
+                if cache_snapshot_required:
+                    preprocessed_array, original_shape, image_sha256 = preprocess_image_snapshot(
+                        validated_path,
+                        raw_config=self.config,
                     )
-                except Exception as e:
-                    logger.error(
-                        "Strict verification" " failed: %s - %s",
-                        validated_path.name,
-                        e,
+                else:
+                    preprocessed_array, original_shape = preprocess_image(
+                        validated_path,
+                        raw_config=self.config,
                     )
-                    raise ValueError(
-                        "Image failed strict" " verification:" f" {validated_path}",
-                    ) from e
-
-            preprocessed_array, original_shape = preprocess_image(
-                validated_path,
-                raw_config=self.config,
-            )
 
             logger.info(
                 "Stage A: Generating" " depth for %s...",
@@ -1514,18 +1743,11 @@ class EnhanceOrchestrator:
             t0 = time.time()
             try:
                 # Phase 2: Check content-addressable depth cache
-                image_sha256 = None
                 if self.depth_cache:
-                    image_sha256 = self._compute_or_skip_hash(
-                        image_input.path,
-                        manifest_exists=False,
-                        for_manifest_write=True,
-                    )
                     if image_sha256 is None:
                         logger.debug(
-                            "Stage A depth cache lookup skipped for %s: image hash unavailable (hash_mode=%s)",
+                            "Stage A depth cache lookup skipped for %s: an exact cache-authorizing input snapshot is unavailable",
                             output_key,
-                            self.config.hash_mode.value,
                         )
                 else:
                     logger.debug(
@@ -1598,38 +1820,81 @@ class EnhanceOrchestrator:
                     }
 
                     try:
-                        attempt_cache_fp_hash = None
                         cached_depth = None
-                        backend_instance = self._depth_backend_cache.get(
+                        cache_authority: Optional[_DepthCacheAuthority] = None
+                        backend = self._get_or_create_depth_backend(
                             backend_id,
                         )
+                        backend_instance = backend
+                        self.depth_backend = backend
+                        attempt_record.update(
+                            self._resolve_backend_model_artifact(
+                                backend_id,
+                                backend=backend_instance,
+                            ),
+                        )
+                        resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
+                        if isinstance(resolved_backend_device, str) and resolved_backend_device:
+                            attempt_record["device"] = resolved_backend_device
+
                         if self.depth_cache and image_sha256:
-                            attempt_cache_fp_hash = self._build_depth_cache_fingerprint(
-                                backend_id,
+                            cache_authority = self._prepare_depth_cache_authority(
+                                backend=backend,
+                                backend_id=backend_id,
+                                image_path=image_input.path,
+                                input_content_sha256=image_sha256,
                             )
-                            cache_key_preview = f"{image_sha256[:12]}_{attempt_cache_fp_hash[:12]}"
-                            logger.debug(
-                                "Stage A depth cache lookup for %s (backend=%s, key=%s)",
-                                output_key,
-                                backend_id,
-                                cache_key_preview,
-                            )
-                            cached_depth = self.depth_cache.get(
-                                image_sha256,
-                                attempt_cache_fp_hash,
-                            )
-                            if cached_depth is not None:
-                                logger.info(
-                                    "Cache hit: using" " cached depth for" " %s (backend=%s)",
+                            if cache_authority is not None:
+                                cache_key = cache_authority.identity.cache_key(DEPTH_CACHE_SCHEMA)
+                                logger.debug(
+                                    "Stage A depth cache lookup for %s (backend=%s, key=%s)",
                                     output_key,
                                     backend_id,
+                                    cache_key[:12],
                                 )
+                                try:
+                                    cached_depth = self.depth_cache.get(cache_authority.identity)
+                                except Exception as cache_error:
+                                    logger.warning(
+                                        "Depth cache lookup failed for %s (backend=%s); continuing without cache: %s",
+                                        output_key,
+                                        backend_id,
+                                        cache_error,
+                                    )
+                                    cached_depth = None
+                                    cache_authority = None
+                                if cached_depth is not None:
+                                    assert cache_authority is not None
+                                    if self._verify_depth_cache_runtime_state(
+                                        backend,
+                                        cache_authority,
+                                        backend_id=backend_id,
+                                    ):
+                                        logger.info(
+                                            "Cache hit: using cached depth for %s (backend=%s)",
+                                            output_key,
+                                            backend_id,
+                                        )
+                                    else:
+                                        logger.warning(
+                                            "Discarding depth cache hit for %s (backend=%s): live runtime identity changed",
+                                            output_key,
+                                            backend_id,
+                                        )
+                                        cached_depth = None
+                                        cache_authority = None
+                                else:
+                                    logger.debug(
+                                        "Stage A depth cache miss for %s (backend=%s, key=%s)",
+                                        output_key,
+                                        backend_id,
+                                        cache_key[:12],
+                                    )
                             else:
                                 logger.debug(
-                                    "Stage A depth cache miss for %s (backend=%s, key=%s)",
+                                    "Stage A depth cache bypass for %s (backend=%s): incomplete runtime identity",
                                     output_key,
                                     backend_id,
-                                    cache_key_preview,
                                 )
                         elif self.depth_cache:
                             logger.debug(
@@ -1653,8 +1918,15 @@ class EnhanceOrchestrator:
                                 "cache_backend_id": backend_id,
                                 "device": "cache",
                             }
-                            if image_sha256 and attempt_cache_fp_hash:
-                                cache_metadata["cache_key"] = f"{image_sha256}" f"_{attempt_cache_fp_hash}"
+                            if cache_authority is None:
+                                raise LuxExecutionPlanAuthorityError("Depth-cache hit lacks complete identity authority")
+                            cache_metadata.update(
+                                {
+                                    "cache_key": cache_authority.identity.cache_key(DEPTH_CACHE_SCHEMA),
+                                    "execution_identity_sha256": cache_authority.identity.execution_identity_sha256,
+                                    "runtime_identity_sha256": (cache_authority.runtime_evidence.runtime_identity_sha256),
+                                }
+                            )
 
                             result_candidate = DepthResult(
                                 depth_map=cached_depth,
@@ -1667,38 +1939,19 @@ class EnhanceOrchestrator:
                                 input_size=original_shape,
                             )
                         else:
-                            backend = self._get_or_create_depth_backend(
-                                backend_id,
-                            )
-                            backend_instance = backend
-                            self.depth_backend = backend
-                            attempt_record.update(
-                                self._resolve_backend_model_artifact(
-                                    backend_id,
-                                    backend=backend_instance,
-                                ),
-                            )
-                            resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
-                            if (
-                                isinstance(
-                                    resolved_backend_device,
-                                    str,
+                            raw_result = backend.compute(pil_image)
+                            if cache_authority is not None:
+                                self._verify_depth_cache_runtime_echo(
+                                    raw_result,
+                                    cache_authority,
+                                    backend_id=backend_id,
                                 )
-                                and resolved_backend_device
-                            ):
-                                attempt_record["device"] = resolved_backend_device
                             result_candidate = cast(
                                 Any,
                                 self.postprocessor.process(
-                                    backend.compute(pil_image),
+                                    raw_result,
                                 ),
                             )  # type: ignore  # noqa: E501
-                            if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
-                                self.depth_cache.store(
-                                    image_sha256,
-                                    attempt_cache_fp_hash,
-                                    result_candidate.depth_map,
-                                )
 
                         result_device = getattr(
                             result_candidate,
@@ -1777,6 +2030,32 @@ class EnhanceOrchestrator:
                             native_shape=current_shape,
                             artifact_shape=original_shape,
                         )
+
+                        # Publish only a semantically accepted miss under the
+                        # exact identity prepared before lookup. Cache failures
+                        # remain bounded optimizations and never weaken the
+                        # successful execution result.
+                        if cached_depth is None and cache_authority is not None and self.depth_cache is not None:
+                            if self._verify_depth_cache_runtime_state(
+                                backend_instance,
+                                cache_authority,
+                                backend_id=backend_id,
+                            ):
+                                try:
+                                    self.depth_cache.store(cache_authority.identity, native_depth_map)
+                                except Exception as cache_error:
+                                    logger.warning(
+                                        "Depth cache publication failed for %s (backend=%s); preserving the successful result: %s",
+                                        output_key,
+                                        backend_id,
+                                        cache_error,
+                                    )
+                            else:
+                                logger.warning(
+                                    "Skipping depth cache publication for %s (backend=%s): live runtime identity changed",
+                                    output_key,
+                                    backend_id,
+                                )
 
                         artifact_depth_map = native_depth_map
                         if current_shape != original_shape:
@@ -3690,6 +3969,11 @@ class EnhanceOrchestrator:
                 image_input,
             )
 
+        # A precomputed flag is only a legacy manifest hint.  Recheck it at the
+        # execution boundary so prepared cache-enabled runs cannot bypass the
+        # identity-v3 authority path.
+        skip_depth = self._authorize_legacy_depth_resume(skip_depth)
+
         # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
         active_batch_id = getattr(self, "_active_batch_id", None)
@@ -4931,6 +5215,7 @@ class EnhanceOrchestrator:
             manifest_path,
             image_input,
         )
+        should_skip = self._authorize_legacy_depth_resume(should_skip)
 
         return {
             "status": "ok",

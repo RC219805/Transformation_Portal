@@ -19,6 +19,7 @@ import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
@@ -154,7 +155,7 @@ class TestPhase123Integration:
             test_images.append(ImageInput(img_path))
 
         config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_SMALL,
+            model_key="da3-metric",
             # Phase 1: Enabled
             enable_manifest_cache=True,
             chunked_hashing=True,
@@ -166,7 +167,12 @@ class TestPhase123Integration:
             enable_v2=False,
         )
 
-        orch = EnhanceOrchestrator(config, tmp_path / "output")
+        prepared = prepare_lux_execution(
+            config,
+            tmp_path / "input",
+            [image.path for image in test_images],
+        )
+        orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         # Process batch
         results = orch.enhance_batch_parallel(test_images, input_root=tmp_path / "input")
@@ -187,7 +193,7 @@ class TestPhase123Integration:
             test_images.append(ImageInput(img_path))
 
         config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_SMALL,
+            model_key="da3-metric",
             # Phase 1: Enabled
             enable_manifest_cache=True,
             chunked_hashing=True,
@@ -200,7 +206,12 @@ class TestPhase123Integration:
             generate_pbr=True,
         )
 
-        orch = EnhanceOrchestrator(config, tmp_path / "output")
+        prepared = prepare_lux_execution(
+            config,
+            tmp_path / "input",
+            [image.path for image in test_images],
+        )
+        orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         # Process batch
         results = orch.enhance_batch_parallel(test_images, input_root=tmp_path / "input")

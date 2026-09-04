@@ -8,14 +8,15 @@ Validates:
 5. Graceful fallback to sequential processing
 """
 
-import tempfile
+import copy
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
+from tests.lux_depth_v3.test_depth_cache_identity_v3 import _identity as _cache_identity
+from tests.lux_depth_v3.test_depth_cache_identity_v3 import _sha as _cache_sha
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
@@ -32,14 +33,13 @@ class TestDepthCache:
 
         # Create test depth map
         depth = np.random.rand(100, 100).astype(np.float32)
-        image_hash = "test_image_sha256"
-        config_hash = "test_config_fp"
+        identity = _cache_identity()
 
         # Store in cache
-        cache.store(image_hash, config_hash, depth)
+        assert cache.store(identity, depth)
 
         # Retrieve from cache
-        retrieved = cache.get(image_hash, config_hash)
+        retrieved = cache.get(identity)
 
         assert retrieved is not None
         assert np.allclose(retrieved, depth)
@@ -48,7 +48,7 @@ class TestDepthCache:
         """Verify cache miss returns None."""
         cache = DepthCache(tmp_path)
 
-        result = cache.get("nonexistent_image", "nonexistent_config")
+        result = cache.get(_cache_identity(input_label="nonexistent"))
 
         assert result is None
 
@@ -57,15 +57,14 @@ class TestDepthCache:
         cache = DepthCache(tmp_path)
 
         depth = np.random.rand(100, 100).astype(np.float32)
-        image_hash = "same_image"
-        config_hash_1 = "config_v1"
-        config_hash_2 = "config_v2"
+        identity_v1 = _cache_identity(config=_cache_sha("config-v1"))
+        identity_v2 = _cache_identity(config=_cache_sha("config-v2"))
 
         # Store with config v1
-        cache.store(image_hash, config_hash_1, depth)
+        assert cache.store(identity_v1, depth)
 
         # Query with config v2 should miss
-        result = cache.get(image_hash, config_hash_2)
+        result = cache.get(identity_v2)
 
         assert result is None
 
@@ -77,7 +76,7 @@ class TestDepthCache:
         # Store multiple large depth maps to trigger eviction
         for i in range(10):
             depth = np.random.rand(500, 500).astype(np.float32)  # ~1MB each
-            cache.store(f"image_{i}", "config", depth)
+            cache.store(_cache_identity(input_label=f"image-{i}"), depth)
 
         # Cache should have evicted some entries
         stats = cache.stats()
@@ -90,7 +89,7 @@ class TestDepthCache:
         # Store some depth maps
         for i in range(5):
             depth = np.random.rand(100, 100).astype(np.float32)
-            cache.store(f"image_{i}", "config", depth)
+            assert cache.store(_cache_identity(input_label=f"image-{i}"), depth)
 
         stats = cache.stats()
 
@@ -105,7 +104,7 @@ class TestDepthCache:
         # Store depth maps
         for i in range(3):
             depth = np.random.rand(100, 100).astype(np.float32)
-            cache.store(f"image_{i}", "config", depth)
+            assert cache.store(_cache_identity(input_label=f"image-{i}"), depth)
 
         # Clear cache
         cache.clear()
@@ -121,10 +120,10 @@ class TestDepthCache:
         depth = np.random.rand(1000, 1000).astype(np.float32)
 
         # Store depth
-        cache.store("test_image", "test_config", depth)
+        assert cache.store(_cache_identity(), depth)
 
         # Verify no .tmp files left behind
-        tmp_files = list(cache.cache_dir.glob("*.tmp"))
+        tmp_files = list(cache.cache_dir.rglob("*.tmp*"))
         assert len(tmp_files) == 0
 
     def test_cache_corrupted_file_handling(self, tmp_path):
@@ -136,7 +135,7 @@ class TestDepthCache:
         corrupted_path.write_text("not a valid numpy file")
 
         # Should return None for corrupted file
-        result = cache.get("corrupted", "hash")
+        result = cache.get(_cache_identity(input_label="corrupted"))
 
         assert result is None
 
@@ -296,10 +295,10 @@ class TestPhase2Config:
 class TestCacheIntegration:
     """Test depth cache integration with orchestrator."""
 
-    @pytest.fixture
-    def orchestrator_with_cache(self, tmp_path):
-        """Create orchestrator with depth cache enabled."""
+    def test_cache_initialization_requires_prepared_execution(self, tmp_path):
+        """Direct callers cannot enable a cache without plan authority."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
@@ -308,15 +307,45 @@ class TestCacheIntegration:
             depth_cache_max_size_gb=1.0,
             enable_v2=False,
         )
+        original_config = copy.deepcopy(config)
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
-            orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
-            return orch
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.apply_effective_da3_runtime_config") as da3_resolver,
+            patch("transformation_portal.lux_depth_v3.orchestrator.apply_effective_raw_runtime_config") as raw_resolver,
+            pytest.raises(LuxExecutionPlanAuthorityError, match="from_prepared"),
+        ):
+            EnhanceOrchestrator(config, tmp_path / "output", verify_outputs=False)
 
-    def test_cache_initialization(self, orchestrator_with_cache):
-        """Verify cache is initialized when enabled."""
-        assert orchestrator_with_cache.depth_cache is not None
-        assert orchestrator_with_cache.depth_cache.max_size_gb == 1.0
+        da3_resolver.assert_not_called()
+        raw_resolver.assert_not_called()
+        assert config == original_config
+        assert not (tmp_path / "output").exists()
+
+    def test_prepared_cache_initializes_with_planned_size_limit(self, tmp_path):
+        """Prepared execution carries the exact configured cache quota."""
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "scene.jpg"
+        image.write_bytes(b"not-decoded-during-plan-preparation")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                depth_backend="synthetic",
+                allow_synthetic_fallback=True,
+                enable_depth_cache=True,
+                depth_cache_max_size_gb=1.25,
+                enable_v2=False,
+            ),
+            input_root,
+            [image],
+        )
+
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output", verify_outputs=False)
+
+        assert orchestrator.depth_cache is not None
+        assert orchestrator.depth_cache.max_size_gb == 1.25
 
     def test_cache_disabled_when_flag_off(self, tmp_path):
         """Verify cache is None when disabled."""
@@ -379,7 +408,7 @@ class TestPerformanceMetrics:
         # Add some entries
         for i in range(3):
             depth = np.random.rand(100, 100).astype(np.float32)
-            cache.store(f"img_{i}", "config", depth)
+            assert cache.store(_cache_identity(input_label=f"img-{i}"), depth)
 
         stats = cache.stats()
 
@@ -512,7 +541,7 @@ class TestThreadSafety:
         def store_depth(idx):
             try:
                 # Different images but same config
-                cache.store(f"image_{idx}", "config_abc", depth)
+                cache.store(_cache_identity(input_label=f"image-{idx}"), depth)
             except Exception as e:
                 exceptions.append(e)
 
@@ -529,7 +558,7 @@ class TestThreadSafety:
         assert stats["entry_count"] == 10
 
     def test_depth_cache_concurrent_same_key(self, tmp_path):
-        """Test depth cache handles concurrent writes to same key (last write wins)."""
+        """Test depth cache rejects divergent writes to one identity safely."""
         import threading
 
         from transformation_portal.lux_depth_v3.depth_cache import DepthCache
@@ -540,7 +569,7 @@ class TestThreadSafety:
         def store_depth(value):
             try:
                 depth = np.full((100, 100), value, dtype=np.float32)
-                cache.store("same_image", "same_config", depth)
+                cache.store(_cache_identity(input_label="same-image"), depth)
             except Exception as e:
                 exceptions.append(e)
 
@@ -556,8 +585,8 @@ class TestThreadSafety:
         stats = cache.stats()
         assert stats["entry_count"] == 1
 
-        # Verify final value is from one of the writers (last write wins)
-        result = cache.get("same_image", "same_config")
+        # The first complete publication wins; every hit remains verified.
+        result = cache.get(_cache_identity(input_label="same-image"))
         assert result is not None
 
     def test_depth_cache_read_while_evict(self, tmp_path):
@@ -574,20 +603,20 @@ class TestThreadSafety:
         # Fill cache
         for i in range(5):
             depth = np.random.rand(500, 500).astype(np.float32)  # ~1MB each
-            cache.store(f"image_{i}", "config", depth)
+            cache.store(_cache_identity(input_label=f"image-{i}"), depth)
 
         def add_entry():
             """Add new entry to trigger eviction."""
             try:
                 depth = np.random.rand(500, 500).astype(np.float32)
-                cache.store("new_image", "config", depth)
+                cache.store(_cache_identity(input_label="new-image"), depth)
             except Exception as e:
                 exceptions.append(e)
 
         def read_entry():
             """Try to read while eviction might be happening."""
             try:
-                result = cache.get("image_0", "config")
+                result = cache.get(_cache_identity(input_label="image-0"))
                 reads_succeeded.append(result is not None)
             except Exception as e:
                 exceptions.append(e)
@@ -737,10 +766,11 @@ class TestThreadSafety:
         def store_and_retrieve(idx):
             try:
                 depth = np.random.rand(100, 100).astype(np.float32)
-                cache.store(f"image_{idx}", "config", depth)
+                identity = _cache_identity(input_label=f"image-{idx}")
+                cache.store(identity, depth)
 
                 # Retrieve to update access time
-                cache.get(f"image_{idx}", "config")
+                cache.get(identity)
             except Exception as e:
                 exceptions.append(e)
 
