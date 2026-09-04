@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.core.platform_matrix import PlatformAccel, PlatformISA, PlatformMatrix, PlatformOS
-from transformation_portal.depth.backends import protocol as depth_protocol_module
 from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 
 # Mark all tests as ML tier - they test backend registry behavior with real backends
@@ -986,15 +986,8 @@ def test_runtime_license_restriction_does_not_fallback(tmp_path):
     assert da3_backend.compute.call_count == 0
 
 
-def test_unprepared_runtime_depth_cache_bypasses_all_backend_attempts(tmp_path):
-    """Incomplete unprepared identities must never authorize cache access."""
-    from PIL import Image
-
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
-
-    test_image = tmp_path / "cache_scope.png"
-    Image.new("RGB", (64, 64), color="white").save(test_image)
-
+def test_unprepared_runtime_rejects_enabled_depth_cache_before_backend_access(tmp_path):
+    """Direct construction must reject cache use without plan authority."""
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
@@ -1002,48 +995,17 @@ def test_unprepared_runtime_depth_cache_bypasses_all_backend_attempts(tmp_path):
         enable_depth_cache=True,
     )
 
-    da3_backend = Mock()
-    da3_backend.name = "da3"
-    da3_backend.license_type = Mock(value="commercial")
-    da3_backend.ensure_available.return_value = None
-    da3_backend.compute.side_effect = RuntimeError("Torch not compiled with CUDA enabled")
+    output_root = tmp_path / "output"
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as registry_cls:
+        with pytest.raises(LuxExecutionPlanAuthorityError, match="from_prepared"):
+            EnhanceOrchestrator(config, output_root)
 
-    da2_backend = Mock()
-    da2_backend.name = "da2"
-    da2_backend.license_type = Mock(value="commercial")
-    da2_backend.ensure_available.return_value = None
-    da2_backend.compute.return_value = _make_depth_result()
-
-    registry = Mock()
-    registry.get_backend.side_effect = lambda backend_id, _config: {
-        "da3": da3_backend,
-        "da2": da2_backend,
-    }[backend_id]
-
-    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
-        orchestrator = EnhanceOrchestrator(config, tmp_path)
-        orchestrator.postprocessor = Mock(process=lambda result: result)
-        cache = Mock()
-        cache.get.return_value = None
-        orchestrator.depth_cache = cache
-        result = orchestrator.enhance_image(ImageInput(path=test_image))
-
-    assert result["status"] == "ok"
-    assert da3_backend.compute.call_count == 1
-    assert da2_backend.compute.call_count == 1
-    cache.get.assert_not_called()
-    cache.store.assert_not_called()
+    registry_cls.assert_not_called()
+    assert not output_root.exists()
 
 
-def test_unprepared_runtime_depth_cache_never_authorizes_legacy_hit(tmp_path):
-    """A populated legacy cache cannot be read without complete v3 authority."""
-    from PIL import Image
-
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
-
-    test_image = tmp_path / "cache_hit_contract.png"
-    Image.new("RGB", (64, 64), color="white").save(test_image)
-
+def test_unprepared_runtime_cache_rejection_is_fail_closed(tmp_path):
+    """An unprepared caller cannot inject a legacy cache hit after construction."""
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
@@ -1051,28 +1013,8 @@ def test_unprepared_runtime_depth_cache_never_authorizes_legacy_hit(tmp_path):
         enable_depth_cache=True,
     )
 
-    backend = Mock()
-    backend.name = "da3"
-    backend.license_type = Mock(value="commercial")
-    backend.ensure_available.return_value = None
-    backend.compute.return_value = _make_depth_result()
-
-    registry = Mock()
-    registry.get_backend.return_value = backend
-
-    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
-        orchestrator = EnhanceOrchestrator(config, tmp_path)
-        orchestrator.postprocessor = Mock(process=lambda result: result)
-        cache = Mock()
-        cache.get.return_value = np.full((64, 64), 0.5, dtype=np.float32)
-        orchestrator.depth_cache = cache
-        output = orchestrator.enhance_image(ImageInput(path=test_image))
-
-    assert output["status"] == "ok"
-    cache.get.assert_not_called()
-    cache.store.assert_not_called()
-    assert backend.compute.call_count == 1
-    assert output["attempts"][0]["device"] != "cache"
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="ExecutionIdentity v3"):
+        EnhanceOrchestrator(config, tmp_path / "output")
 
 
 def test_runtime_attempt_device_records_actual_backend_device(tmp_path):

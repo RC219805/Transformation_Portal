@@ -8,10 +8,9 @@ Validates:
 5. Graceful fallback to sequential processing
 """
 
-import tempfile
+import copy
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -296,10 +295,10 @@ class TestPhase2Config:
 class TestCacheIntegration:
     """Test depth cache integration with orchestrator."""
 
-    @pytest.fixture
-    def orchestrator_with_cache(self, tmp_path):
-        """Create orchestrator with depth cache enabled."""
+    def test_cache_initialization_requires_prepared_execution(self, tmp_path):
+        """Direct callers cannot enable a cache without plan authority."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
@@ -308,15 +307,45 @@ class TestCacheIntegration:
             depth_cache_max_size_gb=1.0,
             enable_v2=False,
         )
+        original_config = copy.deepcopy(config)
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
-            orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
-            return orch
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.apply_effective_da3_runtime_config") as da3_resolver,
+            patch("transformation_portal.lux_depth_v3.orchestrator.apply_effective_raw_runtime_config") as raw_resolver,
+            pytest.raises(LuxExecutionPlanAuthorityError, match="from_prepared"),
+        ):
+            EnhanceOrchestrator(config, tmp_path / "output", verify_outputs=False)
 
-    def test_cache_initialization(self, orchestrator_with_cache):
-        """Verify cache is initialized when enabled."""
-        assert orchestrator_with_cache.depth_cache is not None
-        assert orchestrator_with_cache.depth_cache.max_size_gb == 1.0
+        da3_resolver.assert_not_called()
+        raw_resolver.assert_not_called()
+        assert config == original_config
+        assert not (tmp_path / "output").exists()
+
+    def test_prepared_cache_initializes_with_planned_size_limit(self, tmp_path):
+        """Prepared execution carries the exact configured cache quota."""
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "scene.jpg"
+        image.write_bytes(b"not-decoded-during-plan-preparation")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                depth_backend="synthetic",
+                allow_synthetic_fallback=True,
+                enable_depth_cache=True,
+                depth_cache_max_size_gb=1.25,
+                enable_v2=False,
+            ),
+            input_root,
+            [image],
+        )
+
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output", verify_outputs=False)
+
+        assert orchestrator.depth_cache is not None
+        assert orchestrator.depth_cache.max_size_gb == 1.25
 
     def test_cache_disabled_when_flag_off(self, tmp_path):
         """Verify cache is None when disabled."""

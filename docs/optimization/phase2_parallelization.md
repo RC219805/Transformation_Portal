@@ -9,10 +9,10 @@ Phase 2 optimizations focus on parallelization and caching to achieve **4-5x thr
 ### Delivered Components
 
 1. **Content-Addressable Depth Cache** (`depth_cache.py`)
-   - Cache key: `image_sha256 + config_fingerprint`
-   - LRU eviction when size exceeds limit
-   - Atomic writes (no partial files)
-   - Thread-safe concurrent reads
+   - Cache key: complete materialized ExecutionIdentity v3
+   - Exact physical-byte quota with LRU reconciliation
+   - Durable pointer-last publication
+   - Verified no-follow reads
 
 2. **Parallel Batch Processing** (orchestrator.py)
    - ThreadPoolExecutor for I/O-bound operations
@@ -68,15 +68,16 @@ Results (N outputs)
 ```
 DepthCache
     └── .depth_cache/
-        ├── {img_sha256}_{config_fp}.npy
-        ├── {img_sha256}_{config_fp}.npy
-        └── ...
+        └── v1/
+            ├── entries/{execution_identity_sha256}.json
+            └── objects/{npy_sha256}.npy
 
 Key Properties:
-- Content-addressable (image hash + config hash)
-- LRU eviction (oldest 20% when size limit exceeded)
-- Atomic writes (temp file + rename)
-- Thread-safe reads
+- Bound to complete ExecutionIdentity v3 (plan/config, input, immutable model,
+  runtime/dependency identities)
+- Immutable content-addressed objects plus identity pointers
+- Exact physical-byte quota with LRU reconciliation
+- Durable pointer-last publication and verified no-follow reads
 ```
 
 ## Performance Impact
@@ -121,11 +122,23 @@ orchestrator.enhance_batch(input_dir)
 ### Enable Depth Cache
 
 ```python
+from pathlib import Path
+
+from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+
 config = EnhanceConfig(
     enable_depth_cache=True,          # Opt-in cache
     depth_cache_max_size_gb=10.0,     # Size limit
 )
+input_root = Path("input_images").resolve()
+inputs = sorted(input_root.glob("*.jpg"))
+prepared = prepare_lux_execution(config, input_root, inputs)
+orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("output"))
 ```
+
+Depth caching requires `EnhanceOrchestrator.from_prepared(...)`. The direct
+compatibility constructor rejects `enable_depth_cache=True` because a legacy
+image/config pair cannot authorize an identity-v3 cache entry.
 
 ### Custom Worker Count
 
@@ -205,11 +218,10 @@ stats = orchestrator.depth_cache.stats()
 # Clear entire cache
 orchestrator.depth_cache.clear()
 
-# Check specific entry
-depth = orchestrator.depth_cache.get(image_sha256, config_fp)
-if depth is None:
-    # Cache miss - run inference
-    ...
+# Cache lookups are performed by the orchestrator after it materializes the
+# planned input, model, and runtime identities. Low-level callers must supply a
+# complete MaterializedExecutionIdentityV3; legacy two-key calls always miss.
+depth = orchestrator.depth_cache.get(materialized_execution_identity)
 ```
 
 ### LRU Eviction
@@ -246,8 +258,12 @@ Phase 2 gracefully falls back to sequential when:
 
 ### API Compatibility
 
-No breaking changes:
-- `enhance_image()`: Single-image processing unchanged
+The direct constructor remains available when depth caching is disabled.
+Cache-enabled orchestration must use `from_prepared(...)` so reads and writes
+carry complete plan and runtime identity. Historical low-level
+`DepthCache.get(image_sha256, config_fingerprint)` and
+`store(image_sha256, config_fingerprint, depth)` calls remain callable, but
+fail closed as a cache miss / rejected store and never access the v3 namespace.
 - `enhance_batch()`: Transparently uses parallel processing
 - Manifest format: Unchanged (same SHA-256 hashes)
 
@@ -296,7 +312,7 @@ python scripts/benchmark_phase2.py --input-dir /path/to/images --workers 1 2 4 8
 1. Verify cache enabled: `config.enable_depth_cache == True`
 2. Check image hash: Hash must be identical (same file contents)
 3. Check config hash: Config changes invalidate cache
-4. Inspect cache dir: `ls output/.depth_cache/`
+4. Inspect governed pointers and objects under `output/.depth_cache/v1/`
 
 ### Memory Usage High
 

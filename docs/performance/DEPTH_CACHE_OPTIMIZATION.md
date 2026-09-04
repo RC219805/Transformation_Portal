@@ -1,5 +1,11 @@
 # Depth Cache Performance Optimization
 
+> Historical performance record (2026-02-02). The current cache is the
+> identity-v3 pointer/object design documented in
+> `docs/optimization/phase2_parallelization.md`. Legacy two-key `get` and
+> three-argument `store` calls shown below remain callable only as fail-closed
+> compatibility adapters: they return a miss/rejected store and write nothing.
+
 ## Issue Summary
 
 **Date:** 2026-02-02

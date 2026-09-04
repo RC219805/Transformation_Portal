@@ -17,7 +17,7 @@ import hashlib
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -468,6 +468,7 @@ class TestPhase3Performance:
     @pytest.mark.benchmark
     def test_no_regression_single_image(self, tmp_path, mock_backend_compute):
         """Ensure optimizations don't regress single-image performance."""
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         # Create single test image
@@ -476,13 +477,14 @@ class TestPhase3Performance:
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_SMALL,
+            model_key="da3-metric",
             enable_parallel_processing=True,
             enable_manifest_cache=True,
             enable_depth_cache=True,
             enable_v2=False,
         )
-        orch = EnhanceOrchestrator(config, tmp_path / "output")
+        prepared = prepare_lux_execution(config, tmp_path, [img_path])
+        orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         start = time.time()
         result = orch.enhance_image(ImageInput(img_path))

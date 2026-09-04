@@ -23,7 +23,7 @@ from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Generator, Iterable, Mapping, Optional
+from typing import Any, BinaryIO, Generator, Iterable, Mapping, Optional, overload
 
 import numpy as np
 
@@ -50,6 +50,7 @@ _LOCK_SHARD_COUNT = 64
 _SIZE_CHECK_INTERVAL = 16
 _POINTER_MAX_DEPTH = 16
 _POINTER_MAX_NODES = 4_096
+_ARGUMENT_MISSING = object()
 _QUOTA_STATE_NAME = ".quota-state.json"
 _QUOTA_STATE_SCHEMA = "tp.lux.depth-cache.quota-state.v1"
 _REMOVAL_QUARANTINE_PREFIX = ".remove-"
@@ -1710,8 +1711,45 @@ class DepthCache:
     def _pointer_matches_identity(pointer: Mapping[str, Any], projection: Mapping[str, Any]) -> bool:
         return all(pointer[field_name] == projection[field_name] for field_name in projection)
 
-    def get(self, identity: MaterializedExecutionIdentityV3) -> Optional[np.ndarray]:
-        """Return a fully verified cache hit for one complete identity."""
+    @overload
+    def get(self, identity: MaterializedExecutionIdentityV3) -> Optional[np.ndarray]: ...
+
+    @overload
+    def get(self, image_sha256: str, config_fingerprint: str) -> None: ...
+
+    def get(
+        self,
+        *args: object,
+        identity: object = _ARGUMENT_MISSING,
+        image_sha256: object = _ARGUMENT_MISSING,
+        config_fingerprint: object = _ARGUMENT_MISSING,
+    ) -> Optional[np.ndarray]:
+        """Return a verified hit, or a safe miss for the legacy two-key API.
+
+        Historical callers supplied ``(image_sha256, config_fingerprint)``.
+        Those values cannot prove model/runtime identity, so the compatibility
+        adapter deliberately returns a miss instead of raising or consulting
+        the v3 namespace.
+        """
+
+        if args:
+            if len(args) > 2 or identity is not _ARGUMENT_MISSING or image_sha256 is not _ARGUMENT_MISSING:
+                logger.warning("Depth cache bypassed unsupported execution identity arguments")
+                return None
+            identity = args[0]
+            if len(args) == 2:
+                if config_fingerprint is not _ARGUMENT_MISSING:
+                    logger.warning("Depth cache bypassed ambiguous execution identity arguments")
+                    return None
+                config_fingerprint = args[1]
+        if image_sha256 is not _ARGUMENT_MISSING:
+            if identity is not _ARGUMENT_MISSING:
+                logger.warning("Depth cache bypassed ambiguous execution identity arguments")
+                return None
+            identity = image_sha256
+        if config_fingerprint is not _ARGUMENT_MISSING or not isinstance(identity, MaterializedExecutionIdentityV3):
+            logger.warning("Depth cache bypassed a legacy or incomplete execution identity")
+            return None
 
         try:
             self._validate_namespace_roots()
@@ -1818,8 +1856,51 @@ class DepthCache:
             wrote_object = True
         return wrote_object
 
-    def store(self, identity: MaterializedExecutionIdentityV3, depth: np.ndarray) -> bool:
-        """Publish one immutable object and its identity pointer, pointer last."""
+    @overload
+    def store(self, identity: MaterializedExecutionIdentityV3, depth: np.ndarray) -> bool: ...
+
+    @overload
+    def store(self, image_sha256: str, config_fingerprint: str, depth: np.ndarray) -> bool: ...
+
+    def store(
+        self,
+        *args: object,
+        identity: object = _ARGUMENT_MISSING,
+        image_sha256: object = _ARGUMENT_MISSING,
+        config_fingerprint: object = _ARGUMENT_MISSING,
+        depth: object = _ARGUMENT_MISSING,
+    ) -> bool:
+        """Publish verified bytes, or reject the legacy three-argument API.
+
+        ``store(image_sha256, config_fingerprint, depth)`` remains callable for
+        compatibility but cannot authorize a v3 cache entry and therefore
+        returns ``False`` without writing.
+        """
+
+        if args:
+            if len(args) > 3 or identity is not _ARGUMENT_MISSING or image_sha256 is not _ARGUMENT_MISSING:
+                logger.warning("Depth cache refused unsupported execution identity arguments")
+                return False
+            identity = args[0]
+            if len(args) >= 2:
+                if depth is not _ARGUMENT_MISSING:
+                    logger.warning("Depth cache refused ambiguous execution identity arguments")
+                    return False
+                depth = args[1]
+            if len(args) == 3:
+                if config_fingerprint is not _ARGUMENT_MISSING:
+                    logger.warning("Depth cache refused ambiguous execution identity arguments")
+                    return False
+                config_fingerprint = depth
+                depth = args[2]
+        if not (
+            isinstance(identity, MaterializedExecutionIdentityV3)
+            and isinstance(depth, np.ndarray)
+            and config_fingerprint is _ARGUMENT_MISSING
+            and image_sha256 is _ARGUMENT_MISSING
+        ):
+            logger.warning("Depth cache refused a legacy or incomplete execution identity")
+            return False
 
         try:
             self._validate_namespace_roots()

@@ -10,6 +10,7 @@ import stat
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -137,8 +138,8 @@ def test_same_complete_identity_is_a_verified_hit(tmp_path) -> None:
     identity = _identity()
     depth = np.linspace(0, 1, 20, dtype=np.float32).reshape(4, 5)
 
-    assert cache.store(identity, depth)
-    cached = cache.get(identity)
+    assert cache.store(identity=identity, depth=depth)
+    cached = cache.get(identity=identity)
 
     assert cached is not None
     np.testing.assert_array_equal(cached, depth)
@@ -187,10 +188,24 @@ def test_incomplete_seed_and_legacy_string_key_cannot_access_cache(tmp_path) -> 
         input_id="input-000001",
     )
 
-    assert cache.get(seed) is None  # type: ignore[arg-type]
-    assert not cache.store(seed, np.ones((2, 2), dtype=np.float32))  # type: ignore[arg-type]
-    with pytest.raises(TypeError):
-        cache.get("image_sha", "config")  # pylint: disable=too-many-function-args
+    with (
+        patch.object(cache, "_validate_namespace_roots") as validate_namespace,
+        patch.object(cache, "_entry_path") as derive_entry_path,
+        patch.object(cache, "_serialize_depth") as serialize_depth,
+    ):
+        assert cache.get(seed) is None  # type: ignore[arg-type]
+        assert not cache.store(seed, np.ones((2, 2), dtype=np.float32))  # type: ignore[arg-type]
+        assert cache.get("image_sha", "config") is None
+        assert cache.get(image_sha256="image_sha", config_fingerprint="config") is None
+        assert not cache.store("image_sha", "config", np.ones((2, 2), dtype=np.float32))
+        assert not cache.store(
+            image_sha256="image_sha",
+            config_fingerprint="config",
+            depth=np.ones((2, 2), dtype=np.float32),
+        )
+        validate_namespace.assert_not_called()
+        derive_entry_path.assert_not_called()
+        serialize_depth.assert_not_called()
 
 
 def test_legacy_npy_without_pointer_is_a_miss_and_not_counted(tmp_path) -> None:

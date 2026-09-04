@@ -483,6 +483,11 @@ class EnhanceOrchestrator:
                 raise LuxExecutionPlanAuthorityError(
                     "A config carrying execution-plan authority must be constructed with from_prepared"
                 )
+            if config.enable_depth_cache:
+                raise LuxExecutionPlanAuthorityError(
+                    "enable_depth_cache requires EnhanceOrchestrator.from_prepared so every cache access "
+                    "is bound to a complete ExecutionIdentity v3"
+                )
             self._prepared_execution = None
             config = apply_effective_da3_runtime_config(config)
             config = apply_effective_raw_runtime_config(config)
@@ -635,11 +640,6 @@ class EnhanceOrchestrator:
                 "Depth cache enabled: %s",
                 self.depth_cache.cache_dir,
             )
-            if self._prepared_execution is None:
-                logger.info(
-                    "Depth cache access will remain disabled for this run: "
-                    "complete ExecutionIdentity v3 requires a prepared execution plan",
-                )
 
         # Injectable seam for lightweight reconstruction tests.
         self.run_scene_reconstruction_fn: Callable[..., Path] = run_scene_reconstruction
