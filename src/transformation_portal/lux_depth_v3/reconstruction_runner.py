@@ -24,7 +24,8 @@ from .reconstruction_manifest import (
     reconstruction_manifest_path,
     write_reconstruction_manifest,
 )
-from .scene_context import SceneContext
+from .scene_context import CameraWithProvenance, SceneContext
+from .scene_groups import lexical_relative_path
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
@@ -312,6 +313,35 @@ def _build_scene_builder(*, tier: str) -> Any:
     return SceneBuilder(tier=tier)
 
 
+def _camera_views_align(
+    execution_cameras: Sequence[CameraWithProvenance],
+    manifest_cameras: Sequence[CameraWithProvenance],
+) -> bool:
+    """Return whether execution and durable camera authority are identical."""
+
+    if len(execution_cameras) != len(manifest_cameras):
+        return False
+    for execution_camera, manifest_camera in zip(execution_cameras, manifest_cameras):
+        execution_params = execution_camera.params
+        manifest_params = manifest_camera.params
+        execution_distortion = execution_params.distortion
+        manifest_distortion = manifest_params.distortion
+        if (
+            execution_camera.provenance != manifest_camera.provenance
+            or execution_params.width != manifest_params.width
+            or execution_params.height != manifest_params.height
+            or execution_params.camera_id != manifest_params.camera_id
+            or not np.array_equal(execution_params.intrinsics, manifest_params.intrinsics)
+            or not np.array_equal(execution_params.extrinsics, manifest_params.extrinsics)
+            or (execution_distortion is None) != (manifest_distortion is None)
+        ):
+            return False
+        if execution_distortion is not None:
+            if manifest_distortion is None or not np.array_equal(execution_distortion, manifest_distortion):
+                return False
+    return True
+
+
 def run_scene_reconstruction(
     *,
     context: SceneContext,
@@ -320,46 +350,80 @@ def run_scene_reconstruction(
     tier: str = "apex_research",
     scene_fingerprint: str | None = None,
     run_card_merkle_root: str | None = None,
+    manifest_context: SceneContext | None = None,
+    image_sha256_overrides: Sequence[str] | None = None,
 ) -> Path:
     """Run reconstruction for a single scene and persist deterministic report."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if (manifest_context is None) != (image_sha256_overrides is None):
+        raise ValueError("manifest_context and image_sha256_overrides must be provided together for prepared reconstruction")
+
+    durable_context = manifest_context or context
+    if durable_context.scene_id != context.scene_id:
+        raise ValueError("Reconstruction execution and manifest contexts must have the same scene_id")
+    if manifest_context is not None:
+        try:
+            execution_images = tuple(lexical_relative_path(path, context.dataset_root) for path in context.images)
+            durable_images = tuple(
+                lexical_relative_path(path, durable_context.dataset_root) for path in durable_context.images
+            )
+        except ValueError as exc:
+            raise ValueError("Reconstruction execution and manifest image identities must align") from exc
+        if execution_images != durable_images:
+            raise ValueError("Reconstruction execution and manifest image identities must align")
+    if not _camera_views_align(context.cameras, durable_context.cameras):
+        raise ValueError("Reconstruction execution and manifest cameras must align")
+
     manifest = build_reconstruction_manifest(
-        context=context,
+        context=durable_context,
         iterations=int(iterations),
         tier=str(tier),
+        image_sha256_overrides=image_sha256_overrides,
+        paths_are_canonical=manifest_context is not None,
     )
     manifest_path = write_reconstruction_manifest(manifest=manifest, output_dir=output_dir)
-    loaded_manifest = load_reconstruction_manifest(manifest_path=manifest_path)
 
-    iterations_value = int(loaded_manifest.reconstruction_parameters.get("iterations", iterations))
-    tier_value = str(loaded_manifest.reconstruction_parameters.get("tier", tier))
+    if manifest_context is None:
+        # Preserve the legacy round-trip verification contract. Prepared runs
+        # cannot reload the durable originals after snapshot authority is
+        # established, so they execute from the already-validated live view.
+        execution_manifest = load_reconstruction_manifest(manifest_path=manifest_path)
+        execution_image_paths = list(manifest_image_paths(execution_manifest))
+        execution_cameras = [camera.params for camera in execution_manifest.cameras]
+    else:
+        execution_manifest = manifest
+        execution_image_paths = list(context.images)
+        execution_cameras = [camera.params for camera in context.cameras]
+
+    iterations_value = int(execution_manifest.reconstruction_parameters.get("iterations", iterations))
+    tier_value = str(execution_manifest.reconstruction_parameters.get("tier", tier))
     builder = _build_scene_builder(tier=tier_value)
     reconstructed_scene = builder.build_from_images(
-        image_paths=list(manifest_image_paths(loaded_manifest)),
-        cameras=[camera.params for camera in loaded_manifest.cameras],
+        image_paths=execution_image_paths,
+        cameras=execution_cameras,
         iterations=iterations_value,
         gamma=1.0,
     )
     scale_metadata = _normalize_scene_scale(reconstructed_scene)
     diagnostics_path = write_reconstruction_diagnostics(
         scene=reconstructed_scene,
-        manifest=loaded_manifest,
+        manifest=execution_manifest,
         output_dir=output_dir,
         scene_fingerprint=scene_fingerprint,
     )
 
-    camera_sources = [camera.provenance.source for camera in loaded_manifest.cameras]
-    camera_confidences = [camera.provenance.confidence for camera in loaded_manifest.cameras]
+    camera_sources = [camera.provenance.source for camera in execution_manifest.cameras]
+    camera_confidences = [camera.provenance.confidence for camera in execution_manifest.cameras]
     camera_provenance_files = sorted(
-        {camera.provenance.file for camera in loaded_manifest.cameras if isinstance(camera.provenance.file, str)}
+        {camera.provenance.file for camera in execution_manifest.cameras if isinstance(camera.provenance.file, str)}
     )
 
     payload = {
         "schema": "tp.reconstruction_report.v1",
-        "scene_id": loaded_manifest.scene_id,
-        "num_views": len(loaded_manifest.images),
-        "images": list(loaded_manifest.images),
+        "scene_id": execution_manifest.scene_id,
+        "num_views": len(execution_manifest.images),
+        "images": list(execution_manifest.images),
         "manifest_path": str(manifest_path),
         "camera_sources": camera_sources,
         "camera_confidences": camera_confidences,
@@ -377,7 +441,7 @@ def run_scene_reconstruction(
     if camera_provenance_files:
         payload["camera_provenance_files"] = camera_provenance_files
 
-    safe_scene_id = sanitize_path_component_nonlossy(loaded_manifest.scene_id)
+    safe_scene_id = sanitize_path_component_nonlossy(execution_manifest.scene_id)
     report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"
     report_bytes = (
         dumps_json(

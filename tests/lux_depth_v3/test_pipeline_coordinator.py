@@ -467,6 +467,129 @@ class TestRuntimeBackendStateHelpers:
             }
         ]
 
+    def test_seed_depth_attempts_from_carried_depth_pro_plan_preserves_artifact_authority(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Failed prepared Depth Pro attempts retain the pinned model identity."""
+        import transformation_portal.lux_depth_v3.execution_lifecycle as lifecycle_module
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.execution_evidence import _validate_attempt_claims
+        from transformation_portal.lux_depth_v3.execution_lifecycle import (
+            backend_candidate_authority,
+            prepare_lux_execution,
+        )
+        from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            default_model_id_for_backend,
+            seed_depth_attempts_from_selection_fallback,
+        )
+
+        monkeypatch.setenv("TP_ALLOW_SYNTHETIC_FALLBACK", "1")
+        monkeypatch.setattr(
+            lifecycle_module,
+            "resolve_requested_backend",
+            lambda _requested, _config: "depth_pro",
+        )
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "sample.jpg"
+        image.write_bytes(b"not-decoded-during-plan-preparation")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                non_commercial_ok=True,
+                accept_apple_depth_pro_research_license=True,
+                depth_pro_checkpoint_path="/models/depth-pro-local.pt",
+                depth_device="cpu",
+                enable_v2=False,
+            ),
+            input_root,
+            [image],
+        )
+        assert prepared.plan.candidate_fallback_chain[:2] == ("depth_pro", "da3")
+
+        metadata = BackendSelectionMetadata(
+            requested_backend="depth_pro",
+            resolved_backend="da3",
+            resolution_status="fallback",
+            resolution_reason="Depth Pro unavailable",
+            model_id="depth-anything/Depth-Anything-3-Metric-Large",
+            device="cpu",
+        )
+        attempts = seed_depth_attempts_from_selection_fallback(
+            metadata,
+            {"depth_pro": "checkpoint not found"},
+            prepared.runtime_config,
+            ModelVariant.METRIC_LARGE,
+        )
+        depth_pro_authority = backend_candidate_authority(prepared.plan, "depth_pro")
+        assert depth_pro_authority.model_contract is not None
+        assert attempts[0]["model_artifact_filename"] == "depth-pro-local.pt"
+        assert attempts[0]["model_artifact_sha256"] == depth_pro_authority.model_contract.artifact_sha256
+
+        da3_authority = backend_candidate_authority(prepared.plan, "da3")
+        attempts.append(
+            {
+                "attempt": 1,
+                "backend": "da3",
+                "model_id": default_model_id_for_backend(
+                    "da3",
+                    ModelVariant.METRIC_LARGE,
+                    config=prepared.runtime_config,
+                ),
+                "device": da3_authority.device,
+                "status": "success",
+            }
+        )
+        _validate_attempt_claims(attempts, plan=prepared.plan, selected_backend="da3")
+
+    def test_seed_depth_attempts_uses_each_carried_candidate_device(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """A CUDA DA3 plan records its DA2 fallback failure on planned CPU."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            seed_depth_attempts_from_selection_fallback,
+        )
+
+        monkeypatch.setenv("TP_ALLOW_SYNTHETIC_FALLBACK", "1")
+        input_root = tmp_path / "inputs"
+        input_root.mkdir()
+        image = input_root / "sample.jpg"
+        image.write_bytes(b"not-decoded-during-plan-preparation")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                model_key="da3-metric",
+                depth_device="cuda",
+                enable_v2=False,
+            ),
+            input_root,
+            [image],
+        )
+        metadata = BackendSelectionMetadata(
+            requested_backend="da3",
+            resolved_backend="synthetic",
+            resolution_status="synthetic_fallback",
+            resolution_reason="Model backends unavailable",
+            model_id="synthetic/depth-analytic-v1",
+            device="cuda",
+        )
+
+        attempts = seed_depth_attempts_from_selection_fallback(
+            metadata,
+            {"da3": "DA3 unavailable", "da2": "DA2 unavailable"},
+            prepared.runtime_config,
+            ModelVariant.METRIC_LARGE,
+        )
+
+        assert [attempt["backend"] for attempt in attempts] == ["da3", "da2"]
+        assert [attempt["device"] for attempt in attempts] == ["cuda", "cpu"]
+
     def test_get_or_create_depth_backend_prefers_matching_active_backend(self):
         """Test active backend injection is preserved over stale cache entries."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

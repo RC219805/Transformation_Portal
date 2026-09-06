@@ -697,8 +697,11 @@ from transformation_portal.evals.apex_evidence_bundle import (
     derive_materials_v3_evidence_from_manifest,
 )
 
-evidence = derive_materials_v3_evidence_from_manifest(Path("output/.../image_manifest.json"))
-Path("output/.../materials_v3_evidence.json").write_text(json.dumps(evidence))
+# `result` is one successful item returned by EnhanceOrchestrator.enhance_batch.
+# Its manifest field is the exact evidence-bound combined-manifest path.
+manifest_path = Path(result["manifest"])
+evidence = derive_materials_v3_evidence_from_manifest(manifest_path)
+Path("output/apex_eval/materials_v3_evidence.json").write_text(json.dumps(evidence))
 # Then: tools/run_apex_eval.py --candidate-evidence materials_v3:<asset_id>=<evidence_path>
 ```
 

@@ -3,18 +3,82 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from functools import lru_cache
 from typing import Any
 
 from tp.crypto.ct_merkle import (
-    ct_inclusion_proof,
     ct_leaf_hash,
     ct_merkle_root,
+    ct_node_hash,
     verify_ct_inclusion_proof,
 )
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
 RUN_CARD_ARTIFACT_TREE_ALGORITHM = "ct-sha256-v1"
 RUN_CARD_ARTIFACT_LEAF_FORMAT = "tp.run_card.artifact_leaf.v1"
+MAX_ARTIFACT_TREE_LEAVES = 524_288
+MAX_ARTIFACT_TREE_PROOF_DEPTH = (MAX_ARTIFACT_TREE_LEAVES - 1).bit_length()
+MAX_ARTIFACT_TREE_VALIDATION_ERRORS = 64
+_ARTIFACT_TREE_TRUNCATION_MESSAGE = (
+    "Artifact tree validation stopped after the bounded limit of " f"{MAX_ARTIFACT_TREE_VALIDATION_ERRORS} errors"
+)
+
+
+class _BoundedArtifactTreeErrors(list[str]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.truncated = False
+
+    def mark_truncated(self) -> None:
+        if not self.truncated:
+            super().append(_ARTIFACT_TREE_TRUNCATION_MESSAGE)
+            self.truncated = True
+
+    def append(self, message: str) -> None:
+        if self.truncated:
+            return
+        if len(self) >= MAX_ARTIFACT_TREE_VALIDATION_ERRORS:
+            self.mark_truncated()
+            return
+        super().append(message)
+
+    def stop_if_full(self) -> bool:
+        if self.truncated:
+            return True
+        if len(self) >= MAX_ARTIFACT_TREE_VALIDATION_ERRORS:
+            self.mark_truncated()
+            return True
+        return False
+
+
+def _require_bounded_leaf_count(count: int, *, field: str) -> None:
+    if count > MAX_ARTIFACT_TREE_LEAVES:
+        raise ValueError(f"{field} exceeds the bounded limit of {MAX_ARTIFACT_TREE_LEAVES}")
+
+
+def _all_inclusion_proofs(leaf_hashes: Sequence[bytes]) -> list[list[bytes]]:
+    """Build all CT proofs in O(n log n), sharing cached subtree roots."""
+
+    @lru_cache(maxsize=None)
+    def subtree_root(start: int, end: int) -> bytes:
+        size = end - start
+        if size == 1:
+            return leaf_hashes[start]
+        split = 1 << ((size - 1).bit_length() - 1)
+        middle = start + split
+        return ct_node_hash(subtree_root(start, middle), subtree_root(middle, end))
+
+    def inclusion_proof(start: int, end: int, leaf_index: int) -> list[bytes]:
+        size = end - start
+        if size == 1:
+            return []
+        split = 1 << ((size - 1).bit_length() - 1)
+        middle = start + split
+        if leaf_index < middle:
+            return inclusion_proof(start, middle, leaf_index) + [subtree_root(middle, end)]
+        return inclusion_proof(middle, end, leaf_index) + [subtree_root(start, middle)]
+
+    return [inclusion_proof(0, len(leaf_hashes), index) for index in range(len(leaf_hashes))]
 
 
 def _require_string(value: Any, *, field: str) -> str:
@@ -66,6 +130,7 @@ def build_artifact_tree(
     include_proofs: bool = True,
 ) -> dict[str, Any]:
     """Build the transparency-grade artifact tree payload for run-card v2."""
+    _require_bounded_leaf_count(len(artifact_index), field="artifact_index")
     normalized_artifacts = [normalize_artifact_leaf_payload(artifact) for artifact in artifact_index]
     normalized_artifacts.sort(key=lambda item: item["relative_path"])
 
@@ -87,8 +152,8 @@ def build_artifact_tree(
     }
     if include_proofs:
         proofs: list[dict[str, Any]] = []
-        for index, artifact in enumerate(artifacts_with_leaf_hash):
-            sibling_hashes = ct_inclusion_proof(leaf_hashes, index)
+        all_sibling_hashes = _all_inclusion_proofs(leaf_hashes) if leaf_hashes else []
+        for index, (artifact, sibling_hashes) in enumerate(zip(artifacts_with_leaf_hash, all_sibling_hashes)):
             proof_steps: list[dict[str, str]] = []
             fn = index
             sn = len(leaf_hashes) - 1
@@ -122,7 +187,10 @@ def verify_artifact_tree_payload(
     artifact_index: Sequence[Mapping[str, Any]],
 ) -> list[str]:
     """Validate a run-card v2 artifact_tree block against the artifact index."""
-    errors: list[str] = []
+    errors = _BoundedArtifactTreeErrors()
+
+    if len(artifact_index) > MAX_ARTIFACT_TREE_LEAVES:
+        return [f"artifact_index exceeds the bounded limit of {MAX_ARTIFACT_TREE_LEAVES}"]
 
     if artifact_tree.get("algorithm") != RUN_CARD_ARTIFACT_TREE_ALGORITHM:
         errors.append(f"artifact_tree.algorithm must be {RUN_CARD_ARTIFACT_TREE_ALGORITHM!r}")
@@ -132,8 +200,10 @@ def verify_artifact_tree_payload(
     artifacts = artifact_tree.get("artifacts")
     if not isinstance(artifacts, list):
         return errors + ["artifact_tree.artifacts must be a list"]
+    if len(artifacts) > MAX_ARTIFACT_TREE_LEAVES:
+        return errors + [f"artifact_tree.artifacts exceeds the bounded limit of {MAX_ARTIFACT_TREE_LEAVES}"]
 
-    expected_tree = build_artifact_tree(artifact_index, include_proofs=("proofs" in artifact_tree))
+    expected_tree = build_artifact_tree(artifact_index, include_proofs=False)
     if artifact_tree.get("leaf_count") != len(artifacts):
         errors.append("artifact_tree.leaf_count must equal len(artifact_tree.artifacts)")
     if artifact_tree.get("root_sha256") != expected_tree["root_sha256"]:
@@ -151,9 +221,15 @@ def verify_artifact_tree_payload(
         return errors
     if not isinstance(proofs, list):
         return errors + ["artifact_tree.proofs must be a list when present"]
+    if len(proofs) > MAX_ARTIFACT_TREE_LEAVES:
+        return errors + [f"artifact_tree.proofs exceeds the bounded limit of {MAX_ARTIFACT_TREE_LEAVES}"]
+    if len(proofs) != len(expected_artifacts):
+        errors.append("artifact_tree.proofs must contain exactly one entry per artifact")
 
     proof_by_path: dict[str, Mapping[str, Any]] = {}
     for proof_entry in proofs:
+        if errors.stop_if_full():
+            return list(errors)
         if not isinstance(proof_entry, Mapping):
             errors.append("artifact_tree.proofs entries must be objects")
             continue
@@ -163,6 +239,8 @@ def verify_artifact_tree_payload(
 
     expected_root_bytes = bytes.fromhex(expected_tree["root_sha256"])
     for expected_index, expected_artifact in enumerate(expected_artifacts):
+        if errors.stop_if_full():
+            return list(errors)
         relative_path = expected_artifact["relative_path"]
         proof_entry = proof_by_path.get(relative_path)
         if proof_entry is None:
@@ -185,6 +263,12 @@ def verify_artifact_tree_payload(
         if not isinstance(proof_path, list):
             errors.append(f"artifact_tree proof path must be a list for {relative_path}")
             continue
+        if len(proof_path) > MAX_ARTIFACT_TREE_PROOF_DEPTH:
+            errors.append(
+                f"artifact_tree proof path exceeds the bounded limit of {MAX_ARTIFACT_TREE_PROOF_DEPTH} "
+                f"for {relative_path}"
+            )
+            continue
         sibling_hashes: list[bytes] = []
         position_error = False
         # CT audit-path position validation state.
@@ -195,6 +279,8 @@ def verify_artifact_tree_payload(
         sn = len(expected_artifacts) - 1
         step_index = 0
         for step in proof_path:
+            if errors.stop_if_full():
+                return list(errors)
             if not isinstance(step, Mapping):
                 errors.append(f"artifact_tree proof path steps must be objects for {relative_path}")
                 sibling_hashes = []
@@ -243,4 +329,4 @@ def verify_artifact_tree_payload(
             expected_root=expected_root_bytes,
         ):
             errors.append(f"artifact_tree inclusion proof verification failed for {relative_path}")
-    return errors
+    return list(errors)

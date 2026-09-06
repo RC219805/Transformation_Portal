@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import re
 import stat
@@ -22,34 +23,131 @@ from transformation_portal.lux_depth_v3.run_card_contract import (
 )
 
 from .run_card_backend_semantics import collect_run_card_backend_semantic_errors
-from .run_card_validator import _default_schema_path, _load_validator
+from .run_card_validator import (
+    _default_schema_path,
+    _format_schema_error,
+    _load_validator,
+    _validate_bounded_collections,
+)
 
 SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 DEFAULT_SCHEMA_V1_PATH = _default_schema_path("v1")
 DEFAULT_SCHEMA_V2_PATH = _default_schema_path("v2")
+_MAX_RUN_CARD_BYTES = 512 * 1024 * 1024
+_MAX_LINKED_JSON_BYTES = 64 * 1024 * 1024
+_MAX_INTEGRITY_ERRORS = 64
+_INTEGRITY_TRUNCATION_MESSAGE = (
+    f"Run card integrity validation stopped after the bounded limit of {_MAX_INTEGRITY_ERRORS} errors"
+)
 
 
-def _load_json(path: Path) -> tuple[Any | None, str | None]:
+class _BoundedDiagnostics(list[str]):
+    """Collect a bounded number of diagnostics and expose a stop signal."""
+
+    def __init__(self, *, limit: int = _MAX_INTEGRITY_ERRORS) -> None:
+        super().__init__()
+        self.limit = limit
+        self.truncated = False
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.limit - len(self)) if not self.truncated else 0
+
+    def mark_truncated(self, message: str = _INTEGRITY_TRUNCATION_MESSAGE) -> None:
+        if self.truncated:
+            return
+        super().append(message)
+        self.truncated = True
+
+    def append(self, message: str) -> None:
+        if self.truncated:
+            return
+        if len(self) >= self.limit:
+            self.mark_truncated()
+            return
+        super().append(message)
+
+    def extend(self, messages: Any) -> None:
+        for message in messages:
+            self.append(message)
+            if self.truncated:
+                break
+
+    def stop_if_full(self) -> bool:
+        if self.truncated:
+            return True
+        if len(self) >= self.limit:
+            self.mark_truncated()
+            return True
+        return False
+
+
+def _diagnostics_exhausted(errors: list[str]) -> bool:
+    return isinstance(errors, _BoundedDiagnostics) and errors.stop_if_full()
+
+
+def _load_json(
+    path: Path,
+    *,
+    max_bytes: int = _MAX_LINKED_JSON_BYTES,
+) -> tuple[Any | None, str | None]:
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        decoded: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in decoded:
+                bounded_key = key if len(key) <= 128 else key[:125] + "..."
+                raise ValueError(f"duplicate JSON member {bounded_key!r}")
+            decoded[key] = value
+        return decoded
+
+    def reject_non_finite(value: str) -> Any:
+        raise ValueError(f"forbidden non-finite number {value}")
+
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle), None
+        with open(path, "rb") as handle:
+            payload = handle.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            return None, f"JSON file exceeds the bounded byte limit of {max_bytes}: {path}"
+        return (
+            json.loads(
+                payload,
+                object_pairs_hook=reject_duplicate_keys,
+                parse_constant=reject_non_finite,
+            ),
+            None,
+        )
     except FileNotFoundError:
         return None, f"JSON file not found: {path}"
     except PermissionError:
         return None, f"Permission denied reading JSON file: {path}"
-    except JSONDecodeError as exc:
+    except (JSONDecodeError, UnicodeDecodeError) as exc:
+        if isinstance(exc, UnicodeDecodeError):
+            return None, f"Invalid UTF-8 in JSON file {path}: {exc}"
         return None, f"Invalid JSON in {path}: {exc.msg} (line {exc.lineno}, column {exc.colno})"
+    except RecursionError:
+        return None, f"Invalid JSON in {path}: nesting exceeds the decoder limit"
+    except ValueError as exc:
+        detail = str(exc)
+        if len(detail) > 640:
+            detail = detail[:637] + "..."
+        return None, f"Invalid JSON value in {path}: {detail}"
     except OSError as exc:
         return None, f"Failed to read JSON file {path}: {exc}"
 
 
-def _read_text(path: Path) -> tuple[str | None, str | None]:
+def _read_text(path: Path, *, max_bytes: int = _MAX_RUN_CARD_BYTES) -> tuple[str | None, str | None]:
     try:
-        return path.read_text(encoding="utf-8"), None
+        with open(path, "rb") as handle:
+            payload = handle.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            return None, f"Text file exceeds the bounded byte limit of {max_bytes}: {path}"
+        return payload.decode("utf-8"), None
     except FileNotFoundError:
         return None, f"Text file not found: {path}"
     except PermissionError:
         return None, f"Permission denied reading text file: {path}"
+    except UnicodeDecodeError as exc:
+        return None, f"Invalid UTF-8 in text file {path}: {exc}"
     except OSError as exc:
         return None, f"Failed to read text file {path}: {exc}"
 
@@ -102,6 +200,8 @@ def _verify_backend_semantics(
     errors: list[str],
 ) -> None:
     for error in collect_run_card_backend_semantic_errors(run_card_payload):
+        if _diagnostics_exhausted(errors):
+            return
         if error.startswith("requested backend 'depth_pro' was not honored"):
             fallback_reason = _first_combined_manifest_fallback_reason(
                 run_card_payload,
@@ -118,11 +218,15 @@ def _verify_captioning_status(run_card_payload: dict[str, Any], errors: list[str
     top_level_status = run_card_payload.get("captioning_status")
     if isinstance(top_level_status, dict) and top_level_status.get("used_for_quality_gate") is True:
         errors.append("captioning_status.used_for_quality_gate must be false")
+        if _diagnostics_exhausted(errors):
+            return
 
     result_summary = run_card_payload.get("result_summary")
     if not isinstance(result_summary, list):
         return
     for index, row in enumerate(result_summary):
+        if _diagnostics_exhausted(errors):
+            return
         if not isinstance(row, dict):
             continue
         status = row.get("captioning_status")
@@ -136,12 +240,11 @@ def _first_combined_manifest_fallback_reason(
     run_card_root: Path,
     errors: list[str] | None = None,
 ) -> str | None:
-    manifest_artifacts = [
-        artifact
-        for artifact in run_card_payload.get("artifact_index", [])
-        if isinstance(artifact, dict) and artifact.get("artifact_type") == "combined_manifest"
-    ]
-    for artifact in manifest_artifacts:
+    for artifact in run_card_payload.get("artifact_index", []):
+        if errors is not None and _diagnostics_exhausted(errors):
+            return None
+        if not isinstance(artifact, dict) or artifact.get("artifact_type") != "combined_manifest":
+            continue
         relative_path = artifact.get("relative_path")
         if not isinstance(relative_path, str) or not relative_path:
             continue
@@ -224,6 +327,8 @@ def _verify_indexed_artifact_files(
         return
 
     for index, artifact in enumerate(artifact_index):
+        if _diagnostics_exhausted(errors):
+            return
         if not isinstance(artifact, dict):
             continue
         relative_path = artifact.get("relative_path")
@@ -362,6 +467,8 @@ def _verify_reconstruction_scene_manifests(
         return
 
     for artifact in manifest_artifacts:
+        if _diagnostics_exhausted(errors):
+            return
         relative_path = artifact.get("relative_path")
         if not isinstance(relative_path, str) or not relative_path:
             errors.append("reconstruction_scene_manifest artifact is missing relative_path")
@@ -407,6 +514,8 @@ def _verify_reconstruction_diagnostics(
         return
 
     for artifact in diagnostics_artifacts:
+        if _diagnostics_exhausted(errors):
+            return
         relative_path = artifact.get("relative_path")
         if not isinstance(relative_path, str) or not relative_path:
             errors.append("reconstruction_diagnostics artifact is missing relative_path")
@@ -437,6 +546,8 @@ def _verify_reconstruction_diagnostics(
         if payload.get("camera_count") != len(cameras):
             errors.append(f"Reconstruction diagnostics camera_count mismatch ({relative_path})")
         for index, camera in enumerate(cameras):
+            if _diagnostics_exhausted(errors):
+                return
             if not isinstance(camera, dict):
                 errors.append(f"Reconstruction diagnostics camera entry must be object ({relative_path} #{index})")
                 continue
@@ -461,23 +572,35 @@ def verify_run_card_integrity(
     if not run_card_path.exists():
         return [f"Run card not found: {run_card_path}"]
 
-    raw_run_card_payload, run_card_load_error = _load_json(run_card_path)
+    raw_run_card_payload, run_card_load_error = _load_json(
+        run_card_path,
+        max_bytes=_MAX_RUN_CARD_BYTES,
+    )
     if run_card_load_error:
         return [run_card_load_error]
     if not isinstance(raw_run_card_payload, dict):
         return [f"Run card root must be a JSON object: {run_card_path}"]
     run_card_payload = with_inferred_run_card_version(raw_run_card_payload)
+    run_card_version = infer_run_card_version(run_card_payload)
+
+    try:
+        _validate_bounded_collections(
+            run_card_payload,
+            schema_version=run_card_version,
+        )
+    except RuntimeError as exc:
+        return [str(exc)]
 
     effective_schema_path = infer_schema_path_for_payload(run_card_payload, explicit_schema_path=schema_path)
     if schema_path is not None:
         if not effective_schema_path.exists():
             return [f"Run card schema not found: {effective_schema_path}"]
 
-    errors: list[str] = []
+    errors = _BoundedDiagnostics()
     try:
         validator = _load_validator(
             str(effective_schema_path) if schema_path is not None else None,
-            infer_run_card_version(run_card_payload),
+            run_card_version,
         )
     except RuntimeError as exc:
         errors.append(str(exc))
@@ -486,9 +609,24 @@ def verify_run_card_integrity(
         errors.append(f"Failed to load run card schema {effective_schema_path}: {exc}")
         return errors
 
-    schema_errors = sorted(validator.iter_errors(run_card_payload), key=lambda item: list(item.path))
+    bounded_schema_errors = list(
+        itertools.islice(
+            validator.iter_errors(run_card_payload),
+            errors.remaining + 1,
+        )
+    )
+    schema_errors = sorted(
+        bounded_schema_errors[: errors.remaining],
+        key=lambda item: list(item.path),
+    )
     for item in schema_errors:
-        errors.append(f"Schema validation failed at {format_error_path(item.path)}: {item.message}")
+        errors.append(_format_schema_error(item))
+    if len(bounded_schema_errors) > len(schema_errors):
+        errors.mark_truncated(
+            "Run card schema validation stopped after the bounded limit of " f"{_MAX_INTEGRITY_ERRORS} errors"
+        )
+    if errors.truncated:
+        return list(errors)
 
     artifact_index = run_card_payload.get("artifact_index")
     if not isinstance(artifact_index, list):
@@ -497,6 +635,8 @@ def verify_run_card_integrity(
 
     relative_paths: list[str] = []
     for index, artifact in enumerate(artifact_index):
+        if errors.stop_if_full():
+            return list(errors)
         if not isinstance(artifact, dict):
             errors.append(f"artifact_index[{index}] must be an object")
             continue
@@ -542,14 +682,20 @@ def verify_run_card_integrity(
                     f"artifact_merkle_root mismatch: expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
                 )
 
+    if errors.stop_if_full():
+        return list(errors)
     _verify_indexed_artifact_files(
         run_card_payload,
         run_card_root=run_card_path.parent,
         errors=errors,
     )
 
+    if errors.stop_if_full():
+        return list(errors)
     artifact_index_by_relative_path = {}
     for artifact in artifact_index:
+        if errors.stop_if_full():
+            return list(errors)
         if not isinstance(artifact, dict):
             continue
         relative_path = artifact.get("relative_path")
@@ -566,25 +712,37 @@ def verify_run_card_integrity(
         artifact_index_by_relative_path=artifact_index_by_relative_path,
         errors=errors,
     )
+    if errors.stop_if_full():
+        return list(errors)
     _verify_reconstruction_diagnostics(
         run_card_payload,
         run_card_root=run_card_path.parent,
         errors=errors,
     )
 
+    if errors.stop_if_full():
+        return list(errors)
     _verify_backend_semantics(
         run_card_payload,
         run_card_root=run_card_path.parent,
         errors=errors,
     )
+    if errors.stop_if_full():
+        return list(errors)
     _verify_captioning_status(run_card_payload, errors)
+    if errors.stop_if_full():
+        return list(errors)
     _verify_config_fingerprint(run_card_payload, errors)
+    if errors.stop_if_full():
+        return list(errors)
     _verify_run_card_self_integrity(
         raw_run_card_payload,
         run_card_path=run_card_path,
         errors=errors,
     )
 
+    if errors.stop_if_full():
+        return list(errors)
     if check_canonical_json:
         raw_text, raw_text_error = _read_text(run_card_path)
         if raw_text_error:
@@ -594,4 +752,4 @@ def verify_run_card_integrity(
             if raw_text not in (canonical, canonical + "\n"):
                 errors.append("JSON canonical serialization drift detected (expected sort_keys=True, indent=2)")
 
-    return errors
+    return list(errors)

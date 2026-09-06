@@ -466,7 +466,7 @@ class TestPhase3Performance:
         print(f"✓ PBR generation baseline: {per_image_time*1000:.0f}ms per image")
 
     @pytest.mark.benchmark
-    def test_no_regression_single_image(self, tmp_path, mock_backend_compute):
+    def test_no_regression_single_image(self, tmp_path):
         """Ensure optimizations don't regress single-image performance."""
         from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
@@ -477,17 +477,21 @@ class TestPhase3Performance:
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
-            model_key="da3-metric",
+            depth_backend="synthetic",
             enable_parallel_processing=True,
             enable_manifest_cache=True,
-            enable_depth_cache=True,
+            enable_depth_cache=False,
             enable_v2=False,
+            emit_run_card=False,
         )
         prepared = prepare_lux_execution(config, tmp_path, [img_path])
         orch = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
 
         start = time.time()
-        result = orch.enhance_image(ImageInput(img_path))
+        result = orch.enhance_batch(
+            prepared.input_root,
+            input_files=list(prepared.input_files),
+        )[0]
         total_time = time.time() - start
 
         # Verify: single image completes in reasonable time (< 2 seconds with mocks)

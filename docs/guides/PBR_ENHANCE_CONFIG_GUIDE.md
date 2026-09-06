@@ -182,7 +182,6 @@ from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Configure for standard quality
 config = EnhanceConfig(
@@ -200,23 +199,21 @@ config = EnhanceConfig(
 )
 
 # Freeze the exact input selection before initializing the orchestrator
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 image_path = input_root / "luxury_interior.jpg"
 output_root = Path("./output")
 prepared = prepare_lux_execution(config, input_root, [image_path])
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
-# Process image
-image_input = ImageInput(path=image_path)
-result = orchestrator.enhance_image(image_input, input_root=input_root)
+# Process the complete frozen selection and emit final execution evidence
+result = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)[0]
 
-# Expected outputs in output_root:
-# - luxury_interior_depth.png (16-bit depth visualization)
-# - luxury_interior_depth_float.npy (high-precision depth array)
-# - luxury_interior_normal.png (RGB normal map)
-# - luxury_interior_roughness.png (grayscale roughness)
-# - luxury_interior_ao.png (grayscale ambient occlusion)
-# - luxury_interior_manifest.json (processing metadata)
+# Read exact evidence-bound paths from result["depth_path"],
+# result["depth_float_path"], and result["manifest"]. PBR paths are recorded
+# in CombinedManifest.load(Path(result["manifest"])).pbr_assets.
 ```
 
 ### Example 2: Batch Processing with Premium Quality
@@ -226,8 +223,6 @@ from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
-from tqdm import tqdm
 
 # Configure for premium quality
 config = EnhanceConfig(
@@ -245,7 +240,7 @@ config = EnhanceConfig(
 )
 
 # Setup paths
-input_root = Path("./input_estate_photos")
+input_root = Path("./input_estate_photos").resolve()
 output_root = Path("./output_pbr_premium")
 image_paths = sorted(input_root.glob("*.jpg"))
 
@@ -253,14 +248,13 @@ image_paths = sorted(input_root.glob("*.jpg"))
 prepared = prepare_lux_execution(config, input_root, image_paths)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
 
-# Batch process with progress tracking
-for img_path in tqdm(image_paths, desc="Generating PBR maps"):
-    image_input = ImageInput(path=img_path)
-    try:
-        result = orchestrator.enhance_image(image_input, input_root=input_root)
-        print(f"✓ Processed: {img_path.name}")
-    except Exception as e:
-        print(f"✗ Failed {img_path.name}: {e}")
+# Batch process through one evidence-authoritative execution
+results = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)
+for img_path, result in zip(prepared.input_files, results):
+    print(f"{result['status']}: {img_path.name}")
 
 print(f"\nCompleted: {len(image_paths)} images processed")
 print(f"Outputs: {output_root}")
@@ -273,7 +267,6 @@ from pathlib import Path
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Draft config for rapid iteration
 config = EnhanceConfig(
@@ -291,13 +284,15 @@ config = EnhanceConfig(
 )
 
 # Quick preview of single image
-input_root = Path(".")
+input_root = Path(".").resolve()
 image_path = input_root / "test_scene.jpg"
 output_root = Path("./preview_pbr")
 prepared = prepare_lux_execution(config, input_root, [image_path])
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
-image_input = ImageInput(path=image_path)
-result = orchestrator.enhance_image(image_input, input_root=input_root)
+result = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)[0]
 
 print(f"Preview PBR maps generated in: {output_root}")
 print("Review depth quality before running premium preset on full batch")
@@ -462,14 +457,26 @@ The Lux Depth V3 orchestrator provides intelligent caching:
 
 ```
 output_root/
-├── image_001_depth.png              # 16-bit depth visualization
-├── image_001_depth_float.npy        # Float32 depth array (if save_float_depth=True)
-├── image_001_normal.png             # RGB normal map (uint8)
-├── image_001_roughness.png          # Grayscale roughness (uint8)
-├── image_001_ao.png                 # Grayscale ambient occlusion (uint8)
-├── image_001_manifest.json          # Processing metadata
-└── image_001_v2_report.json         # V2 enhancement report (if enabled)
+├── depth/
+│   ├── <input-key>_depth.png    # 16-bit depth visualization
+│   ├── <input-key>_depth.npy    # Float32 depth array (if save_float_depth=True)
+│   └── <input-key>_depth_metadata.json # Depth provenance and statistics
+├── pbr/
+│   ├── <input-key>_normal.png   # RGB normal map (uint8)
+│   ├── <input-key>_roughness.png # Grayscale roughness (uint8)
+│   └── <input-key>_ao.png       # Grayscale ambient occlusion (uint8)
+├── manifests/
+│   ├── <input-key>_combined.json # Processing metadata
+│   ├── batch_<batch-id>.json
+│   └── execution_evidence_<batch-id>.json # Detached completion record
+├── v2/                               # V2 outputs/reports when enabled
+├── run_card_<batch-id>.json          # Reproducibility card when enabled
+└── run_card_<batch-id>.self.json     # Run-card self-integrity sidecar
 ```
+
+`<input-key>` includes the normalized source extension and a stable path hash.
+Consume the paths returned by `enhance_batch` and the PBR paths in the combined
+manifest instead of reconstructing filenames.
 
 ### PBR Map File Formats
 
@@ -623,14 +630,22 @@ Before delivering PBR maps to client:
 # 3. Monitor memory usage - reduce batch size if OOM
 # 4. Use Draft preset for initial QC, Premium for finals only
 
-# Example: Hybrid approach
-for img_path in image_paths:
-    # Quick depth check with Draft
-    draft_result = orchestrator.enhance_image(img_input, ...)
-
-    if depth_quality_acceptable(draft_result):
-        # Re-run with Premium config (depth cached, fast!)
-        premium_result = orchestrator_premium.enhance_image(img_input, ...)
+# Example: Hybrid approach. Each configuration owns a complete prepared batch.
+draft_results = orchestrator_draft.enhance_batch(
+    prepared_draft.input_root,
+    input_files=list(prepared_draft.input_files),
+)
+premium_inputs = [
+    image_path
+    for image_path, result in zip(prepared_draft.input_files, draft_results)
+    if depth_quality_acceptable(result)
+]
+prepared_premium = prepare_lux_execution(premium_config, input_root, premium_inputs)
+orchestrator_premium = EnhanceOrchestrator.from_prepared(prepared_premium, premium_output_root)
+premium_results = orchestrator_premium.enhance_batch(
+    prepared_premium.input_root,
+    input_files=list(prepared_premium.input_files),
+)
 ```
 
 ---
@@ -775,9 +790,14 @@ maps = processor.from_depth(depth, save=True, base_name="scene1")
 from pathlib import Path
 from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
 
-# Input: Directory of depth files from previous orchestrator run
-depth_dir = Path("output/batch_depths/")
-depth_files = list(depth_dir.glob("*_depth.npy"))
+# Input: exact depth paths retained from a previous enhance_batch call.
+# `orchestrator_results` is that returned result list; do not reconstruct
+# evidence-bound names from source stems or scan a guessed directory.
+depth_files = []
+for result in orchestrator_results:
+    depth_path = result.get("depth_float_path")
+    if result.get("status") == "ok" and isinstance(depth_path, str) and depth_path:
+        depth_files.append(Path(depth_path))
 
 # Output: Generate PBR with premium preset
 config = get_preset("premium").to_pbr_config()

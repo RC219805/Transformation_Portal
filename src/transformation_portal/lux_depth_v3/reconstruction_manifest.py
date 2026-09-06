@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -15,7 +15,8 @@ from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
 from .manifest import compute_file_sha256
 from .scene_context import CameraConfidence, CameraProvenance, CameraSource, CameraWithProvenance, SceneContext
-from .scene_groups import normalize_relative_path
+from .scene_groups import lexical_relative_path
+from .scene_integrity import validate_image_sha256_overrides
 from .security import sanitize_path_component_nonlossy
 
 SCHEMA_RECONSTRUCTION_MANIFEST = "tp.reconstruction_manifest.v1"
@@ -84,18 +85,50 @@ def reconstruction_manifest_path(*, scene_id: str, output_dir: Path) -> Path:
     return output_dir / f"{safe_scene_id}_manifest.json"
 
 
+def _manifest_image_path(path: Path, dataset_root: Path) -> str:
+    """Serialize a loadable path without case-folding filesystem components."""
+
+    resolved_path = path.resolve()
+    try:
+        return resolved_path.relative_to(dataset_root.resolve()).as_posix()
+    except ValueError:
+        return resolved_path.as_posix()
+
+
 def build_reconstruction_manifest(
     *,
     context: SceneContext,
     iterations: int,
     tier: str,
+    image_sha256_overrides: Sequence[str] | None = None,
+    paths_are_canonical: bool = False,
 ) -> ReconstructionManifest:
     """Build deterministic manifest from scene context."""
-    normalized_images = tuple(normalize_relative_path(path, context.dataset_root) for path in context.images)
-    image_hashes = tuple(f"sha256:{compute_file_sha256(path)}" for path in context.images)
+    validated_image_hashes = validate_image_sha256_overrides(
+        image_sha256_overrides,
+        expected_count=len(context.images),
+    )
+    if paths_are_canonical and validated_image_hashes is None:
+        raise ValueError("paths_are_canonical requires image_sha256_overrides")
+    normalized_images = tuple(
+        (
+            lexical_relative_path(path, context.dataset_root)
+            if paths_are_canonical
+            else _manifest_image_path(path, context.dataset_root)
+        )
+        for path in context.images
+    )
+    image_hashes = tuple(
+        f"sha256:{digest}"
+        for digest in (
+            validated_image_hashes
+            if validated_image_hashes is not None
+            else tuple(compute_file_sha256(path) for path in context.images)
+        )
+    )
     return ReconstructionManifest(
         scene_id=context.scene_id,
-        dataset_root=str(context.dataset_root.resolve()),
+        dataset_root=str(context.dataset_root if paths_are_canonical else context.dataset_root.resolve()),
         images=normalized_images,
         image_hashes=image_hashes,
         cameras=tuple(context.cameras),

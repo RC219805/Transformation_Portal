@@ -11,15 +11,15 @@ From cached depth::
 
     config = get_preset("premium").to_pbr_config()
     paths = PBRProcessor.from_cached_depth(
-        depth_path="output/scene1_depth.npy",
+        depth_path=Path("output/scene1_depth.npy"),
         config=config,
-        output_dir="output/pbr/",
+        output_dir=Path("output/pbr/"),
         base_name="scene1"
     )
 
 From depth array::
 
-    processor = PBRProcessor(config=config, output_dir="output/pbr/")
+    processor = PBRProcessor(config=config, output_dir=Path("output/pbr/"))
     maps = processor.from_depth(depth_array, save=True, base_name="scene1")
 """
 

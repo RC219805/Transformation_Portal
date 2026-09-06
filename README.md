@@ -233,7 +233,10 @@ input_root = Path("./input_images")
 input_files = [input_root / "scene.tif"]
 prepared = prepare_lux_execution(config, input_root, input_files)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
-results = orchestrator.enhance_batch(input_root)
+results = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)
 ```
 
 `PreparedLuxExecution` is the direct-Python execution authority used by the
@@ -338,10 +341,11 @@ lux-depth-v3 \
 ```
 
 Typical outputs:
-- `*_depth.png` and optional float depth artifacts
-- `*_normal.png`
-- `*_roughness.png`
-- `*_ao.png`
+- `depth/*_depth.png` and optional `depth/*_depth.npy` artifacts
+- `pbr/*_normal.png`
+- `pbr/*_roughness.png`
+- `pbr/*_ao.png`
+- `manifests/*_combined.json`
 
 For standalone depth-to-PBR iteration, see [PBR Processor Quick Start](docs/guides/PBR_PROCESSOR_QUICKSTART.md).
 

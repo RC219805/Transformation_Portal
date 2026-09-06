@@ -662,45 +662,61 @@ def seed_depth_attempts_from_selection_fallback(
     ):
         return []
 
-    requested_error = effective_errors.get(requested_backend)
-    if not isinstance(requested_error, str) or not requested_error.strip():
-        return []
+    carried_plan = _carried_execution_plan(config)
+    failed_backends: tuple[str, ...] = (requested_backend,)
+    if carried_plan is not None:
+        try:
+            resolved_index = carried_plan.candidate_fallback_chain.index(resolved_backend)
+        except ValueError:
+            return []
+        failed_backends = carried_plan.candidate_fallback_chain[:resolved_index]
 
-    attempt: Dict[str, Any] = {
-        "attempt": 0,
-        "backend": requested_backend,
-        "model_id": default_model_id_for_backend(requested_backend, model_variant, config=config),
-        "device": config.depth_device,
-        "status": "failed",
-        "failure_kind": "operational",
-        "error_code": infer_operational_error_code(
-            RuntimeError(requested_error),
-        ),
-        "error_message": requested_error,
-        "apex_gate_passed": False,
-        "cached": False,
-        "duration_s": 0.0,
-        "model_artifact_filename": None,
-        "model_artifact_sha256": None,
-    }
+    startup_failures: List[Dict[str, Any]] = []
+    for backend_id in failed_backends:
+        backend_error = effective_errors.get(backend_id)
+        if not isinstance(backend_error, str) or not backend_error.strip():
+            # An incomplete startup history cannot safely authorize a partial
+            # candidate prefix. Let downstream evidence accounting fail closed.
+            return []
 
-    if requested_backend == "depth_pro":
-        carried_plan = _carried_execution_plan(config)
-        if carried_plan is not None:
-            from .execution_lifecycle import backend_candidate_authority
+        attempt: Dict[str, Any] = {
+            "attempt": len(startup_failures),
+            "backend": backend_id,
+            "model_id": default_model_id_for_backend(backend_id, model_variant, config=config),
+            "device": _carried_candidate_device(config, backend_id) or config.depth_device,
+            "status": "failed",
+            "failure_kind": "operational",
+            "error_code": infer_operational_error_code(
+                RuntimeError(backend_error),
+            ),
+            "error_message": backend_error,
+            "apex_gate_passed": False,
+            "cached": False,
+            "duration_s": 0.0,
+            "model_artifact_filename": None,
+            "model_artifact_sha256": None,
+        }
 
-            authority = backend_candidate_authority(carried_plan, requested_backend)
-            artifact_path = None if authority.model_contract is None else authority.model_contract.artifact_path
-            checkpoint_path = Path(artifact_path or "checkpoints/depth_pro.pt")
-        else:
-            checkpoint_path = Path(
-                getattr(config, "depth_pro_checkpoint_path", None)
-                or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
-                or "checkpoints/depth_pro.pt"
-            )
-        attempt["model_artifact_filename"] = checkpoint_path.name
+        if backend_id == "depth_pro":
+            if carried_plan is not None:
+                from .execution_lifecycle import backend_candidate_authority
 
-    return [attempt]
+                authority = backend_candidate_authority(carried_plan, backend_id)
+                model_contract = authority.model_contract
+                artifact_path = None if model_contract is None else model_contract.artifact_path
+                checkpoint_path = Path(artifact_path or "checkpoints/depth_pro.pt")
+                attempt["model_artifact_sha256"] = None if model_contract is None else model_contract.artifact_sha256
+            else:
+                checkpoint_path = Path(
+                    getattr(config, "depth_pro_checkpoint_path", None)
+                    or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
+                    or "checkpoints/depth_pro.pt"
+                )
+            attempt["model_artifact_filename"] = checkpoint_path.name
+
+        startup_failures.append(attempt)
+
+    return startup_failures
 
 
 def get_or_create_depth_backend(

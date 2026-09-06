@@ -32,7 +32,6 @@ from transformation_portal.lux_depth_v3.execution_lifecycle import (
     PreparedLuxExecution,
     prepare_lux_execution,
 )
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -110,15 +109,10 @@ def benchmark_sequential(
     logger.info("=== Sequential Processing Benchmark ===")
 
     start_time = time.time()
-    results = []
-
-    for img_path in image_paths:
-        try:
-            result = orchestrator.enhance_image(ImageInput(img_path), input_root)
-            results.append(result)
-        except Exception as e:
-            logger.error(f"Failed {img_path}: {e}")
-            results.append({"status": "error", "error": str(e)})
+    results = orchestrator.enhance_batch(
+        input_root,
+        input_files=image_paths,
+    )
 
     elapsed = time.time() - start_time
 
@@ -151,8 +145,10 @@ def benchmark_parallel(
 
     start_time = time.time()
 
-    image_inputs = [ImageInput(p) for p in image_paths]
-    results = orchestrator.enhance_batch_parallel(image_inputs, input_root)
+    results = orchestrator.enhance_batch(
+        input_root,
+        input_files=image_paths,
+    )
 
     elapsed = time.time() - start_time
 
@@ -189,8 +185,10 @@ def benchmark_cache_effectiveness(
     # First pass: populate cache
     logger.info("First pass: populating cache...")
     start_time = time.time()
-    image_inputs = [ImageInput(p) for p in image_paths]
-    results_pass1 = orchestrator.enhance_batch_parallel(image_inputs, input_root)
+    results_pass1 = orchestrator.enhance_batch(
+        input_root,
+        input_files=image_paths,
+    )
     elapsed_pass1 = time.time() - start_time
 
     cache_stats_after_pass1 = orchestrator.depth_cache.stats()
@@ -198,7 +196,10 @@ def benchmark_cache_effectiveness(
     # Second pass: should hit cache
     logger.info("Second pass: testing cache hits...")
     start_time = time.time()
-    results_pass2 = orchestrator.enhance_batch_parallel(image_inputs, input_root)
+    results_pass2 = orchestrator.enhance_batch(
+        input_root,
+        input_files=image_paths,
+    )
     elapsed_pass2 = time.time() - start_time
 
     cache_stats_after_pass2 = orchestrator.depth_cache.stats()
@@ -267,7 +268,7 @@ def benchmark_worker_scalability(
     return results
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Benchmark Phase 2 parallelization")
     parser.add_argument("--input-dir", type=Path, help="Directory with test images")
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic images")

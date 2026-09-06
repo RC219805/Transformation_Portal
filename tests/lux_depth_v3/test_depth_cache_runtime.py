@@ -249,7 +249,6 @@ def test_opened_prepared_input_must_still_match_the_plan_bound_path(tmp_path) ->
 
 def test_prepared_cache_hit_is_authorized_before_inference_and_uses_uint8_snapshot(tmp_path) -> None:
     from transformation_portal.core.execution_identity_v3 import MaterializedExecutionIdentityV3
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
     prepared, image, evidence = _prepared_da2_evidence(tmp_path)
@@ -311,22 +310,17 @@ def test_prepared_cache_hit_is_authorized_before_inference_and_uses_uint8_snapsh
                     "thresholds": {},
                 },
             ):
-                output_key = Path("prepared-cache-hit")
-                output = orchestrator.enhance_image(
-                    ImageInput(path=image),
-                    _precomputed_paths={
-                        "output_key": output_key,
-                        "depth_path": orchestrator.depth_dir / f"{output_key.name}_depth.png",
-                        "manifest_path": orchestrator.manifests_dir / f"{output_key.name}_combined.json",
-                        # A prepared cache-enabled run must ignore this legacy
-                        # manifest-resume hint and enter identity-v3 lookup.
-                        "should_skip": True,
-                    },
-                )
+                output = orchestrator.enhance_batch(
+                    prepared.input_root,
+                    input_files=[image],
+                )[0]
 
     assert output["status"] == "ok"
     assert observed["dtype"] == "uint8"
-    assert output["attempts"][0]["device"] == "cache"
+    planned_candidate = next(candidate for candidate in prepared.plan.backend_candidates if candidate.backend_id == "da2")
+    assert len(planned_candidate.model_contracts) == 1
+    assert output["attempts"][0]["device"] == planned_candidate.model_contracts[0].device
+    assert output["attempts"][0]["cached"] is True
     cache.get.assert_called_once()
     assert isinstance(cache.get.call_args.args[0], MaterializedExecutionIdentityV3)
     cache.store.assert_not_called()
@@ -335,7 +329,6 @@ def test_prepared_cache_hit_is_authorized_before_inference_and_uses_uint8_snapsh
 def test_prepared_cache_miss_stores_only_after_runtime_echo_and_semantic_gate(tmp_path) -> None:
     from transformation_portal.core.execution_identity_v3 import MaterializedExecutionIdentityV3
     from transformation_portal.depth.backends.protocol import DepthResult
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
     prepared, image, evidence = _prepared_da2_evidence(tmp_path)
@@ -391,7 +384,7 @@ def test_prepared_cache_miss_stores_only_after_runtime_echo_and_semantic_gate(tm
                 "thresholds": {},
             },
         ):
-            output = orchestrator.enhance_image(ImageInput(path=image))
+            output = orchestrator.enhance_batch(prepared.input_root, input_files=[image])[0]
 
     assert output["status"] == "ok"
     cache.get.assert_called_once()
@@ -404,7 +397,6 @@ def test_prepared_cache_miss_stores_only_after_runtime_echo_and_semantic_gate(tm
 @pytest.mark.parametrize("cached", [False, True])
 def test_live_runtime_drift_revokes_cache_authority_without_failing_execution(tmp_path, cached: bool) -> None:
     from transformation_portal.depth.backends.protocol import DepthResult
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
     prepared, image, evidence = _prepared_da2_evidence(tmp_path)
@@ -464,7 +456,7 @@ def test_live_runtime_drift_revokes_cache_authority_without_failing_execution(tm
                 "thresholds": {},
             },
         ):
-            output = orchestrator.enhance_image(ImageInput(path=image))
+            output = orchestrator.enhance_batch(prepared.input_root, input_files=[image])[0]
 
     assert output["status"] == "ok"
     assert verification_calls == [evidence.runtime_identity_sha256] * 2
@@ -478,7 +470,6 @@ def test_live_runtime_drift_revokes_cache_authority_without_failing_execution(tm
 @pytest.mark.parametrize("failing_operation", ["get", "store"])
 def test_cache_api_failure_cannot_replace_successful_backend_execution(tmp_path, failing_operation: str) -> None:
     from transformation_portal.depth.backends.protocol import DepthResult
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
     prepared, image, evidence = _prepared_da2_evidence(tmp_path)
@@ -538,7 +529,7 @@ def test_cache_api_failure_cannot_replace_successful_backend_execution(tmp_path,
                 "thresholds": {},
             },
         ):
-            output = orchestrator.enhance_image(ImageInput(path=image))
+            output = orchestrator.enhance_batch(prepared.input_root, input_files=[image])[0]
 
     assert output["status"] == "ok"
     assert output["backend"] == "da2"
@@ -554,7 +545,7 @@ def test_cache_api_failure_cannot_replace_successful_backend_execution(tmp_path,
 @pytest.mark.parametrize("failure", ["runtime_echo", "semantic_gate"])
 def test_prepared_cache_miss_refuses_store_before_authority_and_semantic_acceptance(tmp_path, failure: str) -> None:
     from transformation_portal.depth.backends.protocol import DepthResult
-    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    from transformation_portal.lux_depth_v3.execution_evidence import ExecutionEvidenceError
     from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 
     prepared, image, evidence = _prepared_da2_evidence(tmp_path)
@@ -607,15 +598,16 @@ def test_prepared_cache_miss_refuses_store_before_authority_and_semantic_accepta
             "thresholds": {},
         }
 
-    expected_exception = ApexStrictGateError if failure == "semantic_gate" else LuxExecutionPlanAuthorityError
-
     with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
         orchestrator = EnhanceOrchestrator.from_prepared(prepared, tmp_path / f"output-{failure}")
         orchestrator.depth_cache = cache
         orchestrator.postprocessor = Mock(process=lambda result: result)
         with patch.object(orchestrator, "_enforce_apex_depth_validity_gate", side_effect=_gate):
-            with pytest.raises(expected_exception):
-                orchestrator.enhance_image(ImageInput(path=image))
+            with pytest.raises(ExecutionEvidenceError, match="failed required artifact accounting"):
+                orchestrator.enhance_batch(
+                    prepared.input_root,
+                    input_files=list(prepared.input_files),
+                )
 
     cache.get.assert_called_once()
     cache.store.assert_not_called()

@@ -24,7 +24,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--command",
-        choices=("load_rgb", "linear_decode", "phase2_decode"),
+        choices=("probe", "load_rgb", "linear_decode", "phase2_decode"),
         help="RAW operation to execute.",
     )
     parser.add_argument(
@@ -89,6 +89,19 @@ def _run_load_rgb(input_path: Path, payload: Dict[str, Any]) -> tuple[np.ndarray
     }
 
 
+def _run_probe(input_path: Path) -> tuple[np.ndarray, Dict[str, Any]]:
+    """Read LibRaw's visible-frame dimensions without demosaicing pixels."""
+
+    import rawpy
+
+    with rawpy.imread(str(input_path)) as raw:
+        width = int(raw.sizes.width)
+        height = int(raw.sizes.height)
+    if width <= 0 or height <= 0:
+        raise ValueError(f"RAW input exposes invalid visible dimensions: {width}x{height}")
+    return np.empty((0,), dtype=np.uint8), {"input_size": [height, width]}
+
+
 def _run_linear_decode(input_path: Path, payload: Dict[str, Any]) -> tuple[np.ndarray, Dict[str, Any]]:
     from .linear_decoder import LinearDecoder
 
@@ -114,7 +127,7 @@ def _run_phase2_decode(input_path: Path, payload: Dict[str, Any]) -> tuple[np.nd
 
     tensor, fingerprint = ingest_phase2_xyz_d50_linear_fp32(
         input_path,
-        wb_mode=str(payload.get("wb_mode", "camera")),
+        wb_mode=str(payload.get("wb_mode", "camera")),  # type: ignore[arg-type]
         demosaic=str(payload.get("demosaic", "AHD")),
         raw_python_executable=None,
     )
@@ -150,7 +163,9 @@ def main(argv: list[str] | None = None) -> int:
     payload = _load_payload(args.payload_json)
     input_path = args.input_path.expanduser().resolve()
 
-    if args.command == "load_rgb":
+    if args.command == "probe":
+        array, metadata = _run_probe(input_path)
+    elif args.command == "load_rgb":
         array, metadata = _run_load_rgb(input_path, payload)
     elif args.command == "linear_decode":
         array, metadata = _run_linear_decode(input_path, payload)

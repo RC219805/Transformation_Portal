@@ -13,7 +13,7 @@ from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_e
 from pathlib import Path
 
 # Use the preset with one exact prepared input selection
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 input_files = sorted(input_root.glob("*.jpg"))
 prepared = prepare_lux_execution(STANDARD_QUALITY, input_root, input_files)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=Path("./output"))
@@ -46,18 +46,19 @@ orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=Path("./o
 ```python
 from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, STANDARD_QUALITY
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from pathlib import Path
 
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 image_paths = sorted(input_root.glob("*.jpg"))
 output_root = Path("./pbr_output")
 prepared = prepare_lux_execution(STANDARD_QUALITY, input_root, image_paths)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
-
-for img_path in image_paths:
-    result = orchestrator.enhance_image(ImageInput(img_path), input_root=input_root)
-    print(f"✓ {img_path.name}")
+results = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)
+for img_path, result in zip(prepared.input_files, results):
+    print(f"{result['status']}: {img_path.name}")
 ```
 
 ### Example 2: Get Preset by Name
@@ -69,7 +70,7 @@ from pathlib import Path
 
 # Load preset dynamically
 config = get_preset("premium")  # or "standard", "draft", "wood", etc.
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 input_files = sorted(input_root.glob("*.jpg"))
 prepared = prepare_lux_execution(config, input_root, input_files)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
@@ -100,7 +101,7 @@ custom_config = replace(
     pbr_ao_bias=0.40,         # Darker AO
 )
 
-input_root = Path("./input_images")
+input_root = Path("./input_images").resolve()
 input_files = sorted(input_root.glob("*.jpg"))
 prepared = prepare_lux_execution(custom_config, input_root, input_files)
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
@@ -128,13 +129,24 @@ orchestrator = EnhanceOrchestrator.from_prepared(prepared, Path("./output"))
 
 ```
 output_root/
-├── image_name_depth.png              # 16-bit depth visualization
-├── image_name_depth_float.npy        # High-precision depth (if save_float_depth=True)
-├── image_name_normal.png             # RGB normal map
-├── image_name_roughness.png          # Grayscale roughness map
-├── image_name_ao.png                 # Grayscale ambient occlusion map
-└── image_name_manifest.json          # Processing metadata
+├── depth/
+│   ├── <input-key>_depth.png    # 16-bit depth visualization
+│   ├── <input-key>_depth.npy    # High-precision depth (if enabled)
+│   └── <input-key>_depth_metadata.json # Depth provenance and statistics
+├── pbr/
+│   ├── <input-key>_normal.png   # RGB normal map
+│   ├── <input-key>_roughness.png # Grayscale roughness map
+│   └── <input-key>_ao.png       # Grayscale ambient occlusion map
+├── manifests/
+│   ├── <input-key>_combined.json     # Processing metadata
+│   ├── batch_<batch-id>.json
+│   └── execution_evidence_<batch-id>.json # Detached completion record
+├── run_card_<batch-id>.json          # Reproducibility card when enabled
+└── run_card_<batch-id>.self.json     # Run-card self-integrity sidecar
 ```
+
+Use the paths returned by `enhance_batch` and the PBR paths recorded in the
+combined manifest; do not reconstruct names from the source stem.
 
 ## Troubleshooting
 

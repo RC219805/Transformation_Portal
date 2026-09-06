@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
-from transformation_portal.lux_depth_v3.ingest_adapter import RawIngestError, decode_for_lux_depth
+from transformation_portal.lux_depth_v3.ingest_adapter import RawIngestError, decode_for_lux_depth, probe_raw_dimensions
 from transformation_portal.lux_depth_v3.preprocessing import preprocess_image
 from transformation_portal.lux_depth_v3.provenance import capture_provenance
 
@@ -19,6 +19,57 @@ pytestmark = pytest.mark.unit
 
 def _raw_cfg(mode: str = "auto") -> SimpleNamespace:
     return SimpleNamespace(raw_ingest_mode=mode, raw_wb_mode="camera", raw_demosaic="AHD")
+
+
+def test_probe_raw_dimensions_uses_validated_external_worker_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "scene_probe.dng"
+    raw_path.write_bytes(b"raw")
+    config = _raw_cfg()
+    config.raw_python_executable = "/runtime/raw-python"
+    captured: dict[str, object] = {}
+
+    def fake_run_raw_worker(**kwargs):
+        captured.update(kwargs)
+        return np.empty((0,), dtype=np.uint8), {"input_size": [3024, 4032]}
+
+    monkeypatch.delenv("TP_ALLOW_RAW_PREVIEW", raising=False)
+    monkeypatch.setattr("transformation_portal.lux_depth_v3.ingest_adapter.run_raw_worker", fake_run_raw_worker)
+
+    assert probe_raw_dimensions(raw_path, config) == (4032, 3024)
+    assert captured == {
+        "python_executable": "/runtime/raw-python",
+        "command_name": "probe",
+        "input_path": raw_path,
+        "payload": {},
+        "start": raw_path,
+    }
+
+
+@pytest.mark.parametrize(
+    "input_size",
+    [None, [3024], [0, 4032], [True, 4032], [3024.0, 4032]],
+)
+def test_probe_raw_dimensions_rejects_invalid_external_worker_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    input_size: object,
+) -> None:
+    raw_path = tmp_path / "scene_invalid_probe.dng"
+    raw_path.write_bytes(b"raw")
+    config = _raw_cfg()
+    config.raw_python_executable = "/runtime/raw-python"
+
+    monkeypatch.delenv("TP_ALLOW_RAW_PREVIEW", raising=False)
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.ingest_adapter.run_raw_worker",
+        lambda **_kwargs: (np.empty((0,), dtype=np.uint8), {"input_size": input_size}),
+    )
+
+    with pytest.raises(RawIngestError, match="RAW dimension probe returned invalid input_size"):
+        probe_raw_dimensions(raw_path, config)
 
 
 def test_preprocess_image_routes_raw_to_canonical_ingest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

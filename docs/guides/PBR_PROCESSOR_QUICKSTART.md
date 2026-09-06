@@ -33,12 +33,15 @@ pip install -e .
 
 ### Step 2: Verify Depth Files Exist
 
-PBRProcessor requires existing depth maps (from previous orchestrator run or external source):
+PBRProcessor requires an explicit existing depth-map path. For an
+`EnhanceOrchestrator` run, retain the exact `result["depth_float_path"]`
+returned by `enhance_batch`; the evidence-bound name includes the input
+extension and a stable path hash, so do not reconstruct it from the source
+stem. The standalone tutorial below uses a caller-managed depth file instead:
 
 ```bash
-# Check for depth files
-ls output/*_depth.npy
-# Expected: scene1_depth.npy, scene2_depth.npy, etc.
+# Check the caller-managed depth file used by this tutorial
+test -f output/scene1_depth.npy
 ```
 
 ### Step 3: Generate PBR Maps
@@ -270,8 +273,11 @@ FileNotFoundError: Depth file not found: output/scene1_depth.npy
 ```
 
 **Solution:**
-- Verify depth file exists: `ls output/scene1_depth.npy`
-- Run full orchestrator first to generate depth
+- Verify the caller-managed depth file exists: `test -f output/scene1_depth.npy`
+- For orchestrator-generated depth, pass
+  `Path(result["depth_float_path"])` from the successful `enhance_batch`
+  result instead of guessing `output/scene1_depth.npy`
+- If needed, run the full orchestrator first and retain that returned result
 - Check file path is correct (relative or absolute)
 
 ### Issue: "Expected 2D depth array"
@@ -369,6 +375,7 @@ ValueError: Depth contains NaN or Inf values
 Override preset parameters for fine-grained control:
 
 ```python
+from pathlib import Path
 from transformation_portal.lux_depth_v3 import PBRProcessor
 from transformation_portal.lux_depth_v3.pbr import PBRConfig
 
@@ -383,7 +390,7 @@ custom_config = PBRConfig(
     ao_bias=0.3,                # Darker shadows
 )
 
-processor = PBRProcessor(config=custom_config, output_dir="output/custom/")
+processor = PBRProcessor(config=custom_config, output_dir=Path("output/custom/"))
 maps = processor.from_depth(depth, save=True, base_name="custom_scene")
 ```
 
@@ -405,25 +412,29 @@ PBRProcessor complements the full orchestrator pipeline:
 ### Workflow 1: Depth First, PBR Later
 
 ```python
+from dataclasses import replace
 from pathlib import Path
 from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, PBRProcessor, get_preset
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 # Step 1: Run orchestrator for depth only
-config = get_preset("premium")
-config.generate_pbr = False  # Skip PBR in orchestrator
+config = replace(get_preset("premium"), generate_pbr=False)
 
-input_root = Path("input")
+input_root = Path("input").resolve()
 image_path = input_root / "scene1.jpg"
 prepared = prepare_lux_execution(config, input_root, [image_path])
 orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root=Path("output/"))
-manifest = orchestrator.enhance_image(ImageInput(image_path), input_root=input_root)
+result = orchestrator.enhance_batch(
+    prepared.input_root,
+    input_files=list(prepared.input_files),
+)[0]
+if result["status"] != "ok" or not result["depth_float_path"]:
+    raise RuntimeError("Depth generation did not produce the requested float map")
 
 # Step 2: Generate PBR separately (allows parameter iteration)
 pbr_config = config.to_pbr_config()
 paths = PBRProcessor.from_cached_depth(
-    depth_path=manifest.depth_path_float,
+    depth_path=Path(result["depth_float_path"]),
     config=pbr_config,
     output_dir=Path("output/pbr/"),
     base_name="scene1"

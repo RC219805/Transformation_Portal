@@ -2,6 +2,11 @@
 
 Extracted from orchestrator.py as part of ADR-043 decomposition.
 
+This module provides compatibility projections for the historical Lux
+artifact catalog.  ``build_artifact_index`` is intentionally best-effort and
+therefore is not execution or publication authority. Prepared executions use
+``execution_evidence`` for fail-closed output accounting.
+
 This module provides:
 - Artifact type inference from output paths
 - Artifact indexing with integrity hashes (SHA-256)
@@ -316,10 +321,14 @@ def build_artifact_index(
     output_root: Path,
     artifact_paths: List[Path],
 ) -> List[Dict[str, Any]]:
-    """Build deterministic artifact index with size and SHA256.
+    """Build a deterministic, non-authorizing compatibility artifact index.
 
-    Scans artifact paths, computes integrity hashes, and returns
-    a sorted index for run card inclusion.
+    Scans artifact paths, computes integrity hashes, and returns a sorted index
+    for legacy run-card readers. Missing, unreadable, non-file, and external
+    paths remain best-effort omissions for backwards compatibility. Callers
+    must never use this projection to decide whether a prepared plan produced
+    all required outputs; ``execution_evidence.build_execution_evidence`` is
+    the fail-closed authority for that question.
 
     The index entries contain:
     - artifact_type: Canonical type (e.g., depth_u16_png)

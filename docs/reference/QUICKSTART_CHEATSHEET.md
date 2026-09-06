@@ -129,7 +129,7 @@ Use the current lock-backed targets and runtime scripts above.
 | Workflow | Output shape |
 |----------|--------------|
 | Minimal image adjustment | Single adjusted image at the requested `--output` path |
-| Lux Depth V3 | Depth artifacts, material/PBR outputs, marketing exports, report, and run card when enabled |
+| Lux Depth V3 | Depth artifacts, material/PBR outputs, an unconditional combined manifest, and a run card when enabled |
 | TIFF batch | Processed TIFF files under the output directory, preserving high-fidelity metadata where supported |
 | Lux render | AI-refined render outputs under `--out` |
 | Video grading | Graded MP4/MOV master at the requested output path |
