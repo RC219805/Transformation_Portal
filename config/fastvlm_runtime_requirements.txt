@@ -70,7 +70,7 @@ starlette==1.6.0
 sympy==1.14.0
 timm==1.0.26
 tokenizers==0.22.2
-tomlkit==0.14.0
+tomlkit==0.15.1
 torch==2.13.0
 torchvision==0.28.0
 tqdm==4.70.0
