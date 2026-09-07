@@ -11,7 +11,7 @@ GOVERNED_PIP_PIN = "pip==26.2.1"
 GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.15.0"
-PYPDF_LOCK_PIN = "pypdf==6.16.2"
+PYPDF_LOCK_PIN = "pypdf==6.17.0"
 GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
 GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
 
