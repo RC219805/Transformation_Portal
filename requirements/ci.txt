@@ -16,7 +16,7 @@ build==1.6.0
     # via
     #   -c all.txt
     #   -r ci.in
-cachetools==7.1.7
+cachetools==7.1.8
     # via
     #   -c all.txt
     #   tox
@@ -48,7 +48,7 @@ docutils==0.23
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==3.32.4
+filelock==3.32.5
     # via
     #   -c all.txt
     #   python-discovery
@@ -111,7 +111,7 @@ packaging==26.3
     #   pyproject-api
     #   tox
     #   twine
-platformdirs==4.11.5
+platformdirs==4.11.7
     # via
     #   -c all.txt
     #   tox
@@ -129,7 +129,7 @@ pygments==2.21.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.16.2
+pypdf==6.17.0
     # via
     #   -c all.txt
     #   -r ci.in
@@ -184,7 +184,7 @@ tomli-w==1.2.0
     # via
     #   -c all.txt
     #   tox
-tox==4.61.1
+tox==4.61.2
     # via
     #   -c all.txt
     #   -r ci.in
@@ -202,7 +202,7 @@ urllib3==2.7.0
     #   id
     #   requests
     #   twine
-virtualenv==21.7.7
+virtualenv==21.7.8
     # via
     #   -c all.txt
     #   tox
