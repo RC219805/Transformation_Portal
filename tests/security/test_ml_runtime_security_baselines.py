@@ -19,11 +19,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
                 "pillow==12.3.0",
                 "torch==2.13.0",
                 "torchvision==0.28.0",
-                "transformers==5.8.0",
+                "transformers==5.10.1",
                 "datasets==5.0.1",
                 "gradio==6.22.0",
                 "gradio_client==2.6.0",
                 "huggingface_hub==1.16.0",
+                # Gradio 6.22.0 requires tomlkit<0.15.0; move these together.
+                "tomlkit==0.14.0",
             ),
         ),
         (
