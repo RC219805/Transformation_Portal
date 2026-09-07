@@ -12,7 +12,7 @@ annotated-doc==0.0.5
     # via
     #   -c base.txt
     #   typer
-anyio==4.14.2
+anyio==4.15.1
     # via
     #   -c base.txt
     #   httpx
@@ -34,6 +34,10 @@ click==8.4.2
     # via
     #   -c base.txt
     #   huggingface-hub
+cloudpickle==3.1.2
+    # via
+    #   -c base.txt
+    #   joblib
 colour-science==0.4.7
     # via -r ml-core-darwin-arm64.in
 controlnet-aux==0.0.10
@@ -95,7 +99,7 @@ importlib-metadata==9.0.0
     #   diffusers
 jinja2==3.1.6
     # via torch
-joblib==1.5.3
+joblib==1.6.0
     # via
     #   -c base.txt
     #   scikit-learn
@@ -164,7 +168,7 @@ pillow==12.3.0
     #   imageio
     #   scikit-image
     #   torchvision
-plyfile==1.1.4
+plyfile==1.1.5
     # via -r ml-core-darwin-arm64.in
 protobuf==7.34.1
     # via coremltools
@@ -273,7 +277,7 @@ transformers==5.5.4
     # via
     #   -r ml-core-darwin-arm64.in
     #   sentence-transformers
-typer==0.27.1
+typer==0.27.2
     # via
     #   -c base.txt
     #   transformers
