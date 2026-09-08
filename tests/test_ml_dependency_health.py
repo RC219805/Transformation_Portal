@@ -74,7 +74,7 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
 
 
 def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The supported torch 2.12.x + transformers 5.x baseline must not be rejected."""
+    """The supported torch and Transformers security baseline must not be rejected."""
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._installed_version",
         lambda _distribution: "2.4.3",
@@ -84,9 +84,28 @@ def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatc
         lambda: False,
     )
 
-    message = detect_transformers_torch_version_issue("2.13.0", "5.5.0")
+    message = detect_transformers_torch_version_issue("2.13.0", "5.10.1")
 
     assert message is None
+
+
+def test_detect_transformers_torch_version_issue_rejects_vulnerable_transformers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transformers releases below the CVE-2026-9856 patched baseline fail closed."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "2.4.3",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: False,
+    )
+
+    message = detect_transformers_torch_version_issue("2.13.0", "5.9.0")
+
+    assert message is not None
+    assert "supported security baseline 5.10.1" in message
 
 
 def test_detect_transformers_torch_version_issue_rejects_retired_old_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +123,7 @@ def test_detect_transformers_torch_version_issue_rejects_retired_old_baseline(mo
 
     assert message is not None
     assert "supported security baseline 2.13.0" in message
-    assert "supported security baseline 5.5.0" in message
+    assert "supported security baseline 5.10.1" in message
 
 
 def test_detect_transformers_torch_version_issue_rejects_transformers_53_with_old_torch(

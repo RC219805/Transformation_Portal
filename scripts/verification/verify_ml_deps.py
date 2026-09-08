@@ -52,7 +52,7 @@ def check_dependencies():
         "ML": [
             ("torch", "PyTorch", "2.13.0"),
             ("torchvision", "TorchVision", "0.28.0"),
-            ("transformers", "Transformers", "5.5.0"),
+            ("transformers", "Transformers", "5.10.1"),
             ("diffusers", "Diffusers", "0.38.0"),
         ],
         "Depth": [
