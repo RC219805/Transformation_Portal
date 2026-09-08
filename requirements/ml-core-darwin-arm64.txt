@@ -273,7 +273,7 @@ tqdm==4.70.0
     #   open-clip-torch
     #   sentence-transformers
     #   transformers
-transformers==5.5.4
+transformers==5.10.4
     # via
     #   -r ml-core-darwin-arm64.in
     #   sentence-transformers

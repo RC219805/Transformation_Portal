@@ -35,7 +35,7 @@ _SOURCE_REVISION = "9" * 40
 def _write_governance(path: Path, *, enabled: bool = True) -> Path:
     lock_path = path.with_name("da3-exact.lock")
     if enabled:
-        lock_path.write_bytes(b"torch==2.13.0\ntransformers==5.5.0\n")
+        lock_path.write_bytes(b"torch==2.13.0\ntransformers==5.10.1\n")
         lock_sha256 = hashlib.sha256(lock_path.read_bytes()).hexdigest()
     else:
         lock_sha256 = None
@@ -106,7 +106,7 @@ def _inputs(tmp_path: Path) -> dict[str, Any]:
             },
             {
                 "name": "transformers",
-                "version": "5.5.0",
+                "version": "5.10.1",
                 "direct_url_sha256": "d" * 64,
                 "record_sha256": "e" * 64,
                 "installed_files_sha256": "2" * 64,

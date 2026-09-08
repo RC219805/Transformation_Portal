@@ -41,7 +41,7 @@ Current grouping and compatibility controls keep coupled changes atomic:
   applies security grouping while targeting the repository default branch,
   `main`.
 - Redis major updates and core Transformers minor updates are ignored because
-  the governed contracts remain Redis `<7` and Transformers `>=5.5,<5.6`.
+  the governed contracts remain Redis `<7` and Transformers `>=5.10.1,<5.11`.
   Compatible patch updates remain eligible.
 
 ---

@@ -7,7 +7,7 @@
 
 torch==2.13.0  # Governed DA3 baseline
 torchvision==0.28.0  # Governed DA3 baseline
-transformers==5.5.0  # Governed DA3 baseline
+transformers==5.10.1  # Governed DA3 security baseline (CVE-2026-9856)
 cryptography==50.0.0  # Governed DA3 baseline
 moviepy==1.0.3  # Governed DA3 baseline
 einops==0.8.2  # Governed DA3 baseline
