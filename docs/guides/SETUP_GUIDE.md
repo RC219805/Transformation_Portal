@@ -93,6 +93,25 @@ For depth-aware processing, use the governed isolated runtime installers instead
 ./scripts/setup/install_depth_pro_runtime.sh
 ```
 
+DA3 depth-cache authority additionally requires the governed baseline runtime and
+the exact source revision, dependency lock, and authority marker in the
+[runtime identity contract](../../config/da3_runtime_identity_contract.json).
+The pinned upstream `depth_anything_3` package is a namespace package without an
+`__init__.py`; revision discovery uses its single canonical
+`<checkout>/src/depth_anything_3` directory. Ambiguous or misplaced namespace
+roots remain non-authorizing. A `source_revision_mismatch` requires inspecting
+the imported source and checkout revision, rather than changing the marker.
+Import-root identity uses canonical filesystem paths, so a library changing
+the same root from `str` to `pathlib.Path` does not invalidate it. A different
+root or changed bytes still fails verification.
+
+Worker preparation retains per-file and per-directory observations so later
+cache access can detect runtime changes. The bounded response permits up to
+32 MiB for this verification token plus 4 MiB for evidence and other metadata;
+both component limits are checked separately within the 36 MiB transport limit.
+An oversized response remains non-authorizing. Successful inference alone does
+not establish cache reuse; confirm a cache hit on an identical repeat run.
+
 ---
 
 ## Model Downloads

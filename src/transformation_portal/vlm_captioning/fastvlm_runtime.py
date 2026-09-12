@@ -26,17 +26,12 @@ FASTVLM_CHECKPOINT_DIRS = {
     "smoke": "FastVLM-0.5B-fp16",
 }
 DEFAULT_FASTVLM_PROMPT = (
-    "Return exactly one conservative visual-description line using this exact format "
-    "and equals signs: SCENE=<short>; MATERIALS=<clearly visible materials>; "
-    "FEATURES=<clearly visible architectural or site features>; "
-    "NATURAL=<clearly visible natural elements>; LIGHTING=<visibly supported lighting>; "
-    "ISSUES=<directly visible image-quality or scene issues, or none>; "
-    "UNCERTAIN=<items that may be present but are not visually clear>. "
-    "Use the uppercase keys exactly as shown. Use equals signs, not colons. "
-    "Do not infer use-case, time of day, weather, traffic, construction activity, people, funding, "
-    "maintenance, purpose, ownership, market value, quality status, building condition, "
-    "or property condition unless directly visible. Do not use JSON. Do not repeat items. "
-    "Do not add extra commentary before or after the line."
+    "Describe only clearly visible content in this image. Return one short line with these seven uppercase "
+    "labels in order: SCENE, MATERIALS, FEATURES, NATURAL, LIGHTING, ISSUES, UNCERTAIN. "
+    "Write each label followed by an equals sign and its value; separate fields with semicolons. "
+    "Keep each value under six words. Use none for absent items and unknown when unclear. "
+    "Do not infer time of day, weather, purpose, ownership, value, or property condition unless directly visible. "
+    "Do not use XML, JSON, angle brackets, or commentary."
 )
 REVIEW_FASTVLM_PROMPT = (
     "Return exactly one conservative visual audit line using this exact format "
@@ -306,6 +301,9 @@ def run_fastvlm_caption(
         str(config.max_tokens),
         "--temperature",
         str(config.temperature),
+        # The pinned mlx-vlm CLI uses store_false: this flag disables its
+        # verbose prompt echo, leaving generated text rather than instructions.
+        "--verbose",
     ]
 
     def fail(status: str, error: str) -> FastVLMRuntimeResult:

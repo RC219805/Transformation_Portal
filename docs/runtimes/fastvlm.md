@@ -29,10 +29,13 @@ python -m mlx_vlm.generate \
   --image "$IMAGE" \
   --prompt "$PROMPT" \
   --max-tokens 120 \
-  --temperature 0.0
+  --temperature 0.0 \
+  --verbose
 ```
 
 No production code imports `mlx_vlm`, MLX, or CoreML packages.
+The pinned `mlx-vlm` CLI defines `--verbose` with `store_false`; passing it
+suppresses the rendered input prompt and token statistics.
 
 ## Model Policy
 
@@ -72,7 +75,13 @@ Do not add per-run prompt overrides through the Portal or Lux Depth CLI unless
 the governance contract is intentionally expanded. The active prompt is recorded
 in each sidecar under `vlm_captioning.runtime_diagnostics.command` as the
 `--prompt` argument. The raw text file captures `mlx-vlm` stdout, which may
-include runtime logs, the rendered chat prompt, and the model response.
+include runtime loading logs and the model response. Older raw files may also
+include the rendered chat prompt. The parser isolates the assistant turn in
+those files and never uses echoed instructions to supply caption fields.
+All seven fields must contain a value for `validated: true`; use `none` for
+absent items or `unknown` when unclear. A successful subprocess exit alone
+does not establish a valid caption. The default prompt names the fields without
+angle-bracket placeholders and bounds their lengths to fit the token budget.
 
 ## Input Image Policy
 

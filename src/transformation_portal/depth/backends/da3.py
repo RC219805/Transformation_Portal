@@ -71,7 +71,6 @@ _DEPENDENCY_FAILURE_MARKERS = (
     "importerror",
     "cannot import name",
     "package not installed",
-    "required for",
 )
 _STARTUP_FAILURE_MARKERS = (
     "omp: error",

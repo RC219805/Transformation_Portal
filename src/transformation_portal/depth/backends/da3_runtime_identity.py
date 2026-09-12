@@ -56,7 +56,7 @@ _MAX_SOURCE_TREE_ENTRIES = 50_000
 _MAX_SOURCE_TREE_DIRECTORIES = 8192
 _MAX_DISTRIBUTION_FILES = 100_000
 _MAX_DISTRIBUTION_BYTES = 16 * 1024 * 1024 * 1024
-_MAX_HANDSHAKE_BYTES = 4 * 1024 * 1024
+_MAX_HANDSHAKE_METADATA_BYTES = 4 * 1024 * 1024
 _MAX_LOCK_BYTES = 4 * 1024 * 1024
 _MAX_LOCK_DISTRIBUTIONS = 2048
 _MAX_RUNTIME_MARKER_BYTES = 64 * 1024
@@ -75,6 +75,10 @@ _MAX_IMPORT_CONFIGURATION_FILES = 1024
 _MAX_IMPORT_CONFIGURATION_BYTES = 16 * 1024 * 1024
 _MAX_IMPORT_CONFIGURATION_DIRECTORY_ENTRIES = 50_000
 _MAX_VERIFICATION_TOKEN_BYTES = 32 * 1024 * 1024
+# The handshake carries the complete stat token as well as runtime evidence.
+# Keep their existing budgets separate: a governed baseline can have a 17 MiB
+# token even though its evidence and other envelope metadata use under 1 MiB.
+_MAX_HANDSHAKE_BYTES = _MAX_HANDSHAKE_METADATA_BYTES + _MAX_VERIFICATION_TOKEN_BYTES
 _MAX_VERIFICATION_ENTRIES = 200_000
 _DEFAULT_GOVERNANCE_PATH = "config/da3_runtime_identity_contract.json"
 _RUNTIME_AUTHORITY_SCHEMA = "tp.da3.runtime-authority.v1"
@@ -1125,11 +1129,17 @@ def _module_resolution_record(
     for ordinal, raw_location in enumerate(spec.submodule_search_locations or (), start=1):
         if ordinal > _MAX_MODULE_SEARCH_ROOTS:
             raise ValueError(f"DA3 import resolution has too many roots for {module_name}")
-        raw_locations.append(raw_location)
+        try:
+            # Transformers' direct import replaces a str root with the same
+            # pathlib.Path. Bind its filesystem identity, not its Python type.
+            normalized_location = os.fspath(raw_location)
+        except TypeError as exc:
+            raise ValueError(f"DA3 import resolution has an invalid root for {module_name}") from exc
+        if not isinstance(normalized_location, str) or len(normalized_location.encode("utf-8")) > _MAX_IMPORT_PATH_BYTES:
+            raise ValueError(f"DA3 import resolution has an invalid root for {module_name}")
+        raw_locations.append(normalized_location)
     locations: list[str] = []
     for raw_location in raw_locations:
-        if not isinstance(raw_location, str) or len(raw_location.encode("utf-8")) > _MAX_IMPORT_PATH_BYTES:
-            raise ValueError(f"DA3 import resolution has an invalid root for {module_name}")
         try:
             location = Path(raw_location).resolve(strict=True)
             location_stat = location.stat()
@@ -1307,13 +1317,37 @@ def _git_source_revision() -> str | None:
     spec = importlib.util.find_spec("depth_anything_3")
     if spec is None:
         return None
-    origin = Path(spec.origin).resolve() if spec.origin else None
-    if origin is None:
+    namespace_root: Path | None = None
+    try:
+        if spec.origin:
+            origin = Path(spec.origin).resolve(strict=True)
+            if not origin.is_file():
+                return None
+            source_root = origin.parent
+        else:
+            # The governed upstream checkout is a namespace package without
+            # __init__.py. A split namespace cannot identify one source revision.
+            roots = spec.submodule_search_locations
+            if roots is None or len(roots) != 1:
+                return None
+            raw_root = roots[0]
+            if not isinstance(raw_root, str) or len(raw_root.encode("utf-8")) > _MAX_IMPORT_PATH_BYTES:
+                return None
+            root = Path(raw_root)
+            if not root.is_absolute():
+                return None
+            namespace_root = root.resolve(strict=True)
+            if root != namespace_root or not namespace_root.is_dir():
+                return None
+            source_root = namespace_root
+    except (OSError, RuntimeError, ValueError):
         return None
-    for candidate in (origin.parent, *origin.parents):
+    for candidate in (source_root, *source_root.parents):
         if (candidate / ".git").exists():
             try:
                 repository_path = candidate.resolve(strict=True)
+                if namespace_root is not None and namespace_root != repository_path / "src" / "depth_anything_3":
+                    return None
                 result = subprocess.run(
                     ["git", "-C", str(repository_path), "rev-parse", "HEAD"],
                     capture_output=True,
@@ -1754,6 +1788,13 @@ def load_da3_worker_runtime_handshake(
         raise ValueError("DA3 worker runtime handshake must be a JSON object")
     if canonicalize_json(payload) != raw:
         raise ValueError("DA3 worker runtime handshake is not canonical JSON")
+    if payload.get("schema") == "tp.da3.worker-runtime-handshake.v1":
+        token = payload.get("runtime_verification_token")
+        if token is not None and len(canonicalize_json(token)) > _MAX_VERIFICATION_TOKEN_BYTES:
+            raise ValueError("DA3 worker runtime verification token is oversized")
+        metadata = {**payload, "runtime_verification_token": None}
+        if len(canonicalize_json(metadata)) > _MAX_HANDSHAKE_METADATA_BYTES:
+            raise ValueError("DA3 worker runtime handshake metadata is oversized")
     return payload
 
 

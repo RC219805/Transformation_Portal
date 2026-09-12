@@ -69,3 +69,65 @@ def test_missing_keys_marks_unvalidated_without_fabricating_fields() -> None:
     assert parsed.validated is False
     assert parsed.missing_keys == ["features", "natural", "lighting", "issues", "uncertain"]
     assert parsed.caption == {"scene": "Patio", "materials": ["stone"]}
+
+
+@pytest.mark.parametrize("generation", ["", "<SCENE>Modern residential building with white walls; outdoor seating"])
+def test_verbose_prompt_echo_cannot_authorize_malformed_generation(generation: str) -> None:
+    # Captured failure shape from the governed 1.5B runtime: the old parser
+    # accepted all seven keys from the echoed prompt, not the assistant output.
+    raw = (
+        "Loading vision tower\n==========\n"
+        "Prompt: <|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+        "<|im_start|>user\n<image>\n"
+        "Return exactly one line: SCENE=<short>; MATERIALS=<materials>; FEATURES=<features>; "
+        "NATURAL=<nature>; LIGHTING=<light>; ISSUES=<issues>; UNCERTAIN=<uncertainty>. "
+        "Use the uppercase keys exactly as shown. Do not add commentary.<|im_end|>\n"
+        f"<|im_start|>assistant\n\n{generation}\n==========\n"
+        "Prompt: 441 tokens\nGeneration: 120 tokens\n"
+    )
+
+    parsed = parse_fastvlm_caption(raw)
+
+    assert parsed.validated is False
+    assert parsed.caption == {}
+    assert parsed.raw_text == raw
+
+
+def test_verbose_output_parses_only_generated_caption() -> None:
+    generated = (
+        "SCENE=Patio; MATERIALS=stone; FEATURES=steps; NATURAL=trees; " "LIGHTING=daylight; ISSUES=none; UNCERTAIN=none"
+    )
+    raw = (
+        "Prompt: <|im_start|>user\nSCENE=Wrong; MATERIALS=wrong; FEATURES=wrong; "
+        "NATURAL=wrong; LIGHTING=wrong; ISSUES=wrong; UNCERTAIN=wrong<|im_end|>\n"
+        f"<|im_start|>assistant\n{generated}\n==========\nPrompt: 10 tokens"
+    )
+
+    parsed = parse_fastvlm_caption(raw)
+
+    assert parsed.validated is True
+    assert parsed.caption["scene"] == "Patio"
+    assert parsed.caption["uncertain"] == ["none"]
+    assert "wrong" not in str(parsed.caption).lower()
+
+
+def test_prompt_only_or_instructions_cannot_supply_caption_fields() -> None:
+    template = (
+        "Return these fields: SCENE=short; MATERIALS=materials; FEATURES=features; "
+        "NATURAL=nature; LIGHTING=light; ISSUES=issues; UNCERTAIN=uncertainty"
+    )
+    for raw in (template, "Prompt: " + template, "<|im_start|>user\n" + template):
+        parsed = parse_fastvlm_caption(raw)
+        assert parsed.validated is False
+        assert parsed.caption == {}
+
+
+def test_empty_required_values_do_not_validate() -> None:
+    parsed = parse_fastvlm_caption(
+        "SCENE=<short>; MATERIALS=<materials>; FEATURES=<features>; NATURAL=<nature>; "
+        "LIGHTING=<light>; ISSUES=<issues>; UNCERTAIN=<uncertainty>"
+    )
+
+    assert parsed.validated is False
+    assert parsed.missing_keys == []
+    assert any("empty required fields" in warning for warning in parsed.warnings)
