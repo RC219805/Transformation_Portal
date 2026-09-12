@@ -362,6 +362,42 @@ def test_da3_backend_subprocess_dependency_failure_reports_category(tmp_path):
             backend.ensure_available()
 
 
+def test_optional_gsplat_warning_does_not_mask_runtime_identity_failure():
+    from transformation_portal.depth.backends.da3 import _classify_subprocess_failure
+
+    category, summary = _classify_subprocess_failure(
+        phase="inference",
+        stdout=(
+            "[WARN ] Dependency `gsplat` is required for rendering 3DGS.\n"
+            "[INFO ] Model Forward Pass Done. Time: 3.158 seconds\n"
+        ),
+        stderr="RuntimeError: DA3 worker runtime identity changed during inference",
+    )
+
+    assert category == "inference_failed"
+    assert "missing" not in summary
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "ImportError: torch required for PyTorch inference",
+        "ModuleNotFoundError: No module named 'transformers'",
+        "RuntimeError: package not installed: coremltools",
+    ],
+)
+def test_explicit_dependency_errors_remain_classified(stderr):
+    from transformation_portal.depth.backends.da3 import _classify_subprocess_failure
+
+    category, _summary = _classify_subprocess_failure(
+        phase="inference",
+        stdout="[WARN ] Dependency `gsplat` is required for rendering 3DGS.",
+        stderr=stderr,
+    )
+
+    assert category == "dependency_missing"
+
+
 def test_da3_backend_subprocess_launch_oserror_reports_category(tmp_path):
     """Launch-time OS errors should still map to a stable failure category."""
     from unittest.mock import patch

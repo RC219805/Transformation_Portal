@@ -72,13 +72,21 @@ def _split_list(value: str) -> list[str]:
 
 
 def _caption_candidate(raw_text: str) -> str:
-    no_tags = _TAG_RE.sub(" ", raw_text or "")
+    text = raw_text or ""
+    # Older mlx_vlm.generate output includes the complete input prompt. Only
+    # the assistant turn can supply evidence; never parse the echoed template.
+    assistant_marker = "<|im_start|>assistant"
+    if assistant_marker in text:
+        text = text.rsplit(assistant_marker, 1)[1].split("<|im_end|>", 1)[0]
+        text = re.split(r"(?m)^={5,}\s*$", text, maxsplit=1)[0]
+    elif "<|im_start|>" in text or re.search(r"(?m)^\s*Prompt:", text):
+        return ""
+    no_tags = _TAG_RE.sub(" ", text)
     no_tags = no_tags.replace("|", ";")
     lines = [line.strip() for line in no_tags.splitlines() if line.strip()]
-    keyed_lines = [line for line in lines if _KEY_PATTERN.search(line)]
-    if keyed_lines:
-        return "; ".join(keyed_lines)
-    return no_tags
+    # A caption line starts with a field, not instructions mentioning fields.
+    keyed_lines = [line for line in lines if _KEY_PATTERN.match(line)]
+    return "; ".join(keyed_lines)
 
 
 def parse_fastvlm_caption(raw_text: str) -> FastVLMCaptionParse:
@@ -114,11 +122,14 @@ def parse_fastvlm_caption(raw_text: str) -> FastVLMCaptionParse:
     missing_keys = [key for key in CAPTION_KEYS if key not in seen_keys]
     if missing_keys:
         warnings.append("FastVLM caption is missing required keys: " + ", ".join(missing_keys))
+    empty_keys = [key for key, value in caption.items() if not value]
+    if empty_keys:
+        warnings.append("FastVLM caption has empty required fields: " + ", ".join(empty_keys))
 
     return FastVLMCaptionParse(
         raw_text=raw_text,
         caption=caption,
-        validated=not missing_keys,
+        validated=not missing_keys and not empty_keys,
         missing_keys=missing_keys,
         warnings=warnings,
     )

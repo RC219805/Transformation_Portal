@@ -210,6 +210,151 @@ def test_actual_device_mismatch_is_non_authorizing(tmp_path: Path) -> None:
     assert "device_mismatch:cpu:mps" in evidence.payload["incomplete_reasons"]
 
 
+def test_source_revision_mismatch_remains_non_authorizing(tmp_path: Path) -> None:
+    arguments = _inputs(tmp_path)
+    arguments["actual_source_revision"] = "8" * 40
+
+    evidence = prepare_da3_runtime_identity(snapshot_path=_write_snapshot(tmp_path), **arguments)
+
+    assert evidence.cacheable is False
+    assert evidence.runtime_identity_sha256 is None
+    assert "source_revision_mismatch" in evidence.payload["incomplete_reasons"]
+
+
+@pytest.mark.parametrize("namespace", (True, False))
+def test_source_revision_probe_supports_single_checkout_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    namespace: bool,
+) -> None:
+    repository = tmp_path / "Depth-Anything-3"
+    package = repository / "src" / "depth_anything_3"
+    package.mkdir(parents=True)
+    (repository / ".git").mkdir()
+    origin = package / "__init__.py"
+    if not namespace:
+        origin.write_text("", encoding="utf-8")
+    spec = SimpleNamespace(origin=None if namespace else str(origin), submodule_search_locations=[str(package)])
+    monkeypatch.setattr(identity_module.importlib.util, "find_spec", lambda _name: spec)
+
+    def git_revision(command: list[str], **_kwargs: Any) -> SimpleNamespace:
+        assert command == ["git", "-C", str(repository), "rev-parse", "HEAD"]
+        return SimpleNamespace(returncode=0, stdout=_SOURCE_REVISION + "\n")
+
+    monkeypatch.setattr(identity_module.subprocess, "run", git_revision)
+    probe: dict[str, str] = {}
+    token = identity_module._SOURCE_REVISION_PROBE.set(probe)
+    try:
+        assert identity_module._git_source_revision() == _SOURCE_REVISION
+    finally:
+        identity_module._SOURCE_REVISION_PROBE.reset(token)
+    assert probe == {"repository_path": str(repository), "revision": _SOURCE_REVISION}
+    assert identity_module._verify_source_revision_probe(probe)
+
+
+@pytest.mark.parametrize("invalid", ("missing", "empty", "split", "relative", "outside_layout", "symlink", "no_checkout"))
+def test_namespace_source_revision_probe_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid: str,
+) -> None:
+    repository = tmp_path / "Depth-Anything-3"
+    package = repository / "src" / "depth_anything_3"
+    package.mkdir(parents=True)
+    (repository / ".git").mkdir()
+    roots: list[str] = [str(package)]
+    if invalid == "missing":
+        roots = [str(package / "missing")]
+    elif invalid == "empty":
+        roots = []
+    elif invalid == "split":
+        second = tmp_path / "second_namespace"
+        second.mkdir()
+        roots.append(str(second))
+    elif invalid == "relative":
+        roots = ["src/depth_anything_3"]
+    elif invalid == "outside_layout":
+        unrelated = repository / "untrusted" / "depth_anything_3"
+        unrelated.mkdir(parents=True)
+        roots = [str(unrelated)]
+    elif invalid == "symlink":
+        linked = tmp_path / "linked_namespace"
+        linked.symlink_to(package, target_is_directory=True)
+        roots = [str(linked)]
+    elif invalid == "no_checkout":
+        unbound = tmp_path / "not_a_checkout" / "src" / "depth_anything_3"
+        unbound.mkdir(parents=True)
+        roots = [str(unbound)]
+    spec = SimpleNamespace(origin=None, submodule_search_locations=roots)
+    monkeypatch.setattr(identity_module.importlib.util, "find_spec", lambda _name: spec)
+
+    def reject_git(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Untrusted namespace roots must not supply a Git revision")
+
+    monkeypatch.setattr(identity_module.subprocess, "run", reject_git)
+    probe: dict[str, str] = {}
+    token = identity_module._SOURCE_REVISION_PROBE.set(probe)
+    try:
+        assert identity_module._git_source_revision() is None
+    finally:
+        identity_module._SOURCE_REVISION_PROBE.reset(token)
+    assert probe == {}
+
+
+def test_namespace_source_root_bound_counts_utf8_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    oversized = "/" + "\u00e9" * (identity_module._MAX_IMPORT_PATH_BYTES // 2)
+    spec = SimpleNamespace(origin=None, submodule_search_locations=[oversized])
+    monkeypatch.setattr(identity_module.importlib.util, "find_spec", lambda _name: spec)
+
+    def reject_path_lookup(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Oversized namespace paths must be rejected before filesystem lookup")
+
+    monkeypatch.setattr(identity_module, "Path", reject_path_lookup)
+    assert identity_module._git_source_revision() is None
+
+
+def test_module_resolution_str_and_path_roots_have_identical_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "transformers"
+    package.mkdir()
+    origin = package / "__init__.py"
+    origin.write_text("# fixture\n", encoding="utf-8")
+    spec = SimpleNamespace(origin=str(origin), submodule_search_locations=[str(package)])
+    monkeypatch.setattr(identity_module.importlib.util, "find_spec", lambda _name: spec)
+
+    before, before_bytes = identity_module._module_resolution_record(
+        "transformers", origin_hashes={}, maximum_origin_bytes=1024
+    )
+    # The pinned Transformers processing_utils direct import performs exactly
+    # this representation change after the worker's initial identity capture.
+    spec.submodule_search_locations = [package]
+    after, after_bytes = identity_module._module_resolution_record("transformers", origin_hashes={}, maximum_origin_bytes=1024)
+
+    assert after == before
+    assert after_bytes == before_bytes
+    assert after["search_locations"] == [str(package)]
+
+    other_package = tmp_path / "different_package"
+    other_package.mkdir()
+    spec.submodule_search_locations = [other_package]
+    changed, _ = identity_module._module_resolution_record("transformers", origin_hashes={}, maximum_origin_bytes=1024)
+    assert changed != before
+
+
+@pytest.mark.parametrize("invalid_root", (b"/runtime/package", None, 7, Path("/" + "\u00e9" * 2048)))
+def test_module_resolution_rejects_nontext_or_oversized_pathlike_roots(
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_root: Any,
+) -> None:
+    spec = SimpleNamespace(origin=None, submodule_search_locations=[invalid_root])
+    monkeypatch.setattr(identity_module.importlib.util, "find_spec", lambda _name: spec)
+
+    with pytest.raises(ValueError, match="invalid root"):
+        identity_module._module_resolution_record("transformers", origin_hashes={}, maximum_origin_bytes=1024)
+
+
 def test_dependency_materialization_changes_runtime_identity(tmp_path: Path) -> None:
     snapshot = _write_snapshot(tmp_path)
     arguments = _inputs(tmp_path)
@@ -979,6 +1124,56 @@ def test_worker_handshake_enforces_bounded_canonical_payload(tmp_path: Path) -> 
     assert load_da3_worker_runtime_handshake(handshake) == payload
     with pytest.raises(ValueError, match="oversized"):
         load_da3_worker_runtime_handshake(handshake, maximum_bytes=8)
+
+
+def test_worker_handshake_accepts_token_larger_than_metadata_budget(tmp_path: Path) -> None:
+    # A real governed install produced a 17 MiB token from 55,483 stat entries.
+    # Transport must retain those observations within the existing token budget.
+    entries = [
+        {
+            "path": f"/runtime/lib/{index}/" + "module_" * 35 + ".py",
+            "kind": "file",
+            "device": 1,
+            "inode": index,
+            "size_bytes": 20,
+            "mtime_ns": 1,
+            "ctime_ns": 1,
+        }
+        for index in range(13000)
+    ]
+    payload = {
+        "schema": "tp.da3.worker-runtime-handshake.v1",
+        "runtime_evidence": {"fixture": "transport_only"},
+        "runtime_verification_token": {"entries": entries},
+    }
+    raw = canonicalize_json(payload)
+    assert identity_module._MAX_HANDSHAKE_METADATA_BYTES < len(raw) < identity_module._MAX_VERIFICATION_TOKEN_BYTES
+    handshake = tmp_path / "large_handshake.json"
+    handshake.write_bytes(raw)
+
+    assert load_da3_worker_runtime_handshake(handshake) == payload
+
+
+@pytest.mark.parametrize("oversized_component", ("token", "metadata"))
+def test_worker_handshake_preserves_individual_component_budgets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    oversized_component: str,
+) -> None:
+    monkeypatch.setattr(identity_module, "_MAX_VERIFICATION_TOKEN_BYTES", 256)
+    monkeypatch.setattr(identity_module, "_MAX_HANDSHAKE_METADATA_BYTES", 256)
+    payload = {
+        "schema": "tp.da3.worker-runtime-handshake.v1",
+        "runtime_evidence": {},
+        "runtime_verification_token": {},
+    }
+    field = "runtime_verification_token" if oversized_component == "token" else "runtime_evidence"
+    payload[field] = {"oversized": "x" * 256}
+    handshake = tmp_path / "oversized_component.json"
+    handshake.write_bytes(canonicalize_json(payload))
+
+    with pytest.raises(ValueError, match=f"{'token' if oversized_component == 'token' else 'metadata'} is oversized"):
+        load_da3_worker_runtime_handshake(handshake)
 
 
 def test_stat_token_reuses_unchanged_evidence_and_detects_source_drift(

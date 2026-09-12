@@ -71,6 +71,7 @@ def test_governed_prompts_follow_model_role_and_checkpoint_path(tmp_path: Path) 
     assert prompt_for_fastvlm_model(custom_model) == DEFAULT_FASTVLM_PROMPT
     assert "Do not infer dusk" in REVIEW_FASTVLM_PROMPT
     assert "unless directly visible" in DEFAULT_FASTVLM_PROMPT
+    assert "<" not in DEFAULT_FASTVLM_PROMPT
 
 
 def test_runtime_selects_review_prompt_from_model_role(tmp_path: Path) -> None:
@@ -148,6 +149,7 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert result.caption_parse.caption["scene"] == "Pool"
     assert result.raw_stdout
     assert result.raw_stderr == ""
+    assert "--verbose" in result.command  # Pinned CLI store_false suppresses prompt echo.
     assert not list(runtime_dir.rglob("*.pyc"))
 
 
