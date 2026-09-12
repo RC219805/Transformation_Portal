@@ -64,6 +64,24 @@ cd web/secure-landing
 nvm use 22
 ```
 
+Use the official Node distribution matching the Frontdoor contract CI job when
+regenerating CSS ownership evidence. Its report records exact gzip sizes;
+Homebrew Node can link a different zlib and produce a different compressed size
+for identical CSS. A gzip-only freshness failure is a toolchain mismatch, not a
+reason to relax the CSS hash, architecture, or asset-budget checks. For example,
+the September 2026 CI run used official Node `22.23.2`:
+
+```bash
+cd web/secure-landing
+nvm install 22.23.2
+nvm use 22.23.2
+npm ci
+npm run build:portal
+node scripts/check-portal-css-architecture.mjs --write-ownership-report
+npm run lint:css
+npm run test:coverage
+```
+
 FastAPI still needs its own backend secret for machine and proxy authentication:
 
 ```bash
