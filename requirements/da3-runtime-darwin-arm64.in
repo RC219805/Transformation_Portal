@@ -22,7 +22,7 @@ requests==2.33.1  # Governed DA3 baseline
 typer==0.24.1  # Governed DA3 baseline
 pillow==12.3.0  # Governed DA3 baseline
 omegaconf==2.3.0  # Governed DA3 baseline
-evo==1.34.3  # Governed DA3 baseline
+evo==1.37.1  # Governed DA3 baseline
 e3nn==0.6.0  # Governed DA3 baseline
 plyfile==1.1.3  # Governed DA3 baseline
 pillow-heif==1.3.0  # Governed DA3 baseline

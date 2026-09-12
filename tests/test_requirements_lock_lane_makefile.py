@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -170,7 +173,13 @@ header = [
     f"#    fake pip-compile --output-file={path.name}",
 ]
 
-if path.name in {"all.txt", "base.txt"}:
+if path.name == "da3-runtime-darwin-arm64.txt":
+    # Model a compatible newer transitive release without consulting an index.
+    requested = Path("da3-runtime-darwin-arm64.in").read_text().strip()
+    previous = path.read_text().splitlines() if path.exists() else []
+    transitive = next((line for line in previous if line.startswith("filelock==")), "filelock==3.32.6")
+    body = [requested, transitive]
+elif path.name in {"all.txt", "base.txt"}:
     body = [
         "numpy==9.9.9",
         "opencv-python-headless==4.14.0.92",
@@ -215,10 +224,13 @@ def _write_fake_pip_python(
         "  exit 0\n"
         "fi\n"
         'if [ "$1" = "-c" ]; then\n'
-        f'  echo "{click_version}"\n'
+        '  case "$2" in\n'
+        '    *sys.version_info*) echo "3.11" ;;\n'
+        f'    *) echo "{click_version}" ;;\n'
+        "  esac\n"
         "  exit 0\n"
         "fi\n"
-        "exit 2\n",
+        f'exec {shlex.quote(sys.executable)} "$@"\n',
         encoding="utf-8",
     )
     path.chmod(0o755)
@@ -603,6 +615,72 @@ def _write_fake_uname(fakebin: Path, *, system: str, machine: str) -> None:
         encoding="utf-8",
     )
     (fakebin / "uname").chmod(0o755)
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_error"),
+    [
+        ("compatible", None),
+        ("input_drift", "da3-runtime-darwin-arm64.txt is out of date"),
+        ("missing_lock", "Required lockfile missing: da3-runtime-darwin-arm64.txt"),
+        ("stale_governance", "must bind dependency_lock_sha256"),
+        ("stale_installer", "must declare exactly one DA3_LOCK_SHA256"),
+    ],
+)
+def test_da3_check_preserves_pins_and_rejects_contract_drift(tmp_path: Path, case: str, expected_error: str | None) -> None:
+    """Exercise the real recipe and digest validator with an offline resolver fixture."""
+    requirements_dir = _create_isolated_lock_lane(tmp_path)
+    input_pin = "1.38.0" if case == "input_drift" else "1.37.1"
+    (requirements_dir / "da3-runtime-darwin-arm64.in").write_text(f"evo=={input_pin}\n", encoding="utf-8")
+    lock = requirements_dir / "da3-runtime-darwin-arm64.txt"
+    original = b"evo==1.37.1\nfilelock==3.32.5\n"
+    if case != "missing_lock":
+        lock.write_bytes(original)
+    digest = hashlib.sha256(original).hexdigest()
+    governance_digest = "0" * 64 if case == "stale_governance" else digest
+    installer_digest = "0" * 64 if case == "stale_installer" else digest
+    config_dir = requirements_dir.parent / "config"
+    config_dir.mkdir()
+    (config_dir / "da3_runtime_identity_contract.json").write_text(
+        json.dumps({"dependency_lock_sha256": governance_digest}), encoding="utf-8"
+    )
+    setup_dir = requirements_dir.parent / "scripts" / "setup"
+    setup_dir.mkdir()
+    (setup_dir / "install_da3_runtime.sh").write_text(f'DA3_LOCK_SHA256="{installer_digest}"\n', encoding="utf-8")
+    fakebin = tmp_path / "fakebin"
+    fakebin.mkdir()
+    _write_fake_uname(fakebin, system="Darwin", machine="arm64")
+    _write_fake_pip_compile(fakebin / "pip-compile")
+    _write_fake_pip_python(fakebin / "python")
+    audit_path = tmp_path / "compile-audit.txt"
+
+    result = subprocess.run(
+        [
+            "make",
+            "check-da3-runtime-darwin-arm64",
+            f"PIP_COMPILE_BIN={fakebin / 'pip-compile'}",
+            f"PIP_PYTHON_BIN={fakebin / 'python'}",
+        ],
+        cwd=requirements_dir,
+        env={**os.environ, "PATH": f"{fakebin}:{os.environ['PATH']}", "FAKE_PIP_COMPILE_AUDIT": str(audit_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    if expected_error is None:
+        assert result.returncode == 0, output
+        assert "DA3 runtime lock digest contract passed" in output
+    else:
+        assert result.returncode != 0
+        assert expected_error in output
+    if case == "missing_lock":
+        assert not audit_path.exists()
+        assert not lock.exists()
+    else:
+        assert audit_path.read_text().splitlines() == ["da3-runtime-darwin-arm64.txt|seeded|conservative"]
+        assert lock.read_bytes() == original
 
 
 def test_darwin_arm64_target_fails_closed_off_lane(tmp_path: Path) -> None:

@@ -481,6 +481,12 @@ make check-ml-darwin-arm64
 make check-da3-runtime-darwin-arm64
 ```
 
+The DA3 check seeds its temporary resolver output with the current lock, matching
+the conservative compile lane. It verifies input/lock consistency without
+requiring unrelated transitive upgrades; use the explicit update lane to refresh
+compatible transitive pins. Missing locks, resolver failures, input drift, and
+stale digest consumers still fail the check.
+
 `da3-runtime-darwin-arm64.txt` is the complete exact closure consumed by the
 isolated DA3 baseline installer. It is authoritative only when generated and
 checked on native Darwin arm64 with the pinned Python 3.11/pip-tools toolchain.

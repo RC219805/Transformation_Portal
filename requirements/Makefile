@@ -342,6 +342,7 @@ check-da3-runtime-darwin-arm64: require-da3-runtime-authority
 		echo "ERROR: Required lockfile missing: da3-runtime-darwin-arm64.txt"; \
 		exit 1; \
 	fi; \
+	cp "$$repo_dir/da3-runtime-darwin-arm64.txt" "$$tmp_dir"/; \
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) da3-runtime-darwin-arm64.in -o da3-runtime-darwin-arm64.txt >/dev/null; \
 	normalize_req() { \
