@@ -43,7 +43,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Only validate that Depth Pro imports and the checkpoint exists.",
+        help="Validate execution-plan support, Depth Pro imports, checkpoint, and device readiness.",
     )
     parser.add_argument(
         "--checkpoint",
@@ -219,10 +219,23 @@ def _check_device_availability(device: str) -> int:
 
 
 def _check_availability(checkpoint: Path, device: str) -> int:
-    """Validate imports, checkpoint presence, and requested device readiness."""
+    """Validate plan support, imports, checkpoint, and requested device readiness."""
     if not checkpoint.exists():
         print(f"Checkpoint not found: {checkpoint}", file=sys.stderr)
         return 1
+
+    try:
+        import jsonschema
+
+        from ...core.execution_plan import load_execution_plan_schema
+
+        jsonschema.Draft202012Validator.check_schema(load_execution_plan_schema())
+    except ImportError as exc:
+        return _emit_check_failure(
+            "Execution-plan validation dependencies are unavailable. "
+            "Repair the isolated runtime with scripts/setup/install_depth_pro_runtime.sh.",
+            {"execution_plan_import_error": str(exc)},
+        )
 
     import depth_pro  # noqa: F401
 

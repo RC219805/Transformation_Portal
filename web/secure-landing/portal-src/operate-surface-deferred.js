@@ -49,6 +49,12 @@ export function createDeferredOperateSurfaceApi(host) {
     let queuedReviewSurfaceRefresh = false;
     let lastQueueDeltaSnapshot = null;
 
+    function _jobProgressPercent(job) {
+        // A terminal success can arrive before the final progress event.
+        if (job.state === 'succeeded') return 100;
+        return Math.max(0, Math.min(100, Number(job.progress) || 0));
+    }
+
     function _announceQueueDelta() {
         if (!els.queueDeltaStatus) return;
         const current = new Map(state.jobs.map((job) => [String(job.id || ''), _displayJobState(job)]));
@@ -383,10 +389,10 @@ export function createDeferredOperateSurfaceApi(host) {
         if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = String(selected.pipeline || 'unknown');
         if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = `${artifactCount} indexed`;
         if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = `${streamStatus} • ${elapsedLabel}`;
-        if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${Math.max(0, Math.min(100, Number(selected.progress) || 0))}%`;
+        if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${_jobProgressPercent(selected)}%`;
         if (els.selectedJobProgressBar) {
             els.selectedJobProgressBar.max = 100;
-            els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
+            els.selectedJobProgressBar.value = _jobProgressPercent(selected);
         }
         if (els.selectedJobMetaLine) {
             els.selectedJobMetaLine.textContent = `${titleCaseToken(displayState, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
@@ -504,7 +510,7 @@ export function createDeferredOperateSurfaceApi(host) {
 
             const safePipeline = String(job.pipeline || 'unknown');
             const safeId = String(job.id || 'job_unknown');
-            const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
+            const safeProgress = _jobProgressPercent(job);
             const cancelableState = job.state === 'running' || job.state === 'queued';
             const showCancel = _portalPrivilegesReady() && cancelableState;
             const canCancel = showCancel && !job.cancelPending;

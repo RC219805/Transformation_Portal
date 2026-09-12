@@ -2602,6 +2602,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("selectedJobId", "")).strip() == submitted_job_id
                 and str(value.get("reviewProvenancePath", "")).strip() == "synthetic/review-primary.png"
                 and bool(value.get("advisoryCaptionPanelVisible"))
+                and "Advisory" in str(value.get("advisoryCaptionPanelText", ""))
                 and (
                     str(value.get("actionSecondary2Key", "")).strip() == "toggle_compare"
                     or str(value.get("actionSecondary1Key", "")).strip() == "toggle_compare"
@@ -2654,6 +2655,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("selectedJobId", "")).strip() == submitted_job_id
                 and bool(value.get("reviewCompareEnabled"))
                 and "compare=1" in str(value.get("locationSearch", ""))
+                and bool(value.get("advisoryCaptionPanelVisible"))
+                and "Advisory" in str(value.get("advisoryCaptionPanelText", ""))
             ),
             timeout_seconds=args.timeout_seconds,
             description="compare toggle action to enable compare mode",

@@ -154,7 +154,8 @@ run "${PYTHON_BIN}" -m pip install \
     "matplotlib==3.10.8" \
     "pillow==12.3.0" \
     "pillow_heif==1.3.0" \
-    "timm==1.0.26"
+    "timm==1.0.26" \
+    "jsonschema==4.26.0"
 
 log "Installing Depth Pro from pinned git ref ${REF}"
 run "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps \

@@ -1502,22 +1502,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "gap-5": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "gap-6": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "gap-8": {
       "owner": "static",
       "sources": [
@@ -2153,14 +2137,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "md:grid-cols-4": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "md:grid-cols-5": {
       "owner": "static",
       "sources": [
         "portal.html"

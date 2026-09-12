@@ -84,7 +84,7 @@ Contract notes:
                         <span class="topbar-title-full" aria-hidden="true">Transformation Portal</span>
                         <span class="topbar-title-short" aria-hidden="true">Portal</span>
                     </h1>
-                    <p class="topbar-subtitle">Task-first build, live operations, and governed artifact review.</p>
+                    <p class="topbar-subtitle">Configure runs. Follow progress. Review outputs.</p>
                 </div>
                 <div class="topbar-status" role="group" aria-label="Backend health">
                     <span id="healthIndicator" class="status-dot"></span>
@@ -192,12 +192,12 @@ Contract notes:
                     </div>
                 </div>
                 <div id="missionShellContent">
-                <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div class="overview-intro">
                     <div class="max-w-2xl">
                         <p class="section-kicker">Overview</p>
-                        <h2 id="overviewViewTitle" class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Current operator status</h2>
+                        <h2 id="overviewViewTitle" class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Your workspace</h2>
                         <p class="mt-3 text-base leading-7 text-slate-600 dark:text-slate-300">
-                            Start a new run, resume the current draft, or jump straight into the latest live or reviewable work.
+                            Start a run, pick up your draft, or review the latest outputs.
                         </p>
                     </div>
                     <div class="overview-actions" data-ui="overview-actions-cluster">
@@ -429,115 +429,7 @@ Contract notes:
         <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
 
             <!-- Left Column: Configuration -->
-            <section id="build-shell" class="portal-shell-card portal-shell-card--build lg:col-span-7 flex flex-col gap-6">
-
-                <!-- Orchestration Profile -->
-                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
-                    <div id="profileShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-skeleton">
-                        <div class="surface-skeleton-row">
-                            <div class="flex-1 space-y-3">
-                                <span class="skeleton-line skeleton-line-tiny"></span>
-                                <span class="skeleton-line skeleton-line-medium"></span>
-                                <span class="skeleton-line"></span>
-                            </div>
-                            <span class="skeleton-pill skeleton-pill-short"></span>
-                        </div>
-                        <div class="surface-skeleton-grid">
-                            <div class="surface-skeleton-card">
-                                <span class="skeleton-line skeleton-line-tiny"></span>
-                                <span class="skeleton-line"></span>
-                                <span class="skeleton-line skeleton-line-medium"></span>
-                            </div>
-                            <div class="surface-skeleton-card">
-                                <span class="skeleton-line skeleton-line-tiny"></span>
-                                <span class="skeleton-line"></span>
-                                <span class="skeleton-line skeleton-line-medium"></span>
-                            </div>
-                        </div>
-                        <div class="surface-skeleton-card">
-                            <span class="skeleton-line skeleton-line-medium"></span>
-                            <span class="skeleton-line"></span>
-                        </div>
-                    </div>
-                    <div id="profileShellContent">
-                    <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                        <div>
-                            <p class="section-kicker">Connection</p>
-                            <h2 class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Pipeline and auth mode</h2>
-                            <p class="mt-2 text-[14px] leading-7 text-slate-600 dark:text-slate-300">Choose the active pipeline, confirm connection mode, and keep profile restore close at hand.</p>
-                        </div>
-                        <span class="signal-badge">Build prerequisites</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
-                            <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
-                                <option value="lux-depth-v3">lux-depth-v3</option>
-                                <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
-                                <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
-                                <option value="archive-gate-c">archive-gate-c (METS Export)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Local Profile</label>
-                            <div class="flex gap-2">
-                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] transition-colors cursor-pointer">
-                                    <!-- Populated by JS -->
-                                </select>
-                                <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors btn-busy" aria-busy="false">
-                                    Save
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <details id="connectionDetails" class="quiet-disclosure mt-4" data-ui="connection-details">
-                        <summary class="quiet-disclosure__summary">
-                            <div>
-                                <p class="section-kicker">Connection details</p>
-                                <p class="quiet-disclosure__title">Managed access posture and direct-debug controls</p>
-                            </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">managed_unavailable</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="quiet-disclosure__body">
-                            <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
-                            <div id="apiKeySection" class="mt-4 hidden">
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
-                                <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens are session-only and never persisted in browser local storage.</p>
-                                <div class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
-                                    <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
-                                </div>
-                            </div>
-                        </div>
-                    </details>
-                    <div id="portalAccessState" class="portal-access-state mt-4" data-ui="portal-access-state" data-tone="info" data-bootstrap-status="pending">
-                        <div class="portal-access-state__head">
-                            <div>
-                                <p class="portal-access-state__kicker">Access posture</p>
-                                <p id="bootstrapRecoveryHint" class="portal-access-state__detail">Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.</p>
-                            </div>
-                            <span id="bootstrapStatusBadge" class="signal-badge portal-access-state__badge" data-tone="info">Confirming access</span>
-                        </div>
-                    </div>
-                    <details id="buildRuntimeClarityShell" class="quiet-disclosure mt-5">
-                        <summary class="quiet-disclosure__summary">
-                            <div>
-                                <p class="section-kicker">Execution briefing</p>
-                                <p class="quiet-disclosure__title">Open runtime and license posture detail</p>
-                            </div>
-                            <span class="micro-status">Decision support</span>
-                        </summary>
-                        <div class="quiet-disclosure__body">
-                            <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
-                                The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
-                            </p>
-                            <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
-                        </div>
-                    </details>
-                    </div>
-                </div>
+            <section id="build-shell" class="portal-shell-card portal-shell-card--build lg:col-span-7">
 
                 <section id="buildStepperShell" class="rounded-2xl shell-panel p-5 shadow-soft dark:shadow-soft-dark" data-ui="build-stepper">
                     <div id="buildStepperSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-stepper-skeleton">
@@ -587,28 +479,6 @@ Contract notes:
                             </button>
                         </div>
                     </div>
-                    <div id="buildPulseGrid" class="build-pulse-grid mt-5" data-ui="build-step-pulse">
-                        <div id="buildPulseDraftCard" class="build-pulse-card" data-tone="info">
-                            <p class="build-pulse-label">Draft</p>
-                            <p id="buildPulseDraft" class="build-pulse-value">premium</p>
-                            <p id="buildPulseDraftMeta" class="build-pulse-meta">lux-depth-v3 draft is staged for preview-backed dispatch.</p>
-                        </div>
-                        <div id="buildPulseStepCard" class="build-pulse-card" data-tone="info">
-                            <p class="build-pulse-label">Current Focus</p>
-                            <p id="buildPulseStep" class="build-pulse-value">1 of 4 · Configure</p>
-                            <p id="buildPulseStepMeta" class="build-pulse-meta">Pipeline and preset posture.</p>
-                        </div>
-                        <div id="buildPulsePreviewCard" class="build-pulse-card" data-tone="info">
-                            <p class="build-pulse-label">Preview</p>
-                            <p id="buildPulsePreview" class="build-pulse-value">Refreshing</p>
-                            <p id="buildPulsePreviewMeta" class="build-pulse-meta">Preview-backed validation will summarize the draft here.</p>
-                        </div>
-                        <div id="buildPulseDispatchCard" class="build-pulse-card" data-tone="info">
-                            <p class="build-pulse-label">Dispatch</p>
-                            <p id="buildPulseDispatch" class="build-pulse-value">Review dispatch posture</p>
-                            <p id="buildPulseDispatchMeta" class="build-pulse-meta">The next operator action stays pinned here while the draft changes.</p>
-                        </div>
-                    </div>
                     <div id="buildStepTabs" class="build-step-tabs mt-5" role="toolbar" aria-label="Build steps">
                         <button id="buildStepTab1" type="button" class="build-step-tab is-active" data-build-step-target="1" aria-pressed="true" aria-current="step" aria-controls="presetBuilderShell" tabindex="0" data-ui="build-step-tab">
                             <span class="build-step-index">1</span>
@@ -639,8 +509,141 @@ Contract notes:
                             </span>
                         </button>
                     </div>
+                    <details class="build-validation-details" data-ui="build-validation-details">
+                        <summary>
+                            <span>Draft &amp; validation details</span>
+                            <span id="buildPreviewStatus" class="build-preview-status" data-tone="info">Checking preview</span>
+                        </summary>
+                    <div id="buildPulseGrid" class="build-pulse-grid mt-5" data-ui="build-step-pulse">
+                        <div id="buildPulseDraftCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Draft</p>
+                            <p id="buildPulseDraft" class="build-pulse-value">premium</p>
+                            <p id="buildPulseDraftMeta" class="build-pulse-meta">lux-depth-v3 draft is staged for preview-backed dispatch.</p>
+                        </div>
+                        <div id="buildPulseStepCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Current Focus</p>
+                            <p id="buildPulseStep" class="build-pulse-value">1 of 4 · Configure</p>
+                            <p id="buildPulseStepMeta" class="build-pulse-meta">Pipeline and preset posture.</p>
+                        </div>
+                        <div id="buildPulsePreviewCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Preview</p>
+                            <p id="buildPulsePreview" class="build-pulse-value">Refreshing</p>
+                            <p id="buildPulsePreviewMeta" class="build-pulse-meta">Preview-backed validation will summarize the draft here.</p>
+                        </div>
+                        <div id="buildPulseDispatchCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Dispatch</p>
+                            <p id="buildPulseDispatch" class="build-pulse-value">Review dispatch posture</p>
+                            <p id="buildPulseDispatchMeta" class="build-pulse-meta">The next operator action stays pinned here while the draft changes.</p>
+                        </div>
+                    </div>
+                    </details>
                     </div>
                 </section>
+
+                <!-- Orchestration Profile -->
+                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
+                    <div id="profileShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-skeleton">
+                        <div class="surface-skeleton-row">
+                            <div class="flex-1 space-y-3">
+                                <span class="skeleton-line skeleton-line-tiny"></span>
+                                <span class="skeleton-line skeleton-line-medium"></span>
+                                <span class="skeleton-line"></span>
+                            </div>
+                            <span class="skeleton-pill skeleton-pill-short"></span>
+                        </div>
+                        <div class="surface-skeleton-grid">
+                            <div class="surface-skeleton-card">
+                                <span class="skeleton-line skeleton-line-tiny"></span>
+                                <span class="skeleton-line"></span>
+                                <span class="skeleton-line skeleton-line-medium"></span>
+                            </div>
+                            <div class="surface-skeleton-card">
+                                <span class="skeleton-line skeleton-line-tiny"></span>
+                                <span class="skeleton-line"></span>
+                                <span class="skeleton-line skeleton-line-medium"></span>
+                            </div>
+                        </div>
+                        <div class="surface-skeleton-card">
+                            <span class="skeleton-line skeleton-line-medium"></span>
+                            <span class="skeleton-line"></span>
+                        </div>
+                    </div>
+                    <div id="profileShellContent">
+                    <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <p class="section-kicker">Run setup</p>
+                            <h2 class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Pipeline &amp; profile</h2>
+                        </div>
+                    </div>
+                    <div class="build-profile-fields">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
+                            <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <option value="lux-depth-v3">lux-depth-v3</option>
+                                <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
+                                <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
+                                <option value="archive-gate-c">archive-gate-c (METS Export)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Local Profile</label>
+                            <div class="flex gap-2">
+                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] transition-colors cursor-pointer">
+                                    <!-- Populated by JS -->
+                                </select>
+                                <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors btn-busy" aria-busy="false">
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <details id="connectionDetails" class="quiet-disclosure mt-4" data-ui="connection-details">
+                        <summary class="quiet-disclosure__summary">
+                            <div>
+                                <p class="section-kicker">Connection details</p>
+                                <p class="quiet-disclosure__title">Access and connection settings</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">managed_unavailable</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="quiet-disclosure__body">
+                            <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
+                            <div id="apiKeySection" class="mt-4 hidden">
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
+                                <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens are session-only and never persisted in browser local storage.</p>
+                                <div class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+                                    <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                    <div id="portalAccessState" class="portal-access-state mt-4" data-ui="portal-access-state" data-tone="info" data-bootstrap-status="pending">
+                        <div class="portal-access-state__head">
+                            <div>
+                                <p class="portal-access-state__kicker">Access posture</p>
+                                <p id="bootstrapRecoveryHint" class="portal-access-state__detail">Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.</p>
+                            </div>
+                            <span id="bootstrapStatusBadge" class="signal-badge portal-access-state__badge" data-tone="info">Confirming access</span>
+                        </div>
+                    </div>
+                    <details id="buildRuntimeClarityShell" class="quiet-disclosure mt-5">
+                        <summary class="quiet-disclosure__summary">
+                            <div>
+                                <p class="section-kicker">Execution briefing</p>
+                                <p class="quiet-disclosure__title">Runtime and licenses</p>
+                            </div>
+                        </summary>
+                        <div class="quiet-disclosure__body">
+                            <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
+                            </p>
+                            <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
+                        </div>
+                    </details>
+                    </div>
+                </div>
 
                 <!-- Parameters -->
                 <div id="parameters-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
@@ -671,22 +674,15 @@ Contract notes:
                         </div>
                     </div>
                     <div id="parametersShellContent">
-                    <div class="flex items-start justify-between gap-3 mb-4">
-                        <div>
-                            <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pipeline Parameters</h2>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Move quickly from intent to dispatch: choose the outcome, set the input/output paths, then open advanced controls only when the run contract needs them.</p>
-                        </div>
-                        <span class="signal-badge">Preset or custom flow</span>
-                    </div>
+                    <h2 class="sr-only">Pipeline Parameters</h2>
 
                     <section id="presetBuilderShell" data-build-step-panel="1" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 1</p>
                                 <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Choose a preset or manual mode</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Curated presets still hydrate the fastest valid path. Switch to custom when you need manual Lux controls without backfilling a curated preset contract.</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Start with recommended settings, or choose Custom to tune the run yourself.</p>
                             </div>
-                            <span class="micro-status">Preset or custom → draft posture</span>
                         </div>
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div class="sm:col-span-3">
@@ -726,7 +722,7 @@ Contract notes:
                             <div>
                                 <p class="section-kicker">Step 2</p>
                                 <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Set inputs and output destination</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">A standard Lux Depth run should be dispatchable from these paths alone. JSON import/export, custom manual tuning, and full CLI parity stay available below for exact reproducibility.</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose folders accessible to the processing worker. Your source files stay unchanged.</p>
                             </div>
                             <span class="micro-status">Input → output → dispatch</span>
                         </div>
@@ -774,10 +770,9 @@ Contract notes:
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
-                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape deliverables and confirm output posture</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables, primary output posture, and immediate readiness readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Choose your outputs</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose the depth model and deliverables. Open advanced settings for additional control.</p>
                             </div>
-                            <span class="micro-status">Deliverables first, research controls second</span>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -797,7 +792,7 @@ Contract notes:
                         </div>
                         <fieldset class="group-bare">
                             <legend class="sr-only">Segmentation</legend>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div class="build-option-grid gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
                                 <div class="relative inline-flex items-center">
@@ -987,7 +982,7 @@ Contract notes:
                     <!-- Native Emit Checkboxes -->
                     <fieldset class="mt-4 group-bare">
                         <legend class="sr-only">Emit outputs</legend>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="build-option-grid gap-3">
                         <label class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2" for="outputBitDepth">
                             <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Output depth</span>
                             <select id="outputBitDepth" class="mt-1 w-full bg-slate-50 dark:bg-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-200">
@@ -1036,7 +1031,7 @@ Contract notes:
                                     View Effective Config
                                 </button>
                             </div>
-                            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+                            <div class="mt-4 build-option-grid gap-3">
                                 <div class="panel-subtle rounded-2xl p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Reconstruction</p>
                                     <p id="summaryReconstructionState" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Off</p>
@@ -1481,10 +1476,10 @@ Contract notes:
             </section>
 
             <!-- Right Column: Queue & Logs -->
-            <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6" data-ui="operate-grid">
+            <aside id="jobs-shell" class="lg:col-span-5" data-ui="operate-grid">
 
                 <!-- Selected Job Inspector -->
-                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="portal-shell-card portal-shell-card--inspector workspace-shell sticky-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="portal-shell-card portal-shell-card--inspector workspace-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
                     <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <p class="section-kicker">Selected Job</p>

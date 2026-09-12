@@ -152,6 +152,48 @@ def test_check_availability_reports_missing_checkpoint_before_imports(
     assert f"Checkpoint not found: {missing_checkpoint}" in capsys.readouterr().err
 
 
+def test_check_availability_rejects_missing_plan_validator_before_model_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    real_import = builtins.__import__
+
+    def guarded_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "jsonschema":
+            raise ModuleNotFoundError("No module named 'jsonschema'")
+        if name == "depth_pro":
+            raise AssertionError("model imports must wait for execution-plan support")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    assert _check_availability(checkpoint, "cpu") == 1
+    failure = json.loads(capsys.readouterr().err)
+    assert failure["status"] == "unavailable"
+    assert "install_depth_pro_runtime.sh" in failure["reason"]
+    assert "jsonschema" in failure["execution_plan_import_error"]
+
+
+def test_check_availability_validates_packaged_execution_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.core import execution_plan
+    from transformation_portal.depth.backends import depth_pro_worker
+
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    monkeypatch.setitem(sys.modules, "depth_pro", SimpleNamespace())
+    monkeypatch.setitem(
+        sys.modules, "transformation_portal.stage_graph.stages.depth_pro", SimpleNamespace(DepthProStage=object)
+    )
+    monkeypatch.setattr(depth_pro_worker, "_check_device_availability", lambda device: 0)
+    assert _check_availability(checkpoint, "cpu") == 0
+    # An invalid packaged schema must never pass readiness either.
+    monkeypatch.setattr(execution_plan, "load_execution_plan_schema", lambda: {"type": "invalid-schema-type"})
+    import jsonschema
+
+    with pytest.raises(jsonschema.SchemaError):
+        _check_availability(checkpoint, "cpu")
+
+
 def test_compute_normalizes_device_override_for_readiness_and_subprocess(tmp_path: Path) -> None:
     checkpoint = tmp_path / "depth_pro.pt"
     checkpoint.write_bytes(b"checkpoint")

@@ -2265,8 +2265,9 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "selectedPreviewAvailable &&" in render_body
     assert "comparePreviewAvailable" in render_body
     assert re.search(
-        r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
         r"if \(captioningEvidenceVisible\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
+        r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
+        r"_renderInlinePreview\(els\.artifactCompareImage, comparePreviewSrc, selected, selectedArtifact,[\s\S]*?"
         r"\} else if \(selectedPreviewAvailable\)",
         render_body,
     )
@@ -2854,7 +2855,7 @@ def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules()
         css,
     )
     phone_stepper_rule = re.search(
-        r"@media\(max-width:639px\)\{\.build-step-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\)[^}]*gap:\s*\.5rem[^}]*}\.build-step-tab\s*\{[^}]*min-height:\s*0",
+        r"@media\(max-width:639px\)\{\.build-step-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(4,minmax\(0,1fr\)\)[^}]*gap:\s*\.5rem[^}]*}\.build-step-tab\s*\{[^}]*min-height:\s*0",
         css,
     )
 
@@ -2872,7 +2873,7 @@ def test_portal_workspace_grid_uses_disjoint_desktop_and_mobile_breakpoints() ->
     mobile_media_end = css.find("@media(", mobile_media + 1)
     mobile_rail = css.find(".workspace-rail{grid-template-columns:minmax(0,1fr)", mobile_media)
     mobile_links = css.find(
-        ".workspace-rail-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}",
+        ".workspace-rail-links{grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}",
         mobile_media,
     )
 

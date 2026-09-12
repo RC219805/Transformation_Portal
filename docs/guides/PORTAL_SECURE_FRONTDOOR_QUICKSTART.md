@@ -64,6 +64,24 @@ cd web/secure-landing
 nvm use 22
 ```
 
+Use the official Node distribution matching the Frontdoor contract CI job when
+regenerating CSS ownership evidence. Its report records exact gzip sizes;
+Homebrew Node can link a different zlib and produce a different compressed size
+for identical CSS. A gzip-only freshness failure is a toolchain mismatch, not a
+reason to relax the CSS hash, architecture, or asset-budget checks. For example,
+the September 2026 CI run used official Node `22.23.2`:
+
+```bash
+cd web/secure-landing
+nvm install 22.23.2
+nvm use 22.23.2
+npm ci
+npm run build:portal
+node scripts/check-portal-css-architecture.mjs --write-ownership-report
+npm run lint:css
+npm run test:coverage
+```
+
 FastAPI still needs its own backend secret for machine and proxy authentication:
 
 ```bash
@@ -238,6 +256,38 @@ FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startu
 Managed bootstrap and managed `/v1/*` responses now echo `traceparent`. The
 front door forwards a browser-supplied `traceparent` upstream unchanged, and
 FastAPI mints one when the browser does not supply a valid value.
+
+## Portal Workspace
+
+The four workspace routes remain `?view=overview|build|operate|review`.
+Overview provides run and draft actions; Operate places the queue, inspector,
+and artifacts alongside each other on wide screens; Review gives more space
+to artifacts. Phone layouts keep all four navigation links in one row.
+The queue and inspector display succeeded jobs at 100% even if their final
+progress event was missed; other states retain the reported progress value.
+
+Build starts with four steps: Configure, Paths, Outputs, and Dispatch. Pipeline
+and saved-profile controls sit beside the active step on wide screens and
+stack above it on smaller screens. Next names the destination step and moves
+keyboard focus to its step button. The last step is a location, not evidence
+that dispatch is authorized: preview, readiness, and access checks still own
+the launch button's enabled state.
+
+Preview status remains visible while **Draft & validation details** is closed.
+Expand it for draft, preview, and dispatch guidance. Connection settings and
+runtime/license details remain separately expandable. A failed artifact image
+falls back to metadata; **Inspect** offers the existing preview retry flow,
+and download remains available when the artifact URL can be resolved.
+
+The portal's local CSS includes a base reset for box sizing, margins, borders,
+and form typography. Component styles own workspace layout; do not add flex
+utilities that override the Operate grid. Rebuild with `npm run build:portal`
+from `web/secure-landing`, and run `npm run lint:css` and
+`npm run test:browser:a11y` after layout changes. The browser suite covers
+light/dark layouts at 320, 390, 768, 1280, and 1440 pixels, step focus,
+blocked dispatch, and image failures. These refinements are always on and
+can be reverted with their source, generated assets, and CSS evidence files;
+they introduce no new feature flags or auth/route contracts.
 
 ## Cloudflare Production Notes
 

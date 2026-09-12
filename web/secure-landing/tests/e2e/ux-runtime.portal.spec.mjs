@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { expectNoWcagViolations } from "./helpers/accessibility.mjs";
+import { expectNoHorizontalOverflow, expectNoWcagViolations } from "./helpers/accessibility.mjs";
 
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PORTAL_ASSET_DIR = path.resolve(SPEC_DIR, "../../../../public/portal-assets");
@@ -247,6 +247,10 @@ async function installHydratedPortalRoutes(page, options = {}) {
     }
 
     if (method === "GET" && /^\/v1\/jobs\/[^/]+\/artifacts\//.test(pathname)) {
+      if (options.previewImageFails) {
+        await route.fulfill({ status: 503, body: "Preview temporarily unavailable" });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "image/png",
@@ -382,9 +386,158 @@ async function gotoHydratedPortal(page, target = "/portal") {
   await expect(page.locator("body")).toHaveAttribute("data-bootstrap-status", "ready");
   await expect(page.locator("#healthText")).toHaveText("Backend Online");
   await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
+  // Bootstrap readiness can precede the paint applying inherited theme colors.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
+  for (const theme of ["light", "dark"]) {
+    for (const width of [320, 390, 768, 1280, 1440]) {
+      test(`workspace layout at ${width}px in ${theme} mode`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+        await installHydratedPortalRoutes(page);
+        for (const view of ["overview", "build", "operate", "review"]) {
+          await gotoHydratedPortal(page, `/portal?view=${view}`);
+          await expectNoHorizontalOverflow(page, `${view}, ${width}px, ${theme}`);
+          const geometry = await page.evaluate(() => {
+            const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+            return {
+              bodyMargin: getComputedStyle(document.body).margin,
+              panelBox: getComputedStyle(document.querySelector("#profile-shell")).boxSizing,
+              topbar: rect(".portal-topbar"),
+              nav: rect(".workspace-rail"),
+              preset: rect("#presetSelect"),
+              queue: rect("#queue-shell"),
+              inspector: rect("#selected-job-shell"),
+              artifacts: rect("#artifacts-shell"),
+            };
+          });
+          expect(geometry.bodyMargin).toBe("0px");
+          expect(geometry.panelBox).toBe("border-box");
+          if (width >= 1280) {
+            expect(geometry.topbar.height).toBeLessThan(120);
+            if (view === "build") expect(geometry.preset.bottom).toBeLessThan(720);
+            if (view === "operate") {
+              expect(Math.abs(geometry.queue.y - geometry.inspector.y)).toBeLessThan(2);
+              expect(geometry.queue.right).toBeLessThanOrEqual(geometry.inspector.x);
+              expect(geometry.inspector.right).toBeLessThanOrEqual(geometry.artifacts.x);
+            }
+            if (view === "review") {
+              expect(Math.abs(geometry.inspector.y - geometry.artifacts.y)).toBeLessThan(2);
+              expect(geometry.inspector.right).toBeLessThanOrEqual(geometry.artifacts.x);
+            }
+          }
+          if (width <= 390) expect(geometry.nav.height).toBeLessThan(100);
+          if (view === 'build') {
+            await expect(page.locator('#buildStepNextBtn')).toHaveCSS('background-image', /linear-gradient/);
+          }
+          if (width === 390 || width === 1280) {
+            await expectNoWcagViolations(page, `${view}, ${width}px, ${theme}`);
+            await page.screenshot({ path: test.info().outputPath(`${view}-${theme}-${width}.png`) });
+          }
+          if (view === "build") {
+            for (const step of [2, 3, 4]) {
+              await page.locator(`#buildStepTab${step}`).click();
+              await expectNoHorizontalOverflow(page, `Build step ${step}, ${width}px, ${theme}`);
+              if (step === 3) {
+                const outputs = await page.evaluate(() => {
+                  const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+                  const overflow = Array.from(document.querySelectorAll('#build-shell [data-switch-controls-wrap="true"]'))
+                    .filter((element) => element.checkVisibility())
+                    .filter((element) => {
+                      const control = element.getBoundingClientRect();
+                      const label = element.closest('label').getBoundingClientRect();
+                      return control.left < label.left || control.right > label.right;
+                    }).map((element) => element.closest('label').textContent.trim());
+                  return { parameters: rect('#parameters-shell'), flags: rect('#flagsShellPanel'), overflow };
+                });
+                expect(outputs.overflow, 'Switch controls stay inside their labels').toEqual([]);
+                if (width >= 1280) {
+                  expect(Math.abs(outputs.parameters.x - outputs.flags.x)).toBeLessThan(2);
+                  expect(Math.abs(outputs.parameters.width - outputs.flags.width)).toBeLessThan(2);
+                }
+              }
+              if (width === 390 || width === 1280) {
+                // Paint the deferred output and governance panels before axe
+                // samples their translucent backgrounds below the fold.
+                if (step === 3) {
+                  await page.locator('#flags-shell').scrollIntoViewIfNeeded();
+                  await page.locator('#governance-shell').scrollIntoViewIfNeeded();
+                }
+                await expectNoWcagViolations(page, `Build step ${step}, ${width}px, ${theme}`);
+                await page.locator('#buildStepperShell').scrollIntoViewIfNeeded();
+                await page.screenshot({ path: test.info().outputPath(`build-step${step}-${theme}-${width}.png`) });
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  for (const [state, progress, displayedProgress] of [["succeeded", 0, 100], ["running", 37, 37], ["failed", 42, 42]]) {
+    test(`Operate shows consistent progress for ${state} jobs`, async ({ page }) => {
+      await installHydratedPortalRoutes(page, { jobs: [{
+        id: 'job-progress', pipeline: 'lux-depth-v3', state, progress,
+        logs_tail: [], artifacts: { items: [] }, created_at: '2026-08-09T20:00:00Z',
+      }] });
+      await gotoHydratedPortal(page, '/portal?view=operate');
+      await expect(page.locator('#selectedJobProgressText')).toHaveText(`${displayedProgress}%`);
+      await expect(page.locator('#selectedJobProgressBar')).toHaveJSProperty('value', displayedProgress);
+      await expect(page.locator('#queue-shell progress')).toHaveJSProperty('value', displayedProgress);
+      await expect(page.locator('#queue-shell progress')).toHaveAttribute('aria-valuetext', `${displayedProgress}%`);
+    });
+  }
+
+  test("failed jobs without outputs expose one recovery action per surface", async ({ page }) => {
+    await installHydratedPortalRoutes(page, { jobs: [{
+      id: 'job-failed', pipeline: 'lux-depth-v3', state: 'failed', progress: 0,
+      logs_tail: ["ModuleNotFoundError: No module named 'jsonschema'"],
+      artifacts: { items: [] }, error: { code: 'RUNNER_EXIT_NONZERO', message: 'runner exited with code 1' },
+      created_at: '2026-08-09T20:00:00Z',
+    }] });
+    await gotoHydratedPortal(page, '/portal?view=operate');
+    await expect(page.locator('#consoleActionRailActions').getByRole('button', { name: 'Return to Build' })).toHaveCount(1);
+    await expect(page.locator('#selectedJobRecoverySecondaryBtn')).toBeHidden();
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator('#reviewStatusPrimaryBtn')).toHaveText('Return to Build');
+    await expect(page.locator('#reviewStatusSecondaryBtn')).toBeHidden();
+    await page.screenshot({ path: test.info().outputPath('failed-job-recovery.png') });
+  });
+
+  test("Build navigation preserves focus, exposes preview details, and never implies approval from the step number", async ({ page }) => {
+    const runtime = await installHydratedPortalRoutes(page, {
+      preview: {
+        field_errors: [{ field: "input_dir", code: "input_directory_unavailable", message: "Choose a readable input folder." }],
+      },
+    });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    const details = page.locator('[data-ui="build-validation-details"]');
+    await expect(details).not.toHaveAttribute("open", "");
+    await expect(page.locator("#buildPreviewStatus")).toHaveAttribute("data-tone", "blocked");
+    await details.locator("summary").click();
+    await expect(page.locator("#buildPulsePreview")).toBeVisible();
+    await details.locator("summary").click();
+
+    for (const [step, next] of [[2, "Paths"], [3, "Outputs"], [4, "Dispatch"]]) {
+      await expect(page.locator("#buildStepNextBtn")).toHaveText(`Next: ${next}`);
+      await page.locator("#buildStepNextBtn").click();
+      await expect(page.locator(`#buildStepTab${step}`)).toBeFocused();
+      await expect(page.locator(`#buildStepTab${step}`)).toHaveAttribute("aria-current", "step");
+    }
+    await expect(page.locator("#parameters-shell")).toBeHidden();
+    await expect(page.locator("#cli-shell")).toBeVisible();
+    await expect(page.locator("#buildStepNextBtn")).toHaveText("Final step");
+    await expect(page.locator("#buildStepNextBtn")).toBeDisabled();
+    await expect(page.locator("#runJobBtn")).toBeDisabled();
+    expect(runtime.jobSubmissions).toBe(0);
+    await page.locator("#buildStepBackBtn").click();
+    await expect(page.locator("#buildStepTab3")).toBeFocused();
+    await expect(page.locator("#parameters-shell")).toBeVisible();
+    await expect(page.locator("#cli-shell")).toBeHidden();
+  });
+
   test("deep links hydrate the intended surface and reserve the context rail for Operate", async ({ page }) => {
     await installHydratedPortalRoutes(page);
 
@@ -773,44 +926,59 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await expect(page.locator('[data-ui="queue-row"][data-job-id="job-dispatched"]')).toBeVisible();
   });
 
-  test("Review exposes dynamic artifact text and remains axe-clean", async ({ page }) => {
-    const completedJob = {
-      id: "job-reviewable",
-      pipeline: "lux-depth-v3",
-      state: "succeeded",
-      progress: 100,
-      logs_tail: ["[INFO] Output indexed."],
-      artifacts: {
-        items: [
-          {
-            path: "outputs/depth-primary.png",
-            relative_path: "outputs/depth-primary.png",
-            artifact_type: "image",
-            media_kind: "image",
-            previewable: true,
-            browser_previewable: true,
-            preview_url: "/v1/jobs/job-reviewable/artifacts/outputs%2Fdepth-primary.png",
-            content_type: "image/png",
-            size_bytes: 68,
-            sha256: "a".repeat(64),
-            display_hint: { role: "primary", label: "Primary depth", priority: 1 },
-          },
-        ],
-      },
-      created_at: "2026-08-09T20:00:00Z",
-      finished_at: "2026-08-09T20:00:05Z",
-      updated_at: "2026-08-09T20:00:05Z",
-    };
-    await installHydratedPortalRoutes(page, { jobs: [completedJob] });
-    await gotoHydratedPortal(page, "/portal?view=review");
+  for (const previewImageFails of [false, true]) {
+    test(`Review exposes artifact text with preview failure=${previewImageFails}`, async ({ page }) => {
+      const completedJob = {
+        id: "job-reviewable",
+        pipeline: "lux-depth-v3",
+        state: "succeeded",
+        progress: 100,
+        logs_tail: ["[INFO] Output indexed."],
+        artifacts: {
+          items: [
+            {
+              path: "outputs/depth-primary.png",
+              relative_path: "outputs/depth-primary.png",
+              artifact_type: "image",
+              media_kind: "image",
+              previewable: true,
+              browser_previewable: true,
+              preview_url: "/v1/jobs/job-reviewable/artifacts/outputs%2Fdepth-primary.png",
+              content_type: "image/png",
+              size_bytes: 68,
+              sha256: "a".repeat(64),
+              display_hint: { role: "primary", label: "Primary depth", priority: 1 },
+            },
+          ],
+        },
+        created_at: "2026-08-09T20:00:00Z",
+        finished_at: "2026-08-09T20:00:05Z",
+        updated_at: "2026-08-09T20:00:05Z",
+      };
+      await installHydratedPortalRoutes(page, { jobs: [completedJob], previewImageFails });
+      await gotoHydratedPortal(page, "/portal?view=review");
 
-    const preview = page.locator("#artifactPreviewSoloImage");
-    await expect(preview).toBeVisible();
-    await expect(preview).toHaveAttribute("alt", "Primary depth preview: outputs/depth-primary.png");
-    await expect(page.locator("#artifactThumbnailRail")).toHaveAttribute("role", "group");
-    await expect(page.locator("#reviewStatusBanner")).toContainText(/Review|artifact/i);
-    await expectNoWcagViolations(page, "Portal Review surface");
-  });
+      const preview = page.locator("#artifactPreviewSoloImage");
+      if (previewImageFails) {
+        await expect(preview).toBeHidden();
+        await expect(page.locator("#artifactMetadataCard")).toContainText("Preview could not be loaded");
+        await expect(page.locator("#openArtifactBtn")).toBeEnabled();
+        await expect(page.locator("#downloadArtifactBtn")).toBeEnabled();
+        // Re-render the selection: a failed image should stay in its useful fallback.
+        await page.locator('[data-view-link="operate"]').click();
+        await page.locator('[data-view-link="review"]').click();
+        await expect(preview).toBeHidden();
+        await expect(page.locator("#artifactMetadataCard")).toContainText("Preview could not be loaded");
+      } else {
+        await expect(preview).toBeVisible();
+        await expect.poll(() => preview.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+      }
+      await expect(preview).toHaveAttribute("alt", "Primary depth preview: outputs/depth-primary.png");
+      await expect(page.locator("#artifactThumbnailRail")).toHaveAttribute("role", "group");
+      await expect(page.locator("#reviewStatusBanner")).toContainText(/Review|artifact/i);
+      await expectNoWcagViolations(page, "Portal Review surface");
+    });
+  }
 
   test("Build and profile management execute with valid semantics and protected names", async ({ page }) => {
     const runtime = await installHydratedPortalRoutes(page);
@@ -925,6 +1093,9 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
       .poll(async () => Object.keys(await readProfileStore()))
       .toEqual(["Alternate Run"]);
     await expect(dialog.locator(":focus")).toHaveCount(1);
+    // Earlier notifications can be fading over the dialog while axe samples
+    // contrast. Audit the settled modal after those notifications expire.
+    await expect(page.locator('#toastContainer > *')).toHaveCount(0, { timeout: 6000 });
     await expectNoWcagViolations(page, "Portal profile manager");
 
     const secondaryActor = {
