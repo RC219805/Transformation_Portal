@@ -238,6 +238,14 @@ promotes the venv with rollback. `fastvlm-pip-freeze.txt` is written through a
 no-follow regular temp file, flushed with `fsync`, and atomically replaced under
 the same transaction lock; an existing symlink or special file is rejected.
 
+The current compatibility closure pins `yarl==1.24.5`, `filelock==3.32.5`, and
+`protobuf==7.36.1` alongside `coremltools==9.0`. Validate this closure in a fresh
+runtime: compare installed versions and freeze evidence with the exact
+requirements, load and round-trip the pinned `fastvithd.mlpackage` CoreML
+specification, then run the import/Metal and real-caption Make targets below.
+Static manifest verification alone does not establish protobuf/CoreML or
+caption-inference compatibility.
+
 Model downloads are limited to the allowlisted FastVLM roles, pinned Hugging
 Face revisions, and SHA-256-checked required files. Partial downloads, unsafe
 paths, symlink escapes, unpinned revisions, checksumless artifacts, and checksum
