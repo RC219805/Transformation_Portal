@@ -40,6 +40,11 @@ Current grouping and compatibility controls keep coupled changes atomic:
   updates. Its Dependabot entry intentionally omits `target-branch` so GitHub
   applies security grouping while targeting the repository default branch,
   `main`.
+- The frontdoor's `js-yaml` override is 4.3.2 to bound work from empty YAML
+  merge sources (GHSA-2883-xcg3-v3hh). Keep this override when refreshing the
+  Node group, and validate both production and full npm audits. The regression
+  test exercises the merge budget directly; `npm run lint:css` covers the
+  updated stylelint configuration path.
 - Redis major updates and core Transformers minor updates are ignored because
   the governed contracts remain Redis `<7` and Transformers `>=5.10.1,<5.11`.
   Compatible patch updates remain eligible.
