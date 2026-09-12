@@ -1327,7 +1327,9 @@ class DA3Backend:
                 if self._prepared_cache_runtime_identity is not None:
                     from .da3_runtime_identity import load_da3_worker_runtime_handshake
 
-                    payload = load_da3_worker_runtime_handshake(output_json_path)
+                    # Inference metadata must not inherit the larger runtime
+                    # preparation handshake's verification-token budget.
+                    payload = load_da3_worker_runtime_handshake(output_json_path, maximum_bytes=4 * 1024 * 1024)
                 else:
                     with output_json_path.open("r", encoding="utf-8") as handle:
                         payload = json.load(handle)

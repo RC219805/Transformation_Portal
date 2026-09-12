@@ -906,9 +906,11 @@ def test_da3_parent_verifies_runtime_echo_before_loading_array(
     assert loaded is False
 
 
+@pytest.mark.parametrize("result_size_bytes", (None, 4 * 1024 * 1024), ids=("small", "4mib-boundary"))
 def test_da3_parent_records_verified_runtime_identity_after_inference(
     prepared_da3,
     monkeypatch: pytest.MonkeyPatch,
+    result_size_bytes: int | None,
 ) -> None:
     authority = backend_candidate_authority(prepared_da3.plan, "da3")
     backend = DepthBackendRegistry().get_backend(
@@ -953,6 +955,10 @@ def test_da3_parent_records_verified_runtime_identity_after_inference(
             "dtype": "float32",
             "fortran_order": False,
         }
+        if result_size_bytes is not None:
+            payload["padding"] = ""
+            payload["padding"] = "x" * (result_size_bytes - len(canonicalize_json(payload)))
+            assert len(canonicalize_json(payload)) == result_size_bytes
         with open(output_json, "wb") as handle:
             handle.write(canonicalize_json(payload))
         return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -964,6 +970,88 @@ def test_da3_parent_records_verified_runtime_identity_after_inference(
     result = backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
 
     assert result.metadata["runtime_identity_sha256"] == "a" * 64
+    np.testing.assert_array_equal(result.depth_map, np.ones((2, 2), dtype=np.float32))
+
+
+@pytest.mark.parametrize("forged_handshake", (False, True), ids=("inference-result", "forged-handshake"))
+def test_da3_inference_result_over_4mib_rejected_before_authority_or_depth_load(
+    prepared_da3,
+    monkeypatch: pytest.MonkeyPatch,
+    forged_handshake: bool,
+) -> None:
+    authority = backend_candidate_authority(prepared_da3.plan, "da3")
+    backend = DepthBackendRegistry().get_backend(
+        "da3",
+        prepared_da3.runtime_config,
+        candidate_authority=authority,
+        canonical_plan_bytes=prepared_da3.canonical_plan_bytes,
+    )
+    backend._python_executable = "/usr/bin/python-worker"
+    backend._prepared_cache_runtime_identity = SimpleNamespace(runtime_identity_sha256="a" * 64)
+    backend._prepared_cache_runtime_verification_token = {
+        "schema": "tp.da3.runtime-verification-token.v1",
+        "worker_runtime_identity_sha256": "d" * 64,
+        "source_revision_probe": None,
+        "entries": [],
+    }
+    backend._prepared_cache_runtime_verification_token_sha256 = "e" * 64
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        output_json = Path(command[command.index("--output-json") + 1])
+        output_depth = Path(command[command.index("--output-depth") + 1])
+        np.save(output_depth, np.ones((2, 2), dtype=np.float32), allow_pickle=False)
+        depth_bytes = output_depth.read_bytes()
+        payload = {
+            "metadata": {"device": "cpu"},
+            "device": "cpu",
+            "dtype": "float32",
+            "input_size": [2, 2],
+            "execution_authority": {
+                "plan_fingerprint_sha256": authority.plan_fingerprint_sha256,
+                "candidate_id": "da3",
+                "model_backend_id": None,
+                "executed_backend_id": "da3",
+            },
+            "runtime_identity_sha256": "a" * 64,
+            "depth_artifact": {
+                "sha256": hashlib.sha256(depth_bytes).hexdigest(),
+                "size_bytes": len(depth_bytes),
+                "shape": [2, 2],
+                "dtype": "float32",
+                "fortran_order": False,
+            },
+        }
+        if forged_handshake:
+            payload["schema"] = "tp.da3.worker-runtime-handshake.v1"
+            payload["runtime_verification_token"] = {"padding": ""}
+            padding_target = payload["runtime_verification_token"]
+        else:
+            payload["padding"] = ""
+            padding_target = payload
+        size_bytes = 4 * 1024 * 1024 + 1
+        padding_target["padding"] = "x" * (size_bytes - len(canonicalize_json(payload)))
+        raw = canonicalize_json(payload)
+        assert len(raw) == size_bytes
+        output_json.write_bytes(raw)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def forbidden_echo(*_args, **_kwargs):
+        pytest.fail("oversized result reached execution-authority verification")
+
+    def forbidden_depth_load(*_args, **_kwargs):
+        pytest.fail("oversized result reached depth loading")
+
+    import transformation_portal.depth.backends.da3 as da3_module
+
+    monkeypatch.setattr(da3_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(backend, "_verify_worker_authority_echo", forbidden_echo)
+    monkeypatch.setattr(da3_module, "_load_verified_worker_depth", forbidden_depth_load)
+    monkeypatch.setattr(da3_module.np, "load", forbidden_depth_load)
+
+    with pytest.raises(RuntimeError, match="Failure category: protocol_error") as exc_info:
+        backend._compute_subprocess(np.zeros((2, 2, 3), dtype=np.uint8))
+    assert "oversized" in str(exc_info.value)
 
 
 def test_da3_depth_artifact_is_loaded_from_digest_verified_open_handle(

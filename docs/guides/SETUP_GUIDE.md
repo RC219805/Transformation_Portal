@@ -109,6 +109,8 @@ Worker preparation retains per-file and per-directory observations so later
 cache access can detect runtime changes. The bounded response permits up to
 32 MiB for this verification token plus 4 MiB for evidence and other metadata;
 both component limits are checked separately within the 36 MiB transport limit.
+Inference result JSON retains its separate 4 MiB limit; the expanded transport
+budget applies to preparation handshakes, not inference metadata.
 An oversized response remains non-authorizing. Successful inference alone does
 not establish cache reuse; confirm a cache hit on an identical repeat run.
 
