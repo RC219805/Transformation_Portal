@@ -3297,21 +3297,21 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedRawBytes, 0);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedGzipBytes, 0);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesBefore, 80925);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesAfter, 88936);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawByteDelta, 8011);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesAfter, 91013);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawByteDelta, 10088);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesBefore, 15752);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesAfter, 17014);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipByteDelta, 1262);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesAfter, 17491);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipByteDelta, 1739);
   assert.equal(
     ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashBefore,
     "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f"
   );
   assert.equal(
     ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashAfter,
-    "5a32fa16c5664d665f42ac30d151e6e781b54a0d95b2456d053d77e1f1284cab"
+    "77636d0797779caad613c2917373efcf330329a3bbc6b2794a079792500a3c72"
   );
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintBefore, "08a5cefdcc6a");
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "71f7897e7979");
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "ba4a58fa9b72");
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.parityBaselineChanged, false);
   assert.match(

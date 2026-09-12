@@ -940,6 +940,41 @@ export function createDeferredReviewSurfaceApi(host) {
     };
   }
 
+  function _renderInlinePreview(image, source, job, artifact, label) {
+    if (!image) return;
+    image.alt = label;
+    const showFallback = () => {
+      image.classList.add("hidden");
+      image.removeAttribute("src");
+      image.dataset.failedPreviewSource = source;
+      if (!els.artifactMetadataCard) return;
+      els.artifactMetadataCard.classList.remove("hidden");
+      _renderArtifactMetadataCard(job, artifact);
+      const notice = document.createElement("p");
+      notice.className = "field-status mt-2";
+      notice.textContent = "Preview could not be loaded. Metadata is still available. Use the artifact actions below to open or download the file.";
+      els.artifactMetadataCard.prepend(notice);
+    };
+    if (image.dataset.failedPreviewSource === source) {
+      showFallback();
+      return;
+    }
+    if (!source || _isArtifactUrlKnownMissing(source)) {
+      image.classList.add("hidden");
+      image.removeAttribute("src");
+      return;
+    }
+    image.onerror = () => {
+      // Ignore events from an image replaced by a newer selection.
+      if (image.getAttribute("src") === source) showFallback();
+    };
+    image.classList.remove("hidden");
+    if (image.getAttribute("src") !== source) {
+      delete image.dataset.failedPreviewSource;
+      image.src = source;
+    }
+  }
+
   function renderArtifactPanel() {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
@@ -1119,41 +1154,20 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactMetadataCard) {
       els.artifactMetadataCard.classList.toggle("hidden", selectedPreviewAvailable && !captioningEvidenceVisible);
     }
+    if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
     if (compareEnabled && selectedArtifact && compareCandidate) {
-      if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.alt = `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`;
-        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
-          els.artifactPreviewImage.src = selectedPreviewSrc;
-          els.artifactPreviewImage.classList.remove("hidden");
-        } else {
-          els.artifactPreviewImage.classList.add("hidden");
-          els.artifactPreviewImage.removeAttribute("src");
-        }
-      }
+      _renderInlinePreview(els.artifactPreviewImage, selectedPreviewSrc, selected, selectedArtifact,
+        `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`
+      );
       if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
-      if (els.artifactCompareImage) {
-        els.artifactCompareImage.alt = `${artifactDisplayLabel(compareCandidate)} comparison preview: ${artifactLabel(compareCandidate)}`;
-        if (comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc)) {
-          els.artifactCompareImage.src = comparePreviewSrc;
-          els.artifactCompareImage.classList.remove("hidden");
-        } else {
-          els.artifactCompareImage.classList.add("hidden");
-          els.artifactCompareImage.removeAttribute("src");
-        }
-      }
+      _renderInlinePreview(els.artifactCompareImage, comparePreviewSrc, selected, selectedArtifact,
+        `${artifactDisplayLabel(compareCandidate)} comparison preview: ${artifactLabel(compareCandidate)}`
+      );
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
-      if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else if (selectedPreviewAvailable) {
-      if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.alt = `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`;
-        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
-          els.artifactPreviewSoloImage.src = selectedPreviewSrc;
-          els.artifactPreviewSoloImage.classList.remove("hidden");
-        } else {
-          els.artifactPreviewSoloImage.classList.add("hidden");
-          els.artifactPreviewSoloImage.removeAttribute("src");
-        }
-      }
+      _renderInlinePreview(els.artifactPreviewSoloImage, selectedPreviewSrc, selected, selectedArtifact,
+        `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`
+      );
       if (els.artifactPreviewImage) {
         els.artifactPreviewImage.classList.add("hidden");
         els.artifactPreviewImage.removeAttribute("src");
@@ -1162,7 +1176,6 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareImage.classList.add("hidden");
         els.artifactCompareImage.removeAttribute("src");
       }
-      if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else {
       if (els.artifactPreviewSoloImage) {
         els.artifactPreviewSoloImage.classList.add("hidden");

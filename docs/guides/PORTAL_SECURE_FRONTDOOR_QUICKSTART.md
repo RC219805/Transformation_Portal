@@ -239,6 +239,38 @@ Managed bootstrap and managed `/v1/*` responses now echo `traceparent`. The
 front door forwards a browser-supplied `traceparent` upstream unchanged, and
 FastAPI mints one when the browser does not supply a valid value.
 
+## Portal Workspace
+
+The four workspace routes remain `?view=overview|build|operate|review`.
+Overview provides run and draft actions; Operate places the queue, inspector,
+and artifacts alongside each other on wide screens; Review gives more space
+to artifacts. Phone layouts keep all four navigation links in one row.
+The queue and inspector display succeeded jobs at 100% even if their final
+progress event was missed; other states retain the reported progress value.
+
+Build starts with four steps: Configure, Paths, Outputs, and Dispatch. Pipeline
+and saved-profile controls sit beside the active step on wide screens and
+stack above it on smaller screens. Next names the destination step and moves
+keyboard focus to its step button. The last step is a location, not evidence
+that dispatch is authorized: preview, readiness, and access checks still own
+the launch button's enabled state.
+
+Preview status remains visible while **Draft & validation details** is closed.
+Expand it for draft, preview, and dispatch guidance. Connection settings and
+runtime/license details remain separately expandable. A failed artifact image
+falls back to metadata; **Inspect** offers the existing preview retry flow,
+and download remains available when the artifact URL can be resolved.
+
+The portal's local CSS includes a base reset for box sizing, margins, borders,
+and form typography. Component styles own workspace layout; do not add flex
+utilities that override the Operate grid. Rebuild with `npm run build:portal`
+from `web/secure-landing`, and run `npm run lint:css` and
+`npm run test:browser:a11y` after layout changes. The browser suite covers
+light/dark layouts at 320, 390, 768, 1280, and 1440 pixels, step focus,
+blocked dispatch, and image failures. These refinements are always on and
+can be reverted with their source, generated assets, and CSS evidence files;
+they introduce no new feature flags or auth/route contracts.
+
 ## Cloudflare Production Notes
 
 - Put the front door behind Cloudflare Tunnel + Access.

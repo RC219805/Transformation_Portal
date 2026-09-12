@@ -349,6 +349,34 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:
 
 ---
 
+### Symptom: Depth Pro exits before inference with missing `jsonschema`
+
+`RUNNER_EXIT_NONZERO` is the orchestrator's exit summary. Inspect the selected
+job's Logs tab for the first backend exception. If the isolated Depth Pro
+worker reports `ModuleNotFoundError: No module named 'jsonschema'`, its runtime
+is missing the validator required by `tp.execution.plan.v1`.
+
+For an otherwise working `.venv-depth-pro`, repair the missing dependency and
+verify it without replacing the existing ML packages:
+
+```bash
+./.venv-depth-pro/bin/python -m pip install "jsonschema==4.26.0"
+./.venv-depth-pro/bin/python -m pip check
+PYTHONPATH=src ./.venv-depth-pro/bin/python -m transformation_portal.depth.backends.depth_pro_worker --check --checkpoint checkpoints/depth_pro.pt --device cpu
+```
+
+The full `./scripts/setup/install_depth_pro_runtime.sh` installer also installs
+this dependency and now validates the packaged execution-plan schema during
+readiness. A fresh runtime installation replaces the venv. Keep the existing
+research-license acknowledgments and canonical-plan validation intact; synthetic
+fallback does not repair a production runtime.
+
+Strict input discovery intentionally excludes hidden folders and generated
+output paths. Place validation sources under a normal input directory such as
+`input_images/local_managed_validation/`, rather than `.runtime/` or `output/`.
+Historical failed jobs remain failed after a repair; verify a new job and its
+indexed outputs before rerunning a larger batch.
+
 ### Symptom: OpenMP Runtime Collision on macOS (OMP Error #15)
 
 **Error Message:**

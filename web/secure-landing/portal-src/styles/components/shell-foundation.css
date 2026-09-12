@@ -645,7 +645,7 @@
    on #main-content plus the Phase 6 mobile override that tightened the inset
    at <=960px. Component layer is the sole source of these declarations. */
 .portal-main {
-    padding: 2rem 1.5rem;
+    padding: 1.5rem;
 }
 @media (max-width: 960px) {
     .portal-main {
@@ -674,7 +674,6 @@
     border-radius: 1rem;
 }
 @media (max-width: 767px) {
-    .portal-shell-card--build,
     .portal-shell-card--queue,
     .portal-shell-card--inspector,
     .portal-shell-card--artifacts,
@@ -780,13 +779,15 @@
 
 .capability-matrix {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
     gap: 0.75rem;
     margin-top: 1rem;
 }
 
 .capability-row {
     display: flex;
+    min-width: 0;
+    overflow-wrap: anywhere;
     min-height: 10.25rem;
     flex-direction: column;
     gap: 0.65rem;

@@ -211,7 +211,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
     justify-content: stretch;
-    width: min(100%, 29rem);
+    width: 100%;
+}
+
+.overview-intro {
+    display: grid;
+    gap: 1.5rem;
 }
 
 .overview-meta-grid {
@@ -323,14 +328,14 @@
 
 .build-step-tab {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.8rem;
-    min-height: 88px;
+    min-height: 56px;
     width: 100%;
     border: 1px solid var(--shell-border);
     border-radius: 1.25rem;
     background: var(--shell-veil-soft);
-    padding: 0.95rem 1rem;
+    padding: 0.65rem 0.75rem;
     text-align: left;
     color: var(--shell-ink);
     transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -368,11 +373,18 @@
 
 @media (max-width: 639px) {
     .build-step-tabs {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.5rem;
     }
     .build-step-tab {
         min-height: 0;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 0.5rem 0.15rem;
+    }
+    .build-step-tab .build-step-label {
+        font-size: 11px;
+        letter-spacing: 0;
     }
 }
 
@@ -403,6 +415,7 @@
 }
 
 .build-step-meta {
+    display: none;
     font-size: 13px;
     line-height: 1.5;
     color: var(--shell-muted);
@@ -410,12 +423,6 @@
 
 .dark .stepper-nav-btn {
     background: rgba(15, 23, 42, 0.78);
-}
-
-.stepper-nav-btn-primary {
-    background: linear-gradient(135deg, var(--shell-accent-fill-strong), var(--shell-accent-fill));
-    border-color: transparent;
-    color: var(--shell-on-accent);
 }
 
 .field-status {
@@ -456,14 +463,14 @@
 
 @media (min-width: 1280px) {
     #jobs-shell {
-        grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.05fr) minmax(280px, 1fr);
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.05fr) minmax(0, 1fr);
     }
-    #queue-shell { grid-column: 1; }
-    #selected-job-shell { grid-column: 2; }
-    #artifacts-shell,
-    #logs-shell { grid-column: 3; }
+    #queue-shell { grid-column: 1; grid-row: 1; }
+    #selected-job-shell { grid-column: 2; grid-row: 1; }
+    #artifacts-shell { grid-column: 3; grid-row: 1; }
+    #logs-shell { grid-column: 3; grid-row: 2; }
     body[data-console-view="review"] #jobs-shell {
-        grid-template-columns: minmax(280px, 0.9fr) minmax(460px, 1.35fr);
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.35fr);
     }
     body[data-console-view="review"] #selected-job-shell { grid-column: 1; }
     body[data-console-view="review"] #artifacts-shell,
@@ -569,6 +576,11 @@ textarea {
 
     .disclosure-summary {
         align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .quiet-disclosure__summary {
+        flex-wrap: wrap;
     }
 
     .disclosure-summary-meta {
@@ -587,10 +599,12 @@ textarea {
     }
 
     .workspace-rail-links {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.5rem;
     }
 
+    .workspace-rail-copy,
+    .workspace-link-shortcut,
     .workspace-rail-text,
     .workspace-shortcut-hint,
     .workspace-link-meta {
@@ -601,7 +615,12 @@ textarea {
         justify-content: center;
         min-height: var(--ux-target-min-size);
         gap: 0;
-        padding: 0.65rem 0.75rem;
+        padding: 0.65rem 0.25rem;
+    }
+
+    .workspace-link .workspace-link-label {
+        font-size: 11px;
+        letter-spacing: 0.02em;
     }
 
     .workspace-link-heading {

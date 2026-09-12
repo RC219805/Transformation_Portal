@@ -2,8 +2,58 @@
  * 3. BASE
  * ============================================================================ */
 
+/* The local utility bundle does not include a framework preflight. Keep the
+   browser defaults deterministic before component and utility declarations. */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+}
+
+h1, h2, h3, h4, h5, h6,
+p, figure, blockquote, dl, dd, pre {
+    margin: 0;
+}
+
+ul,
+ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+:where(button, input, select, textarea) {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+}
+
+fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+button {
+    background-color: transparent;
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+img,
+video {
+    display: block;
+    max-width: 100%;
+}
+
 html,
 body {
+    margin: 0;
     max-width: 100%;
     overflow-x: clip;
 }

@@ -103,8 +103,10 @@ test("Review uses button selection semantics and contextual image alternatives",
 
   assert.match(artifactPanel, /setAttribute\(["']role["'], ["']group["']\)/);
   assert.match(artifactPanel, /button\.setAttribute\(["']aria-pressed["']/);
-  assert.match(artifactPanel, /artifactPreviewImage\.alt =/);
-  assert.match(artifactPanel, /artifactCompareImage\.alt =/);
+  assert.match(artifactPanel, /_renderInlinePreview\(els\.artifactPreviewImage,/);
+  assert.match(artifactPanel, /_renderInlinePreview\(els\.artifactCompareImage,/);
+  assert.match(artifactPanel, /_renderInlinePreview\(els\.artifactPreviewSoloImage,/);
+  assert.match(between(review, "function _renderInlinePreview", "function renderArtifactPanel"), /image\.alt = label/);
   assert.doesNotMatch(artifactPanel, /setAttribute\(["']role["'], ["']option["']\)/);
   assert.doesNotMatch(artifactPanel, /setAttribute\(["']aria-selected["']/);
 });

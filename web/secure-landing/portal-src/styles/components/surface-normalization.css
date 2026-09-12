@@ -57,8 +57,7 @@ html {
     padding: 0.9rem 1rem;
     font-size: 13px;
     font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
     box-shadow: none;
     transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
 }
@@ -90,8 +89,7 @@ html {
     color: var(--shell-ink);
     font-size: 13px;
     font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
     box-shadow: none;
 }
 
@@ -318,11 +316,53 @@ html {
 }
 
 .hero-action-primary,
-.operator-action-btn-primary {
+.operator-action-btn-primary,
+.stepper-nav-btn-primary,
+.dark .stepper-nav-btn-primary {
     background: linear-gradient(135deg, var(--shell-accent-fill-strong), var(--shell-accent-fill));
     color: var(--shell-on-accent);
     border-color: rgba(8, 145, 178, 0.2);
 }
+
+.hero-action-secondary {
+    border-color: var(--ux-border-subtle);
+}
+
+.build-validation-details {
+    margin-top: 1rem;
+    border-top: 1px solid var(--ux-border-subtle);
+}
+
+.build-validation-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    font-size: 13px;
+    color: var(--shell-muted);
+    cursor: pointer;
+}
+
+.build-validation-details > summary::after {
+    content: "+";
+    font-size: 1rem;
+}
+
+.build-validation-details[open] > summary::after {
+    content: "−";
+}
+
+.build-preview-status {
+    margin-left: auto;
+    font-weight: 700;
+    color: var(--shell-ink);
+}
+
+.build-preview-status[data-tone="ready"] { color: var(--ux-status-ready); }
+.build-preview-status[data-tone="warning"] { color: var(--ux-status-warning); }
+.build-preview-status[data-tone="blocked"] { color: var(--ux-status-blocked); }
 
 .quiet-disclosure {
     border: 1px solid var(--ux-border-subtle);

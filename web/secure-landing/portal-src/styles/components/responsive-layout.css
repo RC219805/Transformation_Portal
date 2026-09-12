@@ -12,7 +12,6 @@
 .portal-overview-shell > *,
 #console-grid,
 #console-grid > *,
-#build-shell,
 #build-shell > *,
 #jobs-shell > *,
 .portal-shell-card {
@@ -31,20 +30,21 @@ body:not([data-console-view="operate"]) #console-context-shell {
         display: grid;
         grid-template-columns: 13rem minmax(0, 1fr);
         grid-template-areas:
-            "rail overview"
-            "rail context"
-            "rail console";
+            "rail content";
         column-gap: 1.25rem;
         row-gap: 1.25rem;
         align-items: start;
     }
-    .portal-shell-grid > #overview-shell { grid-area: overview; }
+    body[data-console-view="operate"] .portal-shell-grid {
+        grid-template-areas: "rail context" "rail content";
+    }
+    .portal-shell-grid > #overview-shell { grid-area: content; }
     .portal-shell-grid > #console-context-shell { grid-area: context; }
-    .portal-shell-grid > #console-grid { grid-area: console; }
+    .portal-shell-grid > #console-grid { grid-area: content; }
     .portal-shell-grid > .portal-workspace-rail {
         grid-area: rail;
         position: sticky;
-        top: 5.5rem;
+        top: 7.5rem;
         align-self: start;
         padding: 0.85rem 0.75rem;
         grid-template-columns: 1fr;
@@ -70,11 +70,46 @@ body:not([data-console-view="operate"]) #console-context-shell {
     #console-grid:has(> #build-shell.hidden) > #jobs-shell {
         grid-column: 1 / -1;
     }
-    #buildStepperShell {
-        position: sticky;
-        top: 5.25rem;
-        z-index: 11;
+}
+
+#build-shell {
+    min-width: 0;
+    display: grid;
+    gap: 1rem;
+    align-items: start;
+}
+
+.build-profile-fields {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.build-option-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}
+
+#profileSelect {
+    min-width: 0;
+}
+
+@media (min-width: 640px) and (max-width: 1099px) {
+    .build-profile-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+
+@media (min-width: 1100px) {
+    #build-shell {
+        grid-template-columns: 18rem minmax(0, 1fr);
+    }
+    #buildStepperShell { grid-column: 1 / -1; }
+    #profile-shell { grid-column: 1; grid-row: 2 / span 2; }
+    #parameters-shell,
+    #cli-shell { grid-column: 2; grid-row: 2; }
+    #flagsShellPanel { grid-column: 2; grid-row: 3; }
+    #governance-shell { grid-column: 2; grid-row: 4; }
 }
 
 @media (max-width: 479px) {

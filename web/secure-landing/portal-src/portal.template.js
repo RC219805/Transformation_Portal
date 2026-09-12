@@ -232,6 +232,7 @@ const els = {
     governanceChecklist: _domId('governanceChecklist'),
     buildStepTitle: _domId('buildStepTitle'),
     buildStepSummary: _domId('buildStepSummary'),
+    buildPreviewStatus: _domId('buildPreviewStatus'),
     buildStepTabs: _domId('buildStepTabs'),
     buildStepBackBtn: _domId('buildStepBackBtn'),
     buildStepNextBtn: _domId('buildStepNextBtn'),
@@ -1767,10 +1768,10 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
                     detail: 'Return to the build surface to prepare the next dispatch.'
                 }),
             secondary: _compactOperatorActions([
-                _operatorAction('return_to_build', 'Return to Build', {
+                context.reviewableOutputs ? _operatorAction('return_to_build', 'Return to Build', {
                     tone: 'info',
                     detail: 'Return to the build surface to prepare the next dispatch.'
-                }),
+                }) : null,
                 context.reviewableOutputs && context.heroArtifact
                     ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
                         jobId: context.jobId,
@@ -2751,6 +2752,10 @@ function renderBuildStepPulse(payload = null) {
     const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
     const nextAction = _effectiveNextBestAction(currentPayload);
     const previewSummary = _previewSurfaceSummary(currentPayload);
+    if (els.buildPreviewStatus) {
+        _setTextContentIfChanged(els.buildPreviewStatus, previewSummary.value);
+        els.buildPreviewStatus.dataset.tone = String(previewSummary.tone || 'info');
+    }
     const draftValue = state.pipeline === 'lux-depth-v3'
         ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
         : canonicalArchiveCommand(state.pipeline) || 'archive';
@@ -2895,12 +2900,12 @@ function applyConsoleViewLayout() {
     if (els.buildShell) {
         const buildActive = state.currentView === 'build';
         els.buildShell.classList.toggle('hidden', !buildActive);
-        els.buildShell.style.gridColumn = buildActive ? 'span 12 / span 12' : '';
+        els.buildShell.style.gridColumn = buildActive ? '1 / -1' : '';
     }
     if (els.jobsShell) {
         const jobsActive = state.currentView === 'operate' || state.currentView === 'review';
         els.jobsShell.classList.toggle('hidden', !jobsActive);
-        els.jobsShell.style.gridColumn = jobsActive ? 'span 12 / span 12' : '';
+        els.jobsShell.style.gridColumn = jobsActive ? '1 / -1' : '';
     }
     if (els.queueShell) {
         els.queueShell.classList.toggle('hidden', state.currentView === 'review');
@@ -3034,25 +3039,25 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Configure',
             meta: 'Pipeline and preset posture.',
             title: '1. Configure the draft',
-            summary: 'Choose the pipeline and preset that should drive the next preview-backed run.'
+            summary: 'Choose a pipeline and preset for your next run.'
         },
         {
             label: 'Paths',
             meta: 'Inputs, outputs, and roots.',
             title: '2. Set paths',
-            summary: 'Supply input and output roots before opening anything advanced.'
+            summary: 'Choose the source folder and where to save your outputs.'
         },
         {
             label: 'Outputs',
             meta: 'Deliverables, posture, and readiness.',
-            title: '3. Shape deliverables and confirm output posture',
-            summary: 'Keep deliverables, the posture band, and immediate readiness readable before opening contextual controls.'
+            title: '3. Choose your outputs',
+            summary: 'Select the depth model, output format, and optional deliverables.'
         },
         {
             label: 'Dispatch',
             meta: 'Primary review, launch, and parity tools.',
             title: '4. Review and dispatch',
-            summary: 'Use the primary dispatch lane first, then open evidence and CLI parity only when needed.'
+            summary: 'Check the preview and resolve any issues before starting the run.'
         }
     ],
     archive: [
@@ -3162,8 +3167,9 @@ function syncBuildStepUi() {
     }
     if (els.buildStepNextBtn) {
         els.buildStepNextBtn.disabled = activeStep >= 4;
-        els.buildStepNextBtn.textContent = activeStep >= 4 ? 'Dispatch Ready' : 'Next';
+        els.buildStepNextBtn.textContent = activeStep >= 4 ? 'Final step' : `Next: ${stepContent[activeStep].label}`;
     }
+    if (els.parametersShell) els.parametersShell.classList.toggle('hidden', activeStep === 4);
 
     renderBuildStepPulse(generatePayload());
 }
@@ -3175,6 +3181,7 @@ function setBuildStep(nextStep, options) {
     state.portalUi.buildStep = resolved;
     syncBuildStepUi();
     _persistTransientPortalDraft();
+    if (settings.focusStep) _buildStepButtons()[resolved - 1]?.focus();
     if (!settings.silent && resolved > previous) {
         void emitPortalEvent('step_completed', {
             surface: 'build_stepper',
@@ -3207,7 +3214,7 @@ function setupBuildStepper() {
     });
 
     if (els.buildStepBackBtn) {
-        els.buildStepBackBtn.addEventListener('click', () => setBuildStep(state.portalUi.buildStep - 1, { silent: true }));
+        els.buildStepBackBtn.addEventListener('click', () => setBuildStep(state.portalUi.buildStep - 1, { silent: true, focusStep: true }));
     }
     if (els.buildStepNextBtn) {
         els.buildStepNextBtn.addEventListener('click', () => {
@@ -3215,7 +3222,7 @@ function setupBuildStepper() {
                 if (els.runJobBtn) els.runJobBtn.focus();
                 return;
             }
-            setBuildStep(state.portalUi.buildStep + 1);
+            setBuildStep(state.portalUi.buildStep + 1, { focusStep: true });
         });
     }
 

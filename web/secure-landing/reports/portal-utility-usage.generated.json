@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 406,
+    "utilityCount": 403,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -2139,30 +2139,6 @@
       "status": "covered"
     },
     {
-      "className": "gap-5",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "gap-6",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "gap-8",
       "owner": "static",
       "sources": [
@@ -3084,18 +3060,6 @@
     },
     {
       "className": "md:grid-cols-4",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "md:grid-cols-5",
       "owner": "static",
       "sources": [
         "portal.html"

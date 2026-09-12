@@ -28,6 +28,14 @@ pytestmark = [pytest.mark.unit]
 from transformation_portal.depth.backends.depth_pro import DepthProBackend  # noqa: E402
 
 
+def test_installer_includes_the_governed_execution_plan_validator():
+    root = Path(__file__).resolve().parents[2]
+    installer = (root / "scripts/setup/install_depth_pro_runtime.sh").read_text()
+    base_lock = (root / "requirements/base.txt").read_text()
+    pin = next(line for line in base_lock.splitlines() if line.startswith("jsonschema=="))
+    assert f'"{pin}"' in installer
+
+
 class TestDepthProBackendConstants:
     """The backend constants are the wire-format of the runtime contract."""
 
