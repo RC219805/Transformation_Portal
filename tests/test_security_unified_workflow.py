@@ -27,6 +27,45 @@ def _workflow_step(name: str, job: str = "dependency-scan") -> dict:
     return next(step for step in steps if step.get("name") == name)
 
 
+def test_required_dependency_security_check_runs_for_every_main_pull_request() -> None:
+    workflow = _load_workflow()
+    pull_request = workflow["on"]["pull_request"]
+    job = workflow["jobs"]["dependency-scan"]
+
+    assert pull_request["branches"] == ["main"]
+    assert not {"paths", "paths-ignore", "branches-ignore", "types"}.intersection(pull_request)
+    assert "pull_request_target" not in workflow["on"]
+    assert job["name"] == "Dependency Security"
+    assert "if" not in job, "a required security check must not skip draft, fork, or bot-authored pull requests"
+    assert job.get("continue-on-error", "false") == "false"
+
+
+def test_required_dependency_security_check_is_read_only_and_bounded() -> None:
+    workflow = _load_workflow()
+    job = workflow["jobs"]["dependency-scan"]
+
+    assert workflow["permissions"] == {"contents": "read"}, "sibling PR jobs also execute checked-out source"
+    assert job["permissions"] == {"contents": "read"}
+    assert 1 <= int(job["timeout-minutes"]) <= 30
+    assert _workflow_step("Checkout")["with"]["persist-credentials"] == "false"
+    assert "secrets." not in json.dumps(job), "fork pull requests must not depend on unavailable repository secrets"
+
+
+@pytest.mark.parametrize(
+    "step_name",
+    [
+        AUDIT_STEP_NAME,
+        "Check unsafe torch.load() usage (CVE-2025-32434)",
+        "Check Accelerate checkpoint loader reachability",
+    ],
+)
+def test_required_dependency_security_evidence_cannot_skip_or_ignore_failure(step_name: str) -> None:
+    step = _workflow_step(step_name)
+
+    assert "if" not in step
+    assert step.get("continue-on-error", "false") == "false"
+
+
 def _run_audit_step(tmp_path: Path, report: dict | None, audit_exit: int) -> subprocess.CompletedProcess[str]:
     fixture_path = tmp_path / "pip-audit-fixture.json"
     if report is not None:

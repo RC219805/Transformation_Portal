@@ -686,6 +686,16 @@ jobs:
         # `core/` as a whole until all 21 currently-failing files are fixed.
         run: |
           mypy --config-file=mypy.ini \
+            app.py \
+            src/transformation_portal/orchestrator/dispatch.py \
+            src/transformation_portal/orchestrator/worker.py \
+            src/transformation_portal/orchestrator/worker_process.py \
+            src/transformation_portal/orchestrator/execution_dispatch.py \
+            src/transformation_portal/orchestrator/execution_workspace.py \
+            src/transformation_portal/core/execution_plan.py \
+            src/transformation_portal/core/archive_execution_plan.py \
+            src/transformation_portal/core/security/frontdoor_identity.py \
+            src/transformation_portal/core/security/checkpoint_index.py \
             src/transformation_portal/api/ \
             src/transformation_portal/lux_depth_v3/ \
             src/transformation_portal/orchestrator/queue/ \

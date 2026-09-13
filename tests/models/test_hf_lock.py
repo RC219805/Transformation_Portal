@@ -13,6 +13,18 @@ from transformation_portal.models.hf_lock import (
 pytestmark = pytest.mark.unit
 
 
+@pytest.mark.parametrize("revision", ["main", "v1.0", "abc123", "g" * 40, 42])
+def test_manifest_revision_must_be_immutable(revision: str) -> None:
+    with pytest.raises(HFModelLockError, match="commit SHA"):
+        HFModelLockRecord.from_mapping({"repo_id": "org/repo", "revision": revision})
+
+
+@pytest.mark.parametrize("path", ["../model.bin", "/model.bin", "C:\\model.bin", ""])
+def test_manifest_required_file_paths_are_confined(path: str) -> None:
+    with pytest.raises(HFModelLockError, match="unsafe path"):
+        HFModelLockRecord.from_mapping({"repo_id": "org/repo", "revision": "a" * 40, "required_files": [path]})
+
+
 class TestHFRequiredFile:
     """Tests for HFRequiredFile dataclass."""
 

@@ -32,6 +32,7 @@ class StageRegistryIdentifier(str, Enum):
     LUX_V2 = "tp.stage.lux.v2.v1"
     LUX_RECONSTRUCTION = "tp.stage.lux.reconstruction.v1"
     LUX_OUTPUT = "tp.stage.lux.output.v1"
+    ARCHIVE_OPERATION = "tp.stage.archive.operation.v1"
 
 
 class OutputScope(str, Enum):
@@ -151,6 +152,7 @@ OUTPUT_DEFINITIONS: Mapping[str, OutputKindDefinition] = MappingProxyType(
             _output("combined_manifest_json"),
             _output("batch_manifest_json", scope=OutputScope.PER_RUN),
             _output("run_card", scope=OutputScope.PER_RUN),
+            _output("archive_bundle", scope=OutputScope.PER_RUN, cardinality=OutputCardinality.MANY),
         )
     }
 )
@@ -207,6 +209,12 @@ STAGE_DEFINITIONS: Mapping[StageRegistryIdentifier, StageDefinition] = MappingPr
                 "batch_manifest_json",
                 "run_card",
             ),
+            resources=_CPU_ONLY,
+        ),
+        StageRegistryIdentifier.ARCHIVE_OPERATION: StageDefinition(
+            identifier=StageRegistryIdentifier.ARCHIVE_OPERATION,
+            configuration_schema="tp.stage.config.archive.operation.v1",
+            allowed_output_kinds=("archive_bundle",),
             resources=_CPU_ONLY,
         ),
     }

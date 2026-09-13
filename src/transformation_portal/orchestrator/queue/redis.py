@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, List, Optional, cast
 from redis.asyncio import Redis
 
 from transformation_portal.ingest.canonical_json import dumps_json
+from transformation_portal.orchestrator.dispatch import DispatchLocator
 from transformation_portal.orchestrator.queue.base import (
     JobEnqueueRequest,
     JobLease,
@@ -229,6 +230,9 @@ class RedisQueueBroker(QueueBroker):
             else Redis.from_url(
                 redis_url,
                 decode_responses=True,
+                socket_connect_timeout=5.0,
+                socket_timeout=5.0,
+                retry_on_timeout=False,
             )
         )
         self._owns_client = client is None
@@ -274,9 +278,11 @@ class RedisQueueBroker(QueueBroker):
 
     # ------------------------------------------------------------------ API
 
-    async def enqueue(self, request: JobEnqueueRequest) -> None:
-        self._register_scripts()
-        payload = dumps_json(
+    @staticmethod
+    def _serialize_request(request: JobEnqueueRequest | DispatchLocator) -> str:
+        if not isinstance(request, JobEnqueueRequest):
+            raise QueueBrokerError("legacy broker rejects dispatch locators")
+        return dumps_json(
             {
                 "job_id": request.job_id,
                 "argv": request.argv,
@@ -285,6 +291,14 @@ class RedisQueueBroker(QueueBroker):
             },
             sort_keys=True,
         )
+
+    @staticmethod
+    def _parse_request(payload: str) -> JobEnqueueRequest | DispatchLocator:
+        return _deserialize_request(payload)
+
+    async def enqueue(self, request: JobEnqueueRequest | DispatchLocator) -> None:
+        payload = self._serialize_request(request)
+        self._register_scripts()
         assert self._enqueue_script is not None
         added = await self._enqueue_script(
             keys=[self._ready_key, self._leases_key, self._tracked_key, self._job_hash_key(request.job_id)],
@@ -316,7 +330,7 @@ class RedisQueueBroker(QueueBroker):
             request_json = request_json.decode("utf-8")
         if isinstance(deadline_str, bytes):
             deadline_str = deadline_str.decode("utf-8")
-        request = _deserialize_request(request_json)
+        request = self._parse_request(request_json)
         deadline = float(deadline_str)
         return JobLease(
             job_id=job_id,

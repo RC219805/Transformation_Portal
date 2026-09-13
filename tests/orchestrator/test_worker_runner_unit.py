@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import time
 
 import pytest
 
@@ -160,6 +161,43 @@ async def test_step_releases_lease_on_generic_executor_error() -> None:
     assert broker.released == ["job-1"]
 
 
+async def test_step_cancels_executor_when_heartbeat_io_fails() -> None:
+    broker = FakeBroker(leases=[_lease()], extend_results=[ConnectionError("broker unavailable")])
+    observations = []
+
+    async def executor(request, cancel):
+        observations.append("started")
+        await asyncio.wait_for(cancel.wait(), timeout=1.0)
+        observations.append("cancelled")
+        raise CancelledByOrchestrator()
+
+    runner = WorkerRunner(broker=broker, config=_config(heartbeat_interval_seconds=0.0), executor=executor)
+    assert await runner.step() is True
+    assert observations == ["started", "cancelled"]
+    assert broker.released == ["job-1"]
+    assert await runner.step() is False
+
+
+async def test_step_contains_release_failure_after_executor_stops() -> None:
+    class ReleaseFailingBroker(FakeBroker):
+        async def release_lease(self, worker_id, job_id):
+            await super().release_lease(worker_id, job_id)
+            raise ConnectionError("broker unavailable")
+
+    broker = ReleaseFailingBroker(leases=[_lease()])
+    executions = []
+
+    async def executor(request, cancel):
+        executions.append(request.job_id)
+        return 0
+
+    runner = WorkerRunner(broker=broker, config=_config(), executor=executor)
+    assert await runner.step() is True
+    assert await runner.step() is False
+    assert executions == ["job-1"]
+    assert broker.released == ["job-1"]
+
+
 # --------------------------------------------------------------------------- #
 # WorkerRunner._heartbeat_loop
 # --------------------------------------------------------------------------- #
@@ -182,6 +220,39 @@ async def test_heartbeat_signals_cancellation_on_broker_cancel() -> None:
 
     await runner._heartbeat_loop("job-1", event)
     assert event.is_set()
+
+
+@pytest.mark.parametrize("failure", [ConnectionError("disconnected"), TimeoutError("timed out")])
+async def test_heartbeat_signals_cancellation_on_broker_io_failure(failure) -> None:
+    broker = FakeBroker(extend_results=[failure])
+    runner = WorkerRunner(broker=broker, config=_config(heartbeat_interval_seconds=0.0))
+    event = asyncio.Event()
+
+    await runner._heartbeat_loop("job-1", event)
+    assert event.is_set()
+
+
+@pytest.mark.parametrize("boundary", ["acquire", "heartbeat", "release"])
+async def test_broker_task_cancellation_propagates(boundary) -> None:
+    class CancelledBroker(FakeBroker):
+        async def acquire_lease(self, worker_id, *, lease_seconds):
+            if boundary == "acquire":
+                raise asyncio.CancelledError()
+            return await super().acquire_lease(worker_id, lease_seconds=lease_seconds)
+
+        async def extend_lease(self, *args, **kwargs):
+            raise asyncio.CancelledError()
+
+        async def release_lease(self, *args, **kwargs):
+            raise asyncio.CancelledError()
+
+    broker = CancelledBroker(leases=[_lease()])
+    runner = WorkerRunner(broker=broker, config=_config(heartbeat_interval_seconds=0.0))
+    with pytest.raises(asyncio.CancelledError):
+        if boundary == "heartbeat":
+            await runner._heartbeat_loop("job-1", asyncio.Event())
+        else:
+            await runner.step()
 
 
 # --------------------------------------------------------------------------- #
@@ -224,6 +295,44 @@ async def test_run_worker_forever_resets_backoff_then_backs_off_then_stops(
     assert calls["n"] == 3
     # Caller-supplied broker is NOT closed by the loop.
     assert broker.closed is False
+
+
+async def test_supervisor_backs_off_on_acquire_outage_and_recovers(monkeypatch: pytest.MonkeyPatch) -> None:
+    class RecoveringBroker(FakeBroker):
+        async def acquire_lease(self, worker_id, *, lease_seconds):
+            if self.acquire_calls < 2:
+                self.acquire_calls += 1
+                raise ConnectionError("broker unavailable")
+            return await super().acquire_lease(worker_id, lease_seconds=lease_seconds)
+
+    broker = RecoveringBroker(leases=[_lease()])
+    stop_event = asyncio.Event()
+    executions = []
+    backoffs = []
+    original_wait_for = asyncio.wait_for
+
+    async def record_wait_for(awaitable, timeout):
+        backoffs.append(timeout)
+        return await original_wait_for(awaitable, timeout)
+
+    monkeypatch.setattr(worker_module.asyncio, "wait_for", record_wait_for)
+
+    async def executor(request, cancel):
+        executions.append(request.job_id)
+        stop_event.set()
+        return 0
+
+    await run_worker_forever(
+        broker=broker,
+        config=_config(poll_interval_seconds=0.001, max_poll_backoff_seconds=0.002),
+        executor=executor,
+        stop_event=stop_event,
+    )
+
+    assert backoffs == [0.001, 0.002]
+    assert broker.acquire_calls == 3
+    assert executions == ["job-1"]
+    assert broker.released == ["job-1"]
 
 
 async def test_run_worker_forever_closes_constructed_broker_and_swallows_error(
@@ -305,3 +414,196 @@ def test_main_registers_signal_handlers_and_runs(monkeypatch: pytest.MonkeyPatch
 
 def test_monotonic_now_returns_float() -> None:
     assert isinstance(monotonic_now(), float)
+
+
+@pytest.mark.asyncio
+async def test_rejected_canonical_dispatch_release_outage_does_not_stop_worker(monkeypatch):
+    from transformation_portal.orchestrator.dispatch import DispatchLocator
+    from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
+
+    locator = DispatchLocator("job_rejected", "attempt", "dispatch", "a" * 64, "tenant")
+    broker = FakeBroker(leases=[JobLease(locator.job_id, "w", 10, locator)])
+
+    async def fail_release(*args):
+        raise ConnectionError("Redis release unavailable")
+
+    class LostStore:
+        async def claim_dispatch(self, *args, **kwargs):
+            raise DispatchAuthorityLost("tombstoned")
+
+    broker.release_lease = fail_release
+    monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: LostStore())
+    runner = WorkerRunner(broker=broker, config=_config())
+    assert await runner.step() is True
+    assert await runner.step() is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stalled", ["redis", "postgres"])
+@pytest.mark.parametrize("resists_cancellation", [False, True])
+async def test_stalled_heartbeat_cancels_executor_by_lease_deadline(monkeypatch, stalled, resists_cancellation):
+    from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
+
+    locator = DispatchLocator("job_stalled", "attempt", "dispatch", "a" * 64, "tenant")
+    fence = DispatchFence(locator, "w", 1, 0.0, "/output", "/requested")
+    broker = FakeBroker(leases=[JobLease(locator.job_id, "w", 0.0, locator)])
+    never = asyncio.Event()
+    cancellation_observed = asyncio.Event()
+
+    async def stalled_network():
+        try:
+            await never.wait()
+        except asyncio.CancelledError:
+            if not resists_cancellation:
+                raise
+            await never.wait()
+
+    class Store:
+        async def claim_dispatch(self, *args, **kwargs):
+            return fence
+
+        async def renew_dispatch(self, *args, **kwargs):
+            if stalled == "postgres":
+                await stalled_network()
+
+        async def finish_dispatch(self, *args, **kwargs):
+            return None
+
+    async def renew_broker(*args, **kwargs):
+        if stalled == "redis":
+            await stalled_network()
+        return LeaseStatus.active
+
+    async def executor(request, cancellation):
+        await cancellation.wait()
+        cancellation_observed.set()
+        return 0
+
+    broker.extend_lease = renew_broker
+    monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: Store())
+    runner = WorkerRunner(
+        broker=broker, config=_config(lease_seconds=0.15, heartbeat_interval_seconds=0.01), executor=executor
+    )
+    started = asyncio.get_running_loop().time()
+    await asyncio.wait_for(runner.step(), timeout=0.6)
+    assert cancellation_observed.is_set()
+    assert asyncio.get_running_loop().time() - started < 0.5
+    await asyncio.sleep(0)
+    if resists_cancellation:
+        assert runner._pending_network
+        calls = broker.acquire_calls
+        assert await runner.step() is False
+        assert broker.acquire_calls == calls
+        never.set()
+        for _ in range(5):
+            await asyncio.sleep(0)
+    assert not runner._pending_network
+
+
+async def test_placeholder_executor_cannot_consume_canonical_dispatch() -> None:
+    from transformation_portal.orchestrator.dispatch import DispatchLocator
+
+    locator = DispatchLocator("job_canonical", "attempt", "dispatch", "a" * 64, "tenant")
+    with pytest.raises(RuntimeError, match="app-owned trusted executor"):
+        await _default_executor(locator, asyncio.Event())
+
+
+@pytest.mark.parametrize("constructed", [False, True])
+async def test_default_supervisor_rejects_locator_queue_and_closes_only_owned_broker(monkeypatch, constructed):
+    from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
+
+    broker = RedisLocatorQueueBroker(redis_url="redis://unused.invalid/0")
+    closed = []
+
+    async def close():
+        closed.append(True)
+
+    async def forbidden_acquire(*args, **kwargs):
+        pytest.fail("placeholder executor must never acquire canonical work")
+
+    monkeypatch.setattr(broker, "close", close)
+    monkeypatch.setattr(broker, "acquire_lease", forbidden_acquire)
+    monkeypatch.setattr(worker_module, "get_queue_broker", lambda: broker)
+    with pytest.raises(RuntimeError, match="app-owned canonical executor"):
+        await run_worker_forever(broker=None if constructed else broker, config=_config())
+    assert closed == ([True] if constructed else [])
+
+
+@pytest.mark.parametrize("failure", ["database_outage", "expired_broker_response"])
+async def test_unconfirmed_claim_never_executes_or_releases_broker_lease(monkeypatch, failure):
+    from transformation_portal.orchestrator.dispatch import DispatchLocator, current_dispatch_fence
+
+    locator = DispatchLocator("job_unconfirmed", "attempt", "dispatch", "a" * 64, "tenant")
+
+    class Broker(FakeBroker):
+        async def acquire_lease(self, worker_id, *, lease_seconds):
+            lease = await super().acquire_lease(worker_id, lease_seconds=lease_seconds)
+            if failure == "expired_broker_response":
+                # Model a response already received but delayed by a blocked
+                # event loop beyond the conservative request-start deadline.
+                time.sleep(0.02)
+            return lease
+
+    claims = []
+
+    class Store:
+        async def claim_dispatch(self, *args, **kwargs):
+            claims.append(True)
+            raise ConnectionError("Postgres unavailable")
+
+    async def forbidden_executor(*args):
+        pytest.fail("unconfirmed authority reached executor")
+
+    broker = Broker(leases=[JobLease(locator.job_id, "w", 0.0, locator)])
+    monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: Store())
+    runner = WorkerRunner(broker=broker, config=_config(lease_seconds=0.01), executor=forbidden_executor)
+    assert await runner.step() is False
+    assert claims == ([True] if failure == "database_outage" else [])
+    assert broker.released == []
+    assert current_dispatch_fence() is None
+
+
+@pytest.mark.parametrize("outcome", ["already_committed", "database_outage"])
+async def test_executor_completion_retains_uncertain_authority_and_clears_context(monkeypatch, outcome):
+    from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator, current_dispatch_fence
+    from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
+
+    locator = DispatchLocator("job_finished", "attempt", "dispatch", "a" * 64, "tenant")
+    fence = DispatchFence(locator, "w", 1, 0.0, "/output", "/requested")
+    terminal_calls = []
+
+    class Store:
+        async def claim_dispatch(self, *args, **kwargs):
+            return fence
+
+        async def finish_dispatch(self, observed, **kwargs):
+            assert observed == fence
+            terminal_calls.append(kwargs)
+            if outcome == "already_committed":
+                raise DispatchAuthorityLost("executor already committed its terminal outcome")
+            raise ConnectionError("Postgres unavailable")
+
+    async def executor(request, cancellation):
+        assert current_dispatch_fence() == fence
+        assert request == locator
+        return 0
+
+    broker = FakeBroker(leases=[JobLease(locator.job_id, "w", 0.0, locator)])
+    monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: Store())
+    runner = WorkerRunner(broker=broker, config=_config(), executor=executor)
+    assert await runner.step() is True
+    assert len(terminal_calls) == 1
+    assert terminal_calls[0]["error"]["code"] == "RUNNER_ERROR"
+    assert broker.released == ([locator.job_id] if outcome == "already_committed" else [])
+    assert current_dispatch_fence() is None
+
+
+async def test_expired_heartbeat_deadline_cancels_without_attempting_renewal():
+    class Broker(FakeBroker):
+        async def extend_lease(self, *args, **kwargs):
+            pytest.fail("expired authority cannot be renewed")
+
+    runner = WorkerRunner(broker=Broker(), config=_config())
+    cancellation = asyncio.Event()
+    await runner._heartbeat_loop("expired", cancellation, lease_deadline=asyncio.get_running_loop().time() - 1.0)
+    assert cancellation.is_set()

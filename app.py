@@ -26,7 +26,7 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -58,6 +58,13 @@ from transformation_portal.api.v1 import (
     ReadyResponse,
     UploadStagingEnvelope,
 )
+from transformation_portal.core.security.frontdoor_identity import (
+    ACTOR_ASSERTION_HEADER,
+    IdentityAssertionError,
+    IdentityConfigurationError,
+    parse_actor_tenants,
+    verify_actor_assertion,
+)
 from transformation_portal.core.security.tenant import (
     TenantAwareFSGuard,
     TenantContext,
@@ -65,7 +72,7 @@ from transformation_portal.core.security.tenant import (
     TenantManager,
     TenantPolicy,
 )
-from transformation_portal.determinism.trace import get_or_create_trace_context
+from transformation_portal.determinism.trace import TraceContext, get_or_create_trace_context
 from transformation_portal.ingest.upload_staging import (
     DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
     DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
@@ -77,6 +84,7 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.orchestrator import (
+    JobEventStore,
     JobNotFoundError,
     JobRecord,
     JobRepository,
@@ -88,15 +96,23 @@ from transformation_portal.orchestrator import (
 from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
 from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
 from transformation_portal.orchestrator.artifact_store import (
+    ArtifactStore,
     ArtifactStoreError,
     get_artifact_store,
 )
+from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+from transformation_portal.orchestrator.artifact_store.generation_cleanup import cleanup_terminal_generation
+from transformation_portal.orchestrator.dispatch import DispatchLocator, current_dispatch_fence
 from transformation_portal.orchestrator.queue import (
     JobEnqueueRequest,
+    QueueBroker,
     QueueBrokerError,
     get_queue_broker,
 )
+from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
 from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
+from transformation_portal.orchestrator.storage import get_operational_record_store
+from transformation_portal.orchestrator.storage.operational import AdmissionRejected, DispatchAuthorityLost
 from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, WorkerConfig, run_worker_forever
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
@@ -292,7 +308,7 @@ _PORTAL_ASSET_BUNDLE_APP_GLOBALS = (
 
 
 @contextmanager
-def _portal_asset_bundle_app_context():
+def _portal_asset_bundle_app_context() -> Iterator[None]:
     saved = {name: getattr(_portal_asset_bundle, name) for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS}
     try:
         for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS:
@@ -676,6 +692,8 @@ MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 PILOT_CONTROL_PLANE_ENABLED = _env_bool("TP_PILOT_CONTROL_PLANE_ENABLED", False)
 PILOT_TENANT_HEADER = os.getenv("TP_PILOT_TENANT_HEADER", "x-tp-tenant-id").strip().lower() or "x-tp-tenant-id"
 PILOT_ALLOWED_TENANTS = set(_env_csv("TP_PILOT_ALLOWED_TENANTS", []))
+FRONTDOOR_IDENTITY_SECRET = os.getenv("TP_FRONTDOOR_IDENTITY_SECRET", "").strip()
+PILOT_ACTOR_TENANTS_JSON = os.getenv("TP_PILOT_ACTOR_TENANTS_JSON", "{}")
 PILOT_ALLOWED_PIPELINES = set(_env_csv("TP_PILOT_ALLOWED_PIPELINES", ["lux-depth-v3"]))
 PILOT_MAX_ACTIVE_JOBS_PER_TENANT = _env_int("TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT", 0, minimum=0)
 PILOT_TENANT_WORKSPACE_ROOT = Path(
@@ -1150,7 +1168,7 @@ def _job_repository() -> JobRepository:
     return repo
 
 
-def _job_event_store():
+def _job_event_store() -> JobEventStore:
     return get_job_event_store()
 
 
@@ -1261,11 +1279,13 @@ async def _pilot_tenant_error(
     request: Optional[Request],
     tenant_id: Optional[str] = None,
     status_code: int = 400,
+    field: Optional[str] = None,
 ) -> JSONResponse:
     audit_response = await _record_pilot_audit(
         action="tenant_admission",
         decision="rejected",
         tenant_id=tenant_id,
+        actor=getattr(request.state, "verified_frontdoor_actor", None) if request is not None else None,
         request=request,
         details={"action": action, "reason": reason},
     )
@@ -1275,7 +1295,26 @@ async def _pilot_tenant_error(
         status_code,
         code=_http_status_error_code(status_code),
         message="tenant admission failed",
-        details={"field": PILOT_TENANT_HEADER, "reason": reason},
+        details={"field": field or PILOT_TENANT_HEADER, "reason": reason},
+    )
+
+
+def _pilot_identity_memberships() -> Dict[str, str]:
+    if (
+        len(FRONTDOOR_IDENTITY_SECRET.encode("utf-8")) < 32
+        or FRONTDOOR_IDENTITY_SECRET == API_KEY_SECRET
+        or not API_KEY_SECRET
+    ):
+        raise IdentityConfigurationError("invalid dedicated frontdoor identity secret or API key")
+    return parse_actor_tenants(PILOT_ACTOR_TENANTS_JSON)
+
+
+def _pilot_identity_configuration_error() -> JSONResponse:
+    return _error_response(
+        503,
+        code="AUTH_CONFIGURATION_ERROR",
+        message="tenant identity configuration unavailable",
+        details={"env": "TP_API_KEY/TP_FRONTDOOR_IDENTITY_SECRET/TP_PILOT_ACTOR_TENANTS_JSON"},
     )
 
 
@@ -1286,12 +1325,29 @@ async def _pilot_tenant_from_request(
 ) -> Tuple[Optional[TenantContext], Optional[JSONResponse]]:
     if not PILOT_CONTROL_PLANE_ENABLED:
         return None, None
-    if request is None:
-        return None, await _pilot_tenant_error(action=action, reason="tenant_required", request=request)
-
-    tenant_id = str(request.headers.get(PILOT_TENANT_HEADER) or "").strip()
-    if not tenant_id:
-        return None, await _pilot_tenant_error(action=action, reason="tenant_required", request=request)
+    try:
+        memberships = _pilot_identity_memberships()
+        actor = _verified_frontdoor_actor(request)
+    except IdentityConfigurationError:
+        return None, _pilot_identity_configuration_error()
+    except IdentityAssertionError:
+        return None, await _pilot_tenant_error(
+            action=action, reason="authenticated_actor_required", request=request, status_code=401
+        )
+    tenant_id = memberships.get(actor["accessEmail"])
+    if tenant_id is None:
+        return None, await _pilot_tenant_error(
+            action=action, reason="actor_tenant_not_allowed", request=request, status_code=403
+        )
+    # A legacy selector is never authority. Reject direct conflicting selectors;
+    # the frontdoor strips all browser-provided selectors before forwarding.
+    selected_tenant = str(request.headers.get(PILOT_TENANT_HEADER) or "").strip() if request is not None else ""
+    if selected_tenant and selected_tenant != tenant_id:
+        return None, await _pilot_tenant_error(action=action, reason="tenant_actor_mismatch", request=request, status_code=403)
+    if PILOT_ALLOWED_TENANTS and tenant_id not in PILOT_ALLOWED_TENANTS:
+        return None, await _pilot_tenant_error(
+            action=action, reason="tenant_not_allowed", request=request, tenant_id=tenant_id, status_code=403
+        )
 
     try:
         manager = _pilot_tenant_manager()
@@ -1304,15 +1360,6 @@ async def _pilot_tenant_from_request(
             reason="invalid_tenant_id",
             request=request,
             tenant_id=None,
-        )
-
-    if PILOT_ALLOWED_TENANTS and tenant.tenant_id not in PILOT_ALLOWED_TENANTS:
-        return None, await _pilot_tenant_error(
-            action=action,
-            reason="tenant_not_allowed",
-            request=request,
-            tenant_id=tenant.tenant_id,
-            status_code=403,
         )
 
     return tenant, None
@@ -1373,6 +1420,68 @@ def _pilot_tenant_fs_guard(tenant: TenantContext) -> TenantAwareFSGuard:
     guard = TenantAwareFSGuard(_pilot_tenant_manager())
     guard.set_tenant(tenant)
     return guard
+
+
+async def _pilot_enforce_request_paths(
+    tenant: Optional[TenantContext],
+    payload: Mapping[str, Any],
+    *,
+    action: str,
+    request: Request,
+) -> Optional[JSONResponse]:
+    """Reject cross-tenant data paths before preview can inspect their content."""
+    if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
+        return None
+    args = payload.get("args")
+    if not isinstance(args, Mapping):
+        return None
+    guard = _pilot_tenant_fs_guard(tenant)
+    runtime_roots = {
+        "sam2_checkpoint_path": MANAGED_SAM2_TRUSTED_ROOTS,
+        "fastvlm_python_executable": [default_fastvlm_runtime_root()],
+        "fastvlm_mlx_vlm_dir": [default_fastvlm_runtime_root()],
+        "vlm_captioning_model": [default_fastvlm_runtime_root()],
+    }
+    path_specs = (
+        *PATH_FIELD_SPECS,
+        ("vlm_captioning_model", ("vlm_captioning_model", "vlmCaptioningModel"), PATH_SCOPE_INPUT),
+    )
+    for field, aliases, _scope in path_specs:
+        for alias in aliases:
+            value = args.get(alias)
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                return await _pilot_tenant_error(
+                    action=action,
+                    reason="invalid_request",
+                    request=request,
+                    tenant_id=tenant.tenant_id,
+                    status_code=400,
+                    field=field,
+                )
+            if not value.strip():
+                continue
+            if field == "vlm_captioning_model" and value.strip().lower() in ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
+                continue
+            try:
+                path = Path(value.strip()).expanduser()
+                resolved = path.resolve()
+                # Explicit shared runtime selectors may use only existing
+                # server-owned roots. The downstream checksum/provenance checks
+                # still apply; broad input roots must not permit tenant probes.
+                if not any(resolved.is_relative_to(root.resolve()) for root in runtime_roots.get(field, [])):
+                    guard.enforce_path(resolved)
+            except (TenantError, OSError, RuntimeError, ValueError):
+                return await _pilot_tenant_error(
+                    action=action,
+                    reason="tenant_path_outside_workspace",
+                    request=request,
+                    tenant_id=tenant.tenant_id,
+                    status_code=403,
+                    field=field,
+                )
+    return None
 
 
 def _pilot_enforce_dispatch_filesystem_tenant(
@@ -1501,7 +1610,16 @@ def _merge_durable_artifact_lifecycle(cached: Job, durable: Job) -> bool:
     return True
 
 
+def _uses_dispatch_authority() -> bool:
+    return os.getenv("TP_ORCHESTRATOR_QUEUE_BACKEND", "memory").strip().lower() == "redis"
+
+
 def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
+    if _uses_dispatch_authority():
+        # Mutable runtime state cannot supersede a committed projection.
+        if cached is not None:
+            job.proc, job.terminate_task = cached.proc, cached.terminate_task
+        return job
     if cached is None:
         return job
     if cached.proc is not None and cached.proc.returncode is None:
@@ -1606,6 +1724,10 @@ def _cache_runtime_job(job: Job) -> Job:
 
 
 async def _persist_job_fields(job: Job, **fields: Any) -> Optional[JobRecord]:
+    if current_dispatch_fence() is not None:
+        # Dispatch state, requests and publication fields are controlled by
+        # the operational transaction. Only telemetry remains best effort.
+        fields = {key: value for key, value in fields.items() if key in {"progress", "logs_tail", "last_event_at"}}
     try:
         record = await _job_repository().update(job.id, **fields)
     except JobNotFoundError as exc:
@@ -3440,6 +3562,33 @@ async def _delete_job_artifacts_for_job(
     reason: str,
     fail_closed_on_repository: bool = False,
 ) -> Optional[int]:
+    if _uses_dispatch_authority():
+        try:
+            records = get_operational_record_store()
+            locator = await records.get_locator(job.id)
+            if locator is None:
+                raise _JobRepositoryUnavailable("missing dispatch authority")
+            await records.revoke_generation(job.id, locator.tenant_id, reason=reason)
+        except Exception as exc:
+            raise _JobRepositoryUnavailable("generation revocation unavailable") from exc
+        count = None
+        backend = os.getenv("TP_ARTIFACT_STORE", "local")
+        try:
+            store = _artifact_store()
+            backend = store.backend
+            count = await store.delete(job.id)
+            await cleanup_terminal_generation(record_store=records, artifact_store=store, job_id=job.id)
+        except Exception:
+            count = None
+            LOGGER.exception("physical generation or owned attempt deletion failed for %s", job.id)
+        try:
+            job.artifacts = await records.record_generation_deletion(
+                job.id, locator.tenant_id, count=count, reason=reason, backend=backend
+            )
+        except Exception as exc:
+            raise _JobRepositoryUnavailable("generation deletion record unavailable") from exc
+        await _flush_operational_outbox_best_effort()
+        return count
     try:
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - callers surface this as 503
@@ -3622,7 +3771,7 @@ async def _cleanup_loop() -> None:
         _cleanup_rate_limit_buckets(now)
 
 
-def _pick(args: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+def _pick(args: Mapping[str, Any], *keys: str, default: Any = None) -> Any:
     for key in keys:
         value = args.get(key)
         if value is not None:
@@ -3849,7 +3998,7 @@ def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
 
 def _job_create_validation_error_response(exc: ValidationError) -> JSONResponse:
     errors = exc.errors()
-    first_error = errors[0] if errors else {}
+    first_error: Mapping[str, Any] = errors[0] if errors else {}
     location = first_error.get("loc") if isinstance(first_error, dict) else None
     field = "payload"
     if isinstance(location, (list, tuple)) and location:
@@ -3892,11 +4041,8 @@ def _preview_next_best_action(
     warnings: List[Dict[str, Any]],
     readiness_snapshot: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    readiness_issues = (
-        readiness_snapshot.get("missing_prerequisites")
-        if isinstance(readiness_snapshot, Mapping) and isinstance(readiness_snapshot.get("missing_prerequisites"), list)
-        else []
-    )
+    raw_readiness_issues = readiness_snapshot.get("missing_prerequisites") if readiness_snapshot is not None else None
+    readiness_issues = raw_readiness_issues if isinstance(raw_readiness_issues, list) else []
     blocked_issue = next(
         (
             issue
@@ -5360,12 +5506,12 @@ def _build_lux_config_preview(
         )
         normalized_args[field_name] = int(defaults[field_name]) if value is None else value
     for field_name in ("sam2_pred_iou_thresh", "sam2_stability_score_thresh"):
-        value = _normalize_optional_probability(
+        probability = _normalize_optional_probability(
             _pick(args, field_name, default=defaults[field_name]),
             field_name,
             errors,
         )
-        normalized_args[field_name] = float(defaults[field_name]) if value is None else value
+        normalized_args[field_name] = float(defaults[field_name]) if probability is None else probability
     if normalized_args["sam2_overlap_px"] >= normalized_args["sam2_tile_size_px"]:
         errors.append(
             _portal_issue(
@@ -6339,7 +6485,34 @@ def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
     return sanitized
 
 
+def _verified_frontdoor_actor(request: Optional[Request]) -> Dict[str, str]:
+    if request is None:
+        raise IdentityAssertionError("request required")
+    existing = getattr(request.state, "verified_frontdoor_actor", None)
+    if isinstance(existing, dict):
+        return dict(existing)
+    raw_path = request.scope.get("raw_path", request.url.path.encode("utf-8"))
+    query = request.scope.get("query_string", b"")
+    try:
+        target = raw_path.decode("ascii") + ("?" + query.decode("ascii") if query else "")
+    except UnicodeError as exc:
+        raise IdentityAssertionError("invalid request target") from exc
+    actor = verify_actor_assertion(
+        str(request.headers.get(ACTOR_ASSERTION_HEADER) or ""),
+        secret=FRONTDOOR_IDENTITY_SECRET,
+        method=request.method,
+        target=target,
+    )
+    request.state.verified_frontdoor_actor = actor
+    return actor
+
+
 def _portal_actor_from_request(request: Request) -> Dict[str, str]:
+    if PILOT_CONTROL_PLANE_ENABLED:
+        try:
+            return _verified_frontdoor_actor(request)
+        except (IdentityAssertionError, IdentityConfigurationError):
+            return {}
     actor: Dict[str, str] = {}
     username = str(request.headers.get("x-tp-actor") or "").strip().lower()
     access_email = str(request.headers.get("x-tp-actor-email") or "").strip().lower()
@@ -6357,7 +6530,7 @@ def _portal_rum_auth_mode(request: Request) -> str:
     return "managed" if _portal_actor_from_request(request) else _auth_mode()
 
 
-def _portal_request_trace_context(request: Request):
+def _portal_request_trace_context(request: Request) -> TraceContext:
     existing = getattr(request.state, "trace_context", None)
     if existing is not None:
         return existing
@@ -6546,7 +6719,7 @@ def _is_protected_api_key_endpoint(path: str) -> bool:
 
 
 def _job_api_key_enforced() -> bool:
-    return ENFORCE_JOB_API_KEY or bool(API_KEY_SECRET)
+    return ENFORCE_JOB_API_KEY or bool(API_KEY_SECRET) or PILOT_CONTROL_PLANE_ENABLED
 
 
 def _extract_client_ip(request: Request) -> str:
@@ -6820,7 +6993,7 @@ async def _publish_event(
     if not subscribers:
         return
 
-    payload = {"event": event, "data": event_data}
+    payload: Dict[str, Any] = {"event": event, "data": event_data}
     if event_seq is not None:
         payload["id"] = event_seq
     stale_subscribers: List[str] = []
@@ -6841,6 +7014,32 @@ async def _publish_event(
         subscribers.pop(subscriber_id, None)
 
 
+def _owned_process_group_id(proc: asyncio.subprocess.Process) -> Optional[int]:
+    """Return only a group owned by this execution's isolated POSIX session.
+
+    A successful ``start_new_session`` spawn pins its PID on the live process
+    handle. That process-local authority survives leader exit until cleanup;
+    it is never read from persisted job or broker state.
+    """
+
+    if os.name == "nt":
+        return None
+    pid = proc.pid
+    if type(pid) is not int or pid <= 0:
+        return None
+    pinned = getattr(proc, "_tp_owned_process_group_id", None)
+    if pinned is not None:
+        return pinned if type(pinned) is int and pinned == pid else None
+    if proc.returncode is not None:
+        return None
+    try:
+        if os.getpgid(pid) == pid and os.getsid(pid) == pid:
+            return pid
+    except OSError:
+        pass
+    return None
+
+
 def _signal_process_tree(
     proc: asyncio.subprocess.Process,
     sig: int,
@@ -6852,18 +7051,8 @@ def _signal_process_tree(
     spawn did not create a new session, or we are on Windows).
     """
 
-    if os.name == "nt":
-        return False
-    pid = proc.pid
-    if pid is None:
-        return False
-    try:
-        pgid = os.getpgid(pid)
-    except (OSError, ProcessLookupError):
-        return False
-    # Only escalate to the process group if this subprocess is in its own
-    # session; otherwise we could accidentally signal the orchestrator itself.
-    if pgid != pid:
+    pgid = _owned_process_group_id(proc)
+    if pgid is None:
         return False
     try:
         os.killpg(pgid, sig)
@@ -6878,30 +7067,85 @@ async def _terminate_process(
     proc: asyncio.subprocess.Process,
     grace_seconds: float = CANCEL_GRACE_SECONDS,
 ) -> None:
-    if proc.returncode is not None:
+    owned_group = _owned_process_group_id(proc)
+    if proc.returncode is not None and owned_group is None:
         return
-    if not _signal_process_tree(proc, signal.SIGTERM):
-        try:
-            proc.terminate()
-        except ProcessLookupError:
-            return
-        except Exception:
-            return
-
+    if owned_group is not None:
+        # Retain a verified group for escalation after the leader is reaped.
+        setattr(proc, "_tp_owned_process_group_id", owned_group)
+    cleanup_completed = False
+    deadline = asyncio.get_running_loop().time() + grace_seconds
     try:
-        await asyncio.wait_for(proc.wait(), timeout=grace_seconds)
-    except asyncio.TimeoutError:
-        if not _signal_process_tree(proc, signal.SIGKILL):
+        if not _signal_process_tree(proc, signal.SIGTERM):
             try:
-                proc.kill()
+                proc.terminate()
             except ProcessLookupError:
                 return
             except Exception:
                 return
-        await proc.wait()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=grace_seconds)
+        except asyncio.TimeoutError:
+            pass
+
+        # A leader can exit before descendants finish, even when they close
+        # stdout. Give the owned group the remaining TERM grace before KILL.
+        while owned_group is not None:
+            try:
+                os.killpg(owned_group, 0)
+            except ProcessLookupError:
+                cleanup_completed = True
+                return
+            except OSError:
+                break
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(0.05, remaining))
+
+        if owned_group is not None or proc.returncode is None:
+            if not _signal_process_tree(proc, signal.SIGKILL):
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                except Exception:
+                    return
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=grace_seconds)
+        except asyncio.TimeoutError:
+            # A detached descendant can retain a pipe outside our group.
+            # The runner owns bounded pipe draining/closure in its finally.
+            LOGGER.warning("subprocess %s wait exceeded force-kill grace; runner must close remaining pipes", proc.pid)
+        cleanup_completed = True
+    finally:
+        if cleanup_completed:
+            with suppress(AttributeError):
+                delattr(proc, "_tp_owned_process_group_id")
 
 
 async def _request_cancel(job: Job) -> None:
+    if _uses_dispatch_authority():
+        try:
+            records = get_operational_record_store()
+            locator = await records.get_locator(job.id)
+            if locator is None:
+                raise _JobRepositoryUnavailable("job has no dispatch authority")
+            await records.cancel_dispatch(job.id, locator.tenant_id)
+        except Exception as exc:
+            raise _JobRepositoryUnavailable("dispatch cancellation authority unavailable") from exc
+        job.cancel_requested = True
+        with suppress(Exception):
+            await get_queue_broker().cancel(job.id)
+        if job.proc is not None and (job.proc.returncode is None or _owned_process_group_id(job.proc) is not None):
+            if job.terminate_task is None or job.terminate_task.done():
+                job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
+        await _flush_operational_outbox_best_effort()
+        record = await _load_job_record(job.id)
+        if record is not None:
+            job.state, job.finished_at, job.done_published_at = record.state, record.finished_at, record.done_published_at
+            job.exit_code, job.error = record.exit_code, record.error
+        return
     already_requested = job.cancel_requested
     job.cancel_requested = True
     if not already_requested:
@@ -6915,10 +7159,9 @@ async def _request_cancel(job: Job) -> None:
     #     this job_id.
     #   - leased (in-flight) jobs surface ``LeaseStatus.cancelled``
     #     via the worker's next heartbeat, which sets the executor's
-    #     cancellation_event → ``Job.cancel_requested`` bridge in
-    #     ``_orchestrator_job_executor``. ``_run_job``'s existing
-    #     readline loop then terminates the subprocess on the next
-    #     iteration.
+    #     cancellation_event bridge in ``_orchestrator_job_executor``.
+    #     The bridge sets ``Job.cancel_requested`` and immediately
+    #     schedules termination, including while stdout is silent.
     try:
         broker = get_queue_broker()
     except Exception:  # noqa: BLE001 - broker construction is best-effort
@@ -6961,7 +7204,7 @@ async def _request_cancel(job: Job) -> None:
                 await _publish_cancellation_terminal(job)
                 return
 
-    if job.proc is None or job.proc.returncode is not None:
+    if job.proc is None or (job.proc.returncode is not None and _owned_process_group_id(job.proc) is None):
         return
 
     if not already_requested:
@@ -6983,6 +7226,9 @@ async def _request_cancel(job: Job) -> None:
 
 
 def _job_output_dir(job: Job) -> Optional[Path]:
+    fence = current_dispatch_fence()
+    if fence is not None and fence.locator.job_id == job.id:
+        return Path(fence.output_root)
     request_payload = (
         job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
     )
@@ -7429,7 +7675,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     return result.items
 
 
-def _artifact_store():
+def _artifact_store() -> ArtifactStore:
     return get_artifact_store()
 
 
@@ -7536,6 +7782,8 @@ def _artifact_mirror_failed_for_path(job: Job, relative_path: str) -> bool:
 
 
 async def _persist_job_artifact_metadata(job: Job, *, fail_closed: bool = False) -> bool:
+    if _uses_dispatch_authority():
+        return True
     try:
         await _job_repository().set_artifacts(job.id, job.artifacts, job.artifact_lookup)
     except _JobRepositoryUnavailable:
@@ -9022,6 +9270,14 @@ def _argv_from_request(
 
 @asynccontextmanager
 async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]":
+    if _uses_dispatch_authority():
+        if os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() != "postgres":
+            raise RuntimeError("Redis locator dispatch requires the Postgres state backend")
+        if PILOT_MAX_ACTIVE_JOBS_PER_TENANT <= 0:
+            raise RuntimeError("Redis locator dispatch requires TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT > 0")
+        if WORKER_HEARTBEAT_INTERVAL_SECONDS >= WORKER_LEASE_SECONDS:
+            raise RuntimeError("worker heartbeat interval must be shorter than its lease")
+        await get_operational_record_store().validate_cutover()
     if _job_api_key_enforced() and not API_KEY_SECRET:
         LOGGER.warning(
             "TP_ENFORCE_JOB_API_KEY is enabled but"
@@ -9055,7 +9311,8 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         app.state.job_repository_unavailable = False
     app.state.job_repository = repo
 
-    if repo is None:
+    if repo is None or _uses_dispatch_authority():
+        # Other hosts may hold live claims; only DB-clock expiry can recover them.
         app.state.restart_recovery_swept = []
     else:
         try:
@@ -9094,7 +9351,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         if ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED:
             for slot in range(MAX_CONCURRENT_JOBS):
                 worker_config = WorkerConfig(
-                    worker_id=f"inproc-worker-{slot}",
+                    worker_id=f"inproc-{uuid.uuid4().hex}-{slot}",
                     lease_seconds=WORKER_LEASE_SECONDS,
                     heartbeat_interval_seconds=WORKER_HEARTBEAT_INTERVAL_SECONDS,
                     poll_interval_seconds=WORKER_POLL_INTERVAL_SECONDS,
@@ -9506,9 +9763,15 @@ async def healthz() -> JSONResponse:
     response_model_exclude_none=True,
 )
 async def ready() -> Dict[str, Any]:
+    identity_configured = True
+    if PILOT_CONTROL_PLANE_ENABLED:
+        try:
+            _pilot_identity_memberships()
+        except IdentityConfigurationError:
+            identity_configured = False
     artifact_store = await _artifact_store_readiness()
     response: Dict[str, Any] = {
-        "ok": bool(artifact_store.get("configured")),
+        "ok": bool(artifact_store.get("configured")) and identity_configured,
         "time": _now(),
         "version": APP_VERSION,
         "artifact_store": artifact_store,
@@ -9544,6 +9807,11 @@ async def ready() -> Dict[str, Any]:
 
 @app.get("/v1/readiness", response_model=ReadinessEnvelope)
 async def readiness(request: Request) -> JSONResponse:
+    if PILOT_CONTROL_PLANE_ENABLED:
+        try:
+            _pilot_identity_memberships()
+        except IdentityConfigurationError:
+            return _pilot_identity_configuration_error()
     pipeline_data: Dict[str, Any] = {}
     for pipeline_name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
@@ -9641,6 +9909,9 @@ async def config_preview(request: Request, payload: Dict[str, Any]) -> JSONRespo
     tenant, tenant_error = await _pilot_tenant_from_request(request, action="config_preview")
     if tenant_error is not None:
         return tenant_error
+    path_error = await _pilot_enforce_request_paths(tenant, payload, action="config_preview", request=request)
+    if path_error is not None:
+        return path_error
     try:
         preview = await _build_config_preview_threaded(
             payload,
@@ -9852,6 +10123,9 @@ async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResp
     tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
     if tenant_error is not None:
         return tenant_error
+    path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
+    if path_error is not None:
+        return path_error
     return await create_job(
         payload,
         portal_actor=_portal_actor_from_request(request),
@@ -9864,6 +10138,9 @@ async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONR
     tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
     if tenant_error is not None:
         return tenant_error
+    path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
+    if path_error is not None:
+        return path_error
     return await create_job_v2(
         payload,
         portal_actor=_portal_actor_from_request(request),
@@ -9999,6 +10276,19 @@ async def _create_job(
         repo = _job_repository()
     except _JobRepositoryUnavailable:
         return _repository_unavailable_response()
+
+    if _uses_dispatch_authority():
+        return await _create_distributed_job(
+            payload=payload,
+            pipeline=pipeline,
+            execution_args=execution_args,
+            argv=argv,
+            trusted_output_dir=trusted_output_dir,
+            pilot_tenant=pilot_tenant,
+            portal_actor=portal_actor,
+            request=request,
+            api_version=api_version,
+        )
 
     await _cleanup_expired_jobs(_now(), force=False)
     async with JOB_ADMISSION_LOCK:
@@ -10152,10 +10442,12 @@ async def _create_job(
         JobEnvelope(
             schema="tp.orchestrator.job.v1",
             success=True,
-            data=JobBriefData(
-                id=jid,
-                state=job.state,
-                events_url=_job_events_url(jid, api_version=api_version),
+            data=JobBriefData.model_validate(
+                {
+                    "id": jid,
+                    "state": job.state,
+                    "events_url": _job_events_url(jid, api_version=api_version),
+                }
             ),
             error=None,
         ).model_dump(mode="json", by_alias=True, exclude_unset=True)
@@ -10332,6 +10624,7 @@ async def _get_job_artifact(
     if tenant_access_error is not None:
         return tenant_access_error
 
+    reason_code: Optional[str]
     try:
         requested_relative_path = _normalize_artifact_relative_path(artifact_path)
     except InvalidArtifactPathError:
@@ -10365,6 +10658,9 @@ async def _get_job_artifact(
             message="artifact deleted",
             details={"job_id": job_id, "path": requested_relative_path},
         )
+
+    if _uses_dispatch_authority():
+        return await _get_committed_artifact(job, requested_relative_path, tenant=tenant, request=request)
 
     known_paths = _artifact_known_relative_paths(job)
     if not known_paths:
@@ -10551,7 +10847,9 @@ async def _delete_job_artifacts(
             message="artifacts cannot be deleted for an active job",
             details={"job_id": job_id, "state": job.state},
         )
-    if not _artifacts_deleted(job):
+    if not _artifacts_deleted(job) or (
+        _uses_dispatch_authority() and _artifact_lifecycle(job).get("deletion_status") != "deleted"
+    ):
         audit_response = await _record_pilot_audit(
             action="artifact_delete",
             decision="accepted",
@@ -10645,7 +10943,7 @@ async def _cancel_job(job_id: str, *, request: Optional[Request] = None) -> JSON
         JobEnvelope(
             schema="tp.orchestrator.job.v1",
             success=True,
-            data=JobBriefData(id=job_id, state=job.state),
+            data=JobBriefData.model_validate({"id": job_id, "state": job.state}),
             error=None,
         ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
@@ -10703,6 +11001,53 @@ def _terminal_done_payload(job: Job) -> Dict[str, Any]:
     }
 
 
+async def _committed_job_event_stream(
+    request: Request,
+    job: Job,
+    event_store: JobEventStore,
+    after_seq: Optional[int],
+) -> AsyncGenerator[str, None]:
+    """Poll committed events across hosts without trusting local notifications."""
+    cursor = after_seq if after_seq is not None else 0
+    terminal_confirmed = False
+    if after_seq is None:
+        yield _sse("state", {"id": job.id, "state": job.state, "progress": job.progress})
+    last_beat = _now()
+    while not await request.is_disconnected():
+        try:
+            # The bounded batch releases its connection before yielding to the
+            # client. Local outbox/queue notifications never authorize a done.
+            events = await event_store.replay_batch(job.id, after_seq=cursor)
+            for event in events:
+                if event.seq <= cursor:
+                    continue
+                if event.seq > cursor + 1:
+                    yield f": replay-gap requested_after={cursor} first_available={event.seq}\n\n"
+                cursor = event.seq
+                yield _sse(event.event_type, event.payload, event_id=event.seq)
+                if event.event_type == "done":
+                    return
+            if not events:
+                if terminal_confirmed:
+                    return
+                record = await _load_job_record(job.id)
+                if record is None:
+                    return  # Retention removed this previously authorized job.
+                if record.done_published_at is not None:
+                    terminal_confirmed = True
+                    # Retention can evict done after this stream opened. Drain
+                    # once more after observing committed terminal state: done
+                    # may have committed between the empty replay and this read.
+                    continue
+        except Exception:  # noqa: BLE001 - never synthesize terminal authority on replay failure
+            LOGGER.debug("committed job event poll failed for %s", job.id, exc_info=True)
+        now = _now()
+        if now - last_beat > HEARTBEAT_SECONDS:
+            yield ": heartbeat\n\n"
+            last_beat = now
+        await asyncio.sleep(1.0)
+
+
 async def _job_events(
     request: Request,
     job_id: str,
@@ -10735,6 +11080,17 @@ async def _job_events(
             code="INVALID_ARGUMENT",
             message="Last-Event-ID must be a non-negative integer",
             details={"field": "Last-Event-ID", "reason": "invalid_request"},
+        )
+
+    try:
+        event_store = _job_event_store()
+    except Exception:  # noqa: BLE001 - durable streams require a usable event store
+        return _error_response(503, code="UNAVAILABLE", message="job event store unavailable", retriable=True)
+    if getattr(event_store, "supports_live_replay", False):
+        return StreamingResponse(
+            _committed_job_event_stream(request, job, event_store, replay_after_seq),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     subscribers = EVENT_SUBSCRIBERS.setdefault(job_id, {})
@@ -10941,7 +11297,7 @@ async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
 
 
 async def _orchestrator_job_executor(
-    request: JobEnqueueRequest,
+    request: JobEnqueueRequest | DispatchLocator,
     cancellation_event: "asyncio.Event",
 ) -> int:
     """``WorkerRunner.executor`` adapter that runs the orchestrator's job.
@@ -10951,9 +11307,9 @@ async def _orchestrator_job_executor(
     handles such as the live ``asyncio.subprocess.Process``, terminate
     task, and SSE subscriber queues. The executor bridges the two:
     hydrate the job from the repository, overlay any runtime handles,
-    and run the existing ``_run_job`` body, mirroring broker-side
-    cancellation into the ``job.cancel_requested`` flag that
-    ``_run_job``'s loop already observes.
+    and run the existing ``_run_job`` body. Broker-side cancellation
+    sets ``job.cancel_requested`` and immediately schedules live-child
+    termination without waiting for another stdout line.
 
     Phase 2.D — terminal-state guard. The broker's
     ``reclaim_expired_leases`` re-queues abandoned jobs by design
@@ -10986,16 +11342,53 @@ async def _orchestrator_job_executor(
 
     async def _bridge_cancel() -> None:
         await cancellation_event.wait()
-        # Bridge broker-side cancellation into the existing in-process
-        # ``Job.cancel_requested`` flag so ``_run_job``'s readline loop
-        # observes it and terminates the dispatch subprocess.
+        # Signal the live subprocess immediately: it may be silent while
+        # ``_run_job`` is awaiting stdout and never start another iteration.
         if not job.cancel_requested:
             job.cancel_requested = True
+        if job.proc is not None and (job.proc.returncode is None or _owned_process_group_id(job.proc) is not None):
+            if job.terminate_task is None or job.terminate_task.done():
+                job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
 
     bridge_task = asyncio.create_task(_bridge_cancel())
+    execution_output_root = None
     try:
-        await _run_job(job, list(request.argv))
+        if isinstance(request, DispatchLocator):
+            from transformation_portal.orchestrator.execution_dispatch import _pin_output_directory, command_from_dispatch_plan
+            from transformation_portal.orchestrator.execution_workspace import create_execution_workspace
+
+            fence = current_dispatch_fence()
+            if fence is None or fence.locator != request:
+                raise DispatchAuthorityLost("worker has no matching claim")
+            raw = await get_operational_record_store().fetch_plan(request)
+            output_root = _resolve_allowed_request_path(fence.output_root, ALLOWED_OUTPUT_ROOTS)
+            _revalidate_dispatch_paths(request, raw, output_root)
+            # An attempt root is created once, only after a committed claim.
+            parent = _pin_output_directory(output_root.parent)
+            try:
+                os.mkdir(output_root.name, mode=0o700, dir_fd=parent)
+            finally:
+                os.close(parent)
+            workspace = create_execution_workspace(output_root, require_configured=True)
+            execution_output_root = output_root
+            plan_path = workspace / "plan.json"
+            plan_path.write_bytes(raw)
+            command = command_from_dispatch_plan(
+                raw, output_root=output_root, plan_path=plan_path, execution_workspace=workspace
+            )
+        else:
+            command = list(request.argv)
+        if cancellation_event.is_set():
+            return 0
+        await _run_job(job, command)
     finally:
+        if execution_output_root is not None:
+            from transformation_portal.orchestrator.execution_workspace import remove_execution_workspace
+
+            try:
+                remove_execution_workspace(execution_output_root)
+            except Exception:
+                LOGGER.exception("private execution cleanup deferred for %s", request.job_id)
         bridge_task.cancel()
         with suppress(asyncio.CancelledError):
             await bridge_task
@@ -11101,6 +11494,19 @@ async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[st
     only the in-process Job is updated and a warning is logged so
     the operator can see the missing persistence.
     """
+    if isinstance(broker, RedisLocatorQueueBroker):
+        records = get_operational_record_store()
+        expired = await records.expire_dispatches()
+        with suppress(Exception):
+            await broker.reclaim_expired_leases(now=await broker.server_time())
+        with suppress(Exception):
+            await _drain_operational_outbox(broker)
+        for job_id in await records.generation_cleanup_candidates():
+            try:
+                await cleanup_terminal_generation(record_store=records, artifact_store=_artifact_store(), job_id=job_id)
+            except Exception:
+                LOGGER.exception("deferred attempt/staging cleanup failed for %s", job_id)
+        return expired
     try:
         now = await broker.server_time()
         reclaimed = await broker.reclaim_expired_leases(now=now)
@@ -11159,14 +11565,6 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
 
 async def _run_job(job: Job, argv: List[str]) -> None:
     _cache_runtime_job(job)
-    job.state = "running"
-    job.started_at = _now()
-    await _persist_job_fields_best_effort(job, "runner_start", state=job.state, started_at=job.started_at)
-    await _publish_event(
-        job.id,
-        "state",
-        {"id": job.id, "state": job.state},
-    )
 
     pending_log_lines: List[str] = []
     last_log_flush_at = _now()
@@ -11198,6 +11596,22 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             last_progress_flush_at = now
 
     try:
+        if job.done_published_at is not None or job.finished_at is not None:
+            return
+        if job.cancel_requested:
+            job.state = "canceled"
+            return
+        job.state = "running"
+        job.started_at = _now()
+        await _persist_job_fields_best_effort(job, "runner_start", state=job.state, started_at=job.started_at)
+        await _publish_event(job.id, "state", {"id": job.id, "state": job.state})
+        # Startup persistence yields to cancellation and lease watchdogs. Do
+        # not launch native work after either path has withdrawn authority.
+        if job.done_published_at is not None or job.finished_at is not None:
+            return
+        if job.cancel_requested:
+            job.state = "canceled"
+            return
         # NO SHELL EXECUTION.
         spawn_kwargs: Dict[str, Any] = {
             "stdout": asyncio.subprocess.PIPE,
@@ -11209,13 +11623,21 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             # whole process tree, not just the direct child.
             spawn_kwargs["start_new_session"] = True
         proc = await asyncio.create_subprocess_exec(*argv, **spawn_kwargs)
+        if spawn_kwargs.get("start_new_session"):
+            # Spawn itself establishes ownership even if the group leader
+            # exits before a later cancellation observes its descendants.
+            setattr(proc, "_tp_owned_process_group_id", proc.pid)
         job.proc = proc
 
         if proc.stdout is None:
             raise RuntimeError("failed to capture subprocess stdout")
 
         while True:
-            if job.cancel_requested and proc.returncode is None and (job.terminate_task is None or job.terminate_task.done()):
+            if (
+                job.cancel_requested
+                and (proc.returncode is None or _owned_process_group_id(proc) is not None)
+                and (job.terminate_task is None or job.terminate_task.done())
+            ):
                 job.terminate_task = asyncio.create_task(
                     _terminate_process(proc),
                 )
@@ -11256,6 +11678,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         await _flush_log_batch()
         await _flush_progress(force=True)
         rc = await proc.wait()
+        if job.done_published_at is not None or job.finished_at is not None:
+            return
         job.exit_code = int(rc)
         if job.cancel_requested:
             job.state = "canceled"
@@ -11275,7 +11699,17 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             job, "runner_terminal", state=job.state, exit_code=job.exit_code, error=job.error
         )
 
+    except asyncio.CancelledError:
+        # Lifespan shutdown cancels worker tasks after their grace period.
+        # Reap the child in finally and publish a terminal cancellation,
+        # without replacing an outcome already committed by another path.
+        if job.done_published_at is None and job.finished_at is None:
+            job.cancel_requested = True
+            job.state = "canceled"
+        raise
     except FileNotFoundError:
+        if job.done_published_at is not None or job.finished_at is not None:
+            return
         job.state = "failed"
         job.exit_code = 127
         runner_repr = " ".join(argv[:3]) if len(argv) >= 3 else argv[0]
@@ -11308,6 +11742,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             job.id,
         )
         await _flush_log_batch()
+        if job.done_published_at is not None or job.finished_at is not None:
+            return
         job.state = "failed"
         job.exit_code = 1
         job.error = _error_obj(
@@ -11334,6 +11770,23 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             {"id": job.id, "line": msg},
         )
     finally:
+        # An exception while reading stdout (including an oversized line)
+        # or task cancellation must not leave an unobserved child running
+        # after terminal artifacts/events are published.
+        stdout_drain_task = None
+        if job.proc is not None and job.proc.stdout is not None:
+            stdout = job.proc.stdout
+
+            async def _discard_remaining_stdout() -> None:
+                # A full pipe can otherwise keep proc.wait() pending even
+                # after the child exits. Discard in bounded chunks.
+                while await stdout.read(64 * 1024):
+                    pass
+
+            stdout_drain_task = asyncio.create_task(_discard_remaining_stdout())
+        if job.proc is not None and (job.proc.returncode is None or _owned_process_group_id(job.proc) is not None):
+            if job.terminate_task is None or job.terminate_task.done():
+                job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
         with suppress(Exception):
             await _flush_log_batch()
         with suppress(Exception):
@@ -11343,7 +11796,22 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 await job.terminate_task
             except Exception:
                 pass
-
+        if stdout_drain_task is not None:
+            try:
+                await asyncio.wait_for(stdout_drain_task, timeout=CANCEL_GRACE_SECONDS)
+            except asyncio.TimeoutError:
+                LOGGER.warning("job %s stdout pipe did not close during process cleanup", job.id)
+                # StreamReader exposes no public close method. Close this
+                # process-owned pipe transport after cancelling the reader;
+                # an escaped descendant must not keep worker shutdown open.
+                stdout_transport = getattr(stdout, "_transport", None)
+                if stdout_transport is not None:
+                    stdout_transport.close()
+            except Exception:
+                LOGGER.debug("job %s stdout cleanup failed", job.id, exc_info=True)
+        if job.proc is not None:
+            with suppress(AttributeError):
+                delattr(job.proc, "_tp_owned_process_group_id")
         # Phase 2.D — terminal-state authority. If an *external* path
         # (the reclaim sweep, restart recovery, etc.) already drove
         # this Job to a terminal state AND published the terminal
@@ -11367,6 +11835,47 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 job.id,
                 job.state,
             )
+            return
+
+        if job.state == "canceled" and job.proc is not None and job.exit_code is None:
+            job.exit_code = job.proc.returncode
+
+        fence = current_dispatch_fence()
+        if fence is not None:
+            try:
+                await asyncio.to_thread(_index_job_artifacts, job)
+                _refresh_job_run_summary(job)
+                publisher = GenerationPublisher(artifact_store=_artifact_store(), record_store=get_operational_record_store())
+                await publisher.publish(
+                    fence,
+                    job.artifact_lookup,
+                    state=job.state,
+                    exit_code=job.exit_code,
+                    artifacts=job.artifacts,
+                    run_summary=job.run_summary,
+                    error=job.error,
+                )
+            except DispatchAuthorityLost:
+                LOGGER.warning("job %s publication rejected after authority loss", job.id)
+            except Exception:
+                LOGGER.exception("job %s generation publication failed", job.id)
+                with suppress(DispatchAuthorityLost):
+                    await get_operational_record_store().finish_dispatch(
+                        fence,
+                        state="failed",
+                        exit_code=job.exit_code,
+                        error=_error_obj("ARTIFACT_STORE_UNAVAILABLE", "Artifact generation could not be committed."),
+                    )
+            await _flush_operational_outbox_best_effort()
+            try:
+                await cleanup_terminal_generation(
+                    record_store=get_operational_record_store(), artifact_store=_artifact_store(), job_id=job.id
+                )
+            except Exception:
+                LOGGER.exception("owned attempt cleanup deferred for %s", job.id)
+            committed = await _load_job_record(job.id)
+            if committed is not None:
+                _cache_runtime_job(_job_from_record(committed))
             return
 
         # Index artifacts and publish terminal events BEFORE setting finished_at.
@@ -11407,3 +11916,281 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             LOGGER.exception("job repository final state persist failed for %s", job.id)
         _cache_runtime_job(job)
         await _cleanup_expired_jobs(_now(), force=False)
+
+
+async def _create_distributed_job(
+    *,
+    payload: Dict[str, Any],
+    pipeline: str,
+    execution_args: Dict[str, Any],
+    argv: List[str],
+    trusted_output_dir: Optional[Path],
+    pilot_tenant: Any,
+    portal_actor: Any,
+    request: Optional[Request],
+    api_version: str,
+) -> JSONResponse:
+    from transformation_portal.orchestrator.execution_dispatch import prepare_dispatch_plan
+    from transformation_portal.orchestrator.execution_workspace import execution_workspace_base
+
+    try:
+        execution_workspace_base(require_configured=True)
+    except (OSError, ArtifactStoreError):
+        return _error_response(
+            503, code="AUTH_CONFIGURATION_ERROR", message="protected shared execution storage is not configured"
+        )
+
+    if trusted_output_dir is None:
+        try:
+            trusted_output_dir = _resolve_allowed_request_path(
+                str(execution_args.get("output_dir") or execution_args.get("outputDir") or ""), ALLOWED_OUTPUT_ROOTS
+            )
+        except ValueError:
+            return _error_response(400, code="INVALID_ARGUMENT", message="an authorized output directory is required")
+    if PILOT_MAX_ACTIVE_JOBS_PER_TENANT <= 0:
+        return _error_response(
+            503, code="AUTH_CONFIGURATION_ERROR", message="distributed admission configuration is incomplete"
+        )
+    tenant_id = pilot_tenant.tenant_id if pilot_tenant is not None else "default"
+    jid = "job_" + uuid.uuid4().hex
+    effective_request = {"pipeline": pipeline, "args": dict(execution_args), "tenant_id": tenant_id}
+    try:
+        plan_bytes = await asyncio.to_thread(prepare_dispatch_plan, effective_request, trusted_argv=argv)
+    except Exception:
+        LOGGER.exception("canonical dispatch preparation failed")
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="execution plan could not be prepared",
+            details={"field": "payload", "reason": "execution_plan_invalid"},
+        )
+    audit_response = await _record_pilot_audit(
+        action="job_create",
+        decision="accepted",
+        tenant_id=tenant_id,
+        job_id=jid,
+        actor=portal_actor,
+        request=request,
+        details={"pipeline": pipeline},
+    )
+    if audit_response is not None:
+        return audit_response
+    job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
+    # Workers share authorized roots; no output exists before successful admission.
+    attempt_root = trusted_output_dir / ".tp-attempts" / f"{jid}-{uuid.uuid4().hex}"
+    try:
+        await get_operational_record_store().admit(
+            _record_from_job(job),
+            plan_bytes,
+            tenant_id=tenant_id,
+            output_root=str(attempt_root),
+            requested_output_root=str(trusted_output_dir),
+            global_limit=MAX_CONCURRENT_JOBS,
+            tenant_limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+        )
+    except AdmissionRejected as exc:
+        tenant_limited = exc.scope != "global"
+        limit = PILOT_MAX_ACTIVE_JOBS_PER_TENANT if tenant_limited else MAX_CONCURRENT_JOBS
+        details = {"active_jobs": limit, "max_active_jobs" if tenant_limited else "max_concurrent_jobs": limit}
+        return _error_response(
+            429,
+            code="RATE_LIMITED",
+            message=(
+                "too many active jobs for tenant; try again later"
+                if tenant_limited
+                else "too many active jobs; try again later"
+            ),
+            details=details,
+            headers=_rate_limit_response_headers(
+                limit=limit,
+                remaining=0,
+                retry_after=JOB_ADMISSION_RETRY_AFTER_SECONDS,
+                reset_epoch=int(_now()) + JOB_ADMISSION_RETRY_AFTER_SECONDS,
+            ),
+        )
+    except Exception:
+        LOGGER.exception("atomic job admission failed for %s", jid)
+        return _repository_unavailable_response()
+    _cache_runtime_job(job)
+    # A committed admission is durable even when Redis is temporarily unavailable.
+    # The outbox reconciler retries its exact locator; clients get the admitted id.
+    with suppress(Exception):
+        await _flush_operational_outbox_best_effort()
+    return JSONResponse(
+        JobEnvelope(
+            schema="tp.orchestrator.job.v1",
+            success=True,
+            data=JobBriefData(id=jid, state="queued", events_url=_job_events_url(jid, api_version=api_version)),
+            error=None,
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
+    )
+
+
+async def _drain_operational_outbox(broker: QueueBroker) -> None:
+    records = get_operational_record_store()
+    for outbox_id, job_id, kind, data in await records.pending_outbox():
+        if kind == "dispatch":
+            locator = DispatchLocator(**data)
+            await broker.enqueue(locator)
+        elif kind == "event":
+            payload = {"event": data["event_type"], "data": data["payload"], "id": data["seq"]}
+            for queue in list(EVENT_SUBSCRIBERS.get(job_id, {}).values()):
+                if queue.full():
+                    with suppress(asyncio.QueueEmpty):
+                        queue.get_nowait()
+                with suppress(asyncio.QueueFull):
+                    queue.put_nowait(deepcopy(payload))
+        await records.acknowledge_outbox(outbox_id)
+    # Redis may have lost acknowledged queued deliveries after a restart.
+    for locator in await records.queued_dispatches():
+        await broker.enqueue(locator)
+
+
+async def _get_committed_artifact(job: Job, relative_path: str, *, tenant: Any, request: Optional[Request]) -> Response:
+    try:
+        records = get_operational_record_store()
+        locator = await records.get_locator(job.id)
+        manifest = None if locator is None else await records.committed_manifest(job.id, locator.tenant_id)
+        item = next((entry for entry in (manifest or {}).get("files", []) if entry["path"] == relative_path), None)
+        if item is None:
+            return _error_response(
+                404, code="NOT_FOUND", message="artifact not found", details={"job_id": job.id, "path": relative_path}
+            )
+        audit_response = await _record_pilot_audit(
+            action="artifact_fetch",
+            decision="accepted",
+            tenant_id=tenant.tenant_id if tenant is not None else _job_tenant_id(job),
+            job_id=job.id,
+            request=request,
+            details={"path": relative_path},
+        )
+        if audit_response is not None:
+            return audit_response
+        store = _artifact_store()
+        headers = _artifact_response_headers_for_relative_path(relative_path)
+        if store.backend == "s3":
+            url = await store.presign_get(
+                job.id,
+                item["storage_path"],
+                expires_seconds=ARTIFACT_PRESIGN_EXPIRES_SECONDS,
+                content_type=item["content_type"],
+                content_disposition=headers.get("Content-Disposition"),
+                cache_control="no-store",
+            )
+            if not url:
+                raise ArtifactStoreError("presign unavailable")
+            return RedirectResponse(
+                url=url, status_code=307, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+            )
+        stream = await store.open_bytes(job.id, item["storage_path"])
+        return StreamingResponse(stream, media_type=item["content_type"], headers=headers)
+    except Exception:
+        LOGGER.exception("committed artifact lookup failed for %s", job.id)
+        return _error_response(
+            503,
+            code="ARTIFACT_STORE_UNAVAILABLE",
+            message="artifact store unavailable",
+            details={"job_id": job.id},
+            retriable=True,
+        )
+
+
+async def _flush_operational_outbox_best_effort() -> None:
+    try:
+        await _drain_operational_outbox(get_queue_broker())
+    except Exception:
+        LOGGER.exception("committed operational outbox delivery deferred until service recovery")
+
+
+def _revalidate_dispatch_paths(locator: DispatchLocator, plan_bytes: bytes, output_root: Path) -> None:
+    """Recheck the worker host's current allowlists and tenant policy before spawn."""
+    from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
+    from transformation_portal.core.execution_plan import parse_execution_plan_json
+    from transformation_portal.stage_graph.registry import StageRegistryIdentifier
+
+    plan = parse_execution_plan_json(plan_bytes)
+    input_root = _resolve_allowed_request_path(plan.input_root, ALLOWED_INPUT_ROOTS)
+    output_root = _resolve_allowed_request_path(str(output_root), ALLOWED_OUTPUT_ROOTS)
+    paths: List[Tuple[Path, List[Path]]] = [(input_root, []), (output_root, [])]
+    pipeline = "lux-depth-v3"
+    if plan.planned_backend == "archive":
+        configuration = plan.to_payload()["nodes"][0]["configuration"]
+        operation = ARCHIVE_OPERATIONS[configuration["operation"]]
+        pipeline = operation.pipeline
+        for name in operation.files + operation.directories:
+            value = configuration["parameters"].get(name)
+            if value is not None:
+                paths.append((_resolve_allowed_request_path(value, ALLOWED_PATH_ROOTS), []))
+    else:
+        from transformation_portal.lux_depth_v3 import config_resolver
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+        # Only the immutable plan supplies execution paths. Default config is
+        # used solely to read this worker's currently selected server runtimes.
+        defaults = EnhanceConfig()
+        interpreter_resolvers = {
+            "raw_python_executable": config_resolver.resolve_prepared_raw_python_executable,
+            "da3_python_executable": config_resolver.resolve_prepared_da3_python_executable,
+            "depth_pro_python_executable": config_resolver.resolve_prepared_depth_pro_python_executable,
+        }
+        for node in plan.nodes:
+            configuration = node.configuration
+            for field, resolver in interpreter_resolvers.items():
+                carried = configuration.get(field)
+                if carried is not None:
+                    current = resolver(defaults, preparation_cwd=REPO_ROOT)
+                    # Do not dereference Python symlinks: two virtualenvs may
+                    # share a binary while authorizing different packages.
+                    if carried != current:
+                        raise DispatchAuthorityLost(f"worker runtime selection changed: {field}")
+            if node.stage_registry_id == StageRegistryIdentifier.LUX_DEPTH:
+                checkpoint = configuration.get("depth_pro_checkpoint_path")
+                if checkpoint is not None and "depth_pro" in plan.candidate_fallback_chain:
+                    current_checkpoint = config_resolver.resolve_prepared_depth_pro_checkpoint_path(
+                        defaults, preparation_cwd=REPO_ROOT
+                    )
+                    if checkpoint != current_checkpoint:
+                        paths.append(
+                            (_resolve_allowed_request_path(checkpoint, ALLOWED_INPUT_ROOTS), [REPO_ROOT / "checkpoints"])
+                        )
+            elif node.stage_registry_id == StageRegistryIdentifier.LUX_MATERIALS_V3:
+                for field in ("sam2_checkpoint_path", "sam_vit_h_checkpoint_path"):
+                    checkpoint = configuration.get(field)
+                    if checkpoint is not None:
+                        roots = MANAGED_SAM2_TRUSTED_ROOTS if field == "sam2_checkpoint_path" else [REPO_ROOT / "checkpoints"]
+                        paths.append((_resolve_allowed_request_path(checkpoint, ALLOWED_INPUT_ROOTS), roots))
+            elif node.stage_registry_id == StageRegistryIdentifier.LUX_RECONSTRUCTION:
+                sidecar = configuration.get("cameras_sidecar_path")
+                if sidecar is not None:
+                    paths.append((_resolve_allowed_request_path(sidecar, ALLOWED_INPUT_ROOTS), []))
+            elif node.stage_registry_id == StageRegistryIdentifier.LUX_OUTPUT:
+                captioning = configuration.get("captioning")
+                if isinstance(captioning, Mapping) and captioning.get("enabled"):
+                    selectors = [
+                        captioning.get(field)
+                        for field in ("model_path", "review_model_path", "python_executable", "mlx_vlm_dir")
+                    ]
+                    selector = captioning.get("selector")
+                    if isinstance(selector, str) and selector.lower() not in ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
+                        selectors.append(selector)
+                    for value in selectors:
+                        if value is not None:
+                            paths.append(
+                                (
+                                    _resolve_allowed_request_path(value, FASTVLM_RUNTIME_ALLOWED_ROOTS),
+                                    [default_fastvlm_runtime_root()],
+                                )
+                            )
+    if PILOT_CONTROL_PLANE_ENABLED:
+        if (
+            PILOT_ALLOWED_TENANTS and locator.tenant_id not in PILOT_ALLOWED_TENANTS
+        ) or pipeline not in PILOT_ALLOWED_PIPELINES:
+            raise DispatchAuthorityLost("dispatch tenant or pipeline is no longer allowed")
+        manager = _pilot_tenant_manager()
+        tenant = manager.get_tenant(locator.tenant_id)
+        if tenant is None:
+            tenant = manager.create_tenant(locator.tenant_id, policy=_pilot_tenant_policy())
+        guard = _pilot_tenant_fs_guard(tenant)
+        for path, shared_roots in paths:
+            if not any(path.is_relative_to(root.resolve()) for root in shared_roots):
+                guard.enforce_path(path)

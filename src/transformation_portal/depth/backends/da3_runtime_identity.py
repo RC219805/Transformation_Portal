@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from ...core.da3_runtime import find_repo_root
+from ...core.security.checkpoint_index import parse_checkpoint_weight_map
 from ...ingest.canonical_json import canonicalize_json, dumps_json
 
 DA3_RUNTIME_IDENTITY_SCHEMA = "tp.da3.runtime-identity.v1"
@@ -218,7 +219,7 @@ def _hash_regular_file(path: Path, *, maximum_bytes: int | None = None) -> tuple
 
     digest = hashlib.sha256()
     digest_count = 0
-    with path.open("rb") as handle:
+    with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)), "rb") as handle:
         before = os.fstat(handle.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ValueError(f"DA3 identity input is not a regular file: {path}")
@@ -252,7 +253,7 @@ def _hash_regular_file(path: Path, *, maximum_bytes: int | None = None) -> tuple
 
 
 def _read_bounded_regular_file(path: Path, *, maximum_bytes: int) -> bytes:
-    with path.open("rb") as handle:
+    with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)), "rb") as handle:
         before = os.fstat(handle.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ValueError(f"DA3 identity input is not a regular file: {path}")
@@ -454,27 +455,15 @@ def _materialized_model_manifests(snapshot_root: Path) -> tuple[str, str, tuple[
     expected_weight_paths: set[str]
 
     if index_path.is_file():
-
-        def reject_index_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-            payload: dict[str, Any] = {}
-            for key, value in pairs:
-                if key in payload:
-                    raise ValueError("DA3 safetensors index repeats a key")
-                payload[key] = value
-            return payload
-
         try:
             index_raw = _read_bounded_regular_file(index_path, maximum_bytes=_MAX_INDEX_BYTES)
-            index_payload = json.loads(index_raw.decode("utf-8"), object_pairs_hook=reject_index_duplicates)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-            raise ValueError("DA3 safetensors index is not valid bounded JSON") from exc
-        weight_map = index_payload.get("weight_map") if isinstance(index_payload, dict) else None
-        if not isinstance(weight_map, dict) or not weight_map:
-            raise ValueError("DA3 safetensors index has no non-empty weight_map")
-        if len(weight_map) > _MAX_WEIGHT_MAP_ENTRIES:
-            raise ValueError("DA3 safetensors index has too many weight-map entries")
-        if any(not isinstance(value, str) or not value for value in weight_map.values()):
-            raise ValueError("DA3 safetensors index has an invalid weight-map path")
+            weight_map = parse_checkpoint_weight_map(
+                index_raw,
+                maximum_bytes=_MAX_INDEX_BYTES,
+                maximum_entries=_MAX_WEIGHT_MAP_ENTRIES,
+            )
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"DA3 safetensors index is not valid bounded JSON: {exc}") from exc
         expected_weight_paths = set(weight_map.values())
         if any(not value.endswith(".safetensors") for value in expected_weight_paths):
             raise ValueError("DA3 safetensors index references an unsupported weight format")

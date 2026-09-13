@@ -14,13 +14,16 @@ Supported backends:
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from transformation_portal.orchestrator.storage.base import (
     JobEventStore,
     JobRepository,
     OperationalAuditStore,
 )
+
+if TYPE_CHECKING:
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
 
 _BACKEND_ENV = "TP_ORCHESTRATOR_STATE_BACKEND"
 _DATABASE_URL_ENV = "TP_DATABASE_URL"
@@ -131,9 +134,7 @@ def get_operational_audit_store() -> OperationalAuditStore:
         raise RuntimeError(f"operational audit requires {_BACKEND_ENV}=postgres; got {backend!r}.")
 
     try:
-        from transformation_portal.orchestrator.storage.postgres import (
-            PostgresOperationalAuditStore,
-        )
+        from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
     except ImportError as exc:
         raise RuntimeError(
             f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] + "
@@ -148,7 +149,7 @@ def get_operational_audit_store() -> OperationalAuditStore:
             f"operational audit requires {_DATABASE_URL_ENV} to " "be set (e.g. postgresql+asyncpg://user:pw@host:5432/db)."
         )
 
-    _audit_store = PostgresOperationalAuditStore(database_url=database_url)
+    _audit_store = PostgresOperationalRecordStore(database_url=database_url)
     return _audit_store
 
 
@@ -161,3 +162,13 @@ def reset_singletons() -> None:
 
 
 __all__ = ["get_job_event_store", "get_job_repository", "get_operational_audit_store", "reset_singletons"]
+
+
+def get_operational_record_store() -> "PostgresOperationalRecordStore":
+    """Return the evolved audit/record boundary; Postgres is mandatory."""
+    store = get_operational_audit_store()
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+
+    if not isinstance(store, PostgresOperationalRecordStore):
+        raise RuntimeError("dispatch authority requires the Postgres operational record store")
+    return store

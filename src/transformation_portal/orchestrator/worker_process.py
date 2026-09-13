@@ -13,12 +13,12 @@ import logging
 import os
 import signal
 
-from transformation_portal.orchestrator.worker import run_worker_forever
+from transformation_portal.orchestrator.worker import JobExecutor, run_worker_forever
 
 logger = logging.getLogger(__name__)
 
 
-def _load_app_executor():
+def _load_app_executor() -> JobExecutor:
     app_module = importlib.import_module("app")
     return getattr(app_module, "_orchestrator_job_executor")
 

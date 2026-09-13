@@ -20,9 +20,10 @@ Postgres backend, and Phase 1.E wired `app.py` so `JobRepository` is the
 authoritative state surface while `JOBS` only carries runtime handles.
 With the Postgres backend enabled:
 
-- Restart preserves in-flight job records; the Phase 1.C sweeper marks
-  orphaned active jobs `worker_lost` with
-  `error.code = worker_lost_on_restart`.
+- With the memory queue, restart recovery marks orphaned active jobs
+  `worker_lost` with `error.code = worker_lost_on_restart`. With the Redis
+  locator queue, database-clock lease expiry owns recovery and preserves
+  live claims belonging to other hosts.
 - Multiple orchestrator workers can share state (a precondition for
   Phase 2 horizontal workers).
 - Job list/detail/cancel/artifact routes read durable job rows instead
@@ -38,9 +39,11 @@ emitted as the SSE `id`. A reconnect to
 `/v1/jobs/{job_id}/events` or `/v2/jobs/{job_id}/events` with a
 non-negative ASCII-decimal `Last-Event-ID` receives retained events with
 a higher sequence before live delivery; `Last-Event-ID: 0` requests all
-retained events. If the header is absent or blank, or no retained event
-has a higher sequence, the route emits current state before live or
-synthetic terminal delivery instead of replaying full history.
+retained events. Without a replay cursor, the route emits current state.
+Postgres live streams poll committed history and emit only committed terminal
+events; they do not synthesize a terminal event after a replay failure. See
+[bounded event replay](../deployment/paid_pilot_services.md#bounded-event-replay)
+for cursor gaps, polling, and retention behavior.
 
 ## Environment variables
 
@@ -77,7 +80,12 @@ make run-backend-local
 | --- | --- | --- |
 | `jobs` | One row per orchestrator job; mirrors the persistent slice of the legacy `app.py:Job`. JSONB columns hold `request`, `effective_request`, `logs_tail`, `artifacts`, `run_summary`, `error`. `version` increments on every update for optimistic concurrency. | `id` |
 | `job_artifacts` | One row per artifact-lookup entry. Mirrors `Job.artifact_lookup`. | `(job_id, path)` |
-| `job_events` | Append-only SSE event history with per-job monotonic `seq` so a reconnecting client can resume. | `id` (autoincrement BIGINT) |
+| `job_events` | Bounded SSE replay history with per-job monotonic `seq`. | `id` (autoincrement BIGINT) |
+| `job_event_sequences` | Monotonic counters independent of retained replay rows. | `job_id` |
+| `dispatch_attempts` | Immutable attempt identity, once-only claim fence, generation pointer, and cleanup marker. | `job_id` |
+| `admission_capacity` | Locked global and tenant active-job counters. | `scope` |
+| `dispatch_plans`, `operational_records`, `committed_generations` | Immutable canonical execution and publication evidence. | Digest or immutable record identifier |
+| `operational_outbox` | Pending dispatch and event delivery intents; removed after acknowledgement. | `id` |
 
 Indices: `jobs(created_at)`, `jobs(state)`, `jobs(finished_at)`,
 `job_artifacts(job_id)`, `job_events(job_id)`, and a unique
@@ -85,8 +93,11 @@ Indices: `jobs(created_at)`, `jobs(state)`, `jobs(finished_at)`,
 
 The three job tables are created by
 `migrations/versions/0001_initial_orchestrator_schema.py`. Apply the complete
-migration chain: `0002_operational_audit_events.py` additionally creates the
-operational audit store used by the app. Do not stop at revision 0001.
+migration chain through `0006_periodic_generation_scrub`: 0002 adds operational
+audit, 0003 adds admission/dispatch/publication authority, 0004 bounds replay
+with monotonic counters, 0005 tracks private attempt/staging cleanup, and 0006
+adds an indexed periodic scrub cursor for late writes from orphaned subprocesses.
+Do not stop at an earlier revision.
 
 ## Migrations
 
@@ -114,9 +125,10 @@ retries, raising `RepositoryError` after exhausted conflicts. Read-only
 `get`/`list` do not take this update lock. See
 [`postgres.py`](../../src/transformation_portal/orchestrator/storage/postgres.py).
 
-Durable shared state is only one prerequisite for external workers. Queue
-configuration, worker leases, tenant identity, and artifact storage need their
-own contract and service-backed validation.
+For Redis dispatch, operational transactions own state and artifact publication;
+database triggers reject direct projection mutations. The distributed authority
+and its service-backed validation are described below. Legacy memory-queue
+jobs retain the repository behavior described above.
 
 ## Tests
 
@@ -146,10 +158,10 @@ dispatch; it tests durable route authority rather than executing a model.
 | Concern | Recommendation |
 | --- | --- |
 | Provider | Any managed Postgres 16+ that supports `JSONB`. Section 9 of the gap doc is the canonical decision tree. |
-| Connection pool | `AsyncEngine` defaults with `pool_pre_ping=True` and `pool_recycle=300`. There is no `TP_DB_POOL_SIZE` runtime option; changing pool tuning requires a separate implementation and validation. |
+| Connection pool | `AsyncEngine` defaults with `pool_pre_ping=True`, `pool_recycle=300`, five-second connection/command/statement/lock bounds. There is no `TP_DB_POOL_SIZE` runtime option; changing pool tuning requires a separate implementation and validation. |
 | Backups | Out of scope for Phase 1.B; document in the provider's runbook. The orchestrator never assumes durability beyond commit. |
 | Schema changes | Always go through Alembic and `make db-revision` so the migration graph stays linear. |
-| Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The restart sweeper marks orphaned active jobs `worker_lost` with `error.code = worker_lost_on_restart`. |
+| Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The memory-queue restart sweeper marks orphaned jobs `worker_lost_on_restart`; Redis dispatch retains live claims and recovers expired leases using the database clock. |
 | Repository unavailable recovery | `JOB_REPOSITORY_UNAVAILABLE` is fail-closed and redacted. If it appears after fixing `TP_DATABASE_URL`, restart the backend process because repository construction failure is latched in process state. |
 
 ## Known limits in this layer
@@ -164,18 +176,15 @@ dispatch; it tests durable route authority rather than executing a model.
   stores live subprocess handles and cancellation tasks, while
   `EVENT_SUBSCRIBERS` stores live-delivery queues; neither is a durable
   fallback when repository reads or writes fail.
-- The memory event store is process-local and loses replay history on
-  restart. Postgres event append and replay persistence are deliberately
-  best-effort: failures are logged and delivery falls back to live,
-  current-state, or synthetic terminal events. Durable replay can
-  therefore contain gaps and is an operational recovery surface, not a
-  fail-closed or complete audit record.
-- Postgres event history has no independent TTL or per-job count cap.
-  Associated event rows are deleted when `PostgresJobRepository` deletes
-  the job. Normal app cleanup waits until `TP_JOB_RETENTION_SECONDS` has
-  elapsed and undeleted artifacts no longer block deletion. Events for
-  IDs without a job row are outside that cleanup; monitor `job_events`
-  growth.
+- The memory event store loses replay history on restart. Postgres retains at
+  most `TP_ORCHESTRATOR_EVENT_RETENTION_PER_JOB` events per job (default 4096),
+  pruning within the append transaction while preserving a monotonic counter.
+  Telemetry persistence can contain gaps; it remains operational recovery
+  rather than complete audit evidence. Distributed terminal events commit
+  with their authoritative outcome. See [bounded event replay](../deployment/paid_pilot_services.md#bounded-event-replay).
+- Job deletion removes its event history and counter. Orphan event namespaces
+  remain independently bounded by the same per-job cap; operators should
+  monitor the number of orphan namespaces as well as total replay storage.
 
 ---
 
@@ -183,3 +192,123 @@ dispatch; it tests durable route authority rather than executing a model.
 cutover - introduced 2026-05-14. Durable SSE replay wiring - introduced
 2026-05-30. Update this doc when the wiring or any subsequent phase
 changes the operator surface.*
+
+## Distributed dispatch and generation authority
+
+Redis deployments now use the versioned `:dispatch:v1:` queue namespace and
+Postgres operational records. The memory broker retains its local execution
+behavior. Before cutting over, stop legacy producers and workers, drain their
+raw-command queue, and revoke its Redis credentials. Run `make db-upgrade`,
+then give the new producer/worker credentials access only to the versioned
+locator namespace. `TP_REDIS_KEY_PREFIX` supplies the prefix before
+`:dispatch:v1:`; the default namespace is `tp:dispatch:v1:`. Existing raw-command
+Redis messages are deliberately not consumed by the new workers.
+
+Set `TP_ORCHESTRATOR_STATE_BACKEND=postgres`,
+`TP_ORCHESTRATOR_QUEUE_BACKEND=redis`, `TP_DATABASE_URL`, `TP_REDIS_URL`, and
+`TP_ORCHESTRATOR_EXECUTION_ROOT`. The execution root must be a protected shared
+directory at the same absolute path on API and worker hosts, owned by the
+service account with mode `0700`, outside tenant-writable directories. Its
+parent must exist. Missing or unsafe execution storage rejects admission.
+Both `TP_MAX_CONCURRENT_JOBS` and `TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT` must be
+positive. All API hosts must use matching limits: conflicting values fail
+closed. The database stores global and tenant counters, locks them in that
+order, and admits the job, canonical plan, immutable attempt/dispatch, and
+outbox entry in one transaction. The tenant cap applies to the `default`
+tenant when the pilot control plane is disabled. Operator changes to stored
+limits require a coordinated database change while admission is stopped;
+never lower a limit below its active count.
+
+An accepted HTTP job remains queued through a Redis outage. Its committed
+outbox retries the same locator; queued database records also repair Redis
+loss after an acknowledged delivery. Workers atomically claim each dispatch
+once, then reconstruct a fixed local entrypoint from the exact canonical
+`tp.execution.plan.v1` bytes. Broker payloads contain only immutable job,
+attempt, dispatch, tenant, plan-digest, and version fields. Neither broker
+payloads nor operational records contain an executable command. Lux consumes
+its prepared plan through the current Lux executor; archive operations use
+closed, operation-specific configurations with the current archive runner.
+This does not activate the separately gated Spatial/CAS executor convergence.
+
+Input and output roots must be available at the same authorized absolute
+paths on API and worker hosts. Workers recheck current root and tenant policy
+before spawning. Native executors write into protected execution storage;
+bounded regular outputs are atomically exported through pinned directory
+descriptors into a unique `.tp-attempts` directory under the requested root.
+Replacing that directory or an ancestor cannot redirect native output writes.
+The private workspace name derives from the immutable admitted output locator.
+Normal cleanup runs after child reaping; terminal database records and the
+periodic scrub also remove interrupted or late-recreated private workspaces.
+Do not change execution-root configuration until admitted jobs are drained and
+terminal cleanup has completed on the old shared root. Direct local plan
+consumers use private per-user temporary storage when no root is configured;
+an interrupted direct invocation requires cleanup of its exact workspace
+before retrying the same output locator.
+Each worker has a unique holder identifier;
+a database sequence supplies its epoch. Only a successful Redis heartbeat
+can renew the database fence. An independent monotonic deadline signals
+cancellation when either Redis or Postgres stalls; it does not wait for socket
+cancellation to finish. Pending network work prevents another lease acquisition,
+and connection/command timeouts bound cleanup after transport failures.
+Database-clock expiration terminalizes the attempt as `worker_lost` and releases its counters once. Expired locators are
+removed from Redis rather than requeued, and tombstones reject duplicate or
+late deliveries. An explicit retry submits a new job. API startup never
+classifies another host's live claim as an orphan.
+
+`GenerationPublisher` stages immutable objects inside the existing artifact
+store. Local publication uses fsynced files/directories and atomic no-replace
+links; S3 publication requires conditional `PutObject` (`If-None-Match: *`).
+The publisher copies regular, non-symlink output files through bounded
+buffers, pins each parent directory without following symlinks, rejects
+FIFO/special-file sources without blocking, and verifies staged lengths and SHA-256 digests before committing. The current limits are
+200 files, 4 GiB per file, 16 GiB per generation, and 1 MiB for its closed
+canonical manifest. Generation manifests and operational records are
+append-only. The database transaction verifies the running holder, epoch,
+tenant, and unexpired database lease; only then does it commit the manifest,
+reader pointer, terminal projection, event, and outbox. Raw output directories
+and staged objects are never artifact-route authority.
+
+Artifact routes resolve only the committed generation pointer. Failed or
+stale publication leaves staged objects invisible. Explicit deletion and
+retention revoke the pointer before deleting bytes; the immutable record
+retains the reason. A failed physical deletion is retryable and remains
+invisible. Redis delivery failures after a committed cancellation or deletion
+do not undo the operation. SSE replay reads committed event history, including
+terminal outcomes written in the same publication transaction.
+
+After a child is reaped and publication finishes, cleanup removes only the
+recorded private attempt directory, using descriptor-relative traversal that
+cannot follow a swapped ancestor. A bounded reconciler reserves up to 100 due
+terminal jobs per pass through an indexed cursor, checking each at most once
+per hour. Reservations advance before filesystem I/O, so a failed check cannot
+starve later jobs. Successful cleanup is recorded separately from the check
+cursor; explicit deletion can retry immediately. If no committed generation
+pointer exists, the scrub also deletes that job's invisible staging objects;
+otherwise committed objects are preserved. A changed pointer prevents marking
+cleanup complete. The periodic scrub removes late files recreated after an
+earlier cleanup by a stranded child. It is best-effort cleanup: worker-host
+supervisors must still reap subprocesses when the worker or host dies. The
+scrub does not replace process supervision or add per-check immutable records.
+Immutable evidence and dispatch tombstones intentionally outlive mutable job
+history and require an explicit evidence-retention policy. S3 credentials used for
+generation writes must enforce the dedicated prefix and conditional-create
+policy; avoid granting clients direct write access to committed objects.
+
+The dedicated service test database must end in `_fencing` or `_test`; its
+contents are truncated by the following test lane. Supply an isolated Redis
+instance/prefix and optional S3 endpoint/bucket with standard AWS credentials:
+
+```bash
+TP_DISPATCH_TEST_DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/dispatch_test \
+TP_DISPATCH_TEST_REDIS_URL=redis://HOST:6379/0 \
+TP_DISPATCH_TEST_S3_ENDPOINT=http://HOST:9000 \
+TP_DISPATCH_TEST_S3_BUCKET=dispatch-test \
+PYTHONPATH=src:. .venv/bin/pytest tests/orchestrator/test_dispatch_authority_services.py -q
+```
+
+The suite exercises independent-process admission contention, duplicate
+locators, an abruptly killed lease holder, stale publication rejection,
+transactional terminal delivery, fresh-session database mutation guards,
+real conditional S3 writes, and HTTP admission through an independent native
+archive worker to committed artifact download. These bounded fixtures are
+correctness evidence; they are not production TIFF performance evidence.

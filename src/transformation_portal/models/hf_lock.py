@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+from transformation_portal.core.security.checkpoint_index import checkpoint_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,8 @@ class HFModelLockRecord:
         revision = payload.get("revision")
         if not revision:
             raise HFModelLockError(f"Manifest payload for '{repo_id}' missing 'revision'")
+        if not isinstance(revision, str) or re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None:
+            raise HFModelLockError(f"Manifest revision for '{repo_id}' must be a full 40-character commit SHA")
 
         # Parse required_files if present
         raw_files = payload.get("required_files", [])
@@ -92,6 +97,13 @@ class HFModelLockRecord:
                         filesize_bytes=file_entry.get("filesize_bytes"),
                     )
                 )
+            else:
+                raise HFModelLockError("Manifest required_files contains an invalid entry")
+        for required_file in required_files:
+            try:
+                checkpoint_relative_path(required_file.path)
+            except ValueError as exc:
+                raise HFModelLockError("Manifest required_files contains an unsafe path") from exc
 
         return cls(
             repo_id=repo_id,

@@ -53,7 +53,7 @@ def get_queue_broker() -> QueueBroker:
 
     if backend == "redis":
         try:
-            from transformation_portal.orchestrator.queue.redis import RedisQueueBroker
+            from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
         except ImportError as exc:
             raise RuntimeError(
                 f"{_BACKEND_ENV}=redis requires the redis-py async client. "
@@ -66,8 +66,9 @@ def get_queue_broker() -> QueueBroker:
             message = f"{_BACKEND_ENV}=redis requires {_REDIS_URL_ENV} to be set (e.g. redis://localhost:6379/0)."
             raise RuntimeError(message)
 
-        key_prefix = os.getenv(_REDIS_KEY_PREFIX_ENV, "").strip() or "tp:queue:"
-        _broker = RedisQueueBroker(redis_url=redis_url, key_prefix=key_prefix)
+        key_prefix = os.getenv(_REDIS_KEY_PREFIX_ENV, "").strip() or "tp"
+        key_prefix = key_prefix.rstrip(":") + ":dispatch:v1:"
+        _broker = RedisLocatorQueueBroker(redis_url=redis_url, key_prefix=key_prefix)
         return _broker
 
     raise RuntimeError(f"Unsupported {_BACKEND_ENV}={backend!r}; expected 'memory' or 'redis'.")

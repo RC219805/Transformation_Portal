@@ -2,17 +2,98 @@
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import pytest
 
+from transformation_portal.models import hf_manifest_loader as loader_module
 from transformation_portal.models.hf_manifest_loader import (
     HFManifestLoaderError,
     HFResolvedLocalModel,
     _common_local_root,
+    validate_local_model_shard_indexes,
 )
 
 pytestmark = pytest.mark.unit
+
+
+def test_manifest_resolution_validates_existing_local_index_before_returning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "model.bin.index.json").write_text(json.dumps({"weight_map": {"a": "../outside.bin"}}))
+    monkeypatch.setattr(loader_module, "_infer_local_root_from_hub", lambda **kwargs: tmp_path)
+    with pytest.raises(HFManifestLoaderError, match="unsafe weight-map path"):
+        loader_module.resolve_manifest_model("test", {"repo_id": "org/repo", "revision": "a" * 40})
+
+
+def test_verified_model_files_cannot_cross_snapshot_roots() -> None:
+    with pytest.raises(HFManifestLoaderError, match="one snapshot root"):
+        _common_local_root([Path("/cache/snapshots/one/model.bin"), Path("/cache/snapshots/two/config.json")])
+
+
+@pytest.mark.parametrize("shard", ["../outside.bin", "/tmp/outside.bin", "C:\\outside.bin"])
+def test_local_model_index_rejects_traversal(tmp_path: Path, shard: str) -> None:
+    (tmp_path / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"a": shard}}))
+    with pytest.raises(HFManifestLoaderError, match="unsafe weight-map path"):
+        validate_local_model_shard_indexes(tmp_path)
+
+
+def test_local_model_index_rejects_external_symlink(tmp_path: Path) -> None:
+    root = tmp_path / "model"
+    root.mkdir()
+    (tmp_path / "outside.bin").write_bytes(b"model")
+    (root / "shard.bin").symlink_to(tmp_path / "outside.bin")
+    (root / "model.bin.index.json").write_text(json.dumps({"weight_map": {"a": "shard.bin"}}))
+    with pytest.raises(HFManifestLoaderError, match="outside"):
+        validate_local_model_shard_indexes(root)
+
+
+def test_hf_blob_symlinks_remain_supported(tmp_path: Path) -> None:
+    cache = tmp_path / "models--org--repo"
+    root = cache / "snapshots" / ("a" * 40)
+    root.mkdir(parents=True)
+    blobs = cache / "blobs"
+    blobs.mkdir()
+    (blobs / "model").write_bytes(b"weights")
+    (root / "shard.bin").symlink_to(blobs / "model")
+    (blobs / "index").write_text(json.dumps({"weight_map": {"a": "shard.bin"}}))
+    (root / "model.bin.index.json").symlink_to(blobs / "index")
+    validate_local_model_shard_indexes(root)
+
+
+def test_hf_blob_directory_cannot_redirect_outside_cache(tmp_path: Path) -> None:
+    cache = tmp_path / "models--org--repo"
+    root = cache / "snapshots" / ("a" * 40)
+    root.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "model.bin").write_bytes(b"weights")
+    (cache / "blobs").symlink_to(outside, target_is_directory=True)
+    (root / "shard.bin").symlink_to(cache / "blobs" / "model.bin")
+    (root / "model.bin.index.json").write_text(json.dumps({"weight_map": {"a": "shard.bin"}}))
+    with pytest.raises(HFManifestLoaderError, match="blob directory must not be a symlink"):
+        validate_local_model_shard_indexes(root)
+
+
+def test_local_model_index_limits_shards_before_resolving_them(tmp_path: Path) -> None:
+    (tmp_path / "model.bin.index.json").write_text(
+        json.dumps({"weight_map": {f"layer{i}": f"shard{i}.bin" for i in range(1025)}})
+    )
+    with pytest.raises(HFManifestLoaderError, match="too many checkpoint shards"):
+        validate_local_model_shard_indexes(tmp_path)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX FIFO")
+@pytest.mark.parametrize("fifo_name", ["shard.bin", "model.bin.index.json"])
+def test_local_model_index_rejects_fifo_without_opening_it_blocking(tmp_path: Path, fifo_name: str) -> None:
+    (tmp_path / "model.bin.index.json").write_text(json.dumps({"weight_map": {"a": "shard.bin"}}))
+    (tmp_path / "shard.bin").write_bytes(b"weights")
+    (tmp_path / fifo_name).unlink()
+    os.mkfifo(tmp_path / fifo_name)
+    with pytest.raises(HFManifestLoaderError, match="not a regular file"):
+        validate_local_model_shard_indexes(tmp_path)
 
 
 class TestCommonLocalRoot:

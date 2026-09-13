@@ -49,6 +49,8 @@ repos:
         name: Black (CI parity)
         entry: scripts/setup/run_lint_tool.sh black
         language: system
+        # File batches share the bootstrap-owned .venv-lint directory.
+        require_serial: true
         types_or: [python, pyi]
         files: ^(src|tests)/.*\.pyi?$
 
@@ -56,6 +58,7 @@ repos:
         name: isort (CI parity)
         entry: scripts/setup/run_lint_tool.sh isort
         language: system
+        require_serial: true
         types: [python]
         files: ^(src|tests)/.*\.py$
 

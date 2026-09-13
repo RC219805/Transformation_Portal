@@ -1,0 +1,12 @@
+{
+  "secret": "frontdoor-test-identity-secret-32bytes",
+  "actor": {
+    "username": "admin",
+    "accessEmail": "admin@example.com",
+    "role": "admin"
+  },
+  "method": "GET",
+  "target": "/v1/jobs/job_a/artifacts/image%20one.png?download=1",
+  "now": 1700000000000,
+  "assertion": "eyJ2IjoxLCJpYXQiOjE3MDAwMDAwMDAsIm1ldGhvZCI6IkdFVCIsInRhcmdldCI6Ii92MS9qb2JzL2pvYl9hL2FydGlmYWN0cy9pbWFnZSUyMG9uZS5wbmc_ZG93bmxvYWQ9MSIsImFjdG9yIjp7InVzZXJuYW1lIjoiYWRtaW4iLCJhY2Nlc3NFbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwicm9sZSI6ImFkbWluIn19.d0813eea61d791a0be5f96c286cd407cc952e6bfc9021d6c730f484efc54af0f"
+}

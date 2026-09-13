@@ -60,6 +60,11 @@ entrypoint also bounds body bytes, nesting, string length, nodes, edges,
 fanout, inputs, and requested outputs, and rejects duplicate object members
 and non-finite numbers.
 
+Native preparation and carried-plan input binding both reject paths that
+collide after Unicode NFC normalization and case folding. This keeps a
+consumed plan's selection valid on the same portable filesystems as a native
+plan, before any processing snapshots are created.
+
 The plan fingerprint is SHA-256 over canonical `tp.canonical.json.v1` bytes of
 the complete payload with `plan_fingerprint_sha256` omitted. It detects
 payload drift; it is not a signature or authorization grant.
@@ -69,8 +74,9 @@ payload drift; it is not a signature or authorization grant.
 `transformation_portal.stage_graph.registry` is a static semantic allowlist.
 It intentionally contains no constructors, import paths, executable fields,
 commands, or plugin hooks. The current entries describe the Lux v1 stages and
-are closed for this version. New identifiers require a successor plan schema
-and matching registry contract tests.
+the isolated archive operation extension described below. Both domains are
+closed; arbitrary registry additions require a versioned contract and matching
+registry tests.
 
 Schema validity alone grants neither model nor execution authority. A domain
 adapter must revalidate carried model, revision, license, backend, tenant, and
@@ -222,6 +228,35 @@ The legacy `lux_depth_v3.pipeline_coordinator.ExecutionPlan` import is also
 preserved as the flat live-executor projection and is explicitly aliased as
 `LegacyExecutionPlan`. It must not be confused with
 `core.execution_plan.ExecutionPlan`.
+
+## Distributed archive dispatch extension
+
+Distributed admission carries canonical `tp.execution.plan.v1` bytes for both
+Lux and the existing archive gates. The archive extension uses the versioned
+`tp.stage.archive.operation.v1` registry entry and
+`tp.stage.config.archive.operation.v1` configuration. It adds an `archive`
+backend and one required `archive_bundle` output. Existing Lux producers emit
+the same fields and canonical bytes; older readers reject archive plans.
+Deploy API, workers, packaged schema, and database migrations together before
+enabling distributed dispatch. Mixed-version archive dispatch is unsupported.
+
+An archive plan contains exactly one required operation and no model, fallback,
+Lux stage, preset, or dependency edge. Its closed parameter template is selected
+from the existing ten archive commands. It cannot contain an executable,
+module, shell expression, or arbitrary argument vector. File inputs carry
+SHA-256 identities; the consumer verifies and copies them through regular-file
+descriptors into private snapshots. Output paths are relative to the admitted
+output root and are rebound to the worker's private attempt directory.
+Directory inputs retain the existing archive walkers and authorized filesystem
+boundary; this contract does not snapshot an entire mutable archive tree.
+
+The HTTP boundary prepares plans from validated requests before admission.
+Postgres stores the exact canonical bytes and immutable tenant/attempt identity;
+Redis carries only a versioned locator. A fixed dispatch consumer revalidates
+those bytes and invokes the current native Lux or archive implementation. A
+database lease fence controls the committed artifact-generation pointer.
+Broker delivery, a subprocess exit, or an object-store upload alone cannot
+publish a result. See [distributed operation and migration guidance](../runtimes/orchestrator-postgres.md).
 
 ## Non-activation boundary
 

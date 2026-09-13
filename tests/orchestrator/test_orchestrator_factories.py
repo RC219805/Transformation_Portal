@@ -107,17 +107,19 @@ class TestStorageFactory:
         assert isinstance(storage_factory.get_operational_audit_store(), PostgresOperationalAuditStore)
 
     @pytest.mark.parametrize(
-        ("factory_name", "class_name"),
+        ("factory_name", "module_name", "class_name"),
         [
-            ("get_job_repository", "PostgresJobRepository"),
-            ("get_job_event_store", "PostgresJobEventStore"),
-            ("get_operational_audit_store", "PostgresOperationalAuditStore"),
+            ("get_job_repository", "postgres", "PostgresJobRepository"),
+            ("get_job_event_store", "postgres", "PostgresJobEventStore"),
+            ("get_operational_audit_store", "operational", "PostgresOperationalRecordStore"),
+            ("get_operational_record_store", "operational", "PostgresOperationalRecordStore"),
         ],
     )
     def test_postgres_backend_missing_sql_dependencies_reports_install_guidance(
         self,
         monkeypatch: pytest.MonkeyPatch,
         factory_name: str,
+        module_name: str,
         class_name: str,
     ) -> None:
         import builtins
@@ -127,7 +129,7 @@ class TestStorageFactory:
         real_import = builtins.__import__
 
         def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: ANN001, ANN202
-            if name == "transformation_portal.orchestrator.storage.postgres" and class_name in fromlist:
+            if name == f"transformation_portal.orchestrator.storage.{module_name}" and class_name in fromlist:
                 raise ImportError("sqlalchemy unavailable")
             return real_import(name, globals, locals, fromlist, level)
 

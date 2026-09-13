@@ -33,8 +33,9 @@ import signal
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
+from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator, _dispatch_fence
 from transformation_portal.orchestrator.queue import (
     LeaseStatus,
     QueueBroker,
@@ -44,6 +45,8 @@ from transformation_portal.orchestrator.queue.base import (
     JobEnqueueRequest,
     LeaseNotHeldError,
 )
+from transformation_portal.orchestrator.storage import get_operational_record_store
+from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
 
 logger = logging.getLogger(__name__)
 
@@ -94,17 +97,19 @@ class RetryableExecutorUnavailable(Exception):
 # by the heartbeat loop when the broker reports ``LeaseStatus.cancelled``;
 # the executor must observe it and exit promptly so the lease can be
 # released.
-JobExecutor = Callable[[JobEnqueueRequest, asyncio.Event], Awaitable[int]]
+JobExecutor = Callable[[JobEnqueueRequest | DispatchLocator, asyncio.Event], Awaitable[int]]
 
 
 async def _default_executor(
-    request: JobEnqueueRequest,
+    request: JobEnqueueRequest | DispatchLocator,
     cancellation_event: asyncio.Event,
 ) -> int:
     """Lightweight fallback executor for this generic runner module.
 
     Production workers pass the app-owned orchestrator executor instead.
     """
+    if isinstance(request, DispatchLocator):
+        raise RuntimeError("canonical dispatch requires the app-owned trusted executor")
     logger.info(
         "phase2a placeholder executor processing job_id=%s argv=%s",
         request.job_id,
@@ -134,22 +139,76 @@ class WorkerRunner:
         self._broker = broker
         self._config = config
         self._executor = executor
+        self._pending_network: set[asyncio.Future[Any]] = set()
+
+    async def _network(self, operation: Awaitable[Any], *, timeout: float) -> Any:
+        """Bound waiting without waiting for an unresponsive socket's cancellation."""
+        task = asyncio.ensure_future(operation)
+        self._pending_network.add(task)
+
+        def completed(future: asyncio.Future[Any]) -> None:
+            self._pending_network.discard(future)
+            if not future.cancelled():
+                future.exception()  # consume a late failure after the deadline
+
+        task.add_done_callback(completed)
+        try:
+            done, _ = await asyncio.wait({task}, timeout=max(0.001, timeout))
+            if not done:
+                task.cancel()
+                raise TimeoutError("worker authority operation exceeded its lease safety deadline")
+            return task.result()
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
 
     async def step(self) -> bool:
         """Process at most one job. Returns ``True`` if work was done.
 
         Callers loop on this; a ``False`` return is the signal to
-        back off and poll again.
+        back off and poll again, including when the broker is unavailable.
         """
-        lease = await self._broker.acquire_lease(
-            self._config.worker_id,
-            lease_seconds=self._config.lease_seconds,
-        )
+        if self._pending_network:
+            return False
+        lease_deadline = asyncio.get_running_loop().time() + self._config.lease_seconds
+        try:
+            lease = await self._network(
+                self._broker.acquire_lease(
+                    self._config.worker_id,
+                    lease_seconds=self._config.lease_seconds,
+                ),
+                timeout=min(5.0, self._config.lease_seconds),
+            )
+        except Exception:  # noqa: BLE001 - broker IO must not stop the supervisor
+            logger.exception("worker %s could not acquire a lease; backing off", self._config.worker_id)
+            return False
         if lease is None:
             return False
 
+        fence = None
+        if isinstance(lease.request, DispatchLocator):
+            try:
+                remaining = lease_deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    raise TimeoutError("broker lease expired before claim")
+                fence = await self._network(
+                    get_operational_record_store().claim_dispatch(
+                        lease.request, self._config.worker_id, lease_seconds=self._config.lease_seconds
+                    ),
+                    timeout=min(5.0, remaining),
+                )
+            except DispatchAuthorityLost:
+                try:
+                    await self._network(self._broker.release_lease(self._config.worker_id, lease.job_id), timeout=5.0)
+                except Exception:
+                    logger.exception("rejected dispatch release failed; leaving broker item for reclaim")
+                return True
+            except Exception:
+                logger.exception("claim unavailable; retaining broker lease for fail-closed recovery")
+                return False
+        token = _dispatch_fence.set(fence)
         cancellation_event = asyncio.Event()
-        heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease.job_id, cancellation_event))
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease.job_id, cancellation_event, fence, lease_deadline))
         release_lease = True
         try:
             try:
@@ -185,43 +244,75 @@ class WorkerRunner:
                 await heartbeat_task
             except (asyncio.CancelledError, LeaseNotHeldError):
                 pass
+            if fence is not None:
+                try:
+                    # An executor must commit its terminal outcome. A return or
+                    # crash without a commit consumes this attempt once only.
+                    await self._network(
+                        get_operational_record_store().finish_dispatch(
+                            fence,
+                            state="failed",
+                            error={"code": "RUNNER_ERROR", "message": "Executor exited without committed publication."},
+                        ),
+                        timeout=min(5.0, self._config.lease_seconds),
+                    )
+                except DispatchAuthorityLost:
+                    pass
+                except Exception:
+                    release_lease = False
+                    logger.exception("terminal authority unavailable; leaving claim for DB-clock expiry")
+            _dispatch_fence.reset(token)
             if release_lease:
-                await self._broker.release_lease(self._config.worker_id, lease.job_id)
+                try:
+                    await self._network(self._broker.release_lease(self._config.worker_id, lease.job_id), timeout=5.0)
+                except Exception:  # noqa: BLE001 - an uncertain release is left for reclaim
+                    logger.exception(
+                        "worker %s could not release lease for job %s; leaving lease for reclaim",
+                        self._config.worker_id,
+                        lease.job_id,
+                    )
         return True
 
     async def _heartbeat_loop(
         self,
         job_id: str,
         cancellation_event: asyncio.Event,
+        fence: Optional[DispatchFence] = None,
+        lease_deadline: Optional[float] = None,
     ) -> None:
+        clock = asyncio.get_running_loop().time
+        deadline = lease_deadline if lease_deadline is not None else clock() + self._config.lease_seconds
         while True:
-            await asyncio.sleep(self._config.heartbeat_interval_seconds)
-            try:
+            await asyncio.sleep(min(self._config.heartbeat_interval_seconds, max(0.0, deadline - clock())))
+            renewal_started = clock()
+
+            async def renew() -> LeaseStatus:
                 status = await self._broker.extend_lease(
-                    self._config.worker_id,
-                    job_id,
-                    lease_seconds=self._config.lease_seconds,
+                    self._config.worker_id, job_id, lease_seconds=self._config.lease_seconds
                 )
-            except LeaseNotHeldError:
-                # Our lease was reclaimed by the broker (likely because
-                # this worker fell behind on its heartbeat). Signal
-                # cancellation so the executor stops; the orchestrator
-                # will see worker_lost via the broker's reclaim sweep.
-                logger.warning(
-                    "worker %s lost lease on job %s; signalling cancellation",
-                    self._config.worker_id,
-                    job_id,
-                )
+                if status is LeaseStatus.active and fence is not None:
+                    # The DB fence renews only after confirmed broker authority.
+                    await get_operational_record_store().renew_dispatch(fence, lease_seconds=self._config.lease_seconds)
+                return status
+
+            try:
+                remaining = deadline - renewal_started
+                if remaining <= 0:
+                    raise TimeoutError("worker lease expired without a confirmed renewal")
+                status = await self._network(renew(), timeout=remaining)
+            except Exception:
+                # This deadline is independent of TCP/socket cancellation: a
+                # paused server cannot keep a child alive past its last lease.
                 cancellation_event.set()
+                logger.exception(
+                    "worker %s lost or could not confirm lease for %s; signalling cancellation", self._config.worker_id, job_id
+                )
                 return
             if status is LeaseStatus.cancelled:
-                logger.info(
-                    "worker %s received cancellation for job %s",
-                    self._config.worker_id,
-                    job_id,
-                )
                 cancellation_event.set()
                 return
+            # Anchor to request start, conservatively including roundtrip time.
+            deadline = renewal_started + self._config.lease_seconds
 
 
 async def run_worker_forever(
@@ -244,6 +335,13 @@ async def run_worker_forever(
     broker_was_constructed = broker is None
     broker = broker if broker is not None else get_queue_broker()
     config = config if config is not None else _config_from_env()
+    if executor is _default_executor:
+        from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
+
+        if isinstance(broker, RedisLocatorQueueBroker):
+            if broker_was_constructed:
+                await broker.close()
+            raise RuntimeError("Redis locator workers require the app-owned canonical executor")
     runner = WorkerRunner(broker=broker, config=config, executor=executor)
     stop_event = stop_event if stop_event is not None else asyncio.Event()
 

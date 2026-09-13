@@ -20,6 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Set
 
+from transformation_portal.orchestrator.dispatch import DispatchLocator
 from transformation_portal.orchestrator.queue.base import (
     JobEnqueueRequest,
     JobLease,
@@ -51,7 +52,9 @@ class MemoryQueueBroker(QueueBroker):
         self._tracked: Set[str] = set()
         self._lock = asyncio.Lock()
 
-    async def enqueue(self, request: JobEnqueueRequest) -> None:
+    async def enqueue(self, request: JobEnqueueRequest | DispatchLocator) -> None:
+        if not isinstance(request, JobEnqueueRequest):
+            raise QueueBrokerError("memory queues do not carry distributed dispatch locators")
         async with self._lock:
             if request.job_id in self._tracked:
                 raise QueueBrokerError(f"job {request.job_id!r} already pending in the queue or leased")

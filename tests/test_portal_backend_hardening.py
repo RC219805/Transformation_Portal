@@ -449,7 +449,7 @@ def test_artifact_fingerprint_reports_skipped_size_above_cap(tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(os.name == "nt", reason="process-group cancel is POSIX-only")
-def test_signal_process_tree_uses_killpg_when_session_matches() -> None:
+def test_signal_process_tree_uses_killpg_when_session_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     recorded: dict[str, object] = {}
 
     class _FakeProc:
@@ -461,21 +461,17 @@ def test_signal_process_tree_uses_killpg_when_session_matches() -> None:
 
     def fake_getpgid(pid: int) -> int:
         assert pid == 12345
-        return 12345  # same as pid => the child is its own session leader
+        return 12345
 
     def fake_killpg(pgid: int, sig: int) -> None:
         recorded["pgid"] = pgid
         recorded["sig"] = sig
 
-    original_getpgid = os.getpgid
-    original_killpg = os.killpg
-    os.getpgid = fake_getpgid  # type: ignore[assignment]
-    os.killpg = fake_killpg  # type: ignore[assignment]
-    try:
-        delivered = orchestrator_app._signal_process_tree(_FakeProc(), signal.SIGTERM)
-    finally:
-        os.getpgid = original_getpgid  # type: ignore[assignment]
-        os.killpg = original_killpg  # type: ignore[assignment]
+    # Owning a process group alone does not establish isolated-session authority.
+    monkeypatch.setattr(os, "getpgid", fake_getpgid)
+    monkeypatch.setattr(os, "getsid", fake_getpgid)
+    monkeypatch.setattr(os, "killpg", fake_killpg)
+    delivered = orchestrator_app._signal_process_tree(_FakeProc(), signal.SIGTERM)
 
     assert delivered is True
     assert recorded == {"pgid": 12345, "sig": signal.SIGTERM}

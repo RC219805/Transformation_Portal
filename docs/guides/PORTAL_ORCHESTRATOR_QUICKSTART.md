@@ -90,6 +90,23 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
 
+Broker cancellation terminates the worker's subprocess even when it stops
+writing logs. On POSIX, cancellation targets the isolated process group created
+by the worker, including descendants whose group leader has already exited.
+The existing cancellation grace bounds TERM-to-KILL escalation and process
+waiting. Detached descendants are outside that group authority; cleanup drains
+captured stdout in bounded chunks and closes the owned pipe after the grace
+expires if another process still holds it open.
+
+Shutdown cancellation publishes `canceled` after child cleanup. Runner failures
+also clean up the child before publishing terminal artifacts and events. If
+another path already published a terminal outcome, cleanup preserves its state,
+exit code, and error and emits no second `done` event.
+
+S3 fingerprinting checks both object metadata and streamed bytes against its
+per-object byte budget. Oversized content reports `skipped_size`; other size
+disagreements between HEAD metadata and GET content report `unavailable`.
+
 ## Readiness Semantics
 
 - `GET /ready` and `GET /healthz` are liveness probes. They tell you the service answered, not that a given pipeline is dispatchable.

@@ -182,6 +182,17 @@ class ArtifactStore(ABC):
         ``write_bytes``, and return metadata for the stored artifact.
         """
 
+    async def write_immutable_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> None:
+        """Create a generation object once; an existing key must never be replaced."""
+        raise ArtifactStoreError("artifact backend does not support immutable generation writes")
+
     async def presign_get(
         self,
         job_id: str,

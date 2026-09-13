@@ -12,13 +12,16 @@ Design intent:
 from __future__ import annotations
 
 import logging
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.storage.cas_store import ArtifactStore
 
+from transformation_portal.core.security.checkpoint_index import MAX_INDEX_BYTES, parse_checkpoint_weight_map
 from transformation_portal.models.hf_lock import (
     HFModelLockError,
     HFModelLockRecord,
@@ -30,6 +33,64 @@ logger = logging.getLogger(__name__)
 
 class HFManifestLoaderError(RuntimeError):
     """Raised when a manifest-aware local model load cannot be prepared."""
+
+
+def validate_local_model_shard_indexes(local_root: Path) -> None:
+    """Validate local index bytes and regular shard targets before model loading.
+
+    Normal HF blob symlinks remain supported. This is a validation boundary,
+    not isolation from another process that can write this user's model cache.
+    No model weights are downloaded or copied by this check.
+    """
+    root = local_root.resolve(strict=True)
+    allowed_roots = [root]
+    if root.parent.name == "snapshots" and root.parent.parent.name.startswith("models--"):
+        blobs = root.parent.parent / "blobs"
+        if blobs.is_symlink():
+            raise HFManifestLoaderError("Unsafe local model checkpoint index: HF blob directory must not be a symlink")
+        allowed_roots.append(blobs)
+
+    def open_regular(path: Path) -> BinaryIO:
+        target = path.resolve(strict=True)
+        if not any(target.is_relative_to(allowed) for allowed in allowed_roots):
+            raise ValueError("Checkpoint artifact resolves outside the model snapshot and its HF blobs")
+        handle = os.fdopen(os.open(target, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)), "rb")
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            handle.close()
+            raise ValueError("Checkpoint artifact is not a regular file")
+        return handle
+
+    try:
+        indexes: list[Path] = []
+        with os.scandir(root) as entries:
+            for number, entry in enumerate(entries, 1):
+                if number > 4096:
+                    raise ValueError("Model snapshot contains too many directory entries")
+                if entry.name.endswith(".index.json"):
+                    indexes.append(Path(entry.path))
+                    if len(indexes) > 16:
+                        raise ValueError("Model snapshot contains too many checkpoint indexes")
+        for index in sorted(indexes):
+            with open_regular(index) as handle:
+                before = os.fstat(handle.fileno())
+                raw = handle.read(MAX_INDEX_BYTES + 1)
+                after = os.fstat(handle.fileno())
+            if (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            ):
+                raise ValueError("Checkpoint index changed during validation")
+            weight_map = parse_checkpoint_weight_map(raw)
+            shards = set(weight_map.values())
+            if len(shards) > 1024:
+                raise ValueError("Model snapshot contains too many checkpoint shards")
+            for shard in sorted(shards):
+                with open_regular(index.parent / shard):
+                    pass
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HFManifestLoaderError(f"Unsafe local model checkpoint index: {exc}") from exc
 
 
 @dataclass(frozen=True)
@@ -77,6 +138,8 @@ def _common_local_root(paths: list[Path]) -> Path:
         raise HFManifestLoaderError(f"Unable to infer Hugging Face snapshot root from path: {first}")
     snapshot_index = parts.index("snapshots")
     root = Path(*parts[: snapshot_index + 2])
+    if any(not path.is_relative_to(root) for path in paths):
+        raise HFManifestLoaderError("Verified model files do not share one snapshot root")
     return root
 
 
@@ -174,6 +237,8 @@ def resolve_manifest_model(
             cache_dir=cache_dir,
         )
         resolved_files = {}
+
+    validate_local_model_shard_indexes(local_root)
 
     logger.info(
         "Resolved manifest model '%s' (%s@%s) to local root: %s",

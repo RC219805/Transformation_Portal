@@ -50,6 +50,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from transformation_portal.orchestrator.dispatch import DispatchLocator
+
 
 class QueueBrokerError(RuntimeError):
     """Base class for queue-broker failures (lease conflicts, IO, etc.)."""
@@ -118,7 +120,7 @@ class JobLease:
     job_id: str
     worker_id: str
     deadline: float
-    request: JobEnqueueRequest
+    request: JobEnqueueRequest | DispatchLocator
 
 
 class QueueBroker(ABC):
@@ -132,7 +134,7 @@ class QueueBroker(ABC):
     """
 
     @abstractmethod
-    async def enqueue(self, request: JobEnqueueRequest) -> None:
+    async def enqueue(self, request: JobEnqueueRequest | DispatchLocator) -> None:
         """Admit a job for execution.
 
         ``job_id`` is treated as a unique admission token: while the

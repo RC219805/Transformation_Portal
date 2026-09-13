@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import random
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -382,6 +383,38 @@ def _write_runtime_identity_report(
         dump_json(payload, handle, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
+_INFERENCE_SEED_POLICY = "tp.da3.rgb-seed.v1"
+
+
+def _input_inference_seed(image: Image.Image) -> int:
+    """Hash canonical RGB pixels in bounded stripes, independent of encoding."""
+    if image.mode != "RGB":
+        raise ValueError("DA3 inference seed requires canonical RGB pixels")
+    digest = hashlib.sha256(_INFERENCE_SEED_POLICY.encode("ascii") + b"\0")
+    digest.update(f"{image.width}x{image.height}\0".encode("ascii"))
+    for top in range(0, image.height, 64):
+        digest.update(image.crop((0, top, image.width, min(top + 64, image.height))).tobytes())
+    # uint32 is accepted by every seeded library and exactly representable in
+    # JSON metadata. Cache identity still binds the complete source/input hash.
+    return int.from_bytes(digest.digest()[:4], "big")
+
+
+def _seed_isolated_inference(image: Image.Image) -> int:
+    """Seed only this one-shot worker, never the parent's in-process engine.
+
+    Upstream DA3 samples non-sky pixels with torch.randint to estimate a sky
+    quantile. Seeding before the fresh engine loads/predicts makes that sampling
+    repeatable for this input. torch.manual_seed covers CPU and device RNGs.
+    """
+    import torch
+
+    seed = _input_inference_seed(image)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    return seed
+
+
 def _run_inference(
     *,
     input_image: Path,
@@ -454,6 +487,7 @@ def _run_inference(
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
+    inference_seed = _seed_isolated_inference(image)
     result = engine.predict(image)
 
     if expected_runtime_identity_sha256 is not None:
@@ -496,8 +530,11 @@ def _run_inference(
             depth_digest.update(chunk)
     depth_size_bytes = output_depth.stat().st_size
 
+    metadata = dict(result.metadata)
+    metadata["inference_seed_policy"] = _INFERENCE_SEED_POLICY
+    metadata["inference_seed"] = inference_seed
     payload = {
-        "metadata": result.metadata,
+        "metadata": metadata,
         "device": result.metadata.get("device", device),
         "dtype": "float32",
         "input_size": [

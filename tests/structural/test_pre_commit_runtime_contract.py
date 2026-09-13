@@ -54,6 +54,16 @@ def test_repo_python_runner_is_executable() -> None:
     assert os.access(runner, os.X_OK), f"{runner} must be executable for pre-commit system hooks"
 
 
+@pytest.mark.parametrize("tool", ["black", "isort"])
+def test_lint_environment_bootstrap_hooks_run_serially(tool: str) -> None:
+    config = _load_pre_commit_config()
+    hooks = {str(hook.get("id")): hook for repo in config.get("repos", []) for hook in repo.get("hooks", [])}
+    hook = hooks[f"{tool}-ci-parity"]
+
+    assert hook["entry"] == f"scripts/setup/run_lint_tool.sh {tool}"
+    assert hook.get("require_serial") is True, "concurrent file batches must not bootstrap the same lint environment"
+
+
 def test_install_hooks_target_documents_all_installed_hook_types() -> None:
     config = _load_pre_commit_config()
     installed_hook_types = set(config.get("default_install_hook_types") or [])
