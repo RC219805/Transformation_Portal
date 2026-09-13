@@ -345,6 +345,94 @@ def test_cross_tenant_auxiliary_input_is_denied_before_preview(monkeypatch, tmp_
     assert not other.exists()
 
 
+@pytest.mark.parametrize("kind", ["outside", "prefix_sibling", "parent", "relative", "tilde", "nul", "returning_symlink"])
+def test_tenant_path_is_confined_before_user_path_filesystem_operations(monkeypatch, tmp_path, kind):
+    monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_WORKSPACE_ROOT", tmp_path / "workspaces")
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_CAS_ROOT", tmp_path / "cas")
+    monkeypatch.setattr(orchestrator_app, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(orchestrator_app, "_record_pilot_audit", _audit_noop)
+    owned = tmp_path / "workspaces" / "tenant_a"
+    other = tmp_path / "workspaces" / "tenant_b"
+    if kind == "returning_symlink":
+        other.mkdir(parents=True)
+        (other / "returning").symlink_to(owned, target_is_directory=True)
+    raw = {
+        "outside": str(other / "secret.jsonl"),
+        "prefix_sibling": str(owned.with_name("tenant_a_extra") / "secret.jsonl"),
+        "parent": str(owned / ".." / "tenant_a" / "manifest.jsonl"),
+        "relative": "workspaces/tenant_b/secret.jsonl",
+        "tilde": "~other_user/secret.jsonl",
+        "nul": str(owned / "bad\x00path"),
+        "returning_symlink": str(other / "returning" / "manifest.jsonl"),
+    }[kind]
+    original_resolve, original_expanduser = Path.resolve, Path.expanduser
+
+    def guarded_resolve(path, *args, **kwargs):
+        if str(path) == raw:
+            raise AssertionError("unconfined request path reached filesystem resolution")
+        return original_resolve(path, *args, **kwargs)
+
+    def guarded_expanduser(path):
+        if str(path) == raw:
+            raise AssertionError("unconfined request path reached home-directory expansion")
+        return original_expanduser(path)
+
+    async def forbidden_preview(*args, **kwargs):
+        pytest.fail("unconfined request path reached content-inspecting preview")
+
+    monkeypatch.setattr(Path, "resolve", guarded_resolve)
+    monkeypatch.setattr(Path, "expanduser", guarded_expanduser)
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview_threaded", forbidden_preview)
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post(
+            "/v1/config-preview",
+            headers=_identity_headers("POST", "/v1/config-preview"),
+            json={"pipeline": "archive-gate-a", "args": {"archive_index": raw}},
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["details"]["reason"] == "tenant_path_outside_workspace"
+
+
+@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("escapes", [False, True])
+def test_confined_links_preserve_user_path_and_shared_runtime_identity(monkeypatch, tmp_path, shared, escapes):
+    monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_WORKSPACE_ROOT", tmp_path / "workspaces")
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_CAS_ROOT", tmp_path / "cas")
+    monkeypatch.setattr(orchestrator_app, "_record_pilot_audit", _audit_noop)
+    root = tmp_path / "runtime" if shared else tmp_path / "workspaces" / "tenant_a"
+    root.mkdir(parents=True)
+    target = (tmp_path if escapes else root) / "image with spaces — 1.tif"
+    target.write_bytes(b"fixture")
+    selector = root / "selected link"
+    selector.symlink_to(target)
+    if shared:
+        configured_alias = tmp_path / "configured_runtime"
+        configured_alias.symlink_to(root, target_is_directory=True)
+        monkeypatch.setattr(orchestrator_app, "default_fastvlm_runtime_root", lambda: configured_alias)
+    field = "fastvlm_python_executable" if shared else "archive_index"
+
+    async def existing_preview(payload, **kwargs):
+        assert not escapes, "escaping symlink reached content-inspecting preview"
+        assert payload["args"][field] == str(selector)
+        return {"pipeline": "lux-depth-v3", "errors": [{"field": field, "reason": "existing_runtime_validation"}]}
+
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview_threaded", existing_preview)
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post(
+            "/v1/config-preview",
+            headers=_identity_headers("POST", "/v1/config-preview"),
+            json={"pipeline": "lux-depth-v3", "args": {field: str(selector)}},
+        )
+    if escapes:
+        assert response.status_code == 403
+        assert response.json()["error"]["details"]["reason"] == "tenant_path_outside_workspace"
+    else:
+        assert response.status_code == 200
+        assert response.json()["data"]["errors"][0]["reason"] == "existing_runtime_validation"
+
+
 @pytest.mark.parametrize("value", [2026, ["secret.jsonl"], {"path": "secret.jsonl"}, False])
 def test_nonstring_tenant_path_is_rejected_before_preview(monkeypatch, value):
     monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)

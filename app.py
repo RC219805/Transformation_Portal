@@ -1442,6 +1442,13 @@ async def _pilot_enforce_request_paths(
         "fastvlm_mlx_vlm_dir": [default_fastvlm_runtime_root()],
         "vlm_captioning_model": [default_fastvlm_runtime_root()],
     }
+    # Resolve only configured bases; resolving the tenant namespace itself
+    # could authorize a substituted tenant-directory symlink.
+    tenant_roots = [
+        base / tenant.tenant_id
+        for configured in (tenant.workspace_root, tenant.cas_root)
+        for base in (configured.absolute(), configured.resolve())
+    ]
     path_specs = (
         *PATH_FIELD_SPECS,
         ("vlm_captioning_model", ("vlm_captioning_model", "vlmCaptioningModel"), PATH_SCOPE_INPUT),
@@ -1465,13 +1472,29 @@ async def _pilot_enforce_request_paths(
             if field == "vlm_captioning_model" and value.strip().lower() in ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
                 continue
             try:
-                path = Path(value.strip()).expanduser()
-                resolved = path.resolve()
-                # Explicit shared runtime selectors may use only existing
-                # server-owned roots. The downstream checksum/provenance checks
-                # still apply; broad input roots must not permit tenant probes.
-                if not any(resolved.is_relative_to(root.resolve()) for root in runtime_roots.get(field, [])):
-                    guard.enforce_path(resolved)
+                raw = value.strip()
+                parts = (raw.replace(os.altsep, os.sep) if os.altsep else raw).split(os.sep)
+                if raw.startswith("~") or "\x00" in raw or ".." in parts:
+                    raise TenantError("invalid tenant path syntax")
+                # abspath is lexical. Admit a separator-bounded namespace
+                # before constructing/resolving any user-controlled Path.
+                candidate = os.path.abspath(os.path.join(os.fspath(REPO_ROOT), raw))
+                shared_roots = runtime_roots.get(field, [])
+                allowed_roots = [*tenant_roots, *(base for root in shared_roots for base in (root.absolute(), root.resolve()))]
+                for root in allowed_roots:
+                    root_text = os.path.abspath(root)
+                    prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
+                    if candidate == root_text or candidate.startswith(prefix):
+                        path = Path(candidate)
+                        resolved = path.resolve()
+                        # Shared selectors retain downstream provenance checks.
+                        # Keep the admitted lexical path for tenant validation;
+                        # passing only its target would erase namespace escapes.
+                        if not any(resolved.is_relative_to(shared.resolve()) for shared in shared_roots):
+                            guard.enforce_path(path)
+                        break
+                else:
+                    raise TenantError("tenant path outside authorized roots")
             except (TenantError, OSError, RuntimeError, ValueError):
                 return await _pilot_tenant_error(
                     action=action,
