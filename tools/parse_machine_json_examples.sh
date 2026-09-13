@@ -4,6 +4,30 @@
 
 set -euo pipefail
 
+# Validate the envelope and handle command errors before reading command data.
+# Returns the producer status for command errors and 99 for invalid envelopes.
+check_command_envelope() {
+    local payload="$1"
+    local command_status="$2"
+    local envelope_status
+    if ! printf '%s\n' "$payload" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+        echo "ERROR: Invalid JSON or unsupported schema" >&2
+        return 99
+    fi
+    if ! envelope_status=$(printf '%s\n' "$payload" | jq -er '.exit_code | select(type == "number")'); then
+        echo "ERROR: Missing numeric envelope exit_code" >&2
+        return 99
+    fi
+    if [[ "$envelope_status" -ne "$command_status" ]]; then
+        echo "ERROR: Process/envelope exit-code mismatch" >&2
+        return 99
+    fi
+    if printf '%s\n' "$payload" | jq -e '.error != null' >/dev/null; then
+        printf '%s\n' "$payload" | jq -r '.error | "\(.type): \(.message)"' >&2
+        return "$envelope_status"
+    fi
+}
+
 # ==============================================================================
 # Example 1: Extract Command with Exit Code Routing
 # ==============================================================================
@@ -17,12 +41,7 @@ extract_with_routing() {
         exit_code=$?
     fi
 
-    # Validate schema
-    schema=$(echo "$result" | jq -r '.schema')
-    if [[ "$schema" != "tp.meta.machine.v1" ]]; then
-        echo "ERROR: Unsupported schema: $schema" >&2
-        return 99
-    fi
+    check_command_envelope "$result" "$exit_code" || return $?
 
     # Route by exit code
     if [[ $exit_code -eq 0 ]]; then
@@ -32,7 +51,7 @@ extract_with_routing() {
         echo "✅ Extracted: $input_path → $output_path (${elapsed}s)"
         return 0
     else
-        error_type=$(echo "$result" | jq -r '.data.error.type')
+        error_type=$(echo "$result" | jq -r '(.error // .data.error).type')
         error_name=$(echo "$result" | jq -r '.data.error.exit_code.name')
         echo "❌ Extract failed: $error_type ($error_name)" >&2
         return $exit_code
@@ -51,6 +70,8 @@ validate_with_error_handling() {
     else
         exit_code=$?
     fi
+
+    check_command_envelope "$result" "$exit_code" || return $?
 
     success=$(echo "$result" | jq -r '.success')
     sidecar=$(echo "$result" | jq -r '.data.sidecar_path')
@@ -89,6 +110,8 @@ batch_extract_with_summary() {
         exit_code=$?
     fi
 
+    check_command_envelope "$result" "$exit_code" || return $?
+
     total=$(echo "$result" | jq '.data.summary_counts.total')
     success=$(echo "$result" | jq '.data.summary_counts.success')
     failure=$(echo "$result" | jq '.data.summary_counts.failure')
@@ -101,7 +124,7 @@ batch_extract_with_summary() {
 
         # Show first few failures
         echo "First 3 failures:" >&2
-        echo "$result" | jq -r '.data.items[] | select(.success == false) | "  - \(.path): \(.error.type)"' | head -3 >&2
+        echo "$result" | jq -r '[.data.items[] | select(.success == false)][:3][] | "  - \(.path): \(.error.type)"' >&2
     fi
 
     return $exit_code
@@ -117,6 +140,8 @@ check_system_readiness() {
     else
         exit_code=$?
     fi
+
+    check_command_envelope "$result" "$exit_code" || return $?
 
     all_ok=$(echo "$result" | jq -r '.data.all_required_ok')
 
@@ -152,6 +177,8 @@ ci_safe_validate() {
     else
         exit_code=$?
     fi
+
+    check_command_envelope "$result" "$exit_code" || return $?
 
     case $exit_code in
         0)
@@ -196,8 +223,18 @@ ci_safe_validate() {
 compact_status_check() {
     local sidecar_path="$1"
 
-    .venv/bin/python scripts/test_metadata_extraction.py --json validate "$sidecar_path" | \
-        jq -r 'if .success then "✅ \(.data.sidecar_path)" else "❌ \(.data.sidecar_path): \(.data.dominant_error.type)" end'
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    check_command_envelope "$result" "$exit_code" || return $?
+    if [[ "$exit_code" -eq 0 ]]; then
+        printf '%s\n' "$result" | jq -r '"✅ \(.data.sidecar_path)"'
+    else
+        printf '%s\n' "$result" | jq -r '"❌ \(.data.sidecar_path): \(.data.dominant_error.type)"' >&2
+    fi
+    return "$exit_code"
 }
 
 # ==============================================================================
@@ -208,21 +245,23 @@ extract_multiple_with_error_collection() {
     local output_dir="$1"
     shift
     local files=("$@")
+    # --output for extract names one sidecar file, not a directory.
+    mkdir -p "$output_dir"
 
     local errors=()
     local successes=0
 
     for file in "${files[@]}"; do
-        if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir"); then
+        if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir/$(basename "$file").provenance.json"); then
             exit_code=0
         else
             exit_code=$?
         fi
 
         if [[ $exit_code -eq 0 ]]; then
-            ((successes++))
+            successes=$((successes + 1))
         else
-            error_type=$(echo "$result" | jq -r '.data.error.type')
+            error_type=$(echo "$result" | jq -r '(.error // .data.error).type')
             errors+=("$file: $error_type")
         fi
     done

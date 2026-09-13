@@ -61,8 +61,13 @@ def route_by_command(payload: Dict[str, Any]) -> NoReturn:
     Exits:
         With the exit code from the payload
     """
-    command = payload["command"]
     exit_code = payload["exit_code"]
+    command_error = payload.get("error")
+    if command_error is not None:
+        print(f"ERROR: {command_error['type']}: {command_error['message']}", file=sys.stderr)
+        sys.exit(exit_code)
+
+    command = payload["command"]
     success = payload["success"]
     data = payload["data"]
 
