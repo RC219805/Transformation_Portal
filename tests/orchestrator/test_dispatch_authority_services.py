@@ -22,7 +22,7 @@ from transformation_portal.core.execution_plan import CanonicalExecutionPlan
 from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
 from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
-from transformation_portal.orchestrator.queue.base import JobEnqueueRequest, LeaseNotHeldError, QueueBrokerError
+from transformation_portal.orchestrator.queue.base import JobEnqueueRequest, JobLease, LeaseNotHeldError, QueueBrokerError
 from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
 from transformation_portal.orchestrator.storage.base import JobRecord
 from transformation_portal.orchestrator.storage.operational import (
@@ -207,6 +207,71 @@ async def test_expired_lease_cannot_renew_publish_or_requeue_and_recovery_releas
     finally:
         await broker.reset()
         await broker.close()
+        await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.asyncio
+async def test_retryable_executor_claim_survives_until_database_expiry(service_urls, tmp_path, monkeypatch):
+    from transformation_portal.orchestrator import worker as worker_module
+    from transformation_portal.orchestrator.dispatch import current_dispatch_fence
+    from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, WorkerConfig, WorkerRunner
+
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    released = []
+    try:
+        locator = await _admit(store, "job_retryable_start", tmp_path, global_limit=1, tenant_limit=1)
+
+        class Broker:
+            async def acquire_lease(self, worker_id, *, lease_seconds):
+                return JobLease(locator.job_id, worker_id, time.monotonic() + lease_seconds, locator)
+
+            async def release_lease(self, worker_id, job_id):
+                released.append(job_id)
+
+        async def unavailable_executor(request, cancellation):
+            assert request == locator
+            assert current_dispatch_fence() is not None
+            raise RetryableExecutorUnavailable("temporary job hydration failure")
+
+        monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: store)
+        runner = WorkerRunner(
+            broker=Broker(),
+            config=WorkerConfig(worker_id="worker-retryable", lease_seconds=2.0, heartbeat_interval_seconds=10.0),
+            executor=unavailable_executor,
+        )
+        assert await runner.step() is True
+        assert released == []
+        assert current_dispatch_fence() is None
+        engine, _ = await _SharedEngine.get(database_url)
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text("SELECT state, generation_id FROM dispatch_attempts WHERE job_id=:job_id"),
+                    {"job_id": locator.job_id},
+                )
+            ).one()
+            assert row.state == "running"
+            assert row.generation_id is None
+            assert await connection.scalar(text("SELECT active FROM admission_capacity WHERE scope='global'")) == 1
+            assert await connection.scalar(text("SELECT count(*) FROM job_events WHERE event_type='done'")) == 0
+        assert await store.expire_dispatches() == []
+        await asyncio.sleep(2.1)
+        assert await store.expire_dispatches() == [locator.job_id]
+        assert await store.expire_dispatches() == []
+        async with engine.connect() as connection:
+            assert await connection.scalar(text("SELECT active FROM admission_capacity WHERE scope='global'")) == 0
+            assert (
+                await connection.scalar(
+                    text("SELECT state FROM dispatch_attempts WHERE job_id=:job_id"), {"job_id": locator.job_id}
+                )
+                == "worker_lost"
+            )
+            assert await connection.scalar(text("SELECT count(*) FROM job_events WHERE event_type='done'")) == 1
+        with pytest.raises(DispatchAuthorityLost):
+            await store.claim_dispatch(locator, "worker-late", lease_seconds=10)
+        assert await store.committed_manifest(locator.job_id, locator.tenant_id) is None
+    finally:
         await _SharedEngine.dispose(database_url)
 
 

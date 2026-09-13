@@ -93,6 +93,7 @@ from transformation_portal.orchestrator import (
     get_job_repository,
     get_operational_audit_store,
 )
+from transformation_portal.orchestrator.artifact_limits import configured_max_indexed_artifacts
 from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
 from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
 from transformation_portal.orchestrator.artifact_store import (
@@ -433,6 +434,7 @@ _copy_portal_cache_api(_build_portal_asset_bundle, _portal_asset_bundle._build_p
 
 
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
+ARCHIVE_RIGHTS_POLICY_ROOT = REPO_ROOT / "policy" / "archive"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
 
@@ -640,7 +642,7 @@ CANCEL_GRACE_SECONDS = _env_float(
     minimum=0.1,
 )
 JOB_LIST_LIMIT = _env_int("TP_JOB_LIST_LIMIT", 200, minimum=1)
-MAX_INDEXED_ARTIFACTS = _env_int("TP_MAX_INDEXED_ARTIFACTS", 200, minimum=1)
+MAX_INDEXED_ARTIFACTS = configured_max_indexed_artifacts()
 # Keep fingerprinting inexpensive by default. Up to MAX_INDEXED_ARTIFACTS files
 # are hashed per job (off the event loop via asyncio.to_thread); deployments
 # that need copy-friendly hashes for larger artifacts can opt in via the env
@@ -1442,6 +1444,11 @@ async def _pilot_enforce_request_paths(
         "fastvlm_mlx_vlm_dir": [default_fastvlm_runtime_root()],
         "vlm_captioning_model": [default_fastvlm_runtime_root()],
     }
+    if (
+        payload.get("pipeline") == "archive-gate-a"
+        and str(_pick(args, "archive_command", "archiveCommand", default="") or "").strip() == "rights-apply"
+    ):
+        runtime_roots["policy_yaml"] = [ARCHIVE_RIGHTS_POLICY_ROOT]
     # Resolve only configured bases; resolving the tenant namespace itself
     # could authorize a substituted tenant-directory symlink.
     tenant_roots = [
@@ -1484,15 +1491,20 @@ async def _pilot_enforce_request_paths(
                 for root in allowed_roots:
                     root_text = os.path.abspath(root)
                     prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
-                    if candidate == root_text or candidate.startswith(prefix):
+                    if candidate == root_text:
+                        # An exact match uses the configured root itself.
+                        path = root
+                    elif candidate.startswith(prefix):
                         path = Path(candidate)
-                        resolved = path.resolve()
-                        # Shared selectors retain downstream provenance checks.
-                        # Keep the admitted lexical path for tenant validation;
-                        # passing only its target would erase namespace escapes.
-                        if not any(resolved.is_relative_to(shared.resolve()) for shared in shared_roots):
-                            guard.enforce_path(path)
-                        break
+                    else:
+                        continue
+                    resolved = path.resolve()
+                    # Shared selectors retain downstream provenance checks.
+                    # Keep the admitted lexical path for tenant validation;
+                    # passing only its target would erase namespace escapes.
+                    if not any(resolved.is_relative_to(shared.resolve()) for shared in shared_roots):
+                        guard.enforce_path(path)
+                    break
                 else:
                     raise TenantError("tenant path outside authorized roots")
             except (TenantError, OSError, RuntimeError, ValueError):
@@ -8174,7 +8186,7 @@ def _archive_gate_argv(
             args,
             "policy_yaml",
             "policyYaml",
-            default=str(REPO_ROOT / "policy" / "archive" / "rights_flags.yml"),
+            default=str(ARCHIVE_RIGHTS_POLICY_ROOT / "rights_flags.yml"),
             allowed_roots=ALLOWED_INPUT_ROOTS,
         )
         out_jsonl = _path_arg(
@@ -12143,7 +12155,10 @@ def _revalidate_dispatch_paths(locator: DispatchLocator, plan_bytes: bytes, outp
         for name in operation.files + operation.directories:
             value = configuration["parameters"].get(name)
             if value is not None:
-                paths.append((_resolve_allowed_request_path(value, ALLOWED_PATH_ROOTS), []))
+                shared_roots = (
+                    [ARCHIVE_RIGHTS_POLICY_ROOT] if configuration["operation"] == "rights-apply" and name == "policy_yaml" else []
+                )
+                paths.append((_resolve_allowed_request_path(value, ALLOWED_PATH_ROOTS), shared_roots))
     else:
         from transformation_portal.lux_depth_v3 import config_resolver
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

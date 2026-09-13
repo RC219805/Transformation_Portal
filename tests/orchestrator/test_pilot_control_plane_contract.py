@@ -480,6 +480,33 @@ def test_shared_runtime_paths_reach_existing_provenance_validation(monkeypatch, 
     assert response.json()["data"]["errors"][0]["reason"] == "provenance_test_rejection"
 
 
+@pytest.mark.parametrize("field", ["policy_yaml", "policyYaml", "manifest_jsonl"])
+@pytest.mark.parametrize("operation", ["rights-apply", "manifest-build"])
+def test_governed_rights_policy_is_shared_only_for_its_operation_and_field(monkeypatch, tmp_path, field, operation):
+    monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(orchestrator_app, "PILOT_ALLOWED_PIPELINES", {"archive-gate-a"})
+    monkeypatch.setattr(orchestrator_app, "_record_pilot_audit", _audit_noop)
+    governed = tmp_path / "governed_policy"
+    monkeypatch.setattr(orchestrator_app, "ARCHIVE_RIGHTS_POLICY_ROOT", governed)
+    policy = governed / "rights_flags.yml"
+    allowed = operation == "rights-apply" and field in {"policy_yaml", "policyYaml"}
+    reached = []
+
+    async def existing_preview(payload, **kwargs):
+        reached.append(payload["args"][field])
+        return {"pipeline": "archive-gate-a", "errors": []}
+
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview_threaded", existing_preview)
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post(
+            "/v1/config-preview",
+            headers=_identity_headers("POST", "/v1/config-preview"),
+            json={"pipeline": "archive-gate-a", "args": {"archive_command": operation, field: str(policy)}},
+        )
+    assert response.status_code == (200 if allowed else 403)
+    assert reached == ([str(policy)] if allowed else [])
+
+
 @pytest.mark.parametrize("selector", ["default", "review", "smoke"])
 def test_server_selected_model_roles_remain_available_in_tenant_mode(monkeypatch, selector):
     monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)

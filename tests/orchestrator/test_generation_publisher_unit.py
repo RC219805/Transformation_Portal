@@ -12,6 +12,105 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [(None, 200), ("", 200), ("invalid", 200), ("1.5", 200), ("0", 1), ("-1", 1), ("1", 1), (" 201 ", 201)],
+)
+def test_artifact_count_configuration_preserves_portal_defaults(monkeypatch, configured, expected):
+    from transformation_portal.orchestrator.artifact_limits import configured_max_indexed_artifacts
+
+    if configured is None:
+        monkeypatch.delenv("TP_MAX_INDEXED_ARTIFACTS", raising=False)
+    else:
+        monkeypatch.setenv("TP_MAX_INDEXED_ARTIFACTS", configured)
+    assert configured_max_indexed_artifacts() == expected
+
+
+@pytest.mark.parametrize("export_outputs", [False, True])
+def test_configured_artifact_limit_preserves_export_publication_and_manifest_parity(tmp_path: Path, export_outputs: bool):
+    """A fresh worker process must honor the API's supported startup override."""
+    program = """
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.orchestrator.artifact_store.base import ArtifactStoreError
+from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher, validate_manifest
+from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
+from transformation_portal.orchestrator.execution_dispatch import _export_execution_outputs
+
+async def run():
+    root = Path(sys.argv[1])
+    source = root / 'native'
+    source.mkdir()
+    for index in range(201):
+        (source / f'{index:03}.txt').write_bytes(b'verified output')
+    output = root / 'attempt'
+    output.mkdir()
+    if sys.argv[2] == 'True':
+        descriptor = os.open(output, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            _export_execution_outputs(source, descriptor)
+        finally:
+            os.close(descriptor)
+    else:
+        output = source
+    locator = DispatchLocator('job_configured_limit', 'attempt', 'dispatch', 'a' * 64, 'tenant')
+    fence = DispatchFence(locator, 'worker', 1, 0.0, str(output), str(root))
+    manifests = []
+    class Records:
+        async def commit_generation(self, observed, **kwargs):
+            assert observed == fence
+            manifest = validate_manifest(kwargs['manifest_bytes'], fence=fence, generation_id=kwargs['generation_id'])
+            manifests.append(manifest)
+            return manifest
+    store = LocalArtifactStore(root_dir=root / 'artifacts')
+    publisher = GenerationPublisher(artifact_store=store, record_store=Records())
+    files = {path.name: path for path in output.iterdir()}
+    manifest = await publisher.publish(fence, files, state='succeeded', exit_code=0, artifacts={}, run_summary={})
+    assert len(manifest['files']) == 201
+    for item in manifest['files']:
+        chunks = await store.open_bytes(locator.job_id, item['storage_path'])
+        assert b''.join([chunk async for chunk in chunks]) == b'verified output'
+    import app
+    assert app.MAX_INDEXED_ARTIFACTS == 201
+    files['overflow.txt'] = output / 'does-not-exist'
+    try:
+        await publisher.publish(fence, files, state='succeeded', exit_code=0, artifacts={}, run_summary={})
+    except ArtifactStoreError as error:
+        assert 'count exceeds limit' in str(error)
+    else:
+        raise AssertionError('publisher accepted a count beyond configured limit')
+    assert len(manifests) == 1
+    manifest['files'].append(dict(manifest['files'][0]))
+    try:
+        validate_manifest(canonicalize_json(manifest), fence=fence, generation_id=manifest['generation_id'])
+    except ArtifactStoreError as error:
+        assert 'count exceeds limit' in str(error)
+    else:
+        raise AssertionError('manifest validator accepted a count beyond configured limit')
+    try:
+        validate_manifest(b' ' * 1_048_577, fence=fence, generation_id=manifest['generation_id'])
+    except ArtifactStoreError as error:
+        assert 'manifest exceeds byte limit' in str(error)
+    else:
+        raise AssertionError('configured count weakened the manifest byte bound')
+
+asyncio.run(run())
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(tmp_path), str(export_outputs)],
+        env={**os.environ, "TP_MAX_INDEXED_ARTIFACTS": "201"},
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX FIFO contract")
 def test_generation_fifo_source_is_rejected_without_waiting_for_a_writer(tmp_path: Path):
     source = tmp_path / "artifact.fifo"

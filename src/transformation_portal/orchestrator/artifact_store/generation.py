@@ -14,12 +14,13 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.orchestrator.artifact_limits import configured_max_indexed_artifacts
 from transformation_portal.orchestrator.artifact_store._filesystem import open_source_file
 from transformation_portal.orchestrator.artifact_store.base import ArtifactStore, ArtifactStoreError
 from transformation_portal.orchestrator.artifact_store.local import _normalize_relative_path
 from transformation_portal.orchestrator.dispatch import DispatchFence
 
-MAX_GENERATION_FILES = 200
+MAX_GENERATION_FILES = configured_max_indexed_artifacts()
 MAX_GENERATION_FILE_BYTES = 4 * 1024**3
 MAX_GENERATION_BYTES = 16 * 1024**3
 MAX_MANIFEST_BYTES = 1_048_576

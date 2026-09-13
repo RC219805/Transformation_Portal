@@ -232,7 +232,10 @@ This does not activate the separately gated Spatial/CAS executor convergence.
 
 Input and output roots must be available at the same authorized absolute
 paths on API and worker hosts. Workers recheck current root and tenant policy
-before spawning. Native executors write into protected execution storage;
+before spawning. Only archive `rights-apply`'s `policy_yaml` may additionally
+use the governed `policy/archive` directory; manifest and data inputs remain
+tenant-owned, and current global allowed roots still apply. Native executors
+write into protected execution storage;
 bounded regular outputs are atomically exported through pinned directory
 descriptors into a unique `.tp-attempts` directory under the requested root.
 Replacing that directory or an ancestor cannot redirect native output writes.
@@ -254,6 +257,8 @@ Database-clock expiration terminalizes the attempt as `worker_lost` and releases
 removed from Redis rather than requeued, and tombstones reject duplicate or
 late deliveries. An explicit retry submits a new job. API startup never
 classifies another host's live claim as an orphan.
+Retryable executor hydration/startup failures retain the live claim and broker
+lease for this expiry path without committing a synthetic `RUNNER_ERROR`.
 
 `GenerationPublisher` stages immutable objects inside the existing artifact
 store. Local publication uses fsynced files/directories and atomic no-replace
@@ -261,8 +266,11 @@ links; S3 publication requires conditional `PutObject` (`If-None-Match: *`).
 The publisher copies regular, non-symlink output files through bounded
 buffers, pins each parent directory without following symlinks, rejects
 FIFO/special-file sources without blocking, and verifies staged lengths and SHA-256 digests before committing. The current limits are
-200 files, 4 GiB per file, 16 GiB per generation, and 1 MiB for its closed
-canonical manifest. Generation manifests and operational records are
+`TP_MAX_INDEXED_ARTIFACTS` files (default 200, minimum 1), 4 GiB per file,
+16 GiB per generation, and 1 MiB for its closed canonical manifest. Configure
+the same count limit on API and worker hosts; indexing, export, and manifest
+publication share it. Increasing the count does not increase the byte limits.
+Generation manifests and operational records are
 append-only. The database transaction verifies the running holder, epoch,
 tenant, and unexpired database lease; only then does it commit the manifest,
 reader pointer, terminal projection, event, and outbox. Raw output directories

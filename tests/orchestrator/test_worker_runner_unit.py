@@ -150,6 +150,46 @@ async def test_step_leaves_lease_unreleased_on_retryable_unavailable() -> None:
     assert broker.released == []
 
 
+async def test_retryable_canonical_executor_retains_claim_without_terminal_publication(monkeypatch):
+    from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator, current_dispatch_fence
+
+    locator = DispatchLocator("job_unavailable", "attempt", "dispatch", "a" * 64, "tenant")
+    fence = DispatchFence(locator, "w", 1, 0.0, "/output", "/requested")
+    terminal_calls = []
+    heartbeat_started = asyncio.Event()
+    heartbeat_stopped = asyncio.Event()
+
+    class Store:
+        async def claim_dispatch(self, *args, **kwargs):
+            return fence
+
+        async def finish_dispatch(self, observed, **kwargs):
+            terminal_calls.append((observed, kwargs))
+
+    async def heartbeat(*args, **kwargs):
+        heartbeat_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            heartbeat_stopped.set()
+
+    async def executor(request, cancellation):
+        assert request == locator
+        assert current_dispatch_fence() == fence
+        await heartbeat_started.wait()
+        raise RetryableExecutorUnavailable("durable job hydration unavailable")
+
+    broker = FakeBroker(leases=[JobLease(locator.job_id, "w", 0.0, locator)])
+    monkeypatch.setattr(worker_module, "get_operational_record_store", lambda: Store())
+    runner = WorkerRunner(broker=broker, config=_config(), executor=executor)
+    monkeypatch.setattr(runner, "_heartbeat_loop", heartbeat)
+    assert await runner.step() is True
+    assert terminal_calls == []  # DB-clock expiry owns the eventual worker_lost outcome.
+    assert broker.released == []
+    assert heartbeat_stopped.is_set()
+    assert current_dispatch_fence() is None
+
+
 async def test_step_releases_lease_on_generic_executor_error() -> None:
     broker = FakeBroker(leases=[_lease()])
 

@@ -83,9 +83,9 @@ class CancelledByOrchestrator(Exception):
 class RetryableExecutorUnavailable(Exception):
     """Raised when the executor could not safely hydrate or start a job.
 
-    The worker leaves the lease unreleased so the broker can reclaim and
-    requeue it after the lease timeout instead of dropping the dispatch
-    payload while durable job state is unavailable.
+    The worker leaves the lease unreleased and a canonical claim unterminated
+    so database-clock expiry can record ``worker_lost`` and release admission
+    capacity. Legacy broker payloads remain eligible for broker reclaim/requeue.
     """
 
 
@@ -210,6 +210,7 @@ class WorkerRunner:
         cancellation_event = asyncio.Event()
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease.job_id, cancellation_event, fence, lease_deadline))
         release_lease = True
+        finish_uncommitted_dispatch = True
         try:
             try:
                 exit_code = await self._executor(lease.request, cancellation_event)
@@ -227,6 +228,7 @@ class WorkerRunner:
                 )
             except RetryableExecutorUnavailable:
                 release_lease = False
+                finish_uncommitted_dispatch = False
                 logger.exception(
                     "worker %s executor could not safely start job %s; leaving lease for reclaim",
                     self._config.worker_id,
@@ -244,7 +246,7 @@ class WorkerRunner:
                 await heartbeat_task
             except (asyncio.CancelledError, LeaseNotHeldError):
                 pass
-            if fence is not None:
+            if fence is not None and finish_uncommitted_dispatch:
                 try:
                     # An executor must commit its terminal outcome. A return or
                     # crash without a commit consumes this attempt once only.

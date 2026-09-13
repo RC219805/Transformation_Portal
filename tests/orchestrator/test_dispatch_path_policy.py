@@ -12,6 +12,7 @@ from transformation_portal.core.security.tenant import TenantError
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
 from transformation_portal.orchestrator.dispatch import DispatchLocator
+from transformation_portal.orchestrator.execution_dispatch import prepare_dispatch_plan
 from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
 
 pytestmark = pytest.mark.unit
@@ -119,5 +120,75 @@ def test_worker_tenant_membership_revocation_rejects_frozen_plan(paths, monkeypa
     app._revalidate_dispatch_paths(locator, data, output)
     monkeypatch.setattr(app, "PILOT_ALLOWED_TENANTS", {"tenant_b"})
     with pytest.raises(DispatchAuthorityLost):
+        app._revalidate_dispatch_paths(locator, data, output)
+    assert not output.exists()
+
+
+def _frozen_rights(paths, monkeypatch, *, policy=None, manifest=None):
+    inputs, output = paths
+    monkeypatch.setattr(app, "PILOT_ALLOWED_PIPELINES", {"archive-gate-a"})
+    governed = app.REPO_ROOT / "policy" / "archive"
+    # Keep the governed policy's global input authorization independent of
+    # tenant ownership. Revoking either policy must still reject the plan.
+    for name in ("ALLOWED_INPUT_ROOTS", "ALLOWED_PATH_ROOTS"):
+        monkeypatch.setattr(app, name, [*getattr(app, name), governed])
+    if manifest is None:
+        manifest = inputs / "manifest.jsonl"
+        manifest.write_text('{"fixture":true}\n')
+    args = {
+        "archive_command": "rights-apply",
+        "input_dir": str(inputs),
+        "output_dir": str(output),
+        "manifest_jsonl": str(manifest),
+    }
+    if policy is not None:
+        args["policy_yaml"] = str(policy)
+    request = {"pipeline": "archive-gate-a", "args": args}
+    command = app._archive_gate_argv("archive-gate-a", args, str(inputs), str(output))
+    data = prepare_dispatch_plan(request, trusted_argv=command)
+    locator = DispatchLocator("job_rights", "attempt_rights", "dispatch_rights", hashlib.sha256(data).hexdigest(), "tenant_a")
+    return locator, data
+
+
+@pytest.mark.parametrize("policy_kind", ["default", "explicit_governed", "tenant_owned"])
+def test_worker_rights_policy_preserves_governed_default_and_tenant_overrides(paths, monkeypatch, policy_kind):
+    inputs, output = paths
+    policy = None
+    if policy_kind == "explicit_governed":
+        policy = app.REPO_ROOT / "policy" / "archive" / "rights_flags.yml"
+    elif policy_kind == "tenant_owned":
+        policy = inputs / "custom_policy.yml"
+        policy.write_text("version: 1\n")
+    locator, data = _frozen_rights(paths, monkeypatch, policy=policy)
+    app._revalidate_dispatch_paths(locator, data, output)
+    assert not output.exists()
+
+
+def test_worker_governed_policy_still_requires_current_global_root_authorization(paths, monkeypatch):
+    inputs, output = paths
+    locator, data = _frozen_rights(paths, monkeypatch)
+    monkeypatch.setattr(app, "ALLOWED_PATH_ROOTS", [inputs.parent])
+    with pytest.raises(ValueError, match="outside allowed roots"):
+        app._revalidate_dispatch_paths(locator, data, output)
+    assert not output.exists()
+
+
+def test_worker_governed_policy_exemption_does_not_authorize_archive_data(paths, monkeypatch):
+    _, output = paths
+    governed_file = app.REPO_ROOT / "policy" / "archive" / "rights_flags.yml"
+    monkeypatch.setattr(app, "ALLOWED_OUTPUT_ROOTS", [*app.ALLOWED_OUTPUT_ROOTS, governed_file.parent])
+    locator, data = _frozen_rights(paths, monkeypatch, manifest=governed_file)
+    with pytest.raises(TenantError):
+        app._revalidate_dispatch_paths(locator, data, output)
+    assert not output.exists()
+
+
+def test_worker_rights_policy_rejects_another_tenants_file(paths, monkeypatch):
+    inputs, output = paths
+    policy = inputs.parents[1] / "tenant_b" / "policy.yml"
+    policy.parent.mkdir()
+    policy.write_text("version: 1\n")
+    locator, data = _frozen_rights(paths, monkeypatch, policy=policy)
+    with pytest.raises(TenantError):
         app._revalidate_dispatch_paths(locator, data, output)
     assert not output.exists()
