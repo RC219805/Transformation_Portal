@@ -91,6 +91,7 @@ jobs:
 
             const frontdoorMatchers = [
               /^web\/secure-landing\//,
+              /^cloudflare\/transformationportal-worker\//,
               /^config\/portal_asset_manifest\.json$/,
               /^scripts\/validation\/validate_frontdoor_browser_smoke\.py$/,
               /^docs\/guides\/PORTAL_SECURE_FRONTDOOR_QUICKSTART\.md$/,
@@ -489,6 +490,9 @@ jobs:
           node-version-file: web/secure-landing/.nvmrc
           cache: npm
           cache-dependency-path: web/secure-landing/package-lock.json
+
+      - name: Run Worker request security contracts
+        run: npm --prefix cloudflare/transformationportal-worker test
 
       - name: Install frontdoor dependencies
         run: |

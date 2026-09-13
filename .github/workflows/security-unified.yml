@@ -254,7 +254,7 @@ jobs:
 
       - name: Check for bidirectional Unicode
         run: |
-          python scripts/security/pre_commit_security_check.py $(find . -name '*.py' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' | grep -v '.venv' | grep -v 'deprecated' | head -100)
+          python scripts/validation/check_unicode_controls.py --all
 
       - name: Validate .gitignore coverage
         run: |

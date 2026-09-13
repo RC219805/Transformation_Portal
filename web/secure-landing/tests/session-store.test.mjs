@@ -162,6 +162,39 @@ test("RedisSessionStore preserves the RESP2 client contract under ioredis 6", ()
   });
 });
 
+test("RedisSessionStore touch submits timing fields in one atomic Redis operation", async () => {
+  const calls = [];
+  const client = {
+    async eval(script, ...args) {
+      assert.equal(typeof script, "string");
+      calls.push(args);
+      return 1;
+    },
+    async get() {
+      assert.fail("touch must not read a session snapshot outside the atomic operation");
+    },
+    async set() {
+      assert.fail("touch must not write a stale session snapshot");
+    }
+  };
+  const store = new RedisSessionStore({ redisUrl: "redis://fake", keyPrefix: "tp:test:", client });
+
+  await store.touchSession("session-a", 1_000, 61_000);
+  await store.touchSession("", 1_000, 61_000);
+
+  assert.deepEqual(calls, [[1, "tp:test:session:session-a", 1_000, 61_000]]);
+});
+
+test("RedisSessionStore touch propagates atomic update failures", async () => {
+  const failure = new Error("Redis unavailable");
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    client: { async eval() { throw failure; } }
+  });
+
+  await assert.rejects(store.touchSession("session-a", 1_000, 61_000), failure);
+});
+
 // ---------------------------------------------------------------------------
 // RedisSessionStore login-throttle path — exercised with an injected fake
 // client so we do not need a live ioredis connection (and so the typo class

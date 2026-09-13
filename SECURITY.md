@@ -153,6 +153,32 @@ guarantee secure erasure from storage, backups, or process memory.
 - **Temporary CVE Exceptions**:
   - None active. New exceptions require an explicit expiry condition, tracked upstream issue, and matching CI/test coverage.
 
+### Open Dependency Risk: Accelerate Checkpoint Indexes
+
+As reviewed on 2026-09-12, the supported Darwin arm64 ML lock contains
+`accelerate==1.14.0`, affected by
+[GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79).
+Its sharded checkpoint loaders accept paths outside the checkpoint directory
+and can block while opening a named pipe. Both dependency alerts remain open;
+this is not a scanner exception or a completed remediation.
+
+The advisory lists no patched release. Source inspection of
+[Accelerate 1.15.0](https://github.com/huggingface/accelerate/blob/v1.15.0/src/accelerate/utils/modeling.py#L1936-L1944)
+also shows shard entries joined without containment or regular-file validation.
+Do not treat a version outside the advisory's listed range as proof of a fix.
+
+Until an upstream fix is verified, load only reviewed model checkpoints from
+trusted sources in the optional ML environment. Do not pass untrusted local
+checkpoint directories or shard indexes to Accelerate or integrations that
+delegate checkpoint loading to it. Immutable revisions and `weights_only=True`
+alone do not validate shard paths. Keep inference under an unprivileged account
+with access limited to the intended model and asset directories.
+
+Remediation requires verifying containment and non-regular-file rejection in
+the released loader, regenerating the target-owned lock on native Darwin arm64,
+and rerunning the ML lock and dependency-security checks. Keep the alerts open
+until that evidence exists.
+
 ### API Security
 
 If exposing Transformation Portal as a service:

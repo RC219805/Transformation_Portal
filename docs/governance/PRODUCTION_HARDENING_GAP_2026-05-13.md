@@ -231,7 +231,22 @@ original plan; they do not change its phase order.
    invalidates SQLite sessions or migrates them.
 6. **Tenant primitives are the floor for Phase 7.** Phase 7 must build on
    `TenantContext`, `TenantPolicy`, `TenantManager`, and `TenantAwareFSGuard`
-   rather than introducing a parallel customer model.
+   rather than introducing a parallel customer model. After `set_tenant()`,
+   the guard confines text and binary reads/writes, deletes, existence checks,
+   directory creation/listing, copies, and symlinks to that tenant's workspace
+   or CAS namespace. It checks lexical paths, resolved targets and parents,
+   both copy/link endpoints, and atomic-write staging files. Explicit `..`
+   components are rejected before I/O, even when the endpoint resolves within
+   the tenant, so parent-directory creation cannot escape the namespace.
+   Relative link targets without `..` are checked from the link's parent.
+   Configured base-directory aliases and links within the same tenant remain
+   supported; tenant-directory aliases into another namespace and foreign
+   directory entries pointing back into the tenant are rejected. An unset
+   tenant retains the existing unscoped `FSGuard` behavior.
+   These checks do not provide atomic containment against concurrent filesystem
+   renames; callers must prevent untrusted concurrent changes to directory trees.
+   Validate with
+   `./.venv/bin/pytest tests/security/test_tenant_isolation_helpers.py -q`.
 
 ## 7. Pinned acceptance commands for paid pilot sign-off
 

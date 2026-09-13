@@ -95,10 +95,10 @@ export default {
       );
     }
 
-    const upstreamUrl = new URL(
-      incomingUrl.pathname + incomingUrl.search,
-      frontdoorOrigin
-    );
+    // Assign URL components so leading slashes cannot become a new authority.
+    const upstreamUrl = new URL(frontdoorOrigin);
+    upstreamUrl.pathname = incomingUrl.pathname;
+    upstreamUrl.search = incomingUrl.search;
 
     const upstreamRequest = new Request(upstreamUrl, {
       method: request.method,

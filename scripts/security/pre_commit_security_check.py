@@ -1,38 +1,20 @@
 #!/usr/bin/env python3
-"""Pre-commit Security Check - Bidirectional Unicode detection.
-
-This script checks files for bidirectional Unicode characters that could
-be used for Trojan Source attacks.
-"""
+"""Compatibility CLI for the canonical Unicode-control security checker."""
 
 import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.validation.check_unicode_controls import check_file as _check_file  # noqa: E402
 
 
 def check_file(filepath):
-    """Check a single file for bidirectional Unicode characters."""
-    # Bidirectional override characters
-    bidi_chars = [
-        "\u202a",  # LEFT-TO-RIGHT EMBEDDING
-        "\u202b",  # RIGHT-TO-LEFT EMBEDDING
-        "\u202c",  # POP DIRECTIONAL FORMATTING
-        "\u202d",  # LEFT-TO-RIGHT OVERRIDE
-        "\u202e",  # RIGHT-TO-LEFT OVERRIDE
-        "\u2066",  # LEFT-TO-RIGHT ISOLATE
-        "\u2067",  # RIGHT-TO-LEFT ISOLATE
-        "\u2068",  # FIRST STRONG ISOLATE
-        "\u2069",  # POP DIRECTIONAL ISOLATE
-    ]
-
-    try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-            for char in bidi_chars:
-                if char in content:
-                    return False, f"Bidirectional Unicode found: {repr(char)}"
-        return True, None
-    except Exception as e:
-        # Ignore files we can't read
-        return True, None
+    """Preserve the legacy result tuple while failing closed on read errors."""
+    issues = _check_file(Path(filepath))
+    return (False, "; ".join(issues)) if issues else (True, None)
 
 
 def main():

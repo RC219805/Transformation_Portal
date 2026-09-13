@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "security-unified.yml"
@@ -20,8 +22,8 @@ def _load_workflow() -> dict:
     return yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
-def _workflow_step(name: str) -> dict:
-    steps = _load_workflow()["jobs"]["dependency-scan"]["steps"]
+def _workflow_step(name: str, job: str = "dependency-scan") -> dict:
+    steps = _load_workflow()["jobs"][job]["steps"]
     return next(step for step in steps if step.get("name") == name)
 
 
@@ -164,3 +166,32 @@ def test_security_tool_install_pins_a_non_vulnerable_setuptools() -> None:
 
     assert '"pip==26.2.1"' in install_run
     assert '"setuptools==83.0.0"' in install_run
+
+
+@pytest.mark.parametrize("filename", ["zz_last.py", "with spaces.sh", "with\nnewline.yaml", "deprecated/example.md"])
+def test_unicode_workflow_scans_all_tracked_files_without_splitting(tmp_path: Path, filename: str) -> None:
+    script_path = Path("scripts/validation/check_unicode_controls.py")
+    (tmp_path / script_path.parent).mkdir(parents=True)
+    shutil.copyfile(REPO_ROOT / script_path, tmp_path / script_path)
+    for index in range(105):
+        (tmp_path / f"clean{index:03}.py").write_text("# clean\n", encoding="utf-8")
+    bad_file = tmp_path / filename
+    bad_file.parent.mkdir(parents=True, exist_ok=True)
+    bad_file.write_text("# hidden\u202e\n", encoding="utf-8")
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    env = os.environ.copy()
+    env["PATH"] = f"{Path(sys.executable).parent}:{env.get('PATH', '')}"
+    step = _workflow_step("Check for bidirectional Unicode", job="security-gates")
+
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", step["run"]],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Bidirectional Unicode U+202E" in result.stderr

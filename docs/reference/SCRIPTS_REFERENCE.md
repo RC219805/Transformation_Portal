@@ -160,7 +160,7 @@ If a utility becomes shared application behavior, move the reusable portion into
 | `scripts/validation/parse_workflows.py` | Canonical workflow parser and validator; public wrapper remains `scripts/parse_workflows.py` |
 | `scripts/validation/security_scan.sh` | Canonical CI-aligned Bandit security scan; public wrapper remains `scripts/security_scan.sh` |
 | `scripts/validation/validate_phase6a.sh` | Canonical Phase 6A Gaussian rasterizer validation script; public wrapper remains `scripts/validate_phase6a.sh` |
-| `scripts/validation/check_unicode_controls.py` | Detect bidirectional Unicode and format-control characters |
+| `scripts/validation/check_unicode_controls.py` | Detect bidirectional Unicode and format-control characters; `--all` scans every tracked Python, shell, YAML, and Markdown file |
 | `scripts/validation/check_portal_asset_budgets.py` | Validate portal asset budgets |
 | `scripts/validation/validate_metadata_extraction.py` | Canonical implementation for the metadata extraction validation CLI; public wrapper remains `scripts/test_metadata_extraction.py` |
 | `scripts/validation/validate_luxury_estate_pipeline.py` | Validate luxury-estate pipeline dependencies, optional runtimes, presets, and source fixtures |
@@ -176,6 +176,14 @@ If a utility becomes shared application behavior, move the reusable portion into
 | `scripts/verification/verify_lux_depth_v3_surface.py` | Canonical Lux Depth V3 surface-contract verifier; public wrapper remains `scripts/verify_lux_depth_v3_surface.py` |
 | `scripts/verification/verify_performance_ledger_fixes.py` | Canonical performance ledger fix verifier; public wrapper remains `scripts/verify_performance_ledger_fixes.py` |
 | `scripts/verification/verify_run_card_integrity.py` | Canonical run-card integrity verifier; public wrapper remains `scripts/verify_run_card_integrity.py` |
+
+Run `python3 scripts/validation/check_unicode_controls.py --all` for the same
+complete tracked-file scan used by Security Unified. Without arguments, it
+checks staged files; explicit paths scan supported files directly. Git discovery,
+missing-file, permission, and UTF-8 decoding errors fail the check. Filenames are
+read with NUL framing, so spaces and newlines do not split or skip candidates.
+The legacy `scripts/security/pre_commit_security_check.py <paths>` entrypoint
+delegates detection to the same checker and retains its explicit-file CLI.
 
 ## Analysis And Benchmark Scripts
 
