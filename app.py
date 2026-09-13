@@ -12155,10 +12155,10 @@ def _revalidate_dispatch_paths(locator: DispatchLocator, plan_bytes: bytes, outp
         for name in operation.files + operation.directories:
             value = configuration["parameters"].get(name)
             if value is not None:
-                shared_roots = (
-                    [ARCHIVE_RIGHTS_POLICY_ROOT] if configuration["operation"] == "rights-apply" and name == "policy_yaml" else []
-                )
-                paths.append((_resolve_allowed_request_path(value, ALLOWED_PATH_ROOTS), shared_roots))
+                is_rights_policy = configuration["operation"] == "rights-apply" and name == "policy_yaml"
+                shared_roots = [ARCHIVE_RIGHTS_POLICY_ROOT] if is_rights_policy else []
+                allowed_roots = ALLOWED_INPUT_ROOTS if is_rights_policy else ALLOWED_PATH_ROOTS
+                paths.append((_resolve_allowed_request_path(value, allowed_roots), shared_roots))
     else:
         from transformation_portal.lux_depth_v3 import config_resolver
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

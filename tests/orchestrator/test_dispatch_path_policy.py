@@ -164,10 +164,14 @@ def test_worker_rights_policy_preserves_governed_default_and_tenant_overrides(pa
     assert not output.exists()
 
 
-def test_worker_governed_policy_still_requires_current_global_root_authorization(paths, monkeypatch):
+def test_worker_governed_policy_still_requires_current_input_root_authorization(paths, monkeypatch):
     inputs, output = paths
     locator, data = _frozen_rights(paths, monkeypatch)
-    monkeypatch.setattr(app, "ALLOWED_PATH_ROOTS", [inputs.parent])
+    # Output authorization cannot substitute for revoked input authorization.
+    governed = app.ARCHIVE_RIGHTS_POLICY_ROOT
+    monkeypatch.setattr(app, "ALLOWED_INPUT_ROOTS", [inputs.parent])
+    monkeypatch.setattr(app, "ALLOWED_OUTPUT_ROOTS", [*app.ALLOWED_OUTPUT_ROOTS, governed])
+    monkeypatch.setattr(app, "ALLOWED_PATH_ROOTS", list(dict.fromkeys([*app.ALLOWED_INPUT_ROOTS, *app.ALLOWED_OUTPUT_ROOTS])))
     with pytest.raises(ValueError, match="outside allowed roots"):
         app._revalidate_dispatch_paths(locator, data, output)
     assert not output.exists()
