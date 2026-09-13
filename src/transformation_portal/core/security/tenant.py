@@ -263,19 +263,36 @@ class TenantManager:
             tenant: Tenant context
             path: Path to check
         """
-        # Check workspace access
+        # Delegated operations may create raw parent paths before accessing the
+        # endpoint, so resolving away '..' would authorize outside side effects.
+        if ".." in path.parts:
+            raise TenantError(f"Cross-tenant access denied: parent traversal for tenant {tenant.tenant_id}")
         try:
-            path.relative_to(tenant.tenant_workspace)
-            return
-        except ValueError:
-            pass
+            absolute_path = path.absolute()
+            resolved_path = path.resolve()
+            resolved_parent = path.parent.resolve()
+            # Resolve configured bases, but keep the tenant namespace fixed:
+            # a tenant directory symlink must not authorize another tenant.
+            tenant_roots = (
+                tenant.workspace_root.resolve() / tenant.tenant_id,
+                tenant.cas_root.resolve() / tenant.tenant_id,
+            )
+            lexical_roots = (
+                tenant.workspace_root.absolute() / tenant.tenant_id,
+                tenant.cas_root.absolute() / tenant.tenant_id,
+                *tenant_roots,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise TenantError(f"Cross-tenant access denied: invalid path for tenant {tenant.tenant_id}") from exc
 
-        # Check CAS access
-        try:
-            path.relative_to(tenant.tenant_cas)
+        lexical_is_confined = any(absolute_path.is_relative_to(root) for root in lexical_roots)
+        target_is_confined = any(resolved_path.is_relative_to(root) for root in tenant_roots)
+        parent_is_confined = any(resolved_parent.is_relative_to(root) for root in tenant_roots)
+        is_tenant_root = absolute_path in lexical_roots and resolved_path in tenant_roots
+        # Mutating a symlink affects its directory entry, not its final target.
+        # Check the real parent as well, even for a link pointing back in scope.
+        if lexical_is_confined and target_is_confined and (parent_is_confined or is_tenant_root):
             return
-        except ValueError:
-            pass
 
         raise TenantError(f"Cross-tenant access denied: {path} not in tenant {tenant.tenant_id}")
 
@@ -353,6 +370,11 @@ class TenantAwareFSGuard(FSGuard):
         self._enforce_tenant(path)
         return super().read_text(path, encoding)
 
+    def read_bytes(self, path: Path) -> bytes:
+        """Read bytes with tenant check."""
+        self._enforce_tenant(path)
+        return super().read_bytes(path)
+
     def write_text(
         self,
         path: Path,
@@ -362,12 +384,50 @@ class TenantAwareFSGuard(FSGuard):
     ) -> None:
         """Write with tenant check."""
         self._enforce_tenant(path)
+        if atomic:
+            self._enforce_tenant(path.with_suffix(path.suffix + ".tmp"))
         super().write_text(path, data, encoding, atomic)
+
+    def write_bytes(self, path: Path, data: bytes, atomic: bool = True) -> None:
+        """Write bytes with tenant checks for the destination and staging file."""
+        self._enforce_tenant(path)
+        if atomic:
+            self._enforce_tenant(path.with_suffix(path.suffix + ".tmp"))
+        super().write_bytes(path, data, atomic)
 
     def delete(self, path: Path, missing_ok: bool = True) -> bool:
         """Delete with tenant check."""
         self._enforce_tenant(path)
         return super().delete(path, missing_ok)
+
+    def exists(self, path: Path) -> bool:
+        """Check existence within the tenant boundary."""
+        self._enforce_tenant(path)
+        return super().exists(path)
+
+    def mkdir(self, path: Path, parents: bool = True) -> None:
+        """Create a directory within the tenant boundary."""
+        self._enforce_tenant(path)
+        super().mkdir(path, parents)
+
+    def list_dir(self, path: Path) -> list[Path]:
+        """List a directory within the tenant boundary."""
+        self._enforce_tenant(path)
+        return super().list_dir(path)
+
+    def symlink(self, src: Path, dst: Path) -> None:
+        """Confine both the link and its effective target to the tenant."""
+        self._enforce_tenant(dst)
+        self._enforce_tenant(src if src.is_absolute() else dst.parent / src)
+        super().symlink(src, dst)
+
+    def copy(self, src: Path, dst: Path) -> None:
+        """Confine both copy endpoints to the tenant."""
+        self._enforce_tenant(src)
+        self._enforce_tenant(dst)
+        if dst.is_dir():
+            self._enforce_tenant(dst / src.name)
+        super().copy(src, dst)
 
 
 def create_tenant_sandbox(

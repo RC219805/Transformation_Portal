@@ -98,6 +98,29 @@ def test_build_workflow_ci_gate_contract_passes_repo_config() -> None:
     assert validator.errors == []
 
 
+def test_worker_request_contract_runs_in_blocking_frontdoor_job() -> None:
+    _, config = _load_config(BUILD_WORKFLOW_PATH)
+    jobs = config["jobs"]
+    classifier = jobs["preflight"]["steps"][0]["with"]["script"]
+    assert r"/^cloudflare\/transformationportal-worker\//," in classifier.split("const frontdoorMatchers = [", 1)[1]
+
+    job = jobs["frontdoor-contract"]
+    assert not job.get("continue-on-error", False)
+    steps = job["steps"]
+    worker_step_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("run") == "npm --prefix cloudflare/transformationportal-worker test"
+    )
+    assert any(
+        step.get("uses", "").startswith("actions/setup-node@")
+        and step.get("with", {}).get("node-version-file") == "web/secure-landing/.nvmrc"
+        for step in steps[:worker_step_index]
+    )
+    assert "if" not in steps[worker_step_index]
+    assert not steps[worker_step_index].get("continue-on-error", False)
+
+
 def test_build_workflow_wheel_smoke_loads_execution_plan_and_evidence_schemas() -> None:
     workflow_source = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
 

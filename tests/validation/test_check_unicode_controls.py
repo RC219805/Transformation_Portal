@@ -10,7 +10,7 @@ from types import ModuleType
 
 import pytest
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "check_unicode_controls.py"
@@ -96,8 +96,8 @@ def test_main_uses_staged_supported_files_when_paths_are_omitted(
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=args,
             returncode=0,
-            stdout=f"{bad_file}\n{tmp_path / 'ignored.txt'}\n",
-            stderr="",
+            stdout=f"{bad_file}\0{tmp_path / 'ignored.txt'}\0".encode(),
+            stderr=b"",
         ),
     )
 
@@ -106,3 +106,98 @@ def test_main_uses_staged_supported_files_when_paths_are_omitted(
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "Bidirectional Unicode U+202D" in captured.err
+
+
+@pytest.mark.parametrize("filename", ["with spaces.sh", "with\nnewline.py", "caf\u00e9.yaml", "deprecated/file.md"])
+@pytest.mark.parametrize("all_tracked", [False, True])
+def test_git_inventory_preserves_filenames_and_scans_shell_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, filename: str, all_tracked: bool
+) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "--quiet"], check=True, cwd=tmp_path)
+    bad_file = tmp_path / filename
+    bad_file.parent.mkdir(parents=True, exist_ok=True)
+    bad_file.write_text("# hidden\u202e\n", encoding="utf-8")
+    subprocess.run(["git", "add", "--", filename], check=True, cwd=tmp_path)
+
+    assert module.main(["--all"] if all_tracked else []) == 1
+
+
+def test_staged_inventory_includes_renames(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "--quiet"], check=True, cwd=tmp_path)
+    (tmp_path / "before.py").write_text("# hidden\u202e\n", encoding="utf-8")
+    subprocess.run(["git", "add", "before.py"], check=True, cwd=tmp_path)
+    subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture"],
+        check=True,
+        cwd=tmp_path,
+    )
+    subprocess.run(["git", "mv", "before.py", "after.py"], check=True, cwd=tmp_path)
+
+    assert module.main([]) == 1
+
+
+@pytest.mark.parametrize("argv", [[], ["--all"]])
+def test_git_inventory_failure_is_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+
+    assert module.main(argv) == 1
+    assert "Error getting Git files:" in capsys.readouterr().err
+
+
+def test_unavailable_git_is_blocking(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    module = _load_module()
+
+    def missing_git(*args, **kwargs):
+        raise FileNotFoundError("git unavailable")
+
+    monkeypatch.setattr(module.subprocess, "run", missing_git)
+
+    assert module.main(["--all"]) == 1
+    assert "Could not run git:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("failure", ["missing", "directory", "invalid_utf8"])
+def test_explicit_unreadable_files_are_blocking(tmp_path: Path, capsys: pytest.CaptureFixture[str], failure: str) -> None:
+    module = _load_module()
+    bad_file = tmp_path / "unreadable.py"
+    if failure == "directory":
+        bad_file.mkdir()
+    elif failure == "invalid_utf8":
+        bad_file.write_bytes(b"# invalid \xff\n")
+
+    assert module.main([str(bad_file)]) == 1
+    assert "Error reading file:" in capsys.readouterr().err
+
+
+def test_explicit_permission_errors_are_blocking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+
+    def denied_read(*args, **kwargs):
+        raise PermissionError("Permission denied")
+
+    monkeypatch.setattr(Path, "read_text", denied_read)
+
+    assert module.main([str(tmp_path / "denied.py")]) == 1
+
+
+def test_all_cannot_silently_override_explicit_paths(tmp_path: Path) -> None:
+    module = _load_module()
+    with pytest.raises(SystemExit) as exc_info:
+        module.main(["--all", str(tmp_path / "file.py")])
+    assert exc_info.value.code == 2
+
+
+def test_all_ignores_untracked_generated_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "--quiet"], check=True, cwd=tmp_path)
+    (tmp_path / "generated.py").write_text("# hidden\u202e\n", encoding="utf-8")
+
+    assert module.main(["--all"]) == 0

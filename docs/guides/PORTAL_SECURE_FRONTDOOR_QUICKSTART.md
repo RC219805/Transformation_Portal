@@ -18,7 +18,11 @@ In production, place the front door behind Cloudflare Access and keep the
 FastAPI origin off the public browser path. The current hosted rollout can use
 the frontdoor-only Cloudflare Worker as the public edge proxy; its
 `FRONTDOOR_ORIGIN` points at the managed Next frontdoor origin and must stay out
-of normal browser traffic.
+of normal browser traffic. The Worker keeps every upstream request on that
+configured origin, including paths with repeated slashes or backslashes; only
+the incoming path and query are copied. Session cookies and Access assertions
+are forwarded to the configured frontdoor, with redirects returned to the
+browser rather than followed by the Worker.
 
 ## Required Environment
 
@@ -376,6 +380,15 @@ nvm use 22
 cd ../..
 make test-frontdoor-contract
 ```
+
+Worker request security contracts (Node 22, no dependency install required):
+
+```bash
+npm --prefix cloudflare/transformationportal-worker test
+```
+
+The Frontdoor contract CI job runs these tests for Worker changes as well as
+frontdoor changes.
 
 Portal contract checks:
 

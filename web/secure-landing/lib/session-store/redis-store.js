@@ -5,7 +5,7 @@
  * ``TP_FRONTDOOR_REDIS_URL``. Stores each session as a single Redis JSON
  * blob keyed by ``${prefix}session:${id}`` so reads/writes are O(1) and
  * session expiry can be enforced by Redis TTL (set to
- * ``absolute_expires_at - now`` on every persist/touch). Login attempts
+ * ``absolute_expires_at - now`` on persist and preserved on touch). Login attempts
  * live in a per-throttle-key sorted set keyed by ``${prefix}login:${key}``
  * with the timestamp as score, so the throttle-window count is a
  * ``ZCOUNT`` against ``(now - window, now)``.
@@ -29,6 +29,17 @@
 
 let _Redis = null;
 const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 1000;
+const TOUCH_SESSION_SCRIPT = `
+local raw = redis.call("GET", KEYS[1])
+if not raw then
+  return 0
+end
+local record = cjson.decode(raw)
+record.last_seen_at = tonumber(ARGV[1])
+record.idle_expires_at = tonumber(ARGV[2])
+redis.call("SET", KEYS[1], cjson.encode(record), "XX", "KEEPTTL")
+return 1
+`;
 
 export function buildRedisClientOptions(connectTimeoutMs) {
   return {
@@ -143,12 +154,10 @@ export class RedisSessionStore {
 
   async touchSession(sessionId, lastSeenAt, idleExpiresAt) {
     if (!sessionId) return;
-    const existing = await this.getRawSessionRow(sessionId);
-    if (!existing) return;
-    existing.last_seen_at = lastSeenAt;
-    existing.idle_expires_at = idleExpiresAt;
-    // Repersist so TTL refreshes against the absolute deadline.
-    await this.persistSession(existing);
+    const client = await this._client_();
+    // Read and update atomically so a delayed touch cannot restore a revoked
+    // session or overwrite newer auth fields. Keep the existing expiration.
+    await client.eval(TOUCH_SESSION_SCRIPT, 1, this._sessionKey(sessionId), lastSeenAt, idleExpiresAt);
   }
 
   async deleteSession(sessionId) {

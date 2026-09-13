@@ -186,6 +186,11 @@ Session behavior:
 - Idle timeout is enforced.
 - Absolute timeout is enforced.
 - The cookie lifetime is bounded by the absolute timeout.
+- Session activity updates only the current timing fields atomically. A
+  delayed request cannot recreate a session removed by logout, rotation, or
+  expiration. Redis touches preserve the existing key expiration and current
+  identity, role, and CSRF fields. The Redis provider and its ACL must support
+  server-side `EVAL` and `SET ... KEEPTTL` for these atomic updates.
 
 Current shipped timeout defaults:
 

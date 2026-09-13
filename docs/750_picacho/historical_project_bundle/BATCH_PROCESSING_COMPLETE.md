@@ -45,7 +45,7 @@
   - Thumbnail: 305 KB
 - **Processing Time:** 5.2s
 
-### **3. Kitchen - Culinary Space** 👨‍🍳
+### **3. Kitchen - Culinary Space** 🍳
 - **Resolution:** 4000 x 2250 (9 MP)
 - **Enhancements:**
   - Metal & stone enhancement

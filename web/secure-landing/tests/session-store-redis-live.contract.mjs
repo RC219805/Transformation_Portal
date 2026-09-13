@@ -141,3 +141,119 @@ test("Redis SessionStore satisfies multi-instance readiness", () => {
   assert.equal(readiness.mode, "multi_instance");
   assert.equal(readiness.backend, "redis");
 });
+
+function pauseSessionTouch(client) {
+  const reached = Promise.withResolvers();
+  const released = Promise.withResolvers();
+  return {
+    reached: reached.promise,
+    release: released.resolve,
+    client: {
+      // Capture a stale read for the former GET/SET implementation. The
+      // atomic implementation instead pauses before executing its script.
+      async get(...args) {
+        const snapshot = await client.get(...args);
+        reached.resolve();
+        await released.promise;
+        return snapshot;
+      },
+      async eval(...args) {
+        reached.resolve();
+        await released.promise;
+        return client.eval(...args);
+      },
+      set: client.set.bind(client)
+    }
+  };
+}
+
+for (const change of ["delete", "rotation", "expiry"]) {
+  test(`a delayed Redis session touch cannot undo ${change}`, { timeout: 10_000 }, async () => {
+    const keyPrefix = makeKeyPrefix();
+    const store = new RedisSessionStore({ redisUrl: requireRedisUrl(), keyPrefix });
+    const client = await store._client_();
+    const paused = pauseSessionTouch(client);
+    const touchingStore = new RedisSessionStore({
+      redisUrl: requireRedisUrl(),
+      keyPrefix,
+      client: paused.client
+    });
+    let pendingTouch;
+
+    try {
+      const original = sessionRow(`session-${randomUUID()}`);
+      await store.persistSession(original);
+      pendingTouch = touchingStore.touchSession(original.id, Date.now() + 1_000, Date.now() + 61_000);
+      await paused.reached;
+
+      if (change === "expiry") {
+        await client.pexpire(`${keyPrefix}session:${original.id}`, 0);
+      } else {
+        await store.deleteSession(original.id);
+      }
+      const rotated = sessionRow(`rotated-${randomUUID()}`);
+      if (change === "rotation") {
+        await store.persistSession(rotated);
+      }
+
+      paused.release();
+      await pendingTouch;
+
+      assert.equal(await store.getRawSessionRow(original.id), null);
+      if (change === "rotation") {
+        assert.deepEqual(await store.getRawSessionRow(rotated.id), rotated);
+      }
+    } finally {
+      paused.release();
+      await pendingTouch?.catch(() => undefined);
+      await deleteKeysWithPrefix(client, keyPrefix);
+      await store.close();
+    }
+  });
+}
+
+test("Redis session touch updates only current timing fields and preserves the existing TTL", { timeout: 10_000 }, async () => {
+  const keyPrefix = makeKeyPrefix();
+  const store = new RedisSessionStore({ redisUrl: requireRedisUrl(), keyPrefix });
+  const client = await store._client_();
+  const paused = pauseSessionTouch(client);
+  const touchingStore = new RedisSessionStore({
+    redisUrl: requireRedisUrl(),
+    keyPrefix,
+    client: paused.client
+  });
+  let pendingTouch;
+
+  try {
+    const original = sessionRow(`session-${randomUUID()}`);
+    await store.persistSession(original);
+    const touchedAt = Date.now() + 1_000;
+    const idleExpiresAt = touchedAt + 60_000;
+    pendingTouch = touchingStore.touchSession(original.id, touchedAt, idleExpiresAt);
+    await paused.reached;
+
+    const current = { ...original, csrf_token: "current-csrf-token", role: "operator", authenticated: 0 };
+    await store.persistSession(current);
+    const key = `${keyPrefix}session:${original.id}`;
+    await client.pexpire(key, 30_000);
+    const initialTtl = await client.pttl(key);
+
+    paused.release();
+    await pendingTouch;
+
+    assert.deepEqual(await store.getRawSessionRow(original.id), {
+      ...current,
+      last_seen_at: touchedAt,
+      idle_expires_at: idleExpiresAt
+    });
+    const touchedTtl = await client.pttl(key);
+    assert.ok(touchedTtl > 0 && touchedTtl <= initialTtl, "touch must preserve the existing expiration");
+    await store.touchSession("missing-session", touchedAt, idleExpiresAt);
+    assert.equal(await store.getRawSessionRow("missing-session"), null);
+  } finally {
+    paused.release();
+    await pendingTouch?.catch(() => undefined);
+    await deleteKeysWithPrefix(client, keyPrefix);
+    await store.close();
+  }
+});

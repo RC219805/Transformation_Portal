@@ -41,7 +41,9 @@
  *     Fetch the raw row by id. Returns ``null`` when absent. Callers handle
  *     expiry — the store does not.
  * @property {(sessionId: string, lastSeenAt: number, idleExpiresAt: number) => void} touchSession
- *     Update ``last_seen_at`` + ``idle_expires_at`` for a leased session.
+ *     Atomically update only ``last_seen_at`` + ``idle_expires_at`` for an
+ *     existing session. Never recreate an absent session or extend its
+ *     absolute expiration; preserve current identity and CSRF fields.
  * @property {(sessionId: string) => void} deleteSession
  *     Idempotent. ``sessionId`` falsy is a no-op.
  * @property {(throttleKey: string, sinceMs: number) => number} countLoginFailures
