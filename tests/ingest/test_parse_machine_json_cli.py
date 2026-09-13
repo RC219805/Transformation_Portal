@@ -161,3 +161,124 @@ def test_shell_examples_handle_command_errors_with_errexit(tmp_path: Path, funct
     assert "RuntimeError" in result.stderr
     assert "producer unavailable" in result.stderr
     assert "jq: error" not in result.stderr
+
+
+@pytest.fixture(params=["Extract Command", "Validate Command", "Batch Summary"])
+def run_documented_shell_parser(request: pytest.FixtureRequest, tmp_path: Path):
+    """Run the actual reference block with a controlled producer envelope/status."""
+    contract = PARSER.parents[1] / "docs" / "api" / "MACHINE_MODE_CONTRACT.md"
+    reference = contract.read_text(encoding="utf-8").split("## Reference Parser (jq + bash)\n", 1)[1]
+    section = reference.split(f"### {request.param}\n", 1)[1].split("\n### ", 1)[0]
+    script = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    producer = tmp_path / ".venv" / "bin" / "python"
+    producer.parent.mkdir(parents=True)
+    producer.write_text('#!/bin/sh\nprintf "%s\\n" "$TEST_ENVELOPE"\nexit "$TEST_PRODUCER_STATUS"\n', encoding="utf-8")
+    producer.chmod(0o755)
+
+    def run(text: str, status: int) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", "-c", script, "documented-parser", "input.CR2"],
+            cwd=tmp_path,
+            env={**os.environ, "TEST_ENVELOPE": text, "TEST_PRODUCER_STATUS": str(status)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    return run
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="bash reference examples require jq")
+@pytest.mark.parametrize("schema", ["tp.meta.machine.v2", "foreign.machine.v1", None])
+@pytest.mark.parametrize("has_error", [False, True], ids=["success", "command-error"])
+def test_documented_shell_parsers_reject_schema_before_routing(run_documented_shell_parser, schema, has_error) -> None:
+    status = 5 if has_error else 0
+    error = {"type": "RuntimeError", "message": "producer unavailable"} if has_error else None
+    payload = json.loads(envelope({}, exit_code=status, error=error))
+    payload["schema"] = schema
+
+    result = run_documented_shell_parser(json.dumps(payload), status)
+
+    assert result.returncode == 99
+    assert result.stdout == ""
+    assert "unsupported schema" in result.stderr.lower()
+    assert "producer unavailable" not in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="bash reference examples require jq")
+@pytest.mark.parametrize(
+    "error,status",
+    [
+        (error_to_dict(SchemaValidationFailure("invalid extraction input")), 1),
+        ({"type": "RuntimeError", "message": "producer unavailable"}, 5),
+        ({"type": "RuntimeError", "message": "producer unavailable"}, 255),
+    ],
+    ids=["typed", "generic", "max-status"],
+)
+def test_documented_shell_parsers_preserve_supported_command_errors(run_documented_shell_parser, error, status) -> None:
+    result = run_documented_shell_parser(envelope({}, exit_code=status, error=error), status)
+
+    assert result.returncode == status
+    assert result.stdout == ""
+    assert error["type"] in result.stderr
+    assert error["message"] in result.stderr
+    assert "jq: error" not in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="bash reference examples require jq")
+@pytest.mark.parametrize(
+    "text,status,diagnostic",
+    [
+        ("{invalid", 5, "Invalid JSON"),
+        ('{"schema":"tp.meta.machine.v1"}', 5, "Invalid envelope exit_code"),
+        ('{"schema":"tp.meta.machine.v1","exit_code":"5"}', 5, "Invalid envelope exit_code"),
+        ('{"schema":"tp.meta.machine.v1","success":true,"exit_code":0.5,"data":{}}', 0, "Invalid envelope exit_code"),
+        ('{"schema":"tp.meta.machine.v1","exit_code":-1}', 255, "Invalid envelope exit_code"),
+        ('{"schema":"tp.meta.machine.v1","exit_code":256}', 0, "Invalid envelope exit_code"),
+        (envelope({}, exit_code=5), 0, "Process/envelope exit-code mismatch"),
+    ],
+)
+def test_documented_shell_parsers_reject_invalid_envelopes(run_documented_shell_parser, text, status, diagnostic) -> None:
+    result = run_documented_shell_parser(text, status)
+
+    assert result.returncode == 99
+    assert result.stdout == ""
+    assert diagnostic in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="bash reference examples require jq")
+@pytest.mark.parametrize(
+    "run_documented_shell_parser,command,data,expected_output",
+    [
+        (
+            "Extract Command",
+            "extract",
+            {"input_path": "input.CR2", "output_path": "output.json", "elapsed_seconds": 0.25},
+            "Extracted: input.CR2 → output.json",
+        ),
+        (
+            "Validate Command",
+            "validate",
+            {"sidecar_path": "sidecar.json", "strict": False, "errors": [], "dominant_error": None},
+            "Validation passed: sidecar.json",
+        ),
+        (
+            "Batch Summary",
+            "extract-batch",
+            {"summary_counts": {"total": 2, "success": 2, "failure": 0, "by_exit_code": {}}},
+            "Batch result: 2/2 succeeded, 0 failed",
+        ),
+    ],
+    indirect=["run_documented_shell_parser"],
+)
+def test_documented_shell_parsers_preserve_supported_success(
+    run_documented_shell_parser, command, data, expected_output
+) -> None:
+    payload = json.loads(envelope(data))
+    payload["command"] = command
+
+    result = run_documented_shell_parser(json.dumps(payload), 0)
+
+    assert result.returncode == 0
+    assert expected_output in result.stdout
+    assert result.stderr == ""

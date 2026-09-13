@@ -218,11 +218,26 @@ class TestWorkflowDocumentation:
         assert "pypi" in content.lower(), "README should mention PyPI"
 
     def test_readme_documents_usage(self, workflows_dir):
-        """Test that README.md provides usage examples."""
+        """Keep release triggers and OIDC prerequisites aligned with the workflow."""
         readme_file = workflows_dir / "README.md"
 
         with open(readme_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        assert "tag" in content.lower() or "version" in content.lower(), "README should explain how to trigger PyPI uploads"
-        assert "secret" in content.lower() or "token" in content.lower(), "README should mention required secrets"
+        workflow = yaml.safe_load((workflows_dir / "submit-pypi.yml").read_text(encoding="utf-8"))
+        triggers = workflow.get("on", workflow.get(True, {}))
+        normalized = " ".join(content.lower().split())
+
+        for tag_pattern in triggers["push"]["tags"]:
+            assert f"`{tag_pattern}`" in content, "README should identify the production release tags"
+        assert "workflow_dispatch" in content and "test_pypi=true" in content
+        assert "branch ref" in normalized, "Test PyPI guidance must avoid also selecting production tag publication"
+        assert "trusted publishing" in normalized and "oidc" in normalized
+        assert "no pypi api-token secret is required" in normalized
+
+        for job_id in ("pypi", "test-pypi"):
+            job = workflow["jobs"][job_id]
+            assert job["permissions"]["id-token"] == "write"
+            assert "`id-token: write`" in content
+            assert f"`{job['environment']['name']}`" in content
+        assert "required reviewers" in normalized, "README should explain environment approval setup"

@@ -699,7 +699,16 @@ else
   command_status=$?
 fi
 # Only stdout is captured; producer diagnostics remain on stderr.
-exit_code=$(printf '%s\n' "$result" | jq -er '.exit_code')
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
+  exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
 if [[ "$exit_code" -ne "$command_status" ]]; then
   echo "ERROR: Process/envelope exit-code mismatch" >&2
   exit 99
@@ -707,13 +716,6 @@ fi
 if printf '%s\n' "$result" | jq -e '.error != null' >/dev/null; then
   printf '%s\n' "$result" | jq -r '.error | "\(.type): \(.message)"' >&2
   exit "$exit_code"
-fi
-
-# Validate schema
-schema=$(echo "$result" | jq -r '.schema')
-if [[ "$schema" != "tp.meta.machine.v1" ]]; then
-  echo "ERROR: Unsupported schema: $schema" >&2
-  exit 99
 fi
 
 # Route by exit code
@@ -742,7 +744,16 @@ else
   command_status=$?
 fi
 # Only stdout is captured; producer diagnostics remain on stderr.
-exit_code=$(printf '%s\n' "$result" | jq -er '.exit_code')
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
+  exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
 if [[ "$exit_code" -ne "$command_status" ]]; then
   echo "ERROR: Process/envelope exit-code mismatch" >&2
   exit 99
@@ -781,7 +792,16 @@ else
   command_status=$?
 fi
 # Only stdout is captured; producer diagnostics remain on stderr.
-exit_code=$(printf '%s\n' "$result" | jq -er '.exit_code')
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
+  exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
 if [[ "$exit_code" -ne "$command_status" ]]; then
   echo "ERROR: Process/envelope exit-code mismatch" >&2
   exit 99

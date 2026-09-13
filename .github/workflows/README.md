@@ -41,6 +41,24 @@ The former `python-app.yml` and `pylint.yml` are not active workflow files.
 | [`nightly.yml`](nightly.yml), [`ml-slow-suite.yml`](ml-slow-suite.yml) | Separate deep/ML lanes with their own prerequisites; see the performance policy's legacy-nightly limitations. |
 | [`ai-code-review.yml`](ai-code-review.yml), [`summary.yml`](summary.yml), [`smart-issue-management.yml`](smart-issue-management.yml) | Advisory AI automation; service-unavailable diagnostics are not approvals or successful reviews. |
 
+## Package publishing prerequisites
+
+[`submit-pypi.yml`](submit-pypi.yml) uses **Trusted Publishing** through OIDC;
+no PyPI API-token secret is required. Configure a trusted publisher for
+`RC219805/Transformation_Portal` and `submit-pypi.yml` on each package index,
+matching the GitHub environment: `pypi` for PyPI and `testpypi` for Test PyPI.
+Configure the corresponding GitHub environments and their required reviewers
+before releasing. Both publishing jobs request `id-token: write` to obtain the
+short-lived OIDC identity; the build job retains read-only repository access.
+
+Version tags matching `v*` trigger the release workflow; the production job runs
+when the selected ref is a version tag. For a Test PyPI upload, use
+`workflow_dispatch` with `test_pypi=true` on a branch ref. Selecting a version-tag
+ref for that manual run can also satisfy the production job's condition. A
+branch dispatch with `test_pypi=false` builds packages without publishing them.
+Building packages or passing this repository's checks does not prove that the
+external trusted-publisher configuration or release approvals are in place.
+
 ## Local validation
 
 ```bash

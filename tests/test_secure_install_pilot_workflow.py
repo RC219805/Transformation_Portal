@@ -115,11 +115,16 @@ def test_requirements_readme_records_current_curated_web_runtime_baseline() -> N
 def test_dependabot_governance_doc_includes_dep_pin_changed_checklist() -> None:
     governance_doc = DEPENDABOT_GOVERNANCE_PATH.read_text(encoding="utf-8")
 
-    assert '## "Dep Pin Changed" Checklist' in governance_doc
-    assert "Regenerate only the affected governed lockfiles through the existing lock" in governance_doc
-    assert "make check-requirements-lock-contract" in governance_doc
-    assert "runtime/toolchain requirements stay current" in governance_doc
-    assert "make ci" in governance_doc
+    heading = '## "Dep Pin Changed" Checklist'
+    assert heading in governance_doc
+    checklist = " ".join(governance_doc.split(heading, 1)[1].split("\n## ", 1)[0].split())
+
+    assert "a generic writer publishes the complete six-file generic set" in checklist
+    assert "target-owned locks use their native lane" in checklist
+    assert "Do not hand-edit compiled lock output." in checklist
+    assert "make check-requirements-lock-contract" in checklist
+    assert "runtime/toolchain requirements stay current" in checklist
+    assert "make ci" in checklist
 
 
 def test_hash_policy_roadmap_refresh_closes_csp_unlock_and_records_policy_decision() -> None:
