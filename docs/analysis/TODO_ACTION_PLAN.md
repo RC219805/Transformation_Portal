@@ -1,9 +1,9 @@
 # TODO Action Plan - Transformation Portal
 
 **Generated**: 2026-03-13
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-09-12
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.8)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.9)
 
 ---
 
@@ -23,10 +23,18 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 | **Documentation TODOs** | Narrative only | Non-actionable historical markers (see Note below) |
 
 All source code TODOs in `src/` have been cleaned up. The live scanner reports
-25 governed `NotImplementedError` items, 0 ungoverned TODOs, and 1,753 files
-scanned.
+25 governed `NotImplementedError` items, 0 ungoverned TODOs, and 1,811 files
+scanned (September 12, 2026).
 
 > **Note on Documentation TODO counts:** Markdown TODO prose is intentionally outside the CI scanner scope. Historical notes, status markers, and archive candidates remain narrative context unless promoted into the scanner-enforced code/test/script/tool/web surfaces. The experimental-feature-focused markers tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md` remain documentation annotations, not implementation blockers.
+
+### Scanner Reconciliation (2026-09-12)
+
+The existing generator reports 25 governed items and 0 ungoverned items across
+1,811 files. The item count is unchanged. The dated priorities and completion
+reports below are historical planning records, not release or production
+certification. Current unresolved implementation work has acceptance criteria in
+the [finding ledger](../governance/audit/documentation-findings-2026-09-12.md).
 
 ### Recent Governance Completion (2026-06-11)
 
@@ -364,7 +372,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.8 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.9 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
@@ -373,7 +381,7 @@ Require for all preset changes:
 
 ## Summary
 
-**Scanner Baseline Reviewed**: 25 governed items across 1,753 files
+**Scanner Baseline Reviewed**: 25 governed items across 1,811 files
 **Scanner-Governance Action Required**: 0 items
   - 0 active source code TODOs (all cleaned up)
   - 0 ungoverned scanner-visible TODOs
@@ -396,5 +404,5 @@ The codebase demonstrates mature TODO management with proper documentation and c
 
 **Document Version**: 1.5.0
 **Author**: Transformation Portal Architect Review
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-09-12
 **Next Review**: Before v2.5.0 release planning (CI now blocks ungoverned TODOs at PR time)

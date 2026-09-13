@@ -9,5 +9,5 @@ promotes a specific document. Current operator guidance starts at
 [`docs/governance/DOCUMENTATION_MAP.md`](../governance/DOCUMENTATION_MAP.md).
 
 For the repo-wide classification, see
-[`DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`](../governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
+[`DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md`](../governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
 and the inventory CSV under `docs/governance/audit/`.

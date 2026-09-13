@@ -1,5 +1,10 @@
 # Test Coverage Improvement Plan
 
+> **Historical planning snapshot (2026-04-16).** Completion boxes and proposed
+> timing/coverage targets below are not a current CI certification. Current
+> commands and enforced source-backed floors are documented in
+> [Test Strategy](STRATEGY.md) and [Performance Gate Policy](../performance/GATE_POLICY.md).
+
 **Status**: Phase 0 complete (infrastructure setup)
 **Last Updated**: 2026-04-16
 

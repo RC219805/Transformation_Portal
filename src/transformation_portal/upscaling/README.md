@@ -6,7 +6,7 @@ ML-powered super-resolution upscaling with graceful fallback.
 
 The upscaler backend registry provides a **plugin-based architecture** for image upscaling with:
 - **Golden Path**: Bicubic (fast, always available, no ML dependencies)
-- **ML Tier**: Real-ESRGAN (superior quality, optional, commercial-safe)
+- **ML Tier**: Real-ESRGAN is currently disabled by the repository availability guard.
 - **Graceful Fallback**: Automatic degradation if ML dependencies unavailable
 
 ## Quick Start
@@ -63,26 +63,20 @@ upscaled = upscaler.upscale(image, scale_factor=2.0)
 
 ### Bicubic (`bicubic`)
 
-**Golden Path** - Always available, no dependencies.
+**Core backend** - Requires the core NumPy/OpenCV environment; no model download.
 
 - **Algorithm**: OpenCV's bicubic interpolation (cv2.INTER_CUBIC)
-- **Dependencies**: None (OpenCV in base requirements)
-- **Performance**: ~100-200 images/hour for 4K→8K
-- **Memory**: ~50MB per image
-- **Quality**: Good for 2x, acceptable for 4x
+- **Dependencies**: NumPy and OpenCV from the governed core environment
 - **License**: BSD-3-Clause (or Apache 2.0 depending on OpenCV version) (commercial-safe)
 
 ### Real-ESRGAN (`realesrgan`)
 
 **ML Tier** - Superior quality, requires ML dependencies.
 
-**⚠️ CURRENTLY UNAVAILABLE**: Real-ESRGAN backend is temporarily disabled due to CVE-2024-27763 in the BasicSR dependency. A vendored safe implementation will be added in a future update. Use `bicubic` backend as the current production path.
+**⚠️ CURRENTLY UNAVAILABLE**: Real-ESRGAN backend is temporarily disabled due to CVE-2024-27763 in the BasicSR dependency. Re-enabling it requires separate implementation and dependency-policy review. Use `bicubic` backend as the current production path.
 
 - **Algorithm**: Real-ESRGAN (RRDB network with perceptual loss)
 - **Dependencies**: torch, basicsr
-- **Performance**: ~10-30 images/hour for 4K→8K (GPU), ~2-5/hour (CPU)
-- **Memory**: ~2-4GB GPU memory
-- **Quality**: Excellent detail preservation, especially textures
 - **License**: BSD-3-Clause (commercial-safe)
 - **Models**:
   - `RealESRGAN_x2plus`: Best for 2x upscaling (~17MB)
@@ -129,23 +123,13 @@ src/transformation_portal/upscaling/
     └── realesrgan.py              # ML backend
 ```
 
-## CLI Usage
+## CLI boundary
 
-```bash
-# Golden Path (bicubic, default)
-lux-depth-v3 \
-  --input-dir ./input \
-  --output-dir ./output \
-  --enable-v2 on
-
-# ML Tier (Real-ESRGAN)
-lux-depth-v3 \
-  --input-dir ./input \
-  --output-dir ./output \
-  --enable-v2 on \
-  --v2-upscaler realesrgan \
-  --v2-device cuda
-```
+The Lux Depth V3 CLI does not expose `--v2-upscaler` or `--v2-device`.
+`--enable-v2 on` enables the separate enhancement stage; it does not prove
+that this registry performed upscaling. Use the Python registry API above for
+this component and the [Lux CLI guide](../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+for supported command-line options.
 
 ## API Reference
 
@@ -211,24 +195,13 @@ class RealESRGANUpscaler:
         ...
 ```
 
-## Performance
+## Performance evidence
 
-### Bicubic
-
-| Resolution | Scale | Time | Throughput | Memory |
-|------------|-------|------|------------|--------|
-| 1920x1080 → 3840x2160 | 2.0x | ~5ms | ~200/hour | ~50MB |
-| 3840x2160 → 7680x4320 | 2.0x | ~15ms | ~240/hour | ~50MB |
-| 1920x1080 → 7680x4320 | 4.0x | ~20ms | ~180/hour | ~50MB |
-
-### Real-ESRGAN (CURRENTLY UNAVAILABLE)
-
-**Note**: Real-ESRGAN backend is currently disabled due to security vulnerability CVE-2024-27763 in BasicSR dependency. Benchmarks preserved for future reference when safe implementation is available.
-
-| Resolution | Scale | Time (GPU) | Time (CPU) | Throughput (GPU) | Memory (GPU) |
-|------------|-------|------------|------------|------------------|--------------|
-| 1920x1080 → 3840x2160 | 2.0x | ~2-3s | ~15-20s | ~1200/hour | ~2-4GB |
-| 3840x2160 → 7680x4320 | 2.0x | ~8-12s | ~60-90s | ~300/hour | ~2-4GB |
+No reproducible benchmark run accompanies this guide. Measure the actual
+backend, input dimensions, scale, runtime, and output quality before making
+throughput or memory claims. Registry fallback returns bicubic when the
+requested backend is unavailable and `fallback_to_bicubic=True`; inspect
+`upscaler.name` so a fallback is not reported as Real-ESRGAN inference.
 
 ## License
 
@@ -240,7 +213,7 @@ All components are commercial-safe:
 | Real-ESRGAN Model | BSD-3-Clause | ✅ Yes | Suspended (CVE-2024-27763) |
 | BasicSR | Apache 2.0 | ⚠️ Blocked | CVE-2024-27763 |
 
-**Security Note**: BasicSR dependency is blocked due to CVE-2024-27763 (command injection vulnerability). Real-ESRGAN backend will be re-enabled when a safe vendored implementation is available.
+**Security Note**: BasicSR dependency is blocked due to CVE-2024-27763 (command injection vulnerability). Any re-enablement requires a separately reviewed implementation and dependency lane.
 
 ## Examples
 
@@ -253,7 +226,7 @@ python examples/upscaling_comparison.py --backend both --device cuda
 # Test bicubic only
 python examples/upscaling_comparison.py --backend bicubic
 
-# Test Real-ESRGAN only
+# Disabled Real-ESRGAN request (may fall back; not ML inference evidence)
 python examples/upscaling_comparison.py --backend realesrgan --device cuda
 ```
 

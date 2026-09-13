@@ -20,6 +20,7 @@ lux-depth-v3 \
   --input-dir "./input_images" \
   --output-dir "./output/commercial" \
   --quality-tier "apex" \
+  --materials-v3 "off" \
   --depth-backend "da3" \
   --model-key "da3-metric" \
   --depth-device "mps" \
@@ -41,6 +42,9 @@ lux-depth-v3 \
   --depth-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "sam2" \
+  --strict-segmentation \
   --output-bit-depth 16
 ```
 
@@ -54,6 +58,7 @@ lux-depth-v3 \
   --model-key "da3-research" \
   --non-commercial-ok "true" \
   --quality-tier "apex" \
+  --materials-v3 "off" \
   --pbr "on"
 ```
 
@@ -74,9 +79,17 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 - Custom post-processing pipelines
 - Faster iteration during development
 
-**V2 is independent:** All other pipeline features (depth, PBR, Materials V3) work without V2.
+Disabling V2 skips the enhancement subprocess. It does not itself enable PBR
+or any optional feature. Materials V3 in the APEX tier requires explicit
+segmentation, a non-stub backend, and strict segmentation; install and validate
+the selected runtime separately before running those examples.
 
 ### Quality Tier vs Preset
+
+Tier selection does not enable every optional feature. Review `--plan` output
+for the resolved model and stage settings after selecting presets and feature
+flags; see the canonical CLI guide for precedence rules. Planning loads no
+models and is not inference or artifact evidence.
 
 **Use `--quality-tier` for most workflows:**
 - `standard` - Fast/draft quality
@@ -117,6 +130,7 @@ lux-depth-v3 \
   --input-dir "./input" \
   --output-dir "./output/pbr_only" \
   --quality-tier "apex" \
+  --materials-v3 "off" \
   --pbr "on" \
   --enable-v2 "off" \
   --depth-device "mps"
@@ -124,7 +138,7 @@ lux-depth-v3 \
 
 **Outputs:**
 - `depth/<input-key>_depth.png` - 16-bit depth map
-- `depth/<input-key>_depth.npy` - Float32 depth array when requested
+- `depth/<input-key>_depth.npy` - Float32 depth array with `--save-float-depth on`
 - `depth/<input-key>_depth_metadata.json` - Depth provenance and statistics
 - `pbr/<input-key>_normal.png` - Normal map
 - `pbr/<input-key>_roughness.png` - Roughness map
@@ -147,6 +161,9 @@ lux-depth-v3 \
   --depth-device "cuda" \
   --pbr "on" \
   --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "sam2" \
+  --strict-segmentation \
   --enable-v2 "off" \
   --cache-depth "on" \
   --run-card-version "v2" \
@@ -155,7 +172,7 @@ lux-depth-v3 \
 
 **Outputs:**
 - `depth/<input-key>_depth.png` - 16-bit depth map
-- `depth/<input-key>_depth.npy` - Float32 depth array when requested
+- `depth/<input-key>_depth.npy` - Float32 depth array with `--save-float-depth on`
 - `depth/<input-key>_depth_metadata.json` - Depth provenance and statistics
 - All PBR maps listed above
 - Enhanced-image paths reported by the batch result and combined manifest when
@@ -182,12 +199,15 @@ python scripts/verify_run_card_integrity.py ./output/client/run_card_batch.json 
 python tools/sign_run_card_attestation.py \
   --run-card ./output/client/run_card_batch.json \
   --format both \
-  --key-id "release-signer"
+  --gpg \
+  --gpg-key-id "<PRIMARY_GPG_FINGERPRINT>" \
+  --key-id "<PRIMARY_GPG_FINGERPRINT>"
 
 python tools/verify_run_card_attestation.py \
   --run-card ./output/client/run_card_batch.json \
   --require-native \
-  --require-dsse
+  --require-dsse \
+  --gpg
 
 python scripts/validation/assess_run_card_release.py \
   ./output/client/run_card_batch.json \
@@ -259,7 +279,7 @@ ERROR:   - output/depth/result.png (matched: /depth/)
 
 **Why exclude artifacts?** Processing depth maps as RGB inputs creates nonsensical results (depth of depth), feedback loops, and data corruption.
 
-**Full documentation:** [docs/guides/input_hygiene.md](../../../../docs/guides/input_hygiene.md)
+**Full documentation:** [docs/guides/input_hygiene.md](../../../docs/guides/input_hygiene.md)
 
 ## Troubleshooting
 
@@ -296,8 +316,8 @@ You can also override the interpreter explicitly with:
 
 ### More Help
 
-- **Full Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
-- **CLI Reference:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Full Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **CLI Reference:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - **CLI Help:** `lux-depth-v3 --help`
 
 ## Architecture
@@ -329,10 +349,11 @@ Output Deliverables
 
 ### Commercial-Safe (Default)
 
-**DA3 (`da3` backend)**
-- ✅ Commercial use allowed
-- ✅ No license flags required
-- Recommended for production
+**DA3 metric (`--model-key da3-metric`)**
+- The registry identifies this model as Apache-2.0.
+- Backend `da3` and model alias `da3` are different selectors: the bare model
+  alias resolves to the research model and requires explicit acknowledgement.
+- Runtime readiness and permitted use must be checked for the selected model.
 
 ### Research-Only (Explicit Opt-In)
 
@@ -351,7 +372,7 @@ Output Deliverables
 --accept-apple-depth-pro-research-license "true"
 ```
 
-The CLI **enforces license compliance** at startup to prevent accidental violations.
+The CLI enforces model-specific acknowledgement flags; flags alone do not establish permission for a particular use.
 For safe installation, bootstrap `depth-pro` with
 `./scripts/setup/install_depth_pro_runtime.sh` and keep it in a dedicated NumPy 1.x environment
 and point the main pipeline at it with `--depth-pro-python` or
@@ -382,7 +403,10 @@ Enable content-addressable caching for faster iterations:
 --cache-depth "on"
 ```
 
-Cached depth maps are reused across runs, dramatically speeding up parameter exploration.
+Cache access requires a complete materialized plan/input/model/runtime identity
+in the identity-v3 namespace. `--cache-depth on` does not grant runtime authority.
+The native Darwin arm64 Python 3.11 baseline DA3 runtime lock owns that authority;
+other runtimes can remain inference-only. See the [CLI guide](../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md).
 
 ### Batch Processing
 
@@ -404,13 +428,15 @@ Control parallelism and resource usage:
 --verify-images
 ```
 
-**Default behavior:**
-- GPU/MPS: 2 workers (VRAM-conservative)
-- CPU: Auto-detect (CPU count - 1)
+These forward-compatible CLI fields are passed into configuration. They do not
+prove parallel inference throughput or a universal resource limit; verify the
+selected executor's use of each field before treating them as tuning controls.
 
 ## Precision Guardrails
 
-The pipeline maintains **16-bit precision** throughout the depth processing chain to prevent quality degradation.
+Depth processing uses floating-point arrays internally and quantizes at output
+boundaries. Depth PNG encoding and enhanced-image bit depth are distinct; this
+does not imply every backend or image stage preserves 16-bit precision.
 
 ### Design Principles
 
@@ -433,7 +459,7 @@ The pipeline maintains **16-bit precision** throughout the depth processing chai
 
 **Write Path:**
 - 16-bit PNG output maintains full dynamic range
-- Optional float32 NPY for maximum precision PBR
+- Optional float32 NPY with `--save-float-depth on` (default: off)
 - Quantization strategies: linear, percentile, adaptive
 
 ### Avoiding Common Pitfalls
@@ -489,8 +515,10 @@ from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_e
 
 config = EnhanceConfig(
     quality_tier="apex",
+    save_float_depth=True,  # Retain the float depth artifact for reuse
     enable_v2=False,  # Disable V2 for PBR-only
     generate_pbr=True,
+    enable_materials_v3=False,
     depth_device="mps"
 )
 
@@ -577,11 +605,11 @@ pylint src/transformation_portal/lux_depth_v3/
 - Benchmark suite for regression detection
 - Container/serverless deployment patterns
 
-**Contributions welcome!** See [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
+**Contributions welcome!** See [CONTRIBUTING.md](../../../CONTRIBUTING.md)
 
 ## Additional Resources
 
-- **Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
-- **CLI Guide:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
-- **Architecture:** [docs/architecture/ARCHITECTURE.md](../../../../docs/architecture/ARCHITECTURE.md)
-- **Main README:** [README.md](../../../../README.md)
+- **Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **CLI Guide:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Architecture:** [docs/architecture/ARCHITECTURE.md](../../../docs/architecture/ARCHITECTURE.md)
+- **Main README:** [README.md](../../../README.md)

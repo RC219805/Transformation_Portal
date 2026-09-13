@@ -12,7 +12,7 @@ The secure front door is a separate Node app in `web/secure-landing/`.
 - The front door proxies `/portal` and `/v1/*` to FastAPI server-to-server.
 - The backend API key stays on the front door and is never exposed to the browser in managed mode.
 - The front door serves `GET /` directly; FastAPI remains the backend system of record for `GET /ready` and `/v1/*`.
-- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract and is not mirrored under `/api/*` by default.
+- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the shallow backend liveness contract and is not mirrored under `/api/*` by default.
 
 In production, place the front door behind Cloudflare Access and keep the
 FastAPI origin off the public browser path. The current hosted rollout can use
@@ -48,6 +48,10 @@ Notes:
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
 - Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
+
+A successful `/ready` or frontdoor `/healthz` response does not prove that a
+processing job ran. `/v1/readiness`, a resolved plan, successful inference, and
+verified output artifacts are separate evidence levels.
 
 ## Runtime Requirements
 
@@ -173,24 +177,45 @@ Notes:
 
 ## Local Development
 
-Start the FastAPI origin first:
+From the repository root, create the local shared environment once. The writer
+reuses its existing backend key unless explicitly asked to rotate it. Review the
+all-on feature defaults before using this local development fixture.
 
 ```bash
-python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+make dev-write-env
+source /tmp/tp-local-http-all-on.env
+make run-backend-local
 ```
 
-Seed the canonical reusable local login fixture if you want a stable localhost sign-in:
+In a second terminal at the same repository root, load the same environment
+before starting the front door. Exports in the first terminal are not inherited
+by an independently opened terminal.
 
 ```bash
-make seed-frontdoor-user
-```
-
-Start the front door in a second shell:
-
-```bash
-make seed-frontdoor-user
+source /tmp/tp-local-http-all-on.env
+./scripts/setup/ensure_node_version.sh
+if [[ -n "${TP_FRONTDOOR_USERS_JSON:-}" ]]; then
+  unset TP_FRONTDOOR_USERS_FILE
+elif [[ ! -e "${TP_FRONTDOOR_USERS_FILE}" ]]; then
+  make seed-frontdoor-user
+fi
 make run-frontdoor-local
 ```
+
+The shared environment explicitly sets `TP_FRONTDOOR_USERS_FILE`, so this flow
+does not trigger the launcher's automatic seeding. The guard above creates the
+missing disposable local fixture only when no inline users are configured; it
+preserves an existing credential file. When inline users are configured, this
+example unsets the exported file path because file-based configuration otherwise
+takes precedence over `TP_FRONTDOOR_USERS_JSON`. The launcher auto-seeds only when both
+`TP_FRONTDOOR_USERS_FILE` and `TP_FRONTDOOR_USERS_JSON` are unset. Run
+`make seed-frontdoor-user` directly only when you intend to create or replace the
+selected local fixture; do not point it at a production credential file.
+
+For the combined local wrapper, `make dev-start` writes/sources the environment
+and replaces the existing local stack via `stop_local_stack.sh` before launching
+both services. Its logs are `/tmp/tp-backend.log` and `/tmp/tp-frontdoor.log`.
+Use it only when replacing those local processes is intended.
 
 Open `http://localhost:3000/`.
 
@@ -265,6 +290,9 @@ and artifacts alongside each other on wide screens; Review gives more space
 to artifacts. Phone layouts keep all four navigation links in one row.
 The queue and inspector display succeeded jobs at 100% even if their final
 progress event was missed; other states retain the reported progress value.
+
+Startup feature flags control capability exposure; they do not rewrite saved
+Build drafts. Review restored settings before preview or dispatch.
 
 Build starts with four steps: Configure, Paths, Outputs, and Dispatch. Pipeline
 and saved-profile controls sit beside the active step on wide screens and

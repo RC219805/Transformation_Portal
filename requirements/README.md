@@ -271,6 +271,22 @@ make check-hash-pilot LOCK_PYTHON_VERSION=3.11 HASH_PILOT_OUT_DIR=/tmp/tp-hash-p
 `pip install --dry-run --require-hashes`. This pilot is advisory and does not
 replace the standard `make compile` / `make check` flow.
 
+## Core and Isolated Runtime Boundaries
+
+Core Python 3.12 remains supported (`make venv`, `make install-core`); generic
+lock compilation uses its own Python 3.11 toolchain. The DA3 subprocess is
+separate: its cache-authorizing lock is
+`requirements/da3-runtime-darwin-arm64.txt`, compiled only on native Darwin
+arm64/Python 3.11. Use `make compile-da3-runtime-darwin-arm64` (or `update-` /
+`check-da3-runtime-darwin-arm64`) and the baseline DA3 installer. An optional
+profile, dependency/source override, other host, or newer interpreter does not
+authorize depth-cache access. Runtime identity verification and a repeat-run
+cache hit are distinct from successful inference.
+
+Do not install optional packages into the core `.venv` to repair isolated
+DA3, Depth Pro, RAW, or FastVLM workers. Use their own installers and validators
+in [scripts/setup/README.md](../scripts/setup/README.md).
+
 ## 🚀 Usage
 
 ### For Users
@@ -296,8 +312,7 @@ The bootstrap script provides profile-based installation with platform validatio
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2 --dry-run
 
 # RAW/coreml/research/full profiles are disabled until trusted target-correct
-# checked-in contracts exist again
-./scripts/bootstrap/install_ml_stack.sh --profile full
+# checked-in contracts exist again; do not use them as installation recipes.
 ```
 
 #### Using pip directly
@@ -340,7 +355,10 @@ make install-ml-coreml
 make install-ml
 ```
 
-Or use the package extras (installs latest allowed versions, not pinned).
+Package extras describe metadata capabilities (allowed versions, not pinned).
+They are not substitutes for the supported target-owned or isolated-runtime
+installation contracts; the examples below are for metadata/dependency
+development in an explicitly chosen environment.
 The ML extras require the supported PyTorch security baseline
 (`torch>=2.13.0`, `torchvision>=0.28.0`); retired historical ML locks are
 not remediation targets for Dependabot alerts.

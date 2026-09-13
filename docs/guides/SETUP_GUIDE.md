@@ -36,10 +36,11 @@ make check-environment
 
 ### Prerequisites
 
-- **Python**: 3.11+ (tested on 3.11, 3.12)
+- **Core Python**: 3.11+; Python 3.12 is supported and used by the lint and core-test lanes. Preserve an existing supported `.venv`.
+- **DA3 cache-authorizing runtime**: separate Python 3.11 on native Darwin arm64; this does not require downgrading the core environment.
 - **Git**: For cloning the repository
 - **pip**: Python package manager (included with Python)
-- **Optional**: CUDA-capable GPU or Apple Silicon for ML acceleration
+- **Optional**: native Apple Silicon for the checked-in ML lock; see the target restrictions below.
 
 ### Step 1: Core Dependencies
 
@@ -86,10 +87,10 @@ The `core-cuda` profile and all Linux ML lock lanes are retired unsupported lane
 For depth-aware processing, use the governed isolated runtime installers instead of installing model packages directly into the repo `.venv`:
 
 ```bash
-# Default DA3 runtime used by Lux Depth V3
-./scripts/setup/install_da3_runtime.sh
+# Default DA3 runtime used by Lux Depth V3 (installer may replace its own venv)
+./scripts/setup/install_da3_runtime.sh --profile baseline
 
-# Research-only Apple Depth Pro runtime
+# Research-only Apple Depth Pro runtime; requires a separately obtained checkpoint
 ./scripts/setup/install_depth_pro_runtime.sh
 ```
 
@@ -118,9 +119,9 @@ not establish cache reuse; confirm a cache hit on an identical repeat run.
 
 ## Model Downloads
 
-### Automatic Download Script
+### CoreML Instructions and Artifact Check
 
-Use the provided script to print Depth Anything CoreML setup instructions and verify local artifact status:
+This utility prints CoreML conversion/setup instructions and checks local artifacts; it does not download a DA3 runtime or establish inference readiness:
 
 ```bash
 .venv/bin/python scripts/setup/download_depth_models.py --model depth
@@ -131,9 +132,9 @@ Options:
 - `--verify-only`: Verify local model artifact status without setup steps
 - `--output-dir PATH`: Custom output directory (default: ./weights)
 
-### Depth Anything (HuggingFace)
+### Legacy Transformers Depth Anything Example
 
-Transformation Portal uses Depth Anything for depth estimation. The transformers library will auto-download the model on first use:
+The following is a separate Transformers V2 example, requiring an appropriate ML environment and network/cache access. It is not the Lux DA3 subprocess installer:
 
 ```python
 from transformers import pipeline
@@ -145,8 +146,11 @@ depth_estimator = pipeline(
 )
 ```
 
-For the `lux-depth-v3` pipeline, V3 metric model IDs are attempted first and automatically
-fallback to V2 metric `*-hf` IDs when the V3 variant is unavailable.
+The current Lux `da3` backend uses its isolated `depth_anything_3` runtime.
+The default model selector is `da3-metric`; do not assume a V3-to-V2 fallback.
+Depth Pro requires `--depth-backend depth_pro`, an installed isolated runtime,
+its checkpoint, and both research-license acknowledgements described in the
+[CLI guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md).
 
 ### Depth Anything (CoreML - Apple Silicon)
 
@@ -158,27 +162,12 @@ The checked-in Apple Silicon ML core lock includes `coremltools` for governed ma
 
 ## Troubleshooting
 
-### Issue #1: Dimension Errors (Tensor Mismatch)
+### Issue #1: Image or Tensor Dimension Errors
 
-**Error:**
-```
-RuntimeError: The size of tensor a (128) must match the size of tensor b (88)
-```
-
-**Cause**: Stable Diffusion 1.5 requires dimensions that are multiples of 64.
-
-**Solution**: The pipeline now auto-corrects dimensions with a warning:
-```
-⚠ Corrected dimensions from 1024×770 to 1024×768 (SD 1.5 compatible)
-```
-
-**Valid dimensions:**
-- 512×512 (standard)
-- 768×512 (landscape)
-- 512×768 (portrait)
-- 768×768 (square)
-- 1024×768 (HD landscape)
-- 1024×1024 (HD square, requires 8GB+ VRAM)
+Record the backend, input dimensions, and first exception. Dimension constraints
+belong to the selected model or pipeline; a Stable Diffusion sizing rule is not
+a universal Lux or DA3 contract. Do not resize source assets solely to satisfy
+an unrelated model example.
 
 ### Issue #2: Slow Model Downloads
 
@@ -203,15 +192,12 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 Cannot initialize model with low cpu memory usage because `accelerate` was not found
 ```
 
-**Solution**:
-```bash
-pip install accelerate
-```
-
-**Benefits**:
-- 2-3x faster model loading
-- 30-40% less memory during initialization
-- Automatic device mapping for multi-GPU setups
+**Resolution**: Identify the interpreter reporting the warning. For Lux DA3,
+inspect and repair the isolated DA3 runtime with its governed installer;
+installing `accelerate` in the core `.venv` does not repair another process.
+For supported in-process ML features, use the target-owned ML installation
+contract in [requirements/README.md](../../requirements/README.md). Do not infer
+a loading-speed or memory guarantee from the presence of one package.
 
 ### Issue #4: Depth Pipeline Module Not Found
 
@@ -252,40 +238,16 @@ Or for ML dependencies:
 .venv/bin/python scripts/verification/verify_ml_deps.py
 ```
 
-**Example Output:**
-```
-======================================================================
-TRANSFORMATION PORTAL - INSTALLATION VERIFICATION
-======================================================================
+`verify_core.py` exercises an atmosphere/SkyBlender smoke on a synthetic gray
+image; it does not verify the entire application, DA3, or produced Lux artifacts.
+`verify_ml_deps.py` imports packages in the interpreter that runs it and reports
+hardware availability there. It does not audit isolated DA3/Depth Pro/FastVLM
+runtimes or prove successful inference, regardless of its summary wording.
 
-Required Packages:
-----------------------------------------------------------------------
-✓ numpy
-✓ Pillow
-✓ scipy
-✓ typer
-
-Optional ML Packages:
-----------------------------------------------------------------------
-✓ torch
-✓ diffusers
-✓ transformers
-✓ controlnet-aux
-✓ accelerate
-
-PyTorch Backends:
-----------------------------------------------------------------------
-✓ MPS                 Available
-   → Apple Silicon detected - MPS acceleration available
-
-======================================================================
-SUMMARY
-======================================================================
-✓ All required packages are installed
-✓ Optional ML packages installed
-
-✓ Installation verified - ready to use!
-```
+Use separate evidence for each stage: `--help` proves parser availability;
+`--plan` resolves a canonical execution plan without model loading or output
+creation; runtime readiness checks cover their documented scope; an actual
+successful job and indexed artifacts establish processing completion.
 
 ### Test CLI
 
@@ -293,30 +255,8 @@ SUMMARY
 # Test lux-depth-v3 CLI
 lux-depth-v3 --help
 
-# List available presets
-lux-depth-v3 --list-stable
-```
-
----
-
-## Image Dimension Requirements
-
-### Stable Diffusion 1.5
-
-**Requirements:**
-- Dimensions **must** be multiples of 64
-- Recommended resolutions:
-  - **512×512**: Standard, fast, low VRAM (2GB)
-  - **768×512**: Landscape, moderate (4GB)
-  - **512×768**: Portrait, moderate (4GB)
-  - **768×768**: Large square (6GB)
-  - **1024×768**: HD landscape (8GB)
-  - **1024×1024**: HD square, slow (10GB+)
-
-**Auto-correction**: Invalid dimensions are automatically corrected to the nearest valid size:
-```
-1024×770 → 1024×768 (✓ Valid)
-800×600 → 768×576 (✓ Valid)
+# Inspect supported CLI options (there is no --list-stable option)
+# Presets are documented in docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md
 ```
 
 ---
@@ -329,9 +269,8 @@ lux-depth-v3 --list-stable
 2. **Reserve MPS bootstrap for native arm64 macOS bootstrap-profile work**: `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
 3. **Enable Metal**: Ensure macOS 13+ for best performance
 
-**Expected performance**:
-- Depth estimation: 24-65ms per image
-- Batch throughput: 400-600 images/hour
+Measure elapsed time and memory on your selected model, input size, device,
+and enabled stages. No universal latency or throughput is established by setup.
 
 ### NVIDIA GPU
 
@@ -341,7 +280,7 @@ The Linux CUDA ML lane is retired unsupported and fails closed until a governed 
 
 1. **Use smaller models**: Depth-Anything-V2-Small-hf vs Large-hf
 2. **Reduce dimensions**: 512×512 instead of 1024×768
-3. **Be patient**: CPU inference is 10-20x slower than GPU
+3. **Measure the selected runtime**: CPU/GPU ratios vary with model and workload.
 
 ---
 
@@ -364,5 +303,5 @@ After setup:
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: 2026-09-12
 **Version**: 2.0.0

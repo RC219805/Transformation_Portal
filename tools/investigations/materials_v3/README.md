@@ -1,5 +1,11 @@
 # Materials V3 Diagnostic Tools
 
+> Historical context. The dated plans and completion claims below do not certify
+> current runtime, CI, or production readiness. Use [current guidance](../../../docs/governance/DOCUMENTATION_MAP.md).
+> Missing original references are recorded in the documentation refresh link
+> backlog; no similarly numbered ADR or unrelated summary has been substituted.
+
+
 **Purpose**: Analysis scripts used during Materials V3 development to diagnose pixel operations, sky/water detection, and rendering issues.
 
 **Status**: Archive (historical diagnostic tools, preserved for reference)

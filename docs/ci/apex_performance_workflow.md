@@ -1,8 +1,18 @@
-# APEX Performance Workflow - Production Deployment Guide
+# APEX Performance Workflow - Execution and Evidence Guide
 
 ## Overview
 
 The APEX Performance workflow (`apex_performance.yml`) runs both V1 and V2 performance lanes. Pull requests and pushes use deterministic synthetic observations; scheduled runs and manual `mode=real` dispatches execute the selected depth backend against the checked-in image fixtures. PR runs also publish a human-readable comment.
+
+## Evidence Boundary
+
+The current gate invokes `apex_enforce_gate.py --mode shadow`. A gate verdict
+or PR comment therefore does not itself block merge or prove real inference.
+The workflow separately checks complete matrix evidence, including both V1/V2
+results, before dashboard/ledger publication. Pages success demonstrates
+publication only. Real DA3 execution on hosted Linux remains inference evidence,
+not native Darwin arm64 depth-cache authority. See
+[Performance Gate Policy](../performance/GATE_POLICY.md).
 
 ## Features Delivered
 

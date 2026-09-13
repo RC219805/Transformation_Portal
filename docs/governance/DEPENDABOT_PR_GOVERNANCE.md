@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-09-12
 
 ---
 
@@ -147,6 +147,9 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 
 ## Resolved Dependabot Wave (2026-03-26)
 
+> Historical PR outcomes below are retained as recorded evidence, not current
+> checks or authorization to merge another update.
+
 ### Merge Order Recommendations
 
 | Order | PR | Change | Risk | Outcome |
@@ -218,6 +221,24 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 
 ---
 
+## Concurrent Updaters and Target-Owned Locks
+
+Dependabot and `.github/workflows/dependency-update.yml` can propose overlapping
+changes. Review the current PR heads and canonical lock inputs before choosing
+one update; a prior passing run does not validate a later regenerated tree.
+Generic public writers publish a validated, serialized six-file set (`all`,
+`base`, `dev`, `ci`, `security`, `tools-archive`) via `requirements/Makefile`.
+Do not hand-edit a subset of compiled generic locks.
+
+The ML core Darwin arm64 lock and isolated DA3 runtime lock are target-owned.
+Use their named compile/update/check targets on native Darwin arm64 and Python
+3.11. Linux-generated resolution is not authority for a Darwin runtime; keep
+`nvidia-*` and `triton` out of Darwin locks. A DA3 runtime lock rotation must also
+update its governed hash consumers and pass runtime identity contracts.
+Optional profiles/overrides and legacy FastVLM v1 evidence do not authorize
+cache/runtime use; see [setup](../guides/SETUP_GUIDE.md) and
+[FastVLM](../runtimes/fastvlm.md).
+
 ## "Dep Pin Changed" Checklist
 
 Use this checklist whenever a governed dependency pin changes, especially under
@@ -225,8 +246,9 @@ Use this checklist whenever a governed dependency pin changes, especially under
 
 - [ ] Update the manifest input first (`requirements/*.in`, and `pyproject.toml`
       only when the compatibility bound must move with it).
-- [ ] Regenerate only the affected governed lockfiles through the existing lock
-      workflow; do not hand-edit compiled lock output.
+- [ ] Regenerate through the owning lane: a generic writer publishes the complete
+      six-file generic set, while target-owned locks use their native lane. Do not
+      hand-edit compiled lock output.
 - [ ] Re-run `make check-requirements-lock-contract` after regeneration.
 - [ ] Update workflow or contract tests that encode action pins, lock paths, or
       compatibility expectations.

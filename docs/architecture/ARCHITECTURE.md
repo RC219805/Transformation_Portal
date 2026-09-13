@@ -1,7 +1,7 @@
 # Repository Architecture
 
 **Status:** Maintained architecture overview
-**Last updated:** 2026-05-12
+**Last updated:** 2026-09-12
 **Canonical navigation:** [Documentation Map](../governance/DOCUMENTATION_MAP.md)
 
 ## Overview
@@ -126,6 +126,33 @@ readiness probes deliberately preserve raw response shapes:
 
 Do not wrap `/healthz` or `/ready` in the versioned API envelope unless the
 probe contract is intentionally changed and contract tests are updated.
+
+## Execution Preparation And Activation Boundaries
+
+`core/execution_plan.py` owns the immutable `tp.execution.plan.v1` contract and
+bounded parser. Lux's `execution_lifecycle.py` resolves input selection,
+model/license authority, typed stage configuration, outputs, and fallback intent
+into `PreparedLuxExecution` before backend initialization or output creation.
+`execution_plan_adapter.py` revalidates carried authority. Both `--plan` and
+execution use the same canonical bytes; direct cache-enabled callers construct
+`EnhanceOrchestrator.from_prepared(...)`. Legacy `structural_legacy` projections
+are parse-only. See [Execution Plan V1](../reference/EXECUTION_PLAN_V1.md).
+
+This preparation is implemented. It does not activate the target
+`StageGraph`/`CASDAGExecutor` for every pipeline. [ADR-051](ADR-051-execution-artifact-authority-designation.md)
+keeps current Lux and Spatial executors until their applicable vertical-slice
+contract, security, output, and performance gates pass. Its original plane
+inventory describes decision-time evidence; use current source and the plan
+contract for the subsequently implemented Lux preparation boundary.
+
+The live job runner composes `QueueBroker`, `WorkerRunner`, and `JobRepository`.
+Memory defaults, opt-in Postgres snapshots/event history, Redis leasing, and
+local/S3 artifact delivery are separate service contracts. A store implementation
+does not establish the ADR's proposed fenced generation publication transaction.
+The optional pilot control plane reads tenant identity from its configured
+request header; production identity binding and managed-provider readiness need
+separate end-to-end evidence. Readiness HTTP success is not proof of inference
+or verified output artifacts.
 
 ## Managed Frontdoor
 

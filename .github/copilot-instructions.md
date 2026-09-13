@@ -2,10 +2,10 @@
 
 You are working in a governed production repository for **luxury real estate / ArchViz rendering, ingest, archive, and portal orchestration**.
 
-Current baseline: repo-wide documentation refresh audit dated May 11, 2026,
-building on `main` through PR #1721. Use the root `README.md`,
+Current documentation navigation follows the source-reviewed refresh linked in
+`docs/governance/DOCUMENTATION_MAP.md`. Use the root `README.md`,
 `docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md` for current
 navigation. Historical project reports may retain old dates and facts; do not
 treat them as live guidance unless the documentation map promotes them.

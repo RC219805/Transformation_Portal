@@ -1,6 +1,11 @@
 # Examples Directory
 
-Example code demonstrating various features and workflows.
+Example code demonstrating various features and workflows. Examples have
+individual runtime and input prerequisites; their presence is not an executed
+acceptance record. Use the [documentation map](../docs/governance/DOCUMENTATION_MAP.md)
+for maintained operator entrypoints. ComfyUI examples construct graphs; see
+[workflow execution limits](../workflows/README.md#execution-limits) before
+attempting to execute a template.
 
 ## Structure
 - **pipelines/** - Pipeline usage examples
@@ -124,7 +129,7 @@ processor = PBRProcessor(config=custom_config, output_dir=Path("output/custom_pb
 maps = processor.from_depth(depth, save=True, base_name="scene1")
 ```
 
-## Production Examples
+## Pipeline Examples
 
 ### RAG Workflows
 
@@ -156,13 +161,13 @@ python examples/pipelines/luxury_estate_pipeline_examples.py
 
 ### PBR Map Generation
 
-**process_750_picacho_pbr.py** - Production-ready example for luxury real estate PBR processing
+**process_750_picacho_pbr.py** - Project-specific example for PBR processing
 
-Demonstrates optimal PBR map generation for the 750 Picacho Primary Bedroom using the new Lux Depth V3 presets.
+Demonstrates PBR map generation for the 750 Picacho Primary Bedroom using the new Lux Depth V3 presets.
 
 **Features:**
 - Material-aware preset selection (premium, wood, stone, glass, fabric)
-- Production-quality output for hero shot marketing
+- Output maps requiring review against the actual source image
 - Comprehensive source file analysis and validation
 - Integration with existing 750 Picacho processing workflows
 - Detailed performance reporting and troubleshooting

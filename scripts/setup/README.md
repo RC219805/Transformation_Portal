@@ -89,9 +89,8 @@ auto-discovered `./.venv-depth-pro/bin/python` contract and by explicit
 
 **Usage:**
 ```bash
-./scripts/setup/install_depth_pro_runtime.sh --skip-verify
-mkdir -p checkpoints
-curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
+# Obtain the checkpoint separately under the applicable research license.
+# This installer clears/recreates .venv-depth-pro; preserve anything needed first.
 ./scripts/setup/install_depth_pro_runtime.sh
 ```
 
@@ -105,8 +104,15 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoin
 
 **Stable contract:**
 ```bash
-lux-depth-v3 --input-dir ./input_images --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output \
+  --depth-backend depth_pro --depth-pro-python ./.venv-depth-pro/bin/python \
+  --non-commercial-ok true --accept-apple-depth-pro-research-license true
 ```
+
+Supply the acknowledgement flags only after accepting the applicable license.
+A Python override alone does not select Depth Pro. The default checkpoint is
+`checkpoints/depth_pro.pt`; `--skip-verify` omits readiness, not the need for a
+checkpoint before inference. Readiness is not an image-inference result.
 
 Use `--verify-device cpu` when you only need a CPU-safe contract. The default
 `--verify-device auto` validates `mps` on Apple Silicon and `cpu` elsewhere.
@@ -133,6 +139,9 @@ auto-discovered `./.venv-raw/bin/python` contract and by explicit
 ```bash
 lux-depth-v3 --input-dir ./input_images --output-dir ./output --raw-python ./.venv-raw/bin/python
 ```
+
+This isolated RAW worker serves canonical Lux ingest. It does not supply
+`rawpy` or ReportLab to an editorial pipeline that imports them in its own process.
 
 If you want the repo-local runtime to be used automatically for RAW batches,
 just create `./.venv-raw/bin/python` with this script and omit `--raw-python`.
@@ -185,7 +194,9 @@ git commit --no-verify -m "Emergency commit"
 
 ### `install_models.py`
 
-Downloads and installs AI/ML models required by the Transformation Portal pipelines.
+Checks legacy model caches and can download configured upscaling weights.
+It is not the governed DA3 or FastVLM installer; Hugging Face cache checks do
+not establish a complete runtime or successful inference.
 
 **Usage:**
 ```bash
@@ -215,9 +226,9 @@ artifact status.
 ```
 
 **What it does:**
-- Downloads Depth Anything V2 models
-- Installs CoreML variants for Apple Silicon optimization
-- Validates model integrity
+- Prints manual conversion/setup instructions for the legacy CoreML path
+- Checks local artifact presence via `--verify-only`
+- Does not download DA3 weights, install the isolated DA3 runtime, or prove inference
 
 ## Installation Guide
 
@@ -318,8 +329,9 @@ sed -i 's/\r$//' .auto-organize.sh
 
 **Solution:**
 ```bash
-# Try downloading specific models one at a time
-.venv/bin/python scripts/setup/install_models.py --model depth_anything_v2
+# Inspect the supported options; --model is not available on this utility
+.venv/bin/python scripts/setup/install_models.py --help
+.venv/bin/python scripts/setup/install_models.py --dry-run
 
 # Check disk space
 df -h

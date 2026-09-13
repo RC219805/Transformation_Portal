@@ -56,8 +56,8 @@ All contributions must include tests:
 
 | Marker | Dependencies | Python Versions | Command | Runtime Target |
 |--------|--------------|-----------------|---------|----------------|
-| *(core)* | Core only (no ML) | 3.11, 3.12 | `pytest -m "(unit or security or regression or golden or integration) and not slow"` | ~30s |
-| `@pytest.mark.ml` | transformers, torch, diffusers | 3.11 | `pytest -m "ml and not slow"` | ~5min |
+| *(core)* | Core only (no ML) | 3.11, 3.12 | `pytest -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark"` | No universal runtime guarantee |
+| `@pytest.mark.ml` | Selected optional ML dependencies | 3.11 | `pytest -m "ml and not slow and not integration and not benchmark"` | Depends on installed runtime |
 | `@pytest.mark.slow` | Any | 3.11 | Manual/nightly | No limit |
 | `@pytest.mark.benchmark` | Any | 3.11 | Manual/nightly | No limit |
 
@@ -81,7 +81,7 @@ except ImportError:
 @pytest.mark.skipif(not HAS_ML_DEPS, reason="ML dependencies required")
 class TestMaterialClassifier:
     def test_inference(self):
-        # Safe to import here - skipif prevents collection in offline CI
+        # Safe to import here - skipif prevents this body from running
         from transformers import CLIPModel
         model = CLIPModel.from_pretrained(...)
         ...
@@ -104,12 +104,15 @@ def test_inference(self):
 ```python
 from unittest.mock import patch
 
-@patch("transformers.CLIPModel")  # ❌ Imports transformers BEFORE patching!
+@patch("transformers.CLIPModel")  # Imports transformers when the test runs
 def test_foo(mock_clip):
     pass
 ```
 
-**Why it fails:** `@patch("transformers.CLIPModel")` imports the `transformers` module during test collection (before patching), causing `ModuleNotFoundError` when transformers is not installed.
+**Why it fails:** The string-target patch resolves and imports `transformers`
+when the decorated test executes. An unguarded test in the core selection can
+therefore fail before its body runs. Top-level imports can fail earlier, during
+collection.
 
 **CORRECT** ✅ - Add import guard:
 
@@ -122,7 +125,7 @@ except ImportError:
 
 @pytest.mark.ml
 @pytest.mark.skipif(not HAS_ML_DEPS, reason="ML dependencies required")
-@patch("transformers.CLIPModel")  # ✅ Safe: skip decorator prevents collection
+@patch("transformers.CLIPModel")  # Skipping prevents execution of the patch wrapper
 def test_foo(mock_clip):
     pass
 ```
@@ -144,12 +147,12 @@ def test_foo(mock_clip):
 
 ```bash
 # Run core tests (what CI runs for fast feedback)
-pytest tests/ -m "(unit or security or regression or golden or integration) and not slow" -v
+pytest tests/ -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" -v
 
 # Run ML tests (requires ML dependencies installed)
-pytest tests/ -m "ml and not slow" -v
+pytest tests/ -m "ml and not slow and not integration and not benchmark" -v
 
-# Run all tests except slow/benchmark
+# Optional broad selection; includes ML and integration dependencies
 pytest tests/ -m "not slow and not benchmark" -v
 
 # Check if your test will violate isolation
@@ -161,9 +164,11 @@ bash scripts/check_ml_test_isolation.sh
 Tests must be **deterministic** and **reliable**. Flaky tests (intermittent failures) are not acceptable.
 
 **Flake Rate Monitoring:**
-- All tests tracked in `tests/flake_ledger.json`
+- `tests/flake_ledger.json` is the tracking input; its checked-in `tests` map
+  is empty, so it does not establish coverage of every test.
 - Repository target: **<1% flake rate**
-- Tests with >3% flake rate are quarantined
+- The configured quarantine threshold is 3%, but `auto_quarantine_enabled` is
+  false. A threshold is not evidence that a test was automatically quarantined.
 
 **If you encounter a flaky test:**
 1. Check ledger: `.venv/bin/python scripts/analyze_flakes.py`
@@ -196,7 +201,10 @@ See [`docs/architecture/ADR-033-test-flake-management.md`](docs/architecture/ADR
 
 ## CI Quality Firewall
 
-All pull requests must pass these automated gates before merge:
+The repository has the following validation surfaces. A check failing its own
+workflow is distinct from a remotely required status check. `build.yml` owns
+the conditional PR gate; `ci-quality-firewall.yml` runs after successful CI.
+See the control-plane section below before interpreting a blocked merge.
 
 ### 1. Linting (BLOCKING)
 - **flake8**: No critical errors (E9, F63, F7, F82)
@@ -231,18 +239,21 @@ All pull requests must pass these automated gates before merge:
 - Check it with `make coverage-diff`; required PR CI currently enforces the
   global 30% floor and package/cold-zone checks in `build.yml`, not `diff-cover`.
 
-#### Critical Module Floors
-Future enforcement (not yet active):
-- `lux_depth_v3/`: 80% minimum
-- `orchestrator.py`: 80% minimum
-- `pbr_cli.py`: 80% minimum
-- `preprocessing.py`: 70% minimum
+#### Package and Branch Floors
+Current core-tier line floors include 72% for `lux_depth_v3/` excluding its
+separately governed validators, and 80% for `lux_depth_v3/validators/`. The
+complete active inventories are `scripts/ci/check_per_package_coverage.py` and
+`scripts/ci/check_per_package_branch_coverage.py`; `build.yml` also runs the
+touched cold-zone guard. These are measured against the core-tier report, not
+a promise of live Postgres/Redis/S3 or model coverage.
 
 ---
 
 ### 5. Type Checking (BLOCKING)
 
-- **mypy**: Hard-fail type checking on critical modules (`lux_depth_v3/`)
+- **mypy**: Hard-fail on the allowlisted API, Lux, durable orchestrator, and
+  selected core paths in `build.yml`;
+  [type-checking policy](docs/ci/TYPE_CHECKING_POLICY.md) owns expansion rules.
 - **Exit code**: Must be 0
 
 > **Note:** `build.yml` (the canonical PR gate) now includes a dedicated typecheck gate.
@@ -298,14 +309,12 @@ make test-fast
 # Run security scans
 ./scripts/security_scan.sh  # Uses CI-aligned flags: -ll -ii
 
-# Run all tests with coverage
-pytest -v tests/ -m "not slow" \
-  --cov=src/transformation_portal \
-  --cov-report=term \
-  --cov-report=html
-
-# Check coverage threshold
-coverage report --fail-under=30
+# Reproduce the CI core-tier coverage selection
+.venv/bin/python -m pytest -v tests/ -ra \
+  -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" \
+  --cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov=app \
+  --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml \
+  --cov-report=html --cov-fail-under=30 --cov-config=pyproject.toml
 
 # Build package
 .venv/bin/python -m build
@@ -316,7 +325,7 @@ coverage report --fail-under=30
 
 The repository uses a layered CI/CD architecture with distinct workflow roles.
 
-### Quality Control Plane (Q2 2026)
+### Quality Control Plane
 
 | Workflow | Trigger | Role | Branch Protection | Action Refs |
 |----------|---------|------|-------------------|-------------|
@@ -325,16 +334,19 @@ The repository uses a layered CI/CD architecture with distinct workflow roles.
 | `ci-quality-firewall.yml` | workflow_run | Post-CI verification | No | SHA-pinned |
 | `quality-gate.yml` | PR, push | Legacy helper | No | SHA-pinned |
 
-**Canonical Workflow:** `build.yml` is the only workflow required for branch protection.
+**Canonical workflow:** `build.yml` owns the `CI Gate` status. The 2026-09-12
+read-only protection check reported `CI Gate` as the sole required status check
+with strict up-to-date enforcement. Workflow failures and branch-protection
+requirements are separate; recheck live settings before merging.
 All quality-control workflows use SHA-pinned action refs (normalized Q2 2026).
 For manual post-CI verification, dispatch `build.yml` on `main` or `develop`; its
 successful same-repository run triggers `ci-quality-firewall.yml` on the exact commit.
 
 ### Test Marker Selection
 
-> **Current State (2026-03-23):** CI uses **positive marker selection** for core tests.
-> This explicitly selects test categories (unit, security, regression, golden, integration)
-> rather than excluding unwanted tiers.
+CI uses positive category selection plus explicit ML, slow, and benchmark
+exclusions for the core tier. `.github/workflows/build.yml` is the authority for
+the matrix and marker expressions.
 
 ```bash
 # PR gating expression (positive marker selection)
@@ -354,11 +366,12 @@ The `main` branch is protected to ensure code quality and stability. All changes
 
 2. **Pass all required CI checks (merge blockers):**
    - **CI Gate** (`.github/workflows/build.yml`) is the only required status check in branch protection
-   - CI Gate explicitly aggregates and enforces:
-     - `lightweight`
-     - `lint` (when `run_full=true`)
-     - `test` matrix (when `run_full=true`)
-     - `generate-manifest` (when `run_full=true`)
+   - CI Gate always enforces `lightweight` and `dependency-constraints`.
+   - With `run_full=true`, it also enforces `lint`, `typecheck`, the `test`
+     matrix, and `generate-manifest`. It enforces `frontdoor-contract` when
+     the preflight also sets `run_frontdoor=true`.
+   - `preflight` supplies scheduling decisions. Docs-only classification does
+     not remove the lightweight or dependency-constraints requirements.
 
    **Post-merge quality signals (non-blocking):**
    - `CI Quality Firewall (post-CI) / Quality Gate Summary`
@@ -380,14 +393,17 @@ The `main` branch is protected to ensure code quality and stability. All changes
 
 ---
 
-### Current Branch Protection Rules (Verified 2026-06-03)
+### Historical Branch Protection Snapshot (2026-06-03)
 
-### Required Status Checks (✅ ENFORCED)
+The settings below preserve the dated record. They do not certify the current
+GitHub configuration; use the read-only verification command below before a merge.
+
+### Recorded Required Status Checks
 - **CI Gate** (GitHub App ID: 15368) must pass
 - **Strict status checks**: Branches must be up-to-date before merging
 - **Cannot bypass**: Status checks are mandatory
 
-### Pull Request Reviews (⚠️ PARTIAL)
+### Recorded Pull Request Reviews
 - **Approving reviews required**: 0 (not enforced, but recommended)
 - **Dismiss stale reviews**: ✅ Enabled (stale approvals dismissed on new commits)
 - **Code owner reviews**: Not required
@@ -420,7 +436,7 @@ Based on governance best practices, consider enabling:
 
 3. **Require linear history**: Optional only if merge-commit workflows are intentionally retired
 
-### Current Configuration Summary
+### Recorded Configuration Summary
 ```json
 {
   "required_status_checks": {
@@ -741,7 +757,7 @@ Dependencies are validated automatically:
 **CI job** (automated):
 ```bash
 # Runs in CI Quality Firewall workflow
-# Blocks PR merge on violations
+# Post-CI evidence; remotely required checks determine merge blocking
 ```
 
 **Manual validation:**
@@ -766,14 +782,16 @@ new-lib>=0.5.0
 
 ### Quarterly Dependency Audit
 
-Transformation Portal conducts quarterly dependency audits:
+Quarterly dependency audits are the planned cadence:
 
 - **Security patches**: CVEs reviewed and updated
 - **Staleness check**: Packages >6 months old evaluated
 - **Banned packages**: New unmaintained packages identified
 - **Exception review**: Approved exceptions re-validated
 
-Next audit: **2026-08-16 (Q3 2026)**
+The previous schedule named **2026-08-16 (Q3 2026)**. That date has passed;
+no completion report is linked here. Record completed audit evidence and the
+next owner-approved date separately instead of treating the schedule as proof.
 
 ## Release Process
 

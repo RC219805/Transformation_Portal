@@ -10,10 +10,10 @@ The repository now has three live custom agent profiles:
 
 These roles are complementary. The Architect defines system invariants. The Steward and Specialist execute inside them.
 
-Current baseline: `main` through PR #1721. Current documentation navigation
+Current baseline: the source-reviewed refresh linked in the documentation map. Current documentation navigation
 lives in `README.md`, `docs/README.md`,
 `docs/governance/DOCUMENTATION_MAP.md`, and
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, with historical
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md`, with historical
 classification context retained in
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 

@@ -279,7 +279,7 @@ def test_canonical_docs_exist_and_reference_custom_agents() -> None:
     assert "Custom Agents" in documentation_map
     assert "CUSTOM_AGENT_GUIDE.md" in documentation_map
     assert "PR #1562" in documentation_state_audit
-    assert "Current baseline" in copilot_instructions
+    assert "Current documentation navigation" in copilot_instructions
     assert "DOCUMENTATION_MAP.md" in copilot_instructions
 
 

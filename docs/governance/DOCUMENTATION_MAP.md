@@ -3,13 +3,12 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-08-30
+**Last Updated:** 2026-09-12
 **Maintainer:** Repository Architect
-**Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
-`main` through PR #1721, with the May 12 architecture triage overlay for
-`docs/architecture` file dispositions, the May 12 CLI reference alignment for
-`docs/cli`, the June 11 CI/TODO documentation alignment refresh, and the August
-30 execution/artifact authority and orchestrator-runtime fact refresh.
+**Current baseline:** [September 12 documentation audit](DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md),
+reproduced against the source baseline recorded there. Inventory classification,
+source review, local tests, and unexercised runtime/service paths are reported
+separately. The May 11 inventory and May 12 overlays remain historical evidence.
 
 Historical reports remain available for audit context, but they are not current
 operator guidance unless they are linked here as canonical documents.
@@ -20,7 +19,7 @@ operator guidance unless they are linked here as canonical documents.
 | --- | --- | --- |
 | Repository overview | [README.md](../../README.md) | Project overview, install path, current operational surfaces |
 | Documentation index | [docs/README.md](../README.md) | Current docs navigation and historical-boundary guidance |
-| Documentation refresh audit | [DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md](DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) | Repo-wide inventory and classification refresh |
+| Documentation refresh audit | [DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md](DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md) | Repo-wide inventory and classification refresh |
 | Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current architecture-file disposition overlay |
 | CLI triage inventory | [cli-inventory-2026-05-12.csv](audit/cli-inventory-2026-05-12.csv) | Current CLI-file disposition overlay |
 | Prior documentation state audit | [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](DOCUMENTATION_STATE_AUDIT_2026-04-27.md) | Repo-wide docs classification after PR #1562, retained as historical baseline evidence |
@@ -45,7 +44,7 @@ operator guidance unless they are linked here as canonical documents.
 | FastVLM advisory captioning runtime | [FastVLM Runtime](../runtimes/fastvlm.md) | Maintained |
 | Orchestrator Postgres runtime (Phase 1.B/1.E) | [Orchestrator Postgres Runtime](../runtimes/orchestrator-postgres.md) | Maintained; durable `JobRepository` and `JobEventStore` backends are wired through `app.py`, opt-in via `TP_ORCHESTRATOR_STATE_BACKEND=postgres`; ordered SSE history replays across restarts |
 | Lux Depth V3 troubleshooting | [Lux Depth V3 Troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | Maintained |
-| Context-aware rendering | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained |
+| Architectural PDF context | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained extraction boundary; automatic rendering integration archived |
 | PBR processing | [PBR Processor Quickstart](../guides/PBR_PROCESSOR_QUICKSTART.md) | Maintained |
 | Supported formats | [Supported File Formats](../guides/SUPPORTED_FILE_FORMATS.md) | Maintained |
 | Design tokens reference | [Design tokens](../design/tokens.md) | Maintained (generated from `web/shared/shared-ui-tokens.css` + `web/secure-landing/portal-src/styles/tokens.css`) |
@@ -55,7 +54,7 @@ operator guidance unless they are linked here as canonical documents.
 | Area | Canonical Document | Status |
 | --- | --- | --- |
 | Documentation policy | [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) | Maintained |
-| Documentation inventory | [documentation-inventory-2026-05-11.csv](audit/documentation-inventory-2026-05-11.csv) | Current repo-wide classification baseline; architecture overlay is tracked separately below |
+| Documentation inventory | [documentation-inventory-2026-09-12.csv](audit/documentation-inventory-2026-09-12.csv) | Current complete tracked-doc classification with per-file review status; prior inventories preserved |
 | Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current disposition ledger for files formerly or currently under `docs/architecture` |
 | CLI triage inventory | [cli-inventory-2026-05-12.csv](audit/cli-inventory-2026-05-12.csv) | Current disposition ledger for files formerly or currently under `docs/cli` |
 | Repository organization | [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) | Maintained |
@@ -66,7 +65,7 @@ operator guidance unless they are linked here as canonical documents.
 | Claude Code instructions | [CLAUDE.md](../../CLAUDE.md) | Maintained repo-root guide for Claude Code; summarizes contracts, decomposition, marker discipline, and live agent profiles |
 | Maintainer workflow reference | [AGENTS.md](../../AGENTS.md) | Maintained coding-agent guide for operating contracts, worktree/PR hygiene, validation ladders, and closeout discipline |
 | Skill progression tracks | [SKILL_PROGRESS_TRACKS.md](../guides/SKILL_PROGRESS_TRACKS.md) | Maintained; maps recurring PR review themes to training drills |
-| TODO governance | [TODO Inventory](../analysis/TODO_INVENTORY.md), [TODO Action Plan](../analysis/TODO_ACTION_PLAN.md), [TODO Inventory Quick Reference](../architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](todo_priority_schema.yaml) | Maintained; scanner-governed baseline refreshed June 11, 2026 |
+| TODO governance | [TODO Inventory](../analysis/TODO_INVENTORY.md), [TODO Action Plan](../analysis/TODO_ACTION_PLAN.md), [TODO Inventory Quick Reference](../architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](todo_priority_schema.yaml) | Maintained; scanner-governed baseline refreshed September 12, 2026: 25 governed items, 0 ungoverned items, 1,811 files scanned |
 | CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 31-workflow inventory |
 | CI/CD workflow guide | [CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | Maintained |
 | Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |
@@ -98,7 +97,7 @@ operator guidance unless they are linked here as canonical documents.
 | Schema contracts and topology | [Schema Contracts](../../schemas/README.md), [docs/schemas](../schemas/) | Maintained boundary for root runtime schema/profile contracts versus published schema contracts under docs |
 | Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
 | Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Accepted; authoritative repository designation. Implementation activation remains subject to the ADR's vertical-slice gates |
-| Canonical execution plan v1 | [Execution Plan V1 Contract](../reference/EXECUTION_PLAN_V1.md) | Maintained semantic contract and bounded parser; does not activate StageGraph or CASDAGExecutor |
+| Canonical execution plan v1 | [Execution Plan V1 Contract](../reference/EXECUTION_PLAN_V1.md) | Maintained core-owned plan contract, native Lux preparation and execution consumption; StageGraph/CASDAGExecutor activation remains gated |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
 ## APEX And Archive Gates

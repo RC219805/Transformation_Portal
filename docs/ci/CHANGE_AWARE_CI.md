@@ -1,82 +1,50 @@
 # Change-Aware CI Quick Reference
 
-## Overview
+Source-reviewed against [`build.yml`](../../.github/workflows/build.yml) on
+2026-09-12. Preflight classifies changed PR paths inside the workflow; this is
+separate from other workflows' own `on.paths` filters.
 
-Change-aware CI uses path-based workflow triggers to skip irrelevant jobs on PRs, reducing CI runtime and cost while maintaining safety.
+## Classification and execution
 
-## How It Works
+| Change / event | Main CI behavior |
+| --- | --- |
+| PR touching runtime/test/tool/setup/dependency/workflow paths | Full suite. |
+| PR touching frontdoor paths, portal markup, portal asset manifest, frontdoor smoke validator, or secure-frontdoor quickstart | Full suite plus `frontdoor-contract`. |
+| Other PR paths, such as ordinary docs | `lightweight` and `dependency-constraints`; heavy jobs may skip. |
+| Main push or manual dispatch | Full suite plus frontdoor contract. |
 
-### Path Filters
+The full matcher includes `src/`, `apps/`, `tests/`, `scripts/`, `tools/`,
+`config/`, `requirements*`, `pyproject.toml`, `setup.py`, `conftest.py`,
+`Makefile`, `mypy.ini`, `.pylintrc`, `.github/workflows/`, `.github/actions/`,
+and `.github/copilot-instructions.md`. Therefore Markdown under `scripts/`,
+`requirements/`, or `.github/workflows/` is not a lightweight docs-only change.
+The secure-frontdoor quickstart is also an explicit runtime-boundary trigger.
 
-PRs trigger workflows based on which files changed:
+`CI Gate` depends on `preflight`, `lightweight`, `dependency-constraints`,
+`frontdoor-contract`, `lint`, `typecheck`, `test`, and `generate-manifest`.
+Lightweight/dependency results must succeed. Full mode additionally requires
+lint/typecheck/test/manifest success, and frontdoor success when requested.
+Inspect the preflight reason and earliest failing upstream job before diagnosing
+a downstream skip or gate failure. No universal time saving is guaranteed.
 
-**Code/Test Changes** → Full CI Suite
-- `src/**`, `tests/**`, `scripts/**`
-- `requirements*.txt`, `pyproject.toml`
-- `.github/workflows/**`
-
-**Documentation-Only Changes** → Docs Build Only
-- `docs/**`, `*.md`, `README*`
-- Skips: test jobs, lint (except doc validation)
-
-### Safety Guarantees
-
-✅ **Always run on main**: No filters on protected branches
-✅ **Manual override**: `workflow_dispatch` runs full suite
-✅ **Conservative filters**: False positives OK, false negatives NOT OK
-✅ **Explicit skip messages**: Clear logs when jobs skipped
-
-## Expected Time Savings
-
-| PR Type | Time Savings | Example |
-|---------|--------------|---------|
-| Doc-only | 70%+ | 10min → 3min |
-| Test-only | 30%+ | 12min → 8min |
-| Workflow-only | 0% | Full suite |
-| Code changes | 0% | Full suite |
-
-## Manual Override
-
-Run full suite on any PR:
+## Manual full validation
 
 ```bash
-# Via GitHub UI
-Actions → CI → Run workflow → Select branch
-
-# Or via gh CLI
-gh workflow run "CI (Lint, Tests & Manifest)" --ref your-branch-name
+gh workflow run build.yml --ref main
 ```
 
-## Validation
+For post-CI firewall verification, dispatch `build.yml` on `main` or `develop`.
+The firewall accepts only a successful same-repository push/manual upstream
+run and checks out its exact SHA; it remains `workflow_run`-only.
 
-Check path filter configuration:
+## Local configuration checks
 
 ```bash
-python scripts/validate_path_filters.py
+make validate-ci
 ```
 
-## Rollback
-
-If filters cause issues:
-
-```bash
-git revert <commit-sha>
-git push origin main
-```
-
-## Monitoring
-
-Track effectiveness:
-- Compare PR completion times (before/after)
-- Review workflow logs for skip messages
-- Monitor for false negatives (required checks missed)
-
-## Related
-
-- **ADR-0016**: Design decision and rationale
-- **build.yml**: Primary CI workflow with filters
-- **docs.yml**: Documentation workflow (already filtered)
-
-## Last Updated
-
-2026-02-04
+Workflow pass/fail and remotely enforced required checks are separate. See
+[branch-protection snapshot and verification](BRANCH_PROTECTION_SETUP.md),
+[complete workflow inventory](WORKFLOW_MATRIX.md), and
+[test strategy](../testing/STRATEGY.md). Documentation CI does not exercise every
+runtime, service, model, or production deployment.

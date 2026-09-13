@@ -1,5 +1,11 @@
 # Tranche Phase 2 - Quick Reference
 
+> Historical context. The dated plans and completion claims below do not certify
+> current runtime, CI, or production readiness. Use [current guidance](../governance/DOCUMENTATION_MAP.md).
+> Missing original references are recorded in the documentation refresh link
+> backlog; no similarly numbered ADR or unrelated summary has been substituted.
+
+
 **Status:** ✅ APPROVED | **Start:** 2026-02-04 | **Epic:** #819
 
 ---

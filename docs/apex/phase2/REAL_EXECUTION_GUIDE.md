@@ -250,8 +250,8 @@ A: Place images in `tests/fixtures/apex_images/`. Keep them small (<1MB) and non
 
 ## Related Documentation
 
-* [APEX Production Readiness](../APEX_PRODUCTION_READINESS.md)
+* [APEX Production Readiness](../../deployment/APEX_PRODUCTION_READINESS.md)
 * [Performance Contract](../APEX_CONTRACT.md)
 * [Phase 1.1 Truth Alignment](../phase1/PHASE1.1_TRUTH_ALIGNMENT.md)
-* [Phase 3 Backend-Aware Deps](../../issues/875)
+* [Phase 3 Backend-Aware Deps](https://github.com/RC219805/Transformation_Portal/issues/875)
 * [Tier 1 Registry API](../tier1/REGISTRY_API_MIGRATION.md)

@@ -51,8 +51,14 @@ Most scripts can be run directly:
 ./scripts/setup/install_da3_runtime.sh
 
 # Python scripts
-.venv/bin/python scripts/setup/install_models.py --dry-run
+./scripts/setup/run_repo_python.sh scripts/analysis/architectural_context_extractor.py --help
 ```
+
+Use [setup/README.md](setup/README.md) for supported runtime installation lanes.
+An installer or import check does not establish model inference, cache
+authorization, or complete pipeline output. The maintained architectural PDF
+extractor and archived automatic rendering integration are distinguished in
+[Context-Aware Rendering](../docs/guides/CONTEXT_AWARE_RENDERING.md).
 
 ## Contributing
 

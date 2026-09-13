@@ -352,7 +352,7 @@ Changes to this contract require:
 
 ## Related Governance Documents
 
-- **[APEX Governance Framework (ADR-026)](../architecture/decisions/ADR-026-APEX-governance-framework.md)** - Architectural design for policy-as-code
+- **[APEX Governance Framework (ADR-026)](../_archive/2026-Q1-consolidation/ADR-026-APEX-governance-framework.md)** - Architectural design for policy-as-code
 - **[Governance User Guide](GOVERNANCE_USER_GUIDE.md)** - How to interact with APEX governance (waivers, budget changes, incidents)
 - **[Governance Status](GOVERNANCE_STATUS.md)** - Implementation status and next steps
 - **[Performance Budgets Policy](policy/performance_budgets.yaml)** - Performance thresholds (versioned)

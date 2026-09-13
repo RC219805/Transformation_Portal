@@ -56,7 +56,7 @@ APEX operates in three modes:
 | **Disabled** | Gate not executed | Temporary suspension (requires justification) |
 
 **Current status:** Shadow mode (as of 2026-02-09)
-**Transition plan:** See [enforcement_policy.yaml](../policy/enforcement_policy.yaml)
+**Transition plan:** See [enforcement_policy.yaml](policy/enforcement_policy.yaml)
 
 ---
 
@@ -502,11 +502,11 @@ Add `--dry-run --synthetic` for fast validation (no ML deps).
 
 **Documentation:**
 - [APEX Contract](../contracts/APEX_CONTRACT.md)
-- [Performance Budgets](../policy/performance_budgets.yaml)
-- [Enforcement Policy](../policy/enforcement_policy.yaml)
-- [Governance Rules](../policy/governance_rules.yaml)
-- [Workload Suites](../policy/workload_suites.yaml)
-- [ADR-026: Governance Framework](../../architecture/decisions/ADR-026-APEX-governance-framework.md)
+- [Performance Budgets](policy/performance_budgets.yaml)
+- [Enforcement Policy](policy/enforcement_policy.yaml)
+- [Governance Rules](policy/governance_rules.yaml)
+- [Workload Suites](policy/workload_suites.yaml)
+- [ADR-026: Governance Framework](../_archive/2026-Q1-consolidation/ADR-026-APEX-governance-framework.md)
 
 ---
 

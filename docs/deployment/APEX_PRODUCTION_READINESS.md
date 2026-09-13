@@ -1,5 +1,7 @@
 # APEX Production Readiness Status
 
+> Historical snapshot, classified 2026-09-12. The readiness, coverage, rollback, timing, and branch-protection statements below describe an earlier revision; they do not certify the current checkout or deployment. Use the [documentation map](../governance/DOCUMENTATION_MAP.md), [current CI guide](../ci_cd/CI_CD_WORKFLOWS.md), and [managed staging runbook](../deployment/managed_paid_pilot_staging_runbook.md) for current procedures. Retest the exact revision and target environment before relying on a deployment or rollback claim.
+
 **Status:** ✅ Scaffolding Complete | 🚧 Real Pipeline Integration Pending
 
 **Current Version:** v1.0.0 (Dry-Run / Schema Validation)

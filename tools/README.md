@@ -17,7 +17,7 @@ For the broader script placement contract, see
 | Portal evidence and telemetry helpers | `portal_rum_summary.py`, `portal_modernization_evidence.py`, `portal_telemetry_retention.py` | Operator evidence helpers documented by portal modernization and retention runbooks. |
 | APEX evaluation helpers | `run_apex_eval.py`, `audit_apex_assets.py`, `characterize_apex_model_families.py` | Validation/evaluation commands referenced by APEX protocols. |
 | Benchmarks | `benchmark_depth_backends.py`, `benchmark_unified_luxury_batch_io.py` | Evidence-producing benchmark CLIs; default behavior must remain opt-in and contract-stable. |
-| AD editorial post-production | `ad_editorial_post_pipeline.py`, `sample_config.yml` | Maintained operator tool; guide lives in `docs/guides/AD_EDITORIAL_POST_PIPELINE.md`. |
+| AD editorial post-production | `ad_editorial_post_pipeline.py`, `sample_config.yml` | Path-stable operator tool; governed dependency closure remains incomplete. See the editorial limitations below. |
 | Deprecated AD snapshots | `deprecated/` | Historical only; not current operator entrypoints. |
 | Investigation helpers | `investigations/` | Scoped diagnostics with local README context; promote or archive when no longer investigatory. |
 
@@ -36,11 +36,23 @@ For the broader script placement contract, see
 
 ## AD Editorial Pipeline
 
-Current maintained entrypoint:
+Entrypoint, conditional on a separately validated dependency environment:
 
 ```bash
 python tools/ad_editorial_post_pipeline.py run --config my_project.yml -vv
 ```
+
+`ad_editorial_post_pipeline.py` imports `rawpy` and ReportLab at module import
+time in the same Python process. The isolated Lux RAW environment is used by
+Lux subprocess ingest and does not satisfy these imports in the main tool
+interpreter. Core installation alone therefore does not establish editorial
+availability, and a RAW runtime install is not an editorial installation fix.
+
+A governed editorial environment needs an approved target/toolchain and a
+complete pinned dependency closure (including ReportLab), followed by import,
+RAW decode, contact-sheet/PDF, and representative end-to-end tests. Until that
+lane is defined, do not treat the command as verified or add ungoverned packages
+to the core environment to make it run.
 
 Start from the operator guide:
 [`docs/guides/AD_EDITORIAL_POST_PIPELINE.md`](../docs/guides/AD_EDITORIAL_POST_PIPELINE.md)

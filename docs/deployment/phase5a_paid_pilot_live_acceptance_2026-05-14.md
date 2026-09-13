@@ -1,5 +1,7 @@
 # Phase 5.A Paid-Pilot Live Acceptance - 2026-05-14
 
+> Historical acceptance evidence for the commits and local service images recorded below. This record does not establish current managed-provider readiness; rerun the [managed staging gate](managed_paid_pilot_staging_runbook.md) on the target environment.
+
 ## Status
 
 Local Compose acceptance passed on follow-up fix commit `5e0632279`.

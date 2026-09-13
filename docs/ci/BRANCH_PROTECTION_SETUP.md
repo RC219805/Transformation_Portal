@@ -1,15 +1,20 @@
 # Branch Protection Setup Guide
 
-This guide documents the current and recommended branch protection rules for the
-`main` branch to enforce CI quality gates.
+This guide separates observed branch-protection snapshots from configuration
+recommendations. Re-read GitHub before relying on any recorded setting.
 
-Current live settings were verified with:
+Read-only verification command:
 
 ```bash
 gh api repos/RC219805/Transformation_Portal/branches/main/protection
 ```
 
-Last verified: 2026-06-03.
+Previous snapshot: 2026-06-03. Refreshed snapshot: **2026-09-12**. The refreshed
+response lists only `CI Gate` (GitHub Actions app ID 15368), strict up-to-date
+checking, administrator enforcement, zero required approving reviews, stale
+approval dismissal, and no Code Owner or last-push approval requirement.
+Other settings below remain recommendations or the earlier dated snapshot
+unless explicitly included in the refreshed response.
 
 ## Required Branch Protection Rules
 
@@ -85,28 +90,18 @@ checks unless the CI gate contract is intentionally changed.
 
 ## Verification
 
-After setting up branch protection:
+Use read-only checks against the actual PR head before considering configuration
+changes:
 
-1. Create a test PR with intentional failures:
-   ```bash
-   git checkout -b test/branch-protection
-   # Make a change that fails lint
-   echo "import os,sys" >> src/test_file.py
-   git add . && git commit -m "test: verify branch protection"
-   git push origin test/branch-protection
-   ```
+```bash
+gh api repos/RC219805/Transformation_Portal/branches/main/protection
+gh pr checks <PR-number> --required
+gh pr view <PR-number> --json headRefOid,mergeStateStatus,reviewDecision
+```
 
-2. Open PR and verify:
-   - CI checks are required
-   - Cannot merge until checks pass
-   - Cannot force push to main
-
-3. Clean up:
-   ```bash
-   git checkout main
-   git branch -D test/branch-protection
-   git push origin --delete test/branch-protection
-   ```
+An expected check with no matching run needs trigger/name investigation; a
+failing upstream job needs its own diagnosis. Do not change protection merely
+to bypass a failure. Policy changes require explicit scope and approval.
 
 ## CODEOWNERS Setup (Optional)
 

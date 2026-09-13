@@ -1,5 +1,11 @@
 # APEX Research Workflow Execution Report
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 **Workflow ID:** research_depthpro_20260207_115251
 **Execution Date:** 2026-02-07 11:52-11:55 PST
 **Backend:** Depth Pro (Apple ML Research License)
@@ -454,6 +460,6 @@ The **APEX research workflow with Depth Pro** successfully demonstrated:
 **Workflow Version:** transformation_portal v3.0.0-apex
 **Author:** APEX Workflow Orchestrator (Custom Agent)
 **Related Docs:**
-- [APEX Workflow Design](APEX_WORKFLOW_DESIGN.md)
+- [APEX Workflow Design](../architecture/APEX_WORKFLOW_DESIGN.md)
 - [ADR-019: Depth Backend Architecture](ADR-019_IMPLEMENTATION_SUMMARY.md)
-- [Quality Firewall Quick Reference](../QUALITY_FIREWALL_QUICK_REF.md)
+- [Quality Firewall Quick Reference](../implementation_notes/QUALITY_FIREWALL_QUICK_REF.md)

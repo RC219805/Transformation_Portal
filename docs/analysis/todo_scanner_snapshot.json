@@ -2,7 +2,7 @@
   "summary": {
     "total": 25,
     "ungoverned": 0,
-    "files_scanned": 1753,
+    "files_scanned": 1811,
     "by_type": {
       "NotImplementedError": 25
     }

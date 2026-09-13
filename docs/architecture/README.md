@@ -9,6 +9,15 @@ This directory now holds maintained architecture, ADR, roadmap, and review-requi
 
 Current repository-wide documentation navigation remains governed by [docs/README.md](../README.md) and [docs/governance/DOCUMENTATION_MAP.md](../governance/DOCUMENTATION_MAP.md). This index is the architecture-specific disposition overlay for files that were in `docs/architecture` before the May 12 cleanup.
 
+## Current Execution Contract
+
+[Execution Plan V1](../reference/EXECUTION_PLAN_V1.md) documents implemented
+core-owned canonical planning and Lux preparation/consumption.
+[Architecture overview](ARCHITECTURE.md#execution-preparation-and-activation-boundaries)
+separates that live boundary from [ADR-051](ADR-051-execution-artifact-authority-designation.md)
+executor and publication activation gates. The tables below retain the dated
+May 12 disposition history; they do not certify later runtime readiness.
+
 ## Canonical
 
 These files are maintained as the canonical architecture set named by the May 12 triage plan.

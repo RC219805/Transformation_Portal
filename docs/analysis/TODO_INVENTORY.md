@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.8
-**Date:** June 11, 2026
-**Last Updated:** 2026-06-11 (scanner snapshot refreshed; 25 governed items)
-**Previous Version:** 2.4.7 (2026-05-11)
+**Document Version:** 2.4.9
+**Date:** September 12, 2026
+**Last Updated:** 2026-09-12 (scanner snapshot refreshed; 25 governed items)
+**Previous Version:** 2.4.8 (2026-06-11)
 
 ---
 
@@ -16,6 +16,16 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.9 Changes (2026-09-12)
+
+The existing scanner regenerated `todo_scanner_snapshot.json`: **25 governed
+`NotImplementedError` items, 0 ungoverned items, 1,811 files scanned**.
+File coverage grew; the governed-item count is unchanged from June 11.
+This scan checks governance references, not implementation completeness. See the
+[documentation finding ledger](../governance/audit/documentation-findings-2026-09-12.md)
+for the separately reproduced parser/graph repairs and remaining runtime gaps.
+Prior version sections and dated counts below remain historical evidence.
 
 ## Version 2.4.8 Changes (2026-06-11)
 

@@ -183,12 +183,17 @@ class TestRootGovernanceMetadata:
         required_navigation = [
             "docs/README.md",
             "docs/governance/DOCUMENTATION_MAP.md",
-            "May 11, 2026 repo-wide refresh audit",
-            "Last Updated: 2026-06-11",
+            "documentation refresh audit",
+            "Prior dated audits remain historical evidence",
         ]
         for expected in required_navigation:
             assert expected in readme
-        assert "Last Updated: 2026-05-11" not in readme
+        audit_links = re.findall(r"\]\((docs/governance/DOCUMENTATION_REFRESH_AUDIT_[^)]+\.md)\)", readme)
+        assert audit_links, "README must link a concrete refresh audit"
+        for audit in audit_links:
+            assert (_repo_root / audit).is_file()
+            assert Path(audit).name in (_repo_root / "docs/governance/DOCUMENTATION_MAP.md").read_text()
+        assert re.search(r"Last Updated: \d{4}-\d{2}-\d{2}", readme)
 
     def test_operator_guides_use_governed_local_input_surface(self):
         """Current CLI examples should not create untracked input directories."""
@@ -487,8 +492,9 @@ class TestRootGovernanceMetadata:
 
         assert "*Last Updated: March 2026*" not in security_policy
         assert "*Next Review: June 2026*" not in security_policy
-        assert "*Last Updated: 2026-06-03*" in security_policy
-        assert "*Next Review: 2026-09-03*" in security_policy
+        assert re.search(r"Last source review: \d{4}-\d{2}-\d{2}", security_policy)
+        assert "a schedule alone is not completion evidence" in security_policy
+        assert "No completed formal security audit report is linked here" in security_policy
         assert "*Security Policy Version: 1.2*" in security_policy
 
     def test_security_policy_supported_versions_track_release_channels(self):
@@ -540,14 +546,16 @@ class TestRootGovernanceMetadata:
             "sudo -u nobody python -m transformation_portal.cli",
             "# User=nobody",
             "# Group=nogroup",
+            "python -m transformation_portal.cli serve",
         ]
         for stale_fragment in stale_fragments:
             assert stale_fragment not in security_policy
 
         required_fragments = [
-            "sudo -u tp .venv/bin/python -m transformation_portal.cli serve --host 127.0.0.1 --port 8000",
-            "# User=tp",
-            "# Group=tp",
+            ".venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8000",
+            "unprivileged service account",
+            "Supply `TP_API_KEY`",
+            "make run-backend-local-noreload",
         ]
         for required_fragment in required_fragments:
             assert required_fragment in security_policy
@@ -700,12 +708,15 @@ class TestRootGovernanceMetadata:
         assert "| `black`       | dev.in  | `>=26.3.1`" in adr_032
         assert "pylint>=3.0" in adr_032
 
-    def test_contributing_dependency_audit_schedule_is_current(self):
-        """Canonical contribution guidance should not point to a past audit date."""
+    def test_contributing_dependency_audit_schedule_requires_completion_evidence(self):
+        """A scheduled audit must not be presented as a completed audit."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
 
         assert "Next audit: **2026-05-16 (Q2 2026)**" not in contributing
-        assert "Next audit: **2026-08-16 (Q3 2026)**" in contributing
+        assert "Quarterly dependency audits are the planned cadence" in contributing
+        assert "no completion report is linked here" in contributing
+        assert "Record completed audit evidence" in contributing
+        assert "owner-approved date separately" in contributing
 
     def test_contributing_coverage_guidance_matches_active_gates(self):
         """Root contribution guidance should match current coverage gate policy."""
@@ -888,13 +899,13 @@ class TestRootGovernanceMetadata:
             assert (_repo_root / relative_path).exists()
 
     def test_root_branch_protection_guidance_matches_current_contract(self):
-        """Root branch-protection prose should not preserve stale setup snapshots."""
+        """Recorded protection settings must be labeled and require live readback."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
         setup_doc = (_repo_root / "docs" / "ci" / "BRANCH_PROTECTION_SETUP.md").read_text()
         historical_commands_doc = (_repo_root / "docs" / "ci" / "BRANCH_PROTECTION_COMMANDS.md").read_text()
 
         required_current_claims = [
-            "Current Branch Protection Rules (Verified 2026-06-03)",
+            "Historical Branch Protection Snapshot",
             '"enforce_admins": true',
             '"required_linear_history": false',
             '"required_conversation_resolution": true',
@@ -916,12 +927,15 @@ class TestRootGovernanceMetadata:
         for stale_claim in stale_claims:
             assert stale_claim not in contributing
 
-        assert "Last verified: 2026-06-03." in setup_doc
+        assert "Re-read GitHub before relying on any recorded setting" in setup_doc
+        assert "read-only verification command" in contributing
+        assert "They do not certify the current" in contributing
+        assert re.search(r"Refreshed snapshot: \*\*\d{4}-\d{2}-\d{2}", setup_doc)
         assert "CI Gate" in setup_doc
         assert "lint (3.12)" not in setup_doc
         assert "test-core (3.10)" not in setup_doc
         assert "quality-summary" not in setup_doc
-        assert "Admin enforcement is currently enabled" in setup_doc
+        assert "administrator enforcement" in setup_doc
         assert "[CONTRIBUTING.md](../../CONTRIBUTING.md)" in setup_doc
         assert "[Production Readiness](../deployment/PRODUCTION_READINESS.md)" in setup_doc
         assert "[CONTRIBUTING.md](../CONTRIBUTING.md)" not in setup_doc

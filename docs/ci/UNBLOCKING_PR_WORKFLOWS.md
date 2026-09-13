@@ -6,8 +6,8 @@ This document explains the common blockers for PR workflows and how to resolve t
 
 | Pattern | Symptom | Fix |
 |---------|---------|-----|
-| **A) Expected — Waiting** | Merge box shows "Expected — Waiting for status to be reported" | Re-anchor required checks in branch protection |
-| **B) Checks failing** | Workflows run but fail with permission errors | Add explicit `permissions:` to workflow YAML |
+| **A) Expected — Waiting** | Merge box shows "Expected — Waiting for status to be reported" | Compare current required contexts with trigger/job names at the PR head |
+| **B) Checks failing** | Workflows run but fail with permission errors | Trace the failing operation and event trust boundary before changing permissions |
 | **C) No checks appear** | No workflows trigger on PR | Verify `on: pull_request:` trigger in workflow YAML |
 | **D) Action Required** | Workflows show `action_required` conclusion | Maintainer must approve first-run for new contributors |
 
@@ -20,22 +20,24 @@ This document explains the common blockers for PR workflows and how to resolve t
 - Required check names don't appear in the Checks list
 - Merging is blocked even though workflows seem to exist
 
-### Root Cause
-Branch protection is requiring a check name that no longer exists (renamed job, deleted workflow, or check only runs on different triggers).
+### Possible Causes
+A stale check name, an untriggered workflow, approval state, path filter, or a
+run attached to a different commit can all leave an expected check pending.
+Identify the actual cause before changing protection.
 
-### Fix
-1. Go to **Settings → Branches → Branch protection rule for `main`**
-2. Under **Required status checks**, look for:
-   - Stale check names from old workflows
-   - Check names that don't appear in PR's Checks list
-3. Run the workflow at least once on a PR targeting `main`
-4. Return to branch protection and **re-select** the required checks from the recognized list
-5. **Do not** type check names manually
+### Diagnosis
 
-### Prevention
-- Use **unique, stable job names** across all workflows
-- Avoid generic names like `test` repeated in multiple workflows
-- Example: Use `test (3.11, cpu, core)` instead of just `test`
+```bash
+gh pr view <PR-number> --json headRefOid,statusCheckRollup
+gh api repos/RC219805/Transformation_Portal/branches/main/protection
+```
+
+Match each run to the current head. The main protection snapshot read on
+2026-09-12 required only `CI Gate`, with strict up-to-date checking. Its upstream
+jobs are classified by `build.yml`; do not add matrix-expanded job names to
+protection or reconfigure settings solely to bypass a pending/failing check.
+A confirmed stale required context is a separate, explicitly authorized
+administrative change.
 
 ---
 
@@ -117,7 +119,10 @@ on:
   workflow_dispatch: {}
 ```
 3. **Validate YAML syntax**: Use `yamllint` or GitHub's workflow editor
-4. **Ensure workflow is on default branch**: Workflows must exist on `main` to run on PRs
+4. **Inspect event-specific workflow availability**: PR workflows can come from
+   the proposed change; events such as manual dispatch have default-branch
+   availability requirements. Check the actual event instead of assuming every
+   PR workflow must already be on `main`.
 
 ---
 
@@ -139,9 +144,11 @@ GitHub requires maintainer approval before running workflows from:
 2. Click "Approve and run" for each pending workflow
 3. Or go to **Actions tab → Pending approvals** and approve all
 
-### Prevention
-- Configure org/repo settings to auto-approve workflows from trusted bots
-- For Copilot agent: The approval is a one-time action per PR
+### Evidence boundary
+An `action_required` run with zero jobs has not executed tests. Maintainer
+approval and rerun requirements depend on repository policy and the current
+change; do not assume approval persists for every subsequent commit or weaken
+trust settings as a troubleshooting shortcut.
 
 ---
 

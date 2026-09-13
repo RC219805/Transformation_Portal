@@ -1,172 +1,55 @@
-# Transformation Portal Repository
+# GitHub Actions Workflows
 
-This repository contains tools, scripts, and workflows for managing LUTs, aerial image enhancements, and Montecito manifest generation.
+Current workflow inventory and source-derived counts are in
+[CI Workflow Matrix](../../docs/ci/WORKFLOW_MATRIX.md). The workflow YAML files
+are the execution authority; a listed workflow is not automatically a required
+GitHub status check.
 
----
+## Main CI and conditional execution
 
-## GitHub Actions Workflows
+[`build.yml`](build.yml) is **CI (Lint, Tests & Manifest)**. It runs on PRs and
+pushes to `main`, and by manual dispatch. The `preflight` job classifies PR paths;
+non-PR events run the full suite. `lightweight` and `dependency-constraints` run
+for every classified change. Full runs add lint, Python 3.12 type checking,
+Python 3.11/3.12 core tests, Python 3.11 ML tests, and manifest generation.
+`frontdoor-contract` runs when the frontdoor classifier requests it.
 
-The repository includes multiple CI/CD and automation workflows to ensure code quality, security, and productivity.
+`CI Gate` aggregates these results and permits intentional heavy-job skips in
+lightweight mode. Main branch protection was read on **2026-09-12** and required
+only `CI Gate`, with strict up-to-date checking; re-read GitHub before relying
+on that snapshot. See [change classification](../../docs/ci/CHANGE_AWARE_CI.md)
+and [testing strategy](../../docs/testing/STRATEGY.md).
 
-### 1. `python-app.yml`
-**Purpose:** Main CI workflow for Python testing and linting.
-**Triggers:** `push` and `pull_request` on `main`.
-**Features:**
-- Currently runs on Python 3.11 only (to conserve CI resources).
-- Lean CPU-only dependency installation (`requirements-ci.txt`) for fast CI.
-- Linting via `flake8` (critical errors only).
-- Unit testing and end-to-end tests with `pytest`.
-- Montecito manifest generation with artifact upload.
-- Test PyPI deployment on main branch pushes for validation.
-- Comprehensive cleanup job to prevent disk space issues.
+The former `python-app.yml` and `pylint.yml` are not active workflow files.
 
-**Note:** Other workflows like `pylint.yml` use the full multi-Python matrix (3.11–3.12) for cross-version consistency testing.
+## Other maintained surfaces
 
-### 2. `submit-pypi.yml`
-**Purpose:** Package building and distribution to PyPI and Test PyPI.
-**Triggers:**
-- Version tags (e.g., `v0.1.0`) for production PyPI.
-- Manual workflow dispatch for Test PyPI uploads.
+| Workflow | Purpose and evidence boundary |
+| --- | --- |
+| [`ci.yml`](ci.yml) | Push validation on main/develop, including coverage and packaging. |
+| [`ci-quality-firewall.yml`](ci-quality-firewall.yml) | Post-CI verification of the exact successful same-repository push/manual upstream commit; dispatch build.yml to initiate manual verification. |
+| [`enforcement.yml`](enforcement.yml) | Action pins, dependency/artifact boundaries, layered tests and golden contracts. |
+| [`codeql.yml`](codeql.yml), [`security-unified.yml`](security-unified.yml) | Separate static/security analysis; inspect each current job result. |
+| [`dependency-update.yml`](dependency-update.yml) | Scheduled/manual generic dependency update transaction; target-owned ML/DA3 locks retain separate lanes. |
+| [`dependency-pinning-check.yml`](dependency-pinning-check.yml) | Fails its job on exact-pin/constraint drift; distinct from branch protection. |
+| [`secure-install-pilot.yml`](secure-install-pilot.yml) | Advisory hash-install pilot; does not replace checked-in ordinary locks. |
+| [`docs.yml`](docs.yml) | Documentation build, Markdown, and navigation validation; not production-runtime evidence. |
+| [`frontdoor-deployment-gate.yml`](frontdoor-deployment-gate.yml) | Manual shared-frontdoor deployment posture checks. |
+| [`submit-pypi.yml`](submit-pypi.yml) | Tag/manual package publication through configured OIDC environments. |
+| [`apex_performance.yml`](apex_performance.yml) | Synthetic PR/push matrix; scheduled/manual real mode requires backend execution evidence. Pages publication alone proves no inference result. |
+| [`performance-monitor.yml`](performance-monitor.yml) | Scheduled/manual Lux smoke with four required writer tests/artifacts and parsed baselines. |
+| [`nightly.yml`](nightly.yml), [`ml-slow-suite.yml`](ml-slow-suite.yml) | Separate deep/ML lanes with their own prerequisites; see the performance policy's legacy-nightly limitations. |
+| [`ai-code-review.yml`](ai-code-review.yml), [`summary.yml`](summary.yml), [`smart-issue-management.yml`](smart-issue-management.yml) | Advisory AI automation; service-unavailable diagnostics are not approvals or successful reviews. |
 
-**Features:**
-- Builds both wheel and source distributions.
-- Comprehensive distribution validation with `twine check`.
-- Package content verification to ensure correct structure.
-- Test PyPI uploads for validation before production release.
-- Production PyPI uploads triggered by version tags only.
-- Robust cleanup to prevent disk space issues.
-- Separate jobs for build, test upload, and production upload.
-
-**Usage:**
-- **Production Release:** Create and push a version tag (e.g., `git tag v0.1.0 && git push origin v0.1.0`)
-- **Test PyPI Upload:** Manually trigger workflow with `test_pypi` option enabled
-- Uses PyPI Trusted Publishing (OIDC) via `pypa/gh-action-pypi-publish`
-- Requires configured GitHub environments (`pypi`, `testpypi`) and matching trusted publisher setup on PyPI/TestPyPI
-
-### 3. `pylint.yml`
-**Purpose:** Static code analysis using `pylint`.
-**Triggers:** Pull requests affecting `.py` files.
-**Features:**
-- Multi-Python matrix (3.11–3.12) ensures cross-version consistency.
-- Selective linting of changed files to reduce runtime.
-
-### 4. `codeql.yml`
-**Purpose:** Security scanning using GitHub CodeQL.
-**Features:**
-- Automated analysis for security vulnerabilities.
-- Runs on pushes to main and pull requests.
-
-### 4.1 `secure-install-pilot.yml`
-**Purpose:** Advisory validation of a hash-enforced install pilot for the
-checked-in layered dependency contract.
-**Triggers:** Pull requests affecting dependency-management surfaces.
-**Features:**
-- Generates hash-enriched pilot lockfiles into an isolated artifact directory.
-- Validates those artifacts with `pip install --dry-run --require-hashes`.
-- Covers the non-ML checked-in layered locks only.
-- Stays non-blocking while the team evaluates maintenance cost and CI noise.
-
-### 4.2 `frontdoor-deployment-gate.yml`
-**Purpose:** Manual predeploy validation for any shared frontdoor rollout that is about to become internet-reachable.
-**Triggers:** `workflow_dispatch` only.
-**Features:**
-- Targets Cloudflare Worker frontdoor rollouts and the legacy Cloudflare-in-front-of-Vercel posture for the managed front door.
-- Verifies the public hostname is Cloudflare Access protected and not serving the real DNA shell unauthenticated.
-- Verifies the Cloudflare Worker or Vercel deployment URL is protected and not serving the real DNA shell unauthenticated.
-- Verifies FastAPI is either non-public by explicit operator attestation or does not expose healthy unauthenticated `/ready` or `/healthz`.
-- Runs `make test-frontdoor-contract`, `tests/validation/test_frontdoor_deployment_gate.py`, and `make test-orchestrator-contract` before the live posture probe.
-- Uses GitHub environments `frontdoor-staging` and `frontdoor-production` for reviewer-gated rollout approval.
-
-### 5. AI Advisory Workflows
-
-The repository includes three AI-powered advisory workflows that provide intelligent suggestions without blocking PR merges. All workflows follow a hardened pattern with timeout bounds and failure visibility.
-
-**Pattern Documentation:** See `AI_WORKFLOW_PATTERN.md` for the canonical implementation pattern.
-**Status Report:** See `AI_WORKFLOWS_HARDENING_STATUS.md` for architectural assessment.
-
-#### 5.1 `ai-code-review.yml` (AI Code Review)
-**Purpose:** Automatically reviews code changes in pull requests and provides actionable feedback.
-**Status:** Production-ready, non-blocking advisory.
-
-**Features:**
-- Triggered on pull request opened/synchronize/reopened events.
-- Reviews relevant code files (`.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.yml`, `.yaml`, `.json`, `.md`).
-- Uses OpenAI `gpt-4o-mini` model with retry logic for rate-limit handling.
-- Posts review comments with code quality assessment, bug detection, security concerns, and best practices when OpenAI returns real review content.
-- Keeps AI-unavailable fallback diagnostics in workflow logs instead of posting fallback PR comments.
-- Non-blocking: continues even if AI service fails.
-- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
-- Requires `OPENAI_API_KEY` in repository secrets.
-
-#### 5.2 `summary.yml` (AI Issue and PR Summarization)
-**Purpose:** Automatically generates concise summaries of GitHub issues, pull requests, and comments.
-**Status:** Production-ready, non-blocking advisory.
-
-**Features:**
-- Triggered on `issues`, `pull_request`, and `issue_comment` events.
-- Uses OpenAI `gpt-4o-mini` model to generate neutral, concise summaries.
-- Retries HTTP 429, transient HTTP 5xx, and network errors up to 3 total attempts.
-- Posts successful AI-generated summaries as comments on the issue or pull request.
-- Graceful handling when API key is missing or AI calls fail; diagnostic fallbacks stay in logs.
-- Non-blocking: continues even if AI service fails.
-- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
-- Requires `OPENAI_API_KEY` in repository secrets.
-
-#### 5.3 `smart-issue-management.yml` (AI Issue Triage)
-**Purpose:** Automatically classifies and labels issues and pull requests for intelligent triage.
-**Status:** Production-ready, non-blocking advisory.
-
-**Features:**
-- Triggered on issue/PR opened/reopened/labeled/unlabeled events.
-- Uses OpenAI `gpt-4o-mini` model to analyze and classify items.
-- Automatically applies labels based on category, priority, and content analysis.
-- Posts AI analysis comment with suggested classification.
-- Performs duplicate detection for issues.
-- Non-blocking: continues even if AI service fails.
-- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
-- Requires `OPENAI_API_KEY` in repository secrets.
-
-**AI Workflows Architecture:**
-All three workflows implement a hardened pattern with:
-- **Non-blocking behavior**: `continue-on-error: true`; expected AI/service failures emit warnings and typically exit 0, while hard infrastructure errors may still exit non-zero
-- **Timeout bounds**: 4-minute step timeout for AI calls, 10-minute job timeout
-- **Failure visibility**: `::warning::` emission in Python exception handlers and shell failure steps
-- **Retry logic**: up to 6 attempts with exponential backoff in `ai-code-review.yml` and `smart-issue-management.yml`; up to 3 attempts with bounded backoff in `summary.yml`
-- **Concurrency control**: Cancel outdated runs to reduce CI costs
-
----
-
-## GitHub Copilot Firewall Configuration
-
-The repository includes a `copilot-firewall.yml` configuration file that specifies allowed external URLs and hosts for GitHub Copilot agents during execution.
-
-**Configuration file:** `.github/copilot-firewall.yml`
-
-**Allowed domains include:**
-- Python Package Index (PyPI) for dependency installation
-- PyTorch download servers for ML/AI dependencies
-- GitHub resources for repository access
-- npm registry for managed frontdoor dependency installation
-- Hugging Face for ML models and datasets
-- OpenAI API for AI summarization
-- Common CDNs and NVIDIA toolkit for GPU support
-
-This configuration ensures that Copilot agents can access necessary external resources while maintaining security through explicit allowlisting.
-
----
-
-## Unit Tests
-
-Unit tests are provided for:
-
-- `_kmeans` – clustering reproducibility.
-- `_cluster_stats` – cluster statistics correctness.
-- `assign_materials` – assignment logic.
-- `_soft_mask` – Gaussian blending of masks.
-- `enhance_aerial` – end-to-end test using small sample images.
-
-Run tests locally:
+## Local validation
 
 ```bash
-pip install -r requirements-ci.txt
-pytest -v tests/
+make validate-ci
+make ci-quick
+make test-fast
+```
+
+Use the exact job's command and interpreter when reproducing a hosted failure.
+An `action_required` run with no jobs is an approval state, not a product-test
+failure. Governance and permissions remain defined by the existing source and
+[dependency review policy](../../docs/governance/DEPENDABOT_PR_GOVERNANCE.md).

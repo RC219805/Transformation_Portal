@@ -1,5 +1,11 @@
 # Workflow Improvements - November 8, 2025
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 > Historical CI improvement note.
 >
 > This file records November 2025 workflow work. Current CI inventory and

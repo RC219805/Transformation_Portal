@@ -9,4 +9,5 @@ Rendering
 Overview
 --------
 
-High-performance rendering engines for batch processing and production workflows.
+Rendering helpers for image and batch workflows. Successful imports or API
+documentation builds do not establish model availability or measured performance.

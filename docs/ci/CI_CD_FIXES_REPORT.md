@@ -1,4 +1,10 @@
 # CI/CD Fixes and Optimization Report
+
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
 **Date:** 2025-11-11
 **Status:** ✅ Phase 1 Complete - Test Import Errors Resolved
 
@@ -71,7 +77,7 @@ sudo docker image prune --all --force
 ## Local Test Results
 
 ### Python 3.11.14 Environment
-```bash
+```text
 ✅ test_kmeans_simple_deterministic PASSED
 ✅ test_compute_cluster_stats_basic PASSED
 ✅ test_relabel_and_relabel_safe_behavior PASSED
