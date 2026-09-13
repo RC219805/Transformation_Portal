@@ -1,6 +1,8 @@
 # Lux Depth V3 Troubleshooting Guide
 
-Comprehensive troubleshooting guide for the Lux Depth V3 orchestrator, addressing common issues, configuration mistakes, and user confusion.
+Source-reviewed troubleshooting for the Lux Depth V3 orchestrator (2026-09-12).
+Use [setup guidance](SETUP_GUIDE.md) for core and isolated-runtime boundaries.
+A successful plan/readiness check is not a completed inference run or artifact validation.
 
 ## Table of Contents
 - [Quick Diagnosis](#quick-diagnosis)
@@ -46,10 +48,10 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 
 **Answer:**
 
-**Use `--quality-tier` for 90% of workflows:**
-- Controls output quality level: `standard` (fast), `premium` (balanced), `apex` (maximum)
-- Determines processing resolution and enabled features
-- Simple and predictable
+**Use `--quality-tier` to select the quality policy:**
+- Selects `standard`, `premium`, or `apex` policy
+- Does not automatically enable PBR, Materials V3, segmentation, or captioning
+- With Materials V3 enabled, `apex` requires explicit segmentation, a real backend, and `--strict-segmentation`
 
 **Use `--preset` only when you need:**
 - Specific depth model configurations (e.g., Depth Anything V3.1)
@@ -86,7 +88,7 @@ lux-depth-v3 \
 
 The V2 enhancement stage is an **optional** AI-powered refinement step that:
 - Applies **after** depth estimation and PBR processing
-- Requires a placeholder script at `scripts/enhance_image.py`
+- Uses the maintained subprocess entry point at `scripts/enhance_image.py`
 - Is **enabled by default** for backward compatibility
 - Can be completely disabled without affecting other pipeline features
 
@@ -134,9 +136,9 @@ Use this if you plan to apply your own enhancement pipeline after Lux Depth V3 p
 ```bash
 --enable-v2 "on" --v2-preset "none"
 ```
-- Validates script exists
-- Skips actual enhancement
-- Useful for testing without enhancement
+- Resolves to a disabled V2 stage in the prepared execution plan
+- Skips V2 script validation and execution, like `--enable-v2 off`
+- Does not disable validation for other selected stages
 
 ### V2 Enhancement Workflow Integration
 
@@ -164,7 +166,7 @@ Output Deliverables
 
 **Problem:**
 ```bash
-# ❌ Preset overrides quality-tier, causing confusion
+# Review the combined model/default selection and independent quality policy
 --quality-tier "standard" --preset "depth-anything-v3.1-research-m4"
 ```
 
@@ -177,7 +179,11 @@ Output Deliverables
 --preset "depth-anything-v3.1-research-m4" --model-key "da3-research" --non-commercial-ok "true"
 ```
 
-**Explanation:** When both are specified, preset takes precedence. This can lead to unexpected behavior.
+**Explanation:** Preset and quality tier are separate inputs. Typed presets resolve
+model/postprocessing defaults; explicit model choices override preset model
+selection. The quality-tier value remains the requested policy. Unknown preset
+strings can be retained as metadata labels; they do not automatically load an
+arbitrary YAML configuration. Inspect `--plan` for the resolved stages and identity.
 
 ---
 
@@ -249,7 +255,7 @@ Output Deliverables
 --output-dir PATH         # Required: Output artifacts directory
 ```
 
-### Quality Control (Pick One)
+### Quality Control
 
 ```bash
 --quality-tier TIER       # Recommended: standard|premium|apex
@@ -278,6 +284,7 @@ Output Deliverables
 ```bash
 --output-bit-depth 8|16   # 8-bit PNG (default) or 16-bit TIFF
 --emit-run-card on|off    # Reproducibility card (default: on)
+--save-float-depth on|off # Optional canonical .npy depth (default: off)
 ```
 
 `--emit-marketing` and `--emit-report` are deprecated compatibility flags
@@ -316,8 +323,8 @@ created, and the combined processing report is always emitted.
 
 **Verification:**
 ```bash
-# Check PyTorch device availability:
-python3 -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available())"
+# Use the selected worker Python, not the main environment, for this import check:
+.runtime/Depth-Anything-3/.venv-da3/bin/python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available())"
 ```
 
 ---
@@ -328,11 +335,9 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:
 
 **Solutions:**
 
-1. **Enable Depth Caching:**
-   ```bash
-   --cache-depth "on"
-   ```
-   Prevents re-computation on subsequent runs.
+1. **Inspect the failing stage and input size.** A cache hit can avoid repeated
+   depth inference only when the complete runtime identity is authorized.
+   `--cache-depth on` does not reduce memory for a first uncached run.
 
 2. **Reduce Batch Size:** Process images in smaller batches.
 
@@ -399,12 +404,10 @@ which prevents this collision in most cases. However, if you still encounter thi
    - Keep the Depth Pro subprocess on the repo-owned pin (`torch==2.13.0`, `torchvision==0.28.0`, `numpy==1.26.4`) instead of mirroring the main repo runtime
    - Use the subprocess isolation mode (configured via `--depth-pro-python`)
 
-2. **Temporary diagnostic workaround (not recommended for production):**
-   ```bash
-   export KMP_DUPLICATE_LIB_OK=TRUE
-   lux-depth-v3 ...
-   ```
-   This suppresses the error but masks the underlying library conflict.
+2. **Inspect the actual failing process and imported libraries.** Suppressing
+   duplicate OpenMP checks can hide the collision; repair the selected runtime
+   and repeat its readiness/inference check instead of treating suppression as
+   a production fix.
 
 **When can this still occur?**
 - If custom code imports torch before invoking the pipeline
@@ -474,15 +477,15 @@ collision when the Depth Pro subprocess loads its own libomp from `.venv-depth-p
 
 ## License and Research Models
 
-### Commercial-Safe Models (No Restrictions)
+### Commercial Model Selection
 
 **DA3 (`da3` backend):**
 ```bash
---depth-backend "da3"  # Default
+--depth-backend "da3" --model-key "da3-metric"  # Apache-2.0 model
 ```
-- ✅ Commercial use allowed
-- ✅ No license acknowledgement required
-- ✅ Recommended for production workflows
+- The registry identifies `da3-metric` as Apache-2.0; comply with that license.
+- No research acknowledgement is required for this selector.
+- The backend name alone is not a license grant; `da3-research` has separate terms.
 
 ---
 
@@ -581,6 +584,9 @@ lux-depth-v3 \
   --depth-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
+  --enable-segmentation on \
+  --segmentation-backend efficientsam \
+  --strict-segmentation \
   --enable-v2 "off" \
   --cache-depth "on" \
   --output-bit-depth 16
@@ -658,11 +664,13 @@ If you encounter issues not covered in this guide:
    .venv/bin/python -m pip list | grep transformation-portal
    ```
 
-3. **Check ML dependencies:**
+3. **Check the failing runtime:**
    ```bash
    make check-environment
-   make install-ml-core
    ```
+   This covers the core environment. Use the selected isolated worker and its
+   installer/validator for DA3, Depth Pro, or FastVLM failures; a main-environment
+   ML install does not repair another interpreter.
 
 4. **Review configuration:**
    The pipeline emits a run card (`*_run_card.json`) with full configuration details for debugging.

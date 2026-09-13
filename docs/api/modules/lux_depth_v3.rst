@@ -10,39 +10,37 @@ Lux Depth V3
 Overview
 --------
 
-The Lux Depth V3 module provides depth-aware image processing using Depth Anything V2
-with Apple Neural Engine optimization. Features include:
-
-- High-quality monocular depth estimation
-- CoreML acceleration for M-series chips
-- Zone-based tone mapping and atmospheric effects
-- Material-aware depth processing
+The Lux Depth V3 package exposes configuration, inference, PBR, and orchestration
+APIs lazily so importing the package does not initialize optional ML stacks.
+The maintained CLI prepares one canonical ``tp.execution.plan.v1`` before backend
+initialization and output creation. ``--plan`` emits its canonical bytes without
+running inference.
 
 Usage Example
 -------------
 
-.. code-block:: python
+Resolve a plan against an existing image directory from the repository root:
 
-    from transformation_portal.lux_depth_v3 import DepthPipeline
+.. code-block:: bash
 
-    # Initialize pipeline with CoreML optimization
-    pipeline = DepthPipeline(
-        model="depth_anything_v2",
-        use_coreml=True,
-        batch_size=4
-    )
+    .venv/bin/lux-depth-v3 --input-dir input_images --output-dir output/planned \
+      --model-key da3-metric --enable-v2 off --plan
 
-    # Process with depth awareness
-    result = pipeline.process(
-        input_path="input.jpg",
-        output_path="output.jpg",
-        depth_strength=0.8
-    )
+The input directory must contain supported images. The plan resolves inputs,
+model/license selection, and execution policy. A successful plan does not prove
+that the isolated inference runtime can execute or that output artifacts exist.
 
-Performance Notes
------------------
+Python callers that need governed cache access must prepare execution through
+``transformation_portal.lux_depth_v3.execution_lifecycle.prepare_lux_execution``
+and use ``EnhanceOrchestrator.from_prepared(...)``. Legacy structural invocation
+projections cannot authorize execution or cache access. See
+``docs/reference/EXECUTION_PLAN_V1.md`` for the core-owned contract.
 
-- **CoreML (M1/M2/M3)**: 3-5x faster than CPU
-- **MPS Backend**: Recommended for batch processing
-- **Memory**: ~2GB for 4K images with depth estimation
-- **Throughput**: 400-600 images/hour (batch processing)
+Runtime Evidence
+----------------
+
+DA3 and Depth Pro use their selected runtime contracts. Device availability,
+model weights, license acknowledgements, and complete runtime identity must be
+verified for the actual run. Optional PBR, Materials V3, segmentation, captioning,
+float-depth persistence, and output encoding are explicit configuration choices.
+No throughput, memory ceiling, or acceleration factor is guaranteed here.

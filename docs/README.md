@@ -5,10 +5,10 @@ records. Use this page for current navigation; point-in-time reports remain in
 place for audit context but are not live runbooks unless they are linked below
 as canonical documents.
 
-**Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
-`main` through PR #1721, with the May 12 architecture triage overlay for
-`docs/architecture` file dispositions, the May 12 CLI reference alignment for
-`docs/cli`, and the June 11 CI/TODO documentation alignment refresh.
+**Current baseline:** [September 12 documentation audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md),
+reproduced against the source baseline recorded there. Inventory classification,
+source review, local tests, and unexercised runtime/service paths are reported
+separately. The May 11 inventory and May 12 overlays remain historical evidence.
 
 ## Start Here
 
@@ -16,7 +16,7 @@ as canonical documents.
 | --- | --- |
 | Repository overview and setup | [Main README](../README.md) |
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
-| Documentation refresh audit | [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) |
+| Documentation refresh audit | [2026-09-12 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md) |
 | Architecture triage inventory | [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv) |
 | CLI triage inventory | [2026-05-12 CLI Inventory](governance/audit/cli-inventory-2026-05-12.csv) |
 | Prior documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
@@ -40,7 +40,7 @@ as canonical documents.
 | CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 31 workflows after the dependency-pinning signal landed. |
 | Agent / Copilot guidance | [Custom Agent Guide](guides/CUSTOM_AGENT_GUIDE.md), [Agent Quick Reference](reference/AGENT_QUICK_REFERENCE.md), [Copilot Instructions](../.github/copilot-instructions.md), [CLAUDE.md](../CLAUDE.md) | Live agent behavior is governed by `.github/agents/`, Copilot instructions, `CLAUDE.md`, and `docs/architecture/agent_governance.md`. |
 | Skill progression | [Skill Progress Tracks](guides/SKILL_PROGRESS_TRACKS.md) | Maps recurring PR review themes to evidence-linked drills, acceptance tests, and review checklists. |
-| TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 25 governed `NotImplementedError` items, 0 ungoverned TODOs, snapshot refreshed June 11, 2026. |
+| TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 25 governed `NotImplementedError` items, 0 ungoverned TODOs, 1,811 files scanned; snapshot refreshed September 12, 2026. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
 | Schema contracts | [Schema Contracts](../schemas/README.md), [Metadata Schema](schemas/METADATA_SCHEMA.md) | Root `schemas/` holds live machine-readable runtime contracts/profiles; `docs/schemas/` holds published schema contracts and schema documentation. |
@@ -81,7 +81,7 @@ current documentation map.
   duplicate or superseded material should be archived, labeled historical, or
   removed from current indexes.
 - Repo-wide classification evidence lives in
-  [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
+  [2026-09-12 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
   and its inventory CSV.
 - Architecture-specific disposition evidence lives in
   [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv).
@@ -96,4 +96,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-09-12

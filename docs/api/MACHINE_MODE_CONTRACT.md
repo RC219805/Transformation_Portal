@@ -115,7 +115,9 @@ Exit codes follow the ingest layer's `IngestExitCode` enum:
 
 ## Typed Error Structure
 
-When `error` is not `null` at the command level (for command setup/orchestration failures), it has this shape:
+Typed ingest errors have the following shape. A top-level command error must
+be handled before command-specific `data`; it may accompany empty data or
+producer-shaped data whose nested `error` is null.
 
 ```json
 {
@@ -137,6 +139,11 @@ When `error` is not `null` at the command level (for command setup/orchestration
 | `message` | string | Human-readable description (may change; parse `type` not `message`) |
 | `exit_code` | object | Structured exit code with `name` and `value` |
 | `priority` | integer | Error priority for aggregation (higher = more severe) |
+
+Generic command exceptions may contain only `type` and `message`, for example
+`{"type": "RuntimeError", "message": "extraction failed"}`. Do not require their
+nested `exit_code` or `priority`. Forward the envelope
+`exit_code`; domain-result errors retain their typed nested structure.
 
 **For domain errors within data**, errors appear in `data.error` or `data.errors` (plural for batch operations), using the same structure.
 
@@ -482,7 +489,8 @@ Aggregate summary of sidecar validation results in a directory.
 
 ❌ **Error messages:**
 - `error.message` text may be refined for clarity
-- Parse `error.type` and `error.exit_code.name`, not message text
+- Route by the envelope `exit_code`; use `error.type` and, for typed domain
+  errors, `error.exit_code.name`, rather than parsing message text
 
 ❌ **UUIDs and timestamps:**
 - If present in data (e.g., `run_id`), these are non-deterministic by design
@@ -512,21 +520,26 @@ Aggregate summary of sidecar validation results in a directory.
 ### Exit Code Handling
 
 ```bash
-# Exit code reflects operation status
-.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2
-echo $?  # 0 = success, 1-5 = specific failure modes
+# Capture status explicitly, including under set -e
+if .venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 >result.json; then
+  command_status=0
+else
+  command_status=$?
+fi
+printf 'Producer status: %s\n' "$command_status" >&2
+# result.json remains available for error-envelope handling
 
 # Route by exit code in CI
 if .venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json; then
-  echo "Validation passed"
+  echo "Validation passed" >&2
 else
   exit_code=$?
   case $exit_code in
-    1) echo "Schema validation failed" ;;
-    2) echo "8-bit conversion detected" ;;
-    3) echo "Gamma correction detected" ;;
-    4) echo "Schema drift detected" ;;
-    5) echo "Other failure (file not found, tool missing, etc.)" ;;
+    1) echo "Schema validation failed" >&2 ;;
+    2) echo "8-bit conversion detected" >&2 ;;
+    3) echo "Gamma correction detected" >&2 ;;
+    4) echo "Schema drift detected" >&2 ;;
+    5) echo "Other failure (file not found, tool missing, etc.)" >&2 ;;
   esac
   exit $exit_code
 fi
@@ -546,7 +559,10 @@ fi
 
 ## Reference Parser (Python)
 
-A minimal reference parser for consuming machine-mode JSON:
+The maintained [reference parser](../../tools/parse_machine_json.py) handles
+file/stdin input and returns 99 for malformed or unsupported input. Its human
+output is illustrative, not a stable API. The shortened routing example below
+omits that CLI error-handling wrapper:
 
 ```python
 """Reference parser for tp.meta.machine.v1 JSON output."""
@@ -571,8 +587,13 @@ def parse_machine_json(json_str: str) -> Dict[str, Any]:
 
 def route_by_command(payload: Dict[str, Any]) -> None:
     """Route by command and handle typed results."""
-    command = payload["command"]
     exit_code = payload["exit_code"]
+    command_error = payload.get("error")
+    if command_error is not None:
+        print(f"ERROR: {command_error['type']}: {command_error['message']}", file=sys.stderr)
+        sys.exit(exit_code)
+
+    command = payload["command"]
     success = payload["success"]
     data = payload["data"]
 
@@ -580,7 +601,7 @@ def route_by_command(payload: Dict[str, Any]) -> None:
         if success:
             print(f"✅ System check passed (all_required_ok={data['all_required_ok']})")
         else:
-            print(f"❌ System check failed: {data['errors']}")
+            print(f"❌ System check failed: {data['errors']}", file=sys.stderr)
 
     elif command == "extract":
         if success:
@@ -588,34 +609,34 @@ def route_by_command(payload: Dict[str, Any]) -> None:
             print(f"   Elapsed: {data['elapsed_seconds']:.3f}s")
         else:
             error = data["error"]
-            print(f"❌ Extract failed: {data['input_path']}")
-            print(f"   Error type: {error['type']}")
-            print(f"   Exit code: {error['exit_code']['name']} ({error['exit_code']['value']})")
+            print(f"❌ Extract failed: {data['input_path']}", file=sys.stderr)
+            print(f"   Error type: {error['type']}", file=sys.stderr)
+            print(f"   Exit code: {error['exit_code']['name']} ({error['exit_code']['value']})", file=sys.stderr)
 
     elif command == "validate":
         if success:
             print(f"✅ Validation passed: {data['sidecar_path']}")
         else:
-            print(f"❌ Validation failed: {data['sidecar_path']}")
+            print(f"❌ Validation failed: {data['sidecar_path']}", file=sys.stderr)
             dominant = data["dominant_error"]
-            print(f"   Dominant error: {dominant['type']} ({dominant['exit_code']['name']})")
-            print(f"   Total errors: {len(data['errors'])}")
+            print(f"   Dominant error: {dominant['type']} ({dominant['exit_code']['name']})", file=sys.stderr)
+            print(f"   Total errors: {len(data['errors'])}", file=sys.stderr)
 
     elif command == "extract-batch":
         counts = data["summary_counts"]
         print(f"Batch result: {counts['success']}/{counts['total']} succeeded")
         if not success:
             dominant = data["dominant_error"]
-            print(f"   Dominant error: {dominant['type']}")
-            print(f"   Failed by exit code: {counts['by_exit_code']}")
+            print(f"   Dominant error: {dominant['type']}", file=sys.stderr)
+            print(f"   Failed by exit code: {counts['by_exit_code']}", file=sys.stderr)
 
     elif command == "summarize":
         print(f"Sidecars: {data['valid']}/{data['total_sidecars']} valid")
         if not success:
-            print(f"   Errors: {data['errors']}")
+            print(f"   Errors: {data['errors']}", file=sys.stderr)
 
     else:
-        print(f"Unknown command: {command}")
+        print(f"Unknown command: {command}", file=sys.stderr)
 
     sys.exit(exit_code)
 
@@ -645,12 +666,22 @@ if __name__ == "__main__":
 # Parse from stdin
 .venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 | .venv/bin/python tools/parse_machine_json.py
 
-# Exit code forwarding
-.venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json | .venv/bin/python tools/parse_machine_json.py
-echo $?  # Parser exits with same code as CLI
+# Capture a failure envelope before parsing it, even under set -e
+if .venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json >result.json; then
+  command_status=0
+else
+  command_status=$?
+fi
+if .venv/bin/python tools/parse_machine_json.py result.json; then
+  parser_status=0
+else
+  parser_status=$?
+fi
+printf 'Producer: %s; parser: %s\n' "$command_status" "$parser_status" >&2
 ```
 
 ---
+
 
 ## Reference Parser (jq + bash)
 
@@ -662,14 +693,29 @@ For bash automation without Python:
 #!/bin/bash
 set -euo pipefail
 
-result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$1")
-exit_code=$?
-
-# Validate schema
-schema=$(echo "$result" | jq -r '.schema')
-if [[ "$schema" != "tp.meta.machine.v1" ]]; then
-  echo "ERROR: Unsupported schema: $schema" >&2
+if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$1"); then
+  command_status=0
+else
+  command_status=$?
+fi
+# Only stdout is captured; producer diagnostics remain on stderr.
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
   exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
+if [[ "$exit_code" -ne "$command_status" ]]; then
+  echo "ERROR: Process/envelope exit-code mismatch" >&2
+  exit 99
+fi
+if printf '%s\n' "$result" | jq -e '.error != null' >/dev/null; then
+  printf '%s\n' "$result" | jq -r '.error | "\(.type): \(.message)"' >&2
+  exit "$exit_code"
 fi
 
 # Route by exit code
@@ -692,8 +738,30 @@ fi
 #!/bin/bash
 set -euo pipefail
 
-result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$1")
-exit_code=$?
+if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$1"); then
+  command_status=0
+else
+  command_status=$?
+fi
+# Only stdout is captured; producer diagnostics remain on stderr.
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
+  exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
+if [[ "$exit_code" -ne "$command_status" ]]; then
+  echo "ERROR: Process/envelope exit-code mismatch" >&2
+  exit 99
+fi
+if printf '%s\n' "$result" | jq -e '.error != null' >/dev/null; then
+  printf '%s\n' "$result" | jq -r '.error | "\(.type): \(.message)"' >&2
+  exit "$exit_code"
+fi
 
 success=$(echo "$result" | jq -r '.success')
 sidecar=$(echo "$result" | jq -r '.data.sidecar_path')
@@ -718,8 +786,30 @@ fi
 #!/bin/bash
 set -euo pipefail
 
-result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch "$1")
-exit_code=$?
+if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch "$1"); then
+  command_status=0
+else
+  command_status=$?
+fi
+# Only stdout is captured; producer diagnostics remain on stderr.
+# Validate JSON and schema before interpreting status, errors, or command data.
+if ! printf '%s\n' "$result" | jq -e '.schema == "tp.meta.machine.v1"' >/dev/null; then
+  echo "ERROR: Invalid JSON or unsupported schema" >&2
+  exit 99
+fi
+if ! exit_code=$(printf '%s\n' "$result" | jq -er \
+  '.exit_code | select(type == "number") | select(. >= 0 and . <= 255 and . == floor)'); then
+  echo "ERROR: Invalid envelope exit_code: expected integer in 0..255" >&2
+  exit 99
+fi
+if [[ "$exit_code" -ne "$command_status" ]]; then
+  echo "ERROR: Process/envelope exit-code mismatch" >&2
+  exit 99
+fi
+if printf '%s\n' "$result" | jq -e '.error != null' >/dev/null; then
+  printf '%s\n' "$result" | jq -r '.error | "\(.type): \(.message)"' >&2
+  exit "$exit_code"
+fi
 
 total=$(echo "$result" | jq '.data.summary_counts.total')
 success=$(echo "$result" | jq '.data.summary_counts.success')

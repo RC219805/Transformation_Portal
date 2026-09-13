@@ -10,27 +10,24 @@ Scene Types
 Overview
 --------
 
-Scene type detection and classification for architectural rendering workflows.
-Automatically identifies scene characteristics to optimize processing parameters.
-
-Supported Scene Types
----------------------
-
-- **Interior**: Indoor spaces (living rooms, kitchens, bedrooms)
-- **Exterior**: Outdoor facades and landscaping
-- **Aerial**: Drone and elevated photography
-- **Detail**: Close-up architectural details and materials
+This module defines a canonical taxonomy and normalizes supplied labels. It does
+not inspect image pixels or automatically recommend processing parameters.
 
 Usage Example
 -------------
 
 .. code-block:: python
 
-    from transformation_portal.scene_types import detect_scene_type
+    from transformation_portal.scene_types import (
+        get_scene_type_description,
+        normalize_scene_type,
+        validate_scene_type,
+    )
 
-    # Detect scene type from image
-    scene_type = detect_scene_type("estate_exterior.jpg")
-    print(scene_type)  # SceneType.EXTERIOR
+    scene_type = normalize_scene_type("pool")
+    assert scene_type == "exterior_pool"
+    assert validate_scene_type(scene_type)
+    print(get_scene_type_description(scene_type))
 
-    # Get recommended processing parameters
-    params = scene_type.get_recommended_params()
+Unknown labels raise ``ValueError`` during normalization. Enumerate the current
+taxonomy with ``list_scene_types()`` rather than assuming a fixed four-item list.

@@ -4,7 +4,7 @@
 **Date:** 2026-02-01
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
-**Related:** PR #774, Security Policy (SECURITY.md)
+**Related:** PR #774, Security Policy (../../SECURITY.md)
 
 > **2026-05-16 renumbering note:** Originally filed as `ADR-0015` (4-digit prefix). Renumbered to `ADR-015` to match the 3-digit convention used by every other ADR in this series. No content changes.
 
@@ -296,12 +296,12 @@ If a PR introduces non-commercial models without `license_restriction` marker:
 ### External
 - [Depth Anything V3 Repository](https://github.com/ByteDance/depth-anything-v3)
 - [CC BY-NC 4.0 License](https://creativecommons.org/licenses/by-nc/4.0/)
-- [Transformation Portal Security Policy](SECURITY.md)
+- [Transformation Portal Security Policy](../../SECURITY.md)
 
 ### Internal
 - [Repository Organization](../governance/REPO_ORGANIZATION.md)
 - [v2.0.0 Implementation Plan](V2_0_0_IMPLEMENTATION_PLAN.md)
-- [Quality Firewall Quick Reference](../../QUALITY_FIREWALL_QUICK_REF.md)
+- [Quality Firewall Quick Reference](../implementation_notes/QUALITY_FIREWALL_QUICK_REF.md)
 
 ---
 

@@ -1,5 +1,11 @@
 # Quick Reference: Update Branch Protection Settings
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 ## ✅ COMPLETED (2026-02-03)
 
 **Status:** Branch protection successfully updated and verified via PR #804.

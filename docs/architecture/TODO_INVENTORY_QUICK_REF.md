@@ -1,11 +1,29 @@
 # TODO Inventory Quick Reference
 
-**Version:** 2.4.8 | **Date:** 2026-06-11 | **Status:** ACTIVE
+**Version:** 2.4.9 | **Date:** 2026-09-12 | **Status:** ACTIVE
 
 **Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md)
 **Action Plan:** [docs/analysis/TODO_ACTION_PLAN.md](../analysis/TODO_ACTION_PLAN.md)
 
 ---
+
+## Current Scanner Baseline
+
+September 12, 2026: **25 governed `NotImplementedError` items, 0 ungoverned
+items, 1,811 files scanned**. Regenerate with
+`./.venv/bin/python scripts/validation/scan_todo_inventory.py --write-snapshot`.
+The scanner establishes governance-reference coverage, not completed features,
+production readiness, or a current P0/P1 issue count. See the
+[finding ledger](../governance/audit/documentation-findings-2026-09-12.md) for
+reproduced gaps and acceptance criteria.
+
+## Historical Planning Context
+
+The prior tables, estimates, task ownership labels, release criteria, and
+completion entries below preserve the earlier planning record. They do not
+certify today's repository health or remotely enforced settings. Current
+branch-protection readback is a separate dated snapshot in the
+[branch protection guide](../ci/BRANCH_PROTECTION_SETUP.md).
 
 ## At A Glance
 

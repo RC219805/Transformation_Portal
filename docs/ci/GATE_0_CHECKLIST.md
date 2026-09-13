@@ -1,5 +1,11 @@
 # Gate 0: CI Baseline Stabilization Checklist
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 **Priority**: P0 (blocks all tranche work)
 **Owner**: Repository Maintainer
 **Timeline**: 2-3 days

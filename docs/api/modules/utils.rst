@@ -9,23 +9,21 @@ Utilities
 Overview
 --------
 
-Utility modules for common operations:
-
-- **File I/O**: Image loading with metadata preservation
-- **Logging**: Structured logging with performance metrics
-- **Validation**: Input validation and schema checking
-- **Caching**: LRU caching for expensive operations
+The package exposes the ``performance`` and ``error_handling`` utility modules.
+It does not export ``load_image_with_metadata`` or ``setup_logging`` functions.
 
 Usage Example
 -------------
 
 .. code-block:: python
 
-    from transformation_portal.utils import load_image_with_metadata, setup_logging
+    from transformation_portal.utils.performance import cache_result
 
-    # Configure logging
-    logger = setup_logging("processing.log", level="INFO")
+    @cache_result(maxsize=16)
+    def square(value: int) -> int:
+        return value * value
 
-    # Load image with metadata
-    image, metadata = load_image_with_metadata("input.jpg")
-    logger.info(f"Loaded {metadata['width']}x{metadata['height']} image")
+    assert square(4) == 16
+
+The cache is process-local. It is distinct from Lux's governed depth cache and
+does not establish model/runtime identity or persistent artifact authority.

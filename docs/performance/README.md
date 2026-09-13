@@ -5,7 +5,8 @@
 The Transformation Portal performance ledger provides regression detection for pipeline runtime performance. It parses manifests from batch runs, computes statistics, and compares against baselines to detect performance degradation.
 
 **Status:** Phase 2 tooling (v2.0.1+)
-**Enforcement:** Manual workflow, not a CI gate
+**Enforcement:** This ledger CLI is a manual comparison tool. Scheduled Lux and
+APEX workflows have separate evidence contracts; see the policy below.
 
 Current gate authority: [Performance Gate Policy](GATE_POLICY.md).
 
@@ -23,6 +24,7 @@ After a successful production run:
 ```bash
 python tools/performance_ledger.py \
   --manifests-dir ./output/lux_depth_v3_prod/manifests \
+  --backend da3 --quality-tier apex \
   --output ./docs/performance/baselines/baseline_v2.0.0_da3_apex.json
 ```
 
@@ -53,7 +55,7 @@ baseline_{version}_{backend}_{tier}.json
 - `baseline_v2.0.0_da3_standard.json` - v2.0.0 with DA3, standard quality
 - `baseline_v2.1.0_depth_pro_experimental.json` - v2.1.0 with Depth Pro (experimental)
 
-### Baseline Directory Structure
+### Illustrative Baseline Directory Structure
 
 ```
 docs/performance/baselines/
@@ -127,7 +129,10 @@ python tools/performance_ledger.py \
 
 ---
 
-## Baseline Schema
+## Historical Example Baseline Schema
+
+The versions and measurements below are a retained 2026-02 example, not the
+current dependency baseline or evidence of a current run.
 
 ```json
 {
@@ -240,11 +245,12 @@ Investigate slowdown before merging changes.
 lux-depth-v3 \
   --input-dir ./input_images \
   --output-dir ./output/baseline_run \
-  --quality-tier apex
+  --quality-tier apex --materials-v3 off
 
 # Capture baseline
 python tools/performance_ledger.py \
   --manifests-dir ./output/baseline_run/manifests \
+  --backend da3 --quality-tier apex \
   --output ./docs/performance/baselines/baseline_v2.0.0_da3_apex.json
 
 # Commit baseline
@@ -259,7 +265,7 @@ git commit -m "perf: capture v2.0.0 DA3 APEX baseline (20 images)"
 lux-depth-v3 \
   --input-dir ./input_images \
   --output-dir ./output/feature_test \
-  --quality-tier apex
+  --quality-tier apex --materials-v3 off
 
 # Compare against baseline
 python tools/performance_ledger.py \
@@ -270,10 +276,14 @@ python tools/performance_ledger.py \
 # Review report
 cat ./output/perf_check.md
 
-# If OK, merge. If regression, investigate.
+# Review this evidence alongside exact-head required checks and other gates.
 ```
 
-### Scenario 3: Nightly Performance Tracking
+### Scenario 3: Optional Nightly Performance Tracking Example
+
+This illustrates a potential ledger invocation, not the implementation in
+`nightly.yml` or `performance-monitor.yml`. Their evidence limits are documented
+in [Performance Gate Policy](GATE_POLICY.md).
 
 ```bash
 # In CI nightly workflow
@@ -357,11 +367,11 @@ Potential improvements for v2.1.0+:
 
 ## References
 
-- [ADR-023: Post-PR #841 Hardening Strategy](../architecture/decisions/ADR-023-post-pr841-hardening.md)
+- [ADR-023: Post-PR #841 Hardening Strategy](../_archive/2026-Q1-consolidation/ADR-023-post-pr841-hardening.md)
 - [Performance Ledger Implementation](../../tools/performance_ledger.py)
 - [Manifest Schema Documentation](../../src/transformation_portal/lux_depth_v3/manifest.py)
 
 ---
 
-**Last Updated:** 2026-02-05
+**Last Updated:** 2026-09-12 (workflow evidence boundaries; historical samples retained)
 **Maintainer:** Transformation Portal Architect

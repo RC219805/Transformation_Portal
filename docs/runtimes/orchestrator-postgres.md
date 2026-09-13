@@ -3,7 +3,7 @@
 **Document Status:** Active operator runbook for the Postgres-backed
 orchestrator state. The memory backend remains the default; Postgres is
 opt-in via env vars.
-**Last Updated:** 2026-08-30
+**Last Updated:** 2026-09-12
 **Related Docs:**
 - `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` (the Phase 0
   baseline that introduced this work)
@@ -30,8 +30,9 @@ With the Postgres backend enabled:
 - Reconnecting SSE clients can replay stored per-job events after a
   restart by supplying `Last-Event-ID`.
 
-The wire shape of `/v1/jobs` and `/v2/jobs` is unchanged. The runtime
-swap is a single env flip. With the Postgres backend enabled,
+The wire shape of `/v1/jobs` and `/v2/jobs` is unchanged. Enable the runtime
+only after setting the database URL, applying migrations, and preserving the
+required API-key environment in each backend/worker terminal. With the Postgres backend enabled,
 successfully persisted events receive a per-job monotonic sequence,
 emitted as the SSE `id`. A reconnect to
 `/v1/jobs/{job_id}/events` or `/v2/jobs/{job_id}/events` with a
@@ -64,7 +65,8 @@ make db-upgrade
 # 4. (Optional) verify the schema
 docker compose exec postgres psql -U tp -d transformation_portal -c '\d+ jobs'
 
-# 5. Start the orchestrator with the durable backend
+# 5. In this same terminal, set your existing backend API key
+: "${TP_API_KEY:?Set TP_API_KEY before starting the backend}"
 export TP_ORCHESTRATOR_STATE_BACKEND=postgres
 make run-backend-local
 ```
@@ -81,8 +83,10 @@ Indices: `jobs(created_at)`, `jobs(state)`, `jobs(finished_at)`,
 `job_artifacts(job_id)`, `job_events(job_id)`, and a unique
 `job_events(job_id, seq)`.
 
-All three tables are created by the initial Alembic migration
-`migrations/versions/0001_initial_orchestrator_schema.py`.
+The three job tables are created by
+`migrations/versions/0001_initial_orchestrator_schema.py`. Apply the complete
+migration chain: `0002_operational_audit_events.py` additionally creates the
+operational audit store used by the app. Do not stop at revision 0001.
 
 ## Migrations
 
@@ -103,44 +107,46 @@ make db-revision MESSAGE="add foo column to jobs"
 
 ## Concurrency
 
-Every `JobRepository.update`, `append_log`, and `set_artifacts` call
-runs an optimistic-concurrency check against `jobs.version` and
-retries up to three times on conflict before raising
-`RepositoryError`. This pairs well with the asyncio single-loop
-model used by the FastAPI orchestrator and is robust enough for the
-horizontal-worker model that Phase 2 will introduce.
+`update` and `append_logs` select the job row with `FOR UPDATE` and hold its
+row lock through mutation and commit; `append_log` delegates to `append_logs`.
+`set_artifacts` instead uses a version-guarded compare-and-set with bounded
+retries, raising `RepositoryError` after exhausted conflicts. Read-only
+`get`/`list` do not take this update lock. See
+[`postgres.py`](../../src/transformation_portal/orchestrator/storage/postgres.py).
 
-For row-level reads the backend uses `select` without `FOR UPDATE`;
-read-modify-write paths re-fetch + re-compare-and-set inside a single
-async transaction.
+Durable shared state is only one prerequisite for external workers. Queue
+configuration, worker leases, tenant identity, and artifact storage need their
+own contract and service-backed validation.
 
 ## Tests
+
+The Postgres fixtures **drop and recreate tables** through `repo.reset()`.
+Use a separate disposable database, never the database serving local user jobs
+or a shared/production environment. Set `TP_TEST_POSTGRES_URL` to that database
+and apply migrations there explicitly:
 
 ```bash
 # Memory backend only (offline, no Postgres required).
 make test-orchestrator-contract
 
-# Memory + Postgres backends (parametrized).
-docker compose up -d postgres
-make db-upgrade
-TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \
-  make test-orchestrator-postgres-contract
-
-# Postgres-backed app route authority smoke (manual/opt-in).
-TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \
-  make test-orchestrator-postgres-app-contract
+# Operator must supply a disposable test database URL first.
+: "${TP_TEST_POSTGRES_URL:?Set this to a disposable Postgres database}"
+TP_DATABASE_URL="$TP_TEST_POSTGRES_URL" make db-upgrade
+make test-orchestrator-postgres-contract
+make test-orchestrator-postgres-app-contract
 ```
 
-`tests/orchestrator/conftest.py` auto-skips the Postgres branch when
-`TP_TEST_POSTGRES_URL` is unset, so the offline `make test-fast` and
-`make ci` lanes stay green without a database.
+Without `TP_TEST_POSTGRES_URL`, repository-contract collection uses the memory
+backend only and the app-authority smoke skips Postgres. A passing offline lane
+therefore supplies no live Postgres evidence. The app smoke also stubs job
+dispatch; it tests durable route authority rather than executing a model.
 
 ## Production posture
 
 | Concern | Recommendation |
 | --- | --- |
 | Provider | Any managed Postgres 16+ that supports `JSONB`. Section 9 of the gap doc is the canonical decision tree. |
-| Pool size | `AsyncEngine` default plus `pool_pre_ping=True` and `pool_recycle=300`. Tune with `TP_DB_POOL_SIZE` once Phase 6 metrics are wired. |
+| Connection pool | `AsyncEngine` defaults with `pool_pre_ping=True` and `pool_recycle=300`. There is no `TP_DB_POOL_SIZE` runtime option; changing pool tuning requires a separate implementation and validation. |
 | Backups | Out of scope for Phase 1.B; document in the provider's runbook. The orchestrator never assumes durability beyond commit. |
 | Schema changes | Always go through Alembic and `make db-revision` so the migration graph stays linear. |
 | Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The restart sweeper marks orphaned active jobs `worker_lost` with `error.code = worker_lost_on_restart`. |

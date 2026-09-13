@@ -98,7 +98,7 @@ Usage:
 Key Concepts:
     - V2 Enhancement: Optional AI-powered refinement stage (enabled by default)
       * Use --enable-v2 "off" to skip V2 entirely (PBR-only workflows)
-      * Use --v2-preset "none" to skip V2 preset while keeping validation
+      * Use --v2-preset "none" to normalize the plan to a disabled V2 stage
 
     - Quality vs Preset:
       * --quality-tier: Controls output quality

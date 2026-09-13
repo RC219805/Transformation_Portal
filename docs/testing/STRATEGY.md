@@ -1,7 +1,7 @@
 # Test Strategy
 
 **Document Status:** Active
-**Last Updated:** 2026-03-23
+**Last Updated:** 2026-09-12
 **Version:** 1.2.0
 **Related ADRs:** ADR-034 (Benchmark Exclusion), ADR-044 (Test Marker Enforcement)
 
@@ -27,8 +27,8 @@ This document defines the testing strategy for the Transformation Portal reposit
 |-----------|-------|
 | **Markers** | `unit`, `security`, `regression`, `golden`, `integration` (any non-ML category marker) |
 | **CI Selection** | `(unit or security or regression or golden or integration) and not ml and not slow and not benchmark` |
-| **Duration** | < 2 minutes |
-| **Dependencies** | Standard library, numpy, PIL, pyyaml |
+| **Duration** | Workload and runner dependent; inspect the current run. |
+| **Dependencies** | `requirements-ci.txt` plus `requirements/tools-archive.txt`; no optional ML install. |
 | **Coverage Target** | 30% minimum for core modules |
 
 **Note:** Per ADR-044, all tests must have a category marker. CI uses **positive marker selection** to explicitly select core test categories.
@@ -55,9 +55,9 @@ pytest -v tests/ -ra -m "(unit or security or regression or golden or integratio
 |-----------|-------|
 | **Markers** | `ml` (without `slow` or `integration`) |
 | **CI Selection** | `ml and not slow and not integration and not benchmark` |
-| **Duration** | < 10 minutes |
+| **Duration** | Workload and runner dependent. |
 | **Dependencies** | torch (CPU), transformers (offline mode) |
-| **Test Ceiling** | 75 tests (enforced by `tests/enforcement/test_ml_fast_collection_contract.py`) |
+| **Collection Ceiling** | Reconstruction subset: 80 selected tests in `tests/enforcement/test_ml_fast_collection_contract.py`; this is not a ceiling for the entire ML tier. |
 
 **Requirements:**
 - Must operate in offline mode (`TRANSFORMERS_OFFLINE=1`, `HF_HUB_OFFLINE=1`)
@@ -81,7 +81,10 @@ pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" 
 | **Duration** | Nightly/scheduled only |
 | **Dependencies** | Full ML stack, model downloads |
 
-**Execution:** Manual or scheduled workflows only. Excluded from PR gating CI.
+**Execution:** Slow/model-backed integration belongs in manual or scheduled lanes.
+Non-ML tests marked `integration` are included by the core PR expression; the
+ML-fast PR expression excludes `integration`. Read the complete expression,
+not the marker name alone.
 
 ---
 
@@ -95,10 +98,10 @@ pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" 
 | **Duration** | Scheduled (nightly/weekly) |
 | **Execution** | Excluded from default pytest runs |
 
-**Gate Thresholds (Quality Firewall):**
-- Block if p95 latency increases by > 10%
-- Block if mean latency increases by > 15%
-- Block if failure rate > 0% for Golden Path stages
+**Gate authority:** [Performance Gate Policy](../performance/GATE_POLICY.md).
+The ledger defaults are 10% p95 and 15% mean regression thresholds; these are
+not universal PR-blocking wall-clock gates. Scheduled lanes require their own
+valid execution and baseline evidence.
 
 **CI Exclusion:** Per ADR-034, benchmark tests are excluded from PR gating via:
 - Marker expression: `not benchmark`
@@ -202,7 +205,11 @@ def mock_depth_model(deterministic_rng):
 
 ### Canonical Workflow
 
-**`build.yml`** is the canonical PR gating workflow. It is the only workflow required by branch protection.
+**`build.yml`** is the canonical PR gating workflow. A read-only GitHub snapshot
+on 2026-09-12 required its `CI Gate` status for main, with strict checking.
+The workflow
+[classifies PR changes](../ci/CHANGE_AWARE_CI.md); a lightweight run does not
+exercise the full matrix. Other workflow failures are separate signals.
 
 | Workflow | Role | Marker Semantics | Typecheck Policy |
 |----------|------|------------------|------------------|
@@ -250,7 +257,7 @@ For tests validating deterministic behavior:
 2. [ ] Add required markers (`@pytest.mark.unit`, `@pytest.mark.security`, etc.)
 3. [ ] Use fixtures from `conftest.py` where appropriate
 4. [ ] Ensure offline operation for ML tests
-5. [ ] Update `FAST_ML_SELECTED_CEILING` if adding ML-fast tests
+5. [ ] Check reconstruction collection against `FAST_ML_SELECTED_CEILING`; changes to its budget require scoped review, not an automatic increase
 6. [ ] Run targeted tests locally before pushing
 
 ### Marker Application
@@ -331,10 +338,15 @@ TP_RUN_BENCHMARKS=1 pytest -v tests/benchmarks/ -m "benchmark"
 | Core tests | 30% | `--cov-fail-under=30` in build.yml |
 | ML tests | — | Coverage disabled for faster PR feedback |
 
-**Aspirational Per-Module Targets (Not Yet Enforced):**
+**Current package and file floors:**
 
-These targets guide new test development. Per-module enforcement
-will be added once tooling supports granular thresholds.
+The core job also runs `scripts/ci/check_per_package_coverage.py`,
+`scripts/ci/check_per_package_branch_coverage.py`, and
+`scripts/ci/check_cold_zone_touched_files.py` against generated coverage. Their
+source constants are the authority for individual floors and exclusions.
+ML sampled coverage is separate advisory evidence.
+
+**Original aspirational targets (historical planning):**
 
 | Module | Target Coverage |
 |--------|-----------------|
@@ -344,15 +356,15 @@ will be added once tooling supports granular thresholds.
 
 ### Performance Gates (Quality Firewall)
 
-- p95 latency regression: > 10% blocks merge
-- Mean latency regression: > 15% blocks merge
-- Failure rate: > 0% blocks merge (for required stages)
+Use [Performance Gate Policy](../performance/GATE_POLICY.md) for tier and
+evidence requirements. Ledger thresholds do not make synthetic/shadow runs
+proof of real inference or host-speed comparisons mandatory in fast PR CI.
 
 ---
 
 ## References
 
 - [pyproject.toml](../../pyproject.toml) - Pytest marker definitions
-- [conftest.py](../conftest.py) - Shared fixtures
-- [ADR-034](../architecture/adr/) - Benchmark exclusion policy
+- [conftest.py](../../tests/conftest.py) - Shared fixtures
+- [ADR-034](../architecture/ADR-034-benchmark-exclusion-from-pr-gating.md) - Benchmark exclusion policy
 - [CODEBASE_AUDIT_2026_Q1.md](../architecture/CODEBASE_AUDIT_2026_Q1.md) - Testing assessment

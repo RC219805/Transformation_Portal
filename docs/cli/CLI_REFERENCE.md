@@ -1,6 +1,6 @@
 # Transformation Portal CLI Reference
 
-Last updated: 2026-05-12
+Last source review: 2026-09-12
 
 This is the current operator reference for repository CLI entrypoints. It is a
 live support document, not a historical release report. Prefer the Makefile and
@@ -9,8 +9,9 @@ checked-in lock contracts over ad-hoc `pip install` instructions.
 ## Environment Baseline
 
 ```bash
-source .venv/bin/activate
+make venv
 make install-core
+source .venv/bin/activate
 make check-environment
 ```
 
@@ -60,12 +61,13 @@ Current commands:
 - `version`: print package version.
 - `info`: print runtime capability information.
 
-Example:
+Supply an existing recipe and image inputs; the recipe path below is a placeholder,
+not a bundled fixture:
 
 ```bash
 .venv/bin/python -m transformation_portal process \
   --input "input_images/*.jpg" \
-  --recipe config/recipes/signature_estate.yaml \
+  --recipe /path/to/your/recipe.yaml \
   --output output/signature_estate \
   --mode auto \
   --log-level info
@@ -74,8 +76,8 @@ Example:
 Recipe helpers:
 
 ```bash
-.venv/bin/python -m transformation_portal list-recipes --dir config/recipes
-.venv/bin/python -m transformation_portal validate-recipe config/recipes/signature_estate.yaml --verbose
+.venv/bin/python -m transformation_portal list-recipes
+.venv/bin/python -m transformation_portal validate-recipe /path/to/your/recipe.yaml --verbose
 ```
 
 ## Presence Security
@@ -115,6 +117,9 @@ Commercial APEX runs should use the Apache-2.0 DA3 selector:
   --depth-backend da3 \
   --model-key da3-metric \
   --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend efficientsam \
+  --strict-segmentation \
   --pbr on \
   --cache-depth on \
   --output-bit-depth 16 \
@@ -147,7 +152,11 @@ Current option groups include:
   `--allow-semantic-fallback`, `--max-workers`, `--max-gpu-workers`,
   `--overwrite`, and `--force-depth`.
 
-Repo-governed runtime setup commands are documented in `AGENTS.md` and include:
+Install only the optional runtimes selected for your run. The DA3 runtime uses
+its own target-owned Python 3.11 environment; core Python 3.12 remains supported.
+Cache access additionally requires the complete governed runtime and execution
+identity; `--cache-depth on` alone does not authorize it. Repo-governed commands
+are documented in `AGENTS.md` and include:
 
 ```bash
 make install-ml-core
@@ -157,6 +166,12 @@ make install-ml-core
 ./scripts/setup/install_fastvlm_runtime.sh
 make check-fastvlm-runtime
 ```
+
+`--plan` resolves the canonical execution plan without inference or output
+creation. A successful plan is not model execution or produced-artifact evidence.
+For the maintained backend, export `TP_API_KEY` before `make run-backend-local`
+or `make run-backend-local-noreload`; see the
+[orchestrator quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md).
 
 ## PBR Helper CLI
 

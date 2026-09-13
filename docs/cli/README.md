@@ -20,8 +20,9 @@ under `docs/historical/cli/` and are retained as audit evidence only.
 Use the repository-managed environment instead of ad-hoc dependency installs:
 
 ```bash
-source .venv/bin/activate
+make venv
 make install-core
+source .venv/bin/activate
 make check-environment
 ```
 

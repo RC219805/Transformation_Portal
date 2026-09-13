@@ -14,21 +14,33 @@ Command-line tools for image and video processing pipelines.
 Available Console Scripts
 -------------------------
 
-The package installs the following command-line tools:
+The maintained entrypoints are declared in ``pyproject.toml``:
 
-- **transformation-portal**: Main CLI entry point
+- ``lux-depth-v3``: Lux execution planning and image/depth processing.
+- ``depth-aware-dof``: depth-aware focus rendering.
+- ``presence-security``: Presence Compiler parameter, anchor, and watermark tools.
+- ``luxury-tiff-batch``: TIFF batch finishing.
+- ``transform-render``, ``transform-process``, ``transform-analyze``: compatibility
+  command groups.
+
+The recipe CLI is invoked with ``python -m transformation_portal``; there is no
+installed ``transformation-portal`` console script or ``serve`` command in
+``transformation_portal.cli``.
 
 Usage Examples
 --------------
 
 .. code-block:: bash
 
-    # Basic image processing
-    transformation-portal process input.jpg output.jpg
+    .venv/bin/python -m transformation_portal --help
+    .venv/bin/python -m transformation_portal version
+    .venv/bin/python -m transformation_portal list-recipes
+    .venv/bin/lux-depth-v3 --help
 
-    # Batch processing
-    transformation-portal batch input_dir/ output_dir/
+To launch the backend, set ``TP_API_KEY`` in the same shell first, then run
+``make run-backend-local`` or ``make run-backend-local-noreload``. The direct
+no-reload equivalent is:
 
-    # Check version and help
-    transformation-portal --version
-    transformation-portal --help
+.. code-block:: bash
+
+    .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8000

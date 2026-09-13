@@ -44,9 +44,9 @@ The **CI Gate pattern** provides a single, stable check that aggregates all crit
 ```yaml
 ci_gate:
   name: CI Gate  # Stable name - never changes
-  needs: [lint, test, generate-manifest]
+  needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, lint, typecheck, test, generate-manifest]
   if: ${{ always() }}  # Runs even if upstream fails
-  # Checks that all upstream jobs succeeded
+  # Enforces results according to preflight run_full/run_frontdoor
 ```
 
 **Benefits:**
@@ -59,9 +59,13 @@ ci_gate:
 **Current Implementation:**
 - Workflow: `.github/workflows/build.yml`
 - Job name: `CI Gate` (require this in branch protection)
-- Aggregates: `lint`, `test` (all matrix combinations), `generate-manifest`
+- Aggregates: `preflight`, `lightweight`, `dependency-constraints`, `frontdoor-contract`, `lint`, `typecheck`, `test` (all matrix combinations), and `generate-manifest`.
+- Lightweight and dependency checks must succeed; full mode also enforces lint/typecheck/test/manifest and the frontdoor job when requested.
 
-**See:** `docs/operations/branch_protection_setup.md` for configuration details.
+**Snapshot:** Read-only GitHub verification on 2026-09-12 showed only `CI Gate`
+required for main, with strict up-to-date checking. Workflow definitions alone
+do not establish remote enforcement. See
+[Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md).
 
 ---
 
@@ -74,16 +78,21 @@ ci_gate:
 Purpose: Validate that code is importable, tests pass, and manifests/config expectations hold.
 
 **Job structure:**
-- `lint` - Repo-configured linting (flake8, pylint)
+- `preflight` - Change classification; docs paths under setup/workflows can still request full CI
+- `lightweight`, `dependency-constraints` - Always required after classification
+- `frontdoor-contract` - Conditional frontdoor validation
+- `lint` - CI-pinned lint checks
+- `typecheck` - Blocking Python 3.12 mypy whitelist
 - `test` - Matrix-expanded test jobs (Python 3.11/3.12, core/ml tests)
 - `generate-manifest` - Montecito manifest generation
 - `CI Gate` - **Aggregator job** (this is what branch protection requires)
 
-**Branch protection:** Require only `CI Gate` (aggregates all upstream jobs)
+**Branch protection snapshot:** `CI Gate` was the sole required check on 2026-09-12.
+Other failing workflows still require triage according to their scope.
 
 Local equivalents:
-- `python -m pytest -q`
-- `pre-commit run -a` (if pre-commit is configured)
+- `make ci-quick` and `make test-fast` for local development
+- Exact core/ML commands in [Test Strategy](../testing/STRATEGY.md) for job parity
 
 ---
 

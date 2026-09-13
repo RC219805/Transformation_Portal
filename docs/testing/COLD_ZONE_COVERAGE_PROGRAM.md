@@ -35,6 +35,11 @@ the goal.**
 
 ## 2. Feasibility audit (2026-05-12)
 
+> Historical audit and sequencing below are retained as planning evidence.
+> Later source and floor changes supersede its import/coverage snapshots; use
+> [Test Strategy](STRATEGY.md) and the current coverage scripts for execution.
+> Do not reopen a completed seam solely from these earlier findings.
+
 Five strategy assumptions failed audit and have been revised. The rest hold.
 
 ### 2.1 VLM import seam is broken at the package level

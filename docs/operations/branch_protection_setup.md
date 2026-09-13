@@ -1,5 +1,7 @@
 # Branch Protection Configuration Guide
 
+> Historical CI Gate design snapshot, classified 2026-09-12. The job lists, retired `ci.yml` diagnostics, and branch settings below are not current remote configuration. Follow [Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md) and inspect `.github/workflows/build.yml` for current dependencies. Required checks are enforced by live repository settings, not by this document.
+
 ## Overview
 
 This guide documents the **CI Gate pattern**: a stable branch protection approach that doesn't break when the test matrix changes.

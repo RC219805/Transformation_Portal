@@ -1,5 +1,11 @@
 # CI Fixes and Optimizations Summary
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 ## Overview
 This document summarizes all fixes and optimizations applied to achieve passing CI runs and optimized functionality in the Transformation Portal repository.
 

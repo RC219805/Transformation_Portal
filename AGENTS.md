@@ -60,6 +60,15 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   [docs/architecture/ARCHITECTURE_CLEANUP_BOARD.md](docs/architecture/ARCHITECTURE_CLEANUP_BOARD.md).
   Do not reopen landed Tier 1/Tier 2 audit work or landed monolith seams unless
   new evidence shows a regression.
+- Lux prepares `PreparedLuxExecution` in `execution_lifecycle.py` before backend
+  initialization and output creation. Its core-owned `tp.execution.plan.v1`
+  bytes are shared by `--plan` and real execution; use
+  `EnhanceOrchestrator.from_prepared(...)` for cache-enabled orchestration.
+  Legacy `structural_legacy` projections cannot authorize execution. See
+  [Execution Plan V1](docs/reference/EXECUTION_PLAN_V1.md).
+- [ADR-051](docs/architecture/ADR-051-execution-artifact-authority-designation.md)
+  designates migration targets; current Lux/Spatial execution remains active
+  until the respective executor and publication activation gates pass.
 - Historical docs may keep old dates and facts. They are not current operator
   guidance unless the documentation map promotes them.
 - Live Copilot/custom-agent instructions are:

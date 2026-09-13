@@ -47,12 +47,15 @@ review_caption_model  = apple/FastVLM-7B-int4
 smoke_caption_model   = apple/FastVLM-0.5B-fp16
 ```
 
-The default is `apple/FastVLM-1.5B-int8` because the May 2, 2026 benchmark
+Historical rationale: the default is `apple/FastVLM-1.5B-int8`; a May 2, 2026 benchmark
 showed clean flat-schema adherence, roughly 2.5 GB peak memory, and about
 200-209 generated tokens/sec. The `apple/FastVLM-7B-int4` model produced the
 best captions but used roughly 4.95 GB peak memory and about 99-102 generated
 tokens/sec. The benchmark report was written to
 `.runtime/fastvlm/reports/fastvlm_caption_benchmark_20260502_142926.txt`.
+Those recorded results are not current hardware/runtime performance guarantees.
+The role mapping is governed by `config/fastvlm_runtime_manifest.json`; validate
+each selected role, since a smoke-model pass does not cover default/review weights.
 
 ## Prompt Policy
 
@@ -313,6 +316,7 @@ python -m transformation_portal.lux_depth_v3 \
   --input-dir /Users/richardcheetham/Desktop/Transformation_Portal/input_images \
   --output-dir /Users/richardcheetham/Desktop/Transformation_Portal/output/lux_depth_v3_with_fastvlm \
   --quality-tier apex \
+  --materials-v3 off \
   --vlm-captioning on \
   --vlm-captioning-backend fastvlm \
   --vlm-captioning-model review \

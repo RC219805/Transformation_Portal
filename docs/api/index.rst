@@ -1,7 +1,9 @@
 Transformation Portal API Documentation
 ========================================
 
-Welcome to the Transformation Portal API reference. This documentation covers all public modules and APIs for luxury real estate rendering and architectural visualization.
+Welcome to the Transformation Portal API reference. This documentation covers selected Python modules. The maintained HTTP contract
+is implemented by ``app.py`` and its request/response models; see the portal
+quickstarts under ``docs/guides/`` for startup and authentication.
 
 .. toctree::
    :maxdepth: 2
@@ -30,24 +32,19 @@ Welcome to the Transformation Portal API reference. This documentation covers al
 Quick Start
 -----------
 
-Basic usage example:
+Validate a recipe definition without loading a model:
 
 .. code-block:: python
 
-    from transformation_portal.config_loader import load_recipe
-    from transformation_portal.lux_depth_v3 import DA3InferenceEngine, DA3Config
+    from transformation_portal.config_loader import validate_recipe
 
-    # Load recipe configuration
-    recipe = load_recipe("config/recipes/luxury_estate.yaml")
-    print(recipe["name"])
-    print(recipe["stages"])
+    valid, errors = validate_recipe({"name": "Example", "stages": ["color_grading"]})
+    assert valid, errors
 
-    # Initialize depth inference engine
-    da3_config = DA3Config()
-    engine = DA3InferenceEngine(da3_config)
-
-    # Process image with depth awareness
-    result = engine.infer_depth("input.jpg")
+For Lux model/license/input resolution without inference, use the maintained
+module CLI with ``--plan``. Actual inference and produced artifacts require a
+separate successful run with the selected runtime and model installed. Importing
+the API or building this reference does not establish either result.
 
 Module Index
 ------------

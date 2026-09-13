@@ -135,6 +135,21 @@ Use `--da3-python`, `--depth-pro-python`, `--raw-python` flags only to override 
 
 `src/transformation_portal/` is the main package. `src/tp/` is a **separate top-level import surface** for contract / fixity / phase tooling (`tp.crypto`, `tp.merkle`, `tp.phase4`). CI explicitly verifies both import paths in source-tree and wheel-installed contexts. **Never** collapse `tp` into `transformation_portal` or break either path.
 
+## Execution Authority And Evidence
+
+Lux's `execution_lifecycle.py` prepares `PreparedLuxExecution` before backend
+initialization or output creation. `--plan` emits the same canonical
+`tp.execution.plan.v1` bytes that a real run consumes. The contract and bounded
+parser are core-owned; the Lux adapter supplies model/license and stage intent.
+Cache-enabled direct callers use `EnhanceOrchestrator.from_prepared(...)`.
+Legacy `structural_legacy` projections remain non-authorizing.
+
+[ADR-051](docs/architecture/ADR-051-execution-artifact-authority-designation.md)
+preserves the current Lux and Spatial executors until their vertical-slice gates
+pass. Existing CAS, queue, worker, and artifact-store primitives do not establish
+activation of every planned executor or atomic generation publisher. Planning,
+readiness, inference, and artifact verification are distinct evidence levels.
+
 ### Lux Depth V3 is a decomposed orchestrator (do not re-monolithize)
 
 `src/transformation_portal/lux_depth_v3/` is the flagship pipeline. Behavior is split across focused seams; new behavior should land in the right seam, not in `orchestrator.py`:

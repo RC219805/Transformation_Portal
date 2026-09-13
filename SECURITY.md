@@ -48,12 +48,12 @@ This repository uses:
 - **Code Scanning**: CodeQL analysis on every PR
 - **Secret Scanning**: Prevents accidental credential commits
 - **Security Advisories**: Private vulnerability reporting via GitHub
-- **Branch Protection**: Main branch requires security checks to pass
-- **Workflow Token Permissions**: All workflows use least-privilege `permissions:` declarations
-  - `contents: read` (default) - Read-only repository access
-  - `contents: write` - Only for dependency submission and automated PR creation
-  - `security-events: write` - CodeQL and security scanning only
-  - `pull-requests: write` - AI code review bot only
+- **Branch Protection**: Repository policy and remotely configured required
+  checks are distinct. Verify live settings before a merge; see
+  [branch protection setup](docs/ci/BRANCH_PROTECTION_SETUP.md).
+- **Workflow Token Permissions**: Workflow/job ``permissions`` declarations own
+  token scope. Inspect the current workflow YAML before changing write access;
+  this policy is not a complete inventory of jobs with write permissions.
 
 ## Security Considerations
 
@@ -73,17 +73,17 @@ Given our image/video processing nature, special attention is required for:
   - Magic number verification for file formats
   - Filename sanitization to prevent path traversal
 
-- **TIFF Processing**:
-  - Validation of TIFF tags to prevent buffer overflows
-  - Limits on image dimensions (max 65536x65536)
-  - Protection against compression bombs
+- **TIFF Processing**: Validate supported formats and dimensions at the consuming
+  boundary. Decoder limits and memory behavior vary by library and execution
+  path; this repository does not enforce one universal image-dimension ceiling.
 
 ### Depth Map Processing
 
-- **Depth Anything V2 Model**: Validate input dimensions to prevent memory overflow (max 4096x4096)
-- **Point Cloud Generation**: Limit vertex count to prevent DoS (max 10M vertices)
-- **Temporary File Management**: Secure cleanup of intermediate depth maps
-- **GPU Memory**: Monitor and limit VRAM usage (default: 8GB max)
+Input dimensions, point counts, GPU memory use, and intermediate storage depend
+on the selected pipeline and runtime. Set deployment resource budgets and verify
+them on representative inputs; there is no universal 8 GB VRAM cap or 10-million
+vertex ceiling enforced across these paths. Removing temporary files does not
+guarantee secure erasure from storage, backups, or process memory.
 
 ### ML Model Security
 
@@ -100,12 +100,17 @@ Given our image/video processing nature, special attention is required for:
 ### Dependencies
 
 - **Supply Chain**:
-  - All dependencies use version constraints to balance security and compatibility
-  - For security-critical deployments, consider strict version pinning (e.g., via lock files)
+  - Install through the governed Make targets and exact target-owned locks in
+    [requirements/README.md](requirements/README.md)
+  - Do not substitute ad-hoc package upgrades for controlled lock regeneration
   - Regular dependency audits via `pip-audit` (governed scanner in CI)
   - Automated security scanning in CI/CD pipeline
 
-- **Recent Security Updates**:
+- **Recorded Security Updates**:
+
+  These entries retain historical remediation context. Current installed
+  versions come from the applicable lock, and current alert status requires a
+  fresh scanner or service check; this chronology is not an open-alert inventory.
 
   **March 2026**:
   - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
@@ -176,36 +181,30 @@ headers = {
 
 ## Performance vs. Security Trade-offs
 
-Security features may impact performance:
-- File validation: +100-500ms per upload
-- Model checksums: +2-5s on first load
-- Input sanitization: +50-200ms per request
-- Memory clearing: +10-20% processing overhead
-- Depth map bounds checking: +50ms per frame
-
-**Note**: These overheads are configurable and can be tuned based on your security requirements
+Measure validation, checksum, and model-loading overhead for the target runtime
+and input set. No fixed latency or percentage overhead has been established here.
+Keep security-sensitive controls enabled while diagnosing performance; changes
+need measured evidence and the applicable governance review.
 
 ## Security Best Practices
 
 ### Deployment
 
+Run the backend under the deployment's unprivileged service account from the
+repository root. Supply `TP_API_KEY` through that service's secret environment
+before startup; `make run-backend-local-noreload` checks that it is set.
+
 ```bash
-# Run with minimal privileges from the repo-managed environment (recommended)
-sudo -u tp .venv/bin/python -m transformation_portal.cli serve --host 127.0.0.1 --port 8000
-
-# Or use systemd service with User directive:
-# [Service]
-# User=tp
-# Group=tp
-
-# Use read-only filesystem where possible
-docker run --read-only --tmpfs /tmp transformation_portal:latest
-
-# Enable security headers if web-facing
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-Content-Security-Policy: default-src 'self'
+make run-backend-local-noreload
+# Equivalent launch after loading the same environment:
+.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8000
 ```
+
+Configure least-privilege writable input/output/temp paths for the selected
+workflow and keep the backend behind the managed front door. Use the maintained
+[frontdoor guide](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) for HTTPS,
+headers, sessions, and proxy authentication. A generic read-only container command
+alone does not establish usable runtime or artifact storage.
 
 ### Configuration
 
@@ -215,7 +214,7 @@ the root [`.env.example`](.env.example). Depth-pipeline defaults still live in
 boundaries, and artifact-store controls are backend environment contracts:
 
 ```bash
-TP_API_KEY=<strong-token>
+TP_API_KEY="replace-with-strong-token"
 TP_ENFORCE_JOB_API_KEY=true
 TP_MAX_REQUEST_BYTES=1048576
 TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576
@@ -227,10 +226,12 @@ TP_ALLOWED_OUTPUT_ROOTS=.
 
 ### Sensitive Data
 
-- **EXIF Data**: Option to strip all metadata from outputs
+- **EXIF Data**: Verify metadata behavior for the selected output writer;
+  stripping metadata is not a universal promise across all artifact types.
 - **Watermarking**: Support for invisible watermarks for tracking
-- **Temporary Files**: Secure deletion with multi-pass overwrite
-- **Memory**: Clear sensitive data from memory after processing
+- **Temporary Files and Memory**: Apply deployment retention and storage controls.
+  The repository does not promise multi-pass secure deletion or complete memory
+  erasure. Inspect intermediates and manifests before sharing artifacts.
 
 ## Security Testing for Contributors
 
@@ -287,7 +288,8 @@ In case of a security breach:
 - Python 3.11+ (matches the package `requires-python` floor and CI support matrix)
 - FFmpeg 6+ (addresses multiple CVEs from earlier versions)
 - Operating System with DEP/ASLR support
-- Minimum 8GB RAM to prevent swap file exposure
+- Size memory for the selected workload and configure swap/storage protection
+  at the operating-system level; a RAM minimum does not prevent swap exposure.
 - GPU drivers with security updates (NVIDIA 525+ for CUDA operations)
 
 ### Network Security
@@ -299,7 +301,9 @@ In case of a security breach:
 
 ## Security Audit History
 
-No formal security audits have been conducted yet. This section will be updated as audits are completed.
+No completed formal security audit report is linked here. Scheduled dates and
+passing automated scans do not establish a completed independent audit. Record
+the report, scope, exact revision, and remediation evidence when one is completed.
 
 ## Compliance
 
@@ -363,6 +367,6 @@ We support responsible disclosure and will:
 
 ---
 
-*Last Updated: 2026-06-03*
-*Next Review: 2026-09-03*
+*Last source review: 2026-09-12*
+*Previous scheduled review: 2026-09-03; a schedule alone is not completion evidence.*
 *Security Policy Version: 1.2*

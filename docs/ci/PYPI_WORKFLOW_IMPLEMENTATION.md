@@ -1,5 +1,11 @@
 # PyPI Workflow Implementation Summary
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 **Date:** 2025-11-07
 **Issue:** PyPI workflow debug and implementation
 **Status:** ✅ Complete

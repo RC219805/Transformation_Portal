@@ -2,18 +2,27 @@
 
 ## Start the Service
 
-Standalone FastAPI origin:
+From the repository root, prepare the core environment, then set authentication
+before launching the standalone FastAPI origin:
 
 ```bash
-python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+make install-core
+export TP_API_KEY="replace-with-strong-token"
+make run-backend-local
+# For an unsupervised local backend without reload: make run-backend-local-noreload
 ```
+
+These targets use the repo-managed interpreter. The direct no-reload equivalent
+is `.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8000`.
 
 Open `http://127.0.0.1:8000/` for direct backend debugging, or use the secure front door quickstart for the managed browser path:
 - [Portal Secure Front Door Quickstart](PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 
 ## Security Controls
 
-Set an API key for protected job endpoints (`/v1/jobs*`).
+Set an API key in the backend shell before startup for protected job endpoints
+(`/v1/jobs*`). Environment changes in a later terminal do not update a running
+process. Restart deliberately after changing backend configuration.
 By default, the orchestrator now enforces API-key auth for job endpoints and returns `AUTH_CONFIGURATION_ERROR` if `TP_API_KEY` is unset.
 
 ```bash
@@ -88,6 +97,10 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `lux-depth-v3` reports `base` readiness and a separate `canary_status`; canary unavailability does not block the safe local execution lane.
 - `archive-gate-a` is normally `degraded` until an archive index is supplied.
 - `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.
+
+Readiness describes prerequisites; it does not prove inference or successful
+artifact production. Inspect the completed job, exit status, and actual artifact
+manifest for the selected run. Lux `--plan` is also resolution-only evidence.
 
 ## Run Gate A End-to-End
 
@@ -183,6 +196,9 @@ If the form still shows the missing-index warning:
 - the equivalent command will then include `--archive-index`
 
 ### Browser-Saved Build Profiles
+
+Backend startup feature flags do not rewrite saved Build values. Review the
+restored draft and select the intended settings before previewing or dispatching.
 
 Build profiles are stored only in the current browser and are scoped to the
 resolved portal actor. Unsaved restored drafts are protected: choosing another

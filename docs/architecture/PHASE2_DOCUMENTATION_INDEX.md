@@ -9,7 +9,7 @@
 
 ### For Architect Review (Start Here)
 
-1. **📋 [PHASE2_PLANNING_SUMMARY.md](./PHASE2_PLANNING_SUMMARY.md)** — Executive summary (read first)
+1. **📋 [PHASE2_PLANNING_SUMMARY.md](../historical/architecture/PHASE2_PLANNING_SUMMARY.md)** — Executive summary (read first)
 2. **📘 [PHASE2_IMPLEMENTATION_PLAN.md](./PHASE2_IMPLEMENTATION_PLAN.md)** — Comprehensive plan (48KB, main review)
 3. **📜 [ADR-027-phase2-spatial-ai-extension.md](./ADR-027-phase2-spatial-ai-extension.md)** — Architectural decision record (binding)
 

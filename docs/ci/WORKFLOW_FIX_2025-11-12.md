@@ -1,5 +1,11 @@
 # Workflow Failure Fix - November 12, 2025
 
+> **Historical record (boundary clarified 2026-09-12).** Commands, timings,
+> completion claims, and branch settings below describe the original report.
+> They do not certify the current checkout or deployment. Use the
+> [workflow matrix](WORKFLOW_MATRIX.md) and
+> [documentation map](../governance/DOCUMENTATION_MAP.md) for current guidance.
+
 ## Executive Summary
 
 Successfully diagnosed and fixed a critical workflow failure affecting the `test_luxury_tiff_batch_processor.py::test_cli_help_works` test. The issue was caused by missing `if __name__ == "__main__":` guard in the CLI module, preventing proper module execution.

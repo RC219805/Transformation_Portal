@@ -26,7 +26,7 @@ Example:
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -55,17 +55,39 @@ class NodeType(Enum):
     COLOR_CORRECTION = "ColorCorrection"
 
 
+# Named output keys used by the implemented custom nodes and local executor.
+# Keep this pure-Python: importing custom_nodes here would import torch.
+# Unimplemented node contracts are deliberately absent, rather than guessed.
+NODE_OUTPUT_NAMES: Dict[NodeType, Tuple[str, ...]] = {
+    NodeType.INPUT: ("IMAGE",),
+    NodeType.FLUX_ENHANCEMENT: ("IMAGE",),
+    NodeType.SKYGAN_SKY: ("IMAGE", "MASK", "REPORT"),
+    NodeType.SCENE_ANALYSIS: ("STRING",),
+    NodeType.ATMOSPHERIC_MODEL: ("IMAGE",),
+}
+
+
 @dataclass
 class NodeConnection:
     """Connection between nodes."""
 
     source_node_id: str
-    source_output: str
+    source_output: Union[str, int]
     target_node_id: str
     target_input: str
 
-    def to_comfyui_format(self) -> List[Union[str, int]]:
+    def output_name(self, source_type: NodeType) -> Union[str, int]:
+        """Resolve a numeric slot only when its node's output contract is known."""
+        names = NODE_OUTPUT_NAMES.get(source_type, ())
+        if type(self.source_output) is int and 0 <= self.source_output < len(names):
+            return names[self.source_output]
+        return self.source_output
+
+    def to_comfyui_format(self, source_type: Optional[NodeType] = None) -> List[Union[str, int]]:
         """Convert to ComfyUI connection format [node_id, output_slot]."""
+        names = NODE_OUTPUT_NAMES.get(source_type, ()) if source_type is not None else ()
+        if self.source_output in names:
+            return [self.source_node_id, names.index(self.source_output)]
         # Note: ComfyUI expects output_slot as int, usually 0
         slot_idx = 0
         if isinstance(self.source_output, int):
@@ -90,6 +112,7 @@ class Node:
     parameters: Dict[str, Any] = field(default_factory=dict)
     position: Tuple[int, int] = (0, 0)
     inputs: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_comfyui_format(self) -> Dict[str, Any]:
         """Convert to ComfyUI node format."""
@@ -98,6 +121,7 @@ class Node:
             "inputs": {**self.parameters, **self.inputs},
             "_meta": {
                 "title": self.node_type.value,
+                **self.metadata,
             },
         }
 
@@ -122,7 +146,9 @@ class Workflow:
         for conn in self.connections:
             target_node = comfyui_workflow.get(conn.target_node_id)
             if target_node:
-                target_node["inputs"][conn.target_input] = conn.to_comfyui_format()
+                source_node = self.nodes.get(conn.source_node_id)
+                source_type = source_node.node_type if source_node else None
+                target_node["inputs"][conn.target_input] = conn.to_comfyui_format(source_type)
 
         return comfyui_workflow
 
@@ -136,6 +162,9 @@ class Workflow:
             "last_link_id": len(self.connections),
             "nodes": self.to_comfyui_format(),
             "metadata": self.metadata,
+            # Explicit edges disambiguate links from ordinary [string, int]
+            # parameters and retain named outputs through save/load cycles.
+            "connections": [asdict(connection) for connection in self.connections],
         }
 
         with open(path, "w") as f:
@@ -168,9 +197,38 @@ class Workflow:
             node = Node(
                 node_id=node_id,
                 node_type=node_type,
-                parameters=node_data.get("inputs", {}),
+                parameters=dict(node_data.get("inputs", {})),
+                metadata=dict(node_data.get("_meta", {})),
             )
             workflow.nodes[node_id] = node
+
+        if "connections" in workflow_data:
+            for connection_data in workflow_data["connections"]:
+                connection = NodeConnection(**connection_data)
+                target = workflow.nodes.get(connection.target_node_id)
+                if target is None or connection.source_node_id not in workflow.nodes:
+                    # Keep the same tolerance as legacy loading: unknown nodes
+                    # are skipped and unresolved inputs remain ordinary values.
+                    continue
+                workflow.connections.append(connection)
+                target.parameters.pop(connection.target_input, None)
+        else:
+            # Legacy files have only encoded input links. Resolve after all
+            # nodes exist, so dictionary order does not determine dependencies.
+            # Ambiguous literals matching this legacy encoding require saving
+            # with the explicit connections list above to distinguish them.
+            for target in workflow.nodes.values():
+                for input_name, value in list(target.parameters.items()):
+                    if (
+                        isinstance(value, list)
+                        and len(value) == 2
+                        and isinstance(value[0], str)
+                        and value[0] in workflow.nodes
+                        and type(value[1]) is int
+                        and value[1] >= 0
+                    ):
+                        workflow.connections.append(NodeConnection(value[0], value[1], target.node_id, input_name))
+                        del target.parameters[input_name]
 
         logger.info(f"Workflow loaded from {path}")
         return workflow

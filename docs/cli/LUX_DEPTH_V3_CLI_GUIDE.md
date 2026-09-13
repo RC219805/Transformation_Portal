@@ -15,8 +15,9 @@ This document provides usage examples for the `lux-depth-v3` CLI with APEX quali
 Use the repository-managed virtual environment and Make targets:
 
 ```bash
-source .venv/bin/activate
+make venv
 make install-core
+source .venv/bin/activate
 make check-environment
 ```
 
@@ -35,8 +36,9 @@ entrypoint:
 .venv/bin/python -m transformation_portal.lux_depth_v3 --help
 ```
 
-Optional model runtimes are installed through repo-governed scripts instead of
-ad-hoc package installs:
+Core Python 3.12 is supported; DA3 uses a separate target-owned Python 3.11
+runtime. Install only the optional runtime required for your chosen features
+through its repo-governed installer:
 
 ```bash
 make install-ml-core
@@ -115,7 +117,7 @@ lux-depth-v3 \
 
 ### Variant A: Depth Anything V3.1 (CC BY-NC 4.0)
 
-Depth Anything V3.1 provides state-of-the-art depth estimation but is restricted to non-commercial use under CC BY-NC 4.0.
+The DA3 research selector is restricted to non-commercial use under CC BY-NC 4.0.
 
 ```bash
 lux-depth-v3 \
@@ -166,7 +168,7 @@ lux-depth-v3 \
 
 ### Variant B: Apple Depth Pro (AMLR Research License)
 
-Apple Depth Pro provides high-quality depth estimation but requires both non-commercial acknowledgement and explicit Apple license acceptance.
+Apple Depth Pro requires both non-commercial acknowledgement and explicit Apple license acceptance.
 
 ```bash
 lux-depth-v3 \
@@ -236,7 +238,9 @@ lux-depth-v3 \
   - Options: `on`, `off`, `true`, `false`, `yes`, `no`, `1`, `0`
 - `--pbr TEXT`: Enable PBR map generation (normal, roughness, AO) (default: `off`)
   - Options: Same as above
-- `--save-float-depth TEXT`: Persist float depth assets for downstream PBR/DOF workflows.
+- `--save-float-depth TEXT`: Persist canonical `.npy` float depth (default: `off`).
+  PBR can consume in-memory depth without persisting this file; request `on`
+  explicitly when a downstream DOF or external consumer needs it.
 - `--cache-depth TEXT`: Enable content-addressable depth cache (default: `off`)
   - Options: Same as above
 
@@ -266,11 +270,12 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 
 - `--enable-v2 TEXT`: Enable V2 enhancement stage (default: `on`)
   - Options: `on`, `off`, `true`, `false`, `yes`, `no`, `1`, `0`
-  - Set to `off` to completely skip V2 enhancement (no validation, no execution)
+  - Set to `off` to omit the V2 stage and its script validation/execution;
+    input, model/license, and canonical-plan validation still apply.
   - Useful for PBR-only workflows or when the enhancement script is not available
 - `--v2-preset TEXT`: V2 enhancement preset (default: `default`)
   - Options: `default`, `none`, or custom preset names
-  - Set to `none` to skip V2 processing while keeping validation
+  - `none` normalizes to a disabled V2 stage during plan preparation.
   - Only used when `--enable-v2` is `on`
 
 ### Output Deliverables
@@ -302,9 +307,13 @@ do not create separate deliverables, and will be removed in the next major relea
 - `--overwrite`: Force reprocessing even if outputs exist
 - `--keep-intermediates`: Preserve intermediate artifacts for audit/debugging
 - `--force-depth`: Force depth recomputation (ignore cache)
-- `--strict-inputs TEXT`: Fail closed on unsupported or invalid inputs.
-- `--verify-images TEXT`: Verify image inputs before processing.
-- `--allow-semantic-fallback TEXT`: Allow configured semantic fallback paths.
+- `--strict-inputs`: Reject input discovery hygiene violations.
+- `--verify-images`: Verify image inputs before processing.
+- `--allow-semantic-fallback`: Allow configured semantic fallback paths.
+
+These three options, `--strict-segmentation`, `--sam2-tiling-enabled`,
+`--overwrite`, `--force-depth`, and `--keep-intermediates` are boolean switches:
+pass the flag alone. Text toggles such as `--pbr on` require a value.
 - `--max-workers INTEGER`: Bound CPU/I/O worker threads.
 - `--max-gpu-workers INTEGER`: Bound GPU/MPS inference workers.
 
@@ -390,10 +399,10 @@ sidecar to verify.
 - Suitable for professional work
 
 ### APEX
-- Maximum quality processing
-- Full orchestrator path with all features enabled
-- Includes PBR map generation, Materials V3, and all deliverables
-- Suitable for final production and client deliverables
+- Strict quality policy for the selected execution path
+- Optional features and deliverable encodings remain explicit choices
+- Materials V3 requires explicit non-stub, strict segmentation when enabled
+- Inspect run results and artifact manifests before accepting deliverables
 
 #### APEX Gate Policy
 
@@ -409,11 +418,12 @@ APEX mode enforces fail-closed quality gates with two explicit recovery paths:
 
 ## Output Deliverables
 
-When APEX mode is enabled with governed outputs, the following artifacts are generated:
+Artifact production depends on enabled stages, successful execution, and output
+encoding. A plan or readiness response alone does not establish these files:
 
 ### Depth Assets
 - `depth/<input-key>_depth.png`: 16-bit PNG depth map (quantized for compatibility)
-- `depth/<input-key>_depth.npy`: Float32 depth array (high-precision, used for PBR)
+- `depth/<input-key>_depth.npy`: Float depth array, only when `--save-float-depth on`
 - `depth/<input-key>_depth_metadata.json`: Depth provenance and statistics
 
 ### PBR Maps (when `--pbr on`)
@@ -562,8 +572,8 @@ lux-depth-v3 \
 
 **Key Points:**
 - `--enable-v2 off` completely disables the V2 enhancement stage
-- Faster processing (skips enhancement script execution)
-- Still produces high-quality depth maps and PBR outputs
+- Skips enhancement script execution; no runtime saving is asserted here
+- Depth and requested PBR outputs remain part of the run
 - Useful for technical workflows requiring only geometric data
 
 ### Workflow 5: Commercial APEX with Quality-Tier Focus
@@ -584,11 +594,16 @@ lux-depth-v3 \
   --output-bit-depth 16
 ```
 
-**Note:** Using `--quality-tier apex` automatically enables appropriate features for commercial production. The `--preset` flag is optional and provides additional fine-tuning.
+**Note:** `--quality-tier apex` selects quality policy; it does not turn on
+Materials V3, PBR, segmentation, captioning, cache, or 16-bit output. Select each
+feature explicitly. With APEX Materials V3 enabled, the CLI also requires
+`--enable-segmentation on`, a non-stub backend, and `--strict-segmentation`.
+Inference-only DA3 runtimes cannot authorize cache access; see the governed
+[setup guide](../guides/SETUP_GUIDE.md).
 
 ## Understanding V2 Enhancement
 
-The V2 enhancement stage is an **optional** AI-powered enhancement step that applies after depth estimation and PBR processing. It is controlled by two flags:
+The V2 enhancement stage is an **optional** image enhancement step that applies after depth estimation and PBR processing. It is controlled by two flags:
 
 - `--enable-v2`: Master switch to enable/disable the entire V2 stage (default: `on`)
 - `--v2-preset`: Preset configuration for V2 enhancement or `none` to skip (default: `default`)
@@ -598,7 +613,8 @@ The V2 enhancement stage is an **optional** AI-powered enhancement step that app
 When `--enable-v2 on` (the default), the pipeline:
 1. Validates that the enhancement script exists at `scripts/enhance_image.py`
 2. Executes the script for each processed image
-3. Applies AI-powered refinements configured by `--v2-preset`
+3. Applies the refinements configured by `--v2-preset`; enabled models and
+   runtime capabilities determine whether optional AI refinements execute
 
 ### How to Disable V2 Enhancement
 
@@ -608,32 +624,28 @@ There are **two ways** to disable V2 enhancement:
 ```bash
 --enable-v2 "off"
 ```
-This completely skips V2 validation and execution. Best for PBR-only workflows.
+This omits V2 script validation and execution. The rest of plan validation
+still runs. Use it for PBR-only workflows.
 
 **Method 2: Set V2 Preset to None**
 ```bash
 --v2-preset "none"
 ```
-This keeps V2 enabled but with no preset applied (effectively a no-op).
+Plan preparation normalizes this to `enable_v2=False` and `v2_preset=None`,
+omitting the V2 stage and its script validation/execution.
 
 ### Quality Tier vs Preset
 
-These flags serve **different purposes**:
+`--quality-tier standard|premium|apex` selects validation and processing policy.
+It is not a universal feature or deliverable switch. Use explicit feature flags
+and `--output-bit-depth` for those choices.
 
-**`--quality-tier`** (standard|premium|apex)
-- Controls **output quality level** across the entire pipeline
-- Affects processing resolution, precision, and deliverable formats
-- Determines which features are enabled by default
-- Examples: `standard` (fast/draft), `premium` (balanced), `apex` (maximum quality)
-
-**`--preset`** (named configuration)
-- Provides **named combinations** of parameters for specific scenarios
-- Fine-tunes pipeline behavior for particular depth models or use cases
-- Curated examples: `premium`, `depth-anything-v3.1-research-m4`, `default`
-- Unmapped values are preserved as metadata labels unless they match a real preset
-- Can override quality-tier defaults when specified
-
-**Recommendation**: Start with `--quality-tier` for most workflows. Use `--preset` only when you need specific model configurations or research-only features.
+`--preset` is matched against the `Preset` enum for typed model configuration.
+Recognized typed presets supply model defaults; an explicit `--model-key`
+takes precedence over the preset model. Unmapped strings, including `premium`,
+are retained as labels; this CLI does not load arbitrary YAML presets by name.
+The CLI forwards `--quality-tier` separately, so a preset does not override that
+argument. Review `--plan` to inspect the resolved choices before execution.
 
 ## Troubleshooting
 
@@ -644,7 +656,8 @@ These flags serve **different purposes**:
 ERROR: V2 enhancement script not found: scripts/enhance_image.py
 ```
 
-**Cause:** The V2 enhancement stage is enabled (default), but the placeholder script is missing or not executable.
+**Cause:** An enabled V2 stage cannot find the maintained enhancement script.
+`V2Runner` invokes it with the Python interpreter; executable mode is not required.
 
 **Solutions:**
 
@@ -658,10 +671,9 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
    --v2-preset "none"
    ```
 
-3. **Ensure Script Exists**: Verify `scripts/enhance_image.py` exists and is executable:
+3. **Ensure Script Exists**: Verify the checkout includes `scripts/enhance_image.py`:
    ```bash
    ls -l scripts/enhance_image.py
-   chmod +x scripts/enhance_image.py
    ```
 
 **Why This Happens:** The pipeline validates all required scripts at startup when V2 is enabled. This is **correct fail-fast design** to prevent wasted processing time.
@@ -678,12 +690,14 @@ The input directory must contain at least one supported image format:
 
 ### Common Configuration Mistakes
 
-**Mistake: Mixing quality-tier with incompatible presets**
+**Mistake: Assuming a preset overrides the CLI quality tier**
 ```bash
-# Avoid this - conflicts between tier and preset
+# Tier and preset remain independent; inspect the resolved model
 --quality-tier "standard" --preset "depth-anything-v3.1-research-m4"
 ```
-Solution: Let presets override quality-tier, or use quality-tier alone.
+Solution: Specify the intended tier and explicit model selector. Presets do not
+override the CLI tier; inspect `--plan` and acknowledge research licenses only
+when permitted for the run.
 
 **Mistake: Forgetting to disable V2 for PBR-only workflows**
 ```bash

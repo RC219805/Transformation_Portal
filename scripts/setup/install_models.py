@@ -444,7 +444,7 @@ def install_controlnet_models(dry_run: bool = False) -> int:
 
     except ImportError:
         print("\n✗ diffusers not installed")
-        print("  Install with: pip install diffusers torch")
+        print("  Use the supported target-owned ML lane: make install-ml-core (native Darwin arm64).")
         return 0
 
     return installed
@@ -554,9 +554,9 @@ Examples:
     print("  • Models are cached and reused across runs")
 
     print("\n🔧 Optional Dependencies:")
-    print("  • pip install accelerate      (faster loading)")
+    print("  • Main-environment ML packages: use the supported target-owned lane in requirements/README.md")
     print("  • External `realesrgan` package is unsupported by dependency policy")
-    print("  • pip install torch            (GPU acceleration)")
+    print("  • Isolated DA3/Depth Pro/FastVLM workers: use their own installers; see scripts/setup/README.md")
 
     if not args.dry_run:
         print("\n✅ Setup complete!")

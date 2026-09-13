@@ -1,5 +1,11 @@
 # APEX Performance Governance: Implementation Index
 
+> Historical context. The dated plans and completion claims below do not certify
+> current runtime, CI, or production readiness. Use [current guidance](../performance/GATE_POLICY.md).
+> Missing original references are recorded in the documentation refresh link
+> backlog; no similarly numbered ADR or unrelated summary has been substituted.
+
+
 **Created:** 2025-02-09
 **Authority:** Transformation Portal Architect
 **Status:** Active Implementation Plan

@@ -44,6 +44,26 @@ run as bounded smoke checks.
   non-writer benchmark test is a suite failure with complete evidence and
   fails the run without claiming a tolerance breach.
 
+## Evidence Boundaries of Existing Workflows
+
+The accepted tiers above remain policy. Actual execution evidence is narrower:
+
+- `performance-monitor.yml` uses `check_performance_evidence.py`: exit 0 is
+  complete passing evidence; exit 2 classifies a writer regression; exit 1 is
+  invalid evidence; exit 3 is a non-writer suite failure. Four executed writers,
+  four fresh artifacts, and parseable committed baselines are required.
+- The separate legacy `nightly.yml` benchmark job still installs
+  `torch==2.5.1+cpu`/`torchvision==0.20.1+cpu`, picks a fallback JSON baseline
+  by filename, and permits a no-test/no-baseline path. It lacks the Lux evidence
+  validator and classifies pytest exit 1 broadly. Those implementation gaps
+  require a bounded workflow repair; a green nightly summary does not prove
+  the evidence requirements above. Do not copy its old pins into setup.
+- `apex_performance.yml` PR/push runs are synthetic and gate enforcement is
+  shadow mode. Scheduled/manual real mode must complete the current matrix and
+  produce V1/V2 evidence before dashboard/ledger publication. A comment or
+  successful Pages deployment alone proves neither real inference nor
+  production readiness.
+
 ## Advisory Signals
 
 - Local developer timing on unpinned hardware.

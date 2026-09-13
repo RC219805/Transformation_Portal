@@ -195,4 +195,4 @@ Monitor these metrics in production:
 
 - [Performance Regression Test Suite](../../tests/test_performance_regression.py)
 - [Depth Cache Implementation](../../src/transformation_portal/lux_depth_v3/depth_cache.py)
-- [Phase 2 Optimization Summary](../../PHASE2_OPTIMIZATION_SUMMARY.md)
+- [Phase 2 Optimization Summary](PHASE2_OPTIMIZATION_SUMMARY.md)

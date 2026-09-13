@@ -78,3 +78,37 @@ def test_heading_link_validator_ignores_code_block_comment_lines(tmp_path: Path)
 
 def test_default_todo_quick_win_binary_cleanup_heading_references_are_current() -> None:
     assert _module.check([]) == []
+
+
+@pytest.mark.parametrize(
+    ("heading", "anchor"),
+    [
+        ("M-1. Sandbox or sign plugins before broader use", "m-1-sandbox-or-sign-plugins-before-broader-use"),
+        ("1.2.3. Numbered Heading", "123-numbered-heading"),
+        ("What's new? (v2.0!)", "whats-new-v20"),
+    ],
+)
+def test_heading_link_validator_removes_heading_punctuation(tmp_path: Path, heading: str, anchor: str) -> None:
+    target = tmp_path / "target.md"
+    source = tmp_path / "source.md"
+    target.write_text(f"# Target\n\n## {heading}\n", encoding="utf-8")
+    source.write_text(f"[section](target.md#{anchor})\n", encoding="utf-8")
+
+    assert _module.check([source]) == []
+
+
+def test_heading_link_validator_numbers_duplicates_after_punctuation_removal(tmp_path: Path) -> None:
+    target = tmp_path / "target.md"
+    source = tmp_path / "source.md"
+    target.write_text("## 1. Introduction\n\n## 1 Introduction\n", encoding="utf-8")
+    source.write_text(
+        "[first](target.md#1-introduction)\n"
+        "[second](target.md#1-introduction-1)\n"
+        "[invalid punctuation](target.md#1.-introduction)\n",
+        encoding="utf-8",
+    )
+
+    failures = _module.check([source])
+
+    assert len(failures) == 1
+    assert "#1.-introduction" in failures[0]

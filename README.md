@@ -20,8 +20,9 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 Current documentation navigation starts at [docs/README.md](docs/README.md)
 and [docs/governance/DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md).
-The May 11, 2026 repo-wide refresh audit remains the inventory baseline for
-historical classification decisions.
+The [documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
+records the current inventory scope, source-reviewed changes, and remaining
+verification limits. Prior dated audits remain historical evidence.
 Recent merged work added typed API v1 envelopes, typed health/readiness and job
 lifecycle response models, Docker health/env wiring, CI workflow hardening,
 archive-gate readiness evidence, APEX fallback / failure-code hardening,
@@ -57,7 +58,7 @@ Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC2
 Key docs:
 - [Documentation Index](docs/README.md)
 - [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
-- [2026-05-11 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
+- [2026-09-12 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [CI Workflow Matrix](docs/ci/WORKFLOW_MATRIX.md)
@@ -84,14 +85,12 @@ Portal surfaces:
 
 ---
 
-## Flagship Capability: Context-Aware Rendering
+## Architectural PDF Context
 
-Context-Aware Rendering extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses that context to inform processing decisions.
-- Architectural context extraction from PDFs (room types, dimensions, materials, design style)
-- Room-specific strategy derivation (kitchen, bedroom, bath, living, outdoor)
-- Dimension-aware depth decisions (proportion-respecting depth logic)
-- Style-consistent color decisions aligned to design language
-- Document provenance: explicit linkage from construction docs → final render decisions
+The maintained architectural context extractor reads PDF text and metadata for
+review. Extraction does not perform OCR or verify architectural dimensions.
+Automatic context-aware rendering integrations now live under `archive/scripts/`;
+their examples are historical and do not establish an active Lux integration.
 
 Docs:
 - [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
@@ -101,7 +100,7 @@ Docs:
 ## What this repository provides
 
 Core capabilities:
-- Context-aware rendering workflows (document-informed processing)
+- Architectural PDF context extraction for review; archived rendering integration examples
 - Depth-aware enhancement (monocular depth + depth-guided processing)
 - **PBR Map Generation** (Physically Based Rendering maps: normal, roughness, AO)
 - AI-powered refinement (optional ML stack)
@@ -119,7 +118,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The governed depth workflow surface. The default model is the Apache-2.0 `da3_metric`; select `model_key="da3-research"` for the research model (requires `--non-commercial-ok`). The bare `da3` model selector is deprecated and still resolves the research model.
-- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. Use `make install-ml-core` for current operator setup; advanced Apple Silicon bootstrap-profile work can run `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` directly.
+- **Requirement:** DA3 inference needs its runtime and model weights. The recommended subprocess runtime is installed with `./scripts/setup/install_da3_runtime.sh --profile baseline`; its cache-authorizing lock requires native Darwin arm64 and Python 3.11, separately from the supported core Python 3.12 environment. Other hosts, optional profiles, or dependency overrides are inference-only and cannot authorize the governed depth cache. `make install-ml-core` manages the separate Apple Silicon core ML profile; Linux/macOS Intel ML lock lanes remain retired.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
@@ -148,7 +147,8 @@ config = EnhanceConfig(
 
 ## Backend Selection
 
-Lux Depth V3 supports multiple depth estimation backends with automatic fallback for robustness.
+Lux Depth V3 resolves backend and fallback intent into a prepared execution plan.
+Explicit backend requests and license checks retain their fail-closed behavior.
 
 ### Primary User-Facing Backends
 
@@ -249,7 +249,10 @@ real Hugging Face DA3 integration tests.
 
 ### Fallback Behavior
 
-If the requested backend is unavailable, the orchestrator records the resolution outcome in backend metadata and falls back through the configured operational chain. In explicit test or constrained environments, a synthetic fallback path can also be enabled.
+Fallback is permitted only by the resolved configuration and carried plan. An
+explicit `--depth-backend da3` request fails if DA3 cannot initialize. Synthetic
+outputs are test evidence, not proof of successful model inference; inspect the
+executed-backend metadata and produced artifacts before accepting a run.
 
 ### Backend Metadata
 
@@ -365,7 +368,7 @@ make check-environment
 lux-depth-v3 --help
 ```
 
-Core-only installs are useful for documentation, contract checks, portal/orchestrator surfaces, and non-ML utilities. Actual depth inference with the default `da3` backend requires the ML tier unless you are intentionally exercising synthetic fallback in a constrained test setup.
+Core-only installs support contract checks, portal/orchestrator surfaces, and non-ML utilities. Documentation builds need the declared documentation tools. Actual DA3 inference requires a configured model runtime; `--plan` success, HTTP readiness, model inference, and produced-artifact verification are separate evidence levels.
 
 Add a trusted ML profile when you need DA3 depth inference, research backends, segmentation, or other model-heavy workflows:
 
@@ -431,7 +434,7 @@ See [AGENTS.md](AGENTS.md) and the `requirements/` Make targets for the supporte
 ---
 
 ## System Requirements
-- Python 3.11+
+- Core Python 3.11+ (Python 3.12 is supported); the target-owned DA3 runtime requires Python 3.11
 - CPU-only operation supported
 - Apple Silicon (`mps`) and CUDA acceleration supported where the selected workflow can use them
 - FFmpeg recommended for video workflows
@@ -476,8 +479,8 @@ Configuration coherency:
 
 Direct pytest examples:
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
-pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
+./.venv/bin/pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
+./.venv/bin/pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
 ```
 
 ---
@@ -510,7 +513,7 @@ Start here:
 
 Historical project reports, PR summaries, and 2025 pipeline/depth-model notes are
 retained under `docs/` for audit context. Use the documentation map and
-[2026-05-11 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
+[2026-09-12 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
 to distinguish current guidance from archive-only material.
 
 ---
@@ -545,4 +548,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-06-11
+Last Updated: 2026-09-12
