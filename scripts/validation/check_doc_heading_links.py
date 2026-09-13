@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
 HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
 FENCE_RE = re.compile(r"^ {0,3}([`~]{3,})")
@@ -80,7 +79,7 @@ def _heading_texts(path: Path) -> list[str]:
 def _slugify_heading(heading: str) -> str:
     text = heading.strip().lower()
     text = re.sub(r"`([^`]+)`", r"\1", text)
-    text = re.sub(r"[^\w\s.-]", "", text, flags=re.UNICODE)
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
     text = re.sub(r"\s+", "-", text)
     text = re.sub(r"-+", "-", text)
     return text.strip("-")
