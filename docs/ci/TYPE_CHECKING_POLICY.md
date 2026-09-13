@@ -2,7 +2,7 @@
 
 **Status**: DRAFT (requires architect approval)
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-06-02
+**Last Updated**: 2026-09-12
 
 ---
 
@@ -15,8 +15,18 @@ post-CI soft-fail firewall (`.github/workflows/ci-quality-firewall.yml`) mirror
 the same whitelist. Each path passes `mypy --config-file=mypy.ini <path>`
 cleanly; additions must do the same before being appended to workflow lists.
 
-**Enforced as of 2026-05-24:**
+**Enforced as of 2026-09-12:**
 
+- `app.py`
+- `src/transformation_portal/orchestrator/dispatch.py`
+- `src/transformation_portal/orchestrator/worker.py`
+- `src/transformation_portal/orchestrator/worker_process.py`
+- `src/transformation_portal/orchestrator/execution_dispatch.py`
+- `src/transformation_portal/orchestrator/execution_workspace.py`
+- `src/transformation_portal/core/execution_plan.py`
+- `src/transformation_portal/core/archive_execution_plan.py`
+- `src/transformation_portal/core/security/frontdoor_identity.py`
+- `src/transformation_portal/core/security/checkpoint_index.py`
 - `src/transformation_portal/api/`
 - `src/transformation_portal/lux_depth_v3/`
 - `src/transformation_portal/orchestrator/queue/` *(added by N-1, 2026-05-24)*
@@ -34,6 +44,14 @@ signature from `async def` to a plain `def` returning `AsyncIterator`
 (every backend is an async generator consumed via `async for`, so the
 `async def` form mis-typed it as a coroutine); `artifact_store/` required
 tightening one `Optional[int]` local that is always `len(body)` to `int`.
+
+**Architecture-integrity tranche (2026-09-12):** the application, canonical
+dispatch, worker lifecycle, archive-plan and identity/index boundaries pass
+with CI-pinned `mypy==1.20.1`, `types-PyYAML==6.0.12.20260408` and
+`pydantic==2.13.3`. The three workflows use that same toolchain. Fifteen
+pre-existing application errors were corrected through precise return types,
+optional-value narrowing, mapping annotations and the missing broker import;
+no blanket ignores or relaxed mypy settings were introduced.
 
 **Remaining backlog (not yet enforced — candidates for the next tranche):**
 

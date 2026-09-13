@@ -251,6 +251,12 @@ class JobRepository(ABC):
 class JobEventStore(ABC):
     """Async event-history surface for SSE replay across restarts."""
 
+    supports_live_replay = False
+
+    async def replay_batch(self, job_id: str, *, after_seq: int) -> List[JobEvent]:
+        """Return a detached bounded batch for live polling where supported."""
+        return [event async for event in self.events_since(job_id, after_seq=after_seq)]
+
     @abstractmethod
     async def append(
         self,

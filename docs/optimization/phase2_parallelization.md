@@ -80,6 +80,20 @@ Key Properties:
 - Durable pointer-last publication and verified no-follow reads
 ```
 
+Stores reject arrays whose raw payload already meets or exceeds the byte
+quota before allocating a serialized NPY copy. Explicit quota resizes still
+use the shared namespace lock; accepted stores retain exact NPY-plus-pointer
+accounting and the final locked quota checks.
+
+The isolated DA3 worker seeds Python, NumPy, and Torch immediately before
+inference using `tp.da3.rgb-seed.v1`: SHA-256 over that domain, RGB dimensions,
+and decoded RGB pixels supplies a 32-bit seed. This makes DA3 sky quantile
+sampling repeatable for the same input without changing the parent process or
+concurrent in-process callers. Worker metadata records the policy and seed.
+The worker module belongs to the runtime source-digest closure, so changes to
+this policy invalidate the cache identity. Repeatability within a fixed runtime
+and device does not promise bitwise equality across devices or model runtimes.
+
 ## Performance Impact
 
 ### Expected Improvements

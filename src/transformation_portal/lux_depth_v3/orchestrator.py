@@ -2283,15 +2283,21 @@ class EnhanceOrchestrator:
 
         descriptor = self._open_prepared_input_descriptor(image_input.path)
         owns_snapshot_root = snapshot_root is None
-        snapshot_dir = Path(tempfile.mkdtemp(prefix="tp-prepared-input-")) if snapshot_root is None else Path(snapshot_root)
-        os.chmod(snapshot_dir, 0o700)
-        snapshot_path = snapshot_dir.joinpath(*PurePosixPath(plan_input.path).parts)
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        digest = hashlib.sha256()
+        snapshot_dir: Optional[Path] = None
+        snapshot_path: Optional[Path] = None
+        snapshot_created = False
         try:
+            snapshot_dir = (
+                Path(tempfile.mkdtemp(prefix="tp-prepared-input-")) if snapshot_root is None else Path(snapshot_root)
+            )
+            os.chmod(snapshot_dir, 0o700)
+            snapshot_path = snapshot_dir.joinpath(*PurePosixPath(plan_input.path).parts)
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            digest = hashlib.sha256()
             source_stat = os.fstat(descriptor)
             output_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
             output_descriptor = os.open(snapshot_path, output_flags, 0o600)
+            snapshot_created = True
             try:
                 with os.fdopen(descriptor, "rb", closefd=True) as source:
                     descriptor = -1
@@ -2332,9 +2338,11 @@ class EnhanceOrchestrator:
                 if output_descriptor >= 0:
                     os.close(output_descriptor)
         except Exception:
-            snapshot_path.unlink(missing_ok=True)
-            self._remove_empty_snapshot_parents(snapshot_path.parent, snapshot_dir)
-            if owns_snapshot_root:
+            if snapshot_path is not None and snapshot_dir is not None:
+                if snapshot_created:
+                    snapshot_path.unlink(missing_ok=True)
+                self._remove_empty_snapshot_parents(snapshot_path.parent, snapshot_dir)
+            if owns_snapshot_root and snapshot_dir is not None:
                 snapshot_dir.rmdir()
             raise
         finally:
@@ -2346,6 +2354,9 @@ class EnhanceOrchestrator:
         while parent != snapshot_root:
             try:
                 parent.rmdir()
+            except FileNotFoundError:
+                # Recursive mkdir may fail after creating only an ancestor.
+                pass
             except OSError:
                 break
             parent = parent.parent

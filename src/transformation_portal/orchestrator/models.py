@@ -8,7 +8,7 @@ these models are an internal persistence representation that
 Schema notes:
 - ``jobs``: one row per orchestrator job. ``version`` is incremented on
   every update for optimistic concurrency.
-- ``job_events``: append-only, per-job monotonic ``seq`` for SSE replay.
+- ``job_events``: bounded retained replay with per-job monotonic ``seq``.
 - ``job_artifacts``: keyed by ``(job_id, artifact_path)`` to match the
   legacy ``Job.artifact_lookup`` semantic.
 - ``operational_audit_events``: append-only pilot control-plane audit log.
@@ -27,10 +27,12 @@ from typing import Optional
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Float,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     PrimaryKeyConstraint,
     String,
     Text,
@@ -103,7 +105,7 @@ class JobArtifactModel(Base):
 
 
 class JobEventModel(Base):
-    """Append-only SSE event history with per-job monotonic seq.
+    """Retained SSE event history with per-job monotonic seq.
 
     ``job_id`` deliberately has no SQL-level foreign key to ``jobs.id``
     because the ``JobEventStore`` contract allows appending events for
@@ -117,7 +119,7 @@ class JobEventModel(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
@@ -149,3 +151,101 @@ class OperationalAuditEventModel(Base):
 
 
 __all__ = ["Base", "JobArtifactModel", "JobEventModel", "JobModel", "OperationalAuditEventModel"]
+
+
+class AdmissionCapacityModel(Base):
+    """Locked capacity counters; global is always locked before tenant."""
+
+    __tablename__ = "admission_capacity"
+    scope: Mapped[str] = mapped_column(String(160), primary_key=True)
+    limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    active: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    __table_args__ = (CheckConstraint('"limit" > 0 AND active >= 0 AND active <= "limit"'),)
+
+
+class DispatchPlanModel(Base):
+    """Immutable canonical bytes addressed by their exact SHA-256 digest."""
+
+    __tablename__ = "dispatch_plans"
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    canonical_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    __table_args__ = (CheckConstraint("octet_length(canonical_bytes) <= 1048576"),)
+
+
+class DispatchAttemptModel(Base):
+    """One admitted attempt and once-only dispatch; retained as a tombstone."""
+
+    __tablename__ = "dispatch_attempts"
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    dispatch_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    plan_digest: Mapped[str] = mapped_column(ForeignKey("dispatch_plans.digest"), nullable=False)
+    api_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    output_root: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_output_root: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
+    holder: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    lease_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    lease_valid_until: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    generation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    manifest_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    cleaned_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cleanup_checked_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    admitted_at: Mapped[float] = mapped_column(Float, nullable=False)
+    finished_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    __table_args__ = (
+        CheckConstraint("lease_epoch >= 0"),
+        Index(
+            "ix_dispatch_terminal_cleanup_due",
+            cleanup_checked_at.asc().nulls_first(),
+            job_id,
+            postgresql_where=state.in_(("succeeded", "partial", "failed", "canceled", "worker_lost")),
+        ),
+    )
+
+
+class OperationalRecordModel(Base):
+    """Append-only canonical evidence, distinct from mutable API projections."""
+
+    __tablename__ = "operational_records"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    canonical_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class OperationalOutboxModel(Base):
+    """Transactionally committed dispatch and event delivery intents."""
+
+    __tablename__ = "operational_outbox"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    delivered_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True, index=True)
+
+
+class CommittedGenerationModel(Base):
+    """Immutable manifests; visibility is solely the dispatch pointer."""
+
+    __tablename__ = "committed_generations"
+    generation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class JobEventSequenceModel(Base):
+    """Per-job counter survives replay pruning; orphan event ids remain supported."""
+
+    __tablename__ = "job_event_sequences"
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    __table_args__ = (CheckConstraint("last_seq >= 0", name="ck_job_event_sequence_nonnegative"),)

@@ -1,4 +1,5 @@
 import { getConfig } from "./config.js";
+import { ACTOR_ASSERTION_HEADER, signActorAssertion } from "./frontdoor-identity.js";
 
 const STRIP_REQUEST_HEADERS = new Set([
   "authorization",
@@ -12,7 +13,12 @@ const STRIP_REQUEST_HEADERS = new Set([
   "x-forwarded-proto",
   "x-api-key",
   "x-csrf-token",
-  "x-real-ip"
+  "x-real-ip",
+  "x-tp-tenant-id",
+  "x-tp-actor",
+  "x-tp-actor-email",
+  "x-tp-actor-role",
+  ACTOR_ASSERTION_HEADER
 ]);
 
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -34,13 +40,14 @@ export function buildUpstreamUrl(pathname, search = "") {
 
 export function buildUpstreamHeaders(
   sourceHeaders,
-  { backendApiKey, actor, preferIdentityEncoding = false, forwarding = null, traceparent = "" }
+  { backendApiKey, actor, preferIdentityEncoding = false, forwarding = null, traceparent = "", identity = null }
 ) {
   const headers = new Headers();
+  const tenantHeader = getConfig().pilotTenantHeader;
 
   for (const [key, value] of sourceHeaders.entries()) {
     const normalizedKey = key.toLowerCase();
-    if (STRIP_REQUEST_HEADERS.has(normalizedKey)) continue;
+    if (STRIP_REQUEST_HEADERS.has(normalizedKey) || normalizedKey === tenantHeader) continue;
     headers.set(key, value);
   }
 
@@ -65,6 +72,10 @@ export function buildUpstreamHeaders(
   if (actor?.username) headers.set("x-tp-actor", actor.username);
   if (actor?.accessEmail) headers.set("x-tp-actor-email", actor.accessEmail);
   if (actor?.role) headers.set("x-tp-actor-role", actor.role);
+
+  if (identity) {
+    headers.set(ACTOR_ASSERTION_HEADER, signActorAssertion({ ...identity, actor }));
+  }
 
   return headers;
 }

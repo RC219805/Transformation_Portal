@@ -286,6 +286,12 @@ Managed bootstrap and managed `/v1/*` responses now echo `traceparent`. The
 front door forwards a browser-supplied `traceparent` upstream unchanged, and
 FastAPI mints one when the browser does not supply a valid value.
 
+Managed `/v1/*` proxy requests cancel their backend fetch when the browser
+disconnects. SSE forwarding preserves event bytes and backpressure, cancels the
+backend stream when its reader disconnects, and propagates backend stream errors
+instead of turning a truncated response into a clean end of stream. Upstream
+error bodies replaced by managed error envelopes are closed before returning.
+
 ## Portal Workspace
 
 The four workspace routes remain `?view=overview|build|operate|review`.

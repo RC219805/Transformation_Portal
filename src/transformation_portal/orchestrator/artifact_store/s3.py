@@ -20,11 +20,10 @@ Implementation notes:
   ``boto3`` is fundamentally synchronous. The thread-pool model is
   acceptable for artifact I/O which is dominated by network latency
   rather than CPU.
-- Fingerprinting streams the object body once and computes SHA-256 on
-  the wire (no separate ``HeadObject`` + ``GetObject`` round trips).
-  Objects larger than ``ARTIFACT_FINGERPRINT_MAX_BYTES`` are reported
-  as ``fingerprint_status="skipped_size"`` without downloading the
-  bytes, matching the ``LocalArtifactStore`` contract.
+- Fingerprinting checks ``HeadObject`` metadata, then computes SHA-256
+  while streaming the body. Both GET metadata and observed bytes enforce
+  ``ARTIFACT_FINGERPRINT_MAX_BYTES``; a larger replacement object cannot
+  bypass the budget. Size disagreement reports an unavailable fingerprint.
 - Object metadata sets ``Content-Type`` and presigned GET URLs can
   carry response-header overrides so signed delivery preserves the
   orchestrator's artifact response semantics.
@@ -146,6 +145,33 @@ class S3ArtifactStore(ArtifactStore):
         normalized = _normalize_relative_path(relative_path)
         return f"{self._job_prefix(job_id)}/{normalized}"
 
+    async def write_immutable_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> None:
+        key = self._object_key(job_id, relative_path)
+        client = await self._get_client()
+
+        def create() -> None:
+            try:
+                with source_path.open("rb") as source:
+                    client.put_object(
+                        Bucket=self._bucket,
+                        Key=key,
+                        Body=source,
+                        ContentLength=source_path.stat().st_size,
+                        ContentType=content_type or _content_type_for(relative_path),
+                        IfNoneMatch="*",
+                    )
+            except Exception as exc:
+                raise ArtifactStoreError("immutable S3 generation write failed") from exc
+
+        await asyncio.to_thread(create)
+
     async def head(self, job_id: str, relative_path: str) -> ArtifactObjectMetadata:
         key = self._object_key(job_id, relative_path)
         client = await self._get_client()
@@ -166,7 +192,7 @@ class S3ArtifactStore(ArtifactStore):
             sha256_hex = None
             status = "skipped_size"
         else:
-            sha256_hex, status = await self._stream_sha256(client, key)
+            sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes)
 
         return ArtifactObjectMetadata(
             relative_path=_normalize_relative_path(relative_path),
@@ -246,7 +272,7 @@ class S3ArtifactStore(ArtifactStore):
                     sha256_hex = None
                     status = "skipped_size"
                 else:
-                    sha256_hex, status = await self._stream_sha256(client, key)
+                    sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes)
                 results.append(
                     ArtifactObjectMetadata(
                         relative_path=normalized_relative,
@@ -464,7 +490,7 @@ class S3ArtifactStore(ArtifactStore):
         deleted = response.get("Deleted", []) or []
         return len(deleted)
 
-    async def _stream_sha256(self, client: Any, key: str) -> tuple[Optional[str], str]:
+    async def _stream_sha256(self, client: Any, key: str, *, expected_size_bytes: int) -> tuple[Optional[str], str]:
         try:
             response = await asyncio.to_thread(client.get_object, Bucket=self._bucket, Key=key)
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError
@@ -474,11 +500,29 @@ class S3ArtifactStore(ArtifactStore):
         body = response["Body"]
         digest = hashlib.sha256()
         try:
+            content_length = response.get("ContentLength")
+            if content_length is not None:
+                if not isinstance(content_length, int) or isinstance(content_length, bool) or content_length < 0:
+                    return None, "unavailable"
+                if content_length > ARTIFACT_FINGERPRINT_MAX_BYTES:
+                    return None, "skipped_size"
+                if content_length != expected_size_bytes:
+                    return None, "unavailable"
+            bytes_read = 0
             while True:
-                chunk = await asyncio.to_thread(body.read, _CHUNK_BYTES)
+                # Read at most one byte beyond the budget to distinguish an
+                # exact-cap object from an oversized body with missing or
+                # stale ContentLength. Never hash bytes beyond the cap.
+                read_size = min(_CHUNK_BYTES, ARTIFACT_FINGERPRINT_MAX_BYTES - bytes_read + 1)
+                chunk = await asyncio.to_thread(body.read, read_size)
                 if not chunk:
                     break
+                bytes_read += len(chunk)
+                if bytes_read > ARTIFACT_FINGERPRINT_MAX_BYTES:
+                    return None, "skipped_size"
                 digest.update(chunk)
+            if bytes_read != expected_size_bytes:
+                return None, "unavailable"
         except Exception:  # noqa: BLE001 - any read failure → "unavailable"
             return None, "unavailable"
         finally:

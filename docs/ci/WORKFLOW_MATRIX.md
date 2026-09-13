@@ -2,14 +2,14 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13 UTC
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,229 lines total
-- **Required PR check snapshot (2026-09-12)**: read-only GitHub main protection listed only `CI Gate`, with strict up-to-date checking. Re-read remote settings before merge.
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,263 lines total
+- **Required PR check snapshot (2026-09-13 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Consolidation target**: 31 → ~19 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
 
@@ -17,17 +17,17 @@
 
 ## Complete Inventory
 
-Every `.github/workflows/*.yml` file, current as of the timestamp above. The **Recommendation** column is the proposal — *not yet executed*. Discuss before acting. **LOC** values count `Path.read_bytes().splitlines()` for each tracked workflow; blank and comment lines are included. The baseline is `faa3758fc3b5180bccf264c9a1b1d1b5ef927c52`.
+Every `.github/workflows/*.yml` file, current as of the timestamp above. The **Recommendation** column is the proposal — *not yet executed*. Discuss before acting. **LOC** values count `Path.read_bytes().splitlines()` for each tracked workflow; blank and comment lines are included. The previous audited baseline was `faa3758fc3b5180bccf264c9a1b1d1b5ef927c52`; LOC values below reflect the current source.
 
 | # | File | Name | Triggers | Source behavior | LOC | Recommendation |
 |---|------|------|----------|-----------|-------------|----------------|
-| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1320 | **Keep** — primary PR gate; aggregated `CI Gate` check |
-| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 595 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
-| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 949 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest secondary workflow file after `build.yml`. |
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1330 | **Keep** — primary PR gate; aggregated `CI Gate` check |
+| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 605 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
+| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 959 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest secondary workflow file after `build.yml`. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 237 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
 | 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | Failing checks; see remote snapshot | 112 | **Keep** — GitHub semantic SAST; can't be replicated by other workflows. |
-| 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | Failing checks; see remote snapshot | 275 | **Keep** — pip-audit + security gates; distinct from CodeQL. |
+| 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | Dependency Security required on main | 279 | **Keep** — pip-audit + checkpoint-loading source gates; distinct from CodeQL. Unfiltered main PR trigger, read-only dependency job, no secret dependency or soft failure. |
 | 8 | `dependency-review.yml` | Dependency Review | PR | ⚠️ Advisory (warn-only) | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. The workflow sets `warn-only: true` and the job name is "Dependency Review (advisory)", so findings never fail a PR — they only post warnings. |
 | 9 | `dependency-submission.yml` | Dependency Submission | push, PR, manual | ❌ No | 256 | **Keep** — feeds GitHub dependency graph; distinct concern. |
 | 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 223 | **Keep** — Dependabot supplement; scheduled. |
@@ -84,7 +84,7 @@ These are clear wins. Aggregated reduction: **3 fewer workflows**.
    - **Expand `build.yml`'s push branches to include `develop`** (currently only `main`); otherwise retiring `ci.yml` silently drops post-merge coverage on the `develop` branch.
    - Update branch-protection required-checks list if `ci.yml` jobs are listed there.
 
-3. **Retire `ci-quality-firewall.yml`** — 949 lines (largest secondary workflow file after `build.yml`) of `workflow_run` secondary gating. If `build.yml` is required at branch protection, this re-litigates the same checks. Confirm by listing what jobs `ci-quality-firewall.yml` runs that `build.yml` doesn't, then delete.
+3. **Retire `ci-quality-firewall.yml`** — 959 lines (largest secondary workflow file after `build.yml`) of `workflow_run` secondary gating. If `build.yml` is required at branch protection, this re-litigates the same checks. Confirm by listing what jobs `ci-quality-firewall.yml` runs that `build.yml` doesn't, then delete.
 
 ### Tier B — Consolidate domains (medium effort, clear benefit)
 

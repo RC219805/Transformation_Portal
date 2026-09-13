@@ -31,6 +31,13 @@ from transformation_portal.lux_depth_v3.pipeline_coordinator import select_backe
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _stub_isolated_worker_rng_for_contract_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These engine fakes deliberately avoid importing optional torch. Real RNG
+    # behavior and isolation are exercised by test_da3_worker_determinism.py.
+    monkeypatch.setattr(da3_worker, "_seed_isolated_inference", lambda _image: 0)
+
+
 def _write_bound_runtime_token(
     path: Path,
     *,

@@ -14,6 +14,7 @@ import io
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from functools import lru_cache
@@ -5375,6 +5376,90 @@ def test_lux_depth_readiness_blocks_selected_da3_when_runtime_missing(
     assert any(item["reason"] == "da3_runtime_unavailable" for item in readiness["missing_prerequisites"])
 
 
+@pytest.mark.parametrize("cancel_at", ["before_start", "startup_persist", "startup_event"])
+def test_run_job_does_not_spawn_after_startup_cancellation(monkeypatch: pytest.MonkeyPatch, cancel_at: str) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id=f"job_cancel_{cancel_at}", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        spawned: list[object] = []
+        persist = orchestrator_app._persist_job_fields_best_effort
+        publish = orchestrator_app._publish_event
+
+        async def cancel_during_persist(current_job, context, **fields):
+            result = await persist(current_job, context, **fields)
+            if context == "runner_start" and cancel_at == "startup_persist":
+                job.cancel_requested = True
+            return result
+
+        async def cancel_during_event(job_id, event_type, payload):
+            result = await publish(job_id, event_type, payload)
+            if event_type == "state" and cancel_at == "startup_event":
+                job.cancel_requested = True
+            return result
+
+        async def unexpected_spawn(*args, **_kwargs):
+            spawned.append(args)
+            raise AssertionError("a canceled job must not start native work")
+
+        monkeypatch.setattr(orchestrator_app, "_persist_job_fields_best_effort", cancel_during_persist)
+        monkeypatch.setattr(orchestrator_app, "_publish_event", cancel_during_event)
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", unexpected_spawn)
+        job.cancel_requested = cancel_at == "before_start"
+        await orchestrator_app._run_job(job, ["must-not-spawn"])
+        assert spawned == []
+        assert job.proc is None and job.exit_code is None
+        assert job.state == "canceled"
+        assert job.done_published_at is not None and job.finished_at is not None
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None and stored.state == "canceled"
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["canceled"]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("terminal_at", ["before_start", "startup_event"])
+def test_run_job_does_not_spawn_or_rewrite_startup_terminal_authority(
+    monkeypatch: pytest.MonkeyPatch, terminal_at: str
+) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id=f"job_terminal_{terminal_at}", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        publish = orchestrator_app._publish_event
+        snapshot = None
+        spawned: list[object] = []
+
+        async def make_terminal() -> None:
+            nonlocal snapshot
+            await orchestrator_app._publish_worker_lost_terminal(
+                job, reason_code=orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+            )
+            snapshot = await orchestrator_app._job_repository().get(job.id)
+
+        async def terminal_during_event(job_id, event_type, payload):
+            result = await publish(job_id, event_type, payload)
+            if event_type == "state" and terminal_at == "startup_event":
+                await make_terminal()
+            return result
+
+        async def unexpected_spawn(*args, **_kwargs):
+            spawned.append(args)
+            raise AssertionError("a terminal job must not start native work")
+
+        monkeypatch.setattr(orchestrator_app, "_publish_event", terminal_during_event)
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", unexpected_spawn)
+        if terminal_at == "before_start":
+            await make_terminal()
+        await orchestrator_app._run_job(job, ["must-not-spawn"])
+        assert spawned == []
+        assert snapshot is not None and await orchestrator_app._job_repository().get(job.id) == snapshot
+        assert job.state == "worker_lost" and job.proc is None
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())
@@ -5583,6 +5668,264 @@ def test_cancel_request_terminates_running_job() -> None:
 
         assert job.cancel_requested is True
         assert job.state == "canceled"
+
+    asyncio.run(scenario())
+
+
+def test_broker_cancel_terminates_silent_subprocess() -> None:
+    from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_broker_cancel_silent", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        cancellation_event = asyncio.Event()
+        request = JobEnqueueRequest(
+            job_id=job.id,
+            argv=[sys.executable, "-u", "-c", "import time;print('ready', flush=True);time.sleep(30)"],
+        )
+        runner = asyncio.create_task(orchestrator_app._orchestrator_job_executor(request, cancellation_event))
+        try:
+            for _ in range(200):
+                if "ready" in job.logs_tail:
+                    break
+                await asyncio.sleep(0.01)
+            assert "ready" in job.logs_tail
+            assert job.proc is not None
+            if os.name != "nt":
+                assert getattr(job.proc, "_tp_owned_process_group_id") == job.proc.pid
+            cancellation_event.set()
+            await asyncio.wait_for(asyncio.shield(runner), timeout=2)
+            assert job.proc.returncode is not None
+            assert job.state == "canceled"
+            assert job.finished_at is not None
+            assert not hasattr(job.proc, "_tp_owned_process_group_id")
+        finally:
+            if job.proc is not None and job.proc.returncode is None:
+                await orchestrator_app._terminate_process(job.proc, grace_seconds=0.1)
+            await asyncio.gather(runner, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX process groups and fork")
+@pytest.mark.parametrize("cancel_boundary", ["broker", "request"])
+def test_cancel_reaches_owned_descendant_after_group_leader_exits(
+    monkeypatch: pytest.MonkeyPatch,
+    cancel_boundary: str,
+) -> None:
+    from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id=f"job_exited_leader_{cancel_boundary}", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        cancellation_event = asyncio.Event()
+        script = """
+import os, signal, time
+ready_read, ready_write = os.pipe()
+if os.fork() == 0:
+    os.close(ready_read)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    os.write(ready_write, b'1')
+    os.close(ready_write)
+    time.sleep(30)
+else:
+    os.close(ready_write)
+    os.read(ready_read, 1)
+    print('descendant-ready', flush=True)
+"""
+        terminate = orchestrator_app._terminate_process
+
+        async def terminate_promptly(proc):
+            await terminate(proc, grace_seconds=0.05)
+
+        monkeypatch.setattr(orchestrator_app, "_terminate_process", terminate_promptly)
+        request = JobEnqueueRequest(job_id=job.id, argv=[sys.executable, "-u", "-c", script])
+        runner = asyncio.create_task(orchestrator_app._orchestrator_job_executor(request, cancellation_event))
+        try:
+            for _ in range(200):
+                if job.proc is not None and job.proc.returncode == 0 and "descendant-ready" in job.logs_tail:
+                    break
+                await asyncio.sleep(0.01)
+            assert job.proc is not None and job.proc.returncode == 0
+            assert "descendant-ready" in job.logs_tail
+            assert not runner.done()
+            if cancel_boundary == "broker":
+                cancellation_event.set()
+            else:
+                await orchestrator_app._request_cancel(job)
+            await asyncio.wait_for(asyncio.shield(runner), timeout=2)
+            assert job.state == "canceled"
+            assert job.done_published_at is not None
+            assert not hasattr(job.proc, "_tp_owned_process_group_id")
+        finally:
+            if job.proc is not None:
+                try:
+                    os.killpg(job.proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            await asyncio.gather(runner, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("failure", ["oversize_stdout", "stdout_backpressure", "task_cancellation"])
+def test_runner_failure_reaps_subprocess_before_terminal_publication(failure: str) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id=f"job_cleanup_{failure}", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        child = {
+            "oversize_stdout": "import sys,time;sys.stdout.write('x'*70000+'\\n');sys.stdout.flush();time.sleep(30)",
+            "stdout_backpressure": "import sys,time;sys.stdout.write('x'*1048576);sys.stdout.flush();time.sleep(30)",
+            "task_cancellation": "import time;print('ready', flush=True);time.sleep(30)",
+        }[failure]
+        runner = asyncio.create_task(orchestrator_app._run_job(job, [sys.executable, "-u", "-c", child]))
+        try:
+            if failure == "task_cancellation":
+                for _ in range(200):
+                    if "ready" in job.logs_tail:
+                        break
+                    await asyncio.sleep(0.01)
+                assert "ready" in job.logs_tail
+                runner.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await runner
+            else:
+                await asyncio.wait_for(asyncio.shield(runner), timeout=2)
+                assert job.error is not None
+                assert job.error["code"] == "RUNNER_ERROR"
+            assert job.proc is not None
+            assert job.proc.returncode is not None
+            assert job.state == ("canceled" if failure == "task_cancellation" else "failed")
+            assert job.finished_at is not None
+            assert job.done_published_at is not None
+        finally:
+            if job.proc is not None and job.proc.returncode is None:
+                await orchestrator_app._terminate_process(job.proc, grace_seconds=0.1)
+            await asyncio.gather(runner, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("completion", ["broker_cancel", "read_error", "file_not_found", "task_cancel"])
+@pytest.mark.parametrize("terminal_state", ["worker_lost", "canceled"])
+def test_runner_preserves_external_terminal_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    completion: str,
+    terminal_state: str,
+) -> None:
+    from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id=f"job_terminal_authority_{completion}", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        cancellation_event = asyncio.Event()
+        read_started = asyncio.Event()
+        release_read = asyncio.Event()
+        spawn = asyncio.create_subprocess_exec
+
+        async def controlled_spawn(*args, **kwargs):
+            proc = await spawn(*args, **kwargs)
+            assert proc.stdout is not None
+            readline = proc.stdout.readline
+
+            async def controlled_readline():
+                read_started.set()
+                await release_read.wait()
+                if completion == "read_error":
+                    raise ValueError("injected stdout failure")
+                if completion == "file_not_found":
+                    raise FileNotFoundError("injected runner failure")
+                return await readline()
+
+            monkeypatch.setattr(proc.stdout, "readline", controlled_readline)
+            return proc
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", controlled_spawn)
+        request = JobEnqueueRequest(
+            job_id=job.id,
+            argv=[sys.executable, "-u", "-c", "import time;time.sleep(30)"],
+        )
+        runner = asyncio.create_task(orchestrator_app._orchestrator_job_executor(request, cancellation_event))
+        try:
+            await asyncio.wait_for(read_started.wait(), timeout=2)
+            if terminal_state == "worker_lost":
+                await orchestrator_app._publish_worker_lost_terminal(
+                    job, reason_code=orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+                )
+            else:
+                job.state = terminal_state
+                await orchestrator_app._publish_event(job.id, "done", orchestrator_app._terminal_done_payload(job))
+                job.done_published_at = orchestrator_app._now()
+                job.finished_at = job.done_published_at
+                await orchestrator_app._persist_job_state(job)
+            before = await orchestrator_app._job_repository().get(job.id)
+            if completion == "task_cancel":
+                runner.cancel()
+            elif completion == "broker_cancel":
+                cancellation_event.set()
+            release_read.set()
+            await asyncio.wait_for(asyncio.shield(runner), timeout=2)
+            after = await orchestrator_app._job_repository().get(job.id)
+            assert after == before
+            assert job.state == terminal_state
+            assert job.exit_code is None
+            assert job.proc is not None and job.proc.returncode is not None
+            events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+            terminal_events = [event for event in events if event.event_type == "done"]
+            assert len(terminal_events) == 1
+            assert terminal_events[0].payload["state"] == terminal_state
+        finally:
+            release_read.set()
+            if job.proc is not None and job.proc.returncode is None:
+                await orchestrator_app._terminate_process(job.proc, grace_seconds=0.1)
+            await asyncio.gather(runner, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_runner_closes_stdout_pipe_when_cleanup_drain_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        read_started = asyncio.Event()
+
+        class SilentStdout(asyncio.StreamReader):
+            async def readline(self):
+                read_started.set()
+                return await super().readline()
+
+        stdout = SilentStdout()
+
+        class PipeTransport:
+            closed = False
+
+            def close(self):
+                self.closed = True
+                stdout.feed_eof()
+
+        transport = PipeTransport()
+        stdout.set_transport(transport)
+        proc = SimpleNamespace(stdout=stdout, returncode=None, pid=12345)
+
+        async def spawn(*_args, **_kwargs):
+            return proc
+
+        async def terminate(_proc):
+            # The child has exited, but a detached descendant still holds
+            # the stdout pipe open. Process cleanup must remain bounded.
+            proc.returncode = -15
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+        monkeypatch.setattr(orchestrator_app, "_terminate_process", terminate)
+        monkeypatch.setattr(orchestrator_app, "CANCEL_GRACE_SECONDS", 0.01)
+        job = orchestrator_app.Job(id="job_stdout_drain_timeout", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        runner = asyncio.create_task(orchestrator_app._run_job(job, ["controlled-test-runner"]))
+        await asyncio.wait_for(read_started.wait(), timeout=1)
+        runner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(runner, timeout=1)
+        assert transport.closed
+        assert job.state == "canceled"
+        assert job.done_published_at is not None
 
     asyncio.run(scenario())
 

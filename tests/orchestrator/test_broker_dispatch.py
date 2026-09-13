@@ -362,7 +362,7 @@ def test_lease_reclaim_marks_job_worker_lost(monkeypatch: pytest.MonkeyPatch, tm
 
     original_heartbeat = worker_module.WorkerRunner._heartbeat_loop
 
-    async def _no_heartbeat(self, job_id, cancellation_event):  # noqa: ANN001
+    async def _no_heartbeat(self, job_id, cancellation_event, fence=None, lease_deadline=None):  # noqa: ANN001
         # Park forever; the lease will expire and the reclaim sweep
         # will mark the in-process Job worker_lost.
         await cancellation_event.wait()

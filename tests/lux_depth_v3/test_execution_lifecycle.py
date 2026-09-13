@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import json
 import logging
+import os
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,6 +22,7 @@ from transformation_portal.core.execution_plan import (
     with_execution_plan_fingerprint,
 )
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
 from transformation_portal.lux_depth_v3.execution_lifecycle import (
@@ -130,6 +134,123 @@ def test_prepared_inputs_are_real_absolute_and_exactly_authorized(tmp_path: Path
     assert prepared.input_files == (image.resolve(),)
     assert all(path.is_absolute() and not path.is_symlink() for path in prepared.input_files)
     assert authorize_prepared_input(prepared, image) == image.resolve()
+
+
+@pytest.mark.parametrize("names", [("scene.png", "SCENE.png"), ("caf\u00e9.png", "cafe\u0301.png")])
+def test_consumed_plan_rejects_portable_input_collisions(tmp_path: Path, names: tuple[str, str]) -> None:
+    root = tmp_path / "inputs"
+    root.mkdir()
+    images = [root / name for name in names]
+    for image in images:
+        image.write_bytes(b"not-decoded-by-plan-preparation")
+    config = _synthetic_config()
+    prepared = prepare_lux_execution(config, root, images[:1])
+    payload = prepared.plan.to_payload()
+    payload["input_selection"]["files"].append({"id": "input-000002", "path": names[1]})
+
+    with pytest.raises(ExecutionPlanError, match="collide under portable"):
+        prepare_lux_execution(config, root, images)
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="collide under portable"):
+        consume_lux_execution_plan(
+            canonicalize_json(with_execution_plan_fingerprint(payload)),
+            authorized_input_root=root,
+        )
+
+
+@pytest.mark.parametrize("failure_step", ["mkdtemp", "chmod", "mkdir", "partial_mkdir"])
+def test_prepared_snapshot_setup_failure_closes_source_and_cleans_private_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_step: str,
+) -> None:
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    root, image = _input_tree(tmp_path)
+    nested_image = root / "first" / "second" / image.name
+    nested_image.parent.mkdir(parents=True)
+    image.rename(nested_image)
+    image = nested_image
+    prepared = prepare_lux_execution(_synthetic_config(), root, [image])
+    orchestrator = object.__new__(EnhanceOrchestrator)
+    orchestrator._prepared_execution = prepared
+    descriptor = os.open(image, os.O_RDONLY)
+    monkeypatch.setattr(orchestrator, "_open_prepared_input_descriptor", lambda _path: descriptor)
+    failure = OSError(errno.ENOSPC, "simulated snapshot setup failure")
+    created_roots: list[Path] = []
+    real_mkdtemp = tempfile.mkdtemp
+    real_mkdir = Path.mkdir
+
+    def create_snapshot_root(*, prefix: str) -> str:
+        if failure_step == "mkdtemp":
+            raise failure
+        created = real_mkdtemp(prefix=prefix, dir=tmp_path)
+        created_roots.append(Path(created))
+        return created
+
+    def fail_setup(*_args: object, **_kwargs: object) -> None:
+        raise failure
+
+    def fail_nested_mkdir(*_args: object, **_kwargs: object) -> None:
+        real_mkdir(created_roots[-1] / "first")
+        raise failure
+
+    monkeypatch.setattr(tempfile, "mkdtemp", create_snapshot_root)
+    if failure_step == "chmod":
+        monkeypatch.setattr(os, "chmod", fail_setup)
+    elif failure_step == "mkdir":
+        monkeypatch.setattr(Path, "mkdir", fail_setup)
+    elif failure_step == "partial_mkdir":
+        monkeypatch.setattr(Path, "mkdir", fail_nested_mkdir)
+
+    try:
+        with pytest.raises(OSError) as raised:
+            orchestrator._materialize_prepared_input_snapshot(ImageInput(image))
+        assert raised.value is failure
+        with pytest.raises(OSError) as closed:
+            os.fstat(descriptor)
+        assert closed.value.errno == errno.EBADF
+        assert all(not path.exists() for path in created_roots)
+        assert image.read_bytes() == b"not-decoded-by-plan-preparation"
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        for path in created_roots:
+            if path.exists():
+                if (path / "first").exists():
+                    (path / "first").rmdir()
+                path.rmdir()
+
+
+def test_prepared_snapshot_creation_failure_preserves_existing_destination(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    root, image = _input_tree(tmp_path)
+    prepared = prepare_lux_execution(_synthetic_config(), root, [image])
+    orchestrator = object.__new__(EnhanceOrchestrator)
+    orchestrator._prepared_execution = prepared
+    descriptor = os.open(image, os.O_RDONLY)
+    orchestrator._open_prepared_input_descriptor = lambda _path: descriptor
+    snapshot_root = tmp_path / "snapshots"
+    snapshot_root.mkdir()
+    existing = snapshot_root / image.name
+    existing.write_bytes(b"prior snapshot must survive")
+
+    try:
+        with pytest.raises(FileExistsError):
+            orchestrator._materialize_prepared_input_snapshot(ImageInput(image), snapshot_root=snapshot_root)
+        assert existing.read_bytes() == b"prior snapshot must survive"
+        with pytest.raises(OSError) as closed:
+            os.fstat(descriptor)
+        assert closed.value.errno == errno.EBADF
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
 
 
 @pytest.mark.security

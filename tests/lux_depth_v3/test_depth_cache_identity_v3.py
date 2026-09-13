@@ -668,6 +668,39 @@ def test_zero_size_limit_refuses_object_without_leaving_artifacts(tmp_path) -> N
     assert list((cache.cache_dir / "v1" / "objects").glob("*/*.npy")) == []
 
 
+@pytest.mark.parametrize("limit_bytes", [0, 32, 64])
+def test_payload_that_cannot_fit_quota_is_rejected_before_serialization(tmp_path, monkeypatch, limit_bytes) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=limit_bytes / 1024**3)
+    depth = np.ones((4, 4), dtype=np.float32)
+
+    def refuse_serialization(*args, **kwargs):
+        pytest.fail("A depth payload that cannot fit must not allocate a serialized copy")
+
+    monkeypatch.setattr(np, "save", refuse_serialization)
+    assert not cache.store(_identity(), depth)
+    assert cache.stats()["entry_count"] == 0
+
+
+def test_oversized_payload_preflight_still_applies_requested_quota_shrink(tmp_path, monkeypatch) -> None:
+    cache = DepthCache(tmp_path, max_size_gb=4096 / 1024**3)
+    identity = _identity()
+    depth = np.ones((4, 4), dtype=np.float32)
+    assert cache.store(identity, depth)
+    cache.max_size_gb = 32 / 1024**3
+
+    def refuse_serialization(*args, **kwargs):
+        pytest.fail("A depth payload larger than the requested quota must not be serialized")
+
+    monkeypatch.setattr(np, "save", refuse_serialization)
+    assert not cache.store(identity, depth)
+    with cache._locked_shards(()):
+        state = cache._read_quota_state_locked()
+    assert state is not None
+    assert state.max_size_bytes == 32
+    assert state.physical_size_bytes == 0
+    assert cache.get(identity) is None
+
+
 def test_serialized_object_limit_includes_npy_header_bytes(tmp_path, monkeypatch) -> None:
     cache = DepthCache(tmp_path)
     depth = np.ones((3, 3), dtype=np.float64)

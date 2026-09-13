@@ -31,6 +31,8 @@ Coverage:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import io
 import os
 import threading
 import time
@@ -711,3 +713,116 @@ async def test_fingerprint_skipped_when_oversized(store: ArtifactStore, monkeypa
     head = await store.head("job-big", "big.bin")
     assert head.fingerprint_status == "skipped_size"
     assert head.sha256_hex is None
+
+
+@pytest.mark.parametrize("operation", ["head", "list_for_job"])
+@pytest.mark.parametrize(
+    "head_size,get_size,body_size,oversize_chunk,read_error,expected_status,expected_bytes_read",
+    [
+        (16, 16, 16, False, False, "ok", 16),
+        (8, 128, 128, False, False, "skipped_size", 0),
+        (8, 4, 4, False, False, "unavailable", 0),
+        (16, None, 16, False, False, "ok", 16),
+        (16, None, 128, False, False, "skipped_size", 17),
+        (8, 8, 128, False, False, "skipped_size", 17),
+        (16, 16, 8, False, False, "unavailable", 8),
+        (16, None, 128, True, False, "skipped_size", 128),
+        (16, 16, 16, False, True, "unavailable", 0),
+        (16, -1, 16, False, False, "unavailable", 0),
+        (16, True, 16, False, False, "unavailable", 0),
+    ],
+)
+async def test_s3_fingerprint_bounds_actual_get_body(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    head_size: int,
+    get_size: int | None,
+    body_size: int,
+    oversize_chunk: bool,
+    read_error: bool,
+    expected_status: str,
+    expected_bytes_read: int,
+) -> None:
+    from transformation_portal.orchestrator.artifact_store import s3 as s3_module
+
+    monkeypatch.setattr(s3_module, "ARTIFACT_FINGERPRINT_MAX_BYTES", 16)
+
+    class ObservedBody(io.BytesIO):
+        bytes_read = 0
+        read_sizes: list[int]
+
+        def __init__(self) -> None:
+            super().__init__(b"x" * body_size)
+            self.read_sizes = []
+
+        def read(self, size: int = -1) -> bytes:
+            self.read_sizes.append(size)
+            if read_error:
+                raise OSError("injected stream failure")
+            chunk = super().read(-1 if oversize_chunk else size)
+            self.bytes_read += len(chunk)
+            return chunk
+
+    body = ObservedBody()
+
+    class SnapshotClient:
+        def head_object(self, **_kwargs):
+            return {"ContentLength": head_size, "ContentType": "application/octet-stream"}
+
+        def get_object(self, **_kwargs):
+            return {"Body": body, **({"ContentLength": get_size} if get_size is not None else {})}
+
+        def list_objects_v2(self, **_kwargs):
+            return {"Contents": [{"Key": "tp/artifacts/jobs/job/artifact.bin"}]}
+
+    store = s3_module.S3ArtifactStore(bucket="audit", client=SnapshotClient())
+    if operation == "head":
+        metadata = await store.head("job", "artifact.bin")
+    else:
+        metadata = (await store.list_for_job("job"))[0]
+    assert body.closed
+    assert metadata.size_bytes == head_size
+    assert metadata.fingerprint_status == expected_status
+    assert metadata.sha256_hex == (hashlib.sha256(b"x" * body_size).hexdigest() if expected_status == "ok" else None)
+    assert body.bytes_read == expected_bytes_read
+    assert all(0 < size <= 17 for size in body.read_sizes)
+
+
+async def test_s3_fingerprint_closes_body_on_cancellation() -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    started = threading.Event()
+    released = threading.Event()
+
+    class BlockingBody:
+        closed = False
+
+        def read(self, _size: int) -> bytes:
+            started.set()
+            released.wait(timeout=2)
+            return b""
+
+        def close(self) -> None:
+            self.closed = True
+            released.set()
+
+    body = BlockingBody()
+
+    class Client:
+        def head_object(self, **_kwargs):
+            return {"ContentLength": 1}
+
+        def get_object(self, **_kwargs):
+            return {"ContentLength": 1, "Body": body}
+
+    store = S3ArtifactStore(bucket="audit", client=Client())
+    task = asyncio.create_task(store.head("job", "artifact.bin"))
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert body.closed
+    finally:
+        released.set()
+        await asyncio.gather(task, return_exceptions=True)

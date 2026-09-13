@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple, cast
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
@@ -36,8 +38,10 @@ from sqlalchemy.ext.asyncio import (
 
 from transformation_portal.orchestrator.models import (
     Base,
+    DispatchAttemptModel,
     JobArtifactModel,
     JobEventModel,
+    JobEventSequenceModel,
     JobModel,
     OperationalAuditEventModel,
 )
@@ -57,6 +61,7 @@ logger = logging.getLogger(__name__)
 
 _ACTIVE_STATES = {"queued", "running"}
 _OPTIMISTIC_LOCK_RETRIES = 3
+DEFAULT_EVENT_RETENTION_PER_JOB = 4096
 
 
 class _SharedEngine:
@@ -79,6 +84,11 @@ class _SharedEngine:
                     database_url,
                     pool_pre_ping=True,
                     pool_recycle=300,
+                    connect_args={
+                        "timeout": 5.0,
+                        "command_timeout": 5.0,
+                        "server_settings": {"statement_timeout": "5000", "lock_timeout": "5000"},
+                    },
                     future=True,
                 )
                 cls._engines[database_url] = engine
@@ -308,6 +318,15 @@ class PostgresJobRepository(JobRepository):
 
     async def delete(self, job_id: str) -> None:
         async with self._session() as session:
+            await session.execute(select(JobModel.id).where(JobModel.id == job_id).with_for_update())
+            active_dispatch = (
+                select(DispatchAttemptModel.job_id)
+                .where(DispatchAttemptModel.job_id == job_id, DispatchAttemptModel.state.in_(list(_ACTIVE_STATES)))
+                .exists()
+            )
+            if bool((await session.execute(select(active_dispatch))).scalar_one()):
+                raise RepositoryError("cannot delete job with an active durable dispatch")
+            await session.execute(delete(JobEventSequenceModel).where(JobEventSequenceModel.job_id == job_id))
             # job_events.job_id has no SQL FK (see models.py), so cascade
             # event deletion explicitly here. job_artifacts still cascades
             # via its FK on jobs.id.
@@ -318,12 +337,22 @@ class PostgresJobRepository(JobRepository):
     async def cleanup_expired(self, now: float, retention_seconds: float) -> List[str]:
         async with self._session() as session:
             cutoff = now - retention_seconds
-            ids_stmt = select(JobModel.id).where(
-                JobModel.finished_at.is_not(None),
-                JobModel.finished_at <= cutoff,
+            ids_stmt = (
+                select(JobModel.id)
+                .where(
+                    JobModel.finished_at.is_not(None),
+                    JobModel.finished_at <= cutoff,
+                    ~select(DispatchAttemptModel.job_id)
+                    .where(DispatchAttemptModel.job_id == JobModel.id, DispatchAttemptModel.state.in_(list(_ACTIVE_STATES)))
+                    .exists(),
+                )
+                .order_by(JobModel.id)
+                .with_for_update()
             )
             expired_ids = list((await session.execute(ids_stmt)).scalars().all())
             if expired_ids:
+                # Lock counters before event rows, matching terminal publication.
+                await session.execute(delete(JobEventSequenceModel).where(JobEventSequenceModel.job_id.in_(expired_ids)))
                 # Manual cascade for job_events (no SQL FK; see models.py).
                 await session.execute(delete(JobEventModel).where(JobEventModel.job_id.in_(expired_ids)))
                 await session.execute(delete(JobModel).where(JobModel.id.in_(expired_ids)))
@@ -347,7 +376,10 @@ class PostgresJobRepository(JobRepository):
         stamp = _time.time() if now is None else now
         live = list(live_job_ids or [])
         async with self._session() as session:
-            stmt = select(JobModel.id).where(JobModel.state.in_(list(_ACTIVE_STATES)))
+            stmt = select(JobModel.id).where(
+                JobModel.state.in_(list(_ACTIVE_STATES)),
+                ~select(DispatchAttemptModel.job_id).where(DispatchAttemptModel.job_id == JobModel.id).exists(),
+            )
             if live:
                 stmt = stmt.where(~JobModel.id.in_(live))
             orphan_ids = list((await session.execute(stmt)).scalars().all())
@@ -397,12 +429,66 @@ class PostgresJobRepository(JobRepository):
         self._session_factory = None
 
 
+def event_retention_per_job() -> int:
+    """Resolve the positive replay bound; zero must never mean unbounded."""
+    raw = os.getenv("TP_ORCHESTRATOR_EVENT_RETENTION_PER_JOB", str(DEFAULT_EVENT_RETENTION_PER_JOB)).strip()
+    if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
+        raise RepositoryError("TP_ORCHESTRATOR_EVENT_RETENTION_PER_JOB must be a positive integer")
+    return int(raw)
+
+
+async def append_event_in_session(
+    session: AsyncSession,
+    job_id: str,
+    event_type: str,
+    payload: Dict[str, Any],
+    created_at: float,
+    *,
+    per_job_cap: Optional[int] = None,
+) -> JobEvent:
+    """Allocate, insert and prune under one counter lock in caller transaction.
+
+    UPSERT locks the counter row across independent processes, including the
+    first append for an orphan job id. The legacy MAX seed supports preexisting
+    events; subsequent sequence allocation never depends on retained history.
+    Callers that lock jobs must take that lock before invoking this helper.
+    """
+    cap = event_retention_per_job() if per_job_cap is None else per_job_cap
+    if type(cap) is not int or cap <= 0:
+        raise RepositoryError("per_job_cap must be a positive integer")
+    payload_snapshot = deepcopy(payload)
+    legacy_next = select(func.coalesce(func.max(JobEventModel.seq), 0) + 1).where(JobEventModel.job_id == job_id)
+    counter_stmt = (
+        insert(JobEventSequenceModel)
+        .values(job_id=job_id, last_seq=legacy_next.scalar_subquery())
+        .on_conflict_do_update(
+            index_elements=[JobEventSequenceModel.job_id],
+            set_={"last_seq": JobEventSequenceModel.last_seq + 1},
+        )
+        .returning(JobEventSequenceModel.last_seq)
+    )
+    seq = int((await session.execute(counter_stmt)).scalar_one())
+    session.add(
+        JobEventModel(job_id=job_id, seq=seq, event_type=event_type, payload=deepcopy(payload_snapshot), created_at=created_at)
+    )
+    # Flush before pruning even when the session's autoflush is disabled.
+    await session.flush()
+    if seq > cap:
+        await session.execute(delete(JobEventModel).where(JobEventModel.job_id == job_id, JobEventModel.seq <= seq - cap))
+    return JobEvent(job_id=job_id, seq=seq, event_type=event_type, payload=payload_snapshot, created_at=created_at)
+
+
 class PostgresJobEventStore(JobEventStore):
     """Durable ``JobEventStore`` backed by the same engine."""
 
-    def __init__(self, *, database_url: str) -> None:
+    supports_live_replay = True
+
+    def __init__(self, *, database_url: str, per_job_cap: Optional[int] = None) -> None:
         if not database_url:
             raise RepositoryError("database_url must be a non-empty string")
+        self._per_job_cap = event_retention_per_job() if per_job_cap is None else per_job_cap
+        if type(self._per_job_cap) is not int or self._per_job_cap <= 0:
+            raise RepositoryError("per_job_cap must be a positive integer")
         self._database_url = database_url
         self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
@@ -425,57 +511,33 @@ class PostgresJobEventStore(JobEventStore):
         *,
         created_at: float,
     ) -> JobEvent:
-        """Append one event, deriving ``seq`` as ``MAX(seq)+1`` per job_id.
-
-        Concurrent appends to the same job_id can race on the read-then-write,
-        but the ``unique(job_id, seq)`` index in the migration guarantees the
-        race is visible as an ``IntegrityError`` rather than a silent
-        out-of-order overwrite. We retry on conflict so callers see the same
-        monotonic-seq contract as the memory backend.
-        """
         payload_snapshot = deepcopy(payload)
-        for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
-            try:
-                async with self._session() as session:
-                    current_max_stmt = select(func.coalesce(func.max(JobEventModel.seq), 0)).where(
-                        JobEventModel.job_id == job_id
-                    )
-                    current_max = int((await session.execute(current_max_stmt)).scalar_one())
-                    seq = current_max + 1
-                    session.add(
-                        JobEventModel(
-                            job_id=job_id,
-                            seq=seq,
-                            event_type=event_type,
-                            payload=deepcopy(payload_snapshot),
-                            created_at=created_at,
-                        )
-                    )
-                    await session.commit()
-                    return JobEvent(
-                        job_id=job_id,
-                        seq=seq,
-                        event_type=event_type,
-                        payload=deepcopy(payload_snapshot),
-                        created_at=created_at,
-                    )
-            except IntegrityError:
-                # Lost the seq race against a concurrent append for the same
-                # job_id; the unique(job_id, seq) index rejected our row.
-                # Back off briefly and retry; another concurrent append has
-                # already advanced MAX(seq), so the next attempt picks a
-                # higher seq.
-                if attempt + 1 < _OPTIMISTIC_LOCK_RETRIES:
-                    await asyncio.sleep(0.005 * (attempt + 1))
-                    continue
-                raise RepositoryError(
-                    f"PostgresJobEventStore.append: monotonic-seq race lost "
-                    f"after {_OPTIMISTIC_LOCK_RETRIES} retries for job_id="
-                    f"{job_id!r}"
+        async with self._session() as session:
+            async with session.begin():
+                return await append_event_in_session(
+                    session, job_id, event_type, payload_snapshot, created_at, per_job_cap=self._per_job_cap
                 )
 
-        # Unreachable; included for type-checkers.
-        raise RepositoryError(f"PostgresJobEventStore.append failed for job_id={job_id!r}")
+    async def replay_batch(self, job_id: str, *, after_seq: int) -> List[JobEvent]:
+        """Release the DB session before yielding to a potentially slow client."""
+        async with self._session() as session:
+            stmt = (
+                select(JobEventModel)
+                .where(JobEventModel.job_id == job_id, JobEventModel.seq > after_seq)
+                .order_by(JobEventModel.seq.asc())
+                .limit(self._per_job_cap)
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            return [
+                JobEvent(
+                    job_id=row.job_id,
+                    seq=row.seq,
+                    event_type=row.event_type,
+                    payload=deepcopy(row.payload),
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
 
     async def events_since(
         self,
@@ -507,6 +569,7 @@ class PostgresJobEventStore(JobEventStore):
 
     async def reset(self) -> None:
         async with self._session() as session:
+            await session.execute(delete(JobEventSequenceModel))
             await session.execute(delete(JobEventModel))
             await session.commit()
 

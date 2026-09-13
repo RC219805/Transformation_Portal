@@ -214,6 +214,16 @@ def _bind_plan_inputs(
             f"Execution plan input root {carried_real_root} is not the authorized root {authorized_root}"
         )
 
+    collision_keys: dict[str, str] = {}
+    for item in plan.inputs:
+        collision_key = _canonical_input_key(item.path)
+        prior = collision_keys.get(collision_key)
+        if prior is not None:
+            raise LuxExecutionPlanAuthorityError(
+                f"Carried input paths collide under portable Unicode/case normalization: {prior!r}, {item.path!r}"
+            )
+        collision_keys[collision_key] = item.path
+
     bound: list[Path] = []
     for item in plan.inputs:
         lexical = authorized_root / item.path

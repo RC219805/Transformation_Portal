@@ -663,11 +663,12 @@ def test_mypy_policy_contract_passes_repo_workflows() -> None:
         assert validator.errors == []
 
 
-def test_mypy_policy_contract_rejects_workflow_whitelist_drift(tmp_path: Path) -> None:
+@pytest.mark.parametrize("source_path", ["app.py", "src/transformation_portal/api/"])
+def test_mypy_policy_contract_rejects_workflow_whitelist_drift(tmp_path: Path, source_path: str) -> None:
     workflow_path = _mutated_workflow(
         CI_WORKFLOW_PATH,
         tmp_path,
-        "            src/transformation_portal/api/ \\\n",
+        f"            {source_path} \\\n",
         "",
     )
     validator, config = _load_config(workflow_path)
@@ -680,8 +681,8 @@ def test_mypy_policy_contract_requires_api_runtime_dependency(tmp_path: Path) ->
     workflow_path = _mutated_workflow(
         CI_WORKFLOW_PATH,
         tmp_path,
-        ' types-PyYAML "pydantic==2.13.3"',
-        " types-PyYAML",
+        ' "pydantic==2.13.3"',
+        "",
     )
     validator, config = _load_config(workflow_path)
 

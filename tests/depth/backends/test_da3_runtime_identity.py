@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +33,31 @@ pytestmark = pytest.mark.unit
 
 _MODEL_REVISION = "4" * 40
 _SOURCE_REVISION = "9" * 40
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX FIFO")
+@pytest.mark.parametrize("reader", ["_hash_regular_file", "_read_bounded_regular_file"])
+def test_identity_readers_reject_fifo_without_blocking(tmp_path: Path, reader: str) -> None:
+    fifo = tmp_path / "checkpoint.index.json"
+    os.mkfifo(fifo)
+    code = (
+        "import sys\nfrom pathlib import Path\n"
+        "from transformation_portal.depth.backends import da3_runtime_identity as module\n"
+        "try:\n"
+        "    getattr(module, sys.argv[1])(Path(sys.argv[2]), maximum_bytes=1024)\n"
+        "except ValueError as exc:\n"
+        "    assert 'not a regular file' in str(exc)\n"
+        "else:\n"
+        "    raise AssertionError('FIFO accepted')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, reader, str(fifo)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _write_governance(path: Path, *, enabled: bool = True) -> Path:
@@ -1273,6 +1301,7 @@ def test_worker_source_inventory_covers_selection_and_plan_helpers() -> None:
         "transformation_portal/core/execution_plan.py",
         "transformation_portal/core/ml_dependency_health.py",
         "transformation_portal/core/security/model_lock.py",
+        "transformation_portal/depth/backends/da3_worker.py",
         "transformation_portal/depth/backends/protocol.py",
         "transformation_portal/depth/backends/registry.py",
         "transformation_portal/lux_depth_v3/_backend_contract.py",
@@ -1286,12 +1315,14 @@ def test_worker_source_inventory_covers_selection_and_plan_helpers() -> None:
     }
 
 
+@pytest.mark.parametrize("relative_module", ["lux_depth_v3/stage_graph/registry.py", "depth/backends/da3_worker.py"])
 def test_package_source_identity_changes_for_transitive_helper_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    relative_module: str,
 ) -> None:
     package_root = tmp_path / "transformation_portal"
-    helper = package_root / "lux_depth_v3" / "stage_graph" / "registry.py"
+    helper = package_root / relative_module
     helper.parent.mkdir(parents=True)
     (package_root / "__init__.py").write_text("", encoding="utf-8")
     helper.write_text("VALUE = 1\n", encoding="utf-8")

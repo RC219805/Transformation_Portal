@@ -17,6 +17,8 @@ const ENV_KEYS = [
   "NODE_ENV",
   "TP_FASTAPI_ORIGIN",
   "TP_BACKEND_API_KEY",
+  "TP_PILOT_CONTROL_PLANE_ENABLED",
+  "TP_FRONTDOOR_IDENTITY_SECRET",
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
@@ -90,6 +92,8 @@ function withTempEnvironment(overrides = {}) {
   process.env.NODE_ENV = overrides.NODE_ENV ?? "production";
   process.env.TP_FASTAPI_ORIGIN = overrides.TP_FASTAPI_ORIGIN ?? "http://127.0.0.1:8000";
   process.env.TP_BACKEND_API_KEY = overrides.TP_BACKEND_API_KEY ?? "backend-secret";
+  process.env.TP_PILOT_CONTROL_PLANE_ENABLED = overrides.TP_PILOT_CONTROL_PLANE_ENABLED ?? "0";
+  process.env.TP_FRONTDOOR_IDENTITY_SECRET = overrides.TP_FRONTDOOR_IDENTITY_SECRET ?? "";
   process.env.TP_FRONTDOOR_SESSION_DB = dbPath;
   process.env.TP_CF_ACCESS_TEAM_DOMAIN = overrides.TP_CF_ACCESS_TEAM_DOMAIN ?? TEST_CF_ACCESS_TEAM_DOMAIN;
   process.env.TP_CF_ACCESS_AUD = overrides.TP_CF_ACCESS_AUD ?? TEST_CF_ACCESS_AUD;
@@ -3590,6 +3594,116 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
   }
 });
 
+for (const failureMode of ["client_cancel", "upstream_error", "error_response"]) {
+  test(`v1 SSE proxy releases upstream resources on ${failureMode}`, async () => {
+    const env = withTempEnvironment();
+    let upstreamController;
+    let cancellationReason;
+    let cancelCount = 0;
+    let restoreFetch = () => {};
+    try {
+      const sessions = await importFresh("../lib/sessions.js");
+      const route = await importFresh("../app/v1/[...path]/route.js");
+      const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      });
+      const upstreamBody = new ReadableStream({
+        start(controller) {
+          upstreamController = controller;
+          controller.enqueue(new TextEncoder().encode("event: state\ndata: running\n\n"));
+        },
+        cancel(reason) {
+          cancelCount += 1;
+          cancellationReason = reason;
+        }
+      });
+      restoreFetch = withMockedAccessCerts(async () => new Response(upstreamBody, {
+        status: failureMode === "error_response" ? 503 : 200,
+        headers: { "content-type": "text/event-stream" }
+      }));
+      const request = buildRequest("https://portal.example.com/v1/jobs/job-123/events", {
+        headers: {
+          cookie: `__Host-tp_session=${session.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        }
+      });
+      const response = await route.GET(request, { params: { path: ["jobs", "job-123", "events"] } });
+      if (failureMode === "error_response") {
+        assert.equal(response.status, 502);
+        assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
+        assert.equal(cancelCount, 1, "discarded upstream error bodies must be cancelled");
+      } else {
+        const reader = response.body.getReader();
+        assert.equal((await reader.read()).done, false);
+        const failure = new Error(failureMode);
+        if (failureMode === "client_cancel") {
+          const pendingRead = reader.read();
+          await reader.cancel(failure);
+          await pendingRead;
+          await new Promise((resolve) => setImmediate(resolve));
+          assert.equal(cancelCount, 1, "downstream cancellation must cancel the idle backend stream");
+          assert.equal(cancellationReason, failure);
+        } else {
+          upstreamController.error(failure);
+          await assert.rejects(reader.read(), /upstream_error/);
+        }
+        reader.releaseLock();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(upstreamBody.locked, false, "the upstream reader lock must be released");
+    } finally {
+      // Unblock the old leaking implementation when reproducing the regression.
+      try { upstreamController?.close(); } catch { /* Already closed or errored. */ }
+      restoreFetch();
+      env.cleanup();
+    }
+  });
+}
+
+test("v1 cancels an upstream fetch when the browser disconnects before response headers", async () => {
+  const env = withTempEnvironment();
+  const abortController = new AbortController();
+  let restoreFetch = () => {};
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    let markFetchStarted;
+    const fetchStarted = new Promise((resolve) => { markFetchStarted = resolve; });
+    let observedAbort = false;
+    restoreFetch = withMockedAccessCerts(async (_url, init) => {
+      markFetchStarted();
+      assert.ok(init.signal, "backend fetches must observe browser disconnects");
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener("abort", () => {
+          observedAbort = true;
+          reject(init.signal.reason);
+        }, { once: true });
+      });
+    });
+    const responsePromise = route.GET(buildRequest("https://portal.example.com/v1/jobs/job-123/events", {
+      signal: abortController.signal,
+      headers: {
+        cookie: `__Host-tp_session=${session.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      }
+    }), { params: { path: ["jobs", "job-123", "events"] } });
+    await fetchStarted;
+    abortController.abort();
+    const response = await responsePromise;
+    assert.equal(observedAbort, true);
+    assert.equal(response.status, 502);
+  } finally {
+    abortController.abort();
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
 test("v1 artifact proxy passes binary previews through the managed front door with async params", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"
@@ -4400,5 +4514,59 @@ test("development cookies relax __Host/Secure requirements for local HTTP", asyn
     assert.doesNotMatch(cookieHeader, /Secure/i);
   } finally {
     env.cleanup();
+  }
+});
+
+
+for (const configured of [true, false]) {
+  test(`tenant proxy ${configured ? "signs authenticated Access identity" : "fails closed without identity secret"}`, async () => {
+    const env = withTempEnvironment({ TP_PILOT_CONTROL_PLANE_ENABLED: "1",
+      TP_FRONTDOOR_IDENTITY_SECRET: configured ? "frontdoor-test-identity-secret-32bytes" : "" });
+    try {
+      const sessions = await importFresh("../lib/sessions.js");
+      const route = await importFresh("../app/v1/[...path]/route.js");
+      const authenticated = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+        username:"admin", accessEmail:"admin@example.com", role:"admin"
+      });
+      let forwarded = false;
+      const restoreFetch = withMockedAccessCerts(async (url, init) => {
+        forwarded = true;
+        assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs?limit=2");
+        assert.equal(init.headers.has("x-tp-tenant-id"), false);
+        assert.equal(init.headers.get("x-tp-actor-email"), "admin@example.com");
+        const assertion = init.headers.get("x-tp-actor-assertion");
+        assert.notEqual(assertion, "forged");
+        const payload = JSON.parse(Buffer.from(assertion.split(".")[0], "base64url").toString());
+        assert.equal(payload.method, "GET");
+        assert.equal(payload.target, "/v1/jobs?limit=2");
+        assert.equal(payload.actor.accessEmail, "admin@example.com");
+        return new Response(JSON.stringify({ok:true}), {status:200});
+      });
+      try {
+        const request = buildRequest("https://portal.example.com/v1/jobs?limit=2", {
+          headers:new Headers({cookie:`__Host-tp_session=${authenticated.id}`,
+            "Cf-Access-Jwt-Assertion":createAccessJwt(), "x-tp-tenant-id":"tenant_b",
+            "x-tp-actor-email":"b@example.com", "x-tp-actor-assertion":"forged"})
+        });
+        const response = await route.GET(request, {params:{path:["jobs"]}});
+        assert.equal(response.status, configured ? 200 : 503);
+        assert.equal(forwarded, configured);
+        if (!configured) assert.equal((await response.json()).error.code, "AUTH_CONFIGURATION_ERROR");
+      } finally { restoreFetch(); }
+    } finally { env.cleanup(); }
+  });
+}
+
+
+test("tenant startup preflight rejects a missing or reused identity secret before backend contact", () => {
+  for (const secret of ["", "short", "backend-secret-with-more-than-32bytes"]) {
+    const result = spawnSync(process.execPath, ["scripts/preflight-backend-auth.mjs"], {
+      cwd:FRONTDOOR_APP_ROOT,
+      env:{...process.env, TP_FRONTDOOR_PREFLIGHT_DISABLE:"0", NODE_ENV:"development",
+        TP_FASTAPI_ORIGIN:"http://127.0.0.1:1", TP_BACKEND_API_KEY:"backend-secret-with-more-than-32bytes",
+        TP_PILOT_CONTROL_PLANE_ENABLED:"1", TP_FRONTDOOR_IDENTITY_SECRET:secret}, encoding:"utf8"
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tenant identity configuration unavailable/);
   }
 });

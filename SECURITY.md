@@ -155,7 +155,7 @@ guarantee secure erasure from storage, backups, or process memory.
 
 ### Open Dependency Risk: Accelerate Checkpoint Indexes
 
-As reviewed on 2026-09-12, the supported Darwin arm64 ML lock contains
+As reviewed on 2026-09-13 UTC, the supported Darwin arm64 ML lock contains
 `accelerate==1.14.0`, affected by
 [GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79).
 Its sharded checkpoint loaders accept paths outside the checkpoint directory
@@ -166,6 +166,31 @@ The advisory lists no patched release. Source inspection of
 [Accelerate 1.15.0](https://github.com/huggingface/accelerate/blob/v1.15.0/src/accelerate/utils/modeling.py#L1936-L1944)
 also shows shard entries joined without containment or regular-file validation.
 Do not treat a version outside the advisory's listed range as proof of a fix.
+
+The pinned optional ML closure uses Transformers `5.10.4` and Diffusers
+`0.40.0`. Source review of those installed packages found no references to
+`load_checkpoint_in_model` or `load_checkpoint_and_dispatch`; repository
+production code does not call either affected API. Legitimate Accelerate
+device mapping, dispatch and offload remain supported. The required
+`Dependency Security` job now runs
+`python scripts/validation/check_accelerate_loading.py`, which rejects direct
+and aliased imports, statically resolved attribute aliases, and literal
+`getattr` references to the affected APIs. This source gate does not inspect
+third-party packages or dynamically computed Python expressions; repeat the
+reachability review when the optional ML closure changes.
+
+Repository-owned DA3 identity and manifest-local LLaVA resolution share bounded
+shard-index parsing. It rejects duplicate keys, invalid/oversized maps, and
+absolute, parent-traversing or Windows-style shard paths. The LLaVA boundary
+also rejects missing/non-regular shards and symlink targets outside its model
+snapshot or standard HF blob directory. Nonblocking descriptor opens reject
+FIFOs before reads, including DA3 identity reads/hashes. Manifest resolution
+requires a full commit SHA. Normal HF blob symlinks remain supported, and these
+checks neither download alternate model variants nor copy entire model trees.
+They do not isolate a model cache from another process running as the same
+user: keep cache/runtime directories owner-controlled. Index validation is
+not an immutable snapshot of the later model load and must not be used to
+authorize the affected Accelerate APIs.
 
 Until an upstream fix is verified, load only reviewed model checkpoints from
 trusted sources in the optional ML environment. Do not pass untrusted local
@@ -179,6 +204,21 @@ the released loader, regenerating the target-owned lock on native Darwin arm64,
 and rerunning the ML lock and dependency-security checks. Keep the alerts open
 until that evidence exists.
 
+### Required Dependency Security Check
+
+Main branch protection requires both `CI Gate` and `Dependency Security`, with
+strict up-to-date checking and GitHub Actions app binding (`15368`), verified
+2026-09-13 UTC. The security job runs on every pull request targeting `main`,
+without path, draft, fork, or bot filters. It needs no repository secrets,
+has read-only contents permission, disables persisted checkout credentials,
+and has a 20-minute timeout. Scanner errors and findings fail the check;
+pending fork approval cannot satisfy branch protection. Source contract tests
+protect those trigger and failure semantics.
+
+The job audits its installed core/CI environment. The optional native ML lock
+is still tracked by Dependabot; requiring this job does not imply that every
+optional environment has zero advisories or close the two Accelerate alerts.
+
 ### API Security
 
 If exposing Transformation Portal as a service:
@@ -191,6 +231,16 @@ If exposing Transformation Portal as a service:
   - Admission cap: 4 concurrent jobs via `TP_MAX_CONCURRENT_JOBS`
 - **Input Sanitization**: All user inputs must be validated
 - **Output Filtering**: Ensure no metadata leakage in processed files
+
+Signed tenant isolation has a service-backed regression at
+`tests/orchestrator/test_tenant_dispatch_services.py`. Run
+`PYTHONPATH=src:. ./.venv/bin/pytest tests/orchestrator/test_tenant_dispatch_services.py -q`
+with `TP_TENANT_TEST_DATABASE_URL` set to a dedicated migrated test database
+and `TP_DISPATCH_TEST_REDIS_URL` set to an isolated Redis service. The test
+uses real archive inputs and an independent worker, verifies committed artifact
+bytes, and exercises cross-tenant read, event, cancel and deletion denial. It
+does not truncate the database; a skip without those services is not service
+validation evidence.
 
 ### API Security Headers
 

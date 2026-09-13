@@ -1299,6 +1299,19 @@ class DepthCache:
             raise ValueError("depth cache namespace maximum changed after this instance was configured")
         return state
 
+    def _load_requested_quota_state_locked(self) -> _QuotaState:
+        """Apply an explicit local resize while preserving shared quota authority."""
+
+        requested_limit = self._max_size_bytes
+        if requested_limit == self._configured_max_size_bytes:
+            return self._load_quota_state_locked()
+        state = self._configure_quota_locked(
+            requested_limit,
+            expected_previous_max_size_bytes=self._configured_max_size_bytes,
+        )
+        self._configured_max_size_bytes = requested_limit
+        return state
+
     def _configure_quota_locked(
         self,
         max_size_bytes: int,
@@ -1905,6 +1918,14 @@ class DepthCache:
         try:
             self._validate_namespace_roots()
             projection = _identity_projection(identity)
+            # The NPY header and pointer add bytes to the array payload. Reject
+            # a provably impossible write before allocating its serialized copy,
+            # while still applying explicit resizes under the namespace lock.
+            if depth.nbytes >= self._max_size_bytes:
+                with self._locked_shards(()):
+                    state = self._load_requested_quota_state_locked()
+                    if depth.nbytes >= state.max_size_bytes:
+                        raise ValueError("depth payload cannot fit the namespace physical size limit")
             array, serialized, npy_sha256 = self._serialize_depth(depth)
             pointer = self._pointer_for(projection, array, serialized, npy_sha256)
             self._validate_pointer(pointer)
@@ -1923,15 +1944,7 @@ class DepthCache:
                     self._shard_index(npy_sha256),
                 )
             ):
-                requested_limit = self._max_size_bytes
-                if requested_limit != self._configured_max_size_bytes:
-                    state = self._configure_quota_locked(
-                        requested_limit,
-                        expected_previous_max_size_bytes=self._configured_max_size_bytes,
-                    )
-                    self._configured_max_size_bytes = requested_limit
-                else:
-                    state = self._load_quota_state_locked()
+                state = self._load_requested_quota_state_locked()
                 if len(serialized) + len(pointer_bytes) > state.max_size_bytes:
                     raise ValueError("cache entry exceeds the namespace physical size limit")
 

@@ -134,7 +134,7 @@ jobs:
           python -m pip install --upgrade pip
           # The API whitelist imports pydantic; editable install uses --no-deps,
           # so install the same pinned runtime dependency as build.yml.
-          pip install mypy types-PyYAML "pydantic==2.13.3"
+          pip install "mypy==1.20.1" "types-PyYAML==6.0.12.20260408" "pydantic==2.13.3"
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
@@ -143,6 +143,16 @@ jobs:
         continue-on-error: true
         run: |
           mypy --config-file=mypy.ini \
+            app.py \
+            src/transformation_portal/orchestrator/dispatch.py \
+            src/transformation_portal/orchestrator/worker.py \
+            src/transformation_portal/orchestrator/worker_process.py \
+            src/transformation_portal/orchestrator/execution_dispatch.py \
+            src/transformation_portal/orchestrator/execution_workspace.py \
+            src/transformation_portal/core/execution_plan.py \
+            src/transformation_portal/core/archive_execution_plan.py \
+            src/transformation_portal/core/security/frontdoor_identity.py \
+            src/transformation_portal/core/security/checkpoint_index.py \
             src/transformation_portal/api/ \
             src/transformation_portal/lux_depth_v3/ \
             src/transformation_portal/orchestrator/queue/ \

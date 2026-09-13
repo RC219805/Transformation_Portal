@@ -813,7 +813,7 @@ class CIValidator:
 
     @staticmethod
     def _mypy_step_paths(run_script: object) -> Tuple[List[str], bool]:
-        """Return src paths and config-file usage from a mypy workflow step."""
+        """Return governed source paths and config-file usage from a mypy step."""
         tokens = CIValidator._shell_tokens(run_script)
 
         if "mypy" not in tokens:
@@ -824,7 +824,7 @@ class CIValidator:
             token == "--config-file" and index + 1 < len(tokens) and tokens[index + 1] == "mypy.ini"
             for index, token in enumerate(tokens)
         )
-        paths = [token for token in tokens if token.startswith("src/")]
+        paths = [token for token in tokens if token == "app.py" or token.startswith("src/")]
         return paths, has_inline_config or has_split_config
 
     @staticmethod

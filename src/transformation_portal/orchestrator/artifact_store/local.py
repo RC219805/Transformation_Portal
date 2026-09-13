@@ -129,6 +129,52 @@ class LocalArtifactStore(ArtifactStore):
         self._metadata_locks_guard = threading.Lock()
         self._metadata_locks: dict[str, threading.Lock] = {}
 
+    async def write_immutable_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> None:
+        destination = self._resolve(job_id, relative_path)
+
+        def create() -> None:
+            def sync_directory(directory: Path) -> None:
+                descriptor = os.open(directory, os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+
+            missing = []
+            ancestor = destination.parent
+            while not ancestor.exists():
+                missing.append(ancestor)
+                ancestor = ancestor.parent
+            for directory in reversed(missing):
+                directory.mkdir(exist_ok=True)
+                sync_directory(directory.parent)
+            # Root construction can precede this operation in the same process.
+            sync_directory(self._root.parent)
+            fd, name = tempfile.mkstemp(prefix=".staging-", dir=destination.parent)
+            temporary = Path(name)
+            try:
+                with os.fdopen(fd, "wb") as target, source_path.open("rb") as source:
+                    while chunk := source.read(_ARTIFACT_FINGERPRINT_CHUNK_BYTES):
+                        target.write(chunk)
+                    target.flush()
+                    os.fsync(target.fileno())
+                # link is an atomic no-replace commit, including on concurrent writers.
+                os.link(temporary, destination)
+                sync_directory(destination.parent)
+            except FileExistsError as exc:
+                raise ArtifactStoreError("immutable generation object already exists") from exc
+            finally:
+                temporary.unlink(missing_ok=True)
+
+        await asyncio.to_thread(create)
+
     @property
     def backend(self) -> str:
         return "local"

@@ -10,7 +10,8 @@ gh api repos/RC219805/Transformation_Portal/branches/main/protection
 ```
 
 Previous snapshot: 2026-06-03. Refreshed snapshot: **2026-09-12**. The refreshed
-response lists only `CI Gate` (GitHub Actions app ID 15368), strict up-to-date
+response requires `CI Gate` and `Dependency Security` (both bound to GitHub
+Actions app ID 15368), strict up-to-date
 checking, administrator enforcement, zero required approving reviews, stale
 approval dismissal, and no Code Owner or last-push approval requirement.
 Other settings below remain recommendations or the earlier dated snapshot
@@ -42,12 +43,17 @@ main
 **Required Status Checks**:
 ```
 CI Gate
+Dependency Security
 ```
 
 **Note**: `CI Gate` is the stable branch-protection aggregator from
 `.github/workflows/build.yml`. Do not add individual matrix jobs such as
 `lint`, `test (3.11, cpu, core)`, or `generate-manifest` as separate required
 checks unless the CI gate contract is intentionally changed.
+`Dependency Security` is the independently required job in
+`.github/workflows/security-unified.yml`. Its PR trigger must remain unfiltered
+for `main`, and its dependency audit and source-policy checks must fail the job
+on violations. A workflow comment alone does not configure merge protection.
 
 #### ✅ Require Conversation Resolution
 - **Enable**: ✓ enabled
@@ -129,7 +135,7 @@ Create `.github/CODEOWNERS` for automated review assignment:
 
 The canonical PR workflow (`.github/workflows/build.yml`) enforces quality
 gates automatically. Its `CI Gate` job aggregates the blocking upstream jobs and
-is the only status check currently required by branch protection.
+is required alongside the independent `Dependency Security` job.
 
 ### Critical Gates (BLOCKING)
 - Lightweight checks
@@ -137,6 +143,7 @@ is the only status check currently required by branch protection.
 - Test matrix
 - Montecito manifest build
 - CI contract validation
+- Dependency security audit and checkpoint-loading source policy
 
 ### Advisory Gates (NON-BLOCKING but reported)
 - Post-merge quality firewall signals
@@ -171,7 +178,7 @@ recovery path. Document the reason in an issue or post-incident review.
 Before considering this complete:
 
 - [ ] Branch protection rule created for `main`
-- [ ] `CI Gate` is the only required status check
+- [ ] `CI Gate` and `Dependency Security` are required, bound to the GitHub Actions app
 - [ ] Pull request review policy intentionally set (currently 0 approvers; 1+ recommended)
 - [ ] Conversation resolution required
 - [ ] Admin enforcement enabled

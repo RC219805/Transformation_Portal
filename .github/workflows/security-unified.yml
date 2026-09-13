@@ -40,10 +40,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  pull-requests: write
-  actions: read
-  packages: read
 
 concurrency:
   group: security-unified-${{ github.event_name }}-${{ github.ref }}
@@ -56,10 +52,15 @@ jobs:
   dependency-scan:
     name: Dependency Security
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -183,6 +184,9 @@ jobs:
       - name: Check unsafe torch.load() usage (CVE-2025-32434)
         run: |
           python scripts/validation/check_unsafe_torch_load.py --ci-mode --fix-suggestions
+
+      - name: Check Accelerate checkpoint loader reachability
+        run: python scripts/validation/check_accelerate_loading.py
 
       # NOTE: Safety scanning removed per security toolchain governance cleanup
       # pip-audit (above) is the governed blocking dependency scanner

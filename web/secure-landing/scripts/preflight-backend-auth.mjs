@@ -17,6 +17,8 @@
 //     entirely. Use only for emergencies.
 
 import { readFileSync } from "node:fs";
+import { isTruthyEnvFlag } from "../lib/config.js";
+import { hasIdentitySecret } from "../lib/frontdoor-identity.js";
 
 const PROTECTED_PROBE_PATH = "/v1/config-metadata?pipeline=lux-depth-v3";
 const PROBE_TIMEOUT_MS = 3000;
@@ -120,6 +122,15 @@ function validateEnv() {
     failClosed(
       "TP_FASTAPI_ORIGIN is not set",
       "The frontdoor runtime proxies /v1/* through TP_FASTAPI_ORIGIN; TP_BACKEND_ORIGIN is not consumed."
+    );
+  }
+  const identitySecret = trimmed(process.env.TP_FRONTDOOR_IDENTITY_SECRET);
+  if (isTruthyEnvFlag(process.env.TP_PILOT_CONTROL_PLANE_ENABLED) && (
+    !hasIdentitySecret(identitySecret) || identitySecret === apiKey
+  )) {
+    failClosed(
+      "tenant identity configuration unavailable",
+      "Set TP_FRONTDOOR_IDENTITY_SECRET to a dedicated secret of at least 32 UTF-8 bytes, shared with the backend."
     );
   }
   const users = userSourceStatus();

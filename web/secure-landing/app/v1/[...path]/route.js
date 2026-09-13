@@ -3,6 +3,7 @@ import { NextResponse } from "next/server.js";
 import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../../lib/access.js";
 import { audit } from "../../../lib/audit.js";
 import { getConfig } from "../../../lib/config.js";
+import { hasIdentitySecret } from "../../../lib/frontdoor-identity.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
 import {
   auditManagedSurfaceFailure,
@@ -55,24 +56,28 @@ async function streamSse(upstream, session, traceparent) {
   headers.set("Cache-Control", "no-store, no-transform");
   headers.set("traceparent", normalizeTraceparent(upstream.headers.get("traceparent")) || traceparent);
 
-  const { readable, writable } = new TransformStream();
-  const reader = upstream.body?.getReader();
-  const writer = writable.getWriter();
-
   audit("sse_proxy_open", {
     username: session.username,
     accessEmail: session.accessEmail
   });
 
-  void (async () => {
-    let terminalSeen = false;
-    let bufferedTail = "";
-    const decoder = new TextDecoder("utf-8", { fatal: false });
+  if (!upstream.body) {
+    audit("sse_proxy_close", {
+      username: session.username,
+      accessEmail: session.accessEmail,
+      reason: "no_upstream_body"
+    });
+    return new Response(null, { status: upstream.status, headers });
+  }
 
-    const inspectChunk = (value) => {
+  let terminalSeen = false;
+  let bufferedTail = "";
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+
+  const { readable, writable } = new TransformStream({
+    transform(value, controller) {
       try {
         const chunk = typeof value === "string" ? value : decoder.decode(value, { stream: true });
-        if (!chunk) return;
         const combined = bufferedTail + chunk;
         // The backend signals job termination with an `event: done` SSE frame
         // (app.py:_job_events). Detecting it lets the frontdoor distinguish
@@ -84,31 +89,21 @@ async function streamSse(upstream, session, traceparent) {
       } catch {
         // Best-effort terminal detection; never let it interfere with proxying.
       }
-    };
+      controller.enqueue(value);
+    }
+  });
 
-    try {
-      if (!reader) {
-        await writer.close();
-        audit("sse_proxy_close", {
-          username: session.username,
-          accessEmail: session.accessEmail,
-          reason: "no_upstream_body"
-        });
-        return;
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        inspectChunk(value);
-        await writer.write(value);
-      }
+  // Native piping propagates cancellation to the backend, errors to the
+  // browser, and releases both locks even while the backend is idle.
+  void upstream.body.pipeTo(writable)
+    .then(() => {
       audit("sse_proxy_close", {
         username: session.username,
         accessEmail: session.accessEmail,
         reason: terminalSeen ? "terminal_event" : "upstream_eof"
       });
-    } catch (error) {
+    })
+    .catch((error) => {
       const isAbort = error?.name === "AbortError" || /aborted/i.test(error?.message || "");
       const message = error instanceof Error ? error.message : String(error);
       if (isAbort) {
@@ -132,15 +127,7 @@ async function streamSse(upstream, session, traceparent) {
           message
         });
       }
-    } finally {
-      try {
-        await writer.close();
-      } catch {
-        // Ignore double-close during error shutdown.
-      }
-      reader?.releaseLock();
-    }
-  })();
+    });
 
   return new Response(readable, {
     status: upstream.status,
@@ -239,9 +226,26 @@ async function handleProxy(request, { params }) {
     );
   }
 
+  if (config.pilotControlPlaneEnabled && (
+    !hasIdentitySecret(config.frontdoorIdentitySecret) || config.frontdoorIdentitySecret === config.backendApiKey
+  )) {
+    return errorEnvelope(
+      503, "AUTH_CONFIGURATION_ERROR", "tenant identity configuration unavailable",
+      buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.CONFIG_FAILURE, {
+        env: "TP_FRONTDOOR_IDENTITY_SECRET"
+      }), requestTraceparent
+    );
+  }
+  const upstreamUrl = buildUpstreamUrl(pathname, request.nextUrl.search);
+  const upstreamTarget = new URL(upstreamUrl);
   const upstreamHeaders = buildUpstreamHeaders(request.headers, {
     backendApiKey: config.backendApiKey,
     actor: session,
+    identity: config.pilotControlPlaneEnabled ? {
+      secret: config.frontdoorIdentitySecret,
+      method: request.method,
+      target: upstreamTarget.pathname + upstreamTarget.search
+    } : null,
     preferIdentityEncoding: sseRequest,
     traceparent: requestTraceparent,
     forwarding: {
@@ -255,15 +259,14 @@ async function handleProxy(request, { params }) {
     method: request.method,
     headers: upstreamHeaders,
     cache: "no-store",
-    redirect: "manual"
+    redirect: "manual",
+    signal: request.signal
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     fetchOptions.body = request.body;
     fetchOptions.duplex = "half";
   }
-
-  const upstreamUrl = buildUpstreamUrl(pathname, request.nextUrl.search);
 
   let upstream;
   try {
@@ -288,6 +291,11 @@ async function handleProxy(request, { params }) {
 
   const upstreamFailureReason = classifyUpstreamFailureStatus(upstream.status);
   if (upstreamFailureReason) {
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      // The body is discarded; retain the managed error envelope if closing fails.
+    }
     const status = upstreamFailureReason === MANAGED_FAILURE_REASON.CONFIG_FAILURE ? 503 : 502;
     const code =
       upstreamFailureReason === MANAGED_FAILURE_REASON.CONFIG_FAILURE

@@ -88,6 +88,11 @@
       "maxItems": 64
     }
   },
+  "allOf": [{
+    "if": {"properties": {"planned_backend": {"const": "archive"}}},
+    "then": {},
+    "else": {"properties": {"input_selection": {"properties": {"files": {"minItems": 1}}}}}
+  }],
   "$defs": {
     "sha256": {
       "type": "string",
@@ -111,7 +116,7 @@
       ]
     },
     "backendId": {
-      "enum": ["da3", "depth_pro", "synthetic", "da2", "depthcrafter", "ensemble"]
+      "enum": ["da3", "depth_pro", "synthetic", "da2", "depthcrafter", "ensemble", "archive"]
     },
     "configurationCompleteness": {
       "enum": ["structural_legacy", "execution_complete"]
@@ -224,7 +229,7 @@
         "files": {
           "type": "array",
           "items": { "$ref": "#/$defs/planInput" },
-          "minItems": 1,
+          "minItems": 0,
           "maxItems": 4096
         }
       }
@@ -278,7 +283,8 @@
         "tp.stage.lux.pbr.v1",
         "tp.stage.lux.v2.v1",
         "tp.stage.lux.reconstruction.v1",
-        "tp.stage.lux.output.v1"
+        "tp.stage.lux.output.v1",
+        "tp.stage.archive.operation.v1"
       ]
     },
     "stageNode": {
@@ -321,7 +327,783 @@
         { "$ref": "#/$defs/pbrConfiguration" },
         { "$ref": "#/$defs/v2Configuration" },
         { "$ref": "#/$defs/reconstructionConfiguration" },
-        { "$ref": "#/$defs/outputConfiguration" }
+        { "$ref": "#/$defs/outputConfiguration" },
+        { "$ref": "#/$defs/archiveConfiguration" }
+      ]
+    },
+    "archiveConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "configuration_completeness", "pipeline", "operation", "parameters", "input_fingerprints"],
+      "properties": {
+        "schema": {"const": "tp.stage.config.archive.operation.v1"},
+        "configuration_completeness": {"const": "execution_complete"},
+        "pipeline": {"type": "string"},
+        "operation": {"type": "string"},
+        "parameters": {"type": "object"},
+        "input_fingerprints": {"type": "object"}
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-a"
+            },
+            "operation": {
+              "const": "fixity-scan"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_index",
+                "archive_root",
+                "out_dir",
+                "strict",
+                "strict_identity",
+                "workers"
+              ],
+              "properties": {
+                "archive_index": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "archive_root": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_dir": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "strict": {
+                  "type": "boolean"
+                },
+                "strict_identity": {
+                  "type": "boolean"
+                },
+                "validate_schemas": {
+                  "type": "boolean"
+                },
+                "workers": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_index"
+              ],
+              "properties": {
+                "archive_index": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-a"
+            },
+            "operation": {
+              "const": "fixity-verify"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_root",
+                "hash_manifest",
+                "report_path",
+                "verify_sample",
+                "workers"
+              ],
+              "properties": {
+                "archive_root": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "hash_manifest": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "report_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "verify_sample": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                "workers": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "hash_manifest"
+              ],
+              "properties": {
+                "hash_manifest": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-a"
+            },
+            "operation": {
+              "const": "manifest-build"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_index",
+                "archive_root",
+                "collection_id",
+                "hash_manifest",
+                "out_jsonl",
+                "out_summary",
+                "owner"
+              ],
+              "properties": {
+                "archive_index": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "archive_root": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "collection_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "hash_manifest": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "owner": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "rights_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_index",
+                "hash_manifest"
+              ],
+              "properties": {
+                "archive_index": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "hash_manifest": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "rights_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-a"
+            },
+            "operation": {
+              "const": "rights-apply"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl",
+                "out_jsonl",
+                "out_summary",
+                "policy_yaml"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "policy_yaml": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl",
+                "policy_yaml"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "policy_yaml": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-b"
+            },
+            "operation": {
+              "const": "bag-build"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "archive_root",
+                "bag_dir",
+                "manifest_jsonl",
+                "report_json",
+                "source_organization"
+              ],
+              "properties": {
+                "archive_root": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "bag_dir": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "report_json": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "source_organization": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "validate_with_bagit_python": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-b"
+            },
+            "operation": {
+              "const": "bag-validate"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "bag_dir",
+                "report_json"
+              ],
+              "properties": {
+                "bag_dir": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "report_json": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "validate_with_bagit_python": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-b"
+            },
+            "operation": {
+              "const": "dedup-plan"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "approver",
+                "manifest_jsonl",
+                "out_ledger",
+                "out_summary"
+              ],
+              "properties": {
+                "approver": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_ledger": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-c"
+            },
+            "operation": {
+              "const": "mets-export"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "href_prefix",
+                "manifest_jsonl",
+                "out_summary",
+                "out_xml"
+              ],
+              "properties": {
+                "href_prefix": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_xml": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-c"
+            },
+            "operation": {
+              "const": "prov-export"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "datetime_field",
+                "manifest_jsonl",
+                "out_prov_jsonld",
+                "out_summary"
+              ],
+              "properties": {
+                "datetime_field": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_prov_jsonld": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "configuration_completeness",
+            "pipeline",
+            "operation",
+            "parameters",
+            "input_fingerprints"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.stage.config.archive.operation.v1"
+            },
+            "configuration_completeness": {
+              "const": "execution_complete"
+            },
+            "pipeline": {
+              "const": "archive-gate-c"
+            },
+            "operation": {
+              "const": "stac-export"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "datetime_field",
+                "manifest_jsonl",
+                "out_prov_jsonld",
+                "out_stac_catalog",
+                "out_stac_items_dir",
+                "out_summary"
+              ],
+              "properties": {
+                "datetime_field": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "manifest_jsonl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_prov_jsonld": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_stac_catalog": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_stac_items_dir": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "out_summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "require_stac": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "input_fingerprints": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "manifest_jsonl"
+              ],
+              "properties": {
+                "manifest_jsonl": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        }
       ]
     },
     "preprocessConfiguration": {
@@ -910,7 +1692,8 @@
         "reconstruction_bundle",
         "combined_manifest_json",
         "batch_manifest_json",
-        "run_card"
+        "run_card",
+        "archive_bundle"
       ]
     },
     "requestedArtifactKind": {
@@ -924,7 +1707,8 @@
         "reconstruction_bundle",
         "combined_manifest_json",
         "batch_manifest_json",
-        "run_card"
+        "run_card",
+        "archive_bundle"
       ]
     },
     "outputDeclaration": {

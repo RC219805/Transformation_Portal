@@ -589,7 +589,7 @@ def _validate_backend_candidates(payload: Mapping[str, Any]) -> None:
         if candidate_id == "ensemble":
             if any(contract["role"] != "ensemble_constituent" for contract in contracts):
                 raise ExecutionPlanError("Ensemble model contracts must use role='ensemble_constituent'")
-            if any(backend_id in {"ensemble", "synthetic"} for backend_id in contract_backend_ids):
+            if any(backend_id in {"ensemble", "synthetic", "archive"} for backend_id in contract_backend_ids):
                 raise ExecutionPlanError("Ensemble constituents must name concrete non-synthetic backends")
             if completeness == EXECUTION_COMPLETE:
                 enabled_contracts = [contract for contract in contracts if contract["enabled"]]
@@ -606,7 +606,7 @@ def _validate_backend_candidates(payload: Mapping[str, Any]) -> None:
             if any(contract["weight"] is not None for contract in contracts):
                 raise ExecutionPlanError("Non-ensemble model contracts must not carry weights")
             if completeness == EXECUTION_COMPLETE:
-                expected_contract_count = 0 if candidate_id == "synthetic" else 1
+                expected_contract_count = 0 if candidate_id in {"synthetic", "archive"} else 1
                 if len(contracts) != expected_contract_count:
                     raise ExecutionPlanError(
                         f"Execution-complete backend {candidate_id!r} requires {expected_contract_count} model contract(s)"
@@ -653,6 +653,11 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
     if candidate_chain[0] != payload["planned_backend"]:
         raise ExecutionPlanError("candidate_fallback_chain must start with planned_backend")
     _validate_backend_candidates(payload)
+    archive_plan = payload["planned_backend"] == "archive"
+    if not archive_plan and "archive" in candidate_chain:
+        raise ExecutionPlanError("Archive is not a Lux fallback backend")
+    if not archive_plan and not payload["input_selection"]["files"]:
+        raise ExecutionPlanError("A Lux execution plan requires at least one input")
 
     if "\x00" in payload["input_selection"]["root"]:
         raise ExecutionPlanError("input_selection.root contains a NUL character")
@@ -679,10 +684,41 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
     if len(set(node_ids)) != len(node_ids):
         raise ExecutionPlanError("Execution plan node ids must be unique")
     stage_registry_ids = [node["stage_registry_id"] for node in nodes]
-    if stage_registry_ids.count(StageRegistryIdentifier.LUX_DEPTH.value) != 1:
-        raise ExecutionPlanError("A Lux execution plan must contain exactly one depth node")
-    if stage_registry_ids.count(StageRegistryIdentifier.LUX_OUTPUT.value) != 1:
-        raise ExecutionPlanError("A Lux execution plan must contain exactly one output node")
+    if archive_plan:
+        from .archive_execution_plan import archive_configuration_fingerprint
+
+        if stage_registry_ids != [StageRegistryIdentifier.ARCHIVE_OPERATION.value] or payload["edges"]:
+            raise ExecutionPlanError("An archive plan requires one isolated archive operation")
+        if (
+            candidate_chain != ["archive"]
+            or payload["backend_candidates"] != [{"backend_id": "archive", "model_contracts": []}]
+            or payload["configuration_completeness"] != EXECUTION_COMPLETE
+            or payload["quality_tier"] != "archive"
+            or payload["preset_requested"] is not None
+            or payload["preset_resolved"] is not None
+            or any(payload["license_acknowledgements"].values())
+        ):
+            raise ExecutionPlanError("Archive plans cannot carry model, preset or Lux execution intent")
+        try:
+            configuration_fingerprint = archive_configuration_fingerprint(nodes[0]["configuration"])
+        except (TypeError, ValueError) as exc:
+            raise ExecutionPlanError(str(exc)) from exc
+        if configuration_fingerprint != payload["config_fingerprint_sha256"]:
+            raise ExecutionPlanError("Archive configuration fingerprint does not match its operation")
+        if (
+            nodes[0]["optional"]
+            or payload["requested_outputs"] != ["archive_bundle"]
+            or len(nodes[0]["outputs"]) != 1
+            or not nodes[0]["outputs"][0]["required"]
+        ):
+            raise ExecutionPlanError("Archive operation and its bundle must be required")
+    else:
+        if StageRegistryIdentifier.ARCHIVE_OPERATION.value in stage_registry_ids:
+            raise ExecutionPlanError("Lux plans cannot contain archive operations")
+        if stage_registry_ids.count(StageRegistryIdentifier.LUX_DEPTH.value) != 1:
+            raise ExecutionPlanError("A Lux execution plan must contain exactly one depth node")
+        if stage_registry_ids.count(StageRegistryIdentifier.LUX_OUTPUT.value) != 1:
+            raise ExecutionPlanError("A Lux execution plan must contain exactly one output node")
 
     requested_declarations: set[str] = set()
     output_ids: set[str] = set()
@@ -830,7 +866,7 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
             raise ExecutionPlanLimitError(f"Node {source!r} exceeds maximum fanout {MAX_PLAN_FANOUT}")
     _topological_order(node_ids, edge_pairs)
 
-    if payload["configuration_completeness"] == EXECUTION_COMPLETE:
+    if payload["configuration_completeness"] == EXECUTION_COMPLETE and not archive_plan:
         required_stage_ids = (
             StageRegistryIdentifier.LUX_PREPROCESS.value,
             StageRegistryIdentifier.LUX_DEPTH.value,
