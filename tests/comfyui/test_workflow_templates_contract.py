@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from transformation_portal.comfyui.workflow_builder import NodeType, WorkflowBuilder
+from transformation_portal.comfyui.workflow_builder import NodeType, Workflow, WorkflowBuilder
 from transformation_portal.comfyui.workflow_templates import WorkflowTemplates
 
 pytestmark = pytest.mark.unit
@@ -48,12 +48,18 @@ def test_comfyui_package_imports_without_site_packages():
         lambda: WorkflowTemplates.coastal_property_golden_hour("input.jpg", "output.jpg"),
     ],
 )
-def test_single_workflow_templates_build(factory):
+def test_single_workflow_templates_build(factory, tmp_path):
     workflow = factory()
 
     assert workflow.nodes
     assert workflow.metadata["name"]
     assert workflow.to_comfyui_format()
+    path = tmp_path / "template.json"
+    workflow.save(path)
+    loaded = Workflow.load(path)
+    assert loaded.connections == workflow.connections
+    assert loaded.to_comfyui_format() == workflow.to_comfyui_format()
+    assert len(loaded.connections) > 0
 
 
 def test_multi_variant_generation_builds_expected_count():

@@ -32,7 +32,7 @@ class ExecutionContext:
     execution_times: Dict[str, float]
     errors: List[str]
 
-    def get_output(self, node_id: str, output_name: str = "IMAGE") -> Any:
+    def get_output(self, node_id: str, output_name: Union[str, int] = "IMAGE") -> Any:
         outputs = self.node_outputs.get(node_id, {})
         return outputs.get(output_name)
 
@@ -152,7 +152,9 @@ class WorkflowExecutor:
         inputs = {}
         for conn in workflow.connections:
             if conn.target_node_id == node.node_id:
-                inputs[conn.target_input] = context.get_output(conn.source_node_id, conn.source_output)
+                source = workflow.nodes.get(conn.source_node_id)
+                output_name = conn.output_name(source.node_type) if source else conn.source_output
+                inputs[conn.target_input] = context.get_output(conn.source_node_id, output_name)
         inputs.update(node.parameters)
         return inputs
 

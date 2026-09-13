@@ -292,3 +292,128 @@ def test_builder_full_chain_matches_docstring_example(tmp_path: Path) -> None:
 def test_builder_repr_reports_node_count() -> None:
     builder = WorkflowBuilder().add_input("a.jpg")
     assert repr(builder) == "WorkflowBuilder(nodes=1)"
+
+
+@pytest.mark.parametrize("source_output", ["IMAGE", 0, "MASK", 1, "REPORT", 2])
+def test_connected_graph_roundtrip_preserves_edges_and_resolved_inputs(tmp_path, source_output):
+    from transformation_portal.comfyui.executor import ExecutionContext, WorkflowExecutor
+
+    # Insertion order deliberately differs from dependency order. Even a
+    # link-shaped literal must stay a parameter when explicit edges are saved.
+    workflow = Workflow(
+        nodes={
+            "sink": Node("sink", NodeType.OUTPUT, parameters={"size": [640, 480], "literal": ["sky", 1]}),
+            "branch": Node("branch", NodeType.IMAGE_BLEND, parameters={"weights": [0.2, 0.8]}),
+            "sky": Node("sky", NodeType.SKYGAN_SKY, metadata={"title": "Atmosphere", "review": {"owner": "artist"}}),
+        },
+        connections=[
+            NodeConnection("sky", source_output, "sink", "image"),
+            NodeConnection("sky", "IMAGE", "branch", "image"),
+        ],
+        metadata={"name": "branching", "provenance": {"notes": ["review", "draft"]}},
+    )
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    workflow.save(first)
+    loaded = Workflow.load(first)
+    loaded.save(second)
+
+    assert loaded.connections == workflow.connections
+    assert loaded.metadata == workflow.metadata
+    assert loaded.nodes["sky"].metadata == workflow.nodes["sky"].metadata
+    assert loaded.nodes["sink"].parameters == {"size": [640, 480], "literal": ["sky", 1]}
+    assert loaded.nodes["branch"].parameters == {"weights": [0.2, 0.8]}
+    assert {key: node.node_type for key, node in loaded.nodes.items()} == {
+        key: node.node_type for key, node in workflow.nodes.items()
+    }
+    assert json.loads(first.read_text()) == json.loads(second.read_text())
+
+    executor = WorkflowExecutor(cache_models=False)
+    order = executor._build_execution_order(loaded)
+    assert order.index("sky") < order.index("sink")
+    assert order.index("sky") < order.index("branch")
+    outputs = {"IMAGE": object(), "MASK": object(), "REPORT": object()}
+    context = ExecutionContext({"sky": outputs}, {}, [])
+    output_name = {0: "IMAGE", 1: "MASK", 2: "REPORT"}.get(source_output, source_output)
+    inputs = executor._get_node_inputs(loaded.nodes["sink"], loaded, context)
+    assert inputs["image"] is outputs[output_name]
+    assert inputs["literal"] == ["sky", 1]
+    assert executor._get_node_inputs(loaded.nodes["branch"], loaded, context)["image"] is outputs["IMAGE"]
+
+
+def test_legacy_links_use_source_contract_and_not_dictionary_order(tmp_path):
+    from transformation_portal.comfyui.executor import ExecutionContext, WorkflowExecutor
+
+    path = tmp_path / "legacy.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nodes": {
+                    "sink": {"class_type": "SaveImage", "inputs": {"report": ["analysis", 0], "size": [640, 480]}},
+                    "analysis": {"class_type": "SceneAnalysisNode", "inputs": {"detailed": True}},
+                }
+            }
+        )
+    )
+    loaded = Workflow.load(path)
+    assert loaded.connections == [NodeConnection("analysis", 0, "sink", "report")]
+    assert loaded.nodes["sink"].parameters == {"size": [640, 480]}
+    executor = WorkflowExecutor(cache_models=False)
+    context = ExecutionContext({"analysis": {"STRING": "scene report", "IMAGE": "wrong output"}}, {}, [])
+    assert executor._get_node_inputs(loaded.nodes["sink"], loaded, context)["report"] == "scene report"
+    assert executor._build_execution_order(loaded) == ["analysis", "sink"]
+
+
+def test_unknown_output_contract_does_not_guess_image_slot():
+    connection = NodeConnection("node", 0, "sink", "value")
+    assert connection.output_name(NodeType.QUALITY_VALIDATION) == 0
+    assert connection.output_name(NodeType.SCENE_ANALYSIS) == "STRING"
+
+
+def test_graph_loader_preserves_unknown_node_and_missing_target_tolerance(tmp_path):
+    path = tmp_path / "mixed.json"
+    payload = {
+        "nodes": {
+            "good": {"class_type": "LoadImage", "inputs": {"unresolved": ["unknown", 0]}},
+            "unknown": {"class_type": "FutureNode", "inputs": {}},
+        }
+    }
+    path.write_text(json.dumps(payload))
+    loaded = Workflow.load(path)
+    assert set(loaded.nodes) == {"good"}
+    assert loaded.connections == []
+    assert loaded.nodes["good"].parameters == {"unresolved": ["unknown", 0]}
+
+    loaded.connections.append(NodeConnection("good", "IMAGE", "missing", "image"))
+    loaded.save(path)
+    reloaded = Workflow.load(path)
+    assert set(reloaded.nodes) == {"good"}
+    assert reloaded.connections == []
+    assert reloaded.nodes["good"].parameters == {"unresolved": ["unknown", 0]}
+
+
+@pytest.mark.parametrize("source_present", [False, True], ids=["absent-source", "unknown-source-type"])
+def test_explicit_connection_with_unresolvable_source_keeps_parameter_tolerance(tmp_path, source_present):
+    from transformation_portal.comfyui.executor import ExecutionContext, WorkflowExecutor
+
+    payload = {
+        "nodes": {"sink": {"class_type": "SaveImage", "inputs": {"image": ["source", 0], "quality": 95}}},
+        "connections": [
+            {"source_node_id": "source", "source_output": "IMAGE", "target_node_id": "sink", "target_input": "image"}
+        ],
+    }
+    if source_present:
+        payload["nodes"]["source"] = {"class_type": "FutureNode", "inputs": {}}
+    path = tmp_path / "unresolvable.json"
+    path.write_text(json.dumps(payload))
+
+    loaded = Workflow.load(path)
+    assert set(loaded.nodes) == {"sink"}
+    assert loaded.connections == []
+    assert loaded.nodes["sink"].parameters == {"image": ["source", 0], "quality": 95}
+    executor = WorkflowExecutor(cache_models=False)
+    assert executor._build_execution_order(loaded) == ["sink"]
+    context = ExecutionContext({}, {}, [])
+    assert executor._get_node_inputs(loaded.nodes["sink"], loaded, context) == {"image": ["source", 0], "quality": 95}
+    result = executor.execute(loaded)
+    assert result["success"] is False
+    assert "No executor implementation" in result["errors"][0]
