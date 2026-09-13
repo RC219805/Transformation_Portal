@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 APEX ML Dependencies Verification Script
-Checks all required ML dependencies and backends are properly installed.
+Reports imports and versions in this interpreter; does not authorize isolated runtimes or run inference.
 """
 
 import argparse
@@ -37,9 +37,10 @@ def _bootstrap_paths(repo_override: str | None = None) -> Path:
 
 
 def check_dependencies():
-    """Verify all ML dependencies are installed."""
+    """Report in-process ML imports and version warnings."""
     print("=" * 80)
-    print("  APEX ML STACK VERIFICATION")
+    print("  IN-PROCESS ML IMPORT AND VERSION CHECK")
+    print("  Isolated runtime authorization and inference are not checked.")
     print("=" * 80)
     print()
 
@@ -136,18 +137,20 @@ def check_dependencies():
 
     if all_ok:
         print("=" * 80)
-        print("  ✅ ALL DEPENDENCIES VERIFIED - READY FOR APEX PROCESSING")
+        print("  ✅ IMPORT CHECK COMPLETE - inspect version warnings above")
         print("=" * 80)
         return 0
     else:
         print("=" * 80)
-        print("  ❌ SOME DEPENDENCIES MISSING - INSTALL REQUIRED")
+        print("  ❌ IMPORTS MISSING IN THIS INTERPRETER - check the owning runtime installation")
         print("=" * 80)
         return 1
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify APEX ML dependencies and backends.")
+    parser = argparse.ArgumentParser(
+        description="Report in-process ML imports/versions; isolated runtime authorization and inference are not checked."
+    )
     parser.add_argument("--repo", help="Explicit repository root path override.")
     return parser.parse_args()
 
