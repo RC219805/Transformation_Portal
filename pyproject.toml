@@ -17,7 +17,7 @@ dependencies = [
     "Pillow>=10.3.0,<13",
     "scipy>=1.15,<2",
     "scikit-learn>=1.8.0,<2",
-    "opencv-python-headless>=4.8.0,<5 ; platform_system == 'Linux'",  # required for depth_writer (core pipeline)
+    "opencv-python-headless>=4.8.0,<6 ; platform_system == 'Linux'",  # required for depth_writer (core pipeline)
     "opencv-python>=4.8.0,<5 ; platform_system != 'Linux'",  # required for depth_writer (core pipeline)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
