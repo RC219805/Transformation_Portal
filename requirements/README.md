@@ -283,6 +283,13 @@ profile, dependency/source override, other host, or newer interpreter does not
 authorize depth-cache access. Runtime identity verification and a repeat-run
 cache hit are distinct from successful inference.
 
+After regenerating that lock, update its digest in
+`config/da3_runtime_identity_contract.json` and
+`scripts/setup/install_da3_runtime.sh` in the same change, then rerun the native
+lock check. Reinstall existing DA3 runtimes with the baseline installer before
+using the new lock for cache authority; older runtime markers do not authorize
+the refreshed dependency closure.
+
 Do not install optional packages into the core `.venv` to repair isolated
 DA3, Depth Pro, RAW, or FastVLM workers. Use their own installers and validators
 in [scripts/setup/README.md](../scripts/setup/README.md).

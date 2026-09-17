@@ -6,7 +6,7 @@
 #
 aiofiles==25.1.0
     # via -r base.in
-alembic==1.19.2
+alembic==1.20.0
     # via -r base.in
 annotated-doc==0.0.5
     # via
@@ -18,7 +18,7 @@ anyio==4.15.1
     # via
     #   httpx
     #   starlette
-ast-serialize==0.9.0
+ast-serialize==0.11.2
     # via mypy
 astroid==4.0.4
     # via pylint
@@ -36,16 +36,16 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-boto3==1.43.89
+boto3==1.43.93
     # via
     #   -r base.in
     #   moto
-botocore==1.43.89
+botocore==1.43.93
     # via
     #   boto3
     #   moto
     #   s3transfer
-build==1.6.0
+build==1.6.1
     # via -r ci.in
 cachetools==7.1.8
     # via tox
@@ -71,7 +71,7 @@ cloudpickle==3.1.2
     # via joblib
 colorama==0.4.6
     # via tox
-coverage[toml]==7.16.0
+coverage[toml]==7.16.1
     # via pytest-cov
 cryptography==50.0.0
     # via
@@ -90,7 +90,7 @@ execnet==2.1.2
     # via pytest-xdist
 fastapi==0.141.1
     # via -r base.in
-filelock==3.32.5
+filelock==3.32.6
     # via
     #   python-discovery
     #   tox
@@ -107,7 +107,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.167.1
+hypothesis==6.168.0
     # via -r dev.in
 id==1.6.1
     # via twine
@@ -185,7 +185,7 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-narwhals==2.25.0
+narwhals==2.26.0
     # via scikit-learn
 nh3==0.3.7
     # via readme-renderer
@@ -218,7 +218,7 @@ pathspec==1.1.1
     #   mypy
 pillow==12.3.0
     # via -r base.in
-platformdirs==4.11.7
+platformdirs==4.11.8
     # via
     #   black
     #   pylint
@@ -256,7 +256,7 @@ pygments==2.21.0
     #   rich
 pylint==4.0.8
     # via -r dev.in
-pypdf==6.17.0
+pypdf==6.18.1
     # via -r ci.in
 pyproject-api==1.11.0
     # via tox
@@ -329,7 +329,7 @@ rpds-py==2026.6.3
     #   referencing
 s3transfer==0.19.2
     # via boto3
-scikit-learn==1.9.0
+scikit-learn==1.9.1
     # via -r base.in
 scipy==1.17.1
     # via
@@ -362,9 +362,9 @@ tomli-w==1.2.0
     # via tox
 tomlkit==0.15.1
     # via pylint
-tox==4.61.2
+tox==4.61.4
     # via -r ci.in
-tqdm==4.70.0
+tqdm==4.70.1
     # via -r base.in
 twine==7.0.0
     # via -r ci.in
@@ -399,7 +399,7 @@ urllib3==2.7.0
     #   twine
 uvicorn==0.52.1
     # via -r base.in
-virtualenv==21.7.8
+virtualenv==21.7.9
     # via
     #   pre-commit
     #   tox
