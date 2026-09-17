@@ -8,7 +8,7 @@ aiofiles==25.1.0
     # via
     #   -c all.txt
     #   -r base.in
-alembic==1.19.2
+alembic==1.20.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.89
+boto3==1.43.93
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.89
+botocore==1.43.93
     # via
     #   -c all.txt
     #   boto3
@@ -104,7 +104,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-narwhals==2.25.0
+narwhals==2.26.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -168,7 +168,7 @@ s3transfer==0.19.2
     # via
     #   -c all.txt
     #   boto3
-scikit-learn==1.9.0
+scikit-learn==1.9.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -204,7 +204,7 @@ tifffile==2026.3.3
     # via
     #   -c all.txt
     #   -r base.in
-tqdm==4.70.0
+tqdm==4.70.1
     # via
     #   -c all.txt
     #   -r base.in
