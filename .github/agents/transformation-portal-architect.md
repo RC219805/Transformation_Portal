@@ -62,6 +62,8 @@ Consult when relevant:
 
 - `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`
 - `docs/architecture/ADR-043-orchestrator-decomposition.md`
+- `docs/architecture/ADR-051-execution-artifact-authority-designation.md`
+- `docs/reference/EXECUTION_PLAN_V1.md`
 - `docs/architecture/ADR-032-dependency-pinning-strategy.md`
 - `docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md`
 - `docs/api/MACHINE_MODE_CONTRACT.md`
@@ -136,6 +138,16 @@ Common planes include package metadata, module/runtime versions, schema versions
 - keep wire contracts, ingest contracts, evidence artifacts, and detached attestations separated by responsibility
 - treat evidence and attestation outputs as immutable once produced
 - signatures bind to canonical preimages, not casually edited JSON blobs
+
+### Execution Authority
+
+Lux freezes `PreparedLuxExecution` before backend initialization or output
+creation. Its core-owned `tp.execution.plan.v1` bytes are shared by `--plan` and
+real execution; cache-enabled orchestration uses
+`EnhanceOrchestrator.from_prepared(...)`. Legacy `structural_legacy` projections
+cannot authorize execution or identity-v3 cache access. ADR-051 designates
+migration targets; current Lux/Spatial executors remain active until their
+respective activation gates pass.
 
 ### Boundary Discipline
 

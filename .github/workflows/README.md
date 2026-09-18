@@ -15,9 +15,12 @@ Python 3.11/3.12 core tests, Python 3.11 ML tests, and manifest generation.
 `frontdoor-contract` runs when the frontdoor classifier requests it.
 
 `CI Gate` aggregates these results and permits intentional heavy-job skips in
-lightweight mode. Main branch protection was read on **2026-09-12** and required
-only `CI Gate`, with strict up-to-date checking; re-read GitHub before relying
-on that snapshot. See [change classification](../../docs/ci/CHANGE_AWARE_CI.md)
+lightweight mode. Main branch protection was read on **2026-09-18 UTC** and required
+`CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`,
+with strict up-to-date checking. An active default-branch ruleset additionally
+configures Copilot review, code quality, and CodeQL scanning; see the
+[remote snapshot](../BRANCH_PROTECTION_VERIFIED.md). Re-read GitHub before
+relying on that snapshot. See [change classification](../../docs/ci/CHANGE_AWARE_CI.md)
 and [testing strategy](../../docs/testing/STRATEGY.md).
 
 The former `python-app.yml` and `pylint.yml` are not active workflow files.
@@ -51,11 +54,11 @@ Configure the corresponding GitHub environments and their required reviewers
 before releasing. Both publishing jobs request `id-token: write` to obtain the
 short-lived OIDC identity; the build job retains read-only repository access.
 
-Version tags matching `v*` trigger the release workflow; the production job runs
-when the selected ref is a version tag. For a Test PyPI upload, use
-`workflow_dispatch` with `test_pypi=true` on a branch ref. Selecting a version-tag
-ref for that manual run can also satisfy the production job's condition. A
-branch dispatch with `test_pypi=false` builds packages without publishing them.
+Pushing a version tag matching `v*` triggers production publication. For a
+Test PyPI upload, use `workflow_dispatch` with `test_pypi=true` on the intended
+ref. Manual dispatch never publishes to production PyPI, including when a
+version-tag ref is selected. A dispatch with `test_pypi=false` builds packages
+without publishing them.
 Building packages or passing this repository's checks does not prove that the
 external trusted-publisher configuration or release approvals are in place.
 

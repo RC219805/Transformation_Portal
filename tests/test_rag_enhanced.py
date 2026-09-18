@@ -12,6 +12,9 @@ Tests:
 
 # pylint: disable=wrong-import-position,redefined-outer-name
 
+import json
+import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -140,6 +143,112 @@ class TestPersistentCaching:
 
         assert len(chunks1) == len(chunks2)
         assert chunks1[0].content == chunks2[0].content
+
+    def test_valid_cache_skips_chunking(self, temp_repo, monkeypatch):
+        (temp_repo / "src" / "empty.py").write_text("")
+        indexer = RepositoryIndexer(str(temp_repo))
+        expected = indexer.index_repository()
+        assert all(chunk.content.strip() for chunk in expected)
+
+        def unexpected_chunking(*_args):
+            pytest.fail("unchanged content should reuse cached chunks")
+
+        monkeypatch.setattr(indexer, "_index_file", unexpected_chunking)
+        assert indexer.index_repository() == expected
+
+    @pytest.mark.parametrize("mutation", ["edit", "add", "delete", "rename"])
+    def test_cache_invalidates_for_source_changes(self, temp_repo, mutation):
+        indexer = RepositoryIndexer(str(temp_repo))
+        previous = indexer.index_repository()
+        source = temp_repo / "docs" / "readme.md"
+        if mutation == "edit":
+            # Hash bytes, not mtimes or sizes: same-length edits still invalidate.
+            stat = source.stat()
+            source.write_text(source.read_text().replace("Test", "Next"))
+            os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        elif mutation == "add":
+            (temp_repo / "docs" / "new.md").write_text("# New governed source")
+        elif mutation == "delete":
+            source.unlink()
+        else:
+            source.rename(source.with_name("renamed.md"))
+
+        refreshed = indexer.index_repository()
+        uncached = RepositoryIndexer(str(temp_repo), use_cache=False).index_repository()
+        assert refreshed != previous
+        assert refreshed == uncached
+
+    def test_cache_invalidates_for_chunk_settings(self, temp_repo):
+        source = temp_repo / "docs" / "readme.md"
+        source.write_text("A line of documentation.\n" * 30)
+        previous = RepositoryIndexer(str(temp_repo), chunk_size_tokens=750).index_repository()
+        indexer = RepositoryIndexer(str(temp_repo), chunk_size_tokens=30, overlap_tokens=0)
+        refreshed = indexer.index_repository()
+        assert indexer.overlap == 0
+        assert len(refreshed) > len(previous)
+        assert refreshed == indexer.index_repository(force_reindex=True)
+
+    def test_legacy_json_cache_is_rebuilt(self, temp_repo):
+        indexer = RepositoryIndexer(str(temp_repo))
+        expected = indexer.index_repository()
+        payload = json.loads(indexer.cache_file.read_text())
+        payload.update(cache_format="tp.rag.chunks.v1", version=1, chunks=[])
+        payload.pop("source_fingerprint")
+        indexer.cache_file.write_text(json.dumps(payload))
+        assert indexer.index_repository() == expected
+
+    def test_source_changes_during_indexing_do_not_publish_cache(self, temp_repo, monkeypatch):
+        indexer = RepositoryIndexer(str(temp_repo))
+        original = indexer._index_file
+
+        def change_after_read(file_path, chunk_type):
+            source_hash = original(file_path, chunk_type)
+            if file_path.name == "readme.md":
+                file_path.write_text("# Changed during indexing")
+            return source_hash
+
+        monkeypatch.setattr(indexer, "_index_file", change_after_read)
+        indexer.index_repository()
+        assert not indexer.cache_file.exists()
+
+    def test_transient_source_change_cannot_bind_wrong_chunks_to_restored_source(self, temp_repo, monkeypatch):
+        """A->B->A edits must not cache B chunks under the unchanged A digest."""
+        indexer = RepositoryIndexer(str(temp_repo))
+        original_index_file = indexer._index_file
+        source = temp_repo / "docs" / "readme.md"
+        original_bytes = source.read_bytes()
+
+        def change_while_reading(file_path, chunk_type):
+            if file_path != source:
+                return original_index_file(file_path, chunk_type)
+            source.write_text("# Intermediate source B")
+            try:
+                return original_index_file(file_path, chunk_type)
+            finally:
+                source.write_bytes(original_bytes)
+
+        monkeypatch.setattr(indexer, "_index_file", change_while_reading)
+        during_change = indexer.index_repository()
+        assert any(chunk.content == "# Intermediate source B" for chunk in during_change)
+        assert not indexer.cache_file.exists()
+        refreshed = RepositoryIndexer(str(temp_repo)).index_repository()
+        assert refreshed == RepositoryIndexer(str(temp_repo), use_cache=False).index_repository()
+        assert all(chunk.content != "# Intermediate source B" for chunk in refreshed)
+
+    def test_transient_read_failure_cannot_publish_partial_cache(self, temp_repo, monkeypatch):
+        """Successful before/after hashes cannot authorize a skipped source read."""
+        indexer = RepositoryIndexer(str(temp_repo))
+        source = temp_repo / "docs" / "readme.md"
+        original_read = Path.read_bytes
+
+        def fail_source_read(file_path):
+            if file_path == source:
+                raise OSError("Transient source read failure")
+            return original_read(file_path)
+
+        monkeypatch.setattr(Path, "read_bytes", fail_source_read)
+        indexer.index_repository()
+        assert not indexer.cache_file.exists()
 
     def test_force_reindex(self, temp_repo):
         """Test force reindexing ignores cache."""
@@ -437,6 +546,90 @@ class TestPerformance:
         # Cache loading should be much faster than indexing
         # But this might not always be true for tiny repos
         assert time2 <= time1 * 2  # Allow some variance
+
+
+class TestCurrentGuidanceInventory:
+    """Retrieval must represent live authorities with deterministic ordering."""
+
+    def test_includes_authorities_and_prunes_archived_profiles(self, tmp_path):
+        sources = {
+            "AGENTS.md": "# Root operating contract",
+            ".github/copilot-instructions.md": "# Copilot instructions",
+            ".github/agents/live.md": "# Live profile",
+            ".github/agents/_archive/old.md": "# Retired profile",
+            ".github/agents/rag_system/_archive/old.md": "# Retired RAG guidance",
+            "docs/z.md": "# Last document",
+            "docs/a.md": "# First document",
+            "docs/build/output.md": "# Generated build output",
+            "README_GUIDE.md": "# Matches two root patterns",
+        }
+        for rel_path, content in sources.items():
+            path = tmp_path / rel_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        chunks = RepositoryIndexer(str(tmp_path), use_cache=False).index_repository()
+        paths = [chunk.file_path for chunk in chunks]
+        assert paths == sorted(set(paths))
+        assert set(paths) == {
+            "AGENTS.md",
+            ".github/copilot-instructions.md",
+            ".github/agents/live.md",
+            "docs/a.md",
+            "docs/z.md",
+            "README_GUIDE.md",
+        }
+        assert all(
+            chunk.chunk_type == "agent"
+            for chunk in chunks
+            if chunk.file_path
+            in {
+                "AGENTS.md",
+                ".github/copilot-instructions.md",
+                ".github/agents/live.md",
+            }
+        )
+
+    def test_source_snapshot_preserves_universal_newlines(self, tmp_path):
+        (tmp_path / "README.md").write_bytes(b"# Title\r\nFirst line\rSecond line\n")
+        indexer = RepositoryIndexer(str(tmp_path))
+        chunks = indexer.index_repository()
+        assert len(chunks) == 1
+        assert chunks[0].content == "# Title\nFirst line\nSecond line\n"
+        assert chunks[0].start_line == 1
+        assert chunks[0].end_line == 4
+        assert indexer.index_repository() == chunks
+
+    def test_configured_cache_tree_is_not_indexed(self, tmp_path):
+        get_config().set("indexer.cache_dir", "docs/cache")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "readme.md").write_text("# Current documentation")
+        indexer = RepositoryIndexer(str(tmp_path))
+        expected = indexer.index_repository()
+        assert indexer.index_repository(force_reindex=True) == expected
+
+
+@pytest.mark.parametrize("entrypoint", ["script", "module"])
+def test_rag_cli_can_index_with_both_entrypoints(tmp_path, entrypoint):
+    """The supported CLI must import its package and perform an offline operation."""
+    (tmp_path / "README.md").write_text("# CLI fixture")
+    command = (
+        [sys.executable, str(agents_path / "rag_system" / "cli.py")]
+        if entrypoint == "script"
+        else [sys.executable, "-m", "rag_system.cli"]
+    )
+    output = tmp_path / "stats.json"
+    env = {**os.environ, "PYTHONPATH": str(agents_path), "RAG_RETRIEVER_ENABLE_VECTOR_SEARCH": "false"}
+    result = subprocess.run(
+        [*command, "index", "--repo-root", str(tmp_path), "--output", str(output)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        timeout=30,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text())["total_chunks"] == 1
 
 
 if __name__ == "__main__":

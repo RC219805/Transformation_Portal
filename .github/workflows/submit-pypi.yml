@@ -99,7 +99,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Manual Test PyPI dispatches on a version tag must never publish to production.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     environment:
       # Configure this environment with required reviewers for release approvals.
       name: pypi
@@ -116,24 +117,3 @@ jobs:
       uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1
       with:
         skip-existing: true
-
-  cleanup:
-    name: Cleanup
-    needs: [build, test-pypi, pypi]
-    runs-on: ubuntu-latest
-    permissions: {}
-    if: always()
-
-    steps:
-    - name: Clean up build artifacts
-      continue-on-error: true
-      run: |
-        echo "No cleanup required: this job runs on a fresh GitHub Actions runner."
-        # Cleanup commands removed because each job runs on a new VM and there are no artifacts to clean.
-
-    - name: Final cleanup verification
-      continue-on-error: true
-      run: |
-        echo "Disk usage after cleanup:"
-        df -h || true
-        echo "Workflow completed successfully!"

@@ -90,7 +90,7 @@ This repository is broader than the earlier “luxury rendering pipeline only”
 
 6. **Performance, Observability, and Repo Hygiene**
    - APEX performance authority
-   - current 31-workflow inventory in `docs/ci/WORKFLOW_MATRIX.md`
+   - current workflow inventory in `docs/ci/WORKFLOW_MATRIX.md`
    - contract tests, marker audits, CI-aligned linting, and local CI targets
    - documentation/repository organization guardrails
 
@@ -214,11 +214,21 @@ tests/                                               # unit, integration, contra
 
 ### Lux Depth V3 and Media Pipeline Work
 
-- Treat **`da3`** as the default commercial-safe production backend.
+- Use the commercial-safe default model `da3_metric` (`--model-key da3-metric`).
+  The deprecated bare `da3` model selector resolves `da3_research` and requires
+  explicit non-commercial acknowledgement; it is distinct from the `da3` backend.
 - Treat research-only presets/backends as opt-in flows requiring explicit license acknowledgements.
 - Preserve backend resolution metadata, fallback behavior, manifests, run cards, and artifact indexing.
 - Keep optional V2 enhancement behavior explicit; for PBR-only workflows, disabling V2 is a valid path.
 - Keep facade stability in `orchestrator.py`; place config logic in `config_resolver.py`, planning/backend logic in `pipeline_coordinator.py`, artifact logic in `artifact_manager.py`, executable stage logic in `execution_engine.py`, and validation semantics in `validators/run_card_validator.py`.
+
+Lux execution authority is the core-owned `tp.execution.plan.v1` contract in
+`docs/reference/EXECUTION_PLAN_V1.md`. `--plan` prints the exact canonical bytes
+consumed by real execution. Use `EnhanceOrchestrator.from_prepared(...)` for
+cache-enabled orchestration; `structural_legacy` projections cannot authorize
+execution or the identity-v3 cache. ADR-051 designates migration targets only:
+keep current Lux/Spatial executors until their activation gates pass. See
+`docs/architecture/ADR-051-execution-artifact-authority-designation.md`.
 
 ### Portal / Orchestrator / Archive Gate Work
 

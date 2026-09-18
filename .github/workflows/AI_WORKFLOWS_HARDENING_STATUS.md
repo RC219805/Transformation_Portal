@@ -1,5 +1,9 @@
 # AI Workflows Hardening Status - PR #1028
 
+> Historical PR #1028 assessment. Its approval and readiness statements apply only to that review, not the current workflow head.
+> For current behavior, use [workflow guidance](README.md), the
+> [workflow matrix](../../docs/ci/WORKFLOW_MATRIX.md), and the workflow YAML.
+
 **Status**: ✅ **PRODUCTION READY**
 **Architect Assessment**: APPROVED
 **Date**: 2024

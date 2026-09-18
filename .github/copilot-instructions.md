@@ -28,7 +28,7 @@ Recent current-state contract anchors:
 - The managed front door in `web/secure-landing/` is Node 22.x only.
 - Root `.env.example` is the Docker/FastAPI template; `web/secure-landing/.env.example`
   is the managed front-door template.
-- `docs/ci/WORKFLOW_MATRIX.md` is the current 31-workflow GitHub Actions inventory.
+- `docs/ci/WORKFLOW_MATRIX.md` is the current GitHub Actions inventory.
 - `docs/governance/audit/archive-gates-2026-04-27.md` is the current archive
   Gates A/B/C readiness audit evidence.
 
@@ -198,12 +198,22 @@ Do not keep stuffing behavior into one giant orchestrator file.
 
 Prefer these seams:
 
+- `execution_lifecycle.py` for freezing `PreparedLuxExecution` before backend
+  initialization or output creation
 - `config_resolver.py` for preset/config normalization
 - `pipeline_coordinator.py` for backend/stage resolution
 - `execution_engine.py` for stage execution logic
 - `artifact_manager.py` for output hashing/indexing/provenance assembly
 - `validators/` for schema/run-card validation
 - `orchestrator.py` as the compatibility-facing orchestration surface, not the dumping ground
+
+Lux execution authority is the core-owned `tp.execution.plan.v1` contract in
+`docs/reference/EXECUTION_PLAN_V1.md`. `--plan` prints the exact canonical bytes
+consumed by real execution. Use `EnhanceOrchestrator.from_prepared(...)` for
+cache-enabled orchestration; `structural_legacy` projections cannot authorize
+execution or the identity-v3 cache. ADR-051 designates migration targets only:
+keep current Lux/Spatial executors until their activation gates pass. See
+`docs/architecture/ADR-051-execution-artifact-authority-designation.md`.
 
 If you touch `EnhanceOrchestrator`, ask first:
 
@@ -315,7 +325,10 @@ Stable presets and governed PBR surfaces are contract-bearing. Preserve stable p
 
 Assume:
 
-- `da3` is the default commercial-safe production backend
+- The default model is `da3_metric` (`--model-key da3-metric`, Apache-2.0).
+  The deprecated bare `da3` model selector resolves `da3_research` and requires
+  explicit non-commercial acknowledgement; distinguish model selectors from
+  the `da3` backend implementation.
 - `depth_pro` is research-only and requires explicit acknowledgments
 - research presets remain opt-in, not the default production path
 - fallback behavior must stay transparent and traceable

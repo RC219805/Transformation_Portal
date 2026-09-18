@@ -65,8 +65,18 @@ jobs:
               per_page: 100,
             });
 
-            const names = files.map(f => f.filename);
-            core.info(`Changed files (${names.length}):`);
+            // The REST endpoint caps results at 3,000 files. Never authorize
+            // lightweight CI from an empty, incomplete, or stale change list.
+            if (files.length === 0 || files.length >= 3000 || files.length !== pr.changed_files) {
+              core.setOutput('run_full', 'true');
+              core.setOutput('run_frontdoor', 'true');
+              core.setOutput('reason', 'incomplete or changed PR file inventory; full validation required');
+              return;
+            }
+
+            // A rename away from a runtime path still removes that input.
+            const names = files.flatMap(f => [f.filename, f.previous_filename].filter(Boolean));
+            core.info(`Changed paths (${names.length}):`);
             names.forEach(n => core.info(`  ${n}`));
 
             // Patterns that trigger full CI suite
@@ -77,13 +87,20 @@ jobs:
               /^scripts\//,
               /^tools\//,              // execution risk: montecito_manifest.py
               /^config\//,
+              /^migrations\//,
+              /^policy\//,
+              /^schemas\//,
+              /^docs\/(schemas|archive\/schemas|compliance\/schemas)\//,
+              /^[^/]+\.py$/,       // root entrypoints, including app.py
               /^pyproject\.toml$/,
               /^requirements/,
-              /^setup\.py$/,
-              /^conftest\.py$/,
               /^Makefile$/,
               /^mypy\.ini$/,
               /^\.pylintrc$/,
+              /^\.pre-commit-config\.yaml$/,
+              /^Dockerfile$/,
+              /^docker-compose\.yml$/,
+              /^\.github\/agents\//,
               /^\.github\/workflows\//,
               /^\.github\/actions\//,
               /^\.github\/copilot-instructions\.md$/,
@@ -91,9 +108,17 @@ jobs:
 
             const frontdoorMatchers = [
               /^web\/secure-landing\//,
+              /^web\/shared\//,
               /^cloudflare\/transformationportal-worker\//,
-              /^config\/portal_asset_manifest\.json$/,
+              /^public\//,
+              /^config\/portal_asset_(manifest|budgets)\.json$/,
+              /^package(-lock)?\.json$/,
+              /^wrangler\.jsonc$/,
+              /^\.github\/workflows\/build\.yml$/,
               /^scripts\/validation\/validate_frontdoor_browser_smoke\.py$/,
+              /^scripts\/validation\/validate_portal_css_layer_parity\.py$/,
+              /^tests\/fixtures\/portal-css\//,
+              /^tests\/fixtures\/frontdoor_identity_v1\.json$/,
               /^docs\/guides\/PORTAL_SECURE_FRONTDOOR_QUICKSTART\.md$/,
               // The @portal-browser Playwright suite serves portal.html
               // through the mock FastAPI origin, so changes to the
@@ -788,8 +813,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}
+          # Separate Python wheel caches and include the transitive install inputs.
+          key: >-
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ matrix.test-type }}-${{
+            hashFiles('requirements-ci.txt', 'requirements.txt', 'requirements/base.txt',
+            'requirements/tools-archive.txt', 'requirements/ml-raw.in', 'pyproject.toml',
+            'scripts/ci/install_ml_test_dependencies.sh') }}
           restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ matrix.test-type }}-
             ${{ runner.os }}-pip-${{ matrix.test-type }}-
             ${{ runner.os }}-pip-
 

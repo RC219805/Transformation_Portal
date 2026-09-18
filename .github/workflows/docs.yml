@@ -23,6 +23,11 @@ on:
       - 'src/**/*.py'
   workflow_dispatch:
 
+# Superseded documentation builds do not need to finish on the same PR/ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

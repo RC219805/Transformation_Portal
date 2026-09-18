@@ -14,23 +14,18 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
-# Add current directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Preserve direct-script invocation while importing one canonical package.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-try:
-    from citation import CitationGenerator
-    from classifier import ArtifactClassifier
-    from indexer import RepositoryIndexer
-    from knowledge_engine import KnowledgeIntegrationEngine
-    from reranker import ResultReranker
-    from retriever import HybridRetriever
-    from templates import PromptTemplates
-except ImportError as e:
-    print(f"Error importing RAG components: {e}", file=sys.stderr)
-    print("Make sure you're running from the correct directory", file=sys.stderr)
-    sys.exit(1)
+from rag_system.citation import CitationGenerator
+from rag_system.classifier import ArtifactClassifier
+from rag_system.indexer import RepositoryIndexer
+from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import PromptTemplates
 
 
 def cmd_index(args):

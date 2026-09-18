@@ -2,8 +2,8 @@
 
 Retrieval-Augmented Generation (RAG) system that enhances the Transformation Portal Specialist custom agent with:
 
-Current baseline: `main` through PR #1721. This package supports retrieval and
-citation workflows; live agent behavior is governed by `.github/agents/README.md`,
+Current navigation follows `docs/governance/DOCUMENTATION_MAP.md`. This package
+supports retrieval and citation workflows; live agent behavior is governed by `.github/agents/README.md`,
 `.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
 
 1. **Repository content indexing** with intelligent chunking
@@ -15,7 +15,7 @@ citation workflows; live agent behavior is governed by `.github/agents/README.md
 
 ## ✨ New in v2.0 (Enhanced Features)
 
-- 🚀 **Persistent Caching**: 10-100x faster indexing with pickle-based cache
+- 🚀 **Persistent Caching**: JSON chunk cache validated against source content and chunk settings
 - ⚙️ **Configuration System**: YAML-based config with environment variable overrides
 - 📊 **Structured Logging**: Python logging module with configurable levels
 - 🧠 **Semantic Vector Search**: Dense embeddings with Sentence Transformers
@@ -71,7 +71,8 @@ Indexes repository content into searchable chunks:
   - `docs/` - Documentation
   - `src/` - Source code
   - `tests/` - Test files
-  - `.github/agents/` - Agent definitions
+  - `AGENTS.md`, `.github/copilot-instructions.md`, and `.github/agents/` - Live agent guidance
+    (historical agent `_archive/` trees are excluded)
   - Top-level markdown files (READMEs, CHANGELOGs, guides)
   - `examples/` - Example code
 
@@ -79,6 +80,9 @@ Indexes repository content into searchable chunks:
 - Python-aware chunking (preserves functions/classes)
 - Metadata extraction (function names, docstrings, titles)
 - File path and line number tracking
+- Deterministic, deduplicated inventory; excluded build/cache trees are pruned
+- SHA-256 cache identity covers source bytes, file inventory, and chunk settings
+- Old cache formats are ignored; `chunks.pkl` is never deserialized
 
 **Usage**:
 ```bash
@@ -345,8 +349,8 @@ from rag_system import (
     HybridRetriever,
     ResultReranker,
     CitationGenerator,
-    PromptTemplates,
 )
+from rag_system.templates import PromptTemplates
 
 # 1. Index repository (one-time or periodic)
 indexer = RepositoryIndexer('/path/to/repo')
@@ -373,7 +377,18 @@ template = PromptTemplates.feature_implementation(
 )
 ```
 
-## Performance Characteristics
+## Cache and Performance Characteristics
+
+`.rag_cache/chunks.json` stores versioned JSON, never executable pickle data.
+Every indexing call hashes the sorted source inventory and effective chunk sizes
+before reuse. Edits, additions, removals, renames, and chunk-setting changes
+invalidate the cache automatically. A valid cache avoids chunk parsing, while
+source scanning and hashing still run. Publication binds to the exact bytes read
+for chunking; transient edits or failed reads prevent cache publication. `force_reindex=True` bypasses reuse, and `clear_cache()`
+removes both the current cache and any legacy pickle file.
+
+The figures below are historical small-fixture estimates, not current-repository
+performance guarantees. Measure the intended checkout before setting budgets.
 
 ### Indexing
 - **Time**: ~2-5 seconds for typical repo size (100+ files)
@@ -418,12 +433,11 @@ Current implementation uses **in-memory BM25** for simplicity. For enhanced sema
 
 ## Future Enhancements
 
-1. **Dense vector embeddings**: Add sentence-transformers for semantic search
-2. **Persistent index**: Save/load indexed chunks to avoid reindexing
-3. **Incremental updates**: Update index when files change (git hooks)
-4. **Query expansion**: Automatic synonym expansion for better recall
-5. **Code understanding**: AST-based code analysis for deeper understanding
-6. **Embedding caching**: Cache embeddings for faster retrieval
+1. **Incremental chunk updates**: Rebuild only changed files after fingerprint invalidation
+2. **Index refresh hooks**: Trigger repository indexing when needed
+3. **Query expansion**: Automatic synonym expansion for better recall
+4. **Code understanding**: AST-based code analysis for deeper understanding
+5. **Embedding caching**: Cache embeddings for faster retrieval
 
 ## Testing
 

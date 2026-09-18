@@ -345,8 +345,10 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     except ValueError as exc:
         return [str(exc)]
 
-    if set(config) != {"name", "on", "permissions", "jobs"}:
+    if set(config) != {"name", "on", "concurrency", "permissions", "jobs"}:
         errors.append("dependency-update workflow must retain only its governed top-level fields")
+    if config.get("concurrency") != {"group": "dependency-updates", "cancel-in-progress": False}:
+        errors.append("dependency-update workflow must serialize publication without cancelling an active update")
     if config.get("name") != "Dependency Updates":
         errors.append("dependency-update workflow must retain its governed display name")
     if config.get("on") != EXPECTED_TRIGGER_CONFIG:

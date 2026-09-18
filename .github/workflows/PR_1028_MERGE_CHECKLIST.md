@@ -1,5 +1,9 @@
 # PR #1028 - Merge Checklist
 
+> Historical PR #1028 checklist. This is not an approval or merge checklist for a new change.
+> For current behavior, use [workflow guidance](README.md), the
+> [workflow matrix](../../docs/ci/WORKFLOW_MATRIX.md), and the workflow YAML.
+
 ## Pre-Merge Verification
 
 ### ✅ Code Changes

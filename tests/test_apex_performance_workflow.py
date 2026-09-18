@@ -180,6 +180,56 @@ def test_real_da3_lane_bootstraps_only_the_governed_isolated_runtime() -> None:
     assert 'python -m pip install -e ".[ml]"' in install_script
 
 
+def test_dispatch_inputs_are_passed_as_environment_data() -> None:
+    workflow = _load_workflow()
+    matrix = workflow["jobs"]["apex_matrix"]
+    run_step = _step(matrix, "Run APEX Matrix")
+
+    assert set(run_step["env"]) >= {"MODE", "BACKEND_ID", "SAMPLE_SIZE", "DEVICE"}
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            assert "${{ github.event.inputs." not in step.get("run", "")
+
+
+def test_matrix_dispatch_preserves_shell_metacharacters_as_literal_arguments(tmp_path: Path) -> None:
+    workflow = _load_workflow()
+    script = _step(workflow["jobs"]["apex_matrix"], "Run APEX Matrix")["run"]
+    expressions = {
+        "github.event_name": "workflow_dispatch",
+        "env.APEX_RUN_ID": "123",
+        "env.APEX_COMMIT_SHA": "a" * 40,
+        "matrix.workflow_version": "v1",
+        "matrix.zone": "local",
+        "env.APEX_RESULTS_DIR": "results",
+        "env.APEX_LEDGER_DB": "ledger.db",
+    }
+    for expression, value in expressions.items():
+        script = script.replace("${{ " + expression + " }}", value)
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    fake_python = fakebin / "python"
+    fake_python.write_text('#!/bin/sh\nprintf "%s\\0" "$@" > "$CAPTURE"\n', encoding="utf-8")
+    fake_python.chmod(0o755)
+    capture = tmp_path / "args"
+    malicious_value = '$(touch injected); "quoted" `touch injected`'
+    env = {
+        **os.environ,
+        "PATH": f"{fakebin}{os.pathsep}{os.environ['PATH']}",
+        "CAPTURE": str(capture),
+        "MODE": "real",
+        "BACKEND_ID": malicious_value,
+        "SAMPLE_SIZE": malicious_value,
+        "DEVICE": malicious_value,
+    }
+    result = subprocess.run(["bash", "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "injected").exists()
+    arguments = capture.read_text().split("\0")
+    for flag in ("--backend-id", "--sample-size", "--device"):
+        assert arguments[arguments.index(flag) + 1] == malicious_value
+
+
 def test_gate_exposes_each_transfer_stage_and_fail_closed_publishers() -> None:
     workflow = _load_workflow()
     matrix_job = workflow["jobs"]["apex_matrix"]

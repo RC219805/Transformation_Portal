@@ -82,3 +82,16 @@ def test_active_da3_research_examples_use_explicit_model_selector():
     assert 'model_key="da3-research"' in docs_text
     assert 'model_key="da3"' not in agent_text
     assert 'model_key="da3-research"' in agent_text
+
+
+def test_apex_agent_preserves_execution_and_performance_authority():
+    agent_text = (REPO_ROOT / ".github" / "apex-workflow-orchestrator.copilot-agent.yml").read_text(encoding="utf-8")
+
+    assert "PreparedLuxExecution" in agent_text
+    assert "EnhanceOrchestrator.from_prepared(...)" in agent_text
+    assert "identity-v3" in agent_text
+    assert "inference-only" in agent_text
+    assert "docs/performance/GATE_POLICY.md" in agent_text
+    assert "Quality tiers do not enable PBR" in agent_text
+    assert "May 11, 2026" not in agent_text
+    assert "p95 < 15s" not in agent_text

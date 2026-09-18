@@ -8,6 +8,11 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:  # Manual trigger
 
+# Both triggers publish to the same branch; serialize the full update transaction.
+concurrency:
+  group: dependency-updates
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
