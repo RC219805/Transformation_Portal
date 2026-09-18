@@ -1,4 +1,7 @@
-# Dependency Submission Configuration
+# Dependency Submission Configuration Intent (documentation only)
+# These keys have no repository consumer and do not change GitHub settings.
+# Verify automatic submission in GitHub settings; the workflow below owns
+# custom submission behavior.
 
 # This repository uses a custom dependency submission workflow to avoid disk
 # pressure in the ML-heavy dependency graph while still feeding GitHub's

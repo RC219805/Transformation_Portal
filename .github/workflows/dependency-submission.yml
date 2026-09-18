@@ -109,9 +109,6 @@ jobs:
           # Upgrade pip without cache
           python -m pip install --upgrade pip --no-cache-dir
 
-          # Install only pip-tools (minimal dependency, if needed later)
-          pip install --no-cache-dir "pip-tools<8"
-
           echo ""
           echo "=== Disk usage after pip setup ==="
           df -h
@@ -133,15 +130,6 @@ jobs:
           if [ -f "pyproject.toml" ]; then
             echo "✓ pyproject.toml exists"
           fi
-
-      - name: Cache Python dependencies metadata (not packages)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: |
-            ~/.cache/pip/http
-          key: ${{ runner.os }}-pip-metadata-${{ hashFiles('requirements*.txt', 'requirements/*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-metadata-
 
       - name: Submit dependencies to GitHub (attempt 1)
         id: dependency_submission_attempt_1

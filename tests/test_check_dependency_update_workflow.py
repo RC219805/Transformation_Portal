@@ -38,6 +38,10 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
+concurrency:
+  group: dependency-updates
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -155,6 +159,23 @@ def add_to_step_run(text: str, step_name: str, *lines: str) -> str:
 
 def test_valid_dependency_update_workflow_contract_passes() -> None:
     assert workflow_contract.validate_dependency_update_workflow(valid_workflow_text()) == []
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "",
+        "concurrency:\n  group: dependency-updates\n  cancel-in-progress: true\n\n",
+        "concurrency:\n  group: dependency-updates-${{ github.event_name }}\n  cancel-in-progress: false\n\n",
+    ],
+)
+def test_dependency_update_requires_serialized_shared_branch_publication(replacement: str) -> None:
+    broken = valid_workflow_text().replace(
+        "concurrency:\n  group: dependency-updates\n  cancel-in-progress: false\n\n", replacement, 1
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+
+    assert "dependency-update workflow must serialize publication without cancelling an active update" in errors
 
 
 def test_missing_required_audit_target_is_reported() -> None:

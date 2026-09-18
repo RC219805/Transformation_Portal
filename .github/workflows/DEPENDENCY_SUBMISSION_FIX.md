@@ -1,5 +1,9 @@
 # Dependency Submission Workflow - Fix Documentation
 
+> Historical dependency-submission incident record. Package versions, disk estimates, and setup steps below are not the current install contract.
+> For current behavior, use [workflow guidance](README.md), the
+> [workflow matrix](../../docs/ci/WORKFLOW_MATRIX.md), and the workflow YAML.
+
 ## Problem
 
 The automatic GitHub dependency submission workflow was failing with:

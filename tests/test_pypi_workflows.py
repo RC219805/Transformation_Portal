@@ -60,7 +60,7 @@ class TestPyPIWorkflows:
         assert "build" in jobs, "Should have build job"
         assert "test-pypi" in jobs, "Should have test-pypi job"
         assert "pypi" in jobs, "Should have pypi job"
-        assert "cleanup" in jobs, "Should have cleanup job"
+        assert "cleanup" not in jobs, "A fresh runner has no previous job workspace to clean"
 
         # Check build job structure
         build_job = jobs["build"]
@@ -231,7 +231,8 @@ class TestWorkflowDocumentation:
         for tag_pattern in triggers["push"]["tags"]:
             assert f"`{tag_pattern}`" in content, "README should identify the production release tags"
         assert "workflow_dispatch" in content and "test_pypi=true" in content
-        assert "branch ref" in normalized, "Test PyPI guidance must avoid also selecting production tag publication"
+        assert "manual dispatch never publishes to production pypi" in normalized
+        assert "version-tag ref" in normalized, "Document isolation even when dispatch selects a release tag"
         assert "trusted publishing" in normalized and "oidc" in normalized
         assert "no pypi api-token secret is required" in normalized
 

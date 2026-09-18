@@ -85,9 +85,10 @@ jobs:
 
       - name: Install dependencies (ML tier)
         if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
+        env:
+          BACKEND_ID: ${{ github.event.inputs.backend_id || 'da3' }}
         run: |
           set -euo pipefail
-          BACKEND_ID="${{ github.event.inputs.backend_id || 'da3' }}"
 
           if [[ "${BACKEND_ID}" == "da3" ]]; then
             # DA3 owns its ML stack in the governed isolated runtime. Keeping
@@ -107,13 +108,13 @@ jobs:
         id: run_apex
         env:
           APEX_ZONE: ${{ matrix.zone }}
+          MODE: ${{ github.event.inputs.mode || 'synthetic' }}
+          BACKEND_ID: ${{ github.event.inputs.backend_id || 'da3' }}
+          SAMPLE_SIZE: ${{ github.event.inputs.sample_size || '3' }}
+          DEVICE: ${{ github.event.inputs.device || 'cpu' }}
         run: |
           set -euo pipefail
           # Determine execution mode based on event type
-          MODE="${{ github.event.inputs.mode || 'synthetic' }}"
-          BACKEND_ID="${{ github.event.inputs.backend_id || 'da3' }}"
-          SAMPLE_SIZE="${{ github.event.inputs.sample_size || '3' }}"
-          DEVICE="${{ github.event.inputs.device || 'cpu' }}"
           INPUT_DIR="./tests/fixtures/apex_images"
 
           # PR/push events: always synthetic (fast, deterministic)
@@ -345,6 +346,7 @@ jobs:
           MATRIX_RESULT: ${{ needs.apex_matrix.result }}
           RUNNER_OUTCOME: ${{ steps.matrix_stages.outputs.runner_outcome }}
           UPLOAD_OUTCOME: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          MODE: ${{ github.event.inputs.mode || 'synthetic' }}
         run: |
           set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
@@ -455,7 +457,6 @@ jobs:
           fi
 
           # Determine if run was synthetic based on event type
-          MODE="${{ github.event.inputs.mode || 'synthetic' }}"
           if [[ "${{ github.event_name }}" == "pull_request" ]] || [[ "${{ github.event_name }}" == "push" ]]; then
             MODE="synthetic"
           elif [[ "${{ github.event_name }}" == "schedule" ]]; then

@@ -7,6 +7,7 @@ into chunks with metadata for efficient retrieval.
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,8 +20,8 @@ from .logger import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_FORMAT_VERSION = 1
-CACHE_FORMAT_NAME = "tp.rag.chunks.v1"
+CACHE_FORMAT_VERSION = 2
+CACHE_FORMAT_NAME = "tp.rag.chunks.v2"
 CACHE_FILENAME = "chunks.json"
 LEGACY_CACHE_FILENAME = "chunks.pkl"
 
@@ -146,7 +147,7 @@ class RepositoryIndexer:
 
         # Use config values as defaults
         self.chunk_size_tokens = chunk_size_tokens or indexer_config.get("chunk_size_tokens", 750)
-        self.overlap_tokens = overlap_tokens or indexer_config.get("overlap_tokens", 75)
+        self.overlap_tokens = overlap_tokens if overlap_tokens is not None else indexer_config.get("overlap_tokens", 75)
         self.chars_per_token = chars_per_token or indexer_config.get("chars_per_token", 4.0)
         self.use_cache = use_cache if use_cache is not None else indexer_config.get("cache_enabled", True)
 
@@ -174,9 +175,10 @@ class RepositoryIndexer:
         Returns:
             List of document chunks with metadata
         """
-        # Try to load from cache if enabled
-        if self.use_cache and not force_reindex:
-            cached_chunks = self._load_cache()
+        files = self._collect_files()
+        fingerprint = self._source_fingerprint(files) if self.use_cache else None
+        if self.use_cache and not force_reindex and fingerprint is not None:
+            cached_chunks = self._load_cache(fingerprint)
             if cached_chunks is not None:
                 logger.info(f"Loaded {len(cached_chunks)} chunks from cache")
                 self.chunks = cached_chunks
@@ -184,54 +186,49 @@ class RepositoryIndexer:
 
         logger.info("Indexing repository...")
         self.chunks = []
-
+        indexed_sources = []
         try:
-            # Index documentation
-            self._index_directory("docs", chunk_type="doc")
-
-            # Index source code
-            if (self.repo_root / "src").exists():
-                self._index_directory("src", chunk_type="code")
-
-            # Index tests
-            if (self.repo_root / "tests").exists():
-                self._index_directory("tests", chunk_type="test")
-
-            # Index agent definitions
-            self._index_directory(".github/agents", chunk_type="agent")
-
-            # Index top-level markdown files (READMEs, CHANGELOGs, etc.)
-            self._index_top_level_files()
-
-            # Index example code
-            if (self.repo_root / "examples").exists():
-                self._index_directory("examples", chunk_type="code")
-
+            for file_path, chunk_type in files:
+                source_hash = self._index_file(file_path, chunk_type)
+                if source_hash is not None:
+                    indexed_sources.append((file_path, chunk_type, source_hash))
             logger.info(f"Indexed {len(self.chunks)} chunks from repository")
 
-            # Save to cache if enabled
-            if self.use_cache:
-                self._save_cache()
-
+            # Bind cache identity to the exact bytes chunked, not just matching
+            # before/after snapshots: a transient A->B->A edit must not cache B as A.
+            if self.use_cache and fingerprint is not None:
+                if (
+                    len(indexed_sources) == len(files)
+                    and fingerprint == self._fingerprint_sources(indexed_sources)
+                    and fingerprint == self._source_fingerprint(self._collect_files())
+                ):
+                    self._save_cache(fingerprint)
+                else:
+                    logger.warning("Repository changed or a source read failed during indexing; cache was not updated")
         except Exception as e:
             logger.error(f"Error during indexing: {e}")
-            raise IndexingError(f"Failed to index repository: {e}")
-
+            raise IndexingError(f"Failed to index repository: {e}") from e
         return self.chunks
 
-    def _index_directory(self, rel_path: str, chunk_type: str):
-        """Index all files in a directory."""
-        directory = self.repo_root / rel_path
-        if not directory.exists():
-            return
+    def _collect_files(self) -> List[Tuple[Path, str]]:
+        """Collect a unique, deterministic inventory and prune excluded trees."""
+        files = {}
+        for rel_path, chunk_type in (
+            ("docs", "doc"),
+            ("src", "code"),
+            ("tests", "test"),
+            (".github/agents", "agent"),
+            ("examples", "code"),
+        ):
+            for root, directories, names in os.walk(self.repo_root / rel_path):
+                directory = Path(root)
+                directories[:] = sorted(name for name in directories if self._should_index(directory / name, directory=True))
+                for name in names:
+                    file_path = directory / name
+                    if file_path.is_file() and self._should_index(file_path):
+                        files[file_path] = chunk_type
 
-        for file_path in directory.rglob("*"):
-            if file_path.is_file() and self._should_index(file_path):
-                self._index_file(file_path, chunk_type)
-
-    def _index_top_level_files(self):
-        """Index important top-level files like README, CHANGELOG, etc."""
-        patterns = [
+        for pattern in (
             "README*.md",
             "CHANGELOG*.md",
             "CHANGE_LOG*.md",
@@ -240,14 +237,43 @@ class RepositoryIndexer:
             "ARCHITECTURE.md",
             "PERFORMANCE*.md",
             "QUICKSTART*.md",
-        ]
-
-        for pattern in patterns:
+        ):
             for file_path in self.repo_root.glob(pattern):
-                if file_path.is_file():
-                    self._index_file(file_path, "doc")
+                if file_path.is_file() and self._should_index(file_path):
+                    files[file_path] = "doc"
 
-    def _should_index(self, file_path: Path) -> bool:
+        for rel_path in ("AGENTS.md", ".github/copilot-instructions.md"):
+            file_path = self.repo_root / rel_path
+            if file_path.is_file() and self._should_index(file_path):
+                files[file_path] = "agent"
+        return sorted(files.items(), key=lambda item: item[0].relative_to(self.repo_root).as_posix())
+
+    def _fingerprint_sources(self, sources: List[Tuple[Path, str, str]]) -> str:
+        """Hash an ordered inventory of source digests and effective settings."""
+        digest = hashlib.sha256()
+        settings = [CACHE_FORMAT_VERSION, self.chunk_size, self.overlap]
+        digest.update(json.dumps(settings, separators=(",", ":")).encode("utf-8"))
+        for file_path, chunk_type, source_hash in sources:
+            entry = [file_path.relative_to(self.repo_root).as_posix(), chunk_type, source_hash]
+            digest.update(json.dumps(entry, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        return digest.hexdigest()
+
+    def _source_fingerprint(self, files: List[Tuple[Path, str]]) -> Optional[str]:
+        """Bind cache reuse to source bytes, inventory, and effective chunk settings."""
+        sources = []
+        try:
+            for file_path, chunk_type in files:
+                source_hash = hashlib.sha256()
+                with file_path.open("rb") as source:
+                    for block in iter(lambda: source.read(1024 * 1024), b""):
+                        source_hash.update(block)
+                sources.append((file_path, chunk_type, source_hash.hexdigest()))
+        except OSError as exc:
+            logger.warning("Cannot validate repository cache: %s", exc)
+            return None
+        return self._fingerprint_sources(sources)
+
+    def _should_index(self, file_path: Path, directory: bool = False) -> bool:
         """Determine if a file should be indexed."""
         # Skip hidden files, cache, and build artifacts
         skip_dirs = {
@@ -263,21 +289,35 @@ class RepositoryIndexer:
             "build",
         }
 
-        if any(part in skip_dirs for part in file_path.parts):
+        parts = file_path.relative_to(self.repo_root).parts
+        if any(part in skip_dirs for part in parts):
             return False
+        if file_path.is_relative_to(self.cache_dir):
+            return False
+        # Archived profiles are historical evidence, never live agent guidance.
+        if parts[:2] == (".github", "agents") and "_archive" in parts:
+            return False
+        if directory:
+            return True
 
         # Index specific file types
         valid_extensions = {".py", ".md", ".rst", ".txt", ".yaml", ".yml", ".json", ".toml", ".cfg", ".sh", ".bash"}
 
         return file_path.suffix in valid_extensions
 
-    def _index_file(self, file_path: Path, chunk_type: str):
-        """Index a single file into chunks."""
+    def _index_file(self, file_path: Path, chunk_type: str) -> Optional[str]:
+        """Index one read snapshot and return the digest of those exact bytes."""
         try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            source_bytes = file_path.read_bytes()
+            source_hash = hashlib.sha256(source_bytes).hexdigest()
+            # Preserve read_text's universal-newline behavior for existing chunks.
+            content = source_bytes.decode("utf-8", errors="ignore").replace("\r\n", "\n").replace("\r", "\n")
         except Exception as e:
             logger.warning(f"Could not read {file_path}: {e}")
             return
+
+        if not content.strip():
+            return source_hash
 
         rel_path = str(file_path.relative_to(self.repo_root))
         language = self._detect_language(file_path)
@@ -287,6 +327,7 @@ class RepositoryIndexer:
             self._chunk_python_file(content, rel_path, chunk_type, language)
         else:
             self._chunk_text(content, rel_path, chunk_type, language)
+        return source_hash
 
     def _chunk_python_file(self, content: str, file_path: str, chunk_type: str, language: str):
         """Chunk Python files by functions and classes when possible."""
@@ -479,7 +520,7 @@ class RepositoryIndexer:
         }
         return extension_map.get(file_path.suffix)
 
-    def _load_cache(self) -> Optional[List[DocumentChunk]]:
+    def _load_cache(self, source_fingerprint: str) -> Optional[List[DocumentChunk]]:
         """
         Load chunks from cache file.
 
@@ -503,6 +544,9 @@ class RepositoryIndexer:
                 raise ValueError(f"Unexpected cache_format: {payload.get('cache_format')!r}")
             if payload.get("version") != CACHE_FORMAT_VERSION:
                 raise ValueError(f"Unsupported cache version: {payload.get('version')!r}")
+            if payload.get("source_fingerprint") != source_fingerprint:
+                logger.debug("Repository content or chunk settings changed; reindexing")
+                return None
             chunks_payload = payload.get("chunks")
             if not isinstance(chunks_payload, list):
                 raise ValueError("Cache field 'chunks' must be a list")
@@ -516,7 +560,7 @@ class RepositoryIndexer:
             # Don't raise - caching is optional
             return None
 
-    def _save_cache(self):
+    def _save_cache(self, source_fingerprint: Optional[str] = None):
         """Save chunks to cache file."""
         tmp_path = self.cache_file.with_name(f".{self.cache_file.name}.{uuid4().hex}.tmp")
         try:
@@ -525,6 +569,7 @@ class RepositoryIndexer:
             payload = {
                 "cache_format": CACHE_FORMAT_NAME,
                 "version": CACHE_FORMAT_VERSION,
+                "source_fingerprint": source_fingerprint,
                 "chunks": [chunk.to_dict() for chunk in self.chunks],
             }
             serialized = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True)

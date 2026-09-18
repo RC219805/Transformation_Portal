@@ -1,5 +1,9 @@
 # Dependency Submission Fix - Visual Summary
 
+> Historical dependency-submission illustration. Disk estimates and package inventories below are not current measurements.
+> For current behavior, use [workflow guidance](README.md), the
+> [workflow matrix](../../docs/ci/WORKFLOW_MATRIX.md), and the workflow YAML.
+
 ## 📊 Problem vs Solution Comparison
 
 ### BEFORE: Disk Space Failure ❌

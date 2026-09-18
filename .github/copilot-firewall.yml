@@ -1,9 +1,11 @@
-# GitHub Copilot Firewall Configuration
-# This file defines an allowlist of URLs and hosts that GitHub Copilot agents are permitted to access during execution.
-# The allowlist enables agents to download dependencies and access external resources required by the Transformation Portal project.
+# Copilot network allowlist inventory (documentation only)
+# No repository automation consumes this file; it does not configure a firewall.
+# Actual GitHub controls live in Settings > Copilot > Internet access.
+# Review this inventory against current runtime needs before changing those settings.
+# https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-the-firewall
 version: 1
 
-# Allowlist of domains and URLs that Copilot agents can access
+# Historical domain inventory; remote access has not been verified here
 allow:
   # Python Package Index (PyPI) - for pip installs
   - pypi.org

@@ -215,7 +215,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements-ci.txt', 'requirements/tools-archive.txt') }}
+          key: >-
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-${{
+            hashFiles('requirements-ci.txt', 'requirements.txt', 'requirements/base.txt',
+            'requirements/tools-archive.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
@@ -320,7 +323,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-ml-${{ hashFiles('requirements-ci.txt') }}
+          key: >-
+            ${{ runner.os }}-pip-ml-${{ env.PYTHON_VERSION_ML }}-${{
+            hashFiles('requirements-ci.txt', 'requirements.txt', 'requirements/base.txt',
+            'requirements/ml-raw.in', 'pyproject.toml', 'scripts/ci/install_ml_test_dependencies.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ml-${{ env.PYTHON_VERSION_ML }}-
+            ${{ runner.os }}-pip-ml-
 
       - name: Cache ML models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0

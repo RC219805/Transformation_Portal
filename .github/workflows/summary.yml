@@ -1,16 +1,17 @@
 name: Issue Summarizer
 
 on:
-  issue_comment: {}
+  issue_comment:
+    types: [created, edited]
   pull_request: {}
   issues:
     types: [opened, edited]
 
 # Concurrency control: Cancel outdated runs on new events for the same issue/PR
 # This reduces CI minutes and API costs by only processing the latest state
-# Includes event_name so pull_request and issue_comment runs do not cancel each other.
+# Separate bot comments so their skipped runs cannot cancel an active human request.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}-${{ github.event.comment.user.type == 'Bot' && 'bot' || 'human' }}
   cancel-in-progress: true
 
 # Workflow-level permissions with least privilege defaults
@@ -22,7 +23,9 @@ jobs:
   summarize:
     name: AI Advisory / Summary
     # Avoid blocked/required PR checks for bot-authored PR events.
-    if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
+    if: >-
+      (github.event_name != 'issue_comment' || github.event.comment.user.type != 'Bot') &&
+      !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]'))
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 10
@@ -33,6 +36,7 @@ jobs:
       ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       # Marker used to identify fallback diagnostics that should stay log-only.
       DIAGNOSTIC_MARKER: "<!-- ai-summarizer-diagnostic -->"
       DIAGNOSTIC_MSG_MISSING_KEY: |
@@ -47,9 +51,6 @@ jobs:
         AI summarization failed: an internal error occurred. See CI logs for details.
         <!-- ai-summarizer-diagnostic -->
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -61,7 +62,7 @@ jobs:
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.comment.body || github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.head_commit.message || '' }}
           REVIEW_STATE: ${{ github.event.review.state || '' }}
           EVENT_NAME: '${{ github.event_name }}'
         run: |

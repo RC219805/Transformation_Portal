@@ -1,24 +1,34 @@
 # Branch Protection Verification
 
-> Current status note (2026-05-12): This file is a historical verification
-> record for PR #804 plus non-binding policy notes. For live branch protection,
-> verify GitHub repository metadata directly. A live GitHub API check on
-> 2026-05-12 against `main` showed:
->
-> - Required status check contexts: `CI Gate` only
-> - Require branches to be up to date before merge: enabled
-> - Require conversation resolution: enabled
-> - Enforce protections for admins: enabled
-> - Allow force pushes: disabled
-> - Allow deletions: disabled
-> - Require code-owner review: disabled
-> - Require linear history: disabled
->
-> Proof command:
->
-> ```bash
-> gh api repos/RC219805/Transformation_Portal/branches/main/protection
-> ```
+This file retains the PR #804 verification below as historical evidence.
+Current workflow responsibilities are in the
+[workflow matrix](../docs/ci/WORKFLOW_MATRIX.md).
+
+## Current remote snapshot (2026-09-18 UTC)
+
+A read-only GitHub API check against `main` returned:
+
+- Required contexts: `CI Gate` and `Dependency Security`, each bound to
+  GitHub Actions app `15368`.
+- Strict up-to-date checking, conversation resolution, and admin enforcement:
+  enabled.
+- Code-owner review: disabled; required approving review count: zero.
+- Active default-branch ruleset `9331244` ("Copilot review for default branch")
+  also configures Copilot review on push, code-quality severity `all`, and
+  CodeQL scanning with both alert thresholds set to `all`. These are separate
+  from the two branch-protection status contexts.
+
+```bash
+gh api repos/RC219805/Transformation_Portal/branches/main/protection
+gh api repos/RC219805/Transformation_Portal/rulesets/9331244
+```
+
+These settings can change independently of the repository. Re-read them before
+merging; the old single-check record below does not describe current policy.
+The post-CI firewall now runs through trusted `workflow_run` completion, not a
+direct push trigger.
+
+## Historical PR #804 record
 
 ## Verification Status: ✅ COMPLETE
 

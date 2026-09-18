@@ -85,6 +85,25 @@ def test_summary_workflow_remains_advisory_and_timeout_bounded() -> None:
     assert run_step["timeout-minutes"] == "4"
 
 
+def test_summary_ignores_bot_comments_without_cancelling_human_summaries() -> None:
+    workflow = _load_workflow()
+    job = workflow["jobs"]["summarize"]
+
+    assert workflow["on"]["issue_comment"]["types"] == ["created", "edited"]
+    assert "github.event_name != 'issue_comment' || github.event.comment.user.type != 'Bot'" in job["if"]
+    assert "github.event.comment.user.type == 'Bot' && 'bot' || 'human'" in workflow["concurrency"]["group"]
+
+
+def test_summary_uses_event_data_without_repository_checkout() -> None:
+    workflow = _load_workflow()
+    job = workflow["jobs"]["summarize"]
+    run_step = next(step for step in job["steps"] if step.get("id") == "summarizer")
+
+    assert not any(step.get("uses", "").startswith("actions/checkout@") for step in job["steps"])
+    assert job["env"]["GH_REPO"] == "${{ github.repository }}"
+    assert run_step["env"]["ISSUE_BODY"].startswith("${{ github.event.comment.body ||")
+
+
 def test_summary_workflow_suppresses_pr_1947_rate_limit_diagnostic_comment(tmp_path: Path) -> None:
     diagnostic_body = (
         "AI summarizer skipped after bounded retries due to OpenAI rate limiting.\n"

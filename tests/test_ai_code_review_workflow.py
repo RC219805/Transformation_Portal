@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,28 @@ def test_ai_code_review_workflow_remains_advisory_and_timeout_bounded() -> None:
     assert job["continue-on-error"] == "true"
     assert job["timeout-minutes"] == "10"
     assert run_step["timeout-minutes"] == "4"
+
+
+@pytest.mark.parametrize("api_key", ["", "test-api-key"])
+def test_ai_code_review_gates_preparation_on_available_api_key(tmp_path: Path, api_key: str) -> None:
+    steps = _load_workflow()["jobs"]["ai-review"]["steps"]
+    check = next(step for step in steps if step.get("name") == "Check API Key")
+    output_file = tmp_path / "outputs.txt"
+    result = subprocess.run(
+        ["bash", "-c", check["run"]],
+        env={**os.environ, "OPENAI_API_KEY": api_key, "GITHUB_OUTPUT": str(output_file)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output_file.read_text() == f"available={'true' if api_key else 'false'}\n"
+    for name in ("Checkout", "Get changed files", "Set up Python", "Install dependencies", "Run AI Code Review"):
+        step = next(step for step in steps if step.get("name") == name)
+        assert "steps.api-key.outputs.available == 'true'" in step["if"]
+    if api_key:
+        assert api_key not in result.stdout + result.stderr
 
 
 def test_ai_code_review_classifies_insufficient_quota_as_non_retryable() -> None:

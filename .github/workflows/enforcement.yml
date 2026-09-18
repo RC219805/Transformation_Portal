@@ -24,6 +24,9 @@ jobs:
   changes:
     name: Classify Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read  # paths-filter lists PR files through the GitHub API
     outputs:
       ml_changed: ${{ steps.filter.outputs.ml }}
       core_changed: ${{ steps.filter.outputs.core }}
@@ -53,7 +56,6 @@ jobs:
   action-pins:
     name: Verify Action Pins
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -65,7 +67,6 @@ jobs:
   no-tautological-tests:
     name: Ban Tautological Test Assertions
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -81,7 +82,6 @@ jobs:
   banned-dependencies:
     name: Verify No Banned Dependencies
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -91,16 +91,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install tomli for TOML parsing
-        run: pip install tomli
-
       - name: Check for banned packages
         run: python scripts/security/verify_banned_dependencies.py --strict
 
   hf-revision-policy:
     name: Validate HuggingFace Revisions
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -128,7 +124,6 @@ jobs:
   test-layer1:
     name: Layer 1 Tests (Fast)
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -222,7 +217,6 @@ jobs:
   artifact-boundary:
     name: Verify Artifact Boundary
     runs-on: ubuntu-latest
-    needs: [changes]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

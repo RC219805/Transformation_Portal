@@ -2,9 +2,8 @@
 
 This document describes the enhanced features added to the RAG (Retrieval-Augmented Generation) system.
 
-Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
-building on `main` through PR #1721. This document supports repository
-retrieval workflows; it does not override live custom-agent profiles,
+Current navigation follows `docs/governance/DOCUMENTATION_MAP.md`.
+This document supports repository retrieval workflows; it does not override live custom-agent profiles,
 `.github/copilot-instructions.md`, or `docs/architecture/agent_governance.md`.
 
 ## What's New
@@ -13,7 +12,8 @@ retrieval workflows; it does not override live custom-agent profiles,
 
 **Problem Solved:** Re-indexing the repository on every run was slow and inefficient.
 
-**Solution:** Chunks are now cached to disk using pickle serialization.
+**Solution:** Chunks are cached as versioned JSON, with SHA-256 validation of source bytes,
+file inventory, and effective chunk settings. Legacy pickle caches are ignored.
 
 **Usage:**
 ```python
@@ -21,9 +21,9 @@ from rag_system.indexer import RepositoryIndexer
 
 # Caching is enabled by default
 indexer = RepositoryIndexer('/path/to/repo')
-chunks = indexer.index_repository()  # Saves to .rag_cache/chunks.pkl
+chunks = indexer.index_repository()  # Saves to .rag_cache/chunks.json
 
-# Second run loads from cache (10-100x faster!)
+# Unchanged sources reuse chunks after content validation
 indexer2 = RepositoryIndexer('/path/to/repo')
 chunks2 = indexer2.index_repository()  # Loads from cache
 
@@ -46,9 +46,9 @@ indexer:
 ```
 
 **Benefits:**
-- 10-100x faster subsequent runs
-- Reduces API calls for vector embeddings
-- Automatic invalidation when repo changes (future enhancement)
+- Avoids repeated chunk parsing for unchanged content
+- Rebuilds after source additions, edits, removals, renames, or chunk-setting changes
+- Keeps vector embedding generation separate; the chunk cache stores no embeddings
 
 ---
 
@@ -392,7 +392,7 @@ indexer:
 ```
 
 **Benefits:**
-- Faster startup (10-100x)
+- Reuses unchanged parsed chunks; source scanning and hashing still run
 - Reduced resource usage
 - Better user experience
 
@@ -613,6 +613,9 @@ For issues or questions:
 ## Changelog
 
 ### v2.0.0 (2025-11-09)
+
+Historical release notes below retain the original implementation and claims.
+Current cache behavior is described in "Persistent Caching" above.
 
 **Added:**
 - ✅ Persistent caching with pickle serialization

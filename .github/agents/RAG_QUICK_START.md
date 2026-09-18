@@ -2,9 +2,8 @@
 
 Quick reference for using the RAG-enhanced Transformation Portal Specialist agent.
 
-Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
-building on `main` through PR #1721. This is support material for repository
-retrieval; live role boundaries are defined by `.github/agents/README.md`,
+Current documentation navigation follows `docs/governance/DOCUMENTATION_MAP.md`.
+This is support material for repository retrieval; live role boundaries are defined by `.github/agents/README.md`,
 `.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
 
 ## What is RAG?
@@ -17,13 +16,13 @@ retrieval; live role boundaries are defined by `.github/agents/README.md`,
 
 ## 🚀 Quick Examples
 
-### Index the Repository (One-Time Setup)
+### Index the Repository
 
 ```bash
 cd /path/to/Transformation_Portal
 
-# Index all content
-python .github/agents/rag_system/indexer.py --repo-root . --verbose
+# Index current source and guidance; validate cached content before reuse
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.indexer --repo-root . --verbose
 
 # Output:
 # Indexed 1838 chunks
@@ -35,7 +34,7 @@ python .github/agents/rag_system/indexer.py --repo-root . --verbose
 
 ```bash
 # Find depth pipeline examples
-python .github/agents/rag_system/retriever.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.retriever \
     --repo-root . \
     --query "depth pipeline atmospheric effects" \
     --top-k 3 \
@@ -48,7 +47,7 @@ python .github/agents/rag_system/retriever.py \
 
 ```bash
 # Get markdown citations for material response
-python .github/agents/rag_system/citation.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.citation \
     --repo-root . \
     --query "material response enhancement" \
     --max-citations 3 \
@@ -61,22 +60,22 @@ python .github/agents/rag_system/citation.py \
 
 ```bash
 # Feature implementation template
-python .github/agents/rag_system/templates.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --type feature \
     --description "Add sunset LUT preset" \
     --with-examples > /tmp/feature_template.md
 
 # Bug triage template
-python .github/agents/rag_system/templates.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --type bug \
     --description "ImportError: No module named torch" \
     --context "Python 3.11, Ubuntu 22.04"
 
 # CI workflow change template
-python .github/agents/rag_system/templates.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --type ci \
     --description "build.yml Add Python 3.12 to matrix" \
-    --reason "Ensure compatibility"
+    --context "Ensure compatibility"
 ```
 
 ## 📋 Using Templates in Agent Conversations
@@ -98,7 +97,7 @@ apply haze based on depth distance.
   "summary": "Add depth-based fog effect to atmospheric processor",
   "files": [
     {
-      "path": "depth_pipeline/processors/atmospheric.py",
+      "path": "src/transformation_portal/depth/processors/atmospheric_effects.py",
       "patch": "Add fog_density parameter and blend_fog() function",
       "description": "Implements depth-proportional fog blending"
     }
@@ -125,7 +124,7 @@ apply haze based on depth distance.
 Help me debug this error:
 ImportError: cannot import name 'DepthEstimator' from 'depth_tools'
 
-The error happens when running: python lux_render_pipeline.py
+The error happens when running: ./.venv/bin/lux-depth-v3 --help
 ```
 
 **Expected response includes**:
@@ -139,10 +138,10 @@ The error happens when running: python lux_render_pipeline.py
 
 **Your prompt**:
 ```
-@transformation-portal-specialist
+@transformation-portal-architect
 
-I need to modify the build.yml workflow to add Python 3.12 to the test
-matrix. What changes are needed?
+Review a proposed build.yml matrix change against current runtime and
+dependency policy. What enforcement updates would be required?
 ```
 
 **Expected response includes**:
@@ -156,7 +155,7 @@ matrix. What changes are needed?
 Citations look like this:
 
 ```
-[File: depth_pipeline/processors/atmospheric.py:45-60] (Confidence: 90%)
+[File: src/transformation_portal/depth/processors/atmospheric_effects.py:45-60] (Confidence: 90%)
 Relevance: Function: apply_haze | Has documentation | Similar pattern
 ```
 ```python
@@ -224,12 +223,12 @@ def apply_haze(image, depth_map, intensity=0.3):
 **Solution**:
 ```bash
 # Try broader query terms
-python .github/agents/rag_system/retriever.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.retriever \
     --query "depth processing" \
     --top-k 10  # Get more results
 
 # Filter by specific types
-python .github/agents/rag_system/retriever.py \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.retriever \
     --query "pipeline" \
     --type code  # Only search code, not docs
 ```
@@ -241,7 +240,7 @@ python .github/agents/rag_system/retriever.py \
 **Solution**:
 ```bash
 # Re-index the repository
-python .github/agents/rag_system/indexer.py --repo-root . --verbose
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.indexer --repo-root . --verbose
 
 # Verify new content is indexed
 grep -r "your_new_function" .github/agents/rag_system/ || \
@@ -255,7 +254,9 @@ grep -r "your_new_function" .github/agents/rag_system/ || \
 **Solution**:
 ```bash
 # Validate a response file
-python .github/agents/rag_system/templates.py --validate response.json
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
+    --type feature --description "Validate a feature response" \
+    --validate response.json
 
 # Required fields:
 # - summary (string)
