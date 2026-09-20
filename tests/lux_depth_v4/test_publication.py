@@ -27,13 +27,19 @@ pytestmark = pytest.mark.unit
 
 
 @pytest.fixture
-def completed(tmp_path, monkeypatch):
+def completed(tmp_path, monkeypatch, request):
     """Unit fixture stubs only the separately tested runtime identity deserializer."""
     source = tmp_path / "source"
     source.mkdir()
     Image.new("RGB", (3, 2)).save(source / "image.png")
     root = tmp_path / "attempt"
-    prepared = prepare(LuxDepthV4Request(source, root, input_color="srgb"))
+    publisher = GenerationPublisher(
+        artifact_store=LocalArtifactStore(root_dir=tmp_path / "preparation-store"), record_store=None
+    )
+    prepared = prepare(
+        LuxDepthV4Request(source, root, input_color="srgb"),
+        publisher=publisher if getattr(request, "param", True) else None,
+    )
     plan = prepared.plan.to_payload()
     root.mkdir()
     (root / "execution-plan.json").write_bytes(prepared.canonical_plan_bytes)
@@ -249,6 +255,45 @@ def test_publication_reuses_generation_commit_and_preserves_pending_acceptance(c
     assert {item["path"] for item in manifest["files"]} == set(result.artifact_paths)
     assert len(commits) == 1
     assert commits[0]["run_summary"]["production_acceptance"] == "pending"
+
+
+@pytest.mark.parametrize("completed", [False], indirect=True)
+def test_standalone_completion_cannot_skip_managed_preparation(completed, tmp_path):
+    result, fence, _ = completed
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    with pytest.raises(ValueError, match="requires prepare"):
+        asyncio.run(publish_result(result, publisher=publisher, fence=fence))
+
+
+def test_publication_rechecks_active_limits_before_staging(completed, tmp_path, monkeypatch):
+    from transformation_portal.orchestrator.artifact_store import generation
+
+    result, fence, _ = completed
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    monkeypatch.setattr(generation, "MAX_GENERATION_FILES", 199)
+    with pytest.raises(ValueError, match="limits changed after managed preparation"):
+        asyncio.run(publish_result(result, publisher=publisher, fence=fence))
+
+
+def test_managed_publication_rejects_unreserved_artifacts(completed, tmp_path):
+    result, fence, payload = completed
+    path = result.output_root / "input-0000/unreserved.npy"
+    path.write_bytes(b"unexpected but hash-consistent output")
+    relative = path.relative_to(result.output_root).as_posix()
+    payload["artifacts"].append(
+        {
+            "path": relative,
+            "kind": "array",
+            "input_id": "input-0000",
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "size_bytes": path.stat().st_size,
+        }
+    )
+    _rewrite(result, payload)
+    result = replace(result, artifact_paths=result.artifact_paths + (relative,))
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    with pytest.raises(ValueError, match="publication reservation"):
+        asyncio.run(publish_result(result, publisher=publisher, fence=fence))
 
 
 @pytest.mark.parametrize("mutation", ["root", "plan", "inventory", "summary"])

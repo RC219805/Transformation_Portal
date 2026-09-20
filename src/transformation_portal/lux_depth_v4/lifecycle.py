@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jsonschema
 
@@ -16,6 +16,9 @@ from transformation_portal.core.da3_runtime import repo_local_da3_python_path
 from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2, digest_payload, photography_nodes
 from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
+
+if TYPE_CHECKING:
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
 _SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw"})
 
@@ -161,11 +164,14 @@ def validate_prepared_bindings(prepared: PreparedLuxExecutionV4) -> None:
             raise ValueError("Prepared companion root must be separate from cache")
 
 
-def prepare(request: LuxDepthV4Request) -> PreparedLuxExecutionV4:
+def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None = None) -> PreparedLuxExecutionV4:
     """Freeze content selection, model, device and processing policy exactly once."""
     if not isinstance(request, LuxDepthV4Request):
         raise TypeError("prepare requires LuxDepthV4Request")
     configuration, resources = _configuration_and_resources(request)
+    publication_limits = None if publisher is None else publisher.limits
+    if publication_limits is not None:
+        resources["max_output_bytes"] = min(resources["max_output_bytes"], publication_limits.max_total_bytes)
     root = directory_path(request.input_dir)
     output = directory_path(request.output_dir, allow_missing=True)
     if _overlap(root, output):
@@ -194,6 +200,18 @@ def prepare(request: LuxDepthV4Request) -> PreparedLuxExecutionV4:
         for item in inputs:
             if item["path"] in companion_records:
                 item["companions"] = companion_records[item["path"]]
+    if publication_limits is not None:
+        from .publication import validate_publication_plan
+
+        validate_publication_plan(
+            {
+                "inputs": inputs,
+                "configuration": configuration,
+                "resources": resources,
+                "publication": publication_limits.to_payload(),
+            },
+            publication_limits,
+        )
     resolved = resolve_model_contract(ModelRequest(model_key=request.model_key, strict_model_lock=True))
     if resolved.canonical_key != "da3_metric":
         raise ValueError("Initial V4 photography profile supports only governed da3_metric")
@@ -226,6 +244,8 @@ def prepare(request: LuxDepthV4Request) -> PreparedLuxExecutionV4:
     }
     if companion_manifest is not None:
         payload["companions_manifest"] = companion_manifest
+    if publication_limits is not None:
+        payload["publication"] = publication_limits.to_payload()
     payload["plan_fingerprint_sha256"] = digest_payload(payload)
     plan = ExecutionPlanV2.from_payload(payload)
     authorize_model(plan)

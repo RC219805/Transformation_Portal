@@ -10,6 +10,7 @@ import os
 import stat
 import tempfile
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -25,6 +26,47 @@ MAX_GENERATION_FILE_BYTES = 4 * 1024**3
 MAX_GENERATION_BYTES = 16 * 1024**3
 MAX_MANIFEST_BYTES = 1_048_576
 _CHUNK = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class GenerationPublicationLimits:
+    """Immutable admission snapshot of the limits enforced by publication."""
+
+    max_files: int
+    max_file_bytes: int
+    max_total_bytes: int
+    max_manifest_bytes: int
+
+    def __post_init__(self) -> None:
+        for name, value in self.to_payload().items():
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"Generation publication limit {name!r} must be a positive exact integer")
+
+    def to_payload(self) -> dict[str, int]:
+        """Return an independent, closed JSON-compatible limits record."""
+        return {
+            "max_files": self.max_files,
+            "max_file_bytes": self.max_file_bytes,
+            "max_total_bytes": self.max_total_bytes,
+            "max_manifest_bytes": self.max_manifest_bytes,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> GenerationPublicationLimits:
+        """Reject unknown, missing, or coercible carried limit fields."""
+        if not isinstance(payload, Mapping) or set(payload) != {
+            "max_files",
+            "max_file_bytes",
+            "max_total_bytes",
+            "max_manifest_bytes",
+        }:
+            raise ValueError("Generation publication limits must contain exactly the four supported fields")
+        return cls(
+            max_files=payload["max_files"],
+            max_file_bytes=payload["max_file_bytes"],
+            max_total_bytes=payload["max_total_bytes"],
+            max_manifest_bytes=payload["max_manifest_bytes"],
+        )
 
 
 def validate_manifest(raw: bytes, *, fence: DispatchFence, generation_id: str) -> dict[str, Any]:
@@ -115,6 +157,16 @@ class GenerationPublisher:
     def __init__(self, *, artifact_store: ArtifactStore, record_store: Any) -> None:
         self._artifacts = artifact_store
         self._records = record_store
+
+    @property
+    def limits(self) -> GenerationPublicationLimits:
+        """Snapshot the active enforcement constants without changing publication."""
+        return GenerationPublicationLimits(
+            max_files=MAX_GENERATION_FILES,
+            max_file_bytes=MAX_GENERATION_FILE_BYTES,
+            max_total_bytes=MAX_GENERATION_BYTES,
+            max_manifest_bytes=MAX_MANIFEST_BYTES,
+        )
 
     async def publish(
         self,

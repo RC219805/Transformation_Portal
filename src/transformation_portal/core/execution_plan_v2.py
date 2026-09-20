@@ -127,6 +127,12 @@ def validate_plan_v2(payload: Mapping[str, Any]) -> None:
     for name, value in payload["resources"].items():
         if type(value) is not int:
             raise ExecutionPlanError(f"Resource {name!r} must be an exact integer")
+    if "publication" in payload:
+        for name, value in payload["publication"].items():
+            if type(value) is not int:
+                raise ExecutionPlanError(f"Publication limit {name!r} must be an exact integer")
+        if payload["resources"]["max_output_bytes"] > payload["publication"]["max_total_bytes"]:
+            raise ExecutionPlanError("Managed output budget exceeds its publication limit")
     if type(payload["configuration"]["target_size"]) is not int:
         raise ExecutionPlanError("target_size must be an exact integer")
     if payload["model"]["revision"] == "0" * 40:

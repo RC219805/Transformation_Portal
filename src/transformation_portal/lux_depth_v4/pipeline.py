@@ -13,7 +13,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 import numpy as np
 
@@ -41,6 +41,9 @@ from .photography import (
 )
 from .raw import decode_raw
 from .runtime import PhotographyRuntime
+
+if TYPE_CHECKING:
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
 
 @dataclass(frozen=True)
@@ -98,14 +101,25 @@ def _depth(context: StageContext, source_sha256: str, companion: Mapping[str, An
     return artifact
 
 
-def run(prepared: PreparedLuxExecutionV4, *, cancellation: Callable[[], bool] | None = None) -> LuxDepthV4Result:
+def run(
+    prepared: PreparedLuxExecutionV4,
+    *,
+    cancellation: Callable[[], bool] | None = None,
+    publisher: GenerationPublisher | None = None,
+) -> LuxDepthV4Result:
     """Execute the exact prepared plan, publishing completion only after verification."""
     if type(prepared) is not PreparedLuxExecutionV4:
         raise TypeError("run requires PreparedLuxExecutionV4; V3 plans cannot be downgraded")
     validate_prepared_bindings(prepared)
     plan = ExecutionPlanV2(prepared.canonical_plan_bytes)
-    authorize_model(plan)
     payload = plan.to_payload()
+    if "publication" in payload or publisher is not None:
+        from .publication import validate_publication_plan
+
+        if publisher is None:
+            raise ValueError("Managed execution requires its publisher before backend initialization")
+        validate_publication_plan(payload, publisher.limits)
+    authorize_model(plan)
     resources = payload["resources"]
     configuration = payload["configuration"]
     started = time.monotonic()
@@ -150,6 +164,8 @@ def run(prepared: PreparedLuxExecutionV4, *, cancellation: Callable[[], bool] | 
     hits = misses = written = 0
 
     def check() -> None:
+        if publisher is not None and publisher.limits.to_payload() != payload["publication"]:
+            raise RuntimeError("Publisher limits changed during managed execution")
         if cancellation is not None and cancellation():
             raise RuntimeError("Photographic execution cancelled")
         if time.monotonic() - started >= resources["wall_time_seconds"]:
@@ -162,7 +178,10 @@ def run(prepared: PreparedLuxExecutionV4, *, cancellation: Callable[[], bool] | 
     def observe(path: Path, kind: str, input_id: str | None = None) -> None:
         nonlocal written
         check()
-        _, record = snapshot(root, path, maximum_bytes=resources["max_output_bytes"] - written, retain_bytes=False)
+        maximum_bytes = resources["max_output_bytes"] - written
+        if publisher is not None:
+            maximum_bytes = min(maximum_bytes, payload["publication"]["max_file_bytes"])
+        _, record = snapshot(root, path, maximum_bytes=maximum_bytes, retain_bytes=False)
         written += record["size_bytes"]
         artifacts.append({**record, "kind": kind, "input_id": input_id})
 
@@ -461,6 +480,8 @@ def run(prepared: PreparedLuxExecutionV4, *, cancellation: Callable[[], bool] | 
                 completion_bytes = canonicalize_json(evidence)
                 if written + len(completion_bytes) > resources["max_output_bytes"]:
                     raise RuntimeError("Completion evidence exceeds the output byte budget")
+                if publisher is not None and len(completion_bytes) > payload["publication"]["max_file_bytes"]:
+                    raise RuntimeError("Completion evidence exceeds the publisher file-byte limit")
                 check()
                 parent_runtime.verify()
                 session.verify()

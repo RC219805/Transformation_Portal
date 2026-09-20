@@ -158,6 +158,36 @@ integrity and provenance; it does not establish photographic acceptance.
 
 `await publish_result(result, publisher=publisher, fence=fence)` is an opt-in
 adapter to the existing `GenerationPublisher` and admitted `DispatchFence`.
+Managed callers must pass their active publisher during preparation and execution:
+
+```python
+prepared = prepare(request, publisher=publisher)
+# Admit prepared.canonical_plan_bytes and acquire the existing dispatch fence.
+result = run(prepared, publisher=publisher)
+await publish_result(result, publisher=publisher, fence=fence)
+```
+
+Preparation freezes the publisher's file-count, per-file-byte, total-byte and
+manifest-byte limits in the canonical plan. It caps `max_output_bytes` at the
+publisher's total-byte ceiling while preserving a lower requested budget.
+Oversized inventories and per-file/manifest bounds fail before device probing,
+backend initialization or output creation. Limits changing after preparation
+require a new plan and admission; they cannot change inside an admitted attempt.
+
+The resolver conservatively reserves two batch files and ten files per image,
+including optional alpha and confidence that cannot be known without decoding.
+Calibration reserves two more files for each calibrated input; preview maps
+reserve three more per image. The default publisher's 200-file limit therefore
+admits at most 19 images without calibration or previews. Raising the configured
+file-count limit does not bypass the independently enforced manifest-size limit.
+Per-file bounds use the declared master/proxy pixel limits, so a smaller active
+publisher may require a lower `max_pixels` or output-byte budget. Split rejected
+batches explicitly into separately prepared and admitted attempts.
+
+Standalone `prepare(request)` / `run(prepared)` retain their 1,024-input and
+64-GiB defaults. Their completed outputs cannot be retroactively treated as
+managed-admitted results: managed publication requires the frozen publisher
+binding, and managed execution requires its publisher before inference begins.
 The output root and plan fingerprint must match the fence. The publisher's
 optional `expected_file_integrity` mapping then checks its own staged snapshots
 against the verified byte counts and hashes, closing the gap between verification

@@ -90,6 +90,50 @@ def test_complete_graph_preserves_precision_and_native_depth(prepared):
     assert descriptor["materials"]["status"] == "abstained"
 
 
+def test_managed_graph_keeps_optional_outputs_within_admitted_reservation(prepared, tmp_path):
+    from transformation_portal.lux_depth_v4.publication import publication_paths
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
+    source = prepared.input_root / "ramp.tif"
+    rgb = tifffile.imread(source)
+    rgba = np.concatenate((rgb, np.full((*rgb.shape[:2], 1), 65535, dtype=np.uint16)), axis=-1)
+    tifffile.imwrite(source, rgba, photometric="rgb", extrasamples="unassalpha")
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    managed = prepare(
+        LuxDepthV4Request(prepared.input_root, prepared.output_root, input_color="srgb", target_size=56, preview_maps=True),
+        publisher=publisher,
+    )
+    result = pipeline.run(managed, publisher=publisher)
+    assert (result.output_root / "input-0000/alpha.npy").exists()
+    assert (result.output_root / "input-0000/preview-normal.npy").exists()
+    assert set(result.artifact_paths).issubset(publication_paths(managed.plan.to_payload()))
+    assert (result.output_root / "execution-plan.json").read_bytes() == managed.canonical_plan_bytes
+
+
+def test_managed_limit_drift_during_inference_cannot_complete(prepared, tmp_path, monkeypatch):
+    from transformation_portal.orchestrator.artifact_store import generation
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    managed = prepare(
+        LuxDepthV4Request(prepared.input_root, prepared.output_root, input_color="srgb", target_size=56), publisher=publisher
+    )
+    compute = SessionFixture.compute
+
+    def compute_then_drift(self, proxy):
+        result = compute(self, proxy)
+        monkeypatch.setattr(generation, "MAX_GENERATION_FILES", 199)
+        return result
+
+    monkeypatch.setattr(SessionFixture, "compute", compute_then_drift)
+    with pytest.raises(RuntimeError, match="Publisher limits changed during"):
+        pipeline.run(managed, publisher=publisher)
+    assert not (managed.output_root / "execution-evidence.json").exists()
+    assert json.loads((managed.output_root / "failure.json").read_bytes())["complete"] is False
+
+
 def test_warm_cache_reuses_only_native_depth_and_isolates_sources(prepared):
     first = pipeline.run(prepared)
     second = pipeline.run(replace(prepared, output_root=prepared.output_root.with_name("second")))

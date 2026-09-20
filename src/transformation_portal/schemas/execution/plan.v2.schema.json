@@ -17,6 +17,18 @@
     "nodes"
   ],
   "properties": {
+    "publication": {
+      "description": "Optional managed-generation limits frozen before admission; standalone plans omit this binding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_files", "max_file_bytes", "max_total_bytes", "max_manifest_bytes"],
+      "properties": {
+        "max_files": {"type": "integer", "minimum": 1},
+        "max_file_bytes": {"type": "integer", "minimum": 1},
+        "max_total_bytes": {"type": "integer", "minimum": 1},
+        "max_manifest_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
     "schema": {
       "const": "tp.execution.plan.v2"
     },
