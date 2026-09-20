@@ -14,7 +14,8 @@ acceptance remain pending. The
 [forensic analysis](../analysis/MATERIALS_V3_FORENSIC_AND_V4_SUCCESSOR_2026-09-20.md)
 records the reasons for this successor.
 
-The additive `materials-v4` command ships with package version `0.5.0`. The
+The additive `materials-v4` command is registered in
+[pyproject.toml](../../pyproject.toml). The
 [implementation validation report](../analysis/MATERIALS_V4_IMPLEMENTATION_2026-09-20.md)
 separates passing engineering checks from outstanding production acceptance.
 
