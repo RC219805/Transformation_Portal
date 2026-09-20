@@ -14,10 +14,17 @@ import jsonschema
 
 from transformation_portal.core.da3_runtime import repo_local_da3_python_path
 from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2, digest_payload, photography_nodes
+from transformation_portal.core.execution_plan_v3 import (
+    ExecutionPlanV3,
+    PhotographyPlan,
+    materials_photography_nodes,
+    parse_photography_plan,
+)
 from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 
 if TYPE_CHECKING:
+    from transformation_portal.materials_v4.engine import ResponsePolicy
     from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
 _SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw"})
@@ -45,26 +52,29 @@ class LuxDepthV4Request:
     raw_python: str | None = None
     cache_dir: Path | None = None
     companions_manifest: Path | None = None
+    materials_manifest: Path | None = None
+    materials_policy: ResponsePolicy | None = None
 
 
 @dataclass(frozen=True)
 class PreparedLuxExecutionV4:
     """Immutable plan and local physical bindings; plan contains no executable path."""
 
-    plan: ExecutionPlanV2
+    plan: PhotographyPlan
     input_root: Path
     output_root: Path
     runtime_python: str
     raw_python: str | None
     cache_root: Path | None
     companion_root: Path | None = None
+    materials_root: Path | None = None
 
     @property
     def canonical_plan_bytes(self) -> bytes:
         return self.plan.canonical_bytes
 
 
-def authorize_model(plan: ExecutionPlanV2) -> ResolvedModel:
+def authorize_model(plan: PhotographyPlan) -> ResolvedModel:
     """Independently revalidate the model, revision and commercial-use boundary."""
     carried = plan.to_payload()["model"]
     resolved = resolve_model_contract(
@@ -143,7 +153,9 @@ def validate_prepared_bindings(prepared: PreparedLuxExecutionV4) -> None:
     """Revalidate physical bindings without resolving/loading a model or creating paths."""
     if type(prepared) is not PreparedLuxExecutionV4:
         raise TypeError("Expected PreparedLuxExecutionV4")
-    ExecutionPlanV2(prepared.canonical_plan_bytes)
+    if type(prepared.plan) not in (ExecutionPlanV2, ExecutionPlanV3):
+        raise TypeError("Prepared execution requires an exact core photography plan carrier")
+    parse_photography_plan(prepared.canonical_plan_bytes)
     root = directory_path(prepared.input_root)
     output = directory_path(prepared.output_root, allow_missing=True)
     if root != prepared.input_root or output != prepared.output_root or _overlap(root, output):
@@ -162,6 +174,15 @@ def validate_prepared_bindings(prepared: PreparedLuxExecutionV4) -> None:
             raise ValueError("Prepared companion root must be canonical and separate from outputs")
         if prepared.cache_root is not None and _overlap(companion_root, prepared.cache_root):
             raise ValueError("Prepared companion root must be separate from cache")
+    has_materials = "materials_manifest" in prepared.plan.to_payload()
+    if has_materials != (prepared.materials_root is not None):
+        raise ValueError("Prepared material namespace differs from its input bindings")
+    if prepared.materials_root is not None:
+        materials_root = directory_path(prepared.materials_root)
+        if materials_root != prepared.materials_root or _overlap(materials_root, output):
+            raise ValueError("Prepared material root must be canonical and separate from outputs")
+        if prepared.cache_root is not None and _overlap(materials_root, prepared.cache_root):
+            raise ValueError("Prepared material root must be separate from cache")
 
 
 def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None = None) -> PreparedLuxExecutionV4:
@@ -169,6 +190,8 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
     if not isinstance(request, LuxDepthV4Request):
         raise TypeError("prepare requires LuxDepthV4Request")
     configuration, resources = _configuration_and_resources(request)
+    if request.materials_policy is not None and request.materials_manifest is None:
+        raise ValueError("A Materials V4 policy requires an explicit materials manifest")
     publication_limits = None if publisher is None else publisher.limits
     if publication_limits is not None:
         resources["max_output_bytes"] = min(resources["max_output_bytes"], publication_limits.max_total_bytes)
@@ -200,6 +223,25 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
         for item in inputs:
             if item["path"] in companion_records:
                 item["companions"] = companion_records[item["path"]]
+    materials_root = None
+    materials_manifest = None
+    if request.materials_manifest is not None:
+        from transformation_portal.materials_v4.engine import ResponsePolicy
+
+        from .materials import freeze_materials
+
+        policy = request.materials_policy if request.materials_policy is not None else ResponsePolicy()
+        if type(policy) is not ResponsePolicy:
+            raise ValueError("Materials V4 requires an explicit ResponsePolicy")
+        if any("materials" in item.get("companions", {}) for item in inputs):
+            raise ValueError("Cannot combine legacy material masks and Materials V4")
+        materials_records, materials_root, materials_manifest = freeze_materials(request.materials_manifest, inputs, resources)
+        if _overlap(materials_root, output) or (cache is not None and _overlap(materials_root, cache)):
+            raise ValueError("Material root must be separate from output and cache roots")
+        for item in inputs:
+            if item["path"] in materials_records:
+                item["materials_v4"] = materials_records[item["path"]]
+        configuration["materials_v4"] = policy.to_payload()
     if publication_limits is not None:
         from .publication import validate_publication_plan
 
@@ -227,7 +269,7 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
 
         device = probe_device(interpreter, device)
     payload = {
-        "schema": "tp.execution.plan.v2",
+        "schema": "tp.execution.plan.v3" if materials_manifest is not None else "tp.execution.plan.v2",
         "canonicalization": "tp.canonical.json.v1",
         "pipeline": "lux_depth_v4",
         "model": {
@@ -240,15 +282,19 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
         "inputs": inputs,
         "configuration": configuration,
         "resources": resources,
-        "nodes": photography_nodes(configuration, companions=companion_root is not None),
+        "nodes": (materials_photography_nodes if materials_manifest is not None else photography_nodes)(
+            configuration, companions=companion_root is not None
+        ),
     }
     if companion_manifest is not None:
         payload["companions_manifest"] = companion_manifest
+    if materials_manifest is not None:
+        payload["materials_manifest"] = materials_manifest
     if publication_limits is not None:
         payload["publication"] = publication_limits.to_payload()
     payload["plan_fingerprint_sha256"] = digest_payload(payload)
-    plan = ExecutionPlanV2.from_payload(payload)
+    plan = (ExecutionPlanV3 if materials_manifest is not None else ExecutionPlanV2).from_payload(payload)
     authorize_model(plan)
     raw_python = request.raw_python or os.environ.get("TRANSFORMATION_PORTAL_RAW_PYTHON")
     raw_python = os.path.abspath(os.path.expanduser(raw_python)) if raw_python else None
-    return PreparedLuxExecutionV4(plan, root, output, interpreter, raw_python, cache, companion_root)
+    return PreparedLuxExecutionV4(plan, root, output, interpreter, raw_python, cache, companion_root, materials_root)

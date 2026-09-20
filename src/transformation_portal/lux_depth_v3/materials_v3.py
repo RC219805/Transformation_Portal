@@ -12,7 +12,9 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from .materials_v3_response import generate_response_plan
-from .pixel_ops_executor import apply_pixel_ops
+from .pixel_ops_decider import decide_pixel_ops
+from .pixel_ops_executor import _canonical_mask, _resolve_overlaps, apply_pixel_ops
+from .pixel_ops_registry import OP_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,72 @@ def _split_mask_and_confidence(value: Any, fallback_confidence: Optional[float])
         coerced = _coerce_unit_confidence(confidence)
         return mask, coerced if coerced is not None else fallback_confidence
     return value, fallback_confidence
+
+
+def authorized_v2_material_masks(masks: Dict[str, np.ndarray], result: Dict[str, Any], config: Any) -> Dict[str, np.ndarray]:
+    """Project current, executed V3 authorization into V2's array-only interface.
+
+    Segmentation artifacts remain observations and must retain every class. The
+    V2 handoff is a separate projection: missing, blocked, disabled, unsupported,
+    and unexecuted decisions cannot become permission merely by retaining a mask.
+    """
+    from .materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
+
+    if not masks or not bool(getattr(config, "apply_pixel_ops", False)):
+        return {}
+    pixel_ops = result.get("materials_v3_pixel_ops")
+    plan = result.get("materials_v3_response_plan")
+    if not isinstance(pixel_ops, dict) or pixel_ops.get("enabled") is not True or not isinstance(plan, dict):
+        return {}
+    applied = pixel_ops.get("applied")
+    blocked = pixel_ops.get("blocked")
+    per_class = plan.get("per_class")
+    if not isinstance(applied, list) or not isinstance(blocked, list) or not isinstance(per_class, dict):
+        return {}
+    executed = set()
+    for item in applied:
+        if not isinstance(item, dict) or not isinstance(item.get("material"), str):
+            continue
+        name, ops = item["material"], item.get("ops")
+        registered = OP_REGISTRY.get(name, {})
+        if (
+            not isinstance(ops, list)
+            or not ops
+            or any(not isinstance(op, str) or op not in registered or not registered[op].implemented for op in ops)
+        ):
+            continue
+        executed.add(name)
+    refused = {item.get("material") for item in blocked if isinstance(item, dict) and isinstance(item.get("material"), str)}
+    if not executed - refused:
+        return {}
+    try:
+        canonical = {name: _canonical_mask(mask) for name, mask in masks.items()}
+        shape = next(iter(canonical.values())).shape
+        if any(
+            mask.shape != shape or not np.isfinite(mask).all() or np.any((mask < 0) | (mask > 1))
+            for mask in canonical.values()
+        ):
+            return {}
+        resolved, _telemetry = _resolve_overlaps(canonical, DEFAULT_MATERIAL_METADATA, shape)
+    except (AttributeError, TypeError, ValueError):
+        return {}
+    authorized = {}
+    for name in sorted(executed - refused):
+        mask = resolved.get(name)
+        entry = per_class.get(name)
+        if mask is None or not isinstance(entry, dict):
+            continue
+        # V2 has no representation for absent semantic confidence. Do not let
+        # the V3 legacy coverage fallback promote that absence across the seam.
+        raw_confidence = entry.get("material_confidence")
+        confidence = None if isinstance(raw_confidence, (bool, np.bool_)) else _coerce_unit_confidence(raw_confidence)
+        if confidence is None:
+            continue
+        stats = dict(entry)
+        stats.update(coverage_px=int(np.count_nonzero(mask > 0.5)), mean_conf=float(mask.mean()))
+        if decide_pixel_ops(name, stats, config).get("will_apply"):
+            authorized[name] = mask
+    return authorized
 
 
 class MaterialsV3Engine:

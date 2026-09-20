@@ -103,6 +103,7 @@ def decide_pixel_ops(
     eligible = False
     reason = "no_implementation"
     should_apply = False
+    material_confidence = _material_confidence(stats)
 
     # If material has implemented operations in registry, evaluate eligibility
     if implemented:
@@ -110,7 +111,6 @@ def decide_pixel_ops(
         min_coverage = getattr(config, "min_coverage_px", 500)  # Default to 500 if not set
         mean_conf = float(stats.get("mean_conf", 0.0))
         base_confidence_threshold = float(getattr(config, "min_mean_conf", 0.2))
-        material_confidence = _material_confidence(stats)
         apex_confidence_blocker = _apex_confidence_authority_blocker(stats, config)
         if stats["coverage_px"] < min_coverage:
             eligible = False

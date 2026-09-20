@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image
 
 from transformation_portal.core.execution_plan import decode_bounded_json_object
-from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2
+from transformation_portal.core.execution_plan_v3 import PhotographyPlan
 from transformation_portal.ingest.canonical_json import dumps_json
 
 
@@ -97,7 +97,7 @@ def _signal_process_group(process: subprocess.Popen, signum: int) -> None:
 class DA3Session:
     """Persistent batch worker; cancellation always terminates its process group."""
 
-    def __init__(self, interpreter: str, plan: ExecutionPlanV2, *, cancellation: Callable[[], bool] | None = None) -> None:
+    def __init__(self, interpreter: str, plan: PhotographyPlan, *, cancellation: Callable[[], bool] | None = None) -> None:
         if not interpreter or not Path(interpreter).is_file():
             raise RuntimeError("Governed DA3 Python is missing; set TRANSFORMATION_PORTAL_DA3_PYTHON")
         self.plan = plan

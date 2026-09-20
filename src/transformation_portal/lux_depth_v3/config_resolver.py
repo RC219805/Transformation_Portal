@@ -621,8 +621,9 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "apply_pixel_ops": bool(config.apply_pixel_ops),
         # APEX Materials V3 strict-gate policy version. Bumped when the gate's
         # blocker semantics change so cache replays don't serve verdicts under
-        # old policy. v2 introduces soft-passthrough on confidence-only blocks.
-        "pixel_ops_strict_policy_version": "v2",
+        # old policy. v3 binds corrected resolved support, delta measurement,
+        # and the refusal-preserving V2 mask projection. APEX no-op policy stays.
+        "pixel_ops_strict_policy_version": "v3",
         "enable_material_segmentation": bool(config.enable_material_segmentation),
         "material_segmentation_backend": str(config.material_segmentation_backend),
         "strict_backend": bool(config.strict_backend),

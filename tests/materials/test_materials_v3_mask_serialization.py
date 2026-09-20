@@ -21,7 +21,17 @@ import pytest
 pytestmark = pytest.mark.unit
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.materials_v3 import MaterialsV3Engine
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+
+def _authorized_materials_result(masks, config):
+    """Supply an executed decision rather than treating array presence as authority."""
+    shape = next(iter(masks.values())).shape
+    return MaterialsV3Engine(config).process(
+        np.full((*shape, 3), 0.5, np.float32),
+        {"materials": {name: (mask, 0.99) for name, mask in masks.items()}},
+    )
 
 
 @pytest.fixture
@@ -292,6 +302,7 @@ class TestCleanupBehavior:
             enable_v2=True,
             v2_preset="default",
             enable_materials_v3=True,
+            apply_pixel_ops=True,
             enable_material_segmentation=True,
             material_segmentation_backend="stub",
             depth_device="cpu",
@@ -324,7 +335,7 @@ class TestCleanupBehavior:
                 v2_log_path=temp_output_dir / "logs" / "test.log",
                 manifest_path=temp_output_dir / "manifests" / "test.json",
                 skip_depth=False,
-                materials_v3_result={"material_masks": masks},
+                materials_v3_result=_authorized_materials_result(masks, config),
             )
 
         # Verify cleanup happened after success
@@ -336,6 +347,7 @@ class TestCleanupBehavior:
             enable_v2=True,
             v2_preset="default",
             enable_materials_v3=True,
+            apply_pixel_ops=True,
             enable_material_segmentation=True,
             material_segmentation_backend="stub",
             depth_device="cpu",
@@ -369,7 +381,7 @@ class TestCleanupBehavior:
                     v2_log_path=temp_output_dir / "logs" / "test.log",
                     manifest_path=temp_output_dir / "manifests" / "test.json",
                     skip_depth=False,
-                    materials_v3_result={"material_masks": masks},
+                    materials_v3_result=_authorized_materials_result(masks, config),
                 )
             except RuntimeError:
                 pass  # Expected
@@ -377,21 +389,22 @@ class TestCleanupBehavior:
         # Verify cleanup happened despite failure
         assert not mask_path.exists(), "Temporary masks should be cleaned up even on V2 failure"
 
-    def test_reuses_persisted_mask_artifact_for_v2_without_cleanup(
+    def test_projects_persisted_mask_artifact_for_v2_without_modifying_original(
         self, temp_output_dir, mock_depth_backend, mock_da3_available
     ):
-        """V2 should reuse persisted segmentation mask artifacts instead of re-serializing temp masks."""
+        """V2 receives a decision-filtered temp projection; segmentation remains intact."""
         config = EnhanceConfig(
             enable_v2=True,
             v2_preset="default",
             enable_materials_v3=True,
+            apply_pixel_ops=True,
             enable_material_segmentation=True,
             material_segmentation_backend="stub",
             depth_device="cpu",
         )
         orchestrator = EnhanceOrchestrator(config, temp_output_dir)
 
-        masks = {"glass": np.random.rand(16, 16).astype(np.float32)}
+        masks = {"glass": np.ones((64, 64), dtype=np.float32)}
         output_key = Path("test_image_abc123")
         persisted_dir = temp_output_dir / "segmentation"
         persisted_path = orchestrator._serialize_material_masks(masks, output_key, persisted_dir)
@@ -413,13 +426,16 @@ class TestCleanupBehavior:
                 manifest_path=temp_output_dir / "manifests" / "test.json",
                 skip_depth=False,
                 materials_v3_result={
-                    "material_masks": masks,
+                    **_authorized_materials_result(masks, config),
                     "materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(persisted_path)}},
                 },
             )
 
         assert run_mock.call_count == 1
-        assert run_mock.call_args.kwargs["masks_file"] == persisted_path
+        projected_path = run_mock.call_args.kwargs["masks_file"]
+        assert projected_path is not None
+        assert projected_path != persisted_path
+        assert not projected_path.exists(), "Temporary authorization projection should be cleaned up"
         assert persisted_path.exists(), "Persisted segmentation artifacts should not be removed during V2 cleanup"
 
     @pytest.mark.parametrize(

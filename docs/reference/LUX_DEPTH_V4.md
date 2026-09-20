@@ -28,7 +28,12 @@ The core-owned plan family gains `tp.execution.plan.v2`; V3's
 `tp.execution.plan.v1` continues to exist. V4 stage identity is
 `tp.execution.identity.v4`, which binds every named input artifact plus source,
 runtime and applicable model identity. These are versioned additions, not a
-reinterpretation of historical V3 identities or cache entries.
+reinterpretation of historical V3 identities or cache entries. Explicit
+`--materials-manifest` use selects the additive
+[Execution Plan V3](EXECUTION_PLAN_V3.md) with MaterialsV4 evidence and policy;
+ordinary requests retain V2. Follow the
+[MaterialsV4 guide](../guides/MATERIALS_V4.md) for supplied evidence, experimental
+inference, policy, and evaluation commands.
 
 The initial profile uses governed `da3_metric` without synthetic fallback.
 Photographic ingest distinguishes the linear-sRGB floating-point master from the
@@ -76,6 +81,13 @@ The output directory must be new and its parent must already exist. Existing
 attempts are never overwritten or resumed under different executor semantics.
 
 ## Optional calibration and Materials
+
+This section describes the existing V2-plan `--companions-manifest` material
+adapter. For the opt-in MaterialsV4 library use `--materials-manifest` and
+optionally `--materials-policy`; see the
+[MaterialsV4 guide](../guides/MATERIALS_V4.md). Legacy material masks and
+MaterialsV4 cannot be combined in one request. Camera-calibration companions
+remain compatible with MaterialsV4.
 
 Store the companion manifest and its masks in a private directory separate from
 output and cache roots. Paths in the manifest are relative to the image input
@@ -153,7 +165,11 @@ generation merely because some image files exist.
 `verify_execution_evidence_v2(output_root, expected_plan_sha256=...)` checks the
 complete inventory, required photographic artifacts, descriptor source bindings,
 output budget, and canonical plan before returning immutable verified records.
-It rejects extra files, links, incomplete evidence and changed bytes. This proves
+It rejects extra files, links, incomplete evidence and changed bytes. V3 plans
+add a required `materials-baseline.npy` and the complete material response
+receipt; verification independently measures material-only differences from
+that pre-material baseline. The original `source-master.npy` keeps its existing
+meaning. The completion `plan_schema` must match the exact V2 or V3 plan. This proves
 integrity and provenance; it does not establish photographic acceptance.
 
 `await publish_result(result, publisher=publisher, fence=fence)` is an opt-in
@@ -177,7 +193,9 @@ require a new plan and admission; they cannot change inside an admitted attempt.
 The resolver conservatively reserves two batch files and ten files per image,
 including optional alpha and confidence that cannot be known without decoding.
 Calibration reserves two more files for each calibrated input; preview maps
-reserve three more per image. The default publisher's 200-file limit therefore
+reserve three more per image. MaterialsV4 V3 plans reserve one additional
+pre-material baseline per image, reducing the batch permitted by the same
+file-count limit. Without MaterialsV4, the default publisher's 200-file limit therefore
 admits at most 19 images without calibration or previews. Raising the configured
 file-count limit does not bypass the independently enforced manifest-size limit.
 Per-file bounds use the declared master/proxy pixel limits, so a smaller active

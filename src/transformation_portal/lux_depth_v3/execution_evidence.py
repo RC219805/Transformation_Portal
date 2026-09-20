@@ -1738,10 +1738,15 @@ def _destination_entry_mode(parent_descriptor: int, name: str) -> int:
     return destination_mode
 
 
-def _secure_atomic_write_bytes(root: _PinnedOutputRoot, relative_path: str, data: bytes) -> None:
-    """Atomically publish bytes through a parent descriptor pinned under ``root``."""
+def _secure_atomic_write_bytes(
+    root: _PinnedOutputRoot, relative_path: str, data: bytes, *, maximum_bytes: Optional[int] = None
+) -> None:
+    """Atomically publish bytes under a caller budget or the legacy sidecar limit."""
 
-    if len(data) > _MAX_EVIDENCE_BYTES:
+    effective_max_bytes = _MAX_EVIDENCE_BYTES if maximum_bytes is None else maximum_bytes
+    if type(effective_max_bytes) is not int or not 0 < effective_max_bytes <= _MAX_ARTIFACT_BYTES:
+        raise ValueError(f"Publication byte budget must be a positive integer no greater than {_MAX_ARTIFACT_BYTES}")
+    if len(data) > effective_max_bytes:
         raise ArtifactEvidenceError("artifact_too_large", "Execution evidence sidecar exceeds its byte limit")
     parent_descriptor: Optional[int] = None
     temporary_name: Optional[str] = None

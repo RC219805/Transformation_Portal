@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from transformation_portal.core.execution_plan import ExecutionPlanError, decode_bounded_json_object
 from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2, digest_payload, require_digest
+from transformation_portal.core.execution_plan_v3 import ExecutionPlanV3, PhotographyPlan, parse_photography_plan
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
 IDENTITY_SCHEMA = "tp.execution.identity.v4"
@@ -25,7 +26,7 @@ class MaterializedExecutionIdentityV4:
     @classmethod
     def from_plan(
         cls,
-        plan: ExecutionPlanV2,
+        plan: PhotographyPlan,
         *,
         node_id: str,
         input_id: str,
@@ -34,11 +35,11 @@ class MaterializedExecutionIdentityV4:
         runtime_identity_sha256: str,
         model_identity_sha256: str | None = None,
     ) -> MaterializedExecutionIdentityV4:
-        if type(plan) is not ExecutionPlanV2:
+        if type(plan) not in (ExecutionPlanV2, ExecutionPlanV3):
             raise ExecutionPlanError("Execution identity requires the exact core-owned plan carrier")
         # Reconstruct from immutable bytes rather than trusting a forged object
         # or any caller-supplied projection of the plan.
-        plan = ExecutionPlanV2(plan.canonical_bytes)
+        plan = parse_photography_plan(plan.canonical_bytes)
         payload = plan.to_payload()
         selected_inputs = [item for item in payload["inputs"] if item["id"] == input_id]
         if len(selected_inputs) != 1:
@@ -78,7 +79,7 @@ class MaterializedExecutionIdentityV4:
         cls,
         payload: Mapping[str, Any],
         *,
-        expected_plan: ExecutionPlanV2,
+        expected_plan: PhotographyPlan,
         node_id: str,
         input_id: str,
         inputs: Mapping[str, str],

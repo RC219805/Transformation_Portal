@@ -213,7 +213,7 @@ def test_feathered_writeback_preserves_padded_transition():
     mask[20:44, 20:44] = 1.0
 
     segmentation_result = {"materials": {"glass": mask}}
-    response_plan = {"per_class": {"glass": {"coverage_px": int(mask.sum()), "mean_conf": 0.7}}}
+    response_plan = {"per_class": {"glass": {"coverage_px": int(mask.sum()), "mean_conf": 0.7, "material_confidence": 0.95}}}
 
     output, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config)
 

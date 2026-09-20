@@ -342,6 +342,7 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
 
         # First preference: use SAM2/CLIP labels when available.
         material_buckets: Dict[str, Tuple[np.ndarray, float, int]] = {}
+        missing_semantic_confidence: set[str] = set()
         segments: List[Dict[str, Any]] = []
         masks = np.asarray(seg_result.masks)
         scores = np.asarray(seg_result.scores, dtype=np.float32)
@@ -383,8 +384,16 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             label = self._canonicalize_material_label(getattr(metadata, "material_label", None))
             if label:
                 confidence = getattr(metadata, "material_confidence", None)
-                if confidence is None:
-                    confidence = float(scores[idx]) if idx < len(scores) else 0.5
+                if (
+                    isinstance(confidence, (bool, np.bool_))
+                    or not isinstance(confidence, (int, float, np.integer, np.floating))
+                    or not np.isfinite(confidence)
+                    or not 0.0 <= confidence <= 1.0
+                ):
+                    # A SAM IoU/stability score describes geometry, not the
+                    # class label. Retain this observation without edit authority.
+                    missing_semantic_confidence.add(label)
+                    confidence = 0.0
                 self._merge_material_result(
                     material_buckets,
                     label,
@@ -393,6 +402,11 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 )
 
         if material_buckets:
+            # V3 merges regions by class. If any contributing region lacks
+            # semantic evidence, a confident neighbor cannot authorize its union.
+            for material in missing_semantic_confidence:
+                mask, _confidence, area = material_buckets[material]
+                material_buckets[material] = (mask, 0.0, area)
             logger.debug(
                 "SAM2 classified %d masks via metadata labels: %s",
                 len(segments),
@@ -401,11 +415,17 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             self._material_confidence_evidence = {
                 material: {
                     "material_confidence": float(bucket[1]),
-                    "confidence_score_type": MATERIAL_CLASSIFIER_SCORE_TYPE,
+                    "confidence_score_type": (
+                        "missing_material_confidence"
+                        if material in missing_semantic_confidence
+                        else MATERIAL_CLASSIFIER_SCORE_TYPE
+                    ),
                     "raw_clip_similarity": None,
                     "clip_softmax_probability": None,
                     "clip_top2_margin": None,
-                    "calibration_version": MATERIALS_V3_CALIBRATION_VERSION,
+                    "calibration_version": (
+                        None if material in missing_semantic_confidence else MATERIALS_V3_CALIBRATION_VERSION
+                    ),
                 }
                 for material, bucket in material_buckets.items()
             }

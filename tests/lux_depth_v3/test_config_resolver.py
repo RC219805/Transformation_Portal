@@ -686,7 +686,7 @@ class TestBuildFingerprintPayloads:
 
         payload = build_materials_fingerprint_payload(EnhanceConfig(enable_materials_v3=True))
 
-        assert payload["pixel_ops_strict_policy_version"] == "v2"
+        assert payload["pixel_ops_strict_policy_version"] == "v3"
 
     def test_fingerprint_changes_when_low_saturation_warning_band_changes(self):
         """APEX gate fingerprint should change when the warning band changes."""

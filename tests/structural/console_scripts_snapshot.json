@@ -1,5 +1,5 @@
 {
-  "_version_marker": "0.4.0",
+  "_version_marker": "0.5.0",
   "scripts": {
     "depth-aware-dof": "transformation_portal.depth.depth_aware_dof:main",
     "lux-depth-v3": "transformation_portal.lux_depth_v3.__main__:app",
@@ -7,6 +7,7 @@
     "lux_render": "transformation_portal.pipelines.lux_render_pipeline:main",
     "luxury-tiff-batch": "luxury_tiff_batch_processor.cli:main",
     "luxury_video_grader": "transformation_portal.processors.luxury_video_master_grader:main",
+    "materials-v4": "transformation_portal.materials_v4.__main__:main",
     "presence-security": "transformation_portal.presence_security.cli:main",
     "transform-analyze": "transformation_portal.cli:analyze_cli",
     "transform-process": "transformation_portal.cli:process_cli",

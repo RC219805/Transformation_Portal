@@ -96,7 +96,9 @@ def _validated_plan_bbox(
         return None
     if x0 < 0 or y0 < 0 or x1 > img_w or y1 > img_h or x1 <= x0 or y1 <= y0:
         return None
-    if not np.any(mask[y0:y1, x0:x1] > 0.5):
+    # A plan bbox is only a hint. It must describe all current active support,
+    # including support changed by overlap resolution or mask replacement.
+    if (x0, y0, x1, y1) != _bounding_box(mask):
         return None
     return x0, y0, x1, y1
 
@@ -158,7 +160,12 @@ def _weighted_abs_delta_for_percentile(
     mask: np.ndarray,
     max_samples: int = _LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES,
 ) -> tuple[np.ndarray, int]:
-    """Return a bounded 2D weighted-delta sample for percentile checks."""
+    """Return a bounded 2D sample of actual output deltas.
+
+    Operations already blend by the soft mask. Weighting their resulting delta
+    again would understate changes at soft edges and defeat the p99 ceiling.
+    The mask supplies the sample grid only; zero-mask writes also count.
+    """
     if delta.size == 0 or mask.size == 0:
         return np.asarray([], dtype=np.float32), 1
 
@@ -173,8 +180,7 @@ def _weighted_abs_delta_for_percentile(
     if abs_delta.ndim == 3:
         abs_delta = abs_delta.max(axis=-1)
 
-    weighted = abs_delta * mask.astype(np.float32, copy=False)
-    return weighted.astype(np.float32, copy=False), sample_stride
+    return abs_delta.astype(np.float32, copy=False), sample_stride
 
 
 def _expand_bbox_with_padding(
@@ -227,9 +233,7 @@ def _resolve_overlaps(
     h, w = image_shape
 
     # Sort materials by priority (highest first)
-    sorted_materials = sorted(
-        materials.items(), key=lambda x: material_metadata.get(x[0], {}).get("priority", 0), reverse=True
-    )
+    sorted_materials = sorted(materials.items(), key=lambda x: (-material_metadata.get(x[0], {}).get("priority", 0), x[0]))
 
     # Track overlaps
     total_pixels = 0
@@ -360,8 +364,7 @@ def apply_pixel_ops(
     # Sort by priority (highest first) to process in order
     sorted_materials = sorted(
         resolved_materials.items(),
-        key=lambda x: DEFAULT_MATERIAL_METADATA.get(x[0], {}).get("priority", 0),
-        reverse=True,
+        key=lambda x: (-DEFAULT_MATERIAL_METADATA.get(x[0], {}).get("priority", 0), x[0]),
     )
 
     for material_key, mask in sorted_materials:
@@ -386,7 +389,13 @@ def apply_pixel_ops(
         # Recompute execution eligibility from the current code/config instead
         # of blindly trusting a serialized response-plan decision. This keeps
         # cached or stale plans from bypassing newer fail-closed guards.
-        decision = decide_pixel_ops(material_key, plan_entry, config, registry=registry)
+        # Geometry must come from the resolved mask, never stale planning stats.
+        # Keep all masks in ownership resolution: dropping an abstained region
+        # would incorrectly authorize a contradictory lower-priority material.
+        execution_stats = dict(plan_entry)
+        execution_stats["coverage_px"] = int(np.count_nonzero(mask_2d > 0.5))
+        execution_stats["mean_conf"] = float(mask_2d.mean()) if mask_2d.size else 0.0
+        decision = decide_pixel_ops(material_key, execution_stats, config, registry=registry)
         plan_decision = plan_entry.get("pixel_ops")
         ops_for_material = registry.get(material_key, {})
         recommended_ops = _validated_recommended_ops(plan_decision, ops_for_material)
@@ -472,12 +481,9 @@ def apply_pixel_ops(
         # A2: Expand bbox by feathering padding
         pad = math.ceil(3 * feather_sigma) if feather_sigma > 0 else 0
         x0_padded, y0_padded, x1_padded, y1_padded = _expand_bbox_with_padding(bbox, pad, img_h, img_w)
-        inside_y = slice(y0 - y0_padded, y1 - y0_padded)
-        inside_x = slice(x0 - x0_padded, x1 - x0_padded)
-
         # Extract padded ROI
         mask_roi_padded = mask_2d[y0_padded:y1_padded, x0_padded:x1_padded]
-        before_padded = output[y0_padded:y1_padded, x0_padded:x1_padded]
+        before_padded = output[y0_padded:y1_padded, x0_padded:x1_padded].copy()
 
         # Apply feathering to padded mask
         mask_roi_feathered = _feather_mask(mask_roi_padded, feather_sigma)
@@ -546,12 +552,9 @@ def apply_pixel_ops(
 
         elapsed_ms = (time.perf_counter() - start_material) * 1000.0
 
-        # Compute stats on original ROI
-        delta_stats = _compute_delta_stats(
-            before_padded[inside_y, inside_x],
-            after_padded[inside_y, inside_x],
-            mask_roi_feathered[inside_y, inside_x],
-        )
+        # Measure the complete writeback scope against the immutable baseline,
+        # including feather tails outside the original mask/bounding box.
+        delta_stats = _compute_delta_stats(before_padded, after_padded, mask_roi_padded)
 
         telemetry["applied"].append(
             {

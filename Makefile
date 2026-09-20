@@ -269,6 +269,10 @@ check-fastvlm-runtime:
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS) $(PHASE6_SMOKE_TESTS)
 
+.PHONY: test-materials-v4-contract
+test-materials-v4-contract:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/materials_v4 tests/lux_depth_v4 tests/core/test_execution_plan_v2.py tests/materials/test_materials_v3_forensic_regressions.py
+
 test-novideo:
 	@"$(PY)" -m pytest -q -k 'not video_master_grader'
 

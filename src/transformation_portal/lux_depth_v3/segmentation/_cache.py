@@ -123,7 +123,9 @@ def _softmax_probabilities(values: np.ndarray, logit_scale: float = 20.0) -> np.
 
 SAM2_AUTO_TILING_MAX_AREA_PX = 8_000_000
 SAM2_AUTO_TILING_MAX_DIM_PX = 4096
-SEGMENTATION_CACHE_SCHEMA_VERSION = "materials-segmentation-cache.v1"
+# Reject legacy SAM2 entries that could promote geometric IoU into material
+# confidence when the semantic classifier had supplied no confidence at all.
+SEGMENTATION_CACHE_SCHEMA_VERSION = "materials-segmentation-cache.v2"
 _CACHE_MASK_CHECKSUM_CHUNK_SIZE = 1024 * 1024
 
 

@@ -11,6 +11,7 @@ Use these current entry points first:
 - [Portal + Orchestrator Quickstart](PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [Lux Depth V3 Troubleshooting](LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- [MaterialsV4 Candidate](MATERIALS_V4.md)
 - [Context-Aware Rendering](CONTEXT_AWARE_RENDERING.md)
 - [Skill Progress Tracks](SKILL_PROGRESS_TRACKS.md)
 - [AD Editorial Post-Production Pipeline](AD_EDITORIAL_POST_PIPELINE.md)
