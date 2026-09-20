@@ -94,6 +94,19 @@ Apple Silicon, `cpu` elsewhere). The checkpoint validator then confirms:
 
 ## Usage
 
+The stage loads the exact checkpoint path whose hash it validates. Direct NumPy
+`uint16` inputs are mapped across the full 0–65535 range to the model's 8-bit
+input; `uint8` samples retain their values, including dark images containing
+only 0 and 1. This conversion does not make the model a 16-bit inference model.
+
+Stage users may provide a finite positive `focal_length_px` artifact measured on
+the input image grid. The stage passes it to Depth Pro and includes it in its
+cache key. Without that artifact, Depth Pro estimates the focal length. Returned
+metadata and provenance distinguish `supplied`, `model_estimated`, and
+`unavailable` focal values and retain horizontal field of view. This optional
+stage input does not add a focal CLI flag or supplied-intrinsics transport to
+the backend's canonical execution plan; EXIF does not activate it implicitly.
+
 ### Option 1: Using Presets (Recommended)
 
 The easiest way to use Depth Pro is with one of the experimental presets:

@@ -392,6 +392,7 @@ class DepthAnythingV2Model:
                 device=pipeline_kwargs["device"],
                 revision=pipeline_kwargs.get("revision"),
             )
+            self.processor = None
             logger.info("Loaded PyTorch model: %s", self.variant.value)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -614,22 +615,19 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_pytorch(self, image: Image.Image) -> dict:
         """Estimate depth using PyTorch backend."""
-        if not TORCH_AVAILABLE:
+        if not TORCH_AVAILABLE or torch is None:
             raise ImportError("torch required for PyTorch inference")
+        if self.model is None:
+            raise RuntimeError("PyTorch depth model is not loaded")
 
         start_time = time.time()
 
         # Run inference
-        if hasattr(self.model, "__call__"):
+        if self.processor is None:
             # Pipeline API
             prediction = self.model(image)
-            depth_raw = prediction["depth"]
-
-            # Convert to numpy
-            if TORCH_AVAILABLE and isinstance(depth_raw, torch.Tensor):
-                depth_raw = depth_raw.cpu().numpy()
-            elif isinstance(depth_raw, Image.Image):
-                depth_raw = np.array(depth_raw)
+            # ``depth`` is an 8-bit PIL visualization, not the model prediction.
+            depth_raw = prediction["predicted_depth"]
         else:
             # Manual inference
             inputs = self.processor(images=image, return_tensors="pt")
@@ -639,10 +637,22 @@ class DepthAnythingV2Model:
 
             with torch.no_grad():
                 outputs = self.model(**inputs)
-                depth_raw = outputs.predicted_depth
+                prediction = self.processor.post_process_depth_estimation(outputs, target_sizes=[(image.height, image.width)])
+                depth_raw = prediction[0]["predicted_depth"]
 
-            # Convert to numpy
-            depth_raw = depth_raw.squeeze().cpu().numpy()
+        # Keep spatial singleton axes; only remove the single-image batch axis.
+        if isinstance(depth_raw, torch.Tensor):
+            depth_raw = depth_raw.detach().cpu().numpy()
+        depth_raw = np.asarray(depth_raw, dtype=np.float32)
+        if self.processor is not None and depth_raw.ndim < 2:
+            # The upstream postprocessor squeezes singleton spatial dimensions.
+            depth_raw = depth_raw.reshape(image.height, image.width)
+        if depth_raw.ndim == 3 and depth_raw.shape[0] == 1:
+            depth_raw = depth_raw[0]
+        if depth_raw.ndim != 2:
+            raise ValueError("predicted_depth must contain one HxW depth map")
+        if self.processor is not None and depth_raw.shape != (image.height, image.width):
+            raise ValueError("Postprocessed predicted_depth must match the input image grid")
 
         # Normalize to [0, 1]
         depth_min = depth_raw.min()

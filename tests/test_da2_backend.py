@@ -31,6 +31,15 @@ def test_da2_backend_registry_integration():
     assert backends["da2"]["requires_checkpoint"] is False
 
 
+def test_da2_cache_key_excludes_legacy_display_depth():
+    """New predictions must not reuse a formerly quantized DA2 cache entry."""
+    backend = DA2Backend()
+    image = np.zeros((3, 4, 3), dtype=np.uint8)
+    cache_key = backend.get_cache_key(image)
+    assert cache_key.endswith("_v2")
+    assert backend.get_cache_key(image.copy()) == cache_key
+
+
 def test_da2_backend_compute_contract(monkeypatch):
     """DA2 backend compute returns unified DepthResult contract."""
     backend = DA2Backend()
@@ -50,6 +59,36 @@ def test_da2_backend_compute_contract(monkeypatch):
     assert result.backend_id == "da2"
     assert result.metadata["source_depth_units"] == "relative"
     assert result.metadata["output_depth_units"] == "relative"
+
+
+@pytest.mark.parametrize(
+    "values, dtype, expected",
+    [
+        ([0, 255, 256, 32768, 65535], np.uint16, [0, 1, 1, 128, 255]),
+        ([0, 255, 256, 32768, 65535], ">u2", [0, 1, 1, 128, 255]),
+        ([0, 1, 1, 0, 0], np.uint16, [0, 0, 0, 0, 0]),
+        ([0, 64, 127, 128, 255], np.uint8, [0, 64, 127, 128, 255]),
+        ([0, 1, 1, 0, 0], np.uint8, [0, 1, 1, 0, 0]),
+        ([0, 0.25, 0.5, 0.75, 1], np.float32, [0, 63, 127, 191, 255]),
+    ],
+)
+def test_da2_backend_numpy_conversion_preserves_range(monkeypatch, values, dtype, expected):
+    """High bit-depth input scales to the model proxy without wrapping."""
+    image = np.repeat(np.asarray(values, dtype=dtype)[None, :, None], 3, axis=2)
+    captured = []
+    backend = DA2Backend()
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+
+    def estimate(image_pil):
+        captured.append(np.asarray(image_pil))
+        return {"depth": np.zeros(image.shape[:2], dtype=np.float32)}
+
+    backend._model = SimpleNamespace(estimate_depth=estimate)
+    result = backend.compute(image)
+
+    np.testing.assert_array_equal(captured[0], np.repeat(np.asarray(expected)[None, :, None], 3, axis=2))
+    assert result.original_image is image
+    assert result.input_size == (1, 5)
 
 
 def test_da2_backend_cuda_request_without_cuda_falls_back_to_cpu(monkeypatch):

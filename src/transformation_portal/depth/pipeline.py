@@ -134,6 +134,7 @@ class ArchitecturalDepthPipeline:
         cache = DepthCache(
             max_size=model_config.get("cache_size", 100),
             enable_disk_cache=model_config.get("enable_disk_cache", False),
+            namespace="da2-float-prediction-v2",
         )
 
         return cache

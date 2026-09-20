@@ -13,14 +13,22 @@ import time
 import zipfile
 from pathlib import Path
 from types import ModuleType, TracebackType
-from typing import Callable
+from typing import Any, Callable, ClassVar, Mapping, Protocol
 
 import numpy as np
 from PIL import Image
 
 from transformation_portal.core.execution_plan import decode_bounded_json_object
-from transformation_portal.core.execution_plan_v3 import PhotographyPlan
 from transformation_portal.ingest.canonical_json import dumps_json
+
+
+class CarriedDepthPlan(Protocol):
+    """Immutable plan surface shared by versioned native-depth workers."""
+
+    @property
+    def plan_fingerprint_sha256(self) -> str: ...
+
+    def to_payload(self) -> dict[str, Any]: ...
 
 
 def require_process_supervisor() -> ModuleType:
@@ -97,7 +105,14 @@ def _signal_process_group(process: subprocess.Popen, signum: int) -> None:
 class DA3Session:
     """Persistent batch worker; cancellation always terminates its process group."""
 
-    def __init__(self, interpreter: str, plan: PhotographyPlan, *, cancellation: Callable[[], bool] | None = None) -> None:
+    _WORKER_MODULE = "transformation_portal.lux_depth_v4.worker"
+    _ARRAY_DTYPES: ClassVar[Mapping[str, np.dtype]] = {
+        "native_depth": np.dtype("float32"),
+        "confidence": np.dtype("float32"),
+    }
+    _REQUIRED_ARRAYS = frozenset({"native_depth"})
+
+    def __init__(self, interpreter: str, plan: CarriedDepthPlan, *, cancellation: Callable[[], bool] | None = None) -> None:
         if not interpreter or not Path(interpreter).is_file():
             raise RuntimeError("Governed DA3 Python is missing; set TRANSFORMATION_PORTAL_DA3_PYTHON")
         self.plan = plan
@@ -108,7 +123,7 @@ class DA3Session:
         self.root = Path(self._temporary.name)
         self._stderr = (self.root / "worker.log").open("w+b")
         self.process = subprocess.Popen(
-            [interpreter, "-m", "transformation_portal.lux_depth_v4.worker"],
+            [interpreter, "-m", self._WORKER_MODULE],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self._stderr,
@@ -214,11 +229,15 @@ class DA3Session:
             raise RuntimeError("Worker output identity mismatch")
         with zipfile.ZipFile(io.BytesIO(raw)) as container:
             members = container.infolist()
-            expected_names = {"native_depth.npy", "confidence.npy"}
-            if not 1 <= len(members) <= 2 or len({member.filename for member in members}) != len(members):
+            expected_names = {f"{name}.npy": dtype for name, dtype in self._ARRAY_DTYPES.items()}
+            if not 1 <= len(members) <= len(expected_names) or len({member.filename for member in members}) != len(members):
                 raise RuntimeError("Worker depth archive has an invalid member inventory")
             for member in members:
-                if member.filename not in expected_names or member.file_size > proxy.shape[0] * proxy.shape[1] * 4 + 1024:
+                expected_dtype = expected_names.get(member.filename)
+                if (
+                    expected_dtype is None
+                    or member.file_size > proxy.shape[0] * proxy.shape[1] * expected_dtype.itemsize + 1024
+                ):
                     raise RuntimeError("Worker depth archive exceeds its expanded array budget")
                 with container.open(member) as source:
                     version = np.lib.format.read_magic(source)
@@ -228,15 +247,15 @@ class DA3Session:
                         shape, _fortran, dtype = np.lib.format.read_array_header_2_0(source, max_header_size=1024)
                     else:
                         raise RuntimeError("Unsupported worker array header")
-                    if shape != proxy.shape[:2] or dtype != np.dtype("float32"):
+                    if shape != proxy.shape[:2] or dtype != expected_dtype:
                         raise RuntimeError("Worker array header differs from prepared proxy")
         with np.load(io.BytesIO(raw), allow_pickle=False) as archive:
-            if set(archive.files) not in ({"native_depth"}, {"native_depth", "confidence"}):
+            if not self._REQUIRED_ARRAYS <= set(archive.files) <= set(self._ARRAY_DTYPES):
                 raise RuntimeError("Worker returned unknown depth arrays")
             arrays = {name: archive[name].copy() for name in archive.files}
         if any(
-            array.dtype != np.float32 or array.shape != proxy.shape[:2] or not np.isfinite(array).all()
-            for array in arrays.values()
+            array.dtype != self._ARRAY_DTYPES[name] or array.shape != proxy.shape[:2] or not np.isfinite(array).all()
+            for name, array in arrays.items()
         ):
             raise RuntimeError("Worker returned invalid depth arrays")
         input_path.unlink()

@@ -26,6 +26,7 @@ separately. The May 11 inventory and May 12 overlays remain historical evidence.
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
 | LuxDepthV4 candidate | [V4 photography and evaluation](reference/LUX_DEPTH_V4.md) |
+| LuxDepthV5 candidate | [V5 depth evidence and evaluation](reference/LUX_DEPTH_V5.md), [Execution Plan V4](reference/EXECUTION_PLAN_V4.md) |
 | MaterialsV4 candidate | [Evidence and response guide](guides/MATERIALS_V4.md), [Execution Plan V3](reference/EXECUTION_PLAN_V3.md) |
 | CLI entrypoint reference | [CLI Reference](cli/CLI_REFERENCE.md) |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |

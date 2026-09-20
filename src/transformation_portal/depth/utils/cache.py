@@ -131,6 +131,8 @@ class DepthCache:
         max_size: int = 100,
         cache_dir: Optional[Union[str, Path]] = None,
         enable_disk_cache: bool = False,
+        *,
+        namespace: Optional[str] = None,
     ):
         """
         Initialize depth cache.
@@ -139,9 +141,13 @@ class DepthCache:
             max_size: Maximum number of depth maps to cache in memory
             cache_dir: Directory for disk cache (default: ~/.cache/depth_pipeline)
             enable_disk_cache: Enable persistent disk cache
+            namespace: Optional recipe identifier; None retains legacy image-only keys
         """
+        if namespace is not None and (not isinstance(namespace, str) or not namespace.strip()):
+            raise ValueError("namespace must be a nonempty string or None")
         self.max_size = max_size
         self.enable_disk_cache = enable_disk_cache
+        self.namespace = namespace
 
         # Memory cache
         self.memory_cache = LRUCache(max_size)
@@ -244,6 +250,8 @@ class DepthCache:
 
         # Compute hash (MD5 is used only for cache keying, not security)
         hash_obj = hashlib.md5(image_bytes, usedforsecurity=False)
+        if self.namespace is not None:
+            hash_obj.update(b"\x00depth-recipe\x00" + self.namespace.encode("utf-8"))
         cache_key = hash_obj.hexdigest()
 
         return cache_key

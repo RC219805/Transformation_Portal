@@ -52,6 +52,13 @@ def validate_publication_plan(payload: Mapping[str, Any], limits: GenerationPubl
     Limits are part of the canonical plan, not mutable execution configuration.
     A changed publisher requires fresh preparation and admission.
     """
+    _validate_publication_plan(payload, limits)
+
+
+def _validate_publication_plan(
+    payload: Mapping[str, Any], limits: GenerationPublicationLimits, *, profile: Any = None
+) -> None:
+    """Reuse bounded admission for private versioned photographic inventories."""
     carried = payload.get("publication")
     if carried is None:
         raise ValueError("Managed publication requires prepare(request, publisher=publisher)")
@@ -60,7 +67,7 @@ def validate_publication_plan(payload: Mapping[str, Any], limits: GenerationPubl
     resources = payload["resources"]
     if resources["max_output_bytes"] > limits.max_total_bytes:
         raise ValueError("Managed output budget exceeds publisher total-byte limit")
-    paths = publication_paths(payload)
+    paths = (publication_paths if profile is None else profile.publication_paths)(payload)
     if len(paths) > limits.max_files:
         raise ValueError(f"Managed batch reserves {len(paths)} artifacts, exceeding publisher limit {limits.max_files}")
     # Every array is at most RGB float32 on the master or padded proxy grid.
@@ -73,6 +80,7 @@ def validate_publication_plan(payload: Mapping[str, Any], limits: GenerationPubl
             proxy_edge * proxy_edge * 12 + 256,
             resources["max_pixels"] * 8 + 1024 * 1024,
             MAX_EVIDENCE_BYTES,
+            0 if profile is None else profile.additional_file_bound,
         ),
     )
     if maximum_file > limits.max_file_bytes:
@@ -105,12 +113,20 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
     GenerationPublisher rechecks expected hashes on its own staged snapshots;
     the existing record store remains the sole lease/visibility commit authority.
     """
+    return await _publish_result(result, publisher=publisher, fence=fence)
+
+
+async def _publish_result(
+    result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence, profile: Any = None
+) -> dict[str, Any]:
+    """Versioned verification/reservation reuse the same dispatch visibility fence."""
     root = directory_path(result.output_root)
     if str(root) != fence.output_root or Path(result.evidence_path) != root / "execution-evidence.json":
         raise ValueError("Completed V4 output root does not match the dispatch fence")
     if result.plan_fingerprint_sha256 != fence.locator.plan_digest:
         raise ValueError("Completed V4 plan does not match the admitted dispatch plan")
-    verified = verify_execution_evidence_v2(root, expected_plan_sha256=result.plan_fingerprint_sha256)
+    verifier = verify_execution_evidence_v2 if profile is None else profile.verify_evidence
+    verified = verifier(root, expected_plan_sha256=result.plan_fingerprint_sha256)
     evidence = verified.to_payload()
     inventory = {record.path: root / record.path for record in verified.artifacts}
     if len(result.artifact_paths) != len(inventory) or set(result.artifact_paths) != set(inventory):
@@ -122,13 +138,14 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
     ):
         raise ValueError("V4 result summary differs from verified completion")
     plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
-    plan = parse_photography_plan(plan_bytes)
+    plan = (parse_photography_plan if profile is None else profile.parse_plan)(plan_bytes)
     if plan.plan_fingerprint_sha256 != result.plan_fingerprint_sha256:
         raise ValueError("Managed publication plan changed after completion verification")
     payload = plan.to_payload()
     limits = publisher.limits
-    validate_publication_plan(payload, limits)
-    if not set(inventory).issubset(publication_paths(payload)):
+    (validate_publication_plan if profile is None else profile.validate_publication_plan)(payload, limits)
+    reserved = (publication_paths if profile is None else profile.publication_paths)(payload)
+    if not set(inventory).issubset(reserved):
         raise ValueError("Managed output inventory exceeds the prepared publication reservation")
     if any(record.size_bytes > limits.max_file_bytes for record in verified.artifacts):
         raise ValueError("Managed output exceeds publisher file-byte limit")
@@ -138,9 +155,13 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
         inventory,
         state="succeeded",
         exit_code=0,
-        artifacts={"schema": "tp.lux.delivery.v2", "paths": list(inventory), "execution_evidence": "execution-evidence.json"},
+        artifacts={
+            "schema": "tp.lux.delivery.v2" if profile is None else profile.delivery_schema,
+            "paths": list(inventory),
+            "execution_evidence": "execution-evidence.json",
+        },
         run_summary={
-            "pipeline": "lux_depth_v4",
+            "pipeline": "lux_depth_v4" if profile is None else profile.pipeline,
             "plan_schema": plan.schema,
             "plan_fingerprint_sha256": result.plan_fingerprint_sha256,
             "input_count": result.input_count,

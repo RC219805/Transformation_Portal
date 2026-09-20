@@ -39,6 +39,7 @@ operator guidance unless they are linked here as canonical documents.
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](../deployment/managed_paid_pilot_staging_runbook.md) | Maintained; provider-neutral procedure for rerunning the Phase 5.A gate against managed Postgres, Redis, and S3-compatible storage |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
 | LuxDepthV4 candidate | [V4 photography and evaluation](../reference/LUX_DEPTH_V4.md) | Opt-in candidate; production acceptance and shared-executor cutover remain gated |
+| LuxDepthV5 candidate | [V5 depth evidence and evaluation](../reference/LUX_DEPTH_V5.md) | Explicit validity, precision, conservative detail recovery, and independent verification; DA3 Metric remains the baseline and production acceptance is pending |
 | MaterialsV4 candidate | [MaterialsV4 guide](../guides/MATERIALS_V4.md) | Explicit evidence/response candidate; inferred ranking does not authorize edits and production acceptance remains pending |
 | CLI entrypoints | [CLI Reference](../cli/CLI_REFERENCE.md) | Maintained |
 | PBR CLI testing | [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md) | Maintained |
@@ -101,6 +102,7 @@ operator guidance unless they are linked here as canonical documents.
 | Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Accepted; authoritative repository designation. Implementation activation remains subject to the ADR's vertical-slice gates |
 | Canonical execution plan v1 | [Execution Plan V1 Contract](../reference/EXECUTION_PLAN_V1.md) | Maintained core-owned plan contract, native Lux preparation and execution consumption; StageGraph/CASDAGExecutor activation remains gated |
 | MaterialsV4 photographic plan | [Execution Plan V3 Contract](../reference/EXECUTION_PLAN_V3.md) | Additive opt-in plan and verified material baseline; V1/V2 defaults remain intact |
+| LuxDepthV5 photographic plan | [Execution Plan V4 Contract](../reference/EXECUTION_PLAN_V4.md) | Closed V5 graph, factored native cache, and evidence V3; earlier plan versions remain independent |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
 ## APEX And Archive Gates

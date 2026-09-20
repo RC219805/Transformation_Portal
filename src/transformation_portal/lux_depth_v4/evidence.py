@@ -118,12 +118,20 @@ def verify_execution_evidence_v2(output_root: Path, *, expected_plan_sha256: str
     Verification establishes artifact integrity and execution provenance, never
     photographic quality or production approval. No models are loaded here.
     """
+    return _verify_execution_evidence(output_root, expected_plan_sha256=expected_plan_sha256)
+
+
+def _verify_execution_evidence(
+    output_root: Path, *, expected_plan_sha256: str, profile: Any = None
+) -> VerifiedExecutionEvidenceV2:
+    """Share inventory/runtime authority with explicitly versioned private profiles."""
     require_digest(expected_plan_sha256)
     root = directory_path(output_root)
     with pinned_directory(root):
         raw, completion = snapshot(root, root / "execution-evidence.json", maximum_bytes=MAX_EVIDENCE_BYTES)
         evidence = _decode_evidence(raw)
-        schema = json.loads(files("transformation_portal.schemas.execution").joinpath("evidence.v2.schema.json").read_text())
+        schema_name = "evidence.v2.schema.json" if profile is None else profile.schema_file
+        schema = json.loads(files("transformation_portal.schemas.execution").joinpath(schema_name).read_text())
         try:
             jsonschema.Draft202012Validator(schema).validate(evidence)
         except jsonschema.ValidationError as exc:
@@ -131,7 +139,7 @@ def verify_execution_evidence_v2(output_root: Path, *, expected_plan_sha256: str
         if canonicalize_json(evidence) != raw or evidence["plan_fingerprint_sha256"] != expected_plan_sha256:
             raise ValueError("Completion evidence is noncanonical or does not match the expected plan")
         plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
-        plan = parse_photography_plan(plan_bytes)
+        plan = (parse_photography_plan if profile is None else profile.parse_plan)(plan_bytes)
         payload = plan.to_payload()
         if evidence["plan_schema"] != plan.schema:
             raise ValueError("Completion plan schema differs from the canonical plan")
@@ -176,6 +184,9 @@ def verify_execution_evidence_v2(output_root: Path, *, expected_plan_sha256: str
         if declared.get("execution-plan.json", {}).get("kind") != "plan":
             raise ValueError("Completion inventory omits its canonical plan")
         for input_id, source in inputs.items():
+            if profile is not None:
+                profile.verify_photograph(root, input_id, source, payload, declared)
+                continue
             required = {
                 "source-master.npy": "array",
                 "master.npy": "array",

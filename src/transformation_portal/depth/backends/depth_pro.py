@@ -406,7 +406,11 @@ class DepthProBackend:
     ) -> tuple[Image.Image, np.ndarray]:
         """Normalize input image for both local and subprocess execution."""
         if isinstance(image, np.ndarray):
-            if image.max() <= 1.0:
+            if np.issubdtype(image.dtype, np.uint16):
+                arr = np.rint(image.astype(np.float32) / 257.0).astype(np.uint8)
+            elif image.dtype == np.uint8:
+                arr = image
+            elif image.max() <= 1.0:
                 arr = (image * 255).astype(np.uint8)
             else:
                 arr = image.astype(np.uint8)
@@ -629,7 +633,7 @@ class DepthProBackend:
         runner_path = self._python_executable or sys.executable
         runner_hash = hashlib.sha256(runner_path.encode("utf-8")).hexdigest()[:8]
 
-        return f"depthpro_{ckpt_hash}_{image_hash}_{self._device}_{runner_mode}_{runner_hash}_v2"
+        return f"depthpro_{ckpt_hash}_{image_hash}_{self._device}_{runner_mode}_{runner_hash}_v3"
 
     def _load_stage(self) -> None:
         """Lazy-load DepthProStage for local in-process execution."""

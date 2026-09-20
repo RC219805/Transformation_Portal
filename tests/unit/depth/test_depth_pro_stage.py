@@ -137,6 +137,8 @@ class TestDepthProStageUnit:
         mock_torch.device.return_value = "cpu"
 
         mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.eval.return_value = mock_model
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
 
@@ -173,6 +175,8 @@ class TestDepthProStageUnit:
 
         # Mock model and inference
         mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.eval.return_value = mock_model
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
 
@@ -288,6 +292,8 @@ class TestDepthProStageUnit:
 
         # Mock model and inference
         mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.eval.return_value = mock_model
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
 
@@ -505,6 +511,8 @@ class TestDepthProStageUnit:
         """_load_model should call _validate_checkpoint before loading."""
         mock_torch.device.return_value = "cpu"
         mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.eval.return_value = mock_model
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
 
@@ -537,3 +545,178 @@ class TestDepthProStageUnit:
         assert "SHA-256 validation failed" in result.error
         assert "invalid_hash_for_test" in result.error
         assert "actual_hash_different" in result.error
+
+
+@pytest.mark.unit
+def test_configured_checkpoint_reaches_loader_without_mutating_default(tmp_path, monkeypatch):
+    import hashlib
+    from types import SimpleNamespace
+
+    from transformation_portal.stage_graph.stages import depth_pro as module
+
+    selected = tmp_path / "selected" / "weights.pt"
+    selected.parent.mkdir()
+    selected.write_bytes(b"selected-checkpoint")
+    elsewhere = tmp_path / "different-working-directory"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    default = SimpleNamespace(checkpoint_uri="./checkpoints/depth_pro.pt", use_fov_head=True)
+    seen = []
+    model = MagicMock()
+    model.to.return_value = model
+    model.eval.return_value = model
+
+    def create_model_and_transforms(*, config):
+        seen.append((config, Path(config.checkpoint_uri).read_bytes()))
+        return model, None
+
+    monkeypatch.setattr(
+        module,
+        "depth_pro",
+        SimpleNamespace(
+            depth_pro=SimpleNamespace(DEFAULT_MONODEPTH_CONFIG_DICT=default),
+            create_model_and_transforms=create_model_and_transforms,
+        ),
+    )
+    monkeypatch.setattr(module, "torch", SimpleNamespace(device=lambda value: value))
+    stage = DepthProStage(selected, expected_sha256=hashlib.sha256(selected.read_bytes()).hexdigest(), device="cpu")
+    stage._load_model()
+    assert seen[0][1] == b"selected-checkpoint"
+    assert seen[0][0].checkpoint_uri == str(selected.resolve())
+    assert seen[0][0] is not default
+    assert default.checkpoint_uri == "./checkpoints/depth_pro.pt"
+
+
+@pytest.mark.unit
+def test_preload_hash_cache_cannot_authorize_replaced_checkpoint(tmp_path):
+    import hashlib
+
+    checkpoint = tmp_path / "selected.pt"
+    checkpoint.write_bytes(b"trusted")
+    expected = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    stage = DepthProStage(checkpoint, expected_sha256=expected, device="cpu")
+    assert stage._get_checkpoint_hash() == expected
+    checkpoint.write_bytes(b"changed")
+    with pytest.raises(CheckpointValidationError):
+        stage._load_model()
+
+
+def _inference_stage(tmp_path, monkeypatch, *, returned_focal=650.0):
+    from types import SimpleNamespace
+
+    torch = pytest.importorskip("torch")
+    from transformation_portal.stage_graph.stages import depth_pro as module
+
+    monkeypatch.setattr(module, "DEPTH_PRO_AVAILABLE", True)
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"test-checkpoint")
+    stage = DepthProStage(checkpoint, device="cpu")
+    stage._model_loaded = True
+    stage._transform = lambda image: torch.zeros((3, image.height, image.width))
+    calls = []
+
+    def infer(image, **kwargs):
+        calls.append(kwargs)
+        return {
+            "depth": torch.ones(image.shape[-2:]),
+            "focallength_px": kwargs.get("f_px", None if returned_focal is None else torch.tensor(returned_focal)),
+        }
+
+    stage._model = SimpleNamespace(infer=infer)
+    return stage, calls
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("supplied, source", [(None, "model_estimated"), (500.0, "supplied")])
+def test_focal_length_and_horizontal_fov_survive_stage_and_provenance(tmp_path, monkeypatch, supplied, source):
+    import math
+
+    stage, calls = _inference_stage(tmp_path, monkeypatch)
+    context = StageContext(artifacts={"image": Image.new("RGB", (64, 48)), "focal_length_px": supplied})
+    result = stage.compute(context)
+    assert result.status == StageStatus.COMPLETED, result.error
+    expected_focal = supplied if supplied is not None else 650.0
+    assert result.metadata["focal_length_px"] == expected_focal
+    assert result.metadata["focal_length_source"] == source
+    assert result.metadata["fov_deg"] == pytest.approx(math.degrees(2 * math.atan(64 / (2 * expected_focal))))
+    assert result.artifacts["depth_provenance"]["camera"]["focal_length_px"] == expected_focal
+    if supplied is None:
+        assert calls == [{}]
+    else:
+        assert calls[0]["f_px"].ndim == 0
+        assert calls[0]["f_px"].item() == supplied
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("focal", [True, "500", 0, -1, float("nan"), float("inf"), [500]])
+def test_invalid_supplied_focal_fails_before_model_loading(tmp_path, monkeypatch, focal):
+    from transformation_portal.stage_graph.stages import depth_pro as module
+
+    monkeypatch.setattr(module, "DEPTH_PRO_AVAILABLE", True)
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"test-checkpoint")
+    stage = DepthProStage(checkpoint, device="cpu")
+    stage._load_model = lambda: pytest.fail("Invalid focal must fail before model initialization")
+    result = stage.compute(StageContext(artifacts={"image": Image.new("RGB", (64, 48)), "focal_length_px": focal}))
+    assert result.status == StageStatus.FAILED
+    assert "finite positive scalar" in result.error
+
+
+@pytest.mark.unit
+def test_focal_length_participates_in_stage_cache_identity(tmp_path, monkeypatch):
+    stage = DepthProStage(device="cpu")
+    monkeypatch.setattr(stage, "_get_checkpoint_hash", lambda: "a" * 64)
+    image = Image.new("RGB", (64, 48))
+    keys = [
+        stage.get_cache_key(StageContext(artifacts={"image": image, "focal_length_px": focal})) for focal in (None, 500, 650)
+    ]
+    assert len(set(keys)) == 3
+    assert keys[1] == stage.get_cache_key(StageContext(artifacts={"image": image, "focal_length_px": 500.0}))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "dtype, values, expected",
+    [
+        ("uint16", [0, 255, 256, 32768, 65535], [0, 1, 1, 128, 255]),
+        (">u2", [0, 255, 256, 32768, 65535], [0, 1, 1, 128, 255]),
+        ("uint16", [0, 1], [0, 0]),
+        ("uint8", [0, 1], [0, 1]),
+    ],
+)
+def test_stage_integer_input_conversion_preserves_intensity_order(tmp_path, monkeypatch, dtype, values, expected):
+    stage, _ = _inference_stage(tmp_path, monkeypatch, returned_focal=None)
+    image = np.repeat(np.array(values, dtype=dtype)[None, :, None], 3, axis=2)
+    original_transform = stage._transform
+    captured = []
+
+    def transform(image):
+        captured.append(np.array(image))
+        return original_transform(image)
+
+    stage._transform = transform
+    stage._run_inference(image)
+    assert captured[0][0, :, 0].tolist() == expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("returned_focal", [0.0, float("nan")])
+def test_invalid_estimated_focal_cannot_be_published(tmp_path, monkeypatch, returned_focal):
+    stage, _ = _inference_stage(tmp_path, monkeypatch, returned_focal=returned_focal)
+    result = stage.compute(StageContext(artifacts={"image": Image.new("RGB", (64, 48))}))
+    assert result.status == StageStatus.FAILED
+    assert "finite positive scalar" in result.error
+
+
+@pytest.mark.unit
+def test_model_cannot_disagree_with_supplied_focal(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    torch = pytest.importorskip("torch")
+    stage, _ = _inference_stage(tmp_path, monkeypatch)
+    stage._model = SimpleNamespace(
+        infer=lambda image, **kwargs: {"depth": torch.ones(image.shape[-2:]), "focallength_px": torch.tensor(900.0)}
+    )
+    result = stage.compute(StageContext(artifacts={"image": Image.new("RGB", (64, 48)), "focal_length_px": 500.0}))
+    assert result.status == StageStatus.FAILED
+    assert "different from the supplied input" in result.error

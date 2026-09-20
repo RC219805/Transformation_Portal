@@ -194,7 +194,11 @@ class DA2Backend:
         image: Union[Image.Image, np.ndarray],
         device: Optional[str] = None,
     ) -> DepthResult:
-        """Estimate relative depth using Depth Anything V2."""
+        """Estimate relative depth using Depth Anything V2.
+
+        NumPy uint8 pixels retain their values; uint16 pixels map their full
+        storage range to uint8. Floating inputs in [0, 1] are normalized pixels.
+        """
         self.ensure_available()
 
         if device is not None:
@@ -221,7 +225,12 @@ class DA2Backend:
 
         if isinstance(image, np.ndarray):
             image_np = image
-            if image_np.max() <= 1.0:
+            if image_np.dtype == np.uint8:
+                image_pil = Image.fromarray(image_np)
+            elif image_np.dtype.kind == "u" and image_np.dtype.itemsize == 2:
+                # Scale the full uint16 range; a direct cast wraps modulo 256.
+                image_pil = Image.fromarray(np.rint(image_np.astype(np.float32) / 257.0).astype(np.uint8))
+            elif image_np.max() <= 1.0:
                 image_pil = Image.fromarray(
                     (np.clip(image_np, 0, 1) * 255).astype(np.uint8),
                 )
@@ -265,4 +274,5 @@ class DA2Backend:
             image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
         else:
             image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
-        return f"da2_small_{image_hash}_{self._device}_v1"
+        # V2 uses float predictions and explicit uint16 scaling, not display depth.
+        return f"da2_small_{image_hash}_{self._device}_v2"

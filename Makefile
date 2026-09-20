@@ -273,6 +273,10 @@ test-fast:
 test-materials-v4-contract:
 	@PYTHONPATH=src "$(PY)" -m pytest -q tests/materials_v4 tests/lux_depth_v4 tests/core/test_execution_plan_v2.py tests/materials/test_materials_v3_forensic_regressions.py
 
+.PHONY: test-lux-depth-v5-contract
+test-lux-depth-v5-contract:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/lux_depth_v5 tests/lux_depth_v4 tests/core/test_depth_evidence.py tests/core/test_execution_plan_v2.py tests/materials_v4
+
 test-novideo:
 	@"$(PY)" -m pytest -q -k 'not video_master_grader'
 

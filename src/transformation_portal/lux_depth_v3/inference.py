@@ -904,13 +904,17 @@ class DA3InferenceEngine:
             # Transformers pipeline models
             assert self.model is not None
             prediction = self.model(image)
-            depth_raw = prediction["depth"]
+            # ``depth`` is an 8-bit PIL visualization, not the model prediction.
+            depth_raw = prediction["predicted_depth"]
 
             # Convert to numpy
             if torch is not None and isinstance(depth_raw, torch.Tensor):
-                depth_raw = depth_raw.cpu().numpy()
-            elif isinstance(depth_raw, Image.Image):
-                depth_raw = np.array(depth_raw)
+                depth_raw = depth_raw.detach().cpu().numpy()
+            depth_raw = np.asarray(depth_raw, dtype=np.float32)
+            if depth_raw.ndim == 3 and depth_raw.shape[0] == 1:
+                depth_raw = depth_raw[0]
+            if depth_raw.ndim != 2:
+                raise ValueError("predicted_depth must contain one HxW depth map")
         else:
             raise RuntimeError("Model is not callable")
 
