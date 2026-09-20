@@ -36,11 +36,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--companions-manifest", type=Path, help="Immutable per-source calibration and material-mask bindings")
     parser.add_argument(
+        "--materials-manifest", type=Path, help="Opt in to source-bound Materials V4 evidence and conservative response"
+    )
+    parser.add_argument(
+        "--materials-policy", type=Path, help="Complete Materials V4 ResponsePolicy JSON; requires --materials-manifest"
+    )
+    parser.add_argument(
         "--plan", action="store_true", help="Print exact canonical execution bytes without loading models or writing outputs"
     )
     args = vars(parser.parse_args(argv))
     planning = args.pop("plan")
     try:
+        policy_path = args.pop("materials_policy")
+        if policy_path is not None:
+            from transformation_portal.core.execution_plan import decode_bounded_json_object
+            from transformation_portal.lux_depth_v4.io import directory_path, snapshot
+            from transformation_portal.materials_v4.engine import ResponsePolicy
+
+            policy_path = policy_path.expanduser().absolute()
+            policy_root = directory_path(policy_path.parent)
+            policy_bytes, _ = snapshot(policy_root, policy_path, maximum_bytes=65536)
+            args["materials_policy"] = ResponsePolicy.from_payload(decode_bounded_json_object(policy_bytes))
         prepared = prepare(LuxDepthV4Request(**args))
         if planning:
             sys.stdout.buffer.write(prepared.canonical_plan_bytes)

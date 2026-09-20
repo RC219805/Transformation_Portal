@@ -1,0 +1,828 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tp.execution.plan.v3",
+  "title": "Closed photographic execution plan with Materials V4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "canonicalization",
+    "plan_fingerprint_sha256",
+    "pipeline",
+    "model",
+    "device",
+    "inputs",
+    "configuration",
+    "resources",
+    "nodes",
+    "materials_manifest"
+  ],
+  "properties": {
+    "publication": {
+      "description": "Optional managed-generation limits frozen before admission; standalone plans omit this binding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_files",
+        "max_file_bytes",
+        "max_total_bytes",
+        "max_manifest_bytes"
+      ],
+      "properties": {
+        "max_files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_file_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_total_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_manifest_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "schema": {
+      "const": "tp.execution.plan.v3"
+    },
+    "canonicalization": {
+      "const": "tp.canonical.json.v1"
+    },
+    "plan_fingerprint_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "pipeline": {
+      "const": "lux_depth_v4"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_key",
+        "repo_id",
+        "revision",
+        "license"
+      ],
+      "properties": {
+        "canonical_key": {
+          "const": "da3_metric"
+        },
+        "repo_id": {
+          "const": "depth-anything/DA3METRIC-LARGE"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "license": {
+          "const": "apache-2.0"
+        }
+      }
+    },
+    "device": {
+      "enum": [
+        "cpu",
+        "mps"
+      ]
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^input-[0-9]{4}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483648
+          },
+          "companions": {
+            "$ref": "#/$defs/companions"
+          },
+          "materials_v4": {
+            "$ref": "#/$defs/material_evidence"
+          }
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_color",
+        "target_size",
+        "strength",
+        "clarity",
+        "preview_maps",
+        "materials_v4"
+      ],
+      "properties": {
+        "input_color": {
+          "enum": [
+            "auto",
+            "srgb",
+            "linear_srgb"
+          ]
+        },
+        "target_size": {
+          "type": "integer",
+          "minimum": 14,
+          "maximum": 2044,
+          "multipleOf": 14
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "clarity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "preview_maps": {
+          "type": "boolean"
+        },
+        "materials_v4": {
+          "$ref": "#/$defs/materials_policy"
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_pixels",
+        "max_input_bytes",
+        "max_output_bytes",
+        "wall_time_seconds",
+        "memory_mib",
+        "inference_slots"
+      ],
+      "properties": {
+        "max_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000000
+        },
+        "max_input_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1099511627776
+        },
+        "wall_time_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "memory_mib": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 262144
+        },
+        "inference_slots": {
+          "const": 1
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "stage",
+            "inputs",
+            "outputs",
+            "configuration"
+          ],
+          "properties": {
+            "id": {
+              "const": "preprocess"
+            },
+            "stage": {
+              "const": "tp.stage.lux.preprocess.v2"
+            },
+            "inputs": {
+              "anyOf": [
+                {
+                  "const": {
+                    "source": "$input",
+                    "materials_v4": "$materials_v4"
+                  }
+                },
+                {
+                  "const": {
+                    "source": "$input",
+                    "calibration": "$calibration",
+                    "materials_v4": "$materials_v4"
+                  }
+                }
+              ]
+            },
+            "outputs": {
+              "const": {
+                "master": "tp.image.master.v1",
+                "proxy": "tp.image.proxy.v1"
+              }
+            },
+            "configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "input_color",
+                "target_size",
+                "orientation",
+                "master_space",
+                "proxy_space",
+                "geometry"
+              ],
+              "properties": {
+                "input_color": {
+                  "enum": [
+                    "auto",
+                    "srgb",
+                    "linear_srgb"
+                  ]
+                },
+                "target_size": {
+                  "type": "integer",
+                  "minimum": 14,
+                  "maximum": 2044,
+                  "multipleOf": 14
+                },
+                "orientation": {
+                  "const": "canonical"
+                },
+                "master_space": {
+                  "const": "linear_srgb"
+                },
+                "proxy_space": {
+                  "const": "srgb"
+                },
+                "geometry": {
+                  "const": "resize_then_edge_pad"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "stage",
+            "inputs",
+            "outputs",
+            "configuration"
+          ],
+          "properties": {
+            "id": {
+              "const": "depth"
+            },
+            "stage": {
+              "const": "tp.stage.lux.depth.v2"
+            },
+            "inputs": {
+              "anyOf": [
+                {
+                  "const": {
+                    "proxy": "preprocess.proxy"
+                  }
+                },
+                {
+                  "const": {
+                    "proxy": "preprocess.proxy",
+                    "calibration": "$calibration"
+                  }
+                }
+              ]
+            },
+            "outputs": {
+              "const": {
+                "depth": "tp.depth.artifact.v2"
+              }
+            },
+            "configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "native_semantics",
+                "synthetic_fallback"
+              ],
+              "properties": {
+                "native_semantics": {
+                  "const": "da3_metric_uncalibrated"
+                },
+                "synthetic_fallback": {
+                  "const": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "stage",
+            "inputs",
+            "outputs",
+            "configuration"
+          ],
+          "properties": {
+            "id": {
+              "const": "enhance"
+            },
+            "stage": {
+              "const": "tp.stage.lux.enhance.v2"
+            },
+            "inputs": {
+              "const": {
+                "master": "preprocess.master",
+                "depth": "depth.depth",
+                "proxy": "preprocess.proxy",
+                "materials_v4": "$materials_v4"
+              }
+            },
+            "outputs": {
+              "const": {
+                "master": "tp.image.master.v1",
+                "materials": "tp.materials.execution.v1",
+                "materials_baseline": "tp.image.master.v1"
+              }
+            },
+            "configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "strength",
+                "clarity",
+                "materials_v4"
+              ],
+              "properties": {
+                "strength": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "clarity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "materials_v4": {
+                  "$ref": "#/$defs/materials_policy"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "stage",
+            "inputs",
+            "outputs",
+            "configuration"
+          ],
+          "properties": {
+            "id": {
+              "const": "output"
+            },
+            "stage": {
+              "const": "tp.stage.lux.output.v2"
+            },
+            "inputs": {
+              "const": {
+                "master": "enhance.master",
+                "source_master": "preprocess.master",
+                "depth": "depth.depth",
+                "proxy": "preprocess.proxy",
+                "materials": "enhance.materials",
+                "materials_baseline": "enhance.materials_baseline"
+              }
+            },
+            "outputs": {
+              "const": {
+                "delivery": "image/tiff",
+                "master": "application/x-npy",
+                "evidence": "application/json"
+              }
+            },
+            "configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "bit_depth",
+                "color_space",
+                "preview_maps"
+              ],
+              "properties": {
+                "bit_depth": {
+                  "const": 16
+                },
+                "color_space": {
+                  "const": "srgb"
+                },
+                "preview_maps": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "companions_manifest": {
+      "$ref": "#/$defs/companions_manifest"
+    },
+    "materials_manifest": {
+      "$ref": "#/$defs/companions_manifest"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height",
+        "fx",
+        "fy",
+        "cx",
+        "cy",
+        "source",
+        "coordinate_space"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000000
+        },
+        "fx": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fy": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cx": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cy": {
+          "type": "number",
+          "minimum": 0
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "coordinate_space": {
+          "const": "canonical_master"
+        }
+      }
+    },
+    "material_mask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "shape",
+        "dtype"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        },
+        "shape": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200000000
+          }
+        },
+        "dtype": {
+          "enum": [
+            "bool",
+            "float32"
+          ]
+        }
+      }
+    },
+    "materials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "masks",
+        "confidences",
+        "coordinate_space"
+      ],
+      "properties": {
+        "masks": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/material_mask"
+          }
+        },
+        "confidences": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "coordinate_space": {
+          "const": "canonical_master"
+        }
+      }
+    },
+    "companions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "source_sha256"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "calibration"
+          ]
+        },
+        {
+          "required": [
+            "materials"
+          ]
+        }
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "calibration": {
+          "$ref": "#/$defs/calibration"
+        },
+        "materials": {
+          "$ref": "#/$defs/materials"
+        }
+      }
+    },
+    "companions_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      }
+    },
+    "material_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "content_sha256",
+        "source_sha256",
+        "shape"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "shape": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "materials_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations",
+        "min_confidence",
+        "min_coverage_px",
+        "support_threshold",
+        "allow_supplied_confidence",
+        "trusted_calibration_sha256",
+        "color_space",
+        "conflict_rule",
+        "max_abs_delta",
+        "tile_size",
+        "halo",
+        "max_working_bytes",
+        "protected_master_samples"
+      ],
+      "properties": {
+        "operations": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "operation_id",
+              "strength"
+            ],
+            "properties": {
+              "label": {
+                "enum": [
+                  "glass",
+                  "water",
+                  "stone",
+                  "foliage",
+                  "sky"
+                ]
+              },
+              "operation_id": {
+                "enum": [
+                  "linear_gain_v1",
+                  "luminance_detail_gain_v1",
+                  "luminance_detail_attenuation_v1"
+                ]
+              },
+              "strength": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_coverage_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "support_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "allow_supplied_confidence": {
+          "type": "boolean"
+        },
+        "trusted_calibration_sha256": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "color_space": {
+          "const": "linear_srgb"
+        },
+        "conflict_rule": {
+          "const": "protect_all_positive_overlaps"
+        },
+        "max_abs_delta": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25
+        },
+        "tile_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "halo": {
+          "const": 1
+        },
+        "max_working_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "protected_master_samples": {
+          "const": "outside_unit_rgb_or_zero_alpha"
+        }
+      }
+    }
+  }
+}

@@ -20,7 +20,8 @@ import numpy as np
 from transformation_portal.core.cas_dag_executor import AuthoritativeStageIdentity, CASDAGConfig, CASDAGExecutor
 from transformation_portal.core.depth_artifact import DepthArtifact
 from transformation_portal.core.execution_identity_v4 import MaterializedExecutionIdentityV4
-from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2, digest_payload
+from transformation_portal.core.execution_plan_v2 import digest_payload
+from transformation_portal.core.execution_plan_v3 import parse_photography_plan
 from transformation_portal.core.image_artifact import ImageProxy, artifact_content_hash
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.stage_graph.graph import StageGraph
@@ -111,7 +112,7 @@ def run(
     if type(prepared) is not PreparedLuxExecutionV4:
         raise TypeError("run requires PreparedLuxExecutionV4; V3 plans cannot be downgraded")
     validate_prepared_bindings(prepared)
-    plan = ExecutionPlanV2(prepared.canonical_plan_bytes)
+    plan = parse_photography_plan(prepared.canonical_plan_bytes)
     payload = plan.to_payload()
     if "publication" in payload or publisher is not None:
         from .publication import validate_publication_plan
@@ -147,8 +148,29 @@ def run(
             if receipt != expected or records != planned:
                 raise RuntimeError("Companion manifest semantics differ from the prepared plan")
 
+    def rebind_materials_manifest(*, check_semantics: bool = False) -> None:
+        if prepared.materials_root is None:
+            return
+        from .materials import freeze_materials
+
+        expected = payload["materials_manifest"]
+        _, observed = snapshot(
+            prepared.materials_root,
+            prepared.materials_root / expected["path"],
+            maximum_bytes=min(resources["max_input_bytes"], 1024 * 1024),
+            retain_bytes=False,
+        )
+        if observed != expected:
+            raise RuntimeError("Materials manifest changed after preparation")
+        if check_semantics:
+            records, _, receipt = freeze_materials(prepared.materials_root / expected["path"], payload["inputs"], resources)
+            planned = {item["path"]: item["materials_v4"] for item in payload["inputs"] if "materials_v4" in item}
+            if receipt != expected or records != planned:
+                raise RuntimeError("Materials manifest semantics differ from the prepared plan")
+
     # Rebind every input before model initialization or creating any output.
     rebind_companion_manifest(check_semantics=True)
+    rebind_materials_manifest(check_semantics=True)
     for item in payload["inputs"]:
         _, record = snapshot(
             prepared.input_root,
@@ -226,6 +248,13 @@ def run(
                         raise RuntimeError("Input changed during execution")
                     current_id = item["id"]
                     rebind_companion_manifest()
+                    rebind_materials_manifest()
+                    material_evidence = None
+                    if "materials_v4" in item:
+                        from .materials import load_bound_evidence
+
+                        assert prepared.materials_root is not None
+                        material_evidence = load_bound_evidence(prepared.materials_root, item["materials_v4"], resources)
                     companion = item.get("companions")
                     masks: dict[str, np.ndarray] = {}
                     confidences: dict[str, float] = {}
@@ -258,6 +287,8 @@ def run(
                                 raise ValueError("Calibration does not match orientation-normalized master geometry")
                         if any(mask.shape != master.shape for mask in masks.values()):
                             raise ValueError("Material masks do not match orientation-normalized master geometry")
+                        if material_evidence is not None and material_evidence.shape != master.shape:
+                            raise ValueError("Materials V4 evidence does not match canonical master geometry")
                         return {
                             "preprocess.master": master,
                             "preprocess.proxy": create_proxy(master, configuration["target_size"]),
@@ -293,7 +324,26 @@ def run(
                             valid_mask=aligned_valid,
                         )
                         outputs: dict[str, Any] = {"enhance.master": master}
-                        if "materials" in payload["nodes"][2]["inputs"]:
+                        if "materials_v4" in configuration:
+                            from transformation_portal.materials_v4.contracts import MaterialEvidence
+                            from transformation_portal.materials_v4.engine import ResponsePolicy, apply_response, plan_response
+
+                            evidence = material_evidence
+                            if evidence is None:
+                                evidence = MaterialEvidence(
+                                    item["sha256"], master.shape, (), status="unavailable", reason="no_evidence_for_source"
+                                )
+                            response_plan = plan_response(
+                                master, evidence, ResponsePolicy.from_payload(configuration["materials_v4"])
+                            )
+                            materials_baseline = master
+                            master, materials_report = apply_response(master, evidence, response_plan)
+                            outputs = {
+                                "enhance.master": master,
+                                "enhance.materials": materials_report,
+                                "enhance.materials_baseline": materials_baseline,
+                            }
+                        elif "materials" in payload["nodes"][2]["inputs"]:
                             master, materials_report = apply_materials(master, masks, confidences)
                             outputs = {"enhance.master": master, "enhance.materials": materials_report}
                         return outputs
@@ -316,6 +366,8 @@ def run(
                             "relative-depth.npy": aligned,
                             "aligned-depth-valid.npy": aligned_valid,
                         }
+                        if "enhance.materials_baseline" in context.artifacts:
+                            arrays["materials-baseline.npy"] = context.artifacts["enhance.materials_baseline"].pixels
                         if artifact.metric_map_m is not None:
                             arrays["metric-depth-m.npy"] = artifact.metric_map_m
                             arrays["aligned-metric-depth-m.npy"], _ = restore_depth_with_validity(
@@ -375,6 +427,8 @@ def run(
                             ),
                             "preview_maps": preview_report,
                         }
+                        if "enhance.materials_baseline" in context.artifacts:
+                            descriptor["materials_baseline"] = context.artifacts["enhance.materials_baseline"].to_payload()
                         write_evidence(root, f"{current_id}/photograph.json", canonicalize_json(descriptor))
                         observe(destination / "photograph.json", "descriptor", current_id)
                         return {
@@ -398,6 +452,8 @@ def run(
                                 digest = item["sha256"]
                             elif binding in {"$calibration", "$materials"}:
                                 digest = digest_payload((companion or {}).get(binding[1:]))
+                            elif binding == "$materials_v4":
+                                digest = digest_payload(item.get("materials_v4"))
                             elif binding == "enhance.materials":
                                 digest = digest_payload(context.artifacts[binding])
                             elif binding == "depth.depth":

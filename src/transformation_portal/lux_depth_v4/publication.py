@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2
+from transformation_portal.core.execution_plan_v3 import parse_photography_plan
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v4.evidence import MAX_EVIDENCE_BYTES, verify_execution_evidence_v2
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
@@ -38,6 +38,8 @@ def publication_paths(payload: Mapping[str, Any]) -> tuple[str, ...]:
         ]
         if "calibration" in item.get("companions", {}):
             names.extend(("metric-depth-m.npy", "aligned-metric-depth-m.npy"))
+        if "materials_v4" in payload["configuration"]:
+            names.append("materials-baseline.npy")
         if payload["configuration"]["preview_maps"]:
             names.extend(("preview-normal.npy", "preview-roughness.npy", "preview-ao.npy"))
         paths.extend(f"{item['id']}/{name}" for name in names)
@@ -120,7 +122,7 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
     ):
         raise ValueError("V4 result summary differs from verified completion")
     plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
-    plan = ExecutionPlanV2(plan_bytes)
+    plan = parse_photography_plan(plan_bytes)
     if plan.plan_fingerprint_sha256 != result.plan_fingerprint_sha256:
         raise ValueError("Managed publication plan changed after completion verification")
     payload = plan.to_payload()
@@ -139,7 +141,7 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
         artifacts={"schema": "tp.lux.delivery.v2", "paths": list(inventory), "execution_evidence": "execution-evidence.json"},
         run_summary={
             "pipeline": "lux_depth_v4",
-            "plan_schema": "tp.execution.plan.v2",
+            "plan_schema": plan.schema,
             "plan_fingerprint_sha256": result.plan_fingerprint_sha256,
             "input_count": result.input_count,
             "production_acceptance": "pending",

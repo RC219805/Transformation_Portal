@@ -26,6 +26,7 @@ import importlib.metadata
 import io
 import json
 import logging
+import math
 import os
 import secrets
 import stat
@@ -47,7 +48,7 @@ import numpy as np
 
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as load_model_lock_manifest_payload
 from transformation_portal.core.execution_identity_v3 import MaterializedExecutionIdentityV3
-from transformation_portal.core.execution_plan import CanonicalExecutionPlan, InputSafetyLimits
+from transformation_portal.core.execution_plan import MAX_DECODED_PIXELS_PER_INPUT, CanonicalExecutionPlan, InputSafetyLimits
 from transformation_portal.core.security.model_lock import is_pinned_revision
 
 from ..core.ml_dependency_health import (
@@ -5534,6 +5535,92 @@ class EnhanceOrchestrator:
         )
         return None
 
+    def _load_persisted_material_masks_for_v2(self, materials_v3_result: dict) -> Dict[str, np.ndarray]:
+        """Read bounded mask observations for rechecking a restored V3 decision.
+
+        This does not authorize the artifact for V2. The caller must project
+        current policy and executed decisions after loading, including when a
+        cached Materials result carries only its persisted segmentation path.
+        """
+        artifact = self._persisted_material_mask_artifact_path(materials_v3_result)
+        if artifact is None:
+            return {}
+        limit = 100 * 1024 * 1024
+        prepared = getattr(self, "_prepared_execution", None)
+        pixel_limit = (
+            prepared.plan.input_limits.max_decoded_pixels_per_input if prepared is not None else MAX_DECODED_PIXELS_PER_INPUT
+        )
+        maximum_masks = 32
+        maximum_decoded_bytes = maximum_masks * (pixel_limit * 8 + 4096)
+        metadata = materials_v3_result.get("materials_v3_metadata", {})
+        segmentation_metadata = metadata.get("segmentation_metadata", {}) if isinstance(metadata, dict) else {}
+        expected_shape = segmentation_metadata.get("mask_artifact_shape") if isinstance(segmentation_metadata, dict) else None
+        if expected_shape is not None:
+            if (
+                not isinstance(expected_shape, (list, tuple))
+                or len(expected_shape) != 2
+                or any(type(size) is not int or size <= 0 for size in expected_shape)
+                or math.prod(expected_shape) > pixel_limit
+            ):
+                return {}
+            expected_shape = tuple(expected_shape)
+        try:
+            if artifact.stat().st_size > limit:
+                return {}
+            masks: Dict[str, np.ndarray] = {}
+            with zipfile.ZipFile(artifact) as archive:
+                entries = archive.infolist()
+                # The established 100 MiB bound applies to the compressed file.
+                # Bound decoded arrays by the same image admission contract as
+                # fresh execution; full-resolution float masks can exceed 100 MiB.
+                if not 1 <= len(entries) <= maximum_masks or sum(entry.file_size for entry in entries) > maximum_decoded_bytes:
+                    return {}
+                geometry = None
+                for entry in entries:
+                    if not entry.filename.endswith(".npy") or entry.filename[:-4] in masks:
+                        return {}
+                    with archive.open(entry) as stream:
+                        version = np.lib.format.read_magic(stream)
+                        if version == (1, 0):
+                            length_bytes = 2
+                            header_reader = np.lib.format.read_array_header_1_0
+                        elif version == (2, 0):
+                            length_bytes = 4
+                            header_reader = np.lib.format.read_array_header_2_0
+                        else:
+                            return {}
+                        # NumPy checks max_header_size after reading the declared
+                        # length. Bound that read before decompressing any header.
+                        encoded_length = stream.read(length_bytes)
+                        header_size = int.from_bytes(encoded_length, "little")
+                        if len(encoded_length) != length_bytes or not 0 < header_size <= 4096:
+                            return {}
+                        header = stream.read(header_size)
+                        if len(header) != header_size:
+                            return {}
+                        shape, fortran, dtype = header_reader(io.BytesIO(encoded_length + header), max_header_size=4096)
+                        if (
+                            len(shape) != 2
+                            or any(type(size) is not int or size <= 0 for size in shape)
+                            or math.prod(shape) > pixel_limit
+                            or (expected_shape is not None and shape != expected_shape)
+                            or (geometry is not None and shape != geometry)
+                            or fortran
+                            or dtype not in (np.dtype("float32"), np.dtype("float64"))
+                            or entry.file_size - stream.tell() != math.prod(shape) * dtype.itemsize
+                        ):
+                            return {}
+                        geometry = shape
+                        expected_bytes = math.prod(shape) * dtype.itemsize
+                        payload = stream.read(expected_bytes + 1)
+                        if len(payload) != expected_bytes:
+                            return {}
+                    masks[entry.filename[:-4]] = np.frombuffer(payload, dtype=dtype).reshape(shape)
+            return masks
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
+            logger.warning("Cannot restore material masks for V2 authorization: %s", exc)
+            return {}
+
     def _run_v2_stage(
         self,
         image_input: ImageInput,
@@ -5598,35 +5685,21 @@ class EnhanceOrchestrator:
                 v2_report_path = preserved_report_path
             return preserved_v2_result, 0.0, v2_report_path
 
-        # Use persisted segmentation artifact
-        # when available; otherwise serialize
-        # temp masks for V2 subprocess.
-        masks_path: Optional[Path] = self._persisted_material_mask_artifact_path(
-            materials_v3_result,
-        )
+        # Segmentation artifacts describe observations, not edit permission.
+        # Always make a separate authorization-filtered V2 projection; never
+        # pass the persisted all-class artifact directly to the subprocess.
+        from .materials_v3 import authorized_v2_material_masks
+
+        masks_path: Optional[Path] = None
         cleanup_temp_masks = False
-        if masks_path:
-            logger.info(
-                "Reusing persisted material" + " masks for V2: %s",
-                masks_path.name,
-            )
-        elif materials_v3_result and materials_v3_result.get("material_masks"):
-            temp_dir = self.output_root / "temp"
-            masks_path = self._serialize_material_masks(
-                materials_v3_result["material_masks"],
-                output_key,
-                temp_dir,
-            )
-            if masks_path:
-                cleanup_temp_masks = True
-                logger.info(
-                    "Material masks serialized" + " for V2: %s",
-                    masks_path.name,
-                )
-            else:
-                logger.warning(
-                    "Failed to serialize" " material masks, V2" " will run without" " them",
-                )
+        if isinstance(materials_v3_result, dict):
+            masks = materials_v3_result.get("material_masks")
+            if not isinstance(masks, dict):
+                masks = self._load_persisted_material_masks_for_v2(materials_v3_result)
+            authorized_masks = authorized_v2_material_masks(masks, materials_v3_result, self.config)
+            if authorized_masks:
+                masks_path = self._serialize_material_masks(authorized_masks, output_key, self.output_root / "temp")
+                cleanup_temp_masks = masks_path is not None
 
         # V2 runner: Execute subprocess with optional masks
         # depth_dir=None triggers independent depth generation in V2

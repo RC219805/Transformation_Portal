@@ -9,7 +9,7 @@
     "schema": {"const": "tp.lux.execution.evidence.v2"},
     "complete": {"const": true},
     "synthetic": {"const": false},
-    "plan_schema": {"const": "tp.execution.plan.v2"},
+    "plan_schema": {"enum": ["tp.execution.plan.v2", "tp.execution.plan.v3"]},
     "plan_fingerprint_sha256": {"$ref": "#/$defs/digest"},
     "parent_runtime_sha256": {"$ref": "#/$defs/digest"},
     "worker_runtime": {"type": "object"},

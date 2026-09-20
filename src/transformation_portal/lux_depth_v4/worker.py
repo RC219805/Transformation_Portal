@@ -16,8 +16,8 @@ from typing import Any
 import numpy as np
 
 from transformation_portal.core.execution_plan import decode_bounded_json_object
-from transformation_portal.core.execution_plan_v2 import ExecutionPlanV2
-from transformation_portal.ingest.canonical_json import dumps_json
+from transformation_portal.core.execution_plan_v3 import PhotographyPlan, parse_photography_plan
+from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v4.lifecycle import authorize_model
 
 
@@ -36,7 +36,7 @@ def device_probe(requested: str) -> str:
 class NativeDepthWorker:
     """Worker lifetime holds materialized authority and one lazily loaded model."""
 
-    def __init__(self, plan: ExecutionPlanV2) -> None:
+    def __init__(self, plan: PhotographyPlan) -> None:
         from transformation_portal.depth.backends.da3_runtime_identity import (
             prepare_da3_runtime_identity_with_verification_token,
             runtime_verification_token_sha256,
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
             with contextlib.redirect_stdout(sys.stderr):
                 command = request.get("command")
                 if command == "prepare" and worker is None and set(request) == {"command", "plan"}:
-                    worker = NativeDepthWorker(ExecutionPlanV2.from_payload(request["plan"]))
+                    worker = NativeDepthWorker(parse_photography_plan(canonicalize_json(request["plan"])))
                     result = {"runtime_evidence": worker.evidence.to_mapping()}
                 elif command == "verify" and worker is not None and set(request) == {"command"}:
                     worker.verify()
