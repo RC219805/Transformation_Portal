@@ -96,7 +96,7 @@ def test_pipeline_rejects_multiple_depth_maps(adapter):
 @pytest.mark.parametrize("image_shape", [(40, 60), (1, 1024), (1024, 1), (1, 1)])
 def test_callable_manual_fallback_receives_processed_tensors(monkeypatch, device, image_shape):
     """Manual inference must restore float predictions to the source image grid."""
-    raw = np.linspace(0.1, 2.0, 512, dtype=np.float32).reshape(1, 16, 32)
+    raw = np.linspace(0.1, 2.0, 512, dtype=np.float32).reshape((1, 16, 32))
     height, width = image_shape
     image = Image.new("RGB", (width, height))
     pixel_values = _Tensor(np.zeros((1, 3, 16, 32), dtype=np.float32))

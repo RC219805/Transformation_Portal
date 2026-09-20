@@ -350,7 +350,7 @@ def test_worker_sampling_is_content_seeded_after_lazy_model_initialization(tmp_p
         destination = tmp_path / f"{name}.npz"
         native.infer(tmp_path / source, destination)
         with np.load(destination, allow_pickle=False) as archive:
-            return archive["native_depth"].copy()
+            return np.array(archive["native_depth"], copy=True)
 
     # infer() runs in an isolated process in production; preserve the unit test
     # process's Python, NumPy, and CPU Torch RNG state around this real seam.
