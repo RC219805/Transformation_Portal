@@ -57,11 +57,13 @@ import logging
 import os
 import platform as _platform
 import shutil
+import stat
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, BinaryIO, Iterator, Optional
 
 from transformation_portal.core.security.path_safety import safe_cas_path, validate_sha256
 
@@ -303,6 +305,56 @@ class ArtifactStore:
             path=path,
             size_bytes=path.stat().st_size,
         )
+
+    @contextmanager
+    def open_verified(self, sha256: str, *, max_bytes: int = 1024**3) -> Iterator[BinaryIO]:
+        """Yield a bounded, digest-verified snapshot, never an unchecked path.
+
+        Object and prefix symlinks are rejected. Deserialization consumes the
+        snapshot whose bytes were hashed, so replacing or modifying the CAS
+        object after verification cannot change the returned stream.
+        """
+        sha256 = validate_sha256(sha256)
+        if type(max_bytes) is not int or max_bytes <= 0:
+            raise ValueError("max_bytes must be a positive integer")
+        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+            raise CASError("Verified CAS reads require no-follow directory descriptors")
+        descriptors = []
+        try:
+            directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            root_fd = os.open(self.objects_dir, directory_flags)
+            descriptors.append(root_fd)
+            prefix_fd = os.open(sha256[:2], directory_flags, dir_fd=root_fd)
+            descriptors.append(prefix_fd)
+            object_fd = os.open(sha256, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=prefix_fd)
+            descriptors.append(object_fd)
+            before = os.fstat(object_fd)
+            if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
+                raise CASError("CAS object is not a bounded regular file")
+            with tempfile.SpooledTemporaryFile(max_size=8 * 1024**2, mode="w+b") as snapshot:
+                digest = hashlib.sha256()
+                total = 0
+                while chunk := os.read(object_fd, 1024**2):
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise CASError("CAS object exceeds read limit")
+                    digest.update(chunk)
+                    snapshot.write(chunk)
+                after = os.fstat(object_fd)
+                if (
+                    (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                    != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                    or total != before.st_size
+                    or digest.hexdigest() != sha256
+                ):
+                    raise CASError("CAS object integrity verification failed")
+                snapshot.seek(0)
+                yield snapshot
+        except OSError as exc:
+            raise CASError("CAS object cannot be opened safely") from exc
+        finally:
+            for descriptor in reversed(descriptors):
+                os.close(descriptor)
 
     def _atomic_write_file(
         self,

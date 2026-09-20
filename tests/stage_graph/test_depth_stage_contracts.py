@@ -53,39 +53,22 @@ def test_cache_key_is_deterministic_and_model_configuration_sensitive() -> None:
     assert DepthEstimationStage().get_cache_key(StageContext(artifacts={})) == "no_image"
 
 
-def test_model_load_import_failure_uses_placeholder_without_transformers(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_model_load_import_failure_fails_closed_without_transformers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "transformers", None)
-    image = _image_uint8()
     stage = DepthEstimationStage()
-
-    result = stage.compute(StageContext(artifacts={"image": image}, device="cpu"))
-
-    assert result.status == StageStatus.COMPLETED
-    assert stage._model == "placeholder"
-    depth = result.artifacts["depth_map"]
-    assert depth.shape == image.shape[:2]
-    assert depth.dtype == np.float32
-    assert depth.min() == pytest.approx(0.0)
-    assert depth.max() == pytest.approx(1.0)
-    assert result.artifacts["depth_metadata"] == {
-        "model_size": "small",
-        "device": "cpu",
-        "shape": image.shape[:2],
-    }
+    result = stage.compute(StageContext(artifacts={"image": _image_uint8()}, device="cpu"))
+    assert result.status == StageStatus.FAILED
+    assert "unavailable" in result.error
+    assert result.artifacts == {}
+    assert stage._model is None
 
 
-def test_placeholder_output_is_float32_normalized_to_image_shape() -> None:
-    image = _image_uint8()
+def test_legacy_placeholder_cannot_produce_successful_depth() -> None:
     stage = DepthEstimationStage()
     stage._model = "placeholder"
-
-    depth = stage._estimate_depth(image, device="cpu")
-
-    assert depth.shape == image.shape[:2]
-    assert depth.dtype == np.float32
-    assert np.all(depth >= 0.0)
-    assert np.all(depth <= 1.0)
-    assert np.allclose(depth[0], np.linspace(0.0, 1.0, image.shape[1], dtype=np.float32))
+    result = stage.compute(StageContext(artifacts={"image": _image_uint8()}, device="cpu"))
+    assert result.status == StageStatus.FAILED
+    assert result.artifacts == {}
 
 
 def test_fake_transformers_pipeline_returns_normalized_depth(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,20 +113,19 @@ def test_fake_transformers_pipeline_returns_normalized_depth(monkeypatch: pytest
     assert result.metadata["model_size"] == "small"
 
 
-def test_inference_exception_returns_constant_fallback_depth() -> None:
+def test_inference_exception_fails_without_synthetic_artifacts() -> None:
     class FailingPipeline:
         def __call__(self, image):
             raise RuntimeError("backend unavailable")
 
-    image = _image_uint8()
     stage = DepthEstimationStage()
     stage._model = FailingPipeline()
-
-    depth = stage._estimate_depth(image, device="cpu")
-
-    assert depth.shape == image.shape[:2]
-    assert depth.dtype == np.float32
-    assert np.allclose(depth, 0.5)
+    result = stage.compute(StageContext(artifacts={"image": _image_uint8()}, device="cpu"))
+    assert result.status == StageStatus.FAILED
+    assert "backend unavailable" in result.error
+    assert result.artifacts == {}
+    with pytest.raises(RuntimeError, match="Depth inference failed"):
+        stage._estimate_depth(_image_uint8(), device="cpu")
 
 
 @pytest.mark.parametrize("image", [_image_float(), _image_uint8()])

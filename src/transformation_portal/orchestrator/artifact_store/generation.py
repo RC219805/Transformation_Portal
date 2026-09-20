@@ -126,9 +126,32 @@ class GenerationPublisher:
         artifacts: dict[str, Any],
         run_summary: dict[str, Any],
         error: Optional[dict[str, Any]] = None,
+        expected_file_integrity: Optional[Mapping[str, Mapping[str, Any]]] = None,
     ) -> dict[str, Any]:
         if len(files) > MAX_GENERATION_FILES:
             raise ArtifactStoreError("generation artifact count exceeds limit")
+        expected = None
+        if expected_file_integrity is not None:
+            if not isinstance(expected_file_integrity, Mapping):
+                raise ArtifactStoreError("expected generation integrity must be a mapping")
+            if set(expected_file_integrity) != set(files):
+                raise ArtifactStoreError("expected generation inventory does not match the supplied files")
+            expected = {}
+            for relative, record in expected_file_integrity.items():
+                if _normalize_relative_path(relative) != relative:
+                    raise ArtifactStoreError("expected generation path must be canonical")
+                if not isinstance(record, Mapping) or set(record) != {"size_bytes", "sha256"}:
+                    raise ArtifactStoreError("invalid expected generation integrity fields")
+                size, digest = record["size_bytes"], record["sha256"]
+                if (
+                    type(size) is not int
+                    or not 0 <= size <= MAX_GENERATION_FILE_BYTES
+                    or not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(character not in "0123456789abcdef" for character in digest)
+                ):
+                    raise ArtifactStoreError("invalid expected generation size or digest")
+                expected[relative] = {"size_bytes": size, "sha256": digest}
         generation_id = uuid.uuid4().hex
         items = []
         total = 0
@@ -143,6 +166,8 @@ class GenerationPublisher:
                     raise ArtifactStoreError("generation source escapes the admitted attempt output root")
                 snapshot = Path(temporary) / str(index)
                 size, digest = await asyncio.to_thread(_snapshot, source, snapshot, MAX_GENERATION_BYTES - total)
+                if expected is not None and expected[relative] != {"size_bytes": size, "sha256": digest}:
+                    raise ArtifactStoreError("generation source changed after execution evidence verification")
                 total += size
                 path = f"generations/{generation_id}/{relative}"
                 content_type = mimetypes.guess_type(relative)[0] or "application/octet-stream"

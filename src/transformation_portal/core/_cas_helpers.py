@@ -8,6 +8,7 @@ execution wrapper and DAG executor. Public compatibility aliases remain in
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import platform
 import re
@@ -17,6 +18,7 @@ from typing import Any
 
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.ingest.canonical_json import dump_json
+from transformation_portal.storage.cas_store import CASError
 
 
 class CASObjectMissingError(Exception):
@@ -79,6 +81,37 @@ def compute_numpy_array_id(arr: Any) -> str:
     return hashlib.sha256(jcs_dumpb(array_manifest)).hexdigest()
 
 
+def canonical_input_value(value: Any) -> Any:
+    """Encode supported stage inputs with unambiguous type and byte identity.
+
+    Paths and arbitrary objects require a caller-owned materialization step;
+    their string representation or a duck-typed ``sha256`` is not authority.
+    """
+    import numpy as np
+
+    if isinstance(value, np.ndarray):
+        if value.dtype.hasobject:
+            raise TypeError("Object arrays cannot authorize cached execution")
+        return ["ndarray", compute_numpy_array_id(value)]
+    if value is None:
+        return ["null"]
+    if type(value) in (bool, int, str):
+        return [type(value).__name__, value]
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ValueError("Non-finite stage inputs are not cacheable")
+        return ["float", value.hex()]
+    if type(value) is bytes:
+        return ["bytes", hashlib.sha256(value).hexdigest()]
+    if isinstance(value, dict):
+        if any(type(key) is not str for key in value):
+            raise TypeError("Stage input mappings require string keys")
+        return ["dict", {key: canonical_input_value(item) for key, item in value.items()}]
+    if isinstance(value, (list, tuple)):
+        return [type(value).__name__, [canonical_input_value(item) for item in value]]
+    raise TypeError(f"Unsupported cache input type: {type(value).__name__}; materialize it explicitly")
+
+
 def sanitize_key_for_filename(key: str) -> str:
     """Sanitize an artifact key for safe filename usage."""
     result = re.sub(r'[/\\:*?"<>|]', "_", key)
@@ -103,9 +136,8 @@ def make_serializable(
         if isinstance(value, np.ndarray):
             array_path = base_path / f"{safe_cas_id}_{safe_key}.npy"
             array_path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(array_path, value)
-
             try:
+                np.save(array_path, value, allow_pickle=False)
                 cas_obj = artifact_store.add_file(array_path)
                 result[key] = {
                     "__numpy__": True,
@@ -149,22 +181,66 @@ def serialize_list_recursive(
     return result
 
 
+class CASArtifactInvalidError(CASObjectMissingError):
+    """A cache reference cannot safely reconstruct verified output bytes."""
+
+    def __init__(self, reason: str, sha256: str = ""):
+        self.sha256 = sha256
+        Exception.__init__(self, reason)
+
+
+def _load_numpy(value: dict[str, Any], artifact_store: Any) -> Any:
+    try:
+        return _load_verified_numpy(value, artifact_store)
+    except (CASError, ValueError, TypeError, KeyError, OSError, EOFError, OverflowError) as exc:
+        digest = value.get("sha256", "")
+        raise CASArtifactInvalidError(
+            "Cached array failed integrity or descriptor validation", digest if isinstance(digest, str) else ""
+        ) from exc
+
+
+def _load_verified_numpy(value: dict[str, Any], artifact_store: Any) -> Any:
+    """Validate a closed array descriptor and its exact verified NPY bytes."""
+    import numpy as np
+
+    if set(value) != {"__numpy__", "sha256", "shape", "dtype"} or value["__numpy__"] is not True:
+        raise ValueError("Invalid CAS array descriptor")
+    shape = value["shape"]
+    if not isinstance(shape, list) or len(shape) > 32 or any(type(n) is not int or n < 0 for n in shape):
+        raise ValueError("Invalid CAS array shape")
+    if not isinstance(value["dtype"], str) or len(value["dtype"]) > 512:
+        raise ValueError("Invalid CAS array dtype")
+    if not isinstance(value["sha256"], str) or re.fullmatch(r"[0-9a-f]{64}", value["sha256"]) is None:
+        raise ValueError("Invalid CAS array digest")
+    dtype = np.dtype(value["dtype"])
+    if dtype.hasobject or math.prod(shape) * dtype.itemsize > 1024**3:
+        raise ValueError("CAS array exceeds the supported allocation contract")
+    try:
+        with artifact_store.open_verified(value["sha256"]) as snapshot:
+            version = np.lib.format.read_magic(snapshot)
+            if version == (1, 0):
+                stored_shape, _fortran, stored_dtype = np.lib.format.read_array_header_1_0(snapshot)
+            elif version == (2, 0):
+                stored_shape, _fortran, stored_dtype = np.lib.format.read_array_header_2_0(snapshot)
+            else:
+                raise ValueError("Unsupported cached NPY format")
+            if list(stored_shape) != shape or stored_dtype != dtype or stored_dtype.hasobject:
+                raise ValueError("CAS array header does not match its manifest")
+            snapshot.seek(0)
+            return np.load(snapshot, allow_pickle=False)
+    except FileNotFoundError as exc:
+        raise CASObjectMissingError(value["sha256"]) from exc
+
+
 def load_serializable(
     data: dict[str, Any],
     artifact_store: Any,
 ) -> dict[str, Any]:
     """Reconstruct outputs from serialized format recursively."""
-    import numpy as np
-
     result = {}
     for key, value in data.items():
-        if isinstance(value, dict) and value.get("__numpy__"):
-            sha256 = value["sha256"]
-            cas_obj = artifact_store.get_object(sha256)
-            if cas_obj:
-                result[key] = np.load(cas_obj.path)
-            else:
-                raise CASObjectMissingError(sha256)
+        if isinstance(value, dict) and "__numpy__" in value:
+            result[key] = _load_numpy(value, artifact_store)
         elif isinstance(value, dict):
             result[key] = load_serializable(value, artifact_store)
         elif isinstance(value, list):
@@ -180,17 +256,10 @@ def load_list_recursive(
     artifact_store: Any,
 ) -> list:
     """Reconstruct a list, handling nested arrays and dictionaries."""
-    import numpy as np
-
     result = []
     for item in items:
-        if isinstance(item, dict) and item.get("__numpy__"):
-            sha256 = item["sha256"]
-            cas_obj = artifact_store.get_object(sha256)
-            if cas_obj:
-                result.append(np.load(cas_obj.path))
-            else:
-                raise CASObjectMissingError(sha256)
+        if isinstance(item, dict) and "__numpy__" in item:
+            result.append(_load_numpy(item, artifact_store))
         elif isinstance(item, dict):
             result.append(load_serializable(item, artifact_store))
         elif isinstance(item, list):

@@ -38,6 +38,7 @@ operator guidance unless they are linked here as canonical documents.
 | Archive machine-mode API | [Archive Machine Mode Contract](../api/ARCHIVE_MACHINE_MODE_CONTRACT.md) | Maintained |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](../deployment/managed_paid_pilot_staging_runbook.md) | Maintained; provider-neutral procedure for rerunning the Phase 5.A gate against managed Postgres, Redis, and S3-compatible storage |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
+| LuxDepthV4 candidate | [V4 photography and evaluation](../reference/LUX_DEPTH_V4.md) | Opt-in candidate; production acceptance and shared-executor cutover remain gated |
 | CLI entrypoints | [CLI Reference](../cli/CLI_REFERENCE.md) | Maintained |
 | PBR CLI testing | [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md) | Maintained |
 | Presence Security | [Presence Security](../guides/PRESENCE_SECURITY.md) | Maintained |
