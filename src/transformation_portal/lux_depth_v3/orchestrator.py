@@ -411,6 +411,10 @@ class _PreparedInputDecodeBudget:
 
 _MAX_PREPARED_REUSE_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_PREPARED_REUSE_DEPTH_BYTES = 256 * 1024 * 1024
+# Restored material masks share the adjacent prepared-reuse decoded byte cap.
+# This bounds retained payloads, independently of image geometry or compression.
+_MAX_RESTORED_MATERIAL_MASK_BYTES = _MAX_PREPARED_REUSE_DEPTH_BYTES
+_MATERIAL_MASK_RESTORE_CHUNK_BYTES = 64 * 1024
 _INPUT_HASH_READ_CHUNK_BYTES = 1024 * 1024
 
 _PREPARED_CARRIER_RESULT_PATH_KEYS = (
@@ -5551,7 +5555,6 @@ class EnhanceOrchestrator:
             prepared.plan.input_limits.max_decoded_pixels_per_input if prepared is not None else MAX_DECODED_PIXELS_PER_INPUT
         )
         maximum_masks = 32
-        maximum_decoded_bytes = maximum_masks * (pixel_limit * 8 + 4096)
         metadata = materials_v3_result.get("materials_v3_metadata", {})
         segmentation_metadata = metadata.get("segmentation_metadata", {}) if isinstance(metadata, dict) else {}
         expected_shape = segmentation_metadata.get("mask_artifact_shape") if isinstance(segmentation_metadata, dict) else None
@@ -5570,12 +5573,18 @@ class EnhanceOrchestrator:
             masks: Dict[str, np.ndarray] = {}
             with zipfile.ZipFile(artifact) as archive:
                 entries = archive.infolist()
-                # The established 100 MiB bound applies to the compressed file.
-                # Bound decoded arrays by the same image admission contract as
-                # fresh execution; full-resolution float masks can exceed 100 MiB.
-                if not 1 <= len(entries) <= maximum_masks or sum(entry.file_size for entry in entries) > maximum_decoded_bytes:
+                # Check the aggregate uncompressed size before opening any member.
+                # Include NPY headers in this conservative preflight. Stored and
+                # deflated members honor bounded reads; other ZIP codecs may
+                # decompress an entire block despite the requested read size.
+                if (
+                    not 1 <= len(entries) <= maximum_masks
+                    or sum(entry.file_size for entry in entries) > _MAX_RESTORED_MATERIAL_MASK_BYTES
+                    or any(entry.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED) for entry in entries)
+                ):
                     return {}
                 geometry = None
+                retained_bytes = 0
                 for entry in entries:
                     if not entry.filename.endswith(".npy") or entry.filename[:-4] in masks:
                         return {}
@@ -5612,10 +5621,26 @@ class EnhanceOrchestrator:
                             return {}
                         geometry = shape
                         expected_bytes = math.prod(shape) * dtype.itemsize
-                        payload = stream.read(expected_bytes + 1)
-                        if len(payload) != expected_bytes:
+                        if retained_bytes + expected_bytes > _MAX_RESTORED_MATERIAL_MASK_BYTES:
                             return {}
-                    masks[entry.filename[:-4]] = np.frombuffer(payload, dtype=dtype).reshape(shape)
+                        # Keep one admitted payload allocation. A whole-member
+                        # read can temporarily duplicate it while ZipExtFile
+                        # concatenates decompressed chunks. NumPy retains a view
+                        # of this bytearray without an additional payload copy.
+                        payload = bytearray(expected_bytes)
+                        payload_view = memoryview(payload)
+                        for offset in range(0, expected_bytes, _MATERIAL_MASK_RESTORE_CHUNK_BYTES):
+                            size = min(_MATERIAL_MASK_RESTORE_CHUNK_BYTES, expected_bytes - offset)
+                            chunk = stream.read(size)
+                            if len(chunk) != size:
+                                return {}
+                            payload_view[offset : offset + size] = chunk
+                        if stream.read(1):
+                            return {}
+                    mask = np.frombuffer(payload, dtype=dtype).reshape(shape)
+                    mask.setflags(write=False)
+                    masks[entry.filename[:-4]] = mask
+                    retained_bytes += expected_bytes
             return masks
         except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
             logger.warning("Cannot restore material masks for V2 authorization: %s", exc)

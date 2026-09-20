@@ -64,6 +64,12 @@ The strict `tp.materials.supplied.v1` manifest contains exactly `schema`,
 Mask paths are portable relative paths under the supplied-manifest directory;
 linked, escaping, malformed, changed, or mismatched inputs fail closed.
 
+Default evidence budgets admit up to 100 million pixels, 512 million decoded
+mask bytes in aggregate, and 512 MiB for the encoded bundle. Numeric publication
+uses the validated mask geometry, bounded NPY header, and remaining bundle
+budget; the manifest has a separate 1 MiB limit. These are evidence admission
+limits, not whole-process memory guarantees.
+
 This command derives hashes and geometry from the actual files. Set `0.95` to
 the confidence you explicitly intend to supply; it is not estimated by this
 helper. Choose a new manifest path if the file already exists.
@@ -327,6 +333,13 @@ low-texture statistic no longer weights an already blended delta twice.
 Missing semantic confidence is not replaced by SAM geometric IoU. The downstream
 V2 mask handoff requires current executed material authorization and explicit
 semantic confidence, while segmentation observations remain intact.
+
+Restored V3 mask archives additionally have a 256 MiB aggregate decoded-byte
+budget, checked before any ZIP member is opened and before each payload is
+read. Stored and DEFLATE members are supported; mask payloads are read in bounded
+chunks. Over-budget or unsupported cache observations are withheld from the V2
+handoff. This limits restored-mask storage and decoder transients without
+claiming a bound on total model or process memory.
 
 The V3 segmentation cache schema becomes `materials-segmentation-cache.v2` so
 older entries with the former confidence semantics are rejected and recomputed.

@@ -231,6 +231,7 @@ def write_evidence(evidence: MaterialEvidence, path: Path | str) -> None:
         record = evidence.to_payload()
         record["content_sha256"] = evidence.content_hash()
         # Calculate bounded manifest descriptors without retaining every NPY payload.
+        bundle_bytes = 0
         with pinned_directory(root):
             for region, entry in zip(evidence.regions, record["regions"]):
                 stream = io.BytesIO()
@@ -241,13 +242,24 @@ def write_evidence(evidence: MaterialEvidence, path: Path | str) -> None:
                 if relative == manifest.name:
                     raise MaterialsError("Manifest destination collides with numeric artifact")
                 entry["mask"].update({"path": relative, "file_sha256": digest, "size_bytes": len(data)})
-                _write_bytes(root, relative, data)
+                remaining_bytes = limits.max_bundle_bytes - bundle_bytes
+                if len(data) > remaining_bytes:
+                    raise MaterialsError("Evidence encoded bundle exceeds aggregate byte budget")
+                _write_bytes(
+                    root,
+                    relative,
+                    data,
+                    maximum_bytes=min(region.mask.nbytes + limits.max_header_bytes + 12, remaining_bytes),
+                )
+                bundle_bytes += len(data)
             data = canonicalize_json(record)
             if len(data) > limits.max_manifest_bytes:
                 raise MaterialsError("Evidence manifest exceeds byte budget")
-            if len(data) + sum(entry["mask"]["size_bytes"] for entry in record["regions"]) > limits.max_bundle_bytes:
+            if len(data) + bundle_bytes > limits.max_bundle_bytes:
                 raise MaterialsError("Evidence encoded bundle exceeds aggregate byte budget")
-            _write_bytes(root, manifest.name, data)
+            _write_bytes(
+                root, manifest.name, data, maximum_bytes=min(limits.max_manifest_bytes, limits.max_bundle_bytes - bundle_bytes)
+            )
     except MaterialsError:
         raise
     except (ArtifactEvidenceError, OSError, ValueError, TypeError, OverflowError) as exc:

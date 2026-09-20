@@ -78,12 +78,12 @@ def snapshot(root_path: Path, path: Path, *, maximum_bytes: int, retain_bytes: b
     return b"".join(chunks), {"path": relative, "sha256": digest.hexdigest(), "size_bytes": size}
 
 
-def write_evidence(root_path: Path, relative: str, data: bytes) -> None:
-    """Reuse descriptor-relative, durable completion publication."""
+def write_evidence(root_path: Path, relative: str, data: bytes, *, maximum_bytes: int | None = None) -> None:
+    """Publish securely with an explicit budget or the legacy sidecar default."""
     with _pin_output_root(root_path) as root:
         if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
             raise ArtifactEvidenceError("path_escape", "Evidence destination must be a relative path")
         confined = root.confined_relative_path(Path(relative))
         if confined != relative:
             raise ArtifactEvidenceError("path_escape", "Evidence destination must be canonical")
-        _secure_atomic_write_bytes(root, confined, data)
+        _secure_atomic_write_bytes(root, confined, data, maximum_bytes=maximum_bytes)

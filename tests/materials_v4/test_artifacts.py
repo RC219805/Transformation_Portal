@@ -56,6 +56,90 @@ def test_roundtrip_portable_identity_and_readonly_pixels(tmp_path):
     assert _load(relocated / "manifest.json").content_hash() == evidence.content_hash()
 
 
+def test_material_mask_exceeding_legacy_sidecar_limit_roundtrips(tmp_path, monkeypatch):
+    from transformation_portal.lux_depth_v3 import execution_evidence
+    from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
+    from transformation_portal.lux_depth_v4.io import write_evidence as write_bytes
+
+    # Scale only the legacy sidecar cap; exercise real encoding and secure I/O.
+    monkeypatch.setattr(execution_evidence, "_MAX_EVIDENCE_BYTES", 4096)
+    evidence = MaterialEvidence(
+        "a" * 64, (32, 64), (RegionEvidence("glass", "glass", np.full((32, 64), 0.75, np.float32), 0.99),)
+    )
+    path = tmp_path / "evidence.json"
+    write_evidence(evidence, path)
+    record, _ = _mask(path)
+    assert record["regions"][0]["mask"]["size_bytes"] > 4096
+    loaded = load_evidence(path, "a" * 64, (32, 64), expected_content_hash=evidence.content_hash())
+    np.testing.assert_array_equal(loaded.regions[0].mask, evidence.regions[0].mask)
+
+    # Default callers retain the legacy limit, resolved at call time.
+    write_bytes(tmp_path, "exact.bin", b"x" * 4096)
+    assert (tmp_path / "exact.bin").read_bytes() == b"x" * 4096
+    with pytest.raises(ArtifactEvidenceError) as error:
+        write_bytes(tmp_path, "oversized.bin", b"x" * 4097)
+    assert error.value.code == "artifact_too_large"
+    assert not (tmp_path / "oversized.bin").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+@pytest.mark.parametrize("maximum", [True, False, 0, -1, 1.5, "4", [], {}, np.int64(4), 64 * 1024**3 + 1])
+def test_publication_rejects_invalid_byte_budget_before_writing(tmp_path, maximum):
+    from transformation_portal.lux_depth_v4.io import write_evidence as write_bytes
+
+    with pytest.raises(ValueError, match="Publication byte budget"):
+        write_bytes(tmp_path, "evidence.bin", b"data", maximum_bytes=maximum)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_explicit_publication_budget_accepts_boundary_and_rejects_overflow(tmp_path):
+    from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
+    from transformation_portal.lux_depth_v4.io import write_evidence as write_bytes
+
+    write_bytes(tmp_path, "evidence.bin", b"data", maximum_bytes=4)
+    with pytest.raises(ArtifactEvidenceError) as error:
+        write_bytes(tmp_path, "evidence.bin", b"extra", maximum_bytes=4)
+    assert error.value.code == "artifact_too_large"
+    assert (tmp_path / "evidence.bin").read_bytes() == b"data"
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink"])
+def test_explicit_publication_budget_preserves_link_rejection(tmp_path, kind):
+    from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
+    from transformation_portal.lux_depth_v4.io import write_evidence as write_bytes
+
+    victim = tmp_path / "victim.bin"
+    victim.write_bytes(b"keep")
+    destination = tmp_path / "evidence.bin"
+    if kind == "symlink":
+        destination.symlink_to(victim)
+    else:
+        os.link(victim, destination)
+    with pytest.raises(ArtifactEvidenceError):
+        write_bytes(tmp_path, destination.name, b"changed", maximum_bytes=8)
+    assert victim.read_bytes() == b"keep"
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+@pytest.mark.parametrize(
+    "limits, message",
+    [
+        (MaterialLimits(max_bundle_bytes=200), "encoded bundle"),
+        (MaterialLimits(max_manifest_bytes=128), "manifest exceeds"),
+    ],
+)
+def test_material_publication_keeps_distinct_bundle_and_manifest_budgets(tmp_path, monkeypatch, limits, message):
+    from transformation_portal.materials_v4 import artifacts
+
+    evidence = MaterialEvidence("a" * 64, (4, 5), (RegionEvidence("water", "water", np.ones((4, 5), np.float32), 0.9),))
+    monkeypatch.setattr(artifacts, "MaterialLimits", lambda: limits)
+    with pytest.raises(MaterialsError, match=message):
+        write_evidence(evidence, tmp_path / "evidence.json")
+    assert not (tmp_path / "evidence.json").exists()
+    if limits.max_bundle_bytes == 200:
+        assert list(tmp_path.iterdir()) == []
+
+
 def test_stale_source_geometry_and_frozen_identity_fail(tmp_path):
     _, path = _bundle(tmp_path)
     with pytest.raises(MaterialsError, match="source or geometry"):

@@ -12,6 +12,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+from transformation_portal.lux_depth_v3 import orchestrator as orchestrator_module
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.materials_v3 import MaterialsV3Engine, authorized_v2_material_masks
@@ -138,9 +139,11 @@ def _orchestrator(tmp_path, config):
     return orchestrator
 
 
-@pytest.mark.parametrize("restored", [False, True])
+@pytest.mark.parametrize("restored, restore_budget", [(False, None), (True, None), (True, 100)])
 @pytest.mark.parametrize("confidence", [0.01, 0.99])
-def test_orchestrator_projects_authorization_without_rewriting_segmentation_artifact(tmp_path, restored, confidence):
+def test_orchestrator_projects_authorization_without_rewriting_segmentation_artifact(
+    tmp_path, monkeypatch, restored, restore_budget, confidence
+):
     config = _config(enable_v2=True)
     orchestrator = _orchestrator(tmp_path, config)
     result = _process({"glass": (np.ones((64, 64), np.float32), confidence)}, config)
@@ -149,6 +152,8 @@ def test_orchestrator_projects_authorization_without_rewriting_segmentation_arti
     result["materials_v3_metadata"]["segmentation_metadata"] = {"mask_artifact_path": str(artifact)}
     if restored:
         result.pop("material_masks")
+    if restore_budget is not None:
+        monkeypatch.setattr(orchestrator_module, "_MAX_RESTORED_MATERIAL_MASK_BYTES", restore_budget)
     captured = {}
 
     def run(**kwargs):
@@ -171,7 +176,7 @@ def test_orchestrator_projects_authorization_without_rewriting_segmentation_arti
         materials_v3_result=result,
     )
     assert artifact.read_bytes() == before
-    if confidence < 0.5:
+    if confidence < 0.5 or restore_budget is not None:
         assert captured["path"] is None
     else:
         assert set(captured["masks"]) == {"glass"}
@@ -284,6 +289,124 @@ def test_restored_masks_reject_oversized_header_before_numpy_reads_it(tmp_path, 
 
     monkeypatch.setattr(np.lib.format, "read_array_header_1_0", unexpected_header_read)
     monkeypatch.setattr(np.lib.format, "read_array_header_2_0", unexpected_header_read)
+    assert (
+        orchestrator._load_persisted_material_masks_for_v2(
+            {"materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(artifact)}}}
+        )
+        == {}
+    )
+
+
+@pytest.mark.parametrize("count, shape", [(1, (128, 64)), (3, (32, 64))])
+def test_restored_masks_reject_aggregate_decoded_budget_before_opening_members(tmp_path, monkeypatch, count, shape):
+    orchestrator = _orchestrator(tmp_path, _config())
+    artifact = tmp_path / "compressed.npz"
+    np.savez_compressed(artifact, **{f"mask_{index}": np.zeros(shape, np.float64) for index in range(count)})
+    budget = 40_000
+    assert artifact.stat().st_size < budget
+    monkeypatch.setattr(orchestrator_module, "_MAX_RESTORED_MATERIAL_MASK_BYTES", budget)
+
+    def unexpected_open(*_args, **_kwargs):
+        pytest.fail("Over-budget archive must be rejected before any member is decompressed")
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", unexpected_open)
+    assert (
+        orchestrator._load_persisted_material_masks_for_v2(
+            {"materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(artifact)}}}
+        )
+        == {}
+    )
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("compressed", [False, True])
+def test_restored_masks_roundtrip_with_bounded_payload_reads(tmp_path, monkeypatch, dtype, compressed):
+    orchestrator = _orchestrator(tmp_path, _config())
+    artifact = tmp_path / "bounded.npz"
+    expected = {
+        "glass": np.linspace(0, 1, 4096, dtype=dtype).reshape(64, 64),
+        "water": np.ones((64, 64), dtype),
+    }
+    (np.savez_compressed if compressed else np.savez)(artifact, **expected)
+    with zipfile.ZipFile(artifact) as archive:
+        budget = sum(entry.file_size for entry in archive.infolist())
+    monkeypatch.setattr(orchestrator_module, "_MAX_RESTORED_MATERIAL_MASK_BYTES", budget)
+    monkeypatch.setattr(orchestrator_module, "_MATERIAL_MASK_RESTORE_CHUNK_BYTES", 1024)
+    original_read = zipfile.ZipExtFile.read
+    reads = []
+
+    def bounded_read(stream, size=-1):
+        assert 0 < size <= 1024, "Payload reads must not request a whole decoded mask"
+        reads.append(size)
+        return original_read(stream, size)
+
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", bounded_read)
+    restored = orchestrator._load_persisted_material_masks_for_v2(
+        {
+            "materials_v3_metadata": {
+                "segmentation_metadata": {"mask_artifact_path": str(artifact), "mask_artifact_shape": [64, 64]}
+            }
+        }
+    )
+    assert restored.keys() == expected.keys()
+    assert 1024 in reads
+    for name, mask in restored.items():
+        assert mask.dtype == expected[name].dtype
+        assert not mask.flags.writeable
+        np.testing.assert_array_equal(mask, expected[name])
+
+
+def test_restored_masks_recheck_cumulative_bytes_before_each_payload(tmp_path, monkeypatch):
+    orchestrator = _orchestrator(tmp_path, _config())
+    artifact = tmp_path / "understated-directory.npz"
+    np.savez_compressed(artifact, glass=np.ones((16, 16), np.float32), water=np.ones((16, 16), np.float32))
+    monkeypatch.setattr(orchestrator_module, "_MAX_RESTORED_MATERIAL_MASK_BYTES", 1400)
+    original_infolist = zipfile.ZipFile.infolist
+    original_open = zipfile.ZipFile.open
+    original_read = zipfile.ZipExtFile.read
+    real_sizes = {}
+    payload_reads = []
+
+    def understated_directory(archive):
+        # Isolate the independent payload guard from the earlier directory guard.
+        entries = [copy.copy(entry) for entry in original_infolist(archive)]
+        for entry in entries:
+            real_sizes[entry.filename] = entry.file_size
+            entry.file_size = 128
+        return entries
+
+    def open_with_actual_size(archive, entry, *args, **kwargs):
+        entry.file_size = real_sizes[entry.filename]
+        return original_open(archive, entry, *args, **kwargs)
+
+    def record_payload_read(stream, size=-1):
+        if stream.tell() >= 128 and size > 1:
+            payload_reads.append(stream.name)
+        return original_read(stream, size)
+
+    monkeypatch.setattr(zipfile.ZipFile, "infolist", understated_directory)
+    monkeypatch.setattr(zipfile.ZipFile, "open", open_with_actual_size)
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", record_payload_read)
+    assert (
+        orchestrator._load_persisted_material_masks_for_v2(
+            {"materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(artifact)}}}
+        )
+        == {}
+    )
+    assert payload_reads == ["glass.npy"]
+
+
+@pytest.mark.parametrize("compression", [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA])
+def test_restored_masks_reject_unbounded_zip_codecs_before_opening_members(tmp_path, monkeypatch, compression):
+    orchestrator = _orchestrator(tmp_path, _config())
+    artifact = tmp_path / "unsupported-codec.npz"
+    with zipfile.ZipFile(artifact, "w", compression=compression) as archive:
+        archive.writestr("glass.npy", b"untrusted member")
+
+    def unexpected_open(*_args, **_kwargs):
+        pytest.fail("Unsupported codec must be rejected before member decompression")
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", unexpected_open)
     assert (
         orchestrator._load_persisted_material_masks_for_v2(
             {"materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(artifact)}}}
