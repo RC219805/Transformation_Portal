@@ -19,9 +19,9 @@ from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from transformation_portal.core.execution_plan import EXECUTION_COMPLETE, parse_execution_plan_json
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
+from transformation_portal.orchestrator.execution_dispatch import validate_dispatch_plan
 from transformation_portal.orchestrator.models import (
     AdmissionCapacityModel,
     CommittedGenerationModel,
@@ -123,16 +123,19 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         requested_output_root: str,
         global_limit: int,
         tenant_limit: int,
+        execution_bindings: bytes | None = None,
     ) -> DispatchLocator:
-        plan = parse_execution_plan_json(plan_bytes)
-        if plan.to_canonical_json().encode("utf-8") != plan_bytes or plan.configuration_completeness != EXECUTION_COMPLETE:
-            raise RepositoryError("admission requires exact canonical execution-complete plan bytes")
+        try:
+            validate_dispatch_plan(plan_bytes, execution_bindings=execution_bindings)
+        except (TypeError, ValueError) as exc:
+            raise RepositoryError("admission requires exact canonical execution authority and bindings") from exc
         if record.state != "queued" or record.effective_request.get("tenant_id") != tenant_id:
             raise RepositoryError("admission requires a queued tenant-bound job")
         for root in (output_root, requested_output_root):
             if not Path(root).is_absolute() or "\x00" in root:
                 raise RepositoryError("dispatch output roots must be authorized absolute paths")
         digest = hashlib.sha256(plan_bytes).hexdigest()
+        bindings_digest = None if execution_bindings is None else hashlib.sha256(execution_bindings).hexdigest()
         locator = DispatchLocator(
             job_id=record.id,
             attempt_id=uuid.uuid4().hex,
@@ -174,6 +177,8 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                     **{key: value for key, value in locator.to_payload().items() if key != "schema"},
                     output_root=output_root,
                     requested_output_root=requested_output_root,
+                    execution_bindings=execution_bindings,
+                    execution_bindings_digest=bindings_digest,
                     state="queued",
                     admitted_at=now,
                     lease_epoch=0,
@@ -190,6 +195,7 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                         "locator": locator.to_payload(),
                         "output_root": output_root,
                         "requested_output_root": requested_output_root,
+                        **({"execution_bindings_digest": bindings_digest} if bindings_digest is not None else {}),
                     },
                 )
                 session.add(
@@ -207,6 +213,16 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         return PostgresOperationalRecordStore._locator(attempt) == locator
 
     async def fetch_plan(self, locator: DispatchLocator) -> bytes:
+        """Load exact admitted bytes without probing worker-local physical paths."""
+        raw, _ = await self._fetch_execution_authority(locator)
+        return raw
+
+    async def fetch_execution_bindings(self, locator: DispatchLocator) -> bytes | None:
+        """Return the immutable, digest-checked bindings for this exact attempt."""
+        _, bindings = await self._fetch_execution_authority(locator)
+        return bindings
+
+    async def _fetch_execution_authority(self, locator: DispatchLocator) -> tuple[bytes, bytes | None]:
         async with self._session() as session:
             attempt = await session.get(DispatchAttemptModel, locator.job_id)
             if attempt is None or not self._matches(attempt, locator):
@@ -215,10 +231,19 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
             if model is None or hashlib.sha256(model.canonical_bytes).hexdigest() != locator.plan_digest:
                 raise DispatchAuthorityLost("canonical dispatch plan is unavailable or corrupted")
             raw = bytes(model.canonical_bytes)
-        plan = parse_execution_plan_json(raw)
-        if plan.to_canonical_json().encode("utf-8") != raw or plan.configuration_completeness != EXECUTION_COMPLETE:
-            raise DispatchAuthorityLost("stored plan is not canonical execution authority")
-        return raw
+            bindings = attempt.execution_bindings
+            bindings_digest = attempt.execution_bindings_digest
+        if (bindings is None) != (bindings_digest is None):
+            raise DispatchAuthorityLost("dispatch execution bindings are incomplete")
+        if bindings is not None:
+            bindings = bytes(bindings)
+            if hashlib.sha256(bindings).hexdigest() != bindings_digest:
+                raise DispatchAuthorityLost("dispatch execution bindings are corrupted")
+        try:
+            validate_dispatch_plan(raw, execution_bindings=bindings)
+        except (TypeError, ValueError) as exc:
+            raise DispatchAuthorityLost("stored plan and bindings are not canonical execution authority") from exc
+        return raw, bindings
 
     async def claim_dispatch(self, locator: DispatchLocator, holder: str, *, lease_seconds: float) -> DispatchFence:
         self._validate_lease(holder, lease_seconds)
@@ -295,6 +320,26 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
             async with session.begin():
                 attempt, now = await self._locked_fence(session, fence)
                 attempt.lease_valid_until = now + lease_seconds
+
+    async def assert_dispatch_authority(self, fence: DispatchFence) -> None:
+        """Recheck a claim before process launch without renewing or mutating it.
+
+        This is a fresh authority observation, not an atomic database/process
+        transaction. Cancellation and lease supervision remain active afterward.
+        """
+        async with self._session() as session:
+            async with session.begin():
+                attempt, _ = await self._locked_fence(session, fence)
+                job = await session.scalar(select(JobModel).where(JobModel.id == attempt.job_id).with_for_update())
+                now = await self._now(session)
+                if (
+                    job is None
+                    or job.state != "running"
+                    or job.cancel_requested
+                    or attempt.lease_valid_until is None
+                    or now >= attempt.lease_valid_until
+                ):
+                    raise DispatchAuthorityLost("dispatch execution authority is expired or canceled")
 
     async def _terminal(
         self,

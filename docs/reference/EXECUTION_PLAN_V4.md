@@ -19,6 +19,14 @@ reconstructs and compares the exact node graph and verifies the fingerprint.
 An internal projection reuses older structural validators only; that projection
 does not authorize execution. V4's public executor rejects the V5 carrier.
 
+Managed dispatch retains these exact bytes and separately freezes
+`tp.job.photography.bindings.v1` with server-authorized input, runtime, cache,
+and optional companion/material roots. Each carrier has its own SHA256 digest;
+the locator's `plan_digest` hashes the complete plan bytes including the embedded
+fingerprint field. The semantic fingerprint remains a separate identity.
+Workers hydrate the admitted carriers without rediscovering or re-preparing the
+job. See [managed V5 execution](LUX_DEPTH_V5.md#managed-job-execution).
+
 | Node | Stage | Role |
 | --- | --- | --- |
 | preprocess | `tp.stage.lux.preprocess.v2` | Canonical linear photographic master and bounded model proxy |

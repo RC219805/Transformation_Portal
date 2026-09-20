@@ -9,7 +9,6 @@ import math
 import os
 import re
 import shlex
-import signal
 import stat
 import sys
 import tempfile
@@ -26,7 +25,20 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    Callable,
+    Deque,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+)
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -89,6 +101,10 @@ from transformation_portal.orchestrator import (
     JobRecord,
     JobRepository,
     OperationalAuditRecord,
+)
+from transformation_portal.orchestrator import execution_process as _execution_process
+from transformation_portal.orchestrator import execution_summary as _execution_summary
+from transformation_portal.orchestrator import (
     get_job_event_store,
     get_job_repository,
     get_operational_audit_store,
@@ -101,7 +117,6 @@ from transformation_portal.orchestrator.artifact_store import (
     ArtifactStoreError,
     get_artifact_store,
 )
-from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 from transformation_portal.orchestrator.artifact_store.generation_cleanup import cleanup_terminal_generation
 from transformation_portal.orchestrator.dispatch import DispatchLocator, current_dispatch_fence
 from transformation_portal.orchestrator.queue import (
@@ -113,8 +128,8 @@ from transformation_portal.orchestrator.queue import (
 from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
 from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
 from transformation_portal.orchestrator.storage import get_operational_record_store
-from transformation_portal.orchestrator.storage.operational import AdmissionRejected, DispatchAuthorityLost
-from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, WorkerConfig, run_worker_forever
+from transformation_portal.orchestrator.storage.operational import AdmissionRejected
+from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_forever
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal import job_artifacts as _portal_job_artifacts
@@ -158,6 +173,10 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
     default_fastvlm_runtime_root,
     resolve_fastvlm_model_path,
 )
+
+if TYPE_CHECKING:
+    from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
+    from transformation_portal.orchestrator.job_execution import JobExecutionService
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -663,7 +682,7 @@ ARTIFACT_RETENTION_SECONDS = _env_int(
     minimum=1,
 )
 _ARTIFACT_LIFECYCLE_KEY = "lifecycle"
-PROGRESS_RE = re.compile(r"progress=(\d{1,3})%")
+PROGRESS_RE = _execution_process.PROGRESS_RE
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost",
     "http://localhost:3000",
@@ -1429,7 +1448,7 @@ async def _pilot_enforce_request_paths(
     payload: Mapping[str, Any],
     *,
     action: str,
-    request: Request,
+    request: Optional[Request],
 ) -> Optional[JSONResponse]:
     """Reject cross-tenant data paths before preview can inspect their content."""
     if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
@@ -1803,7 +1822,7 @@ async def _persist_job_state(job: Job) -> None:
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
-ALLOWED_PIPELINES = {"lux-depth-v3", *ARCHIVE_GATE_PIPELINES}
+ALLOWED_PIPELINES = {"lux-depth-v3", "lux-depth-v5", *ARCHIVE_GATE_PIPELINES}
 ARCHIVE_GATE_DEFAULT_COMMANDS = {
     "archive-gate-a": "fixity-scan",
     "archive-gate-b": "bag-build",
@@ -1860,35 +1879,8 @@ except ImportError:  # pragma: no cover - defensive fallback if core import fail
 
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
-FASTVLM_RUN_STATUS_VALUES = {
-    "off",
-    "requested",
-    "succeeded",
-    "failed",
-    "skipped",
-    "missing_runtime",
-    "invalid_config",
-    "unsupported_backend",
-}
-FASTVLM_RUNTIME_STATUS_ALIASES = {
-    "ok": "succeeded",
-    "success": "succeeded",
-    "successful": "succeeded",
-    "succeeded": "succeeded",
-    "error": "failed",
-    "failed": "failed",
-    "failure": "failed",
-    "proxy_error": "failed",
-    "timeout": "failed",
-    "missing_model": "missing_runtime",
-    "missing_runtime": "missing_runtime",
-    "invalid_config": "invalid_config",
-    "unsupported_backend": "unsupported_backend",
-    "skipped": "skipped",
-    "disabled": "off",
-    "off": "off",
-    "requested": "requested",
-}
+FASTVLM_RUN_STATUS_VALUES = _execution_summary.FASTVLM_RUN_STATUS_VALUES
+FASTVLM_RUNTIME_STATUS_ALIASES = _execution_summary.FASTVLM_RUNTIME_STATUS_ALIASES
 ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
 ALLOWED_VLM_CAPTIONING_MODEL_ROLES = frozenset(FASTVLM_CHECKPOINT_DIRS.keys())
 PORTAL_DEFAULT_DA3_MODEL_KEY = "da3-metric"
@@ -2103,6 +2095,8 @@ REPO_LOCAL_PATH_REPAIRED_CODE = "repo_local_path_repaired"
 PATH_SHORTHAND_TRAVERSAL_DISALLOWED_CODE = "path_shorthand_traversal_disallowed"
 PATH_FIELD_SPECS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
     ("input_dir", ("input_dir", "inputDir"), PATH_SCOPE_INPUT),
+    ("companions_manifest", ("companions_manifest",), PATH_SCOPE_INPUT),
+    ("materials_manifest", ("materials_manifest",), PATH_SCOPE_INPUT),
     ("output_dir", ("output_dir", "outputDir"), PATH_SCOPE_OUTPUT),
     ("sam2_checkpoint_path", ("sam2_checkpoint_path", "sam2CheckpointPath"), PATH_SCOPE_INPUT),
     ("cameras_sidecar_path", ("cameras_sidecar_path", "camerasSidecarPath"), PATH_SCOPE_INPUT),
@@ -2969,7 +2963,11 @@ def _evaluate_pipeline_readiness(
     if isinstance(args, dict):
         normalized_args, _, normalization_errors = _normalize_operator_payload_paths(pipeline, args)
 
-    if pipeline == "lux-depth-v3":
+    if pipeline == "lux-depth-v5":
+        from transformation_portal.portal.photography_jobs import managed_photography_readiness
+
+        readiness_payload = managed_photography_readiness()
+    elif pipeline == "lux-depth-v3":
         readiness_payload = _lux_depth_readiness(normalized_args)
     else:
         readiness_payload = _archive_gate_readiness(
@@ -3826,70 +3824,14 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return bool(value)
 
 
-def _extract_progress_percent(line: str) -> Optional[int]:
-    match = PROGRESS_RE.search(line)
-    if not match:
-        return None
-    try:
-        return max(0, min(100, int(match.group(1))))
-    except ValueError:
-        return None
+_extract_progress_percent = _execution_process._extract_progress_percent
 
 
 # Secret-shaped substrings we refuse to persist in runner logs or forward over
 # SSE. These are intentionally conservative: the runner environment is already
 # sanitized, but third-party tools and misconfigured callers can still echo
 # credentials into stdout (e.g. HTTP tracing, library debug output).
-_LOG_REDACT_KV_KEYS = (
-    "api_key",
-    "api-key",
-    "apikey",
-    "access_token",
-    "access-token",
-    "refresh_token",
-    "refresh-token",
-    "authorization",
-    "auth_token",
-    "auth-token",
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "private_key",
-    "private-key",
-    "client_secret",
-    "client-secret",
-    "session_token",
-    "session-token",
-    "aws_secret_access_key",
-    "aws-secret-access-key",
-)
-
-_LOG_REDACTION_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
-    (
-        re.compile(r"(?i)(authorization|proxy-authorization)\s*:\s*" r"(?:bearer|basic|digest|token|apikey)\s+\S+"),
-        r"\1: <redacted>",
-    ),
-    (
-        re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]+"),
-        "Bearer <redacted>",
-    ),
-    (
-        re.compile(
-            r"(?i)(^|[^A-Za-z0-9])(" + "|".join(re.escape(key) for key in _LOG_REDACT_KV_KEYS) + r")(\s*[:=]\s*)([^\s,;]+)"
-        ),
-        r"\1\2\3<redacted>",
-    ),
-)
-
-
-def _redact_log_line(line: str) -> str:
-    if not line:
-        return line
-    redacted = line
-    for pattern, replacement in _LOG_REDACTION_PATTERNS:
-        redacted = pattern.sub(replacement, redacted)
-    return redacted
+_redact_log_line = _execution_process._redact_log_line
 
 
 def _canonical_depth_backend(value: Any) -> str:
@@ -6460,6 +6402,14 @@ def _build_config_preview(
     args = payload.get("args")
     if not isinstance(args, dict):
         args = {}
+    if pipeline == "lux-depth-v5":
+        from transformation_portal.portal.photography_jobs import photography_config_preview
+
+        preview = photography_config_preview(args, policy=_execution_policy())
+        preview["next_best_action"] = _preview_next_best_action(
+            pipeline=pipeline, errors=preview["field_errors"], warnings=[], readiness_snapshot=preview["readiness"]
+        )
+        return preview
     if pipeline == "lux-depth-v3":
         return _build_lux_config_preview(
             args,
@@ -6950,30 +6900,7 @@ def _install_stream_body_limit(request: Request) -> None:
     request.state._tp_body_limit_installed = True
 
 
-def _sanitized_child_env() -> Dict[str, str]:
-    child_env = os.environ.copy()
-    sensitive_exact = {
-        "TP_API_KEY",
-        "HF_TOKEN",
-        "HUGGING_FACE_HUB_TOKEN",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_ACCESS_KEY_ID",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-    }
-    sensitive_suffixes = (
-        "_TOKEN",
-        "_SECRET",
-        "_PASSWORD",
-        "_API_KEY",
-        "_ACCESS_KEY",
-        "_PRIVATE_KEY",
-    )
-    for key in list(child_env.keys()):
-        upper = key.upper()
-        if upper in sensitive_exact or upper.endswith(sensitive_suffixes):
-            child_env.pop(key, None)
-    return child_env
+_sanitized_child_env = _execution_process._sanitized_child_env
 
 
 _LAST_EVENT_AT_ALWAYS_FLUSH_EVENTS = {
@@ -7050,113 +6977,15 @@ async def _publish_event(
 
 
 def _owned_process_group_id(proc: asyncio.subprocess.Process) -> Optional[int]:
-    """Return only a group owned by this execution's isolated POSIX session.
-
-    A successful ``start_new_session`` spawn pins its PID on the live process
-    handle. That process-local authority survives leader exit until cleanup;
-    it is never read from persisted job or broker state.
-    """
-
-    if os.name == "nt":
-        return None
-    pid = proc.pid
-    if type(pid) is not int or pid <= 0:
-        return None
-    pinned = getattr(proc, "_tp_owned_process_group_id", None)
-    if pinned is not None:
-        return pinned if type(pinned) is int and pinned == pid else None
-    if proc.returncode is not None:
-        return None
-    try:
-        if os.getpgid(pid) == pid and os.getsid(pid) == pid:
-            return pid
-    except OSError:
-        pass
-    return None
+    return _execution_process._owned_process_group_id(proc, os_module=os)
 
 
-def _signal_process_tree(
-    proc: asyncio.subprocess.Process,
-    sig: int,
-) -> bool:
-    """Deliver *sig* to the subprocess's full process group on POSIX.
-
-    Returns True when the signal was delivered via :func:`os.killpg`; False
-    when the caller must fall back to the direct ``proc`` methods (e.g. the
-    spawn did not create a new session, or we are on Windows).
-    """
-
-    pgid = _owned_process_group_id(proc)
-    if pgid is None:
-        return False
-    try:
-        os.killpg(pgid, sig)
-    except ProcessLookupError:
-        return True
-    except OSError:
-        return False
-    return True
+def _signal_process_tree(proc: asyncio.subprocess.Process, sig: int) -> bool:
+    return _execution_process._signal_process_tree(proc, sig, os_module=os)
 
 
-async def _terminate_process(
-    proc: asyncio.subprocess.Process,
-    grace_seconds: float = CANCEL_GRACE_SECONDS,
-) -> None:
-    owned_group = _owned_process_group_id(proc)
-    if proc.returncode is not None and owned_group is None:
-        return
-    if owned_group is not None:
-        # Retain a verified group for escalation after the leader is reaped.
-        setattr(proc, "_tp_owned_process_group_id", owned_group)
-    cleanup_completed = False
-    deadline = asyncio.get_running_loop().time() + grace_seconds
-    try:
-        if not _signal_process_tree(proc, signal.SIGTERM):
-            try:
-                proc.terminate()
-            except ProcessLookupError:
-                return
-            except Exception:
-                return
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=grace_seconds)
-        except asyncio.TimeoutError:
-            pass
-
-        # A leader can exit before descendants finish, even when they close
-        # stdout. Give the owned group the remaining TERM grace before KILL.
-        while owned_group is not None:
-            try:
-                os.killpg(owned_group, 0)
-            except ProcessLookupError:
-                cleanup_completed = True
-                return
-            except OSError:
-                break
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                break
-            await asyncio.sleep(min(0.05, remaining))
-
-        if owned_group is not None or proc.returncode is None:
-            if not _signal_process_tree(proc, signal.SIGKILL):
-                try:
-                    proc.kill()
-                except ProcessLookupError:
-                    pass
-                except Exception:
-                    return
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=grace_seconds)
-        except asyncio.TimeoutError:
-            # A detached descendant can retain a pipe outside our group.
-            # The runner owns bounded pipe draining/closure in its finally.
-            LOGGER.warning("subprocess %s wait exceeded force-kill grace; runner must close remaining pipes", proc.pid)
-        cleanup_completed = True
-    finally:
-        if cleanup_completed:
-            with suppress(AttributeError):
-                delattr(proc, "_tp_owned_process_group_id")
+async def _terminate_process(proc: asyncio.subprocess.Process, grace_seconds: float = CANCEL_GRACE_SECONDS) -> None:
+    await _execution_process._terminate_process(proc, grace_seconds, os_module=os)
 
 
 async def _request_cancel(job: Job) -> None:
@@ -7344,84 +7173,10 @@ def _serialize_indexed_artifact(
     )
 
 
-def _fastvlm_model_role_from_value(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in ALLOWED_VLM_CAPTIONING_MODEL_ROLES else "custom"
+_fastvlm_model_role_from_value = _execution_summary._fastvlm_model_role_from_value
 
 
-def _normalize_fastvlm_run_status(
-    raw_status: Any,
-    *,
-    artifact_counts: Optional[Mapping[str, int]] = None,
-    requested: bool = False,
-) -> Optional[Dict[str, Any]]:
-    counts = {
-        "sidecar_count": _coerce_nonnegative_int((artifact_counts or {}).get("sidecar_count")) or 0,
-        "raw_count": _coerce_nonnegative_int((artifact_counts or {}).get("raw_count")) or 0,
-        "proxy_count": _coerce_nonnegative_int((artifact_counts or {}).get("proxy_count")) or 0,
-    }
-    if not isinstance(raw_status, Mapping):
-        if not requested and not any(counts.values()):
-            return None
-        raw_status = {"enabled": True, "status": "requested" if requested else "succeeded"}
-
-    enabled = _as_bool(raw_status.get("enabled"), requested or any(counts.values()))
-    backend = str(raw_status.get("backend") or "fastvlm").strip().lower() or "fastvlm"
-    status_text = str(raw_status.get("status") or "").strip().lower()
-    normalized_status = FASTVLM_RUNTIME_STATUS_ALIASES.get(status_text, "")
-    policy_violation = raw_status.get("used_for_quality_gate") is True
-
-    sidecar_count = max(counts["sidecar_count"], _coerce_nonnegative_int(raw_status.get("sidecar_count")) or 0)
-    raw_count = max(counts["raw_count"], _coerce_nonnegative_int(raw_status.get("raw_count")) or 0)
-    proxy_count = max(counts["proxy_count"], _coerce_nonnegative_int(raw_status.get("proxy_count")) or 0)
-    failed_count = _coerce_nonnegative_int(raw_status.get("failed_count")) or 0
-
-    if policy_violation:
-        normalized_status = "failed"
-        failed_count = max(failed_count, 1)
-    elif backend != "fastvlm":
-        normalized_status = "unsupported_backend"
-    elif normalized_status not in FASTVLM_RUN_STATUS_VALUES:
-        if not enabled:
-            normalized_status = "off"
-        elif failed_count > 0:
-            normalized_status = "failed"
-        elif sidecar_count > 0:
-            normalized_status = "succeeded"
-        elif requested:
-            normalized_status = "requested"
-        else:
-            normalized_status = "skipped"
-
-    if normalized_status == "off":
-        enabled = False
-    if normalized_status == "succeeded" and sidecar_count == 0 and not requested:
-        normalized_status = "skipped"
-
-    normalized: Dict[str, Any] = {
-        "status": normalized_status,
-        "enabled": bool(enabled),
-        "backend": backend,
-        "model_role": str(
-            raw_status.get("model_role") or _fastvlm_model_role_from_value(raw_status.get("model") or "")
-        ).strip()
-        or "custom",
-        "model_id": raw_status.get("model_id") if raw_status.get("model_id") is not None else None,
-        "model_path": str(raw_status.get("model_path") or "").strip() or None,
-        "role": "advisory",
-        "sidecar_count": sidecar_count,
-        "raw_count": raw_count,
-        "proxy_count": proxy_count,
-        "failed_count": failed_count,
-        "used_for_quality_gate": False,
-    }
-    if policy_violation:
-        normalized["policy_violation"] = True
-        normalized["quality_gate_claimed"] = True
-        normalized["error"] = "captioning_status.used_for_quality_gate must be false"
-    elif raw_status.get("error"):
-        normalized["error"] = str(raw_status.get("error"))
-    return normalized
+_normalize_fastvlm_run_status = _execution_summary._normalize_fastvlm_run_status
 
 
 def _requested_fastvlm_captioning_status(job: Job) -> Optional[Dict[str, Any]]:
@@ -7463,75 +7218,10 @@ def _load_bounded_run_card_payload(path: Optional[Path]) -> Optional[Dict[str, A
     )
 
 
-def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    summary: Dict[str, Any] = {"source": "run_card"}
-
-    batch_id = str(payload.get("batch_id") or "").strip()
-    if batch_id:
-        summary["batch_id"] = batch_id
-
-    total_images = _coerce_nonnegative_int(payload.get("total_images"))
-    success_count = _coerce_nonnegative_int(payload.get("success_count"))
-    error_count = _coerce_nonnegative_int(payload.get("error_count"))
-    artifact_index = payload.get("artifact_index")
-    artifact_index_count = len(artifact_index) if isinstance(artifact_index, list) else None
-
-    if total_images is None and success_count is not None and error_count is not None:
-        total_images = success_count + error_count
-
-    if total_images is not None:
-        summary["total_images"] = total_images
-    if success_count is not None:
-        summary["success_count"] = success_count
-    if error_count is not None:
-        summary["error_count"] = error_count
-    if artifact_index_count is not None:
-        summary["artifact_index_count"] = artifact_index_count
-
-    reviewable_outputs = bool((success_count or 0) > 0)
-    partial = reviewable_outputs and bool((error_count or 0) > 0)
-    summary["reviewable_outputs"] = reviewable_outputs
-    summary["partial"] = partial
-    captioning_status = _normalize_fastvlm_run_status(
-        payload.get("captioning_status"),
-        artifact_counts=_captioning_artifact_counts_from_run_card(payload),
-    )
-    if captioning_status is not None:
-        summary["captioning_status"] = captioning_status
-
-    return summary
+_summarize_run_card_payload = _execution_summary._summarize_run_card_payload
 
 
-def _summarize_batch_manifest_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    summary: Dict[str, Any] = {"source": "batch_manifest"}
-
-    batch_id = str(payload.get("batch_id") or "").strip()
-    if batch_id:
-        summary["batch_id"] = batch_id
-
-    results = payload.get("results")
-    if isinstance(results, list):
-        success_count = sum(1 for item in results if isinstance(item, dict) and item.get("status") == "ok")
-        error_count = sum(1 for item in results if isinstance(item, dict) and item.get("status") == "error")
-    else:
-        success_count = 0
-        error_count = 0
-
-    stats = payload.get("stats")
-    total_images = None
-    if isinstance(stats, Mapping):
-        total_images = _coerce_nonnegative_int(stats.get("total_images"))
-    if total_images is None and isinstance(results, list):
-        total_images = len(results)
-
-    if total_images is not None:
-        summary["total_images"] = total_images
-    summary["success_count"] = success_count
-    summary["error_count"] = error_count
-    summary["reviewable_outputs"] = success_count > 0
-    summary["partial"] = success_count > 0 and error_count > 0
-
-    return summary
+_summarize_batch_manifest_payload = _execution_summary._summarize_batch_manifest_payload
 
 
 _artifact_batch_hint = _portal_job_artifacts._artifact_batch_hint
@@ -7577,82 +7267,7 @@ def _build_scoped_job_artifacts_from_run_metadata(
 
 
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
-    if not job:
-        return {}
-
-    existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
-    metadata = _resolve_job_run_metadata(job)
-    summary: Dict[str, Any] = {}
-    if metadata is not None and metadata.run_card_payload is not None:
-        summary = _summarize_run_card_payload(metadata.run_card_payload)
-
-    if not summary and metadata is not None and metadata.batch_manifest_payload is not None:
-        summary = _summarize_batch_manifest_payload(metadata.batch_manifest_payload)
-
-    if not summary and existing_summary:
-        summary = existing_summary
-
-    if summary:
-        artifact_counts = _captioning_artifact_counts_from_job_artifacts(job.artifacts)
-        existing_captioning_counts = summary.get("captioning_status")
-        if isinstance(existing_captioning_counts, Mapping):
-            artifact_counts = {
-                "sidecar_count": max(
-                    artifact_counts["sidecar_count"],
-                    _coerce_nonnegative_int(existing_captioning_counts.get("sidecar_count")) or 0,
-                ),
-                "raw_count": max(
-                    artifact_counts["raw_count"],
-                    _coerce_nonnegative_int(existing_captioning_counts.get("raw_count")) or 0,
-                ),
-                "proxy_count": max(
-                    artifact_counts["proxy_count"],
-                    _coerce_nonnegative_int(existing_captioning_counts.get("proxy_count")) or 0,
-                ),
-            }
-        raw_captioning_status = None
-        if metadata is not None and metadata.run_card_payload is not None:
-            raw_captioning_status = metadata.run_card_payload.get("captioning_status")
-        if raw_captioning_status is None:
-            raw_captioning_status = existing_summary.get("captioning_status")
-        captioning_status = _normalize_fastvlm_run_status(
-            raw_captioning_status,
-            artifact_counts=artifact_counts,
-        )
-        if captioning_status is not None:
-            summary["captioning_status"] = captioning_status
-
-    job.run_summary = summary
-
-    if job.state != "canceled" and summary.get("partial"):
-        job.state = "partial"
-        existing_code = ""
-        if isinstance(job.error, dict):
-            existing_code = str(job.error.get("code") or "").strip().upper()
-        if existing_code in {"", "RUNNER_EXIT_NONZERO"}:
-            total_images = summary.get("total_images")
-            success_count = summary.get("success_count")
-            error_count = summary.get("error_count")
-            detail_text = "outputs remain reviewable"
-            if (
-                isinstance(total_images, int)
-                and isinstance(success_count, int)
-                and isinstance(error_count, int)
-                and total_images > 0
-            ):
-                detail_text = f"{error_count}/{total_images} images failed; " f"{success_count} outputs remain reviewable"
-            job.error = _error_obj(
-                "RUNNER_PARTIAL_FAILURE",
-                detail_text,
-                {
-                    "exit_code": job.exit_code,
-                    "total_images": total_images,
-                    "success_count": success_count,
-                    "error_count": error_count,
-                },
-            )
-
-    return summary
+    return _execution_summary.refresh_job_run_summary(job, _job_output_dir(job))
 
 
 def _serialized_job_run_summary(job: Job) -> Optional[Dict[str, Any]]:
@@ -8527,6 +8142,9 @@ def _argv_from_request(
     pipeline = str(payload.get("pipeline") or "").strip()
     if pipeline not in ALLOWED_PIPELINES:
         raise _PortalValidationReasonError("Unsupported pipeline", reason="unsupported_pipeline")
+
+    if pipeline == "lux-depth-v5":
+        raise _PortalValidationReasonError("V5 requires immutable distributed dispatch", reason="unsupported_pipeline")
 
     args = execution_args if isinstance(execution_args, dict) else payload.get("args")
     if not isinstance(args, dict):
@@ -9848,7 +9466,7 @@ async def readiness(request: Request) -> JSONResponse:
         except IdentityConfigurationError:
             return _pilot_identity_configuration_error()
     pipeline_data: Dict[str, Any] = {}
-    for pipeline_name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
+    for pipeline_name in ("lux-depth-v3", "lux-depth-v5", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
 
     audit_response = await _record_pilot_audit(
@@ -10294,10 +9912,14 @@ async def _create_job(
         )
 
     try:
-        argv = _argv_from_request(
-            payload,
-            execution_args=execution_args,
-        )
+        if pipeline == "lux-depth-v5":
+            # V5 has no request-derived command surface. Only the immutable plan
+            # consumer may construct its fixed worker command after admission.
+            if not _uses_dispatch_authority():
+                raise ValueError("V5 requires immutable distributed dispatch")
+            argv = []
+        else:
+            argv = _argv_from_request(payload, execution_args=execution_args)
     except ValueError as exc:
         reason = _portal_reason_from_exception(exc)
         return _error_response(
@@ -11331,103 +10953,58 @@ async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
         raise _DispatchError(str(exc)) from exc
 
 
+def _job_execution_service() -> JobExecutionService[Job]:
+    """Bind API projection and SSE ports to the shared execution coordinator."""
+    from transformation_portal.orchestrator.job_execution import (
+        ExecutionSettings,
+        JobExecutionRuntime,
+        JobExecutionService,
+    )
+
+    return JobExecutionService(
+        JobExecutionRuntime(
+            load_job=_load_job_view,
+            cache_job=_cache_runtime_job,
+            repository=_job_repository,
+            repository_unavailable=_JobRepositoryUnavailable,
+            persist_fields=_persist_job_fields_best_effort,
+            publish_event=_publish_event,
+            now=_now,
+            child_environment=_sanitized_child_env,
+            owned_process_group=_owned_process_group_id,
+            terminate_process=_terminate_process,
+            redact_log=_redact_log_line,
+            extract_progress=_extract_progress_percent,
+            index_artifacts=_index_job_artifacts,
+            refresh_summary=_refresh_job_run_summary,
+            artifact_store=_artifact_store,
+            operational_records=get_operational_record_store,
+            flush_outbox=_flush_operational_outbox_best_effort,
+            load_record=_load_job_record,
+            job_from_record=_job_from_record,
+            mirror_artifacts=_mirror_job_artifacts_to_store,
+            persist_state=_persist_job_state,
+            cleanup_jobs=_cleanup_expired_jobs,
+            validate_paths=_revalidate_dispatch_paths,
+            resolve_output_root=lambda value: _resolve_allowed_request_path(value, ALLOWED_OUTPUT_ROOTS),
+            allow_legacy_commands=True,
+        ),
+        ExecutionSettings(
+            log_tail_limit=LOG_TAIL_LIMIT,
+            log_batch_size=JOB_LOG_PERSIST_BATCH_SIZE,
+            log_flush_interval=JOB_LOG_PERSIST_FLUSH_INTERVAL_SECONDS,
+            progress_flush_interval=JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS,
+            cancel_grace_seconds=CANCEL_GRACE_SECONDS,
+        ),
+    )
+
+
 async def _orchestrator_job_executor(
     request: JobEnqueueRequest | DispatchLocator,
     cancellation_event: "asyncio.Event",
 ) -> int:
-    """``WorkerRunner.executor`` adapter that runs the orchestrator's job.
-
-    The broker holds the dispatch payload (argv); the orchestrator
-    repository owns durable job state; ``JOBS`` only carries runtime
-    handles such as the live ``asyncio.subprocess.Process``, terminate
-    task, and SSE subscriber queues. The executor bridges the two:
-    hydrate the job from the repository, overlay any runtime handles,
-    and run the existing ``_run_job`` body. Broker-side cancellation
-    sets ``job.cancel_requested`` and immediately schedules live-child
-    termination without waiting for another stdout line.
-
-    Phase 2.D — terminal-state guard. The broker's
-    ``reclaim_expired_leases`` re-queues abandoned jobs by design
-    (Phase 2.A contract). If the orchestrator-level reclaim sweep
-    already drove the in-process ``Job`` to a terminal state
-    (``worker_lost``, ``canceled``, etc.), a stale worker pickup of
-    the same ``job_id`` must not re-spawn the dispatch subprocess.
-    Treat the terminal Job as a no-op and release the lease cleanly.
-
-    When the job has been cleaned up entirely between enqueue and
-    lease pickup (the repository row is gone), the executor also exits
-    cleanly.
-    """
-    try:
-        job = await _load_job_view(request.job_id)
-    except _JobRepositoryUnavailable:
-        LOGGER.exception("worker could not load job_id=%s from repository", request.job_id)
-        raise RetryableExecutorUnavailable(request.job_id)
-    if job is None:
-        LOGGER.warning("worker leased unknown job_id=%s; releasing without dispatch", request.job_id)
-        return 0
-    _cache_runtime_job(job)
-    if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
-        LOGGER.info(
-            "worker leased already-terminal job_id=%s state=%s; releasing without dispatch",
-            request.job_id,
-            job.state,
-        )
-        return 0
-
-    async def _bridge_cancel() -> None:
-        await cancellation_event.wait()
-        # Signal the live subprocess immediately: it may be silent while
-        # ``_run_job`` is awaiting stdout and never start another iteration.
-        if not job.cancel_requested:
-            job.cancel_requested = True
-        if job.proc is not None and (job.proc.returncode is None or _owned_process_group_id(job.proc) is not None):
-            if job.terminate_task is None or job.terminate_task.done():
-                job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
-
-    bridge_task = asyncio.create_task(_bridge_cancel())
-    execution_output_root = None
-    try:
-        if isinstance(request, DispatchLocator):
-            from transformation_portal.orchestrator.execution_dispatch import _pin_output_directory, command_from_dispatch_plan
-            from transformation_portal.orchestrator.execution_workspace import create_execution_workspace
-
-            fence = current_dispatch_fence()
-            if fence is None or fence.locator != request:
-                raise DispatchAuthorityLost("worker has no matching claim")
-            raw = await get_operational_record_store().fetch_plan(request)
-            output_root = _resolve_allowed_request_path(fence.output_root, ALLOWED_OUTPUT_ROOTS)
-            _revalidate_dispatch_paths(request, raw, output_root)
-            # An attempt root is created once, only after a committed claim.
-            parent = _pin_output_directory(output_root.parent)
-            try:
-                os.mkdir(output_root.name, mode=0o700, dir_fd=parent)
-            finally:
-                os.close(parent)
-            workspace = create_execution_workspace(output_root, require_configured=True)
-            execution_output_root = output_root
-            plan_path = workspace / "plan.json"
-            plan_path.write_bytes(raw)
-            command = command_from_dispatch_plan(
-                raw, output_root=output_root, plan_path=plan_path, execution_workspace=workspace
-            )
-        else:
-            command = list(request.argv)
-        if cancellation_event.is_set():
-            return 0
-        await _run_job(job, command)
-    finally:
-        if execution_output_root is not None:
-            from transformation_portal.orchestrator.execution_workspace import remove_execution_workspace
-
-            try:
-                remove_execution_workspace(execution_output_root)
-            except Exception:
-                LOGGER.exception("private execution cleanup deferred for %s", request.job_id)
-        bridge_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await bridge_task
-    return int(job.exit_code) if job.exit_code is not None else 0
+    """Compatibility entry point; execution belongs to JobExecutionService."""
+    return await _job_execution_service().execute(request, cancellation_event, run_job=_run_job)
 
 
 async def _publish_cancellation_terminal(job: "Job") -> None:
@@ -11599,358 +11176,8 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
 
 
 async def _run_job(job: Job, argv: List[str]) -> None:
-    _cache_runtime_job(job)
-
-    pending_log_lines: List[str] = []
-    last_log_flush_at = _now()
-    pending_progress_persist = False
-    last_progress_flush_at = _now()
-
-    async def _flush_log_batch() -> None:
-        nonlocal last_log_flush_at
-        if not pending_log_lines:
-            return
-        batch = list(pending_log_lines)
-        pending_log_lines.clear()
-        last_log_flush_at = _now()
-        try:
-            await _job_repository().append_logs(job.id, batch, tail_limit=LOG_TAIL_LIMIT)
-        except Exception:  # noqa: BLE001 - keep the runner moving if log persistence lags
-            LOGGER.exception("job repository append_logs failed for %s", job.id)
-
-    async def _flush_progress(*, force: bool = False) -> None:
-        nonlocal last_progress_flush_at, pending_progress_persist
-        if not pending_progress_persist:
-            return
-        now = _now()
-        if not force and JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS > 0:
-            if now - last_progress_flush_at < JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS:
-                return
-        if await _persist_job_fields_best_effort(job, "progress", progress=job.progress):
-            pending_progress_persist = False
-            last_progress_flush_at = now
-
-    try:
-        if job.done_published_at is not None or job.finished_at is not None:
-            return
-        if job.cancel_requested:
-            job.state = "canceled"
-            return
-        job.state = "running"
-        job.started_at = _now()
-        await _persist_job_fields_best_effort(job, "runner_start", state=job.state, started_at=job.started_at)
-        await _publish_event(job.id, "state", {"id": job.id, "state": job.state})
-        # Startup persistence yields to cancellation and lease watchdogs. Do
-        # not launch native work after either path has withdrawn authority.
-        if job.done_published_at is not None or job.finished_at is not None:
-            return
-        if job.cancel_requested:
-            job.state = "canceled"
-            return
-        # NO SHELL EXECUTION.
-        spawn_kwargs: Dict[str, Any] = {
-            "stdout": asyncio.subprocess.PIPE,
-            "stderr": asyncio.subprocess.STDOUT,
-            "env": _sanitized_child_env(),
-        }
-        if os.name != "nt":
-            # Put the runner in its own session so cancel can signal the
-            # whole process tree, not just the direct child.
-            spawn_kwargs["start_new_session"] = True
-        proc = await asyncio.create_subprocess_exec(*argv, **spawn_kwargs)
-        if spawn_kwargs.get("start_new_session"):
-            # Spawn itself establishes ownership even if the group leader
-            # exits before a later cancellation observes its descendants.
-            setattr(proc, "_tp_owned_process_group_id", proc.pid)
-        job.proc = proc
-
-        if proc.stdout is None:
-            raise RuntimeError("failed to capture subprocess stdout")
-
-        while True:
-            if (
-                job.cancel_requested
-                and (proc.returncode is None or _owned_process_group_id(proc) is not None)
-                and (job.terminate_task is None or job.terminate_task.done())
-            ):
-                job.terminate_task = asyncio.create_task(
-                    _terminate_process(proc),
-                )
-
-            raw_line = await proc.stdout.readline()
-            if not raw_line:
-                break
-
-            line = raw_line.decode(
-                "utf-8",
-                errors="replace",
-            ).rstrip("\n")
-            line = _redact_log_line(line)
-            job.add_log(line)
-            pending_log_lines.append(line)
-            if (
-                len(pending_log_lines) >= JOB_LOG_PERSIST_BATCH_SIZE
-                or _now() - last_log_flush_at >= JOB_LOG_PERSIST_FLUSH_INTERVAL_SECONDS
-            ):
-                await _flush_log_batch()
-            await _publish_event(
-                job.id,
-                "log",
-                {"id": job.id, "line": line},
-            )
-
-            pct = _extract_progress_percent(line)
-            if pct is not None and pct != job.progress:
-                job.progress = pct
-                pending_progress_persist = True
-                await _flush_progress()
-                await _publish_event(
-                    job.id,
-                    "progress",
-                    {"id": job.id, "progress": job.progress},
-                )
-
-        await _flush_log_batch()
-        await _flush_progress(force=True)
-        rc = await proc.wait()
-        if job.done_published_at is not None or job.finished_at is not None:
-            return
-        job.exit_code = int(rc)
-        if job.cancel_requested:
-            job.state = "canceled"
-        else:
-            job.state = "succeeded" if rc == 0 else "failed"
-            if rc != 0:
-                # Phase 2.D — ``retriable=False`` distinguishes executor-level
-                # failures (the work itself is broken) from the broker-level
-                # ``worker_lost`` state (the worker died holding the lease).
-                job.error = _error_obj(
-                    "RUNNER_EXIT_NONZERO",
-                    f"runner exited with code {rc}",
-                    {"exit_code": int(rc)},
-                    retriable=False,
-                )
-        await _persist_job_fields_best_effort(
-            job, "runner_terminal", state=job.state, exit_code=job.exit_code, error=job.error
-        )
-
-    except asyncio.CancelledError:
-        # Lifespan shutdown cancels worker tasks after their grace period.
-        # Reap the child in finally and publish a terminal cancellation,
-        # without replacing an outcome already committed by another path.
-        if job.done_published_at is None and job.finished_at is None:
-            job.cancel_requested = True
-            job.state = "canceled"
-        raise
-    except FileNotFoundError:
-        if job.done_published_at is not None or job.finished_at is not None:
-            return
-        job.state = "failed"
-        job.exit_code = 127
-        runner_repr = " ".join(argv[:3]) if len(argv) >= 3 else argv[0]
-        job.error = _error_obj(
-            "RUNNER_NOT_FOUND",
-            f"Runner executable not found: '{argv[0]}'.",
-            {"command": argv[0], "runner": runner_repr},
-            retriable=False,
-        )
-        msg = f"runner_error: {job.error['message']}"
-        job.add_log(msg)
-        with suppress(Exception):
-            await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
-        await _persist_job_fields_best_effort(
-            job,
-            "runner_not_found",
-            state=job.state,
-            exit_code=job.exit_code,
-            error=job.error,
-            logs_tail=job.logs_tail,
-        )
-        await _publish_event(
-            job.id,
-            "log",
-            {"id": job.id, "line": msg},
-        )
-    except Exception as exc:
-        LOGGER.exception(
-            "Unhandled runner exception for job %s",
-            job.id,
-        )
-        await _flush_log_batch()
-        if job.done_published_at is not None or job.finished_at is not None:
-            return
-        job.state = "failed"
-        job.exit_code = 1
-        job.error = _error_obj(
-            "RUNNER_ERROR",
-            "unexpected runner failure",
-            {"exception_type": type(exc).__name__},
-            retriable=False,
-        )
-        msg = "runner_error: unexpected runner failure"
-        job.add_log(msg)
-        with suppress(Exception):
-            await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
-        await _persist_job_fields_best_effort(
-            job,
-            "runner_error",
-            state=job.state,
-            exit_code=job.exit_code,
-            error=job.error,
-            logs_tail=job.logs_tail,
-        )
-        await _publish_event(
-            job.id,
-            "log",
-            {"id": job.id, "line": msg},
-        )
-    finally:
-        # An exception while reading stdout (including an oversized line)
-        # or task cancellation must not leave an unobserved child running
-        # after terminal artifacts/events are published.
-        stdout_drain_task = None
-        if job.proc is not None and job.proc.stdout is not None:
-            stdout = job.proc.stdout
-
-            async def _discard_remaining_stdout() -> None:
-                # A full pipe can otherwise keep proc.wait() pending even
-                # after the child exits. Discard in bounded chunks.
-                while await stdout.read(64 * 1024):
-                    pass
-
-            stdout_drain_task = asyncio.create_task(_discard_remaining_stdout())
-        if job.proc is not None and (job.proc.returncode is None or _owned_process_group_id(job.proc) is not None):
-            if job.terminate_task is None or job.terminate_task.done():
-                job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
-        with suppress(Exception):
-            await _flush_log_batch()
-        with suppress(Exception):
-            await _flush_progress(force=True)
-        if job.terminate_task is not None:
-            try:
-                await job.terminate_task
-            except Exception:
-                pass
-        if stdout_drain_task is not None:
-            try:
-                await asyncio.wait_for(stdout_drain_task, timeout=CANCEL_GRACE_SECONDS)
-            except asyncio.TimeoutError:
-                LOGGER.warning("job %s stdout pipe did not close during process cleanup", job.id)
-                # StreamReader exposes no public close method. Close this
-                # process-owned pipe transport after cancelling the reader;
-                # an escaped descendant must not keep worker shutdown open.
-                stdout_transport = getattr(stdout, "_transport", None)
-                if stdout_transport is not None:
-                    stdout_transport.close()
-            except Exception:
-                LOGGER.debug("job %s stdout cleanup failed", job.id, exc_info=True)
-        if job.proc is not None:
-            with suppress(AttributeError):
-                delattr(job.proc, "_tp_owned_process_group_id")
-        # Phase 2.D — terminal-state authority. If an *external* path
-        # (the reclaim sweep, restart recovery, etc.) already drove
-        # this Job to a terminal state AND published the terminal
-        # event while ``_run_job`` was mid-flight, that earlier
-        # terminal event is authoritative: do NOT republish ``done``,
-        # do NOT mutate ``state``/``exit_code``/``error``, do NOT
-        # touch ``finished_at``. The presence of ``done_published_at``
-        # is the canonical signal that an external terminal event
-        # already went out — ``_run_job`` itself sets that timestamp
-        # AFTER publishing ``done`` (further down in this finally
-        # block), so by definition only an external publisher could
-        # have set it by now. Checking ``state in
-        # _TERMINAL_JOB_STATES`` here would be wrong because
-        # ``_run_job`` writes ``succeeded``/``failed``/``canceled``
-        # into ``job.state`` ABOVE this finally block on normal
-        # completion, so guarding on state alone would skip the
-        # done-event publication for every happy-path job.
-        if job.done_published_at is not None or job.finished_at is not None:
-            LOGGER.info(
-                "job %s reached terminal state=%s via an external publisher; skipping duplicate done event",
-                job.id,
-                job.state,
-            )
-            return
-
-        if job.state == "canceled" and job.proc is not None and job.exit_code is None:
-            job.exit_code = job.proc.returncode
-
-        fence = current_dispatch_fence()
-        if fence is not None:
-            try:
-                await asyncio.to_thread(_index_job_artifacts, job)
-                _refresh_job_run_summary(job)
-                publisher = GenerationPublisher(artifact_store=_artifact_store(), record_store=get_operational_record_store())
-                await publisher.publish(
-                    fence,
-                    job.artifact_lookup,
-                    state=job.state,
-                    exit_code=job.exit_code,
-                    artifacts=job.artifacts,
-                    run_summary=job.run_summary,
-                    error=job.error,
-                )
-            except DispatchAuthorityLost:
-                LOGGER.warning("job %s publication rejected after authority loss", job.id)
-            except Exception:
-                LOGGER.exception("job %s generation publication failed", job.id)
-                with suppress(DispatchAuthorityLost):
-                    await get_operational_record_store().finish_dispatch(
-                        fence,
-                        state="failed",
-                        exit_code=job.exit_code,
-                        error=_error_obj("ARTIFACT_STORE_UNAVAILABLE", "Artifact generation could not be committed."),
-                    )
-            await _flush_operational_outbox_best_effort()
-            try:
-                await cleanup_terminal_generation(
-                    record_store=get_operational_record_store(), artifact_store=_artifact_store(), job_id=job.id
-                )
-            except Exception:
-                LOGGER.exception("owned attempt cleanup deferred for %s", job.id)
-            committed = await _load_job_record(job.id)
-            if committed is not None:
-                _cache_runtime_job(_job_from_record(committed))
-            return
-
-        # Index artifacts and publish terminal events BEFORE setting finished_at.
-        # This ensures late-connecting SSE clients can deterministically check
-        # done_published_at to know if they need to wait for real events or can
-        # safely synthesize a 'done' from job state. Indexing also computes
-        # bounded SHA-256 fingerprints, so run it in a worker thread to keep
-        # the event loop responsive while large jobs are wrapping up.
-        indexed_artifacts = await asyncio.to_thread(_index_job_artifacts, job)
-        await _mirror_job_artifacts_to_store(job)
-        _refresh_job_run_summary(job)
-        for artifact in indexed_artifacts:
-            await _publish_event(
-                job.id,
-                "artifact",
-                {"id": job.id, **artifact},
-            )
-
-        await _publish_event(
-            job.id,
-            "done",
-            {
-                "id": job.id,
-                "state": job.state,
-                "exit_code": job.exit_code,
-                "error": job.error,
-                "artifacts": job.artifacts,
-                "run_summary": job.run_summary or None,
-            },
-        )
-        # Mark timestamps AFTER all events are published, so SSE endpoint knows
-        # it's safe to synthesize 'done' if done_published_at is set.
-        job.done_published_at = _now()
-        job.finished_at = job.done_published_at
-        try:
-            await _persist_job_state(job)
-        except Exception:  # noqa: BLE001 - repository lag must not rewrite runner outcome
-            LOGGER.exception("job repository final state persist failed for %s", job.id)
-        _cache_runtime_job(job)
-        await _cleanup_expired_jobs(_now(), force=False)
+    """Retain the legacy Python helper while sharing the production runner."""
+    await _job_execution_service().run(job, argv)
 
 
 async def _create_distributed_job(
@@ -11989,8 +11216,29 @@ async def _create_distributed_job(
     tenant_id = pilot_tenant.tenant_id if pilot_tenant is not None else "default"
     jid = "job_" + uuid.uuid4().hex
     effective_request = {"pipeline": pipeline, "args": dict(execution_args), "tenant_id": tenant_id}
+    if pipeline == "lux-depth-v5":
+        # Preview resolves optional manifests after the initial raw-path guard.
+        # Reauthorize those normalized paths before preparation reads evidence.
+        path_error = await _pilot_enforce_request_paths(pilot_tenant, effective_request, action="job_create", request=request)
+        if path_error is not None:
+            return path_error
+    execution_bindings = None
     try:
-        plan_bytes = await asyncio.to_thread(prepare_dispatch_plan, effective_request, trusted_argv=argv)
+        if pipeline == "lux-depth-v5":
+            from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+            from transformation_portal.orchestrator.photography_adapter import prepare_photography_dispatch
+            from transformation_portal.portal.photography_jobs import managed_photography_readiness, photography_request
+
+            _enforce_job_readiness_preflight(pipeline, managed_photography_readiness())
+            photography = photography_request(execution_args, tenant_id=tenant_id)
+            prepared = await asyncio.to_thread(
+                prepare_photography_dispatch,
+                photography,
+                publisher=GenerationPublisher(artifact_store=_artifact_store(), record_store=get_operational_record_store()),
+            )
+            plan_bytes, execution_bindings = prepared.plan_bytes, prepared.bindings_bytes
+        else:
+            plan_bytes = await asyncio.to_thread(prepare_dispatch_plan, effective_request, trusted_argv=argv)
     except Exception:
         LOGGER.exception("canonical dispatch preparation failed")
         return _error_response(
@@ -12022,6 +11270,7 @@ async def _create_distributed_job(
             requested_output_root=str(trusted_output_dir),
             global_limit=MAX_CONCURRENT_JOBS,
             tenant_limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+            **({"execution_bindings": execution_bindings} if execution_bindings is not None else {}),
         )
     except AdmissionRejected as exc:
         tenant_limited = exc.scope != "global"
@@ -12137,98 +11386,27 @@ async def _flush_operational_outbox_best_effort() -> None:
         LOGGER.exception("committed operational outbox delivery deferred until service recovery")
 
 
-def _revalidate_dispatch_paths(locator: DispatchLocator, plan_bytes: bytes, output_root: Path) -> None:
-    """Recheck the worker host's current allowlists and tenant policy before spawn."""
-    from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
-    from transformation_portal.core.execution_plan import parse_execution_plan_json
-    from transformation_portal.stage_graph.registry import StageRegistryIdentifier
+def _execution_policy() -> ExecutionPolicy:
+    """Share worker authorization while retaining app configuration overrides."""
+    from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
 
-    plan = parse_execution_plan_json(plan_bytes)
-    input_root = _resolve_allowed_request_path(plan.input_root, ALLOWED_INPUT_ROOTS)
-    output_root = _resolve_allowed_request_path(str(output_root), ALLOWED_OUTPUT_ROOTS)
-    paths: List[Tuple[Path, List[Path]]] = [(input_root, []), (output_root, [])]
-    pipeline = "lux-depth-v3"
-    if plan.planned_backend == "archive":
-        configuration = plan.to_payload()["nodes"][0]["configuration"]
-        operation = ARCHIVE_OPERATIONS[configuration["operation"]]
-        pipeline = operation.pipeline
-        for name in operation.files + operation.directories:
-            value = configuration["parameters"].get(name)
-            if value is not None:
-                is_rights_policy = configuration["operation"] == "rights-apply" and name == "policy_yaml"
-                shared_roots = [ARCHIVE_RIGHTS_POLICY_ROOT] if is_rights_policy else []
-                allowed_roots = ALLOWED_INPUT_ROOTS if is_rights_policy else ALLOWED_PATH_ROOTS
-                paths.append((_resolve_allowed_request_path(value, allowed_roots), shared_roots))
-    else:
-        from transformation_portal.lux_depth_v3 import config_resolver
-        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+    return ExecutionPolicy(
+        repo_root=REPO_ROOT,
+        input_roots=tuple(ALLOWED_INPUT_ROOTS),
+        output_roots=tuple(ALLOWED_OUTPUT_ROOTS),
+        fastvlm_roots=tuple(FASTVLM_RUNTIME_ALLOWED_ROOTS),
+        sam2_roots=tuple(MANAGED_SAM2_TRUSTED_ROOTS),
+        caption_roles=frozenset(ALLOWED_VLM_CAPTIONING_MODEL_ROLES),
+        fastvlm_runtime_root=default_fastvlm_runtime_root(),
+        pilot_enabled=PILOT_CONTROL_PLANE_ENABLED,
+        allowed_tenants=frozenset(PILOT_ALLOWED_TENANTS),
+        allowed_pipelines=frozenset(PILOT_ALLOWED_PIPELINES),
+        manager=_pilot_tenant_manager() if PILOT_CONTROL_PLANE_ENABLED else None,
+    )
 
-        # Only the immutable plan supplies execution paths. Default config is
-        # used solely to read this worker's currently selected server runtimes.
-        defaults = EnhanceConfig()
-        interpreter_resolvers = {
-            "raw_python_executable": config_resolver.resolve_prepared_raw_python_executable,
-            "da3_python_executable": config_resolver.resolve_prepared_da3_python_executable,
-            "depth_pro_python_executable": config_resolver.resolve_prepared_depth_pro_python_executable,
-        }
-        for node in plan.nodes:
-            configuration = node.configuration
-            for field, resolver in interpreter_resolvers.items():
-                carried = configuration.get(field)
-                if carried is not None:
-                    current = resolver(defaults, preparation_cwd=REPO_ROOT)
-                    # Do not dereference Python symlinks: two virtualenvs may
-                    # share a binary while authorizing different packages.
-                    if carried != current:
-                        raise DispatchAuthorityLost(f"worker runtime selection changed: {field}")
-            if node.stage_registry_id == StageRegistryIdentifier.LUX_DEPTH:
-                checkpoint = configuration.get("depth_pro_checkpoint_path")
-                if checkpoint is not None and "depth_pro" in plan.candidate_fallback_chain:
-                    current_checkpoint = config_resolver.resolve_prepared_depth_pro_checkpoint_path(
-                        defaults, preparation_cwd=REPO_ROOT
-                    )
-                    if checkpoint != current_checkpoint:
-                        paths.append(
-                            (_resolve_allowed_request_path(checkpoint, ALLOWED_INPUT_ROOTS), [REPO_ROOT / "checkpoints"])
-                        )
-            elif node.stage_registry_id == StageRegistryIdentifier.LUX_MATERIALS_V3:
-                for field in ("sam2_checkpoint_path", "sam_vit_h_checkpoint_path"):
-                    checkpoint = configuration.get(field)
-                    if checkpoint is not None:
-                        roots = MANAGED_SAM2_TRUSTED_ROOTS if field == "sam2_checkpoint_path" else [REPO_ROOT / "checkpoints"]
-                        paths.append((_resolve_allowed_request_path(checkpoint, ALLOWED_INPUT_ROOTS), roots))
-            elif node.stage_registry_id == StageRegistryIdentifier.LUX_RECONSTRUCTION:
-                sidecar = configuration.get("cameras_sidecar_path")
-                if sidecar is not None:
-                    paths.append((_resolve_allowed_request_path(sidecar, ALLOWED_INPUT_ROOTS), []))
-            elif node.stage_registry_id == StageRegistryIdentifier.LUX_OUTPUT:
-                captioning = configuration.get("captioning")
-                if isinstance(captioning, Mapping) and captioning.get("enabled"):
-                    selectors = [
-                        captioning.get(field)
-                        for field in ("model_path", "review_model_path", "python_executable", "mlx_vlm_dir")
-                    ]
-                    selector = captioning.get("selector")
-                    if isinstance(selector, str) and selector.lower() not in ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
-                        selectors.append(selector)
-                    for value in selectors:
-                        if value is not None:
-                            paths.append(
-                                (
-                                    _resolve_allowed_request_path(value, FASTVLM_RUNTIME_ALLOWED_ROOTS),
-                                    [default_fastvlm_runtime_root()],
-                                )
-                            )
-    if PILOT_CONTROL_PLANE_ENABLED:
-        if (
-            PILOT_ALLOWED_TENANTS and locator.tenant_id not in PILOT_ALLOWED_TENANTS
-        ) or pipeline not in PILOT_ALLOWED_PIPELINES:
-            raise DispatchAuthorityLost("dispatch tenant or pipeline is no longer allowed")
-        manager = _pilot_tenant_manager()
-        tenant = manager.get_tenant(locator.tenant_id)
-        if tenant is None:
-            tenant = manager.create_tenant(locator.tenant_id, policy=_pilot_tenant_policy())
-        guard = _pilot_tenant_fs_guard(tenant)
-        for path, shared_roots in paths:
-            if not any(path.is_relative_to(root.resolve()) for root in shared_roots):
-                guard.enforce_path(path)
+
+def _revalidate_dispatch_paths(
+    locator: DispatchLocator, plan_bytes: bytes, output_root: Path, *, execution_bindings: bytes | None = None
+) -> None:
+    """Recheck the same worker policy used by the standalone execution service."""
+    _execution_policy().validate_dispatch_paths(locator, plan_bytes, output_root, execution_bindings=execution_bindings)

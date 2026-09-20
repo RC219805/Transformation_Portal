@@ -18,7 +18,7 @@ from .lifecycle import PreparedLuxExecutionV5, authorize_model, validate_prepare
 from .photography import AlignedDepth, align_depth, enhance_master_v5
 
 if TYPE_CHECKING:
-    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
 
 
 @dataclass(frozen=True)
@@ -164,6 +164,15 @@ def run(
     *,
     cancellation: Callable[[], bool] | None = None,
     publisher: GenerationPublisher | None = None,
+    publication_limits: GenerationPublicationLimits | None = None,
+    managed_process_group: bool = False,
 ) -> LuxDepthV5Result:
     validate_prepared_bindings(prepared)
-    return _run(prepared, cancellation=cancellation, publisher=publisher, profile=_ExecutionProfile)
+    return _run(
+        prepared,
+        cancellation=cancellation,
+        publisher=publisher,
+        profile=_ExecutionProfile,
+        publication_limits=publication_limits,
+        managed_process_group=managed_process_group,
+    )

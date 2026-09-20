@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -34,9 +35,11 @@ from transformation_portal.core.execution_plan import (
     MAX_TOTAL_DECODED_PIXELS,
     CanonicalExecutionPlan,
     ExecutionPlanError,
+    decode_bounded_json_object,
     parse_execution_plan_json,
     with_execution_plan_fingerprint,
 )
+from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4
 from transformation_portal.ingest.canonical_json import TP_CANONICAL_JSON_PROFILE
 from transformation_portal.orchestrator.artifact_store._filesystem import open_directory, open_source_file
 from transformation_portal.orchestrator.artifact_store.generation import (
@@ -48,6 +51,11 @@ from transformation_portal.orchestrator.execution_workspace import (
     create_execution_workspace,
     remove_execution_workspace,
     validate_execution_workspace,
+)
+from transformation_portal.orchestrator.photography_adapter import (
+    MAX_PHOTOGRAPHY_BINDINGS_BYTES,
+    consume_photography_dispatch,
+    validate_photography_dispatch,
 )
 from transformation_portal.stage_graph.registry import StageRegistryIdentifier, get_stage_definition
 
@@ -63,6 +71,20 @@ def _canonical_plan(data: bytes) -> CanonicalExecutionPlan:
     if data != plan.to_canonical_json().encode("utf-8") or plan.configuration_completeness != EXECUTION_COMPLETE:
         raise ExecutionPlanError("Dispatch requires exact execution-complete canonical plan bytes")
     return plan
+
+
+def validate_dispatch_plan(
+    plan_bytes: bytes, execution_bindings: bytes | None = None
+) -> CanonicalExecutionPlan | ExecutionPlanV4:
+    """Statically allowlist plan families and their exact physical-binding carrier."""
+    schema = decode_bounded_json_object(plan_bytes).get("schema")
+    if schema == "tp.execution.plan.v4":
+        if execution_bindings is None:
+            raise ExecutionPlanError("V5 dispatch requires immutable photography bindings")
+        return validate_photography_dispatch(plan_bytes, execution_bindings)
+    if execution_bindings is not None:
+        raise ExecutionPlanError("Legacy dispatch does not accept photography bindings")
+    return _canonical_plan(plan_bytes)
 
 
 def _regular_file_digest(path: Path, *, snapshot: Path | None = None) -> str:
@@ -237,11 +259,19 @@ def prepare_dispatch_plan(job_request: Mapping[str, Any], *, trusted_argv: Seque
 
 
 def command_from_dispatch_plan(
-    plan_bytes: bytes, *, output_root: Path, plan_path: Path, execution_workspace: Path | None = None
+    plan_bytes: bytes,
+    *,
+    output_root: Path,
+    plan_path: Path,
+    execution_workspace: Path | None = None,
+    execution_bindings: bytes | None = None,
+    bindings_path: Path | None = None,
 ) -> list[str]:
     """Return only the fixed local consumer, never a command from stored data."""
 
-    _canonical_plan(plan_bytes)
+    validate_dispatch_plan(plan_bytes, execution_bindings)
+    if (execution_bindings is None) != (bindings_path is None):
+        raise ExecutionPlanError("Dispatch bindings require both carrier bytes and a private file")
     root = _absolute_path(str(output_root), must_exist=False)
     path = _absolute_path(str(plan_path), must_exist=False)
     command = [
@@ -255,6 +285,15 @@ def command_from_dispatch_plan(
         "--output-root",
         str(root),
     ]
+    if execution_bindings is not None:
+        command.extend(
+            [
+                "--bindings-file",
+                str(_absolute_path(str(bindings_path), must_exist=False)),
+                "--bindings-sha256",
+                hashlib.sha256(execution_bindings).hexdigest(),
+            ]
+        )
     if execution_workspace is not None:
         validate_execution_workspace(execution_workspace, root)
         command.extend(["--execution-workspace", str(execution_workspace)])
@@ -375,10 +414,17 @@ def _export_execution_outputs(source_root: Path, output_descriptor: int) -> None
     export(source_root, output_descriptor)
 
 
-def execute_dispatch_plan(plan_bytes: bytes, *, output_root: Path, execution_workspace: Path | None = None) -> int:
+def execute_dispatch_plan(
+    plan_bytes: bytes,
+    *,
+    output_root: Path,
+    execution_workspace: Path | None = None,
+    execution_bindings: bytes | None = None,
+    managed_process_group: bool = False,
+) -> int:
     """Consume frozen intent privately, then export through pinned authority."""
 
-    plan = _canonical_plan(plan_bytes)
+    plan = validate_dispatch_plan(plan_bytes, execution_bindings)
     root = _absolute_path(str(output_root), must_exist=False)
     output_descriptor = None
     owned_workspace = execution_workspace is None
@@ -386,7 +432,17 @@ def execute_dispatch_plan(plan_bytes: bytes, *, output_root: Path, execution_wor
     validate_execution_workspace(workspace, root)
     try:
         execution_root = workspace / "outputs"
-        if plan.planned_backend == "archive":
+        if isinstance(plan, ExecutionPlanV4):
+            from transformation_portal.lux_depth_v5.pipeline import run
+            from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
+
+            assert execution_bindings is not None
+            prepared_photography = consume_photography_dispatch(plan_bytes, execution_bindings, execution_root=execution_root)
+            limits = GenerationPublicationLimits.from_payload(plan.to_payload()["publication"])
+            output_descriptor = _pin_output_directory(root)
+            run(prepared_photography, publication_limits=limits, managed_process_group=managed_process_group)
+            return_code = 0
+        elif plan.planned_backend == "archive":
             snapshot_root = workspace / "inputs"
             snapshot_root.mkdir(mode=0o700)
             command = _archive_command(plan, execution_root, snapshot_root)
@@ -428,6 +484,8 @@ def main() -> int:
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--execution-workspace", type=Path)
+    parser.add_argument("--bindings-file", type=Path)
+    parser.add_argument("--bindings-sha256")
     args = parser.parse_args()
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     with os.fdopen(os.open(args.plan_file, flags), "rb") as source:
@@ -437,7 +495,34 @@ def main() -> int:
         data = source.read(MAX_PLAN_BODY_BYTES + 1)
     if hashlib.sha256(data).hexdigest() != args.plan_sha256:
         raise ExecutionPlanError("Dispatch plan carrier digest does not match the claim")
-    return execute_dispatch_plan(data, output_root=args.output_root, execution_workspace=args.execution_workspace)
+    if (args.bindings_file is None) != (args.bindings_sha256 is None):
+        raise ExecutionPlanError("Dispatch bindings require both file and digest")
+    bindings = None
+    if args.bindings_file is not None:
+        with os.fdopen(os.open(args.bindings_file, flags), "rb") as source:
+            metadata = os.fstat(source.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PHOTOGRAPHY_BINDINGS_BYTES:
+                raise ExecutionPlanError("Dispatch bindings carrier is not a bounded regular file")
+            bindings = source.read(MAX_PHOTOGRAPHY_BINDINGS_BYTES + 1)
+        if hashlib.sha256(bindings).hexdigest() != args.bindings_sha256:
+            raise ExecutionPlanError("Dispatch bindings carrier digest does not match the claim")
+
+    def terminate_dispatch(signum: int, _frame: Any) -> None:
+        # The isolated photography session owns another process group. Unwind
+        # its context manager on normal managed cancellation so it is reaped.
+        raise SystemExit(128 + signum)
+
+    previous_handler = signal.signal(signal.SIGTERM, terminate_dispatch)
+    try:
+        return execute_dispatch_plan(
+            data,
+            output_root=args.output_root,
+            execution_workspace=args.execution_workspace,
+            execution_bindings=bindings,
+            managed_process_group=True,
+        )
+    finally:
+        signal.signal(signal.SIGTERM, previous_handler)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,6 @@ Only the native-depth node is cacheable; all photographic masters remain local.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import tempfile
@@ -44,7 +43,7 @@ from .raw import decode_raw
 from .runtime import PhotographyRuntime
 
 if TYPE_CHECKING:
-    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
 
 
 @dataclass(frozen=True)
@@ -120,19 +119,26 @@ def _run(
     cancellation: Callable[[], bool] | None = None,
     publisher: GenerationPublisher | None = None,
     profile: Any = None,
+    publication_limits: GenerationPublicationLimits | None = None,
+    managed_process_group: bool = False,
 ) -> Any:
     """Shared governed execution, selected only through explicit version boundaries."""
+    if type(managed_process_group) is not bool:
+        raise ValueError("Managed process-group policy must be an exact boolean")
     validator = validate_prepared_bindings if profile is None else profile.validate_prepared_bindings
     parser = parse_photography_plan if profile is None else profile.parse_plan
     validator(prepared)
     plan = parser(prepared.canonical_plan_bytes)
     payload = plan.to_payload()
-    if "publication" in payload or publisher is not None:
+    limits = publisher.limits if publisher is not None else publication_limits
+    if publisher is not None and publication_limits is not None and publisher.limits != publication_limits:
+        raise ValueError("Explicit publication limits differ from the publisher")
+    if "publication" in payload or limits is not None:
         from .publication import validate_publication_plan
 
-        if publisher is None:
-            raise ValueError("Managed execution requires its publisher before backend initialization")
-        (validate_publication_plan if profile is None else profile.validate_publication_plan)(payload, publisher.limits)
+        if limits is None:
+            raise ValueError("Managed execution requires its publisher or frozen limits before backend initialization")
+        (validate_publication_plan if profile is None else profile.validate_publication_plan)(payload, limits)
     (authorize_model if profile is None else profile.authorize_model)(plan)
     resources = payload["resources"]
     configuration = payload["configuration"]
@@ -214,7 +220,7 @@ def _run(
         nonlocal written
         check()
         maximum_bytes = resources["max_output_bytes"] - written
-        if publisher is not None:
+        if limits is not None:
             maximum_bytes = min(maximum_bytes, payload["publication"]["max_file_bytes"])
         _, record = snapshot(root, path, maximum_bytes=maximum_bytes, retain_bytes=False)
         written += record["size_bytes"]
@@ -228,7 +234,8 @@ def _run(
         return False
 
     session_type = DA3Session if profile is None else profile.session_type
-    with session_type(prepared.runtime_python, plan, cancellation=poll_cancellation) as session:
+    worker_options = {"own_process_group": False} if managed_process_group else {}
+    with session_type(prepared.runtime_python, plan, cancellation=poll_cancellation, **worker_options) as session:
         root.mkdir(mode=0o700, parents=False, exist_ok=False)
         with tempfile.TemporaryDirectory(prefix="tp-lux-v4-cache-") as temporary:
             try:
@@ -294,6 +301,7 @@ def _run(
                                 python=prepared.raw_python or "",
                                 resources=resources,
                                 cancellation=poll_cancellation,
+                                **worker_options,
                             ),
                         )
                         if companion is not None and "calibration" in companion:
@@ -578,7 +586,7 @@ def _run(
                 completion_bytes = canonicalize_json(evidence)
                 if written + len(completion_bytes) > resources["max_output_bytes"]:
                     raise RuntimeError("Completion evidence exceeds the output byte budget")
-                if publisher is not None and len(completion_bytes) > payload["publication"]["max_file_bytes"]:
+                if limits is not None and len(completion_bytes) > payload["publication"]["max_file_bytes"]:
                     raise RuntimeError("Completion evidence exceeds the publisher file-byte limit")
                 check()
                 parent_runtime.verify()

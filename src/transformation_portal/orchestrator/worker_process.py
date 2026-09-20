@@ -8,24 +8,20 @@ paid-pilot deployments.
 from __future__ import annotations
 
 import asyncio
-import importlib
 import logging
 import os
 import signal
 
-from transformation_portal.orchestrator.worker import JobExecutor, run_worker_forever
+from transformation_portal.orchestrator.execution_runtime import create_managed_execution_service
+from transformation_portal.orchestrator.worker import run_worker_forever
 
 logger = logging.getLogger(__name__)
 
 
-def _load_app_executor() -> JobExecutor:
-    app_module = importlib.import_module("app")
-    return getattr(app_module, "_orchestrator_job_executor")
-
-
 async def run_external_worker(*, stop_event: asyncio.Event | None = None) -> None:
-    """Consume broker leases with the app-owned orchestrator job executor."""
-    await run_worker_forever(executor=_load_app_executor(), stop_event=stop_event)
+    """Consume immutable dispatches through the shared execution service."""
+    service = create_managed_execution_service()
+    await run_worker_forever(executor=service.execute, stop_event=stop_event)
 
 
 def main() -> None:

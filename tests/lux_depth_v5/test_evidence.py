@@ -216,7 +216,9 @@ def completed(tmp_path, monkeypatch, request):
         0,
         1,
     )
-    locator = DispatchLocator("job_fixture", "attempt", "dispatch", result.plan_fingerprint_sha256, "tenant")
+    locator = DispatchLocator(
+        "job_fixture", "attempt", "dispatch", hashlib.sha256(prepared.canonical_plan_bytes).hexdigest(), "tenant"
+    )
     fence = DispatchFence(locator, "worker", 1, 0.0, str(root), str(tmp_path / "requested"))
     return SimpleNamespace(result=result, evidence=evidence, descriptor=descriptor, prepared=prepared, fence=fence)
 
