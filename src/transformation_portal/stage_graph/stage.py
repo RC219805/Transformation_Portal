@@ -182,14 +182,26 @@ class Stage(ABC):
         Returns:
             Stage result
         """
+        return self._execute(context, use_legacy_cache=True)
+
+    def execute_uncached(self, context: StageContext) -> StageResult:
+        """Compute with normal error handling but no legacy cache authority.
+
+        CAS executors own their cache. This path deliberately does not even
+        evaluate the legacy cache key, so a stage cannot accidentally fall
+        back to an unrelated JSON/NPY entry.
+        """
+        return self._execute(context, use_legacy_cache=False)
+
+    def _execute(self, context: StageContext, *, use_legacy_cache: bool) -> StageResult:
         start_time = time.time()
 
         try:
             # Generate cache key
-            cache_key = self.get_cache_key(context)
+            cache_key = self.get_cache_key(context) if use_legacy_cache else None
 
             # Check cache if enabled
-            if context.cache_enabled and context.cache_dir:
+            if use_legacy_cache and context.cache_enabled and context.cache_dir:
                 cached_result = self._load_from_cache(cache_key, context.cache_dir)
                 if cached_result:
                     self.logger.info(f"Cache hit for {self.name}: {cache_key[:16]}...")
@@ -211,7 +223,7 @@ class Stage(ABC):
                 result.status = StageStatus.COMPLETED
 
             # Save to cache if successful
-            if context.cache_enabled and context.cache_dir and result.is_success():
+            if use_legacy_cache and context.cache_enabled and context.cache_dir and result.is_success():
                 self._save_to_cache(result, cache_key, context.cache_dir)
 
             return result

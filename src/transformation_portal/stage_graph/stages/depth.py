@@ -62,13 +62,18 @@ class DepthEstimationStage(Stage):
 
         start = time.time()
 
-        # Lazy load model
-        if self._model is None:
-            device = context.device
-            self._load_model(device)
-
-        # Compute depth
-        depth_map = self._estimate_depth(image, context.device)
+        try:
+            if self._model is None:
+                self._load_model(context.device)
+            depth_map = self._estimate_depth(image, context.device)
+        except Exception as exc:
+            return StageResult(
+                stage_name=self.name,
+                stage_version=self.version,
+                status=StageStatus.FAILED,
+                error=f"Depth backend failed: {exc}",
+                duration_ms=(time.time() - start) * 1000,
+            )
 
         duration_ms = (time.time() - start) * 1000
 
@@ -125,9 +130,7 @@ class DepthEstimationStage(Stage):
             self.logger.info(f"Loaded depth model ({self.model_size}) on {device}")
 
         except Exception as e:
-            # Fallback to placeholder
-            self.logger.warning(f"Depth model not available ({e}), using placeholder")
-            self._model = "placeholder"
+            raise RuntimeError(f"Depth model is unavailable: {e}") from e
 
     def _estimate_depth(self, image: np.ndarray, device: str) -> np.ndarray:
         """
@@ -140,12 +143,6 @@ class DepthEstimationStage(Stage):
         Returns:
             Depth map (H, W) normalized to [0, 1]
         """
-        if self._model == "placeholder":
-            # Simple placeholder: horizontal gradient
-            h, w = image.shape[:2]
-            depth = np.linspace(0, 1, w)[None, :].repeat(h, axis=0)
-            return depth.astype(np.float32)
-
         try:
             # Use actual depth estimation with transformers pipeline
             from PIL import Image
@@ -172,7 +169,4 @@ class DepthEstimationStage(Stage):
             return depth.astype(np.float32)
 
         except Exception as e:
-            self.logger.error(f"Depth estimation failed: {e}")
-            # Fallback
-            h, w = image.shape[:2]
-            return np.ones((h, w), dtype=np.float32) * 0.5
+            raise RuntimeError(f"Depth inference failed: {e}") from e

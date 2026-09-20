@@ -25,6 +25,7 @@ separately. The May 11 inventory and May 12 overlays remain historical evidence.
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
+| LuxDepthV4 candidate | [V4 photography and evaluation](reference/LUX_DEPTH_V4.md) |
 | CLI entrypoint reference | [CLI Reference](cli/CLI_REFERENCE.md) |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |
 | CI workflow inventory | [Workflow Matrix](ci/WORKFLOW_MATRIX.md) |

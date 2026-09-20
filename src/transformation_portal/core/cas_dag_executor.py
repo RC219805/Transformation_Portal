@@ -38,18 +38,20 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
 import re
+import stat
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from transformation_portal.core._cas_helpers import CASObjectMissingError
 from transformation_portal.core._cas_helpers import atomic_write_json as _atomic_write_json
-from transformation_portal.core._cas_helpers import compute_numpy_array_id as _compute_numpy_array_id
-from transformation_portal.core._cas_helpers import load_serializable, make_serializable
+from transformation_portal.core._cas_helpers import canonical_input_value, load_serializable, make_serializable
 from transformation_portal.core._cas_helpers import sanitize_cas_id_for_filename as _sanitize_cas_id_for_filename
 from transformation_portal.core.execution_identity import (
     ArtifactMetadata,
@@ -66,12 +68,77 @@ from transformation_portal.core.execution_wrapper import (
     FileLock,
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
-from transformation_portal.stage_graph.graph import GraphExecution, StageGraph
+from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
-from transformation_portal.storage.cas_store import ArtifactStore
+from transformation_portal.storage.cas_store import ArtifactStore, CASError
 from transformation_portal.storage.merkle_dag import MerkleDAG
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AuthoritativeStageIdentity:
+    """Trusted compiler adapter; no executable values cross the plan boundary.
+
+    The caller validates its versioned identity factory before constructing
+    this adapter. Cache reads bind both its key and the exact immutable payload.
+    """
+
+    stage_name: str
+    stage_version: str
+    cache_key: str
+    canonical_identity_bytes: bytes
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", self.cache_key):
+            raise ValueError("Authoritative cache keys must be SHA-256 digests")
+        if type(self.canonical_identity_bytes) is not bytes or len(self.canonical_identity_bytes) > 1_048_576:
+            raise ValueError("Authoritative identity must be bounded canonical bytes")
+        payload = json.loads(self.canonical_identity_bytes)
+        if (
+            not isinstance(payload, dict)
+            or not isinstance(payload.get("schema"), str)
+            or canonicalize_json(payload) != self.canonical_identity_bytes
+        ):
+            raise ValueError("Authoritative identity must be a canonical schema-bearing object")
+        if not self.stage_name or not self.stage_version:
+            raise ValueError("Authoritative identity requires stage name and version")
+
+    @property
+    def cas_id(self) -> str:
+        return self.cache_key if self.cache_key.startswith("sha256:") else f"sha256:{self.cache_key}"
+
+    @property
+    def schema_version(self) -> str:
+        return self.to_dict()["schema"]
+
+    def to_dict(self) -> dict[str, Any]:
+        return json.loads(self.canonical_identity_bytes)
+
+
+StageIdentity = Union[ExecutionIdentity, AuthoritativeStageIdentity]
+IdentityProvider = Callable[[Stage, StageContext, Mapping[str, StageIdentity]], AuthoritativeStageIdentity]
+ExecutionCheckpoint = Callable[[str, str, StageContext], None]
+StageCachePolicy = Callable[[Stage, StageContext], bool]
+_CACHE_MANIFEST_SCHEMA = "tp.cas.stage-cache.v1"
+_MAX_CACHE_MANIFEST_BYTES = 4 * 1024**2
+_CACHE_MANIFEST_KEYS = frozenset(
+    {
+        "cache_manifest_schema",
+        "cas_id",
+        "identity",
+        "stage_name",
+        "stage_version",
+        "schema_version",
+        "artifacts",
+        "artifacts_sha256",
+        "result_metadata",
+        "metadata",
+        "cached_at",
+        "payload_sha256",
+    }
+)
 
 
 @dataclass
@@ -96,7 +163,7 @@ class CASExecutionResult:
     cache_misses: int
     total_duration_ms: float
     merkle_dag: Optional[MerkleDAG] = None
-    identities: Dict[str, ExecutionIdentity] = field(default_factory=dict)
+    identities: Dict[str, StageIdentity] = field(default_factory=dict)
     error: Optional[str] = None
 
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -230,7 +297,7 @@ class CASDAGExecutor:
         self,
         stage: Stage,
         context: StageContext,
-        upstream_identities: Dict[str, ExecutionIdentity],
+        upstream_identities: Dict[str, StageIdentity],
     ) -> ExecutionIdentity:
         """Compute execution identity for a stage.
 
@@ -246,38 +313,18 @@ class CASDAGExecutor:
         Returns:
             ExecutionIdentity for this stage execution
         """
-        import numpy as np
-
-        # Collect input IDs from context artifacts
-        input_ids = []
-
-        for dep_name in stage.get_dependencies():
-            if dep_name in upstream_identities:
-                # Use upstream CAS ID for cascade invalidation
-                input_ids.append(upstream_identities[dep_name].cas_id)
-
-            # Also include actual artifact hashes
-            artifact = context.get_artifact(dep_name)
-            if artifact is not None:
-                if isinstance(artifact, np.ndarray):
-                    # Use shared helper for consistent NumPy identity across executors
-                    # This includes dtype, shape, and data hash to avoid false cache hits
-                    input_ids.append(_compute_numpy_array_id(artifact))
-                elif hasattr(artifact, "tobytes"):
-                    # Non-NumPy types with tobytes (e.g., custom array-like)
-                    input_ids.append(hashlib.sha256(artifact.tobytes()).hexdigest())
-                elif isinstance(artifact, dict):
-                    input_ids.append(hashlib.sha256(jcs_dumpb(artifact)).hexdigest())
-                elif hasattr(artifact, "sha256"):
-                    input_ids.append(artifact.sha256)
-
-        # Compute stage config hash
-        stage_config = context.config.get(stage.name, {})
-
+        # A stage may consume root artifacts without declaring stage dependencies.
+        # Bind all stage-visible values conservatively unless a trusted compiler
+        # supplies the exact consumed-input identity through identity_provider.
+        artifact_payload = canonical_input_value(context.artifacts)
+        upstream_payload = {
+            name: upstream_identities[name].cas_id for name in stage.get_dependencies() if name in upstream_identities
+        }
+        input_ids = [hashlib.sha256(jcs_dumpb({"artifacts": artifact_payload, "upstream": upstream_payload})).hexdigest()]
         return compute_cas_id(
             stage_name=stage.name,
             input_ids=input_ids,
-            config=stage_config,
+            config={"stage": context.config.get(stage.name, {}), "device": context.device},
             stage_version=stage.version,
             code_hash=self._code_hash,
             lockfile_path=self._lockfile_path,
@@ -313,7 +360,7 @@ class CASDAGExecutor:
         merkle_node_hashes: Dict[str, str],
         stage_name: str,
         stage: Stage,
-        identity: ExecutionIdentity,
+        identity: StageIdentity,
         cached: bool,
         duration_ms: Optional[float] = None,
     ) -> None:
@@ -362,278 +409,222 @@ class CASDAGExecutor:
         graph: StageGraph,
         context: StageContext,
         run_id: Optional[str] = None,
+        *,
+        identity_provider: Optional[IdentityProvider] = None,
+        checkpoint: Optional[ExecutionCheckpoint] = None,
+        cache_policy: Optional[StageCachePolicy] = None,
     ) -> CASExecutionResult:
-        """Execute DAG with CAS-aware caching.
+        """Execute trusted stages with one cache and compiler-owned authority.
 
-        Args:
-            graph: Stage graph to execute
-            context: Execution context
-            run_id: Optional run identifier
-
-        Returns:
-            CASExecutionResult with cache statistics and provenance
+        Callbacks are trusted in-process integrations, never deserialized from
+        plan JSON. A checkpoint exception stops execution before subsequent
+        propagation/publication. Process-level cancellation belongs to the
+        caller's existing worker boundary.
         """
         import uuid
 
-        if run_id is None:
-            run_id = str(uuid.uuid4())
-
-        start_time = time.time()
-        context.run_id = run_id
-
-        # Initialize result tracking
+        started = time.monotonic()
+        context = StageContext(
+            artifacts=dict(context.artifacts),
+            config=dict(context.config),
+            device=context.device,
+            cache_enabled=False,
+            cache_dir=None,
+            run_id=run_id or str(uuid.uuid4()),
+            metadata=dict(context.metadata),
+        )
         stage_results: Dict[str, StageResult] = {}
-        identities: Dict[str, ExecutionIdentity] = {}
+        identities: Dict[str, StageIdentity] = {}
         execution_order: List[str] = []
-        cache_hits = 0
-        cache_misses = 0
-
-        # Initialize provenance DAG
+        cache_hits = cache_misses = 0
         merkle_dag = MerkleDAG() if self.config.enable_provenance else None
-        # Track merkle node hashes for each stage. MerkleDAG.add_computation() requires
-        # that input node hashes exist in the DAG. This dict maps stage names to their
-        # artifact node hashes, enabling us to reference upstream stages when adding
-        # computation nodes for downstream stages.
         merkle_node_hashes: Dict[str, str] = {}
 
-        try:
-            # Get topological execution order
-            topo_order = graph.get_execution_order()
+        def check(stage_name: str, phase: str) -> None:
+            if checkpoint is not None:
+                checkpoint(stage_name, phase, context)
 
-            # Execute stages in order
-            for stage_name in topo_order:
-                stage = graph.stages[stage_name]
-
-                # Compute identity including upstream dependencies
-                identity = self._compute_stage_identity(
-                    stage=stage,
-                    context=context,
-                    upstream_identities=identities,
-                )
-                identities[stage_name] = identity
-
-                # Check cache
-                cached_result = None
-                if self.config.enable_caching:
-                    cached_result = self._check_cache(identity)
-
-                if cached_result is not None:
-                    # Cache hit
-                    logger.info(
-                        "Stage %s: cache hit (%s)",
-                        stage_name,
-                        identity.cas_id[:16],
-                    )
-                    stage_results[stage_name] = cached_result
-                    execution_order.append(stage_name)
-                    cache_hits += 1
-
-                    # Propagate artifacts
-                    for name, value in cached_result.artifacts.items():
-                        context.set_artifact(name, value)
-
-                    # Add to provenance DAG
-                    if merkle_dag:
-                        self._add_provenance_node(
-                            merkle_dag=merkle_dag,
-                            merkle_node_hashes=merkle_node_hashes,
-                            stage_name=stage_name,
-                            stage=stage,
-                            identity=identity,
-                            cached=True,
-                        )
-                else:
-                    # Cache miss - execute with lock
-                    with self._get_lock(stage_name, identity.cas_id):
-                        # Double-check cache after acquiring lock
-                        if self.config.enable_caching:
-                            cached_result = self._check_cache(identity)
-                            if cached_result is not None:
-                                logger.info(
-                                    "Stage %s: cache hit (after lock) (%s)",
-                                    stage_name,
-                                    identity.cas_id[:16],
-                                )
-                                stage_results[stage_name] = cached_result
-                                execution_order.append(stage_name)
-                                cache_hits += 1
-
-                                for name, value in cached_result.artifacts.items():
-                                    context.set_artifact(name, value)
-                                continue
-
-                        # Execute stage
-                        logger.info(
-                            "Stage %s: executing (cache miss)",
-                            stage_name,
-                        )
-                        result = stage.execute(context)
-                        stage_results[stage_name] = result
-                        execution_order.append(stage_name)
-                        cache_misses += 1
-
-                        # Store in cache
-                        if self.config.enable_caching and result.is_success():
-                            self._store_cache(identity, result)
-
-                        # Propagate artifacts
-                        for name, value in result.artifacts.items():
-                            context.set_artifact(name, value)
-
-                        # Add to provenance DAG
-                        if merkle_dag:
-                            self._add_provenance_node(
-                                merkle_dag=merkle_dag,
-                                merkle_node_hashes=merkle_node_hashes,
-                                stage_name=stage_name,
-                                stage=stage,
-                                identity=identity,
-                                cached=False,
-                                duration_ms=result.duration_ms,
-                            )
-
-                        # Check for failure
-                        if not result.is_success():
-                            return CASExecutionResult(
-                                success=False,
-                                stage_results=stage_results,
-                                execution_order=execution_order,
-                                cache_hits=cache_hits,
-                                cache_misses=cache_misses,
-                                total_duration_ms=(time.time() - start_time) * 1000,
-                                merkle_dag=merkle_dag,
-                                identities=identities,
-                                error=f"Stage {stage_name} failed: {result.error}",
-                            )
-
-        except Exception as e:
-            logger.error("DAG execution failed: %s", e)
+        def finish(error: Optional[str] = None) -> CASExecutionResult:
             return CASExecutionResult(
-                success=False,
+                success=error is None,
                 stage_results=stage_results,
                 execution_order=execution_order,
                 cache_hits=cache_hits,
                 cache_misses=cache_misses,
-                total_duration_ms=(time.time() - start_time) * 1000,
+                total_duration_ms=(time.monotonic() - started) * 1000,
                 merkle_dag=merkle_dag,
                 identities=identities,
-                error=str(e),
+                error=error,
             )
 
-        return CASExecutionResult(
-            success=True,
-            stage_results=stage_results,
-            execution_order=execution_order,
-            cache_hits=cache_hits,
-            cache_misses=cache_misses,
-            total_duration_ms=(time.time() - start_time) * 1000,
-            merkle_dag=merkle_dag,
-            identities=identities,
-        )
-
-    def _check_cache(self, identity: ExecutionIdentity) -> Optional[StageResult]:
-        """Check if stage result is cached.
-
-        Uses recursive deserialization to handle nested numpy arrays and dicts,
-        matching the single-stage executor's semantics.
-
-        Args:
-            identity: Execution identity to look up
-
-        Returns:
-            Cached StageResult if found and valid, None otherwise
-        """
-        cache_path = self._cache_path(identity.cas_id)
-        if not cache_path.exists():
-            return None
-
         try:
-            import json
+            for stage_name in graph.get_execution_order():
+                stage = graph.stages[stage_name]
+                check(stage_name, "before_identity")
+                identity = (
+                    identity_provider(stage, context, dict(identities))
+                    if identity_provider is not None
+                    else self._compute_stage_identity(stage, context, identities)
+                )
+                if not isinstance(identity, (ExecutionIdentity, AuthoritativeStageIdentity)):
+                    raise TypeError("Identity provider returned an unsupported authority type")
+                if identity.stage_name != stage.name or identity.stage_version != stage.version:
+                    raise ValueError("Stage identity does not match the executing stage")
+                identities[stage_name] = identity
+                selected_cache_policy = cache_policy(stage, context) if cache_policy is not None else True
+                if type(selected_cache_policy) is not bool:
+                    raise TypeError("Stage cache policy must return a boolean")
+                cache_enabled = self.config.enable_caching and selected_cache_policy
+                check(stage_name, "before_cache")
+                result = self._check_cache(identity) if cache_enabled else None
+                check(stage_name, "after_cache")
+                if result is None:
+                    with self._get_lock(stage_name, identity.cas_id):
+                        check(stage_name, "before_cache")
+                        result = self._check_cache(identity) if cache_enabled else None
+                        check(stage_name, "after_cache")
+                        if result is None:
+                            check(stage_name, "before_compute")
+                            result = stage.execute_uncached(context)
+                            cache_misses += 1
+                            check(stage_name, "after_compute")
+                            if cache_enabled and result.is_success():
+                                check(stage_name, "before_store")
+                                self._store_cache(identity, result)
+                if result.cache_hit:
+                    cache_hits += 1
+                stage_results[stage_name] = result
+                execution_order.append(stage_name)
+                if not result.is_success():
+                    return finish(f"Stage {stage_name} failed: {result.error}")
+                check(stage_name, "before_propagate")
+                for name, value in result.artifacts.items():
+                    context.set_artifact(name, value)
+                check(stage_name, "after_propagate")
+                if merkle_dag is not None:
+                    self._add_provenance_node(
+                        merkle_dag,
+                        merkle_node_hashes,
+                        stage_name,
+                        stage,
+                        identity,
+                        cached=result.cache_hit,
+                        duration_ms=None if result.cache_hit else result.duration_ms,
+                    )
+        except Exception as exc:
+            logger.error("DAG execution failed: %s", exc)
+            return finish(str(exc))
+        return finish()
 
-            data = json.loads(cache_path.read_text())
+    def _read_cache_manifest(self, cache_path: Path) -> dict[str, Any]:
+        """Read a bounded regular manifest without following cache symlinks."""
+        if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+            raise OSError("Verified cache reads require no-follow directory descriptors")
+        descriptors = []
+        try:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            descriptor = os.open(self.cache_dir, flags)
+            descriptors.append(descriptor)
+            for component in cache_path.relative_to(self.cache_dir).parts[:-1]:
+                descriptor = os.open(component, flags, dir_fd=descriptor)
+                descriptors.append(descriptor)
+            file_descriptor = os.open(cache_path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
+            descriptors.append(file_descriptor)
+            info = os.fstat(file_descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_CACHE_MANIFEST_BYTES:
+                raise ValueError("Cache manifest is not a bounded regular file")
+            chunks = []
+            size = 0
+            while chunk := os.read(file_descriptor, min(65536, _MAX_CACHE_MANIFEST_BYTES + 1 - size)):
+                size += len(chunk)
+                if size > _MAX_CACHE_MANIFEST_BYTES:
+                    raise ValueError("Cache manifest exceeds byte limit")
+                chunks.append(chunk)
 
-            # Validate schema version
-            if data.get("schema_version") != identity.schema_version:
-                logger.debug("Cache schema mismatch for %s", identity.cas_id[:16])
+            def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("Duplicate cache manifest key")
+                    result[key] = value
+                return result
+
+            return json.loads(b"".join(chunks), object_pairs_hook=unique_pairs)
+        finally:
+            for descriptor in reversed(descriptors):
+                os.close(descriptor)
+
+    def _check_cache(self, identity: StageIdentity) -> Optional[StageResult]:
+        """Accept only identity-bound, closed manifests and verified CAS bytes."""
+        try:
+            data = self._read_cache_manifest(self._cache_path(identity.cas_id))
+            if not isinstance(data, dict) or set(data) != _CACHE_MANIFEST_KEYS:
                 return None
-
-            # Validate platform compatibility
-            metadata_dict = data.get("metadata", {})
-            if metadata_dict:
-                metadata = ArtifactMetadata.from_dict(metadata_dict)
-                if not is_compatible(
-                    metadata,
-                    allow_cross_platform=self.config.allow_cross_platform,
+            if (
+                data["cache_manifest_schema"] != _CACHE_MANIFEST_SCHEMA
+                or data["cas_id"] != identity.cas_id
+                or data["schema_version"] != identity.schema_version
+                or data["identity"] != identity.to_dict()
+                or data["stage_name"] != identity.stage_name
+                or data["stage_version"] != identity.stage_version
+                or not isinstance(data["artifacts"], dict)
+                or not isinstance(data["result_metadata"], dict)
+            ):
+                return None
+            digest = data.pop("payload_sha256")
+            if hashlib.sha256(jcs_dumpb(data)).hexdigest() != digest:
+                return None
+            if hashlib.sha256(jcs_dumpb(data["artifacts"])).hexdigest() != data["artifacts_sha256"]:
+                return None
+            if isinstance(identity, ExecutionIdentity):
+                metadata = ArtifactMetadata.from_dict(data["metadata"])
+                if (
+                    metadata.artifact_id != data["artifacts_sha256"]
+                    or metadata.execution_identity != identity.cas_id
+                    or not is_compatible(metadata, allow_cross_platform=self.config.allow_cross_platform)
                 ):
-                    logger.debug("Cache platform mismatch for %s", identity.cas_id[:16])
                     return None
-
-            # Reconstruct artifacts using shared recursive deserialization
-            # This handles nested dicts/lists with numpy arrays
-            raw_artifacts = data.get("artifacts", {})
-            artifacts = load_serializable(raw_artifacts, self.artifact_store)
-
+            elif data["metadata"] != {}:
+                return None
+            artifacts = load_serializable(data["artifacts"], self.artifact_store)
             return StageResult(
-                stage_name=data["stage_name"],
-                stage_version=data["stage_version"],
+                stage_name=identity.stage_name,
+                stage_version=identity.stage_version,
                 status=StageStatus.CACHED,
                 artifacts=artifacts,
                 cache_hit=True,
                 cache_key=identity.cas_id,
-                metadata=data.get("result_metadata", {}),
+                metadata=data["result_metadata"],
             )
-
-        except CASObjectMissingError as e:
-            # Missing CAS object - treat as cache miss for self-healing
-            logger.warning("Missing CAS object for %s: %s", identity.cas_id[:16], e)
-            return None
-        except (json.JSONDecodeError, KeyError, OSError) as e:
-            logger.warning("Failed to load cache for %s: %s", identity.cas_id[:16], e)
+        except (CASObjectMissingError, CASError, ValueError, TypeError, KeyError, OSError, RecursionError) as exc:
+            logger.debug("Cache entry rejected for %s: %s", identity.cas_id[:16], exc)
             return None
 
-    def _store_cache(self, identity: ExecutionIdentity, result: StageResult) -> None:
-        """Store stage result in cache atomically.
-
-        Uses atomic writes to prevent partial writes visible to concurrent readers.
-        Uses shared recursive serialization for consistent semantics with the
-        single-stage executor - handles nested dicts/lists with numpy arrays.
-
-        Args:
-            identity: Execution identity
-            result: Stage result to cache
-        """
+    def _store_cache(self, identity: StageIdentity, result: StageResult) -> None:
+        """Publish one closed identity-bound cache manifest atomically."""
+        if result.stage_name != identity.stage_name or result.stage_version != identity.stage_version:
+            raise ValueError("Cache result does not match its stage identity")
         cache_path = self._cache_path(identity.cas_id)
-
-        # Use shared recursive serialization (same as single-stage executor)
-        # This handles nested dicts/lists with numpy arrays
-        base_path = cache_path.parent
-        serialized_artifacts = make_serializable(
-            result.artifacts,
-            self.artifact_store,
-            base_path,
-            identity.cas_id,
-        )
-
-        # Create artifact metadata from SERIALIZED form (consistent with single-stage executor)
-        # This ensures the output_hash reflects actual content, not just type signatures
-        output_hash = hashlib.sha256(jcs_dumpb(serialized_artifacts)).hexdigest()
-        metadata = create_artifact_metadata(output_hash, identity)
-
-        # Build cache entry
-        cache_data = {
+        serialized = make_serializable(result.artifacts, self.artifact_store, cache_path.parent, identity.cas_id)
+        output_hash = hashlib.sha256(jcs_dumpb(serialized)).hexdigest()
+        metadata = create_artifact_metadata(output_hash, identity).to_dict() if isinstance(identity, ExecutionIdentity) else {}
+        data = {
+            "cache_manifest_schema": _CACHE_MANIFEST_SCHEMA,
             "cas_id": identity.cas_id,
+            "identity": identity.to_dict(),
             "stage_name": result.stage_name,
             "stage_version": result.stage_version,
             "schema_version": identity.schema_version,
-            "artifacts": serialized_artifacts,
+            "artifacts": serialized,
+            "artifacts_sha256": output_hash,
             "result_metadata": result.metadata,
-            "metadata": metadata.to_dict(),
+            "metadata": metadata,
             "cached_at": datetime.now(timezone.utc).isoformat(),
         }
-
-        # Use atomic write (shared with single-stage executor)
-        _atomic_write_json(cache_path, cache_data)
-        logger.debug("Cached result for %s", identity.cas_id[:16])
+        data["payload_sha256"] = hashlib.sha256(jcs_dumpb(data)).hexdigest()
+        if len(jcs_dumpb(data)) > _MAX_CACHE_MANIFEST_BYTES:
+            raise ValueError("Cache manifest exceeds byte limit")
+        _atomic_write_json(cache_path, data)
 
     def _cache_path(self, cas_id: str) -> Path:
         """Get cache file path for a CAS ID."""

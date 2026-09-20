@@ -2,7 +2,7 @@
 
 **Status:** Accepted — owner-approved design; implementation activation remains gated
 **Date:** 2026-08-28
-**Last reviewed:** 2026-08-30
+**Last reviewed:** 2026-09-18 (targeted Lux inventory refresh)
 **Decision Makers:** Repository owner (acceptance) + Architect (designation) + Specialist (migration)
 **Replaces:** None
 **Supersedes:** ADR-029 only for the long-term stage-executor designation; ADR-043 only for its
@@ -37,6 +37,16 @@ before any executor cutover.
 The inventory and consumer searches were refreshed at `main` `ca47d4988` and PR head `085745a2d`
 on 2026-08-30.
 
+The Lux plan/identity inventory below was refreshed against `main` `27da70335` on
+2026-09-18. Other candidate comparison tables retain their August audit context;
+their historical missing-capability lists are not a claim that subsequently landed
+Lux plan/identity work is absent. The opt-in
+[LuxDepthV4 candidate](../reference/LUX_DEPTH_V4.md) adds the versioned
+`tp.execution.plan.v2` photography profile and `tp.execution.identity.v4` stage
+identity. It does not activate the designated executor for production, change the
+Spatial executor designation, or retire V3 before its exact-head vertical-slice
+and photographic acceptance gates pass.
+
 ### Execution inventory
 
 The orchestrator job-boundary composition is identified as `J` because queue, lease lifecycle,
@@ -50,7 +60,7 @@ durable job state, and reclaim reconciliation are job responsibilities, not a ni
 | 4 | `execution_graph/distributed_executor.py` | Tests and documentation only; no verified runtime construction. |
 | 5 | `comfyui/executor.py` | Domain workflow implementation with tests/templates; no verified production construction. |
 | 6 | `runtime/engine.py` + runtime scheduler/process/GPU/sandbox/manifest/ledger/replay helpers | Package-local references, examples, and tests; no verified production construction. |
-| 7 | Lux V3 orchestrator + `pipeline_coordinator`/`execution_engine` | Current Lux production execution path; its `ExecutionPlan` is a flat stage-name list. |
+| 7 | Lux V3 orchestrator + `pipeline_coordinator`/`execution_engine` | Current Lux production execution path. `PreparedLuxExecution` freezes the execution-complete core-owned `tp.execution.plan.v1`; the coordinator's flat internal list is not public execution authority. |
 | 8 | `spatial_ai.orchestration.SpatialAIPipeline` imperative `process()` and `process_multiview()` paths | Publicly exported. Single-view imperative execution is selected whenever `use_execution_graph=False`, the default; multi-view always executes its own reconstruction/export loop and fails if graph mode is enabled. Repository deployment construction was not verified. |
 | J | `QueueBroker` + `WorkerRunner` + `JobRepository` + app admission/reclaim coordinators, with standalone `worker_process.py`; target admission/fence transactions use `OperationalRecordStore` | Current leased-job composition in FastAPI lifespan and multi-host worker mode. The app currently checks global and optional per-tenant active-job caps under a process-local lock before enqueue; repository counts fail closed but admission is not atomic across API hosts. Broker, runner, repository, and reclaim roles remain split as detailed below. |
 
@@ -60,11 +70,14 @@ are the cryptographic evidence plane; they are explicitly outside operational co
 
 ### Plane inventory
 
-- `core/execution_identity.py` has the most complete code/config/environment/lock/platform identity,
-  but it is not wired into Lux and permits a placeholder lock digest outside CI.
-- `lux_depth_v3.ResolvedInvocation` is the only current canonical, schema-validated, license-enforced
-  plan serialization. Its v1 payload is intentionally marked `stability: provisional`, and its stage
-  representation lacks nodes, edges, resources, and typed stage configuration.
+- Lux cache-enabled execution uses `EnhanceOrchestrator.from_prepared(...)` and
+  materialized identity-v3 input/model/runtime closure. Legacy two-key depth-cache
+  access cannot authorize that governed namespace.
+- `core.execution_plan` owns the execution-complete `tp.execution.plan.v1` used by
+  `PreparedLuxExecution` before backend initialization or output creation.
+  Historical `tp.lux.resolved_invocation.v1` projections are `structural_legacy`
+  and cannot authorize execution. The V4 candidate extends the same core-owned
+  versioned family with `tp.execution.plan.v2`; adoption remains gated.
 - `storage/cas_store.py` and `storage/merkle_dag.py` are shared operational byte/lineage primitives.
   Lux and Spatial AI maintain additional cache and Merkle projections.
 - `orchestrator.artifact_store.ArtifactStore` is the live local/S3 job-delivery contract. It is not a
