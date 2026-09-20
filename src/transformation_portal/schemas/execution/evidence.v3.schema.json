@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tp.lux.execution.evidence.v3",
+  "title": "LuxDepthV5 completion evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "complete",
+    "synthetic",
+    "plan_schema",
+    "plan_fingerprint_sha256",
+    "parent_runtime_sha256",
+    "worker_runtime",
+    "inputs",
+    "artifacts",
+    "executions",
+    "duration_seconds",
+    "cache",
+    "production_acceptance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "tp.lux.execution.evidence.v3"
+    },
+    "complete": {
+      "const": true
+    },
+    "synthetic": {
+      "const": false
+    },
+    "plan_schema": {
+      "const": "tp.execution.plan.v4"
+    },
+    "plan_fingerprint_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "parent_runtime_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "worker_runtime": {
+      "type": "object"
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32768,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "size_bytes",
+          "kind",
+          "input_id"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "sha256": {
+            "$ref": "#/$defs/digest"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1099511627776
+          },
+          "kind": {
+            "enum": [
+              "plan",
+              "array",
+              "image",
+              "descriptor"
+            ]
+          },
+          "input_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "pattern": "^input-[0-9]{4}$"
+          }
+        }
+      }
+    },
+    "executions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input_id",
+          "depth_cache_hit",
+          "identities"
+        ],
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "pattern": "^input-[0-9]{4}$"
+          },
+          "depth_cache_hit": {
+            "type": "boolean"
+          },
+          "identities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "preprocess",
+              "depth",
+              "enhance",
+              "output"
+            ],
+            "properties": {
+              "preprocess": {
+                "$ref": "#/$defs/digest"
+              },
+              "depth": {
+                "$ref": "#/$defs/digest"
+              },
+              "enhance": {
+                "$ref": "#/$defs/digest"
+              },
+              "output": {
+                "$ref": "#/$defs/digest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "duration_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "enabled",
+        "hits",
+        "misses"
+      ],
+      "properties": {
+        "namespace": {
+          "const": "identity-v5"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "hits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "misses": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "production_acceptance": {
+      "const": "pending"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {
+        "const": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  }
+}

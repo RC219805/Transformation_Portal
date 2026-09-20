@@ -24,6 +24,7 @@ from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, Re
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 
 if TYPE_CHECKING:
+    from transformation_portal.lux_depth_v4.backend import CarriedDepthPlan
     from transformation_portal.materials_v4.engine import ResponsePolicy
     from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
@@ -74,7 +75,7 @@ class PreparedLuxExecutionV4:
         return self.plan.canonical_bytes
 
 
-def authorize_model(plan: PhotographyPlan) -> ResolvedModel:
+def authorize_model(plan: CarriedDepthPlan) -> ResolvedModel:
     """Independently revalidate the model, revision and commercial-use boundary."""
     carried = plan.to_payload()["model"]
     resolved = resolve_model_contract(
@@ -189,7 +190,14 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
     """Freeze content selection, model, device and processing policy exactly once."""
     if not isinstance(request, LuxDepthV4Request):
         raise TypeError("prepare requires LuxDepthV4Request")
+    return _prepare(request, publisher=publisher)
+
+
+def _prepare(request: Any, *, publisher: GenerationPublisher | None = None, profile: Any = None) -> Any:
+    """Shared discovery and admission; public version boundaries select a fixed profile."""
     configuration, resources = _configuration_and_resources(request)
+    if profile is not None:
+        configuration.update(profile.configuration(request))
     if request.materials_policy is not None and request.materials_manifest is None:
         raise ValueError("A Materials V4 policy requires an explicit materials manifest")
     publication_limits = None if publisher is None else publisher.limits
@@ -242,10 +250,12 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
             if item["path"] in materials_records:
                 item["materials_v4"] = materials_records[item["path"]]
         configuration["materials_v4"] = policy.to_payload()
+    if profile is not None:
+        profile.validate_inputs(inputs)
     if publication_limits is not None:
         from .publication import validate_publication_plan
 
-        validate_publication_plan(
+        (validate_publication_plan if profile is None else profile.validate_publication_plan)(
             {
                 "inputs": inputs,
                 "configuration": configuration,
@@ -269,9 +279,13 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
 
         device = probe_device(interpreter, device)
     payload = {
-        "schema": "tp.execution.plan.v3" if materials_manifest is not None else "tp.execution.plan.v2",
+        "schema": (
+            ("tp.execution.plan.v3" if materials_manifest is not None else "tp.execution.plan.v2")
+            if profile is None
+            else profile.plan_schema
+        ),
         "canonicalization": "tp.canonical.json.v1",
-        "pipeline": "lux_depth_v4",
+        "pipeline": "lux_depth_v4" if profile is None else profile.pipeline,
         "model": {
             "canonical_key": resolved.canonical_key,
             "repo_id": resolved.spec.repo_id,
@@ -282,9 +296,11 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
         "inputs": inputs,
         "configuration": configuration,
         "resources": resources,
-        "nodes": (materials_photography_nodes if materials_manifest is not None else photography_nodes)(
-            configuration, companions=companion_root is not None
-        ),
+        "nodes": (
+            (materials_photography_nodes if materials_manifest is not None else photography_nodes)
+            if profile is None
+            else profile.nodes
+        )(configuration, companions=companion_root is not None),
     }
     if companion_manifest is not None:
         payload["companions_manifest"] = companion_manifest
@@ -293,8 +309,12 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
     if publication_limits is not None:
         payload["publication"] = publication_limits.to_payload()
     payload["plan_fingerprint_sha256"] = digest_payload(payload)
-    plan = (ExecutionPlanV3 if materials_manifest is not None else ExecutionPlanV2).from_payload(payload)
+    carrier = (
+        (ExecutionPlanV3 if materials_manifest is not None else ExecutionPlanV2) if profile is None else profile.plan_type
+    )
+    plan = carrier.from_payload(payload)
     authorize_model(plan)
     raw_python = request.raw_python or os.environ.get("TRANSFORMATION_PORTAL_RAW_PYTHON")
     raw_python = os.path.abspath(os.path.expanduser(raw_python)) if raw_python else None
-    return PreparedLuxExecutionV4(plan, root, output, interpreter, raw_python, cache, companion_root, materials_root)
+    prepared_type = PreparedLuxExecutionV4 if profile is None else profile.prepared_type
+    return prepared_type(plan, root, output, interpreter, raw_python, cache, companion_root, materials_root)

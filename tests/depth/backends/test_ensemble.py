@@ -327,13 +327,13 @@ class TestVarianceFusion:
         assert weight_low > weight_high
 
     def test_metric_alignment_with_mixed_backends(self):
-        """Test metric depth alignment when mixing metric + relative models (Bug P1-A fix)."""
+        """Uncalibrated relative depth cannot change a metric prediction's scale."""
         # Create synthetic image
         test_img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
 
         # Create mock results with different depth units
         metric_result = DepthResult(
-            depth_map=np.ones((100, 100)) * 5.0,
+            depth_map=np.ones((100, 100)) * 50.0,
             original_image=test_img,
             metadata={},
             depth_units="meters",  # metric
@@ -368,18 +368,10 @@ class TestVarianceFusion:
         # This should not crash (tests Bug P1-A fix: .items() not .values())
         aligned = ensemble._align_depth_maps(model_results)
 
-        # Verify both models are aligned
-        assert "depth_pro" in aligned
-        assert "da3" in aligned
-
-        # Verify shapes match
-        assert aligned["depth_pro"].shape == aligned["da3"].shape
+        assert set(aligned) == {"depth_pro"}
 
         # Verify metric model unchanged (already in meters)
         np.testing.assert_array_equal(aligned["depth_pro"], metric_result.depth_map)
-
-        # Verify relative model scaled (approximate 10x scaling)
-        assert aligned["da3"].mean() > 1.0  # Should be scaled up from 0.5
 
     def test_variance_weighted_fusion_actually_uses_variance(self):
         """Test that variance actually changes fusion output (Bug P1-B fix).
@@ -726,3 +718,178 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
 ]
+
+
+@pytest.mark.unit
+class TestEnsembleUnitsAndGeometry:
+    """Fusion must not invent meters or confuse the inference and image grids."""
+
+    @staticmethod
+    def result(depth, image, units="meters", **kwargs):
+        return DepthResult(
+            depth_map=np.asarray(depth, dtype=np.float32),
+            original_image=image,
+            depth_units=units,
+            input_size=image.shape[:2],
+            **kwargs,
+        )
+
+    @staticmethod
+    def backend(*names):
+        return DepthEnsembleBackend(
+            EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True),
+            models=[ModelConfig(name=name, weight=1.0 / len(names)) for name in names],
+        )
+
+    def test_relative_first_cannot_bias_or_relabel_metric_result(self, monkeypatch):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        native = np.full((4, 6), 50.0, dtype=np.float32)
+        results = {
+            "relative": self.result(np.full((4, 6), 0.5), image, "relative"),
+            "metric": self.result(native, image, focal_length_px=525.0),
+        }
+        backend = self.backend(*results)
+        monkeypatch.setattr(backend, "_run_models", lambda *_args: results)
+        result = backend.compute(image)
+
+        np.testing.assert_array_equal(result.depth_map, native)
+        assert result.depth_units == "meters"
+        assert result.focal_length_px == 525.0
+        assert result.input_size == (4, 6)
+        assert set(result.per_model_depths) == {"metric"}
+        assert result.per_model_weights == {"metric": 1.0}
+        assert result.metadata["excluded_models"] == {"relative": "relative_depth_has_no_metric_calibration"}
+        assert any("Excluded relative" in warning for warning in result.warnings)
+        assert np.count_nonzero(result.variance_map) == 0
+        np.testing.assert_array_equal(results["relative"].depth_map, 0.5)
+        np.testing.assert_array_equal(results["metric"].depth_map, native)
+
+    @pytest.mark.parametrize("pil_input", [False, True])
+    def test_metric_predictions_restore_original_grid_without_changing_units(self, pil_input):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        coarse = np.tile([10.0, 20.0, 30.0], (2, 1)).astype(np.float32)
+        expected = np.tile([10.0, 12.5, 17.5, 22.5, 27.5, 30.0], (4, 1)).astype(np.float32)
+        results = {
+            "coarse": self.result(coarse, image),
+            "full": self.result(np.full((4, 6), 50.0), image),
+        }
+        result = self.backend(*results)._fuse_predictions(results, Image.fromarray(image) if pil_input else image)
+
+        np.testing.assert_array_equal(result.per_model_depths["coarse"], expected)
+        np.testing.assert_allclose(result.depth_map, (expected + 50.0) / 2.0, atol=1e-5)
+        assert result.variance_map.shape == (4, 6)
+        assert result.input_size == (4, 6)
+        assert result.depth_units == "meters"
+        np.testing.assert_array_equal(results["coarse"].depth_map, coarse)
+
+    def test_relative_predictions_restore_original_grid_and_remain_relative(self):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        results = {
+            "a": self.result(np.tile([2.0, 4.0, 6.0], (2, 1)), image, "relative"),
+            "b": self.result(np.tile([20.0, 40.0, 60.0], (2, 1)), image, "relative"),
+        }
+        result = self.backend(*results)._fuse_predictions(results, image)
+        expected = np.tile([0.0, 0.125, 0.375, 0.625, 0.875, 1.0], (4, 1))
+        np.testing.assert_allclose(result.depth_map, expected)
+        assert result.depth_units == "relative"
+        assert result.metadata["excluded_models"] == {}
+
+    def test_canonical_mixed_units_fail_closed(self, tmp_path, monkeypatch):
+        from transformation_portal.lux_depth_v3.execution_lifecycle import backend_candidate_authority, prepare_lux_execution
+        from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
+
+        source = tmp_path / "input.jpg"
+        checkpoint = tmp_path / "depth_pro.pt"
+        source.write_bytes(b"fixture")
+        checkpoint.write_bytes(b"fixture")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                depth_backend="ensemble",
+                non_commercial_ok=True,
+                accept_apple_depth_pro_research_license=True,
+                accept_research_tools_license=True,
+                depth_pro_checkpoint_path=str(checkpoint),
+            ),
+            tmp_path,
+            [source],
+        )
+        backend = DepthEnsembleBackend(
+            prepared.runtime_config,
+            candidate_authority=backend_candidate_authority(prepared.plan, "ensemble"),
+            canonical_plan_bytes=prepared.canonical_plan_bytes,
+        )
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        make_result = self.result
+
+        class FakeModel:
+            def __init__(self, name):
+                self.name = name
+
+            def compute(self, image, device=None):
+                units = "meters" if self.name == "depth_pro" else "relative"
+                return make_result(np.full((4, 6), 50.0 if units == "meters" else 0.5), image, units)
+
+        monkeypatch.setattr(backend, "_get_backend", lambda config: FakeModel(config.name))
+        with pytest.raises(LuxExecutionPlanAuthorityError, match="uncalibrated relative predictions into meters"):
+            backend.compute(image)
+
+    @pytest.mark.parametrize("invalid", [np.nan, np.inf, 0.0, -1.0])
+    def test_invalid_metric_samples_fail_before_resizing(self, invalid):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        depth = np.ones((2, 3), dtype=np.float32)
+        depth[0, 0] = invalid
+        with pytest.raises(ValueError, match="finite non-empty 2D|positive metric depth"):
+            self.backend("a")._fuse_predictions({"a": self.result(depth, image)}, image)
+
+    def test_incompatible_original_geometry_fails_before_resizing(self):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        wrong_image = np.zeros((8, 8, 3), dtype=np.uint8)
+        with pytest.raises(ValueError, match="different original input grid"):
+            self.backend("a")._fuse_predictions({"a": self.result(np.ones((2, 3)), wrong_image)}, image)
+
+    def test_no_positive_metric_weight_fails_closed(self):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        results = {
+            "metric": self.result(np.full((4, 6), 50.0), image),
+            "relative": self.result(np.full((4, 6), 0.5), image, "relative"),
+        }
+        backend = self.backend(*results)
+        backend._models[0].weight = 0.0
+        backend._models[1].weight = 1.0
+        with pytest.raises(RuntimeError, match="No positive configured weight"):
+            backend._fuse_predictions(results, image)
+
+    def test_only_synthetic_metric_cannot_authorize_metric_output(self):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        results = {
+            "metric": self.result(np.full((4, 6), 50.0), image, metadata={"synthetic": True}),
+            "relative": self.result(np.full((4, 6), 0.5), image, "relative"),
+        }
+        with pytest.raises(RuntimeError, match="No usable ensemble contribution"):
+            self.backend(*results)._fuse_predictions(results, image)
+
+    @pytest.mark.parametrize("fallback_flag", ["synthetic", "fallback_mode"])
+    @pytest.mark.parametrize("outlier", [100.0, 1e30])
+    def test_fallback_cannot_change_real_fusion_or_statistics(self, fallback_flag, outlier):
+        image = np.zeros((4, 6, 3), dtype=np.uint8)
+        real = {
+            "a": self.result(np.full((4, 6), 10.0), image, focal_length_px=525.0),
+            "b": self.result(np.full((4, 6), 20.0), image),
+        }
+        baseline = self.backend(*real)._fuse_predictions(real, image)
+        # A fallback named depth_pro must not become the primary metadata source,
+        # enter outlier statistics, or change the normalization of real weights.
+        with_fallback = {
+            "depth_pro": self.result(np.full((4, 6), outlier), image, metadata={fallback_flag: True}),
+            **real,
+        }
+        with np.errstate(over="raise", invalid="raise"):
+            observed = self.backend(*with_fallback)._fuse_predictions(with_fallback, image)
+
+        np.testing.assert_array_equal(observed.depth_map, baseline.depth_map)
+        np.testing.assert_array_equal(observed.variance_map, baseline.variance_map)
+        assert observed.model_agreement == baseline.model_agreement
+        assert observed.metadata["mean_variance"] == baseline.metadata["mean_variance"]
+        assert observed.focal_length_px == baseline.focal_length_px == 525.0
+        assert observed.per_model_weights == {"depth_pro": 0.0, **baseline.per_model_weights}
+        np.testing.assert_array_equal(observed.per_model_depths["depth_pro"], with_fallback["depth_pro"].depth_map)

@@ -3,7 +3,7 @@
 Implements APEX Research Ultra (ADR-026) multi-model depth ensemble with:
 - Variance-weighted adaptive fusion (Depth Pro + DA3 + DepthCrafter)
 - Per-pixel confidence estimation
-- Metric depth scaling and alignment
+- Unit-compatible fusion and input-grid restoration
 - Graceful fallback to single-model if ensemble unavailable
 
 Architecture:
@@ -581,7 +581,7 @@ class DepthEnsembleBackend:
         """Fuse multi-model predictions with variance weighting.
 
         Algorithm (ADR-026):
-        1. Align all depth maps to metric scale (using Depth Pro as reference)
+        1. Select compatible depth units and restore the input image grid
         2. Compute per-pixel variance across models
         3. Weight by inverse variance (low variance = high confidence)
         4. Fuse depth maps with adaptive weights
@@ -599,8 +599,12 @@ class DepthEnsembleBackend:
         else:
             img_array = original_image
 
-        # Step 1: Align depth maps to metric scale
-        aligned_depths = self._align_depth_maps(model_results)
+        # A relative prediction has no identified conversion to meters. It
+        # cannot contribute to metric fusion merely because a metric peer exists.
+        aligned_depths = self._align_depth_maps(model_results, img_array.shape[:2])
+        excluded_models = {
+            name: "relative_depth_has_no_metric_calibration" for name in model_results if name not in aligned_depths
+        }
 
         # Step 2: Compute per-pixel statistics
         # depth_stack: (N, H, W)
@@ -609,8 +613,20 @@ class DepthEnsembleBackend:
             [aligned_depths[n] for n in names],
             axis=0,
         ).astype(np.float32)
-        mean_map = np.mean(depth_stack, axis=0)  # (H, W)
-        variance_map = np.var(depth_stack, axis=0)  # (H, W)
+        # Exclude fallback signals before computing statistics. Zeroing their
+        # final confidence alone still changes the real models' outlier weights.
+        real_contributors = np.array(
+            [
+                not (model_results[name].metadata.get("synthetic") or model_results[name].metadata.get("fallback_mode"))
+                for name in names
+            ],
+            dtype=bool,
+        )
+        if not real_contributors.any():
+            raise RuntimeError("No usable ensemble contribution remains after synthetic/fallback exclusion")
+        real_depths = depth_stack[real_contributors]
+        mean_map = np.mean(real_depths, axis=0)  # (H, W)
+        variance_map = np.var(real_depths, axis=0)  # (H, W)
 
         # Step 3: Compute per-model confidence maps (ACTUALLY adaptive)
         #
@@ -634,26 +650,29 @@ class DepthEnsembleBackend:
         #
         epsilon = 1e-6
         denom = variance_map + epsilon
-        z2 = (depth_stack - mean_map[None, :, :]) ** 2 / denom[None, :, :]
-        conf = np.exp(-0.5 * z2).astype(np.float32)  # (N, H, W)
+        z2 = (real_depths - mean_map[None, :, :]) ** 2 / denom[None, :, :]
+        conf = np.zeros_like(depth_stack)
+        conf[real_contributors] = np.exp(-0.5 * z2).astype(np.float32)
 
         # ADR-026 §2.1: Zero out confidence for synthetic/fallback models.
         # A synthetic depth signal must not distort variance-weighted fusion.
         for i, name in enumerate(names):
-            result_meta = model_results[name].metadata
-            is_synthetic = result_meta.get("synthetic") or result_meta.get("fallback_mode")
-            if is_synthetic:
+            if not real_contributors[i]:
                 logger.info(
                     "Model '%s' is in synthetic/fallback" " mode; setting ensemble " "confidence to 0.",
                     name,
                 )
-                conf[i] = 0.0
 
         # Get model weights from config
         model_weights = {m.name: m.weight for m in self._models if m.enabled and m.name in aligned_depths}
+        for i, name in enumerate(names):
+            if not real_contributors[i]:
+                model_weights[name] = 0.0
 
         # Normalize model weights
         total_weight = sum(model_weights.values())
+        if not np.isfinite(total_weight) or total_weight <= 0:
+            raise RuntimeError("No positive configured weight remains for unit-compatible ensemble predictions")
         model_weights = {k: v / total_weight for k, v in model_weights.items()}
 
         # Build base weight tensor aligned to the same model order
@@ -666,11 +685,13 @@ class DepthEnsembleBackend:
 
         # Effective per-pixel weights
         w_eff = base_w * conf  # (N,H,W)
-        w_sum = np.sum(w_eff, axis=0)  # (H,W)
-        w_sum = np.maximum(w_sum, epsilon)
+        real_weights = w_eff[real_contributors]
+        w_sum = np.sum(real_weights, axis=0)  # (H,W)
+        if not np.all(np.isfinite(w_sum)) or np.any(w_sum <= 0):
+            raise RuntimeError("No usable ensemble contribution remains after synthetic/fallback exclusion")
 
         # Fuse
-        fused_depth = np.sum(w_eff * depth_stack, axis=0) / w_sum  # (H,W)
+        fused_depth = np.sum(real_weights * real_depths, axis=0) / w_sum  # (H,W)
 
         # Compute model agreement metric (0.0-1.0, higher is better)
         # Agreement = 1 / (1 + mean_variance)
@@ -678,10 +699,9 @@ class DepthEnsembleBackend:
         model_agreement = 1.0 / (1.0 + mean_variance)
 
         # Select primary model for metadata (Depth Pro if available)
-        primary_result = model_results.get(
-            "depth_pro",
-            next(iter(model_results.values())),
-        )
+        real_names = [name for i, name in enumerate(names) if real_contributors[i]]
+        primary_name = "depth_pro" if "depth_pro" in real_names else real_names[0]
+        primary_result = model_results[primary_name]
 
         # Store a compact "effective weight" summary
         # per model (scalar), for observability. This
@@ -696,6 +716,8 @@ class DepthEnsembleBackend:
             metadata={
                 "backend": "ensemble",
                 "models_used": list(aligned_depths.keys()),
+                "excluded_models": excluded_models,
+                "alignment": "input_grid_bilinear_metric_only_or_relative_percentiles_v2",
                 "mean_variance": float(mean_variance),
             },
             depth_units="meters" if primary_result.is_metric else "relative",
@@ -704,7 +726,8 @@ class DepthEnsembleBackend:
             backend_id="ensemble",
             device=primary_result.device,
             dtype="float32",
-            input_size=primary_result.input_size,
+            input_size=img_array.shape[:2],
+            warnings=[f"Excluded {name}: {reason}" for name, reason in excluded_models.items()],
             # Ensemble-specific fields
             variance_map=variance_map,
             per_model_depths=aligned_depths,
@@ -716,43 +739,51 @@ class DepthEnsembleBackend:
     def _align_depth_maps(
         self,
         model_results: Dict[str, DepthResult],
+        target_shape: Optional[tuple[int, int]] = None,
     ) -> Dict[str, np.ndarray]:
-        """Align all depth maps to common metric scale.
+        """Restore compatible full-frame predictions to the original image grid.
 
-        Uses Depth Pro as reference if available (metric depth).
-        Otherwise, normalizes all to relative depth [0, 1].
+        Metric predictions retain their units and exclude uncalibrated relative
+        predictions. Canonical execution rejects such exclusion because its
+        exact planned membership must be honored. If all predictions are
+        relative, preserve the existing percentile normalization recipe.
 
         Args:
             model_results: Dict of model results.
+            target_shape: Original image (height, width), inferred from the
+                first result's original image when omitted.
 
         Returns:
             Dict mapping model name to aligned depth map.
         """
-        aligned = {}
-
-        # Check if we have metric depth (Depth Pro)
+        if not model_results:
+            raise RuntimeError("No ensemble predictions are available to align")
+        if target_shape is None:
+            target_shape = next(iter(model_results.values())).original_image.shape[:2]
+        if len(target_shape) != 2 or any(size <= 0 for size in target_shape):
+            raise ValueError("Ensemble alignment requires a non-empty original image grid")
         has_metric = any(r.is_metric for r in model_results.values())
-
-        if has_metric:
-            # Use metric depth scale
-            for name, result in model_results.items():
-                if result.is_metric:
-                    # Already metric
-                    aligned[name] = result.depth_map
-                else:
-                    # Convert relative to metric (approximate)
-                    # Note: This is a heuristic.
-                    # Ideally, we'd have camera
-                    # intrinsics.
-                    logger.warning(
-                        "Model %s outputs relative " "depth. Scaling to metric " "is approximate.",
-                        name,
-                    )
-                    # Simple scaling: assume depth range 0-10 meters
-                    aligned[name] = result.depth_map * 10.0
-        else:
-            # All relative depth - normalize to [0, 1]
-            for name, result in model_results.items():
+        incompatible = [name for name, result in model_results.items() if has_metric and not result.is_metric]
+        if incompatible and self._candidate_authority is not None:
+            raise LuxExecutionPlanAuthorityError(
+                "Canonical ensemble cannot fuse uncalibrated relative predictions into meters; "
+                "exact planned membership is required: " + ", ".join(incompatible)
+            )
+        aligned = {}
+        for name, result in model_results.items():
+            if name in incompatible:
+                logger.warning("Excluding model %s from metric fusion: relative depth has no metric calibration", name)
+                continue
+            if result.input_size is not None and tuple(result.input_size) != target_shape:
+                raise ValueError(f"Ensemble model {name!r} describes a different original input grid")
+            if result.original_image.shape[:2] != target_shape:
+                raise ValueError(f"Ensemble model {name!r} does not describe the original input image grid")
+            depth = np.asarray(result.depth_map, dtype=np.float32)
+            if depth.ndim != 2 or not depth.size or not np.isfinite(depth).all():
+                raise ValueError(f"Ensemble model {name!r} must provide a finite non-empty 2D depth map")
+            if result.is_metric and np.any(depth <= 0):
+                raise ValueError(f"Ensemble model {name!r} must provide positive metric depth")
+            if not has_metric:
                 # Use float64 for normalization to avoid precision loss
                 # when vmin is large (float32 epsilon > 1e-6 at ≥50).
                 depth = result.depth_map.astype(np.float64)
@@ -761,11 +792,17 @@ class DepthEnsembleBackend:
                 vmax = np.percentile(depth, 99)
                 if vmax <= vmin:
                     vmax = vmin + 1e-6
-                aligned[name] = np.clip(
+                depth = np.clip(
                     (depth - vmin) / (vmax - vmin),
                     0.0,
                     1.0,
                 ).astype(np.float32)
+            if depth.shape != target_shape:
+                depth = np.asarray(
+                    Image.fromarray(depth).resize((target_shape[1], target_shape[0]), Image.Resampling.BILINEAR),
+                    dtype=np.float32,
+                ).copy()
+            aligned[name] = depth
 
         return aligned
 
@@ -796,7 +833,7 @@ class DepthEnsembleBackend:
         # Add ensemble config
         enabled_models = [m for m in self._models if m.enabled]
         config_str = (
-            f"ensemble_"
+            f"ensemble_units_grid_v2_"
             f"{'_'.join(m.name for m in enabled_models)}_"
             f"{'_'.join(str(m.weight) for m in enabled_models)}_"
             f"{self._fusion_method}"

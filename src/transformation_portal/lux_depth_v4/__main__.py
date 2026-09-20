@@ -7,6 +7,7 @@ import signal
 import sys
 from pathlib import Path
 from types import FrameType
+from typing import Any
 
 from transformation_portal.ingest.canonical_json import dumps_json
 
@@ -14,8 +15,16 @@ from .lifecycle import LuxDepthV4Request, prepare
 
 
 def main(argv: list[str] | None = None) -> int:
+    return _main(argv)
+
+
+def _main(argv: list[str] | None = None, *, profile: Any = None) -> int:
     parser = argparse.ArgumentParser(
-        description="LuxDepthV4 photography candidate: canonical geometry, native depth, 16-bit TIFF."
+        description=(
+            "LuxDepthV4 photography candidate: canonical geometry, native depth, 16-bit TIFF."
+            if profile is None
+            else profile.description
+        )
     )
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -34,7 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-python")
     parser.add_argument("--raw-python")
     parser.add_argument("--cache-dir", type=Path)
-    parser.add_argument("--companions-manifest", type=Path, help="Immutable per-source calibration and material-mask bindings")
+    parser.add_argument(
+        "--companions-manifest",
+        type=Path,
+        help=(
+            "Immutable per-source calibration and material-mask bindings"
+            if profile is None
+            else "Immutable per-source camera calibration; use Materials V4 for material evidence"
+        ),
+    )
     parser.add_argument(
         "--materials-manifest", type=Path, help="Opt in to source-bound Materials V4 evidence and conservative response"
     )
@@ -44,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--plan", action="store_true", help="Print exact canonical execution bytes without loading models or writing outputs"
     )
+    if profile is not None:
+        parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp32")
+        parser.add_argument("--refinement", choices=("bilinear", "guided_bilinear"), default="guided_bilinear")
     args = vars(parser.parse_args(argv))
     planning = args.pop("plan")
     try:
@@ -57,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             policy_root = directory_path(policy_path.parent)
             policy_bytes, _ = snapshot(policy_root, policy_path, maximum_bytes=65536)
             args["materials_policy"] = ResponsePolicy.from_payload(decode_bounded_json_object(policy_bytes))
-        prepared = prepare(LuxDepthV4Request(**args))
+        prepared = prepare(LuxDepthV4Request(**args)) if profile is None else profile.prepare(profile.request_type(**args))
         if planning:
             sys.stdout.buffer.write(prepared.canonical_plan_bytes)
             sys.stdout.buffer.flush()
@@ -72,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
 
         previous = {signum: signal.signal(signum, cancel) for signum in (signal.SIGTERM, signal.SIGINT)}
         try:
-            result = run(prepared, cancellation=lambda: cancelled)
+            result = (run if profile is None else profile.run)(prepared, cancellation=lambda: cancelled)
         finally:
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
@@ -90,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     except (ValueError, OSError, RuntimeError, TimeoutError) as exc:
-        print(f"lux-depth-v4: {exc}", file=sys.stderr)
+        print(f"{'lux-depth-v4' if profile is None else profile.name}: {exc}", file=sys.stderr)
         return 1
 
 

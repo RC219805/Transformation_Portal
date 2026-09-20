@@ -111,16 +111,29 @@ def run(
     """Execute the exact prepared plan, publishing completion only after verification."""
     if type(prepared) is not PreparedLuxExecutionV4:
         raise TypeError("run requires PreparedLuxExecutionV4; V3 plans cannot be downgraded")
-    validate_prepared_bindings(prepared)
-    plan = parse_photography_plan(prepared.canonical_plan_bytes)
+    return _run(prepared, cancellation=cancellation, publisher=publisher)
+
+
+def _run(
+    prepared: Any,
+    *,
+    cancellation: Callable[[], bool] | None = None,
+    publisher: GenerationPublisher | None = None,
+    profile: Any = None,
+) -> Any:
+    """Shared governed execution, selected only through explicit version boundaries."""
+    validator = validate_prepared_bindings if profile is None else profile.validate_prepared_bindings
+    parser = parse_photography_plan if profile is None else profile.parse_plan
+    validator(prepared)
+    plan = parser(prepared.canonical_plan_bytes)
     payload = plan.to_payload()
     if "publication" in payload or publisher is not None:
         from .publication import validate_publication_plan
 
         if publisher is None:
             raise ValueError("Managed execution requires its publisher before backend initialization")
-        validate_publication_plan(payload, publisher.limits)
-    authorize_model(plan)
+        (validate_publication_plan if profile is None else profile.validate_publication_plan)(payload, publisher.limits)
+    (authorize_model if profile is None else profile.authorize_model)(plan)
     resources = payload["resources"]
     configuration = payload["configuration"]
     started = time.monotonic()
@@ -214,13 +227,15 @@ def run(
         check()
         return False
 
-    with DA3Session(prepared.runtime_python, plan, cancellation=poll_cancellation) as session:
+    session_type = DA3Session if profile is None else profile.session_type
+    with session_type(prepared.runtime_python, plan, cancellation=poll_cancellation) as session:
         root.mkdir(mode=0o700, parents=False, exist_ok=False)
         with tempfile.TemporaryDirectory(prefix="tp-lux-v4-cache-") as temporary:
             try:
                 write_evidence(root, "execution-plan.json", prepared.canonical_plan_bytes)
                 observe(root / "execution-plan.json", "plan")
-                cache = (prepared.cache_root or Path(temporary)) / "identity-v4"
+                namespace = "identity-v4" if profile is None else profile.cache_namespace
+                cache = (prepared.cache_root or Path(temporary)) / namespace
                 executor = CASDAGExecutor(
                     ArtifactStore(cache / "cas"),
                     cache / "results",
@@ -294,7 +309,14 @@ def run(
                             "preprocess.proxy": create_proxy(master, configuration["target_size"]),
                         }
 
+                    def read_depth(context: StageContext) -> Any:
+                        if profile is not None:
+                            return profile.read_depth(context, item["sha256"], companion, configuration)
+                        return _depth(context, item["sha256"], companion)
+
                     def depth(context: StageContext) -> dict[str, Any]:
+                        if profile is not None:
+                            return profile.depth_wire(context, session, configuration)
                         proxy = context.artifacts["preprocess.proxy"]
                         arrays, response = session.compute(proxy.pixels)
                         if response["native_semantics"] != "da3_metric_uncalibrated":
@@ -312,18 +334,22 @@ def run(
                         }
 
                     def enhance(context: StageContext) -> dict[str, Any]:
-                        artifact = _depth(context, item["sha256"], companion)
-                        aligned, aligned_valid = restore_depth_with_validity(
-                            artifact.relative_depth(), artifact.valid_mask, context.artifacts["preprocess.proxy"].transform
-                        )
-                        master = enhance_master(
-                            context.artifacts["preprocess.master"],
-                            aligned,
-                            strength=configuration["strength"],
-                            clarity=configuration["clarity"],
-                            valid_mask=aligned_valid,
-                        )
-                        outputs: dict[str, Any] = {"enhance.master": master}
+                        artifact = read_depth(context)
+                        if profile is not None:
+                            outputs = profile.enhance(context, artifact, configuration)
+                            master = outputs["enhance.master"]
+                        else:
+                            aligned, aligned_valid = restore_depth_with_validity(
+                                artifact.relative_depth(), artifact.valid_mask, context.artifacts["preprocess.proxy"].transform
+                            )
+                            master = enhance_master(
+                                context.artifacts["preprocess.master"],
+                                aligned,
+                                strength=configuration["strength"],
+                                clarity=configuration["clarity"],
+                                valid_mask=aligned_valid,
+                            )
+                            outputs = {"enhance.master": master}
                         if "materials_v4" in configuration:
                             from transformation_portal.materials_v4.contracts import MaterialEvidence
                             from transformation_portal.materials_v4.engine import ResponsePolicy, apply_response, plan_response
@@ -338,24 +364,23 @@ def run(
                             )
                             materials_baseline = master
                             master, materials_report = apply_response(master, evidence, response_plan)
-                            outputs = {
-                                "enhance.master": master,
-                                "enhance.materials": materials_report,
-                                "enhance.materials_baseline": materials_baseline,
-                            }
+                            outputs.update(
+                                {
+                                    "enhance.master": master,
+                                    "enhance.materials": materials_report,
+                                    "enhance.materials_baseline": materials_baseline,
+                                }
+                            )
                         elif "materials" in payload["nodes"][2]["inputs"]:
                             master, materials_report = apply_materials(master, masks, confidences)
-                            outputs = {"enhance.master": master, "enhance.materials": materials_report}
+                            outputs.update({"enhance.master": master, "enhance.materials": materials_report})
                         return outputs
 
                     def output(context: StageContext) -> dict[str, Any]:
                         master = context.artifacts["enhance.master"]
                         original = context.artifacts["preprocess.master"]
-                        artifact = _depth(context, item["sha256"], companion)
+                        artifact = read_depth(context)
                         transform = context.artifacts["preprocess.proxy"].transform
-                        aligned, aligned_valid = restore_depth_with_validity(
-                            artifact.relative_depth(), artifact.valid_mask, transform
-                        )
                         destination = root / current_id
                         destination.mkdir(mode=0o700)
                         arrays = {
@@ -363,16 +388,26 @@ def run(
                             "master.npy": master.pixels,
                             "native-depth.npy": artifact.native_depth,
                             "depth-valid.npy": artifact.valid_mask,
-                            "relative-depth.npy": aligned,
-                            "aligned-depth-valid.npy": aligned_valid,
                         }
+                        profile_descriptor = {}
+                        if profile is None:
+                            aligned, aligned_valid = restore_depth_with_validity(
+                                artifact.relative_depth(), artifact.valid_mask, transform
+                            )
+                            arrays.update({"relative-depth.npy": aligned, "aligned-depth-valid.npy": aligned_valid})
+                        else:
+                            profile_arrays, profile_descriptor = profile.output_products(
+                                context, artifact, configuration, current_id
+                            )
+                            arrays.update(profile_arrays)
                         if "enhance.materials_baseline" in context.artifacts:
                             arrays["materials-baseline.npy"] = context.artifacts["enhance.materials_baseline"].pixels
                         if artifact.metric_map_m is not None:
                             arrays["metric-depth-m.npy"] = artifact.metric_map_m
-                            arrays["aligned-metric-depth-m.npy"], _ = restore_depth_with_validity(
-                                artifact.metric_map_m, artifact.valid_mask, transform
-                            )
+                            if profile is None:
+                                arrays["aligned-metric-depth-m.npy"], _ = restore_depth_with_validity(
+                                    artifact.metric_map_m, artifact.valid_mask, transform
+                                )
                         if master.alpha is not None:
                             arrays["alpha.npy"] = master.alpha
                         if artifact.confidence is not None:
@@ -387,7 +422,9 @@ def run(
                         if configuration["preview_maps"]:
                             from .photography import generate_preview_maps
 
-                            maps, preview_report = generate_preview_maps(artifact)
+                            maps, preview_report = (generate_preview_maps if profile is None else profile.preview_maps)(
+                                artifact
+                            )
                             arrays.update({f"preview-{name}.npy": value for name, value in maps.items()})
                             estimate += sum(value.nbytes + 256 for value in maps.values())
                             if estimate + written > resources["max_output_bytes"] or estimate > shutil.disk_usage(root).free:
@@ -427,6 +464,7 @@ def run(
                             ),
                             "preview_maps": preview_report,
                         }
+                        descriptor.update(profile_descriptor)
                         if "enhance.materials_baseline" in context.artifacts:
                             descriptor["materials_baseline"] = context.artifacts["enhance.materials_baseline"].to_payload()
                         write_evidence(root, f"{current_id}/photograph.json", canonicalize_json(descriptor))
@@ -454,14 +492,18 @@ def run(
                                 digest = digest_payload((companion or {}).get(binding[1:]))
                             elif binding == "$materials_v4":
                                 digest = digest_payload(item.get("materials_v4"))
-                            elif binding == "enhance.materials":
+                            elif binding in {"enhance.materials", "enhance.depth_response"}:
                                 digest = digest_payload(context.artifacts[binding])
                             elif binding == "depth.depth":
-                                digest = _depth(context, item["sha256"], companion).content_hash()
+                                digest = read_depth(context).content_hash()
                             else:
                                 value = context.artifacts[binding]
                                 digest = _proxy_hash(value) if isinstance(value, ImageProxy) else value.content_hash()
                             bound[name] = digest
+                        if profile is not None:
+                            return profile.identity(
+                                plan, stage, current_id, bound, parent_runtime.source_sha256, combined_runtime, model_digest
+                            )
                         materialized = MaterializedExecutionIdentityV4.from_plan(
                             plan,
                             node_id=stage.name,
@@ -514,7 +556,7 @@ def run(
                     if any(actual[key] != artifact[key] for key in actual):
                         raise RuntimeError("Output changed before completion publication")
                 evidence = {
-                    "schema": "tp.lux.execution.evidence.v2",
+                    "schema": "tp.lux.execution.evidence.v2" if profile is None else profile.evidence_schema,
                     "complete": True,
                     "synthetic": False,
                     "plan_schema": plan.schema,
@@ -526,7 +568,7 @@ def run(
                     "executions": image_records,
                     "duration_seconds": time.monotonic() - started,
                     "cache": {
-                        "namespace": "identity-v4",
+                        "namespace": namespace,
                         "enabled": prepared.cache_root is not None,
                         "hits": hits,
                         "misses": misses,
@@ -548,7 +590,7 @@ def run(
                     "failure.json",
                     canonicalize_json(
                         {
-                            "schema": "tp.lux.execution.failure.v2",
+                            "schema": "tp.lux.execution.failure.v2" if profile is None else profile.failure_schema,
                             "complete": False,
                             "plan_fingerprint_sha256": plan.plan_fingerprint_sha256,
                             "error": str(exc),
@@ -556,7 +598,8 @@ def run(
                     ),
                 )
                 raise
-    return LuxDepthV4Result(
+    result_type = LuxDepthV4Result if profile is None else profile.result_type
+    return result_type(
         root,
         root / "execution-evidence.json",
         plan.plan_fingerprint_sha256,

@@ -18,6 +18,12 @@ pytestmark = pytest.mark.unit
 
 def _import_with_fake_ml_stack(monkeypatch: pytest.MonkeyPatch, module_name: str):
     """Import a module under a deterministic fake torch/transformers stack."""
+    parent_name, _, child_name = module_name.rpartition(".")
+    parent = importlib.import_module(parent_name)
+    # Import machinery writes both bindings. Restore both after the test so
+    # later consumers keep the original module's classes and enum identities.
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+    monkeypatch.delattr(parent, child_name, raising=False)
     fake_torch = types.ModuleType("torch")
     fake_torch.__version__ = "2.2.2"
     fake_torch.float16 = "float16"  # type: ignore[attr-defined]
@@ -49,7 +55,6 @@ def _import_with_fake_ml_stack(monkeypatch: pytest.MonkeyPatch, module_name: str
         fake_depth_estimation,
     )
 
-    sys.modules.pop(module_name, None)
     return importlib.import_module(module_name)
 
 

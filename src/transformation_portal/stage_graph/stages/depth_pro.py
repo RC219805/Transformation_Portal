@@ -7,12 +7,15 @@ optimized for Apple Silicon (MPS). Inert unless depth_backend=depth_pro.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import math
 import platform
 import sys
 import time
 from datetime import datetime, timezone
+from numbers import Real
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -114,6 +117,7 @@ class DepthProStage(Stage):
         Expected context artifacts:
             - image: Input image as PIL.Image or numpy array (H, W, 3)
             - output_dir: Optional directory for saving outputs
+            - focal_length_px: Optional positive focal length on the input image grid
 
         Output artifacts:
             - depth_map: Metric depth map (H, W) in meters, not normalized
@@ -146,16 +150,19 @@ class DepthProStage(Stage):
             )
 
         try:
+            focal_length_px = self._validated_focal_length(context.get_artifact("focal_length_px"))
             # Lazy load model
             if not self._model_loaded:
                 self._load_model()
 
             # Run inference
-            depth, inference_sec = self._run_inference(image)
+            depth, inference_sec, camera = self._run_inference(image, focal_length_px=focal_length_px)
 
             # Generate outputs
             output_dir = context.get_artifact("output_dir")
-            artifacts = self._generate_outputs(image=image, depth=depth, output_dir=output_dir, inference_sec=inference_sec)
+            artifacts = self._generate_outputs(
+                image=image, depth=depth, output_dir=output_dir, inference_sec=inference_sec, camera=camera
+            )
 
             duration_ms = (time.time() - start_time) * 1000
 
@@ -169,6 +176,7 @@ class DepthProStage(Stage):
                     "device": str(self.device),
                     "checkpoint": str(self.checkpoint_path),
                     "inference_sec": inference_sec,
+                    **camera,
                 },
             )
 
@@ -225,7 +233,9 @@ class DepthProStage(Stage):
             transform_repr = repr(self._transform)[:100]
             transform_hash = hashlib.sha256(transform_repr.encode()).hexdigest()[:8]
 
-        return f"depthpro_{ckpt_hash}_{pkg_ver}_{transform_hash}_" f"{image_hash}_{self.device}"
+        focal = self._validated_focal_length(context.get_artifact("focal_length_px"))
+        focal_key = "estimated" if focal is None else hashlib.sha256(focal.hex().encode("ascii")).hexdigest()[:16]
+        return f"depthpro_{ckpt_hash}_{pkg_ver}_{transform_hash}_{image_hash}_{self.device}_focal_{focal_key}_v2"
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device (prefer MPS for Apple Silicon)."""
@@ -240,7 +250,7 @@ class DepthProStage(Stage):
             pass
         return "cpu"
 
-    def _validate_checkpoint(self):
+    def _validate_checkpoint(self) -> None:
         """Validate checkpoint SHA-256 hash against expected value.
 
         Raises:
@@ -266,18 +276,23 @@ class DepthProStage(Stage):
         else:
             self.logger.info(f"Checkpoint validation passed: {actual_hash[:16]}...")
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Lazy load Depth Pro model and transforms.
 
         Validates checkpoint SHA-256 before loading to detect corruption
         or tampering.
         """
-        # Validate checkpoint integrity before loading
+        # Bind validation and the upstream loader to the same configured path.
+        # A previously computed cache key must not authorize changed weights.
+        self.checkpoint_path = self.checkpoint_path.expanduser().resolve()
+        self.__dict__.pop("_checkpoint_hash_cached", None)
         self._validate_checkpoint()
 
         self.logger.info(f"Loading Depth Pro model on {self.device}...")
 
-        model, transform = depth_pro.create_model_and_transforms()  # type: ignore
+        config = copy.deepcopy(depth_pro.depth_pro.DEFAULT_MONODEPTH_CONFIG_DICT)  # type: ignore
+        config.checkpoint_uri = str(self.checkpoint_path)
+        model, transform = depth_pro.create_model_and_transforms(config=config)  # type: ignore
         device_obj = torch.device(self.device)
         model = model.to(device_obj).eval()
 
@@ -287,15 +302,35 @@ class DepthProStage(Stage):
 
         self.logger.info("Depth Pro model loaded successfully")
 
-    def _run_inference(self, image: Any) -> Tuple[np.ndarray, float]:
+    @staticmethod
+    def _validated_focal_length(value: Any) -> Optional[float]:
+        """Accept only a finite positive scalar focal length, without guessing units."""
+        if value is None:
+            return None
+        if TORCH_AVAILABLE and torch is not None and isinstance(value, torch.Tensor):
+            if value.ndim != 0:
+                raise ValueError("focal_length_px must be a finite positive scalar")
+            value = value.detach().cpu().item()
+        if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value) or value <= 0:
+            raise ValueError("focal_length_px must be a finite positive scalar")
+        return float(value)
+
+    def _run_inference(
+        self, image: Any, *, focal_length_px: Optional[float] = None
+    ) -> Tuple[np.ndarray, float, Dict[str, Any]]:
         """Run Depth Pro inference.
 
         Returns:
-            (depth_array, inference_seconds)
+            (depth_array, inference_seconds, camera_metadata)
         """
+        focal_length_px = self._validated_focal_length(focal_length_px)
         # Convert to PIL if needed
         if isinstance(image, np.ndarray):
-            if image.max() <= 1.0:
+            if np.issubdtype(image.dtype, np.uint16):
+                image_pil = Image.fromarray(np.rint(image.astype(np.float32) / 257.0).astype(np.uint8))
+            elif image.dtype == np.uint8:
+                image_pil = Image.fromarray(image)
+            elif image.max() <= 1.0:
                 image_pil = Image.fromarray((image * 255).astype(np.uint8))
             else:
                 image_pil = Image.fromarray(image.astype(np.uint8))
@@ -316,7 +351,13 @@ class DepthProStage(Stage):
         # Run inference
         t0 = time.perf_counter()
         with torch.no_grad():
-            out = self._model.infer(x)  # type: ignore
+            if focal_length_px is None:
+                out = self._model.infer(x)  # type: ignore
+            else:
+                # The upstream implementation calls squeeze() on f_px, so pass
+                # a scalar tensor in its computation device rather than a float.
+                focal_tensor = torch.tensor(focal_length_px, device=self.device, dtype=torch.float32)
+                out = self._model.infer(x, f_px=focal_tensor)  # type: ignore
         inference_sec = time.perf_counter() - t0
 
         # Extract depth
@@ -326,10 +367,37 @@ class DepthProStage(Stage):
 
         depth = depth_t.detach().float().cpu().numpy().astype(np.float32)
 
-        return depth, inference_sec
+        predicted_focal = self._validated_focal_length(out.get("focallength_px"))
+        if (
+            focal_length_px is not None
+            and predicted_focal is not None
+            and not math.isclose(focal_length_px, predicted_focal, rel_tol=1e-6, abs_tol=1e-6)
+        ):
+            raise ValueError("Depth Pro returned a focal length different from the supplied input")
+        effective_focal = focal_length_px if focal_length_px is not None else predicted_focal
+        camera = {
+            "focal_length_px": effective_focal,
+            "focal_length_source": (
+                "supplied"
+                if focal_length_px is not None
+                else "model_estimated" if predicted_focal is not None else "unavailable"
+            ),
+            "fov_deg": (
+                math.degrees(2.0 * math.atan(image_pil.width / (2.0 * effective_focal)))
+                if effective_focal is not None
+                else None
+            ),
+            "coordinate_space": "input_image",
+        }
+        return depth, inference_sec, camera
 
     def _generate_outputs(
-        self, image: Any, depth: np.ndarray, output_dir: Optional[Path], inference_sec: float
+        self,
+        image: Any,
+        depth: np.ndarray,
+        output_dir: Optional[Path],
+        inference_sec: float,
+        camera: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate output artifacts (npy, png, provenance).
 
@@ -339,10 +407,12 @@ class DepthProStage(Stage):
             - depth_preview_path: Path (if output_dir)
             - depth_provenance: dict
         """
-        artifacts = {
+        artifacts: Dict[str, Any] = {
             "depth_map": depth,
             "depth_provenance": self._generate_provenance(depth=depth, inference_sec=inference_sec),
         }
+        if camera is not None:
+            artifacts["depth_provenance"]["camera"] = dict(camera)
 
         # Save to disk if output_dir provided
         if output_dir:

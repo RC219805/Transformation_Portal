@@ -224,3 +224,47 @@ def test_compute_normalizes_device_override_for_readiness_and_subprocess(tmp_pat
     mock_ready.assert_called_once_with(device="mps")
     mock_subprocess.assert_called_once()
     assert mock_subprocess.call_args.args[1] == "mps"
+
+
+@pytest.mark.parametrize(
+    "dtype, values, expected",
+    [
+        ("uint16", [0, 255, 256, 32768, 65535], [0, 1, 1, 128, 255]),
+        (">u2", [0, 255, 256, 32768, 65535], [0, 1, 1, 128, 255]),
+        ("uint16", [0, 1], [0, 0]),
+        ("uint8", [0, 1], [0, 1]),
+    ],
+)
+def test_prepare_image_preserves_integer_intensity_order(dtype, values, expected):
+    backend = DepthProBackend.__new__(DepthProBackend)
+    image = np.repeat(np.array(values, dtype=dtype)[None, :, None], 3, axis=2)
+    pil_image, prepared = backend._prepare_image(image)
+    assert prepared[0, :, 0].tolist() == expected
+    np.testing.assert_array_equal(np.asarray(pil_image), prepared)
+
+
+def test_worker_envelope_retains_stage_focal_metadata(tmp_path, monkeypatch):
+    from PIL import Image
+
+    from transformation_portal.depth.backends import depth_pro_worker
+    from transformation_portal.stage_graph.stage import StageResult, StageStatus
+    from transformation_portal.stage_graph.stages import depth_pro as stage_module
+
+    focal = 812.0
+    camera = {"focal_length_px": focal, "fov_deg": 61.0, "focal_length_source": "model_estimated"}
+    result = StageResult(
+        stage_name="depth_pro_estimation",
+        stage_version="1.0.0",
+        status=StageStatus.COMPLETED,
+        artifacts={"depth_map": np.ones((14, 28), np.float32), "depth_provenance": {"camera": camera}},
+        metadata=camera,
+    )
+    monkeypatch.setattr(stage_module, "DepthProStage", lambda **kwargs: SimpleNamespace(compute=lambda context: result))
+    image = tmp_path / "image.png"
+    Image.new("RGB", (28, 14)).save(image)
+    output = tmp_path / "result.json"
+    assert depth_pro_worker._run_inference(image, tmp_path / "depth.npy", output, tmp_path / "weights.pt", "cpu") == 0
+    payload = json.loads(output.read_text())
+    assert payload["focal_length_px"] == focal
+    assert payload["field_of_view_deg"] == 61.0
+    assert payload["provenance"]["camera"]["focal_length_source"] == "model_estimated"
