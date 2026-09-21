@@ -14,14 +14,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+from .authority import CATALOG_PATH, DocumentationCatalog
 from .config import get_config
 from .exceptions import CacheError, IndexingError
 from .logger import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_FORMAT_VERSION = 2
-CACHE_FORMAT_NAME = "tp.rag.chunks.v2"
+CACHE_FORMAT_VERSION = 3
+CACHE_FORMAT_NAME = "tp.rag.chunks.v3"
 CACHE_FILENAME = "chunks.json"
 LEGACY_CACHE_FILENAME = "chunks.pkl"
 
@@ -140,6 +141,7 @@ class RepositoryIndexer:
         """
         self.repo_root = Path(repo_root)
         self.chunks: List[DocumentChunk] = []
+        self.catalog = DocumentationCatalog.read(self.repo_root)
 
         # Load config
         config = get_config()
@@ -175,6 +177,7 @@ class RepositoryIndexer:
         Returns:
             List of document chunks with metadata
         """
+        self.catalog = DocumentationCatalog.read(self.repo_root)
         files = self._collect_files()
         fingerprint = self._source_fingerprint(files) if self.use_cache else None
         if self.use_cache and not force_reindex and fingerprint is not None:
@@ -194,13 +197,18 @@ class RepositoryIndexer:
                     indexed_sources.append((file_path, chunk_type, source_hash))
             logger.info(f"Indexed {len(self.chunks)} chunks from repository")
 
+            consumed_fingerprint = self._fingerprint_sources(indexed_sources)
+            final_fingerprint = self._source_fingerprint(self._collect_files())
+            if final_fingerprint is None or consumed_fingerprint != final_fingerprint:
+                self._downgrade_changed_snapshot(self.chunks)
+
             # Bind cache identity to the exact bytes chunked, not just matching
             # before/after snapshots: a transient A->B->A edit must not cache B as A.
             if self.use_cache and fingerprint is not None:
                 if (
                     len(indexed_sources) == len(files)
-                    and fingerprint == self._fingerprint_sources(indexed_sources)
-                    and fingerprint == self._source_fingerprint(self._collect_files())
+                    and fingerprint == consumed_fingerprint
+                    and fingerprint == final_fingerprint
                 ):
                     self._save_cache(fingerprint)
                 else:
@@ -209,6 +217,21 @@ class RepositoryIndexer:
             logger.error(f"Error during indexing: {e}")
             raise IndexingError(f"Failed to index repository: {e}") from e
         return self.chunks
+
+    @staticmethod
+    def _downgrade_changed_snapshot(chunks: List[DocumentChunk]) -> None:
+        """Withhold verified authority after observed drift; do not imply a live lock."""
+        logger.warning("Repository snapshot changed during indexing; returned documentation authority was withheld")
+        for chunk in chunks:
+            if chunk.chunk_type not in {"doc", "agent"}:
+                continue
+            authority = chunk.metadata.get("documentation")
+            if isinstance(authority, dict) and authority.get("verification") == "verified":
+                chunk.metadata["documentation"] = {
+                    **authority,
+                    "authority": "unverified",
+                    "verification": "changed-during-indexing",
+                }
 
     def _collect_files(self) -> List[Tuple[Path, str]]:
         """Collect a unique, deterministic inventory and prune excluded trees."""
@@ -248,10 +271,10 @@ class RepositoryIndexer:
                 files[file_path] = "agent"
         return sorted(files.items(), key=lambda item: item[0].relative_to(self.repo_root).as_posix())
 
-    def _fingerprint_sources(self, sources: List[Tuple[Path, str, str]]) -> str:
+    def _fingerprint_sources(self, sources: List[Tuple[Path, str, str]], catalog_fingerprint: Optional[str] = None) -> str:
         """Hash an ordered inventory of source digests and effective settings."""
         digest = hashlib.sha256()
-        settings = [CACHE_FORMAT_VERSION, self.chunk_size, self.overlap]
+        settings = [CACHE_FORMAT_VERSION, self.chunk_size, self.overlap, catalog_fingerprint or self.catalog.fingerprint]
         digest.update(json.dumps(settings, separators=(",", ":")).encode("utf-8"))
         for file_path, chunk_type, source_hash in sources:
             entry = [file_path.relative_to(self.repo_root).as_posix(), chunk_type, source_hash]
@@ -260,6 +283,9 @@ class RepositoryIndexer:
 
     def _source_fingerprint(self, files: List[Tuple[Path, str]]) -> Optional[str]:
         """Bind cache reuse to source bytes, inventory, and effective chunk settings."""
+        catalog = DocumentationCatalog.read(self.repo_root)
+        if catalog.fingerprint is None:
+            return None
         sources = []
         try:
             for file_path, chunk_type in files:
@@ -271,7 +297,9 @@ class RepositoryIndexer:
         except OSError as exc:
             logger.warning("Cannot validate repository cache: %s", exc)
             return None
-        return self._fingerprint_sources(sources)
+        # Compute with this fresh provenance snapshot without changing the catalog
+        # whose metadata was consumed while chunking.
+        return self._fingerprint_sources(sources, catalog_fingerprint=catalog.fingerprint)
 
     def _should_index(self, file_path: Path, directory: bool = False) -> bool:
         """Determine if a file should be indexed."""
@@ -289,6 +317,8 @@ class RepositoryIndexer:
             "build",
         }
 
+        if file_path.relative_to(self.repo_root).as_posix() == CATALOG_PATH:
+            return False
         parts = file_path.relative_to(self.repo_root).parts
         if any(part in skip_dirs for part in parts):
             return False
@@ -322,11 +352,16 @@ class RepositoryIndexer:
         rel_path = str(file_path.relative_to(self.repo_root))
         language = self._detect_language(file_path)
 
+        first_chunk = len(self.chunks)
         # For Python files, try to chunk by function/class
         if file_path.suffix == ".py" and chunk_type in ("code", "test"):
             self._chunk_python_file(content, rel_path, chunk_type, language)
         else:
             self._chunk_text(content, rel_path, chunk_type, language)
+        if chunk_type in {"doc", "agent"}:
+            authority = self.catalog.metadata(rel_path, source_hash)
+            for chunk in self.chunks[first_chunk:]:
+                chunk.metadata["documentation"] = authority.copy()
         return source_hash
 
     def _chunk_python_file(self, content: str, file_path: str, chunk_type: str, language: str):
@@ -552,6 +587,43 @@ class RepositoryIndexer:
                 raise ValueError("Cache field 'chunks' must be a list")
 
             chunks = [DocumentChunk.from_dict(chunk_payload) for chunk_payload in chunks_payload]
+            # The JSON cache is an optimization, never authority evidence. Bind
+            # cached text to fresh source spans, and derive authority again from
+            # the same catalog/source snapshot used to validate this cache hit.
+            catalog = DocumentationCatalog.read(self.repo_root)
+            if catalog.fingerprint is None:
+                return None
+            sources, snapshots = [], {}
+            for file_path, chunk_type in self._collect_files():
+                source_bytes = file_path.read_bytes()
+                source_hash = hashlib.sha256(source_bytes).hexdigest()
+                source_text = source_bytes.decode("utf-8", errors="ignore").replace("\r\n", "\n").replace("\r", "\n")
+                snapshots[file_path.relative_to(self.repo_root).as_posix()] = (
+                    chunk_type,
+                    source_hash,
+                    source_text.split("\n"),
+                )
+                sources.append((file_path, chunk_type, source_hash))
+            if self._fingerprint_sources(sources, catalog_fingerprint=catalog.fingerprint) != source_fingerprint:
+                return None
+            for chunk in chunks:
+                if chunk.file_path not in snapshots:
+                    raise ValueError("Cached chunk is outside the current source inventory")
+                chunk_type, source_hash, lines = snapshots[chunk.file_path]
+                if (
+                    chunk.chunk_type != chunk_type
+                    or chunk.end_line > len(lines)
+                    or chunk.content != "\n".join(lines[chunk.start_line - 1 : chunk.end_line])
+                ):
+                    raise ValueError("Cached chunk does not match the current source span")
+                chunk.metadata.pop("documentation", None)
+                if chunk_type in {"doc", "agent"}:
+                    chunk.metadata["documentation"] = catalog.metadata(chunk.file_path, source_hash)
+            self.catalog = catalog
+            # A valid cache hit still needs an end-of-read snapshot check: its
+            # source or catalog may change while cached spans are authenticated.
+            if self._source_fingerprint(self._collect_files()) != source_fingerprint:
+                self._downgrade_changed_snapshot(chunks)
             logger.debug(f"Loaded {len(chunks)} chunks from cache: {self.cache_file}")
             return chunks
 

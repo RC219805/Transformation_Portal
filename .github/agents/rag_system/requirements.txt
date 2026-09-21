@@ -6,15 +6,6 @@ numpy>=1.24.0,<3
 scikit-learn>=1.3.0  # For TF-IDF and BM25 implementation
 PyYAML>=6.0  # For configuration management
 
-# Vector embeddings (optional, required only for semantic/vector search)
-# To enable vector search, install these extras:
-# pip install sentence-transformers>=2.2.0 torch>=2.0.0
-#
-# OR install the transformation-portal package with ML extras:
-# pip install -e ".[ml]"
-#
-# sentence-transformers>=2.2.0  # For dense vector embeddings (included in [ml] extras)
-# torch>=2.0.0  # Required by sentence-transformers (included in [ml] extras)
-
-# Optional but recommended
-# faiss-cpu>=1.7.0  # For fast similarity search (future enhancement)
+# Optional semantic/vector search is not supplied by this file or by [ml].
+# No governed semantic-search runtime/lock exists. Keep offline BM25 enabled;
+# propose a separate target-specific dependency/model contract before installation.

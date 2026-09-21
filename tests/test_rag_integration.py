@@ -79,7 +79,7 @@ class TestRAGIntegration:
         """Test pipeline can find FFmpeg filter graph examples."""
         query = "FFmpeg filter graph build"
 
-        results = rag_pipeline["retriever"].retrieve(query, top_k=5)
+        results = rag_pipeline["retriever"].retrieve(query, top_k=5, retrieval_mode="all")
         reranked = rag_pipeline["reranker"].rerank(results, query, top_k=3)
         citations = rag_pipeline["citation_gen"].generate_citations(reranked, max_citations=2)
 

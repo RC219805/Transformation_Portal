@@ -421,7 +421,8 @@ class TestFullPipeline:
         formatted = citation_gen.format_citations(citations, format_type="markdown")
 
         assert "##" in formatted
-        assert "Confidence" in formatted
+        assert "Relevance score" in formatted
+        assert "not correctness or authority" in formatted
 
     def test_pipeline_with_filtering(self, repo_root):
         """Test pipeline with chunk type filtering."""

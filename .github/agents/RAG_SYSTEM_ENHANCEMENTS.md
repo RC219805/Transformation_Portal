@@ -10,6 +10,12 @@ This document supports repository retrieval workflows; it does not override live
 
 ### 1. Persistent Caching ✅
 
+The current chunk envelope is `tp.rag.chunks.v3`. It binds source bytes, chunk
+settings, the exact documentation catalog bytes, and every referenced source
+snapshot, including Makefiles and scripts outside the retrieval corpus. Older
+cache envelopes rebuild. Missing or stale authority evidence remains
+unverified and never receives maintained-guidance priority.
+
 **Problem Solved:** Re-indexing the repository on every run was slow and inefficient.
 
 **Solution:** Chunks are cached as versioned JSON, with SHA-256 validation of source bytes,
@@ -180,17 +186,15 @@ logging:
 
 **Solution:** Dense vector embeddings using Sentence Transformers for semantic similarity.
 
-**Installation:**
-```bash
-# Option 1: Install transformation-portal with ML extras (recommended)
-pip install -e ".[ml]"
-
-# Option 2: Install manually
-pip install sentence-transformers torch
-
-# Option 3: Install RAG system requirements
-pip install -r .github/agents/rag_system/requirements.txt
-```
+**Installation boundary:** The supported repository retrieval path is offline
+BM25 (`enable_vector_search: false`) in the repo-managed environment. The `ml`
+extra does not include `sentence-transformers`, and the RAG requirements file
+does not install optional vector dependencies. There is no governed semantic-
+search install lane; do not use umbrella ML or unpinned manual installs as an
+operator recipe. Adding a vector runtime needs a reviewed target-specific lock,
+model identity, download policy, and runtime validation. The API examples below
+show the optional capability only when that separately validated environment
+already exists; they do not establish an installation or readiness contract.
 
 **Enable Vector Search:**
 ```yaml
@@ -326,15 +330,16 @@ except RetrievalError as e:
 #### 1. Update Dependencies
 
 ```bash
-cd .github/agents/rag_system
-pip install -r requirements.txt
+# From the repository root, install the governed offline environment.
+make venv
+make install-core
 ```
 
 #### 2. Update Code
 
-**Before:**
+**Before (historical constructor, no longer supported):**
 ```python
-# Old way (still works!)
+# Historical API; do not execute this migration example.
 indexer = RepositoryIndexer('/path/to/repo', chunk_size_tokens=750)
 chunks = indexer.index_repository()
 
@@ -506,7 +511,7 @@ except RetrievalError as e:
 ls -la .rag_cache/
 
 # Check config
-python -c "from rag_system.config import get_config; print(get_config().get('indexer', 'cache_enabled'))"
+PYTHONPATH=.github/agents ./.venv/bin/python -c "from rag_system.config import get_config; print(get_config().get('indexer', 'cache_enabled'))"
 
 # Force enable cache
 indexer = RepositoryIndexer('/path/to/repo', use_cache=True)
@@ -516,23 +521,11 @@ indexer = RepositoryIndexer('/path/to/repo', use_cache=True)
 
 **Problem:** `retrieval_method` is always `'bm25'`
 
-**Solutions:**
-```bash
-# Install dependencies (choose one option)
-# Option 1: Install with ML extras (recommended)
-pip install -e ".[ml]"
-
-# Option 2: Install manually
-pip install sentence-transformers torch
-
-# Enable in config
-# config.yaml:
-# retriever:
-#   enable_vector_search: true
-
-# Or in code
-retriever = HybridRetriever(enable_vector_search=True)
-```
+**Expected default:** Offline BM25 is supported. Semantic search stays disabled
+unless a separately reviewed runtime supplies its dependencies and model.
+`pip install -e ".[ml]"` does not supply `sentence-transformers`; installing the
+RAG requirements alone does not supply it either. See the installation boundary
+above before proposing a semantic-search runtime.
 
 ### Logging Not Showing
 

@@ -3,7 +3,10 @@
 This guide covers the maintained local operator paths for image, depth, TIFF,
 AI-render, and video workflows. It intentionally uses repo-managed setup,
 console scripts, and governed runtime installers instead of retired root scripts
-or ad hoc dependency installs.
+or ad hoc dependency installs. LuxDepthV3 remains the production depth/APEX
+baseline. Opt-in V4/V5 and MaterialsV4 workflows have separate
+[candidate guides](../cli/CLI_REFERENCE.md#opt-in-successor-entrypoints); this
+runbook does not select or promote them automatically.
 
 For setup background, start with [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md).
 For Lux Depth V3 flag detail, use
@@ -96,6 +99,9 @@ The maintained APEX depth workflow uses `lux-depth-v3` and the commercial-safe
   --depth-backend da3 \
   --model-key da3-metric \
   --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend efficientsam \
+  --strict-segmentation \
   --pbr on \
   --cache-depth on \
   --output-bit-depth 16 \
@@ -103,6 +109,10 @@ The maintained APEX depth workflow uses `lux-depth-v3` and the commercial-safe
   --run-card-version v2 \
   --overwrite
 ```
+
+APEX with MaterialsV3 requires explicit segmentation, a non-stub backend, and
+strict segmentation. The selected segmentation runtime must be available;
+`--plan` can validate admission without proving inference or photographic quality.
 
 The combined processing manifest is unconditional. Lux does not produce a
 separate marketing deliverable; create delivery derivatives in a separately

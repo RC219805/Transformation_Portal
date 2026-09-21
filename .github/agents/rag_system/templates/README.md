@@ -136,30 +136,30 @@ Templates are designed to work with the RAG system's retrieval and reranking:
 
 ```python
 # Run from repository root with: export PYTHONPATH=.github/agents
-from rag_system.templates import PromptTemplates
+from rag_system.indexer import RepositoryIndexer
+from rag_system.templates import FewShotExamples, PromptTemplates
 from rag_system.retriever import HybridRetriever
 from rag_system.citation import CitationGenerator
 
-# 1. Generate base template
+# Build the explicit, offline corpus before retrieval.
+chunks = RepositoryIndexer(".", use_cache=False).index_repository()
+retriever = HybridRetriever(enable_vector_search=False)
+retriever.index(chunks)
+results = retriever.retrieve(
+    "atmospheric effects depth processing", top_k=5, retrieval_mode="operator"
+)
+
+# Few-shot examples have input/output fields; retrieval results are citations.
 template = PromptTemplates.feature_implementation(
     feature_description="Add depth-based atmospheric haze",
-    context="For exterior architectural renders"
+    context="For exterior architectural renders",
 )
-
-# 2. Retrieve relevant repository examples
-retriever = HybridRetriever()
-examples = retriever.retrieve(
-    query="atmospheric effects depth processing",
-    top_k=5
-)
-
-# 3. Add few-shot examples to template
 template_with_examples = PromptTemplates.add_few_shot_examples(
-    template, examples
+    template, FewShotExamples.get_feature_examples()
 )
-
-# 4. Generate citations
-citations = CitationGenerator.generate_citations(examples)
+citation_generator = CitationGenerator()
+citations = citation_generator.generate_citations(results)
+retrieved_context = citation_generator.format_citations(citations)
 ```
 
 ### Customization
@@ -185,7 +185,7 @@ Replace these with actual values when using templates.
 ### Testing
 - ✅ Include unit, integration, and property-based tests
 - ✅ Cover edge cases and error conditions
-- ✅ Use pytest markers (fast, slow, integration)
+- ✅ Use pytest markers (unit, slow, integration)
 - ✅ Mock heavy dependencies for CI
 
 ### Documentation

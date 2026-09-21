@@ -7,7 +7,7 @@
 - [Overview](#overview)
 - [Directory Structure](#directory-structure)
 - [Automated Organization](#automated-organization)
-- [Helper Scripts](#helper-scripts)
+- [Organization Steps](#organization-steps)
 - [Pre-Commit Hook](#pre-commit-hook)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -85,7 +85,7 @@ Transformation_Portal/
 │   └── luxury_tiff_batch_processor/  # TIFF processing module
 ├── tests/                      # Contract, unit, integration, fixture, and smoke tests
 ├── tools/                      # Governed CLIs for archive/performance/evidence
-├── web/                        # Managed Next.js frontdoor and shared web assets
+├── web/                        # Managed Node 22 frontdoor and shared web assets
 │   ├── secure-landing/         # Node 22 managed browser entry point
 │   └── shared/                 # Shared web tokens/assets
 ├── workflows/                  # Repo-level workflow metadata and supporting files

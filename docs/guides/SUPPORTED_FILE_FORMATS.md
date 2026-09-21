@@ -114,12 +114,20 @@ HDR video support is handled by the video grader's FFmpeg tone-mapping options.
   --depth-backend da3 \
   --model-key da3-metric \
   --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend efficientsam \
+  --strict-segmentation \
   --pbr on \
   --output-bit-depth 16 \
   --emit-run-card on \
   --run-card-version v2 \
   --overwrite
 ```
+
+This APEX example requires the selected DA3 and EfficientSAM runtimes. The
+explicit segmentation flags satisfy admission; they do not prove runtime
+readiness or photographic acceptance. See the
+[Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md).
 
 ### TIFF Batch Processing
 

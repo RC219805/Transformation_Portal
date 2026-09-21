@@ -20,9 +20,11 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 Current documentation navigation starts at [docs/README.md](docs/README.md)
 and [docs/governance/DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md).
-The [documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
-records the current inventory scope, source-reviewed changes, and remaining
-verification limits. Prior dated audits remain historical evidence.
+The [current documentation catalog](docs/governance/DOCUMENTATION_CATALOG.md)
+records classifications, reviewed document hashes, source baselines, and scoped
+successors. The [September 12 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
+remains dated evidence; classification and passing documentation checks do not
+establish runtime, photographic, or production acceptance.
 Recent merged work added typed API v1 envelopes, typed health/readiness and job
 lifecycle response models, Docker health/env wiring, CI workflow hardening,
 archive-gate readiness evidence, APEX fallback / failure-code hardening,
@@ -58,6 +60,7 @@ Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC2
 Key docs:
 - [Documentation Index](docs/README.md)
 - [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
+- [Current Documentation Catalog](docs/governance/DOCUMENTATION_CATALOG.md)
 - [2026-09-12 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
@@ -548,4 +551,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-09-12
+Last Updated: 2026-09-21

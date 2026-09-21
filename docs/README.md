@@ -5,10 +5,12 @@ records. Use this page for current navigation; point-in-time reports remain in
 place for audit context but are not live runbooks unless they are linked below
 as canonical documents.
 
-**Current baseline:** [September 12 documentation audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md),
-reproduced against the source baseline recorded there. Inventory classification,
-source review, local tests, and unexercised runtime/service paths are reported
-separately. The May 11 inventory and May 12 overlays remain historical evidence.
+**Current authority:** the [documentation catalog](governance/DOCUMENTATION_CATALOG.md)
+binds classification and scoped successors to reviewed bytes and source baselines.
+Inventory-only records are not source review. The
+[September 12 audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md), May 11
+inventory, and May 12 overlays remain dated evidence. Local contracts, native
+runtime, photographic, hosted-service, and production acceptance stay separate.
 
 ## Start Here
 
@@ -16,6 +18,7 @@ separately. The May 11 inventory and May 12 overlays remain historical evidence.
 | --- | --- |
 | Repository overview and setup | [Main README](../README.md) |
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
+| Current classifications and successors | [Documentation Catalog](governance/DOCUMENTATION_CATALOG.md) |
 | Documentation refresh audit | [2026-09-12 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md) |
 | Architecture triage inventory | [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv) |
 | CLI triage inventory | [2026-05-12 CLI Inventory](governance/audit/cli-inventory-2026-05-12.csv) |
@@ -62,7 +65,9 @@ map explicitly links a document as canonical:
   2025 project-specific analysis and delivery records.
 - `docs/depth_model/`, `docs/pipeline/`, and `docs/pipeline_docs/` contain older
   depth-model and luxury-pipeline evaluation material. Current depth behavior is
-  described in the main README, CLI guide, and ADR-019/ADR-015.
+  described in the main README, CLI guide, and ADR-019/ADR-015. The explicitly
+  maintained [V3 pipeline operations guide](pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md)
+  is the scoped exception; its neighboring files retain their historical status.
 - `docs/reports/`, `docs/status/`, `docs/session_summaries/`,
   `docs/sessions/`, `docs/historical/`, and `docs/pr_archive/` are
   point-in-time records.
@@ -83,9 +88,10 @@ current documentation map.
 - Current navigation belongs in [Documentation Map](governance/DOCUMENTATION_MAP.md);
   duplicate or superseded material should be archived, labeled historical, or
   removed from current indexes.
-- Repo-wide classification evidence lives in
+- Current repo-wide classification and successor evidence lives in the
+  [documentation catalog](governance/DOCUMENTATION_CATALOG.md). The
   [2026-09-12 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md)
-  and its inventory CSV.
+  and its CSV retain their original dated snapshot.
 - Architecture-specific disposition evidence lives in
   [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv).
 - CLI-specific disposition evidence lives in
@@ -96,7 +102,9 @@ current documentation map.
 make check-docs
 make check-stale-docs
 make check-doc-heading-links
+make check-documentation-catalog
+make test-documentation-contract
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-09-12
+**Last Updated:** 2026-09-21

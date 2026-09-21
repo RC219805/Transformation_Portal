@@ -2,6 +2,11 @@
 
 This directory contains the layered dependency management system for Transformation Portal, using [pip-tools](https://github.com/jazzband/pip-tools) for reproducible builds.
 
+The [editorial runtime lock](locks/README.md) is a separate native Darwin arm64 /
+CPython 3.12 lane for RAW, TIFF, JPEG and PDF editorial output. Its installer
+verifies wheel and installed-package bytes before execution. It does not change
+the six-file generic set or authorize unsupported ML/RAW umbrella installs.
+
 ## 📁 Directory Structure
 
 ```

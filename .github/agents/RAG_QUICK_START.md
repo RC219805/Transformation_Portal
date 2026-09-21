@@ -11,7 +11,7 @@ This is support material for repository retrieval; live role boundaries are defi
 **Retrieval-Augmented Generation (RAG)** enhances the agent by:
 - Searching the repository for relevant code/docs before responding
 - Citing actual examples with file paths and line numbers
-- Providing confidence scores for recommendations
+- Reporting retrieval relevance separately from source authority
 - Using structured JSON responses for automation
 
 ## 🚀 Quick Examples
@@ -53,7 +53,7 @@ PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.citation \
     --max-citations 3 \
     --format markdown
 
-# Output: Formatted citations with confidence scores
+# Output: Formatted citations with relevance and authority notes
 ```
 
 ### Create Workflow Templates
@@ -155,7 +155,7 @@ dependency policy. What enforcement updates would be required?
 Citations look like this:
 
 ```
-[File: src/transformation_portal/depth/processors/atmospheric_effects.py:45-60] (Confidence: 90%)
+[File: src/transformation_portal/depth/processors/atmospheric_effects.py:45-60] (Relevance score (not correctness or authority): 90%)
 Relevance: Function: apply_haze | Has documentation | Similar pattern
 ```
 ```python
@@ -170,19 +170,45 @@ def apply_haze(image, depth_map, intensity=0.3):
 
 **What this tells you**:
 - **File & lines**: Exact location in repository
-- **Confidence**: How relevant (90% = very relevant)
+- **Relevance score**: Retrieval match only; not correctness or source authority
 - **Relevance**: Why it was cited (function name, has docs, similar pattern)
 - **Snippet**: Actual code you can reference
 
-## 📊 Confidence Scores
+## Documentation authority and historical retrieval
+
+`retrieval_mode="operator"` (the default) keeps matching evidence available and
+ranks verified maintained guidance first. `retrieval_mode="historical"` selects
+cataloged historical/archive-only documents; `retrieval_mode="all"` keeps ordinary
+relevance ordering across the corpus. The retrieval, reranking, citation, and
+combined `rag_system.cli search`/`cite` CLIs expose the same `--mode` choices.
+
+```bash
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.retriever \
+    --repo-root . --query "depth pipeline" --mode historical
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.cli search \
+    "depth pipeline" --repo-root . --mode all
+```
+
+Authority comes from `docs/governance/documentation_catalog.json`, matching
+source/document hashes, and explicit `source-reviewed` status. Missing catalog,
+missing entries, stale hashes, incomplete reviews, and unresolved successors
+remain unverified. These results remain searchable; their scores never upgrade
+them into current guidance. Citations display authority and successor pointers.
+Even verified maintained documentation is not production or photographic
+acceptance evidence. Historical mode covers cataloged history; `all` also finds
+unclassified material.
+
+## 📊 Relevance Scores
+
+Scores are rank-and-match heuristics, not calibrated probabilities of
+correctness, currency, or authorization. The JSON `confidence` field remains
+for compatibility and has this same limited meaning.
 
 | Score | Meaning | Action |
 |-------|---------|--------|
-| 0.9-1.0 | Very high confidence | Implement as suggested |
-| 0.7-0.9 | High confidence | Review and implement |
-| 0.5-0.7 | Moderate confidence | Verify before implementing |
-| 0.3-0.5 | Low confidence | Use as starting point, needs revision |
-| 0.0-0.3 | Very low confidence | Consider alternative approach |
+| 0.7–1.0 | Stronger retrieval match | Check source authority, exact current bytes, and relevant contracts |
+| 0.3–0.7 | Partial retrieval match | Inspect surrounding context and current successor |
+| 0.0–0.3 | Weaker retrieval match | Refine the query and verify any usable evidence |
 
 ## 🎯 Best Practices
 
@@ -196,7 +222,7 @@ def apply_haze(image, depth_map, intensity=0.3):
 
 ❌ **Don't:**
 - Ask vague questions without context
-- Ignore confidence scores
+- Ignore source authority and retrieval relevance
 - Skip verifying cited examples
 - Assume agent knows recent uncommitted changes
 
@@ -206,12 +232,12 @@ def apply_haze(image, depth_map, intensity=0.3):
 - Check cited files to understand patterns
 - Run tests after implementing changes
 - Verify the suggested approach fits your use case
-- Compare confidence scores for alternative approaches
+- Compare cited implementation evidence for alternative approaches
 
 ❌ **Don't:**
 - Blindly copy-paste without understanding
 - Skip testing the implemented changes
-- Ignore low confidence warnings
+- Treat a strong retrieval match as proof of correctness
 - Modify files without checking citations first
 
 ## 🛠️ Troubleshooting
@@ -295,5 +321,5 @@ If you're stuck:
 **Remember**: RAG enhances the agent with repository knowledge, but you should always verify suggestions by:
 - Reading cited code
 - Running tests
-- Checking confidence scores
+- Checking retrieval relevance and source authority
 - Understanding the implementation (not just copying)

@@ -182,6 +182,8 @@ jobs:
           set -euo pipefail
           python3 scripts/governance/check_docs_structure.py --changed-only
           python3 scripts/governance/check_docs_structure.py --all
+          python3 scripts/governance/check_documentation_catalog.py
+          python3 scripts/setup/editorial_runtime.py check --contract-only
 
       - name: Basic sanity
         run: |

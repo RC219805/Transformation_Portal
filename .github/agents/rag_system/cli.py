@@ -19,6 +19,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from rag_system.authority import RETRIEVAL_MODES
 from rag_system.citation import CitationGenerator
 from rag_system.classifier import ArtifactClassifier
 from rag_system.indexer import RepositoryIndexer
@@ -83,7 +84,7 @@ def cmd_search(args):
     # Retrieve
     chunk_types = args.types.split(",") if args.types else None
     results = retriever.retrieve(
-        query=args.query, top_k=args.top_k * 2, chunk_type_filter=chunk_types  # Get more for reranking
+        query=args.query, top_k=args.top_k * 2, chunk_type_filter=chunk_types, retrieval_mode=args.mode
     )
 
     # Rerank if requested
@@ -124,7 +125,7 @@ def cmd_cite(args):
     retriever = HybridRetriever()
     retriever.index(chunks)
 
-    results = retriever.retrieve(args.query, top_k=args.max_citations * 2)
+    results = retriever.retrieve(args.query, top_k=args.max_citations * 2, retrieval_mode=args.mode)
 
     # Rerank
     reranker = ResultReranker()
@@ -302,6 +303,7 @@ def main():
     search_parser.add_argument("--top-k", type=int, default=5, help="Number of results")
     search_parser.add_argument("--types", help="Comma-separated chunk types (code,doc,test)")
     search_parser.add_argument("--no-rerank", action="store_true", help="Skip reranking")
+    search_parser.add_argument("--mode", choices=RETRIEVAL_MODES, default="operator", help="Documentation authority scope")
 
     # Citation command
     cite_parser = subparsers.add_parser("cite", help="Generate citations")
@@ -310,6 +312,7 @@ def main():
     cite_parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
     cite_parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
     cite_parser.add_argument("--output", help="Save citations to file")
+    cite_parser.add_argument("--mode", choices=RETRIEVAL_MODES, default="operator", help="Documentation authority scope")
 
     # Template command
     template_parser = subparsers.add_parser("template", help="Generate prompt template")

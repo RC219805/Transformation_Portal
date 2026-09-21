@@ -9,7 +9,7 @@ Production workflow guide for luxury real estate rendering in Santa Barbara's un
 - [Physics-Based Approach](#physics-based-approach)
 - [Signature Atmospheric Conditions](#signature-atmospheric-conditions)
   - [Sundowner Effect](#sundowner-effect-high-clarity)
-  - [Marine Layer Effect](#marine-layer-june-gloom)
+  - [Marine Layer Effect](#marine-layer-effect-june-gloom)
 - [Complete Rendering Workflow](#complete-rendering-workflow)
 - [Real-World Examples](#real-world-examples)
 - [Best Practices](#best-practices)

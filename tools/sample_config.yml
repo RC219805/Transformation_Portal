@@ -1,5 +1,7 @@
 # Sample Configuration for AD Editorial Post-Production Pipeline
 # Copy this file and customize for your project
+# Governed runtime/setup: docs/guides/AD_EDITORIAL_POST_PIPELINE.md
+# Run: .venv/bin/python -I scripts/setup/editorial_runtime.py run -- --config /absolute/private/editorial.yml
 
 # ============================================================================
 # PROJECT IDENTIFICATION
@@ -38,22 +40,19 @@ selects:
 # ============================================================================
 # COLOR PROFILES (ICC Profiles)
 # ============================================================================
-# Adjust paths based on your system:
-# - macOS: /Library/ColorSync/Profiles/ or ~/Library/ColorSync/Profiles/
-# - Linux: /usr/share/color/icc/ or ~/.local/share/icc/
-# - Windows: C:\Windows\System32\spool\drivers\color\
-icc:
-  prophoto_path: "/Library/ColorSync/Profiles/ProPhoto.icc"
-  srgb_path: "/Library/ColorSync/Profiles/sRGB Profile.icc"
+# Omit paths to use deterministic built-in linear ProPhoto and encoded sRGB ICCs.
+# Optional prophoto_path/srgb_path must name valid matching matrix/shaper profiles;
+# missing, mismatched, LUT-based, or unsupported transfer profiles fail preflight.
+icc: {}
 
 # ============================================================================
 # PROCESSING OPTIONS
 # ============================================================================
 processing:
-  workers: 4  # Number of parallel workers (1-64)
+  workers: 4  # Retained configuration field (1-64); execution is currently serial
   denoise_strength: 0  # 0-10 (future feature, currently unused)
 
-  # HDR Merge (Debevec algorithm)
+  # HDR merge from measured shutter times; aperture/ISO must stay constant
   enable_hdr: false
   hdr_group_gap_sec: 2.0  # Group images within 2 seconds as HDR brackets
 
@@ -144,6 +143,7 @@ export:
 # METADATA (IPTC/XMP)
 # ============================================================================
 metadata:
+  # Create this CSV before running; use metadata: {} for optional default metadata.
   csv_path: "~/Photography/SmithResidence_2025-10-18/DOCS/metadata.csv"
   # CSV should have columns: filename, title, description, keywords, creator, copyright, credit, location
   # Example:

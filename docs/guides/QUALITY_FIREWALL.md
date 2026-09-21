@@ -1,5 +1,14 @@
 # Quality Firewall - Transformation Portal
 
+> **Historical guide; superseded for operator use.** The job and timing claims
+> below describe an earlier quality-control design. Current triggers and required
+> checks are documented in the [workflow guide](../../.github/workflows/README.md),
+> [Workflow Matrix](../ci/WORKFLOW_MATRIX.md), and
+> [Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md). Use the
+> [Performance Gate Policy](../performance/GATE_POLICY.md) for current evidence
+> tiers. The `ci.yml` jobs described below are post-merge push checks, not nine
+> independently required PR checks. Retained timings are historical observations.
+
 **Status**: ✅ **FULLY OPERATIONAL**
 **Last Verified**: March 2026
 

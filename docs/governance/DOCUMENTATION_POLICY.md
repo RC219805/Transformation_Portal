@@ -15,6 +15,12 @@ current navigation as live runbooks. When a historical document is easy to
 mistake for current guidance, add a short banner or directory-level README that
 points readers back to the documentation map.
 
+The [current documentation catalog](DOCUMENTATION_CATALOG.md) records these
+classifications and scoped successors. Its source-reviewed records bind exact
+document bytes to a review baseline; inherited classification does not certify
+content. Current navigation may link historical evidence when its role is
+explicitly recorded, but must not present that evidence as a live runbook.
+
 ## Strict Topology Contract
 
 - `docs/README.md` is the only allowed file directly under `docs/`.
@@ -89,7 +95,7 @@ Approved top-level directories:
 
 | Type | Location | Retention |
 | --- | --- | --- |
-| ADR | `docs/architecture/adr/` | Permanent |
+| ADR | `docs/architecture/` | Permanent; preserve existing numbered paths |
 | CLI reference | `docs/cli/` | Permanent |
 | Deployment guide | `docs/deployment/` | Maintained |
 | Optional local runtime guide | `docs/runtimes/` | Maintained |
@@ -116,3 +122,8 @@ Approved top-level directories:
 - CI runs a strict changed-doc validation plus a repo-wide docs topology scan.
 - Repo-wide docs validation runs with no grandfathered exceptions.
 - Changed-doc validation fails immediately for any root-level `docs/*` violation.
+- `make check-documentation-catalog` checks inventory closure, document hashes,
+  source references, successor cycles, maintained local links, and historical
+  navigation exceptions. It executes no instructions from document text.
+- `make test-documentation-contract` executes curated examples and catalog/RAG
+  contracts with local fixtures. It does not establish native or production acceptance.

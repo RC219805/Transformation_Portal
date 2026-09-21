@@ -50,6 +50,9 @@ help:
 	@echo "  install-ml-coreml  Disabled unless a trusted CoreML lockfile is present"
 	@echo "  install-fastvlm-runtime  Install governed optional FastVLM advisory captioning runtime"
 	@echo "  check-fastvlm-runtime  Verify governed optional FastVLM advisory captioning runtime"
+	@echo "  install-editorial-runtime  Install the governed native Darwin arm64 / Python 3.12 editorial runtime"
+	@echo "  check-editorial-runtime  Verify editorial package bytes and TIFF/JPEG/PDF output"
+	@echo "  test-editorial-contract  Run editorial image and isolated runtime failure contracts"
 	@echo "  test-fast          Run fast subset plus Phase 6 smoke coverage"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
@@ -100,6 +103,8 @@ help:
 	@echo "  check-environment  Run pre-flight environment validation"
 	@echo "  check             Verify generic layered requirements under requirements/"
 	@echo "  check-worktree     Check if git worktree is clean"
+	@echo "  check-documentation-catalog  Validate current documentation authority, source hashes, and maintained links"
+	@echo "  test-documentation-contract  Run executable documentation and authority-aware retrieval contracts"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  check-python-headers  Fail on invalid encoding-cookie-like text in Python header lines 1-2"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
@@ -749,6 +754,22 @@ check-stale-docs:
 
 check-doc-heading-links:
 	@"$(PY)" scripts/validation/check_doc_heading_links.py
+
+.PHONY: check-documentation-catalog test-documentation-contract install-editorial-runtime check-editorial-runtime test-editorial-contract
+check-documentation-catalog:
+	@"$(PY)" scripts/governance/check_documentation_catalog.py
+
+test-documentation-contract:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/test_documentation_catalog.py tests/test_documentation_operator_examples.py tests/test_parse_workflows_cli.py tests/test_parse_workflows.py tests/test_rag_documentation_authority.py tests/test_rag_system.py tests/test_rag_integration.py tests/test_rag_enhanced.py tests/test_custom_agent_config.py tests/validation/test_check_doc_heading_links.py
+
+install-editorial-runtime:
+	@"$(PY)" -I scripts/setup/editorial_runtime.py $(EDITORIAL_RUNTIME_ARGS) install
+
+check-editorial-runtime:
+	@"$(PY)" -I scripts/setup/editorial_runtime.py $(EDITORIAL_RUNTIME_ARGS) check
+
+test-editorial-contract:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/test_ad_editorial_post_pipeline_paths.py tests/test_editorial_runtime.py
 
 generate-design-tokens-doc:
 	@echo "Generating docs/design/tokens.md from CSS token sources..."

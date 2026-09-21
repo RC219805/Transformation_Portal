@@ -206,7 +206,10 @@ def mock_depth_model(deterministic_rng):
 ### Canonical Workflow
 
 **`build.yml`** is the canonical PR gating workflow. A read-only GitHub snapshot
-on 2026-09-12 required its `CI Gate` status for main, with strict checking.
+on 2026-09-21 required its `CI Gate` status and the independent
+`Dependency Security` status for main, with strict checking. See
+[Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md) before relying on
+recorded remote settings.
 The workflow
 [classifies PR changes](../ci/CHANGE_AWARE_CI.md); a lightweight run does not
 exercise the full matrix. Other workflow failures are separate signals.
@@ -219,7 +222,8 @@ exercise the full matrix. Other workflow failures are separate signals.
 
 > **Note:** `quality-gate.yml` is part of the broader quality-control plane but is intentionally
 > excluded from this canonical CI workflow table. It runs pre-commit style checks but is not
-> a branch-protection requirement. Its scope is governed by the Quality Firewall documentation.
+> a branch-protection requirement. Its scope is described by the [Workflow Matrix](../ci/WORKFLOW_MATRIX.md)
+> and the [workflow guide](../../.github/workflows/README.md).
 
 ### PR Gating Jobs
 

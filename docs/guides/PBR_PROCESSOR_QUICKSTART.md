@@ -24,12 +24,17 @@
 
 ### Step 1: Installation
 
-Ensure Transformation Portal is installed:
+From the repository root, install the governed core environment:
 
 ```bash
-cd Transformation_Portal
-pip install -e .
+make venv
+make install-core
+make check-environment
 ```
+
+This helper consumes existing depth arrays and needs no model download. Use
+`.venv/bin/python` for the tutorial so imports use the installed core environment.
+See the [Setup Guide](SETUP_GUIDE.md) for optional runtime boundaries.
 
 ### Step 2: Verify Depth Files Exist
 
@@ -70,7 +75,7 @@ print(f"✓ AO map: {paths['ao']}")
 
 **Run:**
 ```bash
-python generate_pbr.py
+.venv/bin/python generate_pbr.py
 ```
 
 **Output:**
