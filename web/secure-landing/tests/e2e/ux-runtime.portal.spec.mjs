@@ -69,6 +69,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     : null;
   const runtime = {
     actor: options.actor || DEFAULT_MANAGED_ACTOR,
+    authMode: options.authMode || "managed",
     bootstrapRequests: 0,
     cancelRequests: 0,
     eventStreamRequests: 0,
@@ -76,7 +77,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     presetRequests: 0,
   };
 
-  await page.addInitScript((transientDraft) => {
+  await page.addInitScript(({ transientDraft, legacyApiKeys }) => {
     const initializationKey = "__tp_ux_storage_initialized";
     if (sessionStorage.getItem(initializationKey) === "true") return;
     window.sessionStorage.clear();
@@ -90,8 +91,12 @@ async function installHydratedPortalRoutes(page, options = {}) {
     if (transientDraft) {
       sessionStorage.setItem("tp_portal_transient_draft", JSON.stringify(transientDraft));
     }
+    if (legacyApiKeys) {
+      localStorage.setItem("tp_api_key", "legacy-local-token");
+      sessionStorage.setItem("tp_api_key", "legacy-session-token");
+    }
     sessionStorage.setItem(initializationKey, "true");
-  }, initialTransientDraft);
+  }, { transientDraft: initialTransientDraft, legacyApiKeys: Boolean(options.legacyApiKeys) });
 
   if (options.keepEventStreamOpen) {
     await page.addInitScript(() => {
@@ -163,12 +168,12 @@ async function installHydratedPortalRoutes(page, options = {}) {
       await new Promise((resolve) => setTimeout(resolve, options.bootstrapRecoveryDelayMs));
     }
     await fulfillJson(route, {
-      authMode: "managed",
-      csrfToken: "hydrated-ux-csrf",
+      authMode: runtime.authMode,
+      csrfToken: runtime.authMode === "managed" ? "hydrated-ux-csrf" : null,
       actor: runtime.actor,
       features: {
-        apiKeyInput: false,
-        directDebug: false,
+        apiKeyInput: runtime.authMode === "direct_debug",
+        directDebug: runtime.authMode === "direct_debug",
         artifactViewerModal: true,
         reviewSurfaceDeferred: true,
         stagedUploads: false,
@@ -178,7 +183,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route("**/healthz", async (route) => {
+  await page.route(/\/(?:healthz|ready)$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/plain; charset=utf-8",
@@ -391,6 +396,48 @@ async function gotoHydratedPortal(page, target = "/portal") {
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
+  test("direct-debug credentials remain page-only and are never restored after reload", async ({ page }, testInfo) => {
+    const errors = [];
+    const requests = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/v1/")) requests.push(request.headers());
+    });
+    await installHydratedPortalRoutes(page, { authMode: "direct_debug", legacyApiKeys: true });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await expect(page.locator("body")).toHaveAttribute("data-auth-mode", "direct_debug");
+    await page.locator("#connectionDetails > summary").click();
+    await expect(page.locator("#apiKeyInput")).toBeVisible();
+    await expect(page.locator("#apiKeyInput")).toHaveValue("");
+    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    expect(requests.every((headers) => !headers.authorization && !headers["x-api-key"])).toBe(true);
+    const storedCredentials = () => page.evaluate(() => ({
+      local: localStorage.getItem("tp_api_key"),
+      session: sessionStorage.getItem("tp_api_key"),
+    }));
+    expect(await storedCredentials()).toEqual({ local: null, session: null });
+
+    const authenticatedRequest = page.waitForRequest((request) =>
+      new URL(request.url()).pathname === "/v1/config-preview"
+      && request.headers().authorization === "Bearer page-only-token",
+    );
+    await page.locator("#apiKeyInput").fill("Bearer page-only-token");
+    await page.locator("#apiKeyInput").press("Tab");
+    expect((await authenticatedRequest).headers()["x-api-key"]).toBe("page-only-token");
+    expect(await storedCredentials()).toEqual({ local: null, session: null });
+    await expect(page.locator("#apiKeySection")).toContainText("Direct-debug tokens stay in this page only.");
+    await page.locator("#connectionDetails").screenshot({ path: testInfo.outputPath("direct-debug-page-only.png") });
+
+    requests.length = 0;
+    await page.reload();
+    await expect(page.locator("body")).toHaveAttribute("data-bootstrap-status", "ready");
+    await expect(page.locator("#apiKeyInput")).toHaveValue("");
+    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    expect(requests.every((headers) => !headers.authorization && !headers["x-api-key"])).toBe(true);
+    expect(await storedCredentials()).toEqual({ local: null, session: null });
+    expect(errors).toEqual([]);
+  });
+
   for (const theme of ["light", "dark"]) {
     for (const width of [320, 390, 768, 1280, 1440]) {
       test(`workspace layout at ${width}px in ${theme} mode`, async ({ page }) => {

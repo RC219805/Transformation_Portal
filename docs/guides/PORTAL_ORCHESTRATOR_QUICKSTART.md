@@ -255,7 +255,9 @@ There are now two supported browser paths:
 - Standalone `direct_debug` mode:
   - the browser is pointed directly at the FastAPI origin
   - `/portal/bootstrap` returns `authMode: "direct_debug"`
-  - the existing API-key workflow remains available for local debugging
+  - enter an API key for the current page only; re-enter it after every reload
+  - credentials are never read from or written to local or session storage; legacy
+    `tp_api_key` entries in both stores are removed when storage access is available
 
 When `TP_API_KEY` is configured for standalone `direct_debug` mode:
 - fetch-based endpoints use `Authorization: Bearer <token>` or `x-api-key`.

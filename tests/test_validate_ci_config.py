@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shlex
 import sys
 from pathlib import Path
 
@@ -172,6 +173,31 @@ def test_firewall_checkout_trust_contract_passes_repo_config() -> None:
 
     assert validator.validate_firewall_checkout_trust_contract(FIREWALL_WORKFLOW_PATH, config) is True
     assert validator.errors == []
+
+
+def test_firewall_core_parallelism_preserves_selection_and_coverage_contract() -> None:
+    marker = (
+        "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark and not stress"
+    )
+    for workflow_path in (CI_WORKFLOW_PATH, FIREWALL_WORKFLOW_PATH):
+        _, config = _load_config(workflow_path)
+        job = config["jobs"]["test-core"]
+        step = next(step for step in job["steps"] if "python -m pytest -v tests/" in step.get("run", ""))
+        command = step["run"].split("python -m pytest", 1)[1].replace("${{ matrix.python-version }}", "3.12")
+        args = shlex.split(command)
+
+        assert "-n" in args, workflow_path.name
+        assert args[args.index("-n") + 1] == "auto", workflow_path.name
+        assert args[args.index("-m") + 1] == marker, workflow_path.name
+        assert "--cov=src/transformation_portal" in args
+        assert "--cov-config=pyproject.toml" in args
+        assert {"--cov-report=xml", "--cov-report=term", "--cov-report=html"} <= set(args)
+        assert not job.get("continue-on-error", False)
+        assert not step.get("continue-on-error", False)
+        if workflow_path == FIREWALL_WORKFLOW_PATH:
+            assert job["timeout-minutes"] == 20
+            assert "--json-report" in args
+            assert "--json-report-file=test-results/core-py3.12.json" in args
 
 
 def test_firewall_upstream_workflow_identity_passes_repo_config() -> None:

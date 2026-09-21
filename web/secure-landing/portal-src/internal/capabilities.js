@@ -138,7 +138,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
       status: authMode === "direct_debug" && features.directDebug !== false ? "enabled" : "gated",
       summary: authMode === "direct_debug" ? "Direct-debug controls are available." : "Direct-debug entry is gated by auth mode.",
       detail: "This is a bootstrap-controlled fallback, not a managed operator default.",
-      nextAction: authMode === "direct_debug" ? "Use session-only API key entry." : "Use managed login."
+      nextAction: authMode === "direct_debug" ? "Enter an API key for this page only." : "Use managed login."
     }),
     makeRow({
       id: "lux_depth_v3",

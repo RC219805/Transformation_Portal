@@ -17,6 +17,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNSAFE_APIS = frozenset({"load_checkpoint_and_dispatch", "load_checkpoint_in_model"})
 MAX_ALIAS_PASSES = 16
+MAX_IDENTITIES_PER_ALIAS = 128
+MAX_TOTAL_ALIAS_IDENTITIES = 4096
+
+
+class _AliasBudgetExceeded(ValueError):
+    """Alias expansion exceeded the source audit's bounded-work contract."""
+
+
+def _add_identity(identities: set[str], identity: str) -> bool:
+    """Retain an identity only when the set can grow within its budget."""
+    if identity in identities:
+        return False
+    if len(identities) >= MAX_IDENTITIES_PER_ALIAS:
+        raise _AliasBudgetExceeded("Accelerate alias resolution exceeded its per-alias identity budget")
+    identities.add(identity)
+    return True
 
 
 def check_source(source: str) -> list[tuple[int, str]]:
@@ -25,34 +41,61 @@ def check_source(source: str) -> list[tuple[int, str]]:
         tree = ast.parse(source)
     except SyntaxError as exc:
         return [(exc.lineno or 1, f"cannot audit invalid Python: {exc.msg}")]
+    try:
+        return _check_tree(tree)
+    except _AliasBudgetExceeded as exc:
+        return [(1, str(exc))]
 
-    aliases: dict[str, str] = {}
 
-    def qualified(node: ast.AST) -> str:
+def _check_tree(tree: ast.AST) -> list[tuple[int, str]]:
+    """Audit parsed source using monotone, budgeted alias provenance."""
+    # This is a conservative source audit, not a scope-sensitive interpreter.
+    # Keep every possible identity: an unrelated import in another scope (or a
+    # later reimport) must not erase an earlier Accelerate binding.
+    aliases: dict[str, set[str]] = {}
+    total_identities = 0
+
+    def retain_alias(name: str, identity: str) -> bool:
+        nonlocal total_identities
+        identities = aliases.setdefault(name, set())
+        if identity in identities:
+            return False
+        if total_identities >= MAX_TOTAL_ALIAS_IDENTITIES:
+            raise _AliasBudgetExceeded("Accelerate alias resolution exceeded its total identity budget")
+        _add_identity(identities, identity)
+        total_identities += 1
+        return True
+
+    def qualified(node: ast.AST) -> set[str]:
         if isinstance(node, ast.Name):
-            return aliases.get(node.id, node.id)
+            return aliases.get(node.id, {node.id})
         if isinstance(node, ast.Attribute):
-            return f"{qualified(node.value)}.{node.attr}"
+            return {f"{name}.{node.attr}" for name in qualified(node.value)}
         if isinstance(node, ast.Call):
-            name = qualified(node.func)
-            if name == "getattr" and len(node.args) >= 2:
+            names = qualified(node.func)
+            result: set[str] = set()
+            if "getattr" in names and len(node.args) >= 2:
                 attr = node.args[1]
                 if isinstance(attr, ast.Constant) and isinstance(attr.value, str):
-                    return f"{qualified(node.args[0])}.{attr.value}"
-            if name in {"importlib.import_module", "__import__"} and node.args:
+                    for name in qualified(node.args[0]):
+                        _add_identity(result, f"{name}.{attr.value}")
+            if names & {"importlib.import_module", "__import__"} and node.args:
                 module = node.args[0]
                 if isinstance(module, ast.Constant) and isinstance(module.value, str):
-                    return module.value
-        return ""
+                    _add_identity(result, module.value)
+            return result
+        return set()
 
     nodes = list(ast.walk(tree))
     for node in nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
-                aliases[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+                name = alias.asname or alias.name.split(".")[0]
+                identity = alias.name if alias.asname else alias.name.split(".")[0]
+                retain_alias(name, identity)
         elif isinstance(node, ast.ImportFrom) and node.module:
             for alias in node.names:
-                aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+                retain_alias(alias.asname or alias.name, f"{node.module}.{alias.name}")
     # Resolve alias chains independent of function nesting/traversal order.
     # Retain imported names conservatively even if code later rebinds them.
     for _ in range(MAX_ALIAS_PASSES):
@@ -60,12 +103,16 @@ def check_source(source: str) -> list[tuple[int, str]]:
         for node in nodes:
             if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                value = qualified(node.value)
-                if value.startswith(("accelerate.", "importlib.")) or value == "accelerate":
-                    for target in targets:
-                        if isinstance(target, ast.Name) and aliases.get(target.id) != value:
-                            aliases[target.id] = value
-                            changed = True
+                values = {
+                    value
+                    for value in qualified(node.value)
+                    if value.startswith(("accelerate.", "importlib.")) or value == "accelerate"
+                }
+                for target in targets:
+                    if isinstance(target, ast.Name) and values:
+                        for value in values:
+                            if retain_alias(target.id, value):
+                                changed = True
         if not changed:
             break
     else:
@@ -78,9 +125,9 @@ def check_source(source: str) -> list[tuple[int, str]]:
                 if alias.name in UNSAFE_APIS or alias.name == "*":
                     errors.add((node.lineno, f"unsafe Accelerate import: {alias.name}"))
         if isinstance(node, (ast.Attribute, ast.Call, ast.Name)):
-            name = qualified(node)
-            if name.startswith("accelerate.") and name.rsplit(".", 1)[-1] in UNSAFE_APIS:
-                errors.add((node.lineno, f"unsafe Accelerate checkpoint API: {name}"))
+            for name in qualified(node):
+                if name.startswith("accelerate.") and name.rsplit(".", 1)[-1] in UNSAFE_APIS:
+                    errors.add((node.lineno, f"unsafe Accelerate checkpoint API: {name}"))
     return sorted(errors)
 
 
