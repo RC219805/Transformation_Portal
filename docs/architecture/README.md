@@ -18,6 +18,13 @@ separates that live boundary from [ADR-051](ADR-051-execution-artifact-authority
 executor and publication activation gates. The tables below retain the dated
 May 12 disposition history; they do not certify later runtime readiness.
 
+The [architecture version table](ARCHITECTURE.md#execution-preparation-and-activation-boundaries)
+also distinguishes the opt-in LuxDepthV4/V2, MaterialsV4-enabled V4/V3, and
+LuxDepthV5/V4 plan routes. Pipeline and plan versions are independent; none
+changes V3's production baseline or the separate activation gates. The
+[current catalog](../governance/DOCUMENTATION_CATALOG.md) records later document
+review and successor decisions alongside this preserved disposition history.
+
 ## Canonical
 
 These files are maintained as the canonical architecture set named by the May 12 triage plan.

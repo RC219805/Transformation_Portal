@@ -9,7 +9,7 @@ supports retrieval and citation workflows; live agent behavior is governed by `.
 1. **Repository content indexing** with intelligent chunking
 2. **Hybrid retrieval** combining BM25 sparse and dense vector search
 3. **Result reranking** for improved precision
-4. **Citation generation** with confidence scores
+4. **Citation generation** with relevance scores and source authority
 5. **Canonical prompt templates** for common workflows
 6. **Structured JSON response schemas** for machine parsing
 
@@ -44,7 +44,7 @@ See [RAG_SYSTEM_ENHANCEMENTS.md](../RAG_SYSTEM_ENHANCEMENTS.md) for detailed doc
 │                    Citation Generator                            │
 │  • File paths + line numbers                                    │
 │  • Code/doc snippets                                            │
-│  • Confidence scores (0.0-1.0)                                  │
+│  • Retrieval relevance scores (0.0-1.0)                         │
 │  • Relevance notes                                              │
 └─────────────────────────────────────────────────────────────────┘
                                                     │
@@ -58,6 +58,26 @@ See [RAG_SYSTEM_ENHANCEMENTS.md](../RAG_SYSTEM_ENHANCEMENTS.md) for detailed doc
 │  • JSON response schema                                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Documentation authority
+
+The `tp.documentation.catalog.v1` catalog at
+`docs/governance/documentation_catalog.json` supplies classification, reviewed
+source hashes, and successors. The indexer annotates each documentation chunk
+against the exact bytes it read. Only matching document and source hashes with
+`source-reviewed` canonical/current-support entries confer maintained retrieval
+priority. Missing, malformed, stale, or incomplete evidence stays unverified.
+The `tp.rag.chunks.v3` cache binds raw catalog bytes and all referenced-source
+hashes, including sources outside the retrieval corpus; older cache envelopes
+rebuild.
+
+`HybridRetriever.retrieve(..., retrieval_mode="operator")` prefers verified
+maintained matches without hiding other evidence. `historical` selects cataloged
+historical/archive-only documents, and `all` retains relevance ordering including
+unclassified material. Search and citation CLIs accept `--mode` with these
+values. Reranking preserves the selected operator preference. Citation relevance
+scores (the compatible JSON `confidence` field) do not establish authority,
+correctness, runtime readiness, or permission to implement a suggestion.
 
 ## Components
 
@@ -86,7 +106,7 @@ Indexes repository content into searchable chunks:
 
 **Usage**:
 ```bash
-PYTHONPATH=.github/agents python -m rag_system.indexer \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.indexer \
     --repo-root /path/to/repo \
     --output index_stats.json \
     --verbose
@@ -108,7 +128,7 @@ Hybrid retrieval using BM25 for sparse keyword matching:
 
 **Usage**:
 ```bash
-PYTHONPATH=.github/agents python -m rag_system.retriever \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.retriever \
     --repo-root /path/to/repo \
     --query "depth pipeline atmospheric effects" \
     --top-k 5 \
@@ -131,7 +151,7 @@ Reranks retrieval results using additional signals:
 
 **Usage**:
 ```bash
-PYTHONPATH=.github/agents python -m rag_system.reranker \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.reranker \
     --repo-root /path/to/repo \
     --query "ffmpeg filter graph" \
     --top-k 5
@@ -139,20 +159,20 @@ PYTHONPATH=.github/agents python -m rag_system.reranker \
 
 ### 4. Citation Generator (`citation.py`)
 
-Generates structured citations with confidence scores:
+Generates structured citations with retrieval relevance and authority notes:
 
-- **Confidence**: Computed from retrieval rank and score (0.0-1.0)
+- **Relevance**: Computed from retrieval rank and score (0.0-1.0), not correctness or authority
 - **Snippets**: Trimmed to 10 lines / 500 characters max
 - **Formats**: Markdown, plain text, JSON
 
 **Features**:
-- Rank-based confidence scoring
+- Rank-based relevance scoring
 - Relevance notes (function names, doc types)
 - Multiple output formats
 
 **Usage**:
 ```bash
-PYTHONPATH=.github/agents python -m rag_system.citation \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.citation \
     --repo-root /path/to/repo \
     --query "material response enhancement" \
     --max-citations 5 \
@@ -186,19 +206,19 @@ Canonical templates for common workflows:
 **Usage**:
 ```bash
 # Generate feature template
-PYTHONPATH=.github/agents python -m rag_system.templates \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --type feature \
     --description "Add depth-based fog effect" \
     --with-examples
 
 # Generate bug triage template
-PYTHONPATH=.github/agents python -m rag_system.templates \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --type bug \
     --description "ImportError: No module named 'torch'" \
     --context "Python 3.11, Ubuntu 22.04"
 
 # Validate response schema
-PYTHONPATH=.github/agents python -m rag_system.templates \
+PYTHONPATH=.github/agents ./.venv/bin/python -m rag_system.templates \
     --validate response.json
 ```
 
@@ -230,13 +250,13 @@ Automatically classifies and organizes image processing artifacts:
 **Usage**:
 ```bash
 # Classify artifacts in a directory
-python .github/agents/rag_system/classifier.py \
+./.venv/bin/python .github/agents/rag_system/classifier.py \
     --input-dir output/ \
     --output artifacts.json \
     --verbose
 
 # Search by tags
-python .github/agents/rag_system/classifier.py \
+./.venv/bin/python .github/agents/rag_system/classifier.py \
     --input-dir output/ \
     --tags depth_map 4k_plus success \
     --require-all-tags
@@ -274,23 +294,23 @@ Provides pattern analysis, feedback loops, and recommendations for continuous im
 **Usage**:
 ```bash
 # Analyze a pipeline
-python .github/agents/rag_system/knowledge_engine.py \
+./.venv/bin/python .github/agents/rag_system/knowledge_engine.py \
     --feedback-file feedback.json \
     --analyze-pipeline depth_pipeline \
     --days 30
 
 # Generate recommendations
-python .github/agents/rag_system/knowledge_engine.py \
+./.venv/bin/python .github/agents/rag_system/knowledge_engine.py \
     --feedback-file feedback.json \
     --recommendations
 
 # Natural language query
-python .github/agents/rag_system/knowledge_engine.py \
+./.venv/bin/python .github/agents/rag_system/knowledge_engine.py \
     --feedback-file feedback.json \
     --query "What is the average processing time?"
 
 # Export knowledge base
-python .github/agents/rag_system/knowledge_engine.py \
+./.venv/bin/python .github/agents/rag_system/knowledge_engine.py \
     --feedback-file feedback.json \
     --export knowledge_base.json
 ```
@@ -328,7 +348,7 @@ All code modification responses must follow this schema:
 **Benefits**:
 - Machine-parseable for CI validation
 - Structured patches for automated application
-- Confidence scoring for human review
+- Retrieval relevance and source authority for human review
 - Citations for verification
 
 ## Integration with Agent
@@ -445,12 +465,12 @@ Run tests for RAG components:
 
 ```bash
 # End-to-end RAG pipeline test
-pytest .github/agents/rag_system/tests/test_rag_pipeline.py -v
+./.venv/bin/pytest .github/agents/rag_system/tests/test_rag_pipeline.py -v
 
 # Target specific component behavior within the same suite
-pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k indexer -v
-pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k retriever -v
-pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k templates -v
+./.venv/bin/pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k indexer -v
+./.venv/bin/pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k retriever -v
+./.venv/bin/pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k templates -v
 ```
 
 ## Contributing

@@ -50,7 +50,7 @@ ci_gate:
 ```
 
 **Benefits:**
-- Branch protection requires only `CI Gate`
+- Matrix jobs are represented by `CI Gate`; `Dependency Security` is a separate required check
 - Test matrix can evolve freely (add/remove Python versions, devices, test types)
 - No admin intervention when matrix changes
 - Clear failure reporting (shows which upstream job failed)
@@ -62,8 +62,9 @@ ci_gate:
 - Aggregates: `preflight`, `lightweight`, `dependency-constraints`, `frontdoor-contract`, `lint`, `typecheck`, `test` (all matrix combinations), and `generate-manifest`.
 - Lightweight and dependency checks must succeed; full mode also enforces lint/typecheck/test/manifest and the frontdoor job when requested.
 
-**Snapshot:** Read-only GitHub verification on 2026-09-12 showed only `CI Gate`
-required for main, with strict up-to-date checking. Workflow definitions alone
+**Snapshot:** Read-only GitHub verification on 2026-09-21 showed `CI Gate` and
+`Dependency Security` required for main, both bound to GitHub Actions app `15368`,
+with strict up-to-date checking and administrator enforcement. Workflow definitions alone
 do not establish remote enforcement. See
 [Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md).
 
@@ -87,8 +88,10 @@ Purpose: Validate that code is importable, tests pass, and manifests/config expe
 - `generate-manifest` - Montecito manifest generation
 - `CI Gate` - **Aggregator job** (this is what branch protection requires)
 
-**Branch protection snapshot:** `CI Gate` was the sole required check on 2026-09-12.
-Other failing workflows still require triage according to their scope.
+**Branch protection snapshot:** `CI Gate` and the independent
+`Dependency Security` job were required on 2026-09-21. Re-read GitHub before
+relying on a dated snapshot; other failing workflows still require triage
+according to their scope.
 
 Local equivalents:
 - `make ci-quick` and `make test-fast` for local development

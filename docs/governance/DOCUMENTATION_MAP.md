@@ -3,12 +3,13 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-09-12
+**Last Updated:** 2026-09-21
 **Maintainer:** Repository Architect
-**Current baseline:** [September 12 documentation audit](DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md),
-reproduced against the source baseline recorded there. Inventory classification,
-source review, local tests, and unexercised runtime/service paths are reported
-separately. The May 11 inventory and May 12 overlays remain historical evidence.
+**Current classification and successors:** [Documentation Catalog](DOCUMENTATION_CATALOG.md),
+with per-document content hashes, review scope, and source baselines. The
+[September 12 documentation audit](DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md),
+May 11 inventory, and May 12 overlays remain dated evidence. Source review and
+local checks do not certify runtime, photographic, hosted, or production acceptance.
 
 Historical reports remain available for audit context, but they are not current
 operator guidance unless they are linked here as canonical documents.
@@ -19,6 +20,7 @@ operator guidance unless they are linked here as canonical documents.
 | --- | --- | --- |
 | Repository overview | [README.md](../../README.md) | Project overview, install path, current operational surfaces |
 | Documentation index | [docs/README.md](../README.md) | Current docs navigation and historical-boundary guidance |
+| Documentation authority and successors | [DOCUMENTATION_CATALOG.md](DOCUMENTATION_CATALOG.md) | Current catalog contract, reviewed-byte refresh, validation, and retrieval modes |
 | Documentation refresh audit | [DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md](DOCUMENTATION_REFRESH_AUDIT_2026-09-12.md) | Repo-wide inventory and classification refresh |
 | Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current architecture-file disposition overlay |
 | CLI triage inventory | [cli-inventory-2026-05-12.csv](audit/cli-inventory-2026-05-12.csv) | Current CLI-file disposition overlay |
@@ -38,6 +40,7 @@ operator guidance unless they are linked here as canonical documents.
 | Archive machine-mode API | [Archive Machine Mode Contract](../api/ARCHIVE_MACHINE_MODE_CONTRACT.md) | Maintained |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](../deployment/managed_paid_pilot_staging_runbook.md) | Maintained; provider-neutral procedure for rerunning the Phase 5.A gate against managed Postgres, Redis, and S3-compatible storage |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
+| V3 pipeline operations | [Pipeline Operations Guide](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md) | Maintained V3 workflow exception within a historical directory; strict APEX admission remains required |
 | LuxDepthV4 candidate | [V4 photography and evaluation](../reference/LUX_DEPTH_V4.md) | Opt-in candidate; production acceptance and shared-executor cutover remain gated |
 | LuxDepthV5 candidate | [V5 depth evidence and evaluation](../reference/LUX_DEPTH_V5.md) | Explicit validity, precision, conservative detail recovery, and independent verification; DA3 Metric remains the baseline and production acceptance is pending |
 | MaterialsV4 candidate | [MaterialsV4 guide](../guides/MATERIALS_V4.md) | Explicit evidence/response candidate; inferred ranking does not authorize edits and production acceptance remains pending |
@@ -49,6 +52,8 @@ operator guidance unless they are linked here as canonical documents.
 | Lux Depth V3 troubleshooting | [Lux Depth V3 Troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | Maintained |
 | Architectural PDF context | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained extraction boundary; automatic rendering integration archived |
 | PBR processing | [PBR Processor Quickstart](../guides/PBR_PROCESSOR_QUICKSTART.md) | Maintained |
+| Heuristic material PBR | [Material PBR Guide](../guides/MATERIAL_PBR_GUIDE.md) | Maintained heuristic capability; installing PBRFusion does not activate unimplemented GPU integration |
+| Editorial finishing | [Editorial Post-Production](../guides/AD_EDITORIAL_POST_PIPELINE.md) | Maintained source contract and local evaluation; unique HDR, panorama, color and runtime acceptance is independent of Lux V5 |
 | Supported formats | [Supported File Formats](../guides/SUPPORTED_FILE_FORMATS.md) | Maintained |
 | Design tokens reference | [Design tokens](../design/tokens.md) | Maintained (generated from `web/shared/shared-ui-tokens.css` + `web/secure-landing/portal-src/styles/tokens.css`) |
 
@@ -57,7 +62,8 @@ operator guidance unless they are linked here as canonical documents.
 | Area | Canonical Document | Status |
 | --- | --- | --- |
 | Documentation policy | [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) | Maintained |
-| Documentation inventory | [documentation-inventory-2026-09-12.csv](audit/documentation-inventory-2026-09-12.csv) | Current complete tracked-doc classification with per-file review status; prior inventories preserved |
+| Current documentation catalog | [documentation_catalog.json](documentation_catalog.json) | Current file inventory, classification, reviewed hashes, source/test references, and scoped successor relations |
+| Prior documentation inventory | [documentation-inventory-2026-09-12.csv](audit/documentation-inventory-2026-09-12.csv) | Preserved September 12 classification and review snapshot; not a current inventory |
 | Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current disposition ledger for files formerly or currently under `docs/architecture` |
 | CLI triage inventory | [cli-inventory-2026-05-12.csv](audit/cli-inventory-2026-05-12.csv) | Current disposition ledger for files formerly or currently under `docs/cli` |
 | Repository organization | [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) | Maintained |
@@ -121,7 +127,7 @@ operator guidance unless they are linked here as canonical documents.
 | Area | Classification | Use |
 | --- | --- | --- |
 | `docs/750_picacho/`, `docs/analysis/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical or mixed project records | Dated project evidence and investigations; not current operator guidance unless linked above |
-| `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs instead |
+| `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs; the explicitly listed V3 Pipeline Operations Guide is the maintained exception |
 | `docs/deliverables/`, `docs/project-status/`, `docs/reports/`, `docs/status/`, `docs/summaries/`, `docs/session_summaries/`, `docs/sessions/`, `docs/historical/`, `docs/verification/` | Point-in-time reports | Audit context only |
 | `docs/historical/architecture/` | Architecture historical records | Point-in-time architecture files moved out of current architecture navigation by the May 12 triage |
 | `docs/historical/cli/` | CLI historical records | Point-in-time CLI implementation and coverage records moved out of current CLI navigation by the May 12 CLI alignment |
@@ -138,6 +144,9 @@ operator guidance unless they are linked here as canonical documents.
 4. Update this map when a new document becomes current guidance.
 5. Label duplicate or stale material historical, archive it, or remove it from
    current navigation.
+6. Update the catalog's explicit record and reviewed hash with the documentation
+   change. Keep historical snapshots intact and do not promote inventory-only
+   classification to source review automatically.
 
 ## Validation
 
@@ -145,6 +154,8 @@ operator guidance unless they are linked here as canonical documents.
 make check-docs
 make check-stale-docs
 make check-doc-heading-links
+make check-documentation-catalog
+make test-documentation-contract
 python3 scripts/governance/check_docs_structure.py --all
 ```
 

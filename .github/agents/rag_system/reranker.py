@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, replace
 from typing import List, Optional
 
+from .authority import RETRIEVAL_MODES, authority_priority
+
 
 @dataclass
 class RerankingSignal:
@@ -77,7 +79,13 @@ class ResultReranker:
             reranked.append(replace(result, score=final_score, metadata=new_metadata))
 
         # Sort by final score
-        reranked.sort(key=lambda x: x.score, reverse=True)
+        reranked.sort(
+            key=lambda result: (
+                authority_priority(result.metadata) if result.metadata.get("retrieval_mode") == "operator" else 0,
+                result.score,
+            ),
+            reverse=True,
+        )
 
         if top_k:
             return reranked[:top_k]
@@ -194,6 +202,7 @@ def main():
     parser.add_argument("--query", required=True, help="Search query")
     parser.add_argument("--top-k", type=int, default=5, help="Number of results")
 
+    parser.add_argument("--mode", choices=RETRIEVAL_MODES, default="operator", help="Documentation authority scope")
     args = parser.parse_args()
 
     # Index and retrieve
@@ -204,7 +213,7 @@ def main():
     print("Retrieving...")
     retriever = HybridRetriever()
     retriever.index(chunks)
-    results = retriever.retrieve(args.query, top_k=args.top_k * 2)
+    results = retriever.retrieve(args.query, top_k=args.top_k * 2, retrieval_mode=args.mode)
 
     print(f"\nBefore reranking ({len(results)} results):")
     for i, r in enumerate(results[: args.top_k], 1):

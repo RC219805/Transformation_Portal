@@ -138,6 +138,19 @@ execution use the same canonical bytes; direct cache-enabled callers construct
 `EnhanceOrchestrator.from_prepared(...)`. Legacy `structural_legacy` projections
 are parse-only. See [Execution Plan V1](../reference/EXECUTION_PLAN_V1.md).
 
+Plan schema versions and product versions are separate contracts:
+
+| Plan schema | Explicit consumer | Authority and activation |
+| --- | --- | --- |
+| `tp.execution.plan.v1` | LuxDepthV3 | Production baseline and rollback path; [V1 contract](../reference/EXECUTION_PLAN_V1.md) |
+| `tp.execution.plan.v2` | LuxDepthV4 without MaterialsV4 | Opt-in photographic graph; [V4 interface](../reference/LUX_DEPTH_V4.md#public-boundary) |
+| `tp.execution.plan.v3` | LuxDepthV4 with `--materials-manifest` | Explicit MaterialsV4 evidence and response; [V3 contract](../reference/EXECUTION_PLAN_V3.md) |
+| `tp.execution.plan.v4` | LuxDepthV5 | Opt-in depth evidence and photographic graph; [V4 contract](../reference/EXECUTION_PLAN_V4.md) |
+
+Later plans do not silently replace earlier contracts. V4/V5 candidates still
+require representative photographic, native runtime, cache/optional-input, and
+performance acceptance before any production promotion.
+
 This preparation is implemented. It does not activate the target
 `StageGraph`/`CASDAGExecutor` for every pipeline. [ADR-051](ADR-051-execution-artifact-authority-designation.md)
 keeps current Lux and Spatial executors until their applicable vertical-slice
@@ -149,8 +162,15 @@ The live job runner composes `QueueBroker`, `WorkerRunner`, and `JobRepository`.
 Memory defaults, opt-in Postgres snapshots/event history, Redis leasing, and
 local/S3 artifact delivery are separate service contracts. A store implementation
 does not establish the ADR's proposed fenced generation publication transaction.
-The optional pilot control plane reads tenant identity from its configured
-request header; production identity binding and managed-provider readiness need
+When pilot tenant mode is enabled, the authenticated frontdoor signs a
+short-lived actor assertion bound to the HTTP method and encoded path/query.
+The backend verifies it with the dedicated `TP_FRONTDOOR_IDENTITY_SECRET` and
+derives tenant membership from `TP_PILOT_ACTOR_TENANTS_JSON`; a browser header
+or request-body tenant selector cannot grant membership. API-key authentication
+remains required. Enable `TP_PILOT_CONTROL_PLANE_ENABLED=1` on backend and
+frontdoor together; invalid identity configuration fails closed. Follow the
+[paid-pilot identity runbook](../deployment/paid_pilot_services.md#pilot-tenant-admission-and-audit-mode).
+This binding is implemented; managed-provider acceptance still requires
 separate end-to-end evidence. Readiness HTTP success is not proof of inference
 or verified output artifacts.
 

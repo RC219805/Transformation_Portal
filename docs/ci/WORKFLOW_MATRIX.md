@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-09-18 UTC
+**Last Updated**: 2026-09-21 UTC
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,295 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,297 lines total
 - **Required PR check snapshot (2026-09-18 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
@@ -22,7 +22,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 
 | # | File | Name | Triggers | Source behavior | LOC | Recommendation |
 |---|------|------|----------|-----------|-------------|----------------|
-| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1361 | **Keep** — primary PR gate; aggregated `CI Gate` check |
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1363 | **Keep** — primary PR gate; aggregated `CI Gate` check; lightweight documentation catalog, maintained-link and editorial lock validation |
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 614 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 970 | **Keep pending equivalence proof** — trusted `workflow_run` verification includes resolution, isolation, security, coverage, and flake-analysis evidence. A passing upstream `CI Gate` alone does not prove this workflow redundant. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 231 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |

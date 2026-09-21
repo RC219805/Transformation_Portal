@@ -1,5 +1,12 @@
 # Depth Anything V2 Pipeline for Architectural Rendering
 
+**Historical evaluation:** this guide records an older Depth Anything V2
+pipeline. Its production and timing claims below are point-in-time evidence.
+Use the maintained [Lux Depth V3 guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) for
+current production operations and the [V5 candidate reference](../reference/LUX_DEPTH_V5.md)
+for explicitly opt-in photographic evaluation. These are scoped successors,
+not proof of equivalent performance or production acceptance.
+
 Production-ready depth-aware image processing pipeline optimized for Apple Silicon. Transforms architectural renders using monocular depth estimation with Depth Anything V2.
 
 ## Overview

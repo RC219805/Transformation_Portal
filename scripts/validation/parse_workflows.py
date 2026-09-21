@@ -12,6 +12,8 @@ This script identifies:
 """
 
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -19,11 +21,6 @@ from typing import Dict, List, Optional
 import yaml
 
 # Precompiled regex patterns for performance
-_NEWLINE_SEMICOLON = re.compile(r"[\n;]")
-_COMMENT_PATTERN = re.compile(r"#.*$")
-_IF_PATTERN = re.compile(r"\bif\s+")
-_ELIF_PATTERN = re.compile(r"\belif\s+")
-_FI_PATTERN = re.compile(r"(^|\s)fi(\s|$)")
 _STEP_OUTPUT_REF = re.compile(r"\$\{\{\s*steps\.([a-zA-Z0-9_-]+)\.outputs")
 _MODEL_PATTERN1 = re.compile(r'"model":\s*"([^"]+)"')
 _MODEL_PATTERN2 = re.compile(r'\\"model\\":\s*\\"([^"\\]+)\\"')
@@ -155,7 +152,7 @@ class WorkflowParser:
                         )
 
     def _check_shell_scripts(self, workflow_file: Path, workflow: Dict, lines: List[str]):
-        """Check for common shell script bugs in run commands."""
+        """Parse supported shell bodies without running workflow commands."""
         if "jobs" not in workflow:
             return
 
@@ -171,43 +168,105 @@ class WorkflowParser:
                 if not run_script:
                     continue
 
-                # Check for unclosed conditionals
-                self._check_conditionals(workflow_file, job_name, run_script, lines)
+                shell = self._shell_for_step(workflow, job_config, step)
+                location = f"job '{job_name}', step {idx + 1}"
+                line_num = self._find_line_number(lines, run_script.splitlines()[0])
+                if shell is None:
+                    self.bugs.append(
+                        WorkflowBug(
+                            str(workflow_file),
+                            line_num,
+                            "info",
+                            f"Shell syntax check skipped for {location}: unsupported or unresolved shell",
+                        )
+                    )
+                    continue
+                # Never execute the workflow's shell declaration or its options.
+                # A minimal environment also excludes startup hooks and exported functions.
+                command = ["/bin/bash", "--noprofile", "--norc", "-p", "-n"] if shell == "bash" else ["/bin/sh", "-n"]
+                try:
+                    result = subprocess.run(
+                        command,
+                        input=run_script,
+                        text=True,
+                        capture_output=True,
+                        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+                        timeout=10,
+                        check=False,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    self.bugs.append(
+                        WorkflowBug(
+                            str(workflow_file), line_num, "error", f"Cannot check {shell} syntax for {location}: {exc}"
+                        )
+                    )
+                    continue
+                if result.returncode:
+                    self.bugs.append(
+                        WorkflowBug(
+                            str(workflow_file),
+                            line_num,
+                            "error",
+                            f"Shell syntax error in {location} ({shell})",
+                            result.stderr.strip(),
+                        )
+                    )
 
-    def _check_conditionals(self, workflow_file: Path, job_name: str, script: str, lines: List[str]):
-        """Check for unclosed if/fi statements."""
-        if_count = 0
-        fi_count = 0
-
-        # Remove heredocs (e.g., python - <<'PY' ... PY) to avoid false positives
-        # from Python/other language if statements
-        script_cleaned = self._remove_heredocs(script)
-
-        # Split by newlines and semicolons
-        statements = _NEWLINE_SEMICOLON.split(script_cleaned)
-
-        for statement in statements:
-            # Remove comments
-            statement = _COMMENT_PATTERN.sub("", statement).strip()
-
-            # Count if statements (excluding elif)
-            if _IF_PATTERN.search(statement) and not _ELIF_PATTERN.search(statement):
-                if_count += 1
-
-            # Count fi statements - must be at start or after whitespace, and must be end of command
-            if _FI_PATTERN.search(statement):
-                fi_count += 1
-
-        if if_count != fi_count:
-            line_num = self._find_line_number(lines, "if [ ")
-            self.bugs.append(
-                WorkflowBug(
-                    str(workflow_file),
-                    line_num,
-                    "error",
-                    f"Unclosed conditional in job '{job_name}': found {if_count} 'if' statements but {fi_count} 'fi' statements",
-                )
+    @staticmethod
+    def _shell_for_step(workflow: Dict, job: Dict, step: Dict) -> Optional[str]:
+        """Resolve shell precedence, admitting only known Bash/sh command templates."""
+        shell = step.get("shell")
+        for scope in (job, workflow):
+            if shell is None:
+                shell = (scope.get("defaults") or {}).get("run", {}).get("shell")
+        if shell is None:
+            container = job.get("container")
+            if isinstance(container, str) and "${{" in container:
+                return None
+            if container:
+                return "sh"
+            runners = job.get("runs-on", [])
+            runners = [runners] if isinstance(runners, str) else runners
+            if not isinstance(runners, list) or any("${{" in str(label) for label in runners):
+                return None
+            labels = [str(label).lower() for label in runners]
+            if any("windows" in label for label in labels):
+                return None
+            return (
+                "bash"
+                if any(label.startswith(("ubuntu", "macos")) or label in {"linux", "macos"} for label in labels)
+                else None
             )
+        if not isinstance(shell, str) or "${{" in shell:
+            return None
+        try:
+            tokens = shlex.split(shell)
+        except ValueError:
+            return None
+        if tokens and Path(tokens[0]).name == "env":
+            tokens.pop(0)
+            while tokens:
+                if tokens[0] in {"-u", "--unset"} and len(tokens) > 1:
+                    del tokens[:2]
+                elif tokens[0] in {"-i", "--ignore-environment"} or tokens[0].startswith("--unset=") or "=" in tokens[0]:
+                    tokens.pop(0)
+                elif tokens[0] == "--":
+                    tokens.pop(0)
+                    break
+                else:
+                    break
+        if not tokens or Path(tokens[0]).name not in {"bash", "sh"}:
+            return None
+        interpreter = Path(tokens.pop(0)).name
+        # Custom templates that change parsing (for example bash -c or -O) are
+        # unsupported rather than being executed or checked under wrong semantics.
+        while tokens:
+            token = tokens.pop(0)
+            if token == "-o" and tokens and tokens[0] in {"pipefail", "errexit", "nounset"}:
+                tokens.pop(0)
+            elif token not in {"{0}", "--noprofile", "--norc", "-p", "-e", "-u"}:
+                return None
+        return interpreter
 
     def _check_job_dependencies(self, workflow_file: Path, workflow: Dict):
         """Check for invalid job dependencies."""
@@ -278,26 +337,6 @@ class WorkflowParser:
                             )
                         )
 
-    def _remove_heredocs(self, script: str) -> str:
-        """Remove heredoc content to avoid false positives from embedded code.
-
-        Detects heredocs like:
-        - python - <<'PY' ... PY
-        - cat <<EOF ... EOF
-        - sh <<'SCRIPT' ... SCRIPT
-        """
-        # Pattern to match heredocs: <<['"]?DELIMITER['"]? ... DELIMITER
-        # This is a simplified version that handles common cases
-        heredoc_pattern = re.compile(r'<<[\'"]?(\w+)[\'"]?.*?^\s*\1\s*$', re.MULTILINE | re.DOTALL)
-
-        # Replace heredoc content with a placeholder to preserve line structure
-        def replace_heredoc(match):
-            # Count newlines in the heredoc to preserve line numbers
-            lines_in_heredoc = match.group(0).count("\n")
-            return "\n" * lines_in_heredoc
-
-        return heredoc_pattern.sub(replace_heredoc, script)
-
     def _find_line_number(self, lines: List[str], search_text: str) -> Optional[int]:
         """Find the line number containing the search text."""
         for idx, line in enumerate(lines, 1):
@@ -306,8 +345,8 @@ class WorkflowParser:
         return None
 
     def _check_openai_models(self, workflow_file: Path, workflow: Dict, lines: List[str]):
-        """Check for invalid OpenAI model names."""
-        valid_models = {
+        """Emit advisory hints from a legacy name list, not API availability claims."""
+        known_models = {
             "gpt-4",
             "gpt-4-turbo",
             "gpt-4-turbo-preview",
@@ -317,10 +356,9 @@ class WorkflowParser:
             "gpt-3.5-turbo-16k",
         }
 
-        # Valid model prefixes for date-stamped versions.
-        # These prefixes allow models like 'gpt-4-turbo-2024-04-09' (e.g., gpt-4-turbo-YYYY-MM-DD).
-        # Any suffix after these prefixes is accepted, so use with caution.
-        valid_prefixes = {"gpt-4-turbo-", "gpt-4o-", "gpt-3.5-turbo-"}
+        # Historical prefix hints suppress this advisory, without validating any
+        # suffix or establishing whether a provider actually offers the model.
+        known_prefixes = {"gpt-4-turbo-", "gpt-4o-", "gpt-3.5-turbo-"}
 
         if "jobs" not in workflow:
             return
@@ -342,10 +380,10 @@ class WorkflowParser:
                 model_matches += _MODEL_PATTERN2.findall(run_script)
 
                 for model in model_matches:
-                    # Check if it looks like a GPT model but isn't valid
-                    if model.startswith("gpt-") and model not in valid_models:
-                        # Check if it's a date-stamped version with valid prefix
-                        is_versioned = any(model.startswith(vp) for vp in valid_prefixes)
+                    # The static list cannot determine provider/account availability.
+                    if model.startswith("gpt-") and model not in known_models:
+                        # Preserve the legacy prefix heuristic as advisory only.
+                        is_versioned = any(model.startswith(vp) for vp in known_prefixes)
 
                         if not is_versioned:
                             line_num = self._find_line_number(lines, model)
@@ -354,7 +392,8 @@ class WorkflowParser:
                                     str(workflow_file),
                                     line_num,
                                     "warning",
-                                    f"Potentially invalid OpenAI model name '{model}' in job '{job_name}'",
+                                    f"Model '{model}' in job '{job_name}' is absent from legacy static hints; "
+                                    "this does not establish API validity or account availability",
                                 )
                             )
 

@@ -1,6 +1,6 @@
 # Type Checking Policy
 
-**Status**: DRAFT (requires architect approval)
+**Status**: Current enforced whitelist; historical rollout proposal retained below
 **Owner**: Transformation Portal Architect
 **Last Updated**: 2026-09-12
 

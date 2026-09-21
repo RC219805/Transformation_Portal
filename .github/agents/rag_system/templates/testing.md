@@ -52,7 +52,7 @@ Use pytest markers to categorize tests:
 ```python
 import pytest
 
-@pytest.mark.fast
+@pytest.mark.unit
 def test_quick_function():
     """Fast tests run in < 100ms, run during development."""
     pass
@@ -67,14 +67,14 @@ def test_full_pipeline():
     """Integration tests require multiple components."""
     pass
 
-@pytest.mark.requires_gpu
+@pytest.mark.ml
 def test_cuda_processing():
     """Tests requiring GPU, skipped on CPU-only systems."""
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")
     pass
 
-@pytest.mark.requires_ffmpeg
+@pytest.mark.integration
 def test_video_processing():
     """Tests requiring FFmpeg, skipped if not installed."""
     if not shutil.which('ffmpeg'):
@@ -85,25 +85,25 @@ def test_video_processing():
 ### Running Tests
 ```bash
 # Fast tests only (development)
-pytest -m fast
+./.venv/bin/pytest -m unit
 
 # All tests except slow
-pytest -m "not slow"
+./.venv/bin/pytest -m "not slow"
 
 # Integration tests
-pytest tests/integration/
+./.venv/bin/pytest tests/integration/
 
 # Specific test file with verbose output
-pytest tests/test_depth_pipeline.py -v
+./.venv/bin/pytest tests/test_depth_pipeline.py -v
 
 # With coverage
-pytest --cov={module_name} tests/
+./.venv/bin/pytest --cov={module_name} tests/
 
 # Parallel execution (if pytest-xdist installed)
-pytest -n auto
+./.venv/bin/pytest -n auto
 
 # Stop on first failure
-pytest -x
+./.venv/bin/pytest -x
 ```
 
 ---
@@ -776,7 +776,7 @@ def test_preserves_gps_coordinates(tmp_path):
 ### Pattern 3: Testing FFmpeg Integration
 
 ```python
-@pytest.mark.requires_ffmpeg
+@pytest.mark.integration
 def test_ffmpeg_video_processing(tmp_path):
     """Test video processing with FFmpeg."""
     import shutil
@@ -811,62 +811,18 @@ def test_ffmpeg_video_processing(tmp_path):
 
 ## CI Test Configuration
 
-### pytest.ini
+### Governed configuration and CI
 
-```ini
-[pytest]
-# Minimum pytest version
-minversion = 6.0
+The repository's pytest configuration is maintained in `pyproject.toml`; do not
+create a competing `pytest.ini` or add example-only markers. Use `unit` for small
+model-free tests, `ml` for optional model/runtime tests, and `integration` for
+multi-component tests. Keep explicit availability checks for required hardware
+and external tools. A marker does not install those dependencies.
 
-# Test discovery patterns
-python_files = test_*.py
-python_classes = Test*
-python_functions = test_*
-
-# Markers
-markers =
-    fast: Fast tests (< 100ms)
-    slow: Slow tests (> 1 second)
-    integration: Integration tests
-    benchmark: Performance benchmarks
-    requires_gpu: Tests requiring CUDA/MPS
-    requires_ffmpeg: Tests requiring FFmpeg
-    requires_tifffile: Tests requiring tifffile
-
-# Ignore directories
-norecursedirs = .git .tox build dist *.egg-info deprecated
-
-# Output options
-addopts =
-    -ra
-    --strict-markers
-    --tb=short
-    --disable-warnings
-
-# Coverage
-[coverage:run]
-source = .
-omit =
-    tests/*
-    setup.py
-    deprecated/*
-```
-
-### Run in CI
-
-```yaml
-# .github/workflows/test.yml snippet
-- name: Run fast tests
-  run: pytest -m fast --cov --cov-report=xml
-
-- name: Run full test suite
-  run: pytest -m "not benchmark" --cov --cov-report=xml
-
-- name: Upload coverage
-  uses: codecov/codecov-action@v3
-  with:
-    file: ./coverage.xml
-```
+Use `make test-fast` for the current quick lane and the selectors in
+`docs/testing/STRATEGY.md` for broader coverage. The maintained workflows are
+`.github/workflows/build.yml` and the current workflow matrix; action pins and
+coverage publication must follow those contracts, not a copied template.
 
 ---
 

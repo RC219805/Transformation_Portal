@@ -5,16 +5,32 @@ A tool to parse and validate GitHub Actions workflow files for common bugs and i
 ## Usage
 
 ```bash
-python parse_workflows.py
+.venv/bin/python scripts/validation/parse_workflows.py
 ```
 
-The script will automatically scan all workflow files in `.github/workflows/` and report any issues found.
+Run from the repository root with the core environment installed. The script
+scans `.github/workflows/` and reports findings. Use `--workflow-dir <directory>`
+for fixtures and `--format json` for structured diagnostics. The current CLI
+prints progress lines before the JSON diagnostics; stdout is not a standalone
+JSON document. Errors return exit status 1; warnings and informational skips
+return 0.
+
+Shell checking requires `/bin/bash` and `/bin/sh`. It passes supported shell
+bodies to the matching interpreter with `-n`, without executing workflow
+commands or loading ambient shell startup configuration. Step `shell` overrides
+job defaults, which override workflow defaults. Known Linux/macOS runners use
+Bash by default; container jobs use sh. Explicit Python/PowerShell, unresolved
+runner, container, or shell expressions, and unsupported custom shell templates are reported
+as skipped. This is a local static check: it does not evaluate Actions expressions,
+validate embedded Python, or prove runner behavior or remote API availability.
 
 ## What It Detects
 
 ### Errors (Critical Issues)
 
-1. **Unclosed Conditionals** - Missing `fi` statements in shell scripts
+1. **Shell Syntax Errors** - Including missing `fi` statements in Bash/sh scripts;
+   heredocs and quoted strings are parsed as shell syntax rather than counted as
+   conditional keywords.
    ```yaml
    run: |
      if [ -z "$VAR" ]; then
@@ -46,10 +62,11 @@ The script will automatically scan all workflow files in `.github/workflows/` an
      device: [cpu, gpu]  # ⚠️ Lint doesn't need both devices
    ```
 
-2. **Invalid API References** - Potentially invalid OpenAI model names
-   ```yaml
-   -d '{"model": "gpt-4.1-mini"}'  # ⚠️ Invalid model name
-   ```
+2. **Legacy Model Hints** - A model name absent from the script's historical
+   static list produces an advisory warning. That list cannot establish whether
+   a model exists, supports an endpoint, or is available to an account. Do not
+   replace a model merely to clear this warning; verify provider documentation
+   and the workflow's actual API contract.
 
 ## Example Output
 
@@ -58,7 +75,8 @@ The script will automatically scan all workflow files in `.github/workflows/` an
 Found 3 issue(s) in workflow files:
 ================================================================================
 
-[ERROR] .github/workflows/build.yml:49 - Unclosed conditional in job 'lint-and-test': found 1 'if' statements but 0 'fi' statements
+[ERROR] .github/workflows/example.yml:9 - Shell syntax error in job 'lint-and-test', step 1 (bash)
+  Context: /bin/bash: line 3: syntax error: unexpected end of file
 
 [ERROR] .github/workflows/summary.yml:46 - Step output referenced 'steps.generate-summary.outputs' but step id 'generate-summary' not found in job 'summarize-issue'
 
@@ -71,20 +89,14 @@ Summary: 2 error(s), 1 warning(s), 0 info
 
 ## Testing
 
-Run the test suite:
+Run the actual CLI regression suite:
 
 ```bash
-pytest tests/test_parse_workflows.py -v
+PYTHONPATH=src .venv/bin/pytest tests/test_parse_workflows_cli.py -v
 ```
 
-## Fixed Issues
-
-This parser helped identify and fix the following bugs:
-
-1. **build.yml:52** - Added missing `fi` statement to close conditional
-2. **summary.yml:19** - Added `id: generate-summary` to step
-3. **summary.yml:28** - Changed invalid model "gpt-4.1-mini" to "gpt-4o-mini"
-4. **build.yml:17** - Added matrix exclusion to prevent lint running on both cpu/gpu
+`tests/test_parse_workflows.py` covers the separate package analyzer under
+`src/transformation_portal/analyzers`; it does not validate this script's CLI.
 
 ## Integration
 
@@ -92,5 +104,5 @@ This parser can be integrated into CI/CD pipelines to automatically check workfl
 
 ```yaml
 - name: Validate workflows
-  run: python parse_workflows.py
+  run: python scripts/validation/parse_workflows.py
 ```

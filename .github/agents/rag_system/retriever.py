@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
+from .authority import RETRIEVAL_MODES, authority_note, authority_priority
 from .config import get_config
 from .exceptions import RetrievalError
 from .logger import get_logger
@@ -29,7 +30,7 @@ except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
     logger.warning(
         "sentence-transformers not installed. Vector search will be disabled. "
-        "Install with: pip install sentence-transformers"
+        "Keep offline BM25 enabled; semantic search requires a separately governed runtime."
     )
 
 
@@ -100,10 +101,7 @@ class BM25Retriever:
         # Robertson-Sparck Jones (RSJ) IDF formula. The 0.5 smoothing constants
         # prevent negative or undefined IDF values for very rare or very common
         # terms.
-        self.idf = {
-            token: math.log((self.N - freq + 0.5) / (freq + 0.5) + 1.0)
-            for token, freq in self.doc_freqs.items()
-        }
+        self.idf = {token: math.log((self.N - freq + 0.5) / (freq + 0.5) + 1.0) for token, freq in self.doc_freqs.items()}
 
     def search(
         self,
@@ -246,6 +244,8 @@ class HybridRetriever:
         logger.info(f"Indexing {len(chunks)} chunks...")
 
         self.chunks = chunks
+        if hasattr(self._retrieve_cached, "cache_clear"):
+            self._retrieve_cached.cache_clear()
         documents = [chunk.content for chunk in chunks]
 
         # BM25 indexing
@@ -270,6 +270,7 @@ class HybridRetriever:
         top_k: int = 10,
         chunk_type_filter: Optional[List[str]] = None,
         file_path_filter: Optional[str] = None,
+        retrieval_mode: str = "operator",
     ) -> List[RetrievalResult]:
         """
         Retrieve relevant chunks for a query.
@@ -279,6 +280,8 @@ class HybridRetriever:
             top_k: Number of results to return
             chunk_type_filter: Filter by chunk types (e.g., ['code', 'doc'])
             file_path_filter: Filter by file path pattern (regex)
+            retrieval_mode: operator prefers verified maintained guidance; historical
+                selects cataloged historical/archive-only documents; all preserves relevance order.
 
         Returns:
             List of RetrievalResult objects
@@ -286,8 +289,11 @@ class HybridRetriever:
         if not self.indexed:
             raise RetrievalError("Retriever not indexed. Call index() first.")
 
+        if retrieval_mode not in RETRIEVAL_MODES:
+            raise ValueError(f"Unknown retrieval mode: {retrieval_mode}")
+
         # Create cache key for filters (make hashable)
-        filter_key = (tuple(sorted(chunk_type_filter)) if chunk_type_filter else None, file_path_filter)
+        filter_key = (tuple(sorted(chunk_type_filter)) if chunk_type_filter else None, file_path_filter, retrieval_mode)
 
         # Call cached implementation
         return self._retrieve_cached(query, top_k, filter_key)
@@ -312,10 +318,17 @@ class HybridRetriever:
         # Extract filters from key
         chunk_type_filter = list(filter_key[0]) if filter_key and filter_key[0] else None
         file_path_filter = filter_key[1] if filter_key else None
+        retrieval_mode = filter_key[2] if filter_key else "operator"
 
         # Apply filters
         filtered_indices = self._apply_filters(chunk_type_filter, file_path_filter)
 
+        if retrieval_mode == "historical":
+            filtered_indices = [
+                index
+                for index in filtered_indices
+                if self.chunks[index].metadata.get("documentation", {}).get("classification") in {"historical", "archive-only"}
+            ]
         if not filtered_indices:
             logger.debug("No chunks match filters")
             return []
@@ -323,16 +336,26 @@ class HybridRetriever:
         # Search the indexed BM25 corpus directly, letting the filter apply
         # at scoring time. This preserves the IDF statistics from the full
         # corpus and avoids refitting BM25 on every filtered query.
-        allowed_indices = set(filtered_indices) if (chunk_type_filter or file_path_filter) else None
-        bm25_scores = self._bm25_search(query, top_k, filtered_indices, allowed_indices)
+        allowed_indices = (
+            set(filtered_indices) if (chunk_type_filter or file_path_filter or retrieval_mode == "historical") else None
+        )
+        # Consider the full matching corpus before authority ordering so a relevant
+        # maintained guide is not truncated behind duplicate historical matches.
+        candidate_count = len(filtered_indices) if retrieval_mode == "operator" else top_k
+        bm25_scores = self._bm25_search(query, candidate_count, filtered_indices, allowed_indices)
 
         # Get vector results (if enabled)
         vector_scores = None
         if self.enable_vector_search and self.embeddings is not None:
-            vector_scores = self._vector_search(filtered_indices, query, top_k)
+            vector_scores = self._vector_search(filtered_indices, query, candidate_count)
 
         # Combine results
-        results = self._combine_results(filtered_indices, bm25_scores, vector_scores, top_k)
+        results = self._combine_results(filtered_indices, bm25_scores, vector_scores, candidate_count)
+        for result in results:
+            result.metadata = {**result.metadata, "retrieval_mode": retrieval_mode}
+        if retrieval_mode == "operator":
+            results.sort(key=lambda result: (authority_priority(result.metadata), result.score), reverse=True)
+        results = results[:top_k]
 
         logger.debug(f"Retrieved {len(results)} results for query: '{query[:50]}'")
         return results
@@ -554,6 +577,7 @@ def main():
     parser.add_argument("--top-k", type=int, default=5, help="Number of results")
     parser.add_argument("--type", nargs="+", help="Filter by chunk type")
     parser.add_argument("--file", help="Filter by file path pattern")
+    parser.add_argument("--mode", choices=RETRIEVAL_MODES, default="operator", help="Documentation authority scope")
 
     args = parser.parse_args()
 
@@ -574,6 +598,7 @@ def main():
         top_k=args.top_k,
         chunk_type_filter=args.type,
         file_path_filter=args.file,
+        retrieval_mode=args.mode,
     )
 
     # Display results
@@ -583,6 +608,7 @@ def main():
     for i, result in enumerate(results, 1):
         print(f"\n{i}. {result.file_path}:{result.start_line}-{result.end_line}")
         print(f"   Score: {result.score:.3f} | Method: {result.retrieval_method}")
+        print(f"   {authority_note(result.metadata)}")
         if result.metadata:
             print(f"   Metadata: {result.metadata}")
         print(f"   Preview: {result.content[:200]}...")

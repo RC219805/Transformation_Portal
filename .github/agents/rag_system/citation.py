@@ -8,6 +8,8 @@ import textwrap
 from dataclasses import dataclass
 from typing import List, Optional
 
+from .authority import RETRIEVAL_MODES, authority_note
+
 
 @dataclass
 class Citation:
@@ -141,7 +143,7 @@ class CitationGenerator:
 
     def _generate_relevance_note(self, result) -> str:
         """Generate a note explaining why this result is relevant."""
-        notes = []
+        notes = [authority_note(result.metadata)]
 
         # Check metadata for specific indicators
         if result.metadata.get("entity_type") == "function":
@@ -197,7 +199,7 @@ class CitationGenerator:
 
         for i, cite in enumerate(citations, 1):
             lines.append(f"### [{i}] {cite.file_path}:{cite.start_line}-{cite.end_line}")
-            lines.append(f"**Confidence**: {cite.confidence:.0%}")
+            lines.append(f"**Relevance score**: {cite.confidence:.0%} (not correctness or authority)")
             if cite.relevance_note:
                 lines.append(f"**Relevance**: {cite.relevance_note}")
             lines.append("\n```")
@@ -212,7 +214,7 @@ class CitationGenerator:
 
         for i, cite in enumerate(citations, 1):
             lines.append(f"[{i}] {cite.file_path}:{cite.start_line}-{cite.end_line}")
-            lines.append(f"    Confidence: {cite.confidence:.0%}")
+            lines.append(f"    Relevance score: {cite.confidence:.0%} (not correctness or authority)")
             if cite.relevance_note:
                 lines.append(f"    Relevance: {cite.relevance_note}")
             lines.append("\n    Snippet:")
@@ -261,6 +263,7 @@ def main():
     parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
     parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
 
+    parser.add_argument("--mode", choices=RETRIEVAL_MODES, default="operator", help="Documentation authority scope")
     args = parser.parse_args()
 
     # Full RAG pipeline
@@ -271,7 +274,7 @@ def main():
     print("Retrieving...")
     retriever = HybridRetriever()
     retriever.index(chunks)
-    results = retriever.retrieve(args.query, top_k=args.max_citations * 2)
+    results = retriever.retrieve(args.query, top_k=args.max_citations * 2, retrieval_mode=args.mode)
 
     print("Reranking...")
     reranker = ResultReranker()

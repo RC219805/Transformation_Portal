@@ -184,7 +184,8 @@ class TestRootGovernanceMetadata:
             "docs/README.md",
             "docs/governance/DOCUMENTATION_MAP.md",
             "documentation refresh audit",
-            "Prior dated audits remain historical evidence",
+            "docs/governance/DOCUMENTATION_CATALOG.md",
+            "remains dated evidence",
         ]
         for expected in required_navigation:
             assert expected in readme

@@ -334,6 +334,7 @@ A phase is complete when:
 ## References
 
 - `docs/guides/coverage-improvement-plan.md` — Quick reference
-- `docs/guides/QUALITY_FIREWALL.md` — Quality gates overview
+- [Workflow Matrix](../ci/WORKFLOW_MATRIX.md) — Current quality-check roles
+- [Performance Gate Policy](../performance/GATE_POLICY.md) — Timing and evidence tiers
 - `pyproject.toml` — Coverage configuration
 - `.github/workflows/ci.yml` — CI coverage gate implementation

@@ -1,153 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-File: tools/ad_editorial_post_pipeline.py
-Architectural Digest–grade Interior Post-Production Pipeline (End-to-End)
+"""File: tools/ad_editorial_post_pipeline.py
 
-Purpose
--------
-Automates a complete stills post workflow for luxury interior architecture photography:
-1)  Offload & verify RAWs (+optional backup).
-2)  Optional renaming with room-aware pattern.
-3)  Generate selects template + contact sheet to aid culling.
-4)  RAW → 16-bit ProPhoto RGB base TIFFs (no auto-bright).
-5)  Optional HDR merge (Debevec) and Panorama stitching.
-6)  Auto-upright (minor horizon/vertical correction).
-7)  Create consistent style variants: natural, minimal, cinematic.
-8)  Per-style luminance/WB normalization for set consistency.
-9)  Optional automated retouch (dust spot removal + hotspot taming).
-10) Export:
-    - Print: 16-bit TIFF + embed ProPhoto ICC.
-    - Web: 8-bit JPEG sRGB + output sharpening + ICC.
-11) IPTC/XMP embedding from CSV (exiftool if present; JPEG fallback via piexif).
-12) Contact sheet PDF + manifest JSON + zipped deliverables.
+Editorial RAW workflow with explicit linear-ProPhoto processing.
 
-Why this design
----------------
-- Keeps the editing color pipeline wide-gamut & 16-bit until export to avoid banding.
-- Styles are deterministic functions so a series stays consistent.
-- Uses external tools when they do a better job (exiftool for IPTC).
-- Treats HDR/pano as optional to avoid forcing artifacts.
-- Retouch steps are conservative and opt-in; complex pixel edits remain manual in PS.
+Maintain the existing CLI and project layout. TIFFs carry genuine uint16 RGB
+and a matching matrix/shaper ICC transfer; web delivery converts to encoded
+sRGB. HDR requires measured, constant-aperture/ISO brackets. Panorama features
+use disposable proxies, while warping and feather blending use float masters.
 
-Dependencies (install)
-----------------------
-python -m pip install --upgrade \\
-    rawpy pillow opencv-python tqdm pyyaml reportlab exifread piexif
-
-Optional:
-- exiftool (system binary) for robust IPTC/XMP writing.
-- lensfunpy (and lensfun database) for lens geometry (optional; off by default).
-
-Config (YAML)
--------------
-Create a YAML like:
-
-    project_name: "SmithResidence"
-    project_root: "/path/to/SmithResidence_2025-10-18"
-    input_raw_dir: "/path/from/card/DCIM"
-    backup_raw_dir: "/Volumes/RAID/Backups/SmithResidence"  # optional
-
-    rename:
-      enabled: true
-      pattern: "{project}_{room}_{seq:03d}"
-      rooms_by_folder:
-        "RAW/Originals/LivingRoom": "LivingRoom"
-        "RAW/Originals/Kitchen": "Kitchen"
-
-    selects:
-      use_csv: true
-      csv_path: "/path/to/project/DOCS/selects.csv"  # created on first run
-
-    icc:
-      prophoto_path: "/Library/ColorSync/Profiles/ProPhoto.icc"
-      srgb_path: "/Library/ColorSync/Profiles/sRGB Profile.icc"
-
-    processing:
-      workers: 4
-      denoise_strength: 0  # 0..10
-      enable_hdr: false
-      hdr_group_gap_sec: 2.0
-      enable_pano: false
-      pano_groups: []  # e.g., [["file1.CR3","file2.CR3",...]]
-      auto_upright: true
-      upright_max_deg: 3.0
-
-    styles:
-      natural:
-        exposure: 0.0
-        contrast: 6
-        saturation: 0
-        split_tone:
-          shadows_hue_deg: null
-          shadows_sat: 0.0
-          highs_hue_deg: null
-          highs_sat: 0.0
-      minimal:
-        exposure: +0.15
-        contrast: -12
-        saturation: -8
-        split_tone:
-          shadows_hue_deg: null
-          shadows_sat: 0.0
-          highs_hue_deg: null
-          highs_sat: 0.0
-      cinematic:
-        exposure: -0.05
-        contrast: +14
-        saturation: +4
-        split_tone:
-          shadows_hue_deg: 210
-          shadows_sat: 0.06
-          highs_hue_deg: 38
-          highs_sat: 0.04
-
-    consistency:
-      target_median: 0.42
-      wb_neutralize: true
-
-    retouch:
-      dust_remove: false
-      hotspot_reduce: false
-
-    export:
-      web_long_edge_px: 2500
-      jpeg_quality: 96
-      sharpen_web_amount: 0.35  # radius 1.2px, threshold 0
-      sharpen_print_amount: 0.10
-
-    metadata:
-      csv_path: "/path/to/project/DOCS/metadata.csv"
-      # columns: filename,title,description,keywords,creator,copyright,credit,location
-
-    deliver:
-      zip: true
-
-Usage
------
-1) Create config YAML. Ensure ICC paths exist.
-2) Run:
-       python tools/ad_editorial_post_pipeline.py run --config /path/to/config.yml
-3) Check outputs under EXPORT/ and DOCS/.
-
-Notes
------
-- RAW decoding: camera WB, no auto-bright, ProPhoto RGB, 16-bit.
-- HDR/Pano: OpenCV works best with sturdy tripod sequences; quality varies—use with care.
-- Auto-upright performs SMALL angle correction only; major perspective fixes are manual.
-- For magazine print, final pixel-critical retouching should be done in Photoshop layered files.
-
-License
--------
-MIT. No warranty.
-
-CHANGELOG (Priority 1 Fixes)
-----------------------------
-- FIXED: Added missing imports (yaml, ImageReader)
-- FIXED: 16-bit TIFF saving now preserves full bit depth
-- FIXED: Added comprehensive config validation
-- FIXED: copy_and_verify now properly checks hashes
-- FIXED: Atomic file writes prevent corruption on interruption
+See docs/guides/AD_EDITORIAL_POST_PIPELINE.md for supported dependencies,
+acceptance limits, and operator commands. Local synthetic checks do not certify
+photographic output or an end-to-end installed editorial runtime.
 """
 
 from __future__ import annotations
@@ -155,21 +19,26 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import logging
 import shutil
+import struct
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import rawpy
+import tifffile
 import yaml  # FIXED: Added missing import
-from PIL import Image, ImageOps
+from PIL import Image, ImageCms, ImageOps
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader  # FIXED: Added missing import
 from reportlab.pdfgen import canvas
+from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 
 # Optional deps
@@ -249,10 +118,11 @@ def has_exiftool() -> bool:
             ["exiftool", "-ver"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            check=False,
+            check=True,
+            timeout=10,
         )
         return True
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return False
 
 
@@ -261,8 +131,7 @@ def load_icc_bytes(icc_path: Optional[Path]) -> Optional[bytes]:
         return None
     if icc_path.exists():
         return icc_path.read_bytes()
-    LOG.warning("ICC profile not found: %s", icc_path)
-    return None
+    raise FileNotFoundError(f"Configured ICC profile not found: {icc_path}")
 
 
 def safe_name(s: str) -> str:
@@ -322,19 +191,18 @@ def atomic_write(path: Path, writer_func, *args, **kwargs) -> None:
         writer_func: Function that takes a path and writes to it
         *args, **kwargs: Additional arguments for writer_func
     """
-    temp_path = path.with_suffix(path.suffix + ".tmp")
+    # Unique, exclusively created siblings avoid competing writers or following a
+    # pre-existing predictable .tmp symlink. Replacement remains on one filesystem.
+    with tempfile.NamedTemporaryFile(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, delete=False) as handle:
+        temp_path = Path(handle.name)
     try:
         writer_func(temp_path, *args, **kwargs)
-        # Atomic rename on POSIX systems
         temp_path.replace(path)
-    except Exception:
-        # Clean up temp file on failure
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except Exception:
-                pass
-        raise
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            LOG.warning("Unable to remove editorial temporary file %s", temp_path)
 
 
 # ----------------------------- config -------------------------------------- #
@@ -412,6 +280,13 @@ class PipelineConfig:
         if not self.input_raw_dir.exists():
             errors.append(f"input_raw_dir does not exist: {self.input_raw_dir}")
 
+        if self.metadata.get("csv_path"):
+            metadata_path = project_relative_path(
+                self.project_root, self.metadata["csv_path"], self.project_root / "DOCS" / "metadata.csv"
+            )
+            if not metadata_path.is_file():
+                errors.append(f"Configured metadata CSV does not exist: {metadata_path}")
+
         # Validate processing params
         workers = self.processing.get("workers", 4)
         if not isinstance(workers, int) or not (1 <= workers <= 64):
@@ -453,6 +328,15 @@ class PipelineConfig:
 
         # Validate style parameters
         for style_name, style_params in self.styles.items():
+            if (
+                not isinstance(style_name, str)
+                or not style_name.strip()
+                or style_name in {".", ".."}
+                or "/" in style_name
+                or "\\" in style_name
+                or "\x00" in style_name
+            ):
+                errors.append(f"Style name must be a single directory name: {style_name!r}")
             if not isinstance(style_params, dict):
                 errors.append(f"Style '{style_name}' must be a dictionary")
                 continue
@@ -472,16 +356,24 @@ class PipelineConfig:
             if not isinstance(saturation, (int, float)) or not (-100 <= saturation <= 100):
                 errors.append(f"Style '{style_name}' saturation must be -100 to 100, got {saturation}")
 
-        # Validate ICC paths if provided
-        if self.icc.get("prophoto_path"):
-            pp_path = Path(self.icc["prophoto_path"]).expanduser()
-            if not pp_path.exists():
-                LOG.warning("ProPhoto ICC profile not found: %s (will proceed without)", pp_path)
-
-        if self.icc.get("srgb_path"):
-            srgb_path = Path(self.icc["srgb_path"]).expanduser()
-            if not srgb_path.exists():
-                LOG.warning("sRGB ICC profile not found: %s (will proceed without)", srgb_path)
+        # Explicit paths must be usable and match the intended pixel contract.
+        for key, prophoto in (("prophoto_path", True), ("srgb_path", False)):
+            if self.icc.get(key):
+                try:
+                    profile = load_icc_bytes(Path(self.icc[key]).expanduser())
+                    _validate_rgb_profile(profile, prophoto=prophoto)
+                except (OSError, ValueError, ImageCms.PyCMSError) as exc:
+                    errors.append(f"icc.{key}: {exc}")
+        if self.processing.get("enable_hdr", False) and exifread is None:
+            errors.append("HDR requires exifread and complete capture exposure metadata")
+        if self.processing.get("enable_pano", False) and not self.processing.get("pano_groups"):
+            errors.append("Panorama requires explicit processing.pano_groups")
+        if (
+            self.processing.get("enable_pano", False)
+            or self.processing.get("auto_upright", True)
+            or self.retouch.get("dust_remove", False)
+        ) and cv2 is None:
+            errors.append("Selected panorama/upright/dust operations require OpenCV")
 
         if errors:
             raise ValueError("Configuration validation failed:\n  - " + "\n  - ".join(errors))
@@ -558,12 +450,15 @@ class Layout:
 RAW_EXTS = {
     ".cr2",
     ".cr3",
-    ".ne",
+    ".nef",
+    ".ne",  # Retained legacy alias.
     ".arw",
-    ".ra",
+    ".raf",
+    ".ra",  # Retained legacy alias.
     ".rw2",
     ".dng",
-    ".or",
+    ".orf",
+    ".or",  # Retained legacy alias.
     ".srw",
     ".crw",
 }
@@ -582,7 +477,12 @@ def mirror_offload(cfg: PipelineConfig, lay: Layout) -> List[Path]:
     LOG.info("Offloading RAW from %s -> %s", cfg.input_raw_dir, lay.RAW_ORIG)
     raws = find_raws(cfg.input_raw_dir)
     if not raws:
-        raise SystemExit("No RAW files found in input_raw_dir.")
+        raise ValueError("No RAW files found in input_raw_dir.")
+    # Offload intentionally flattens the input tree, so reject ambiguous names
+    # before copying instead of silently replacing one capture with another.
+    names = [raw.name.casefold() for raw in raws]
+    if len(set(names)) != len(names):
+        raise ValueError("RAW offload requires unique basenames across input subdirectories")
 
     ensure_dirs([lay.RAW_ORIG])
     out_paths = []
@@ -695,7 +595,7 @@ def filter_selects(cfg: PipelineConfig, files: List[Path]) -> List[Path]:
             if str(k).strip() in {"1", "true", "True", "Y", "y"}:
                 keep.add(fn.strip())
 
-    return [p for p in files if p.name in keep or not keep]
+    return [p for p in files if p.name in keep]
 
 
 def build_contact_sheet(
@@ -705,6 +605,12 @@ def build_contact_sheet(
     page_size=A4,
     caption: str = "",
 ) -> None:
+    if not images:
+        raise ValueError("Contact sheet requires at least one exported image")
+    atomic_write(out_pdf, _render_contact_sheet, images, thumbs_per_row, page_size, caption)
+
+
+def _render_contact_sheet(out_pdf: Path, images: List[Path], thumbs_per_row: int, page_size, caption: str) -> None:
     c = canvas.Canvas(str(out_pdf), pagesize=page_size)
     W, H = page_size
     margin = 36
@@ -740,7 +646,7 @@ def build_contact_sheet(
             x += cell_w
 
         except Exception as e:
-            LOG.warning("Contact sheet skip %s: %s", img, e)
+            raise RuntimeError(f"Contact sheet failed to render {img.name}") from e
 
     c.showPage()
     c.save()
@@ -767,48 +673,218 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
     return np.clip(arr, 0.0, 1.0)
 
 
+# Color matrices from W3C CSS Color 4 sample conversions (D50 ProPhoto,
+# Bradford D50 -> D65, then D65 XYZ -> linear sRGB):
+# https://www.w3.org/TR/css-color-4/#color-conversion-code
+PROPHOTO_TO_XYZ = np.array(
+    [
+        [0.7977666449, 0.1351812974, 0.0313477341],
+        [0.2880748288, 0.7118352342, 0.0000899369],
+        [0.0, 0.0, 0.8251046025],
+    ],
+    dtype=np.float64,
+)
+D50_TO_D65 = np.array(
+    [
+        [0.9554734215, -0.0230984549, 0.0632592432],
+        [-0.0283697093, 1.0099953981, 0.0210414412],
+        [0.0123140149, -0.0205076493, 1.3303659262],
+    ]
+)
+XYZ_TO_SRGB = np.array(
+    [
+        [12831 / 3959, -329 / 214, -1974 / 3959],
+        [-851781 / 878810, 1648619 / 878810, 36519 / 878810],
+        [705 / 12673, -2585 / 12673, 705 / 667],
+    ]
+)
+
+
+def linear_prophoto_icc() -> bytes:
+    """Build a deterministic ICC v2 matrix/shaper profile for linear masters."""
+
+    def xyz(values):
+        return b"XYZ " + bytes(4) + struct.pack(">3i", *(round(float(v) * 65536) for v in values))
+
+    description = b"Transformation Portal Linear ProPhoto RGB\0"
+    tags = {
+        b"desc": b"desc" + bytes(4) + struct.pack(">I", len(description)) + description + bytes(78),
+        b"cprt": b"text" + bytes(4) + b"Public colorimetric definitions\0",
+        b"wtpt": xyz([0.9642, 1.0, 0.8249]),
+    }
+    for index, channel in enumerate((b"r", b"g", b"b")):
+        tags[channel + b"XYZ"] = xyz(PROPHOTO_TO_XYZ[:, index])
+        tags[channel + b"TRC"] = b"curv" + bytes(4) + struct.pack(">I", 0)
+    header = bytearray(128)
+    header[8:24] = struct.pack(">I", 0x02100000) + b"mntrRGB XYZ "
+    header[24:36] = struct.pack(">6H", 2026, 1, 1, 0, 0, 0)
+    header[36:40] = b"acsp"
+    header[68:80] = struct.pack(">3i", *(round(v * 65536) for v in (0.9642, 1.0, 0.8249)))
+    offset = 132 + 12 * len(tags)
+    table, payload = bytearray(), bytearray()
+    for signature, value in tags.items():
+        table += signature + struct.pack(">II", offset + len(payload), len(value))
+        payload += value + bytes((-len(value)) % 4)
+    result = header + struct.pack(">I", len(tags)) + table + payload
+    result[:4] = struct.pack(">I", len(result))
+    return bytes(result)
+
+
+def _icc_curve(profile: bytes) -> tuple[np.ndarray, np.ndarray]:
+    """Admit bounded matrix/shaper RGB profiles with identical monotone TRCs."""
+    if (
+        not 132 <= len(profile) <= 1024 * 1024
+        or profile[36:40] != b"acsp"
+        or struct.unpack_from(">I", profile, 0)[0] != len(profile)
+    ):
+        raise ValueError("Invalid or oversized RGB ICC profile")
+    if profile[16:24] != b"RGB XYZ ":
+        raise ValueError("RGB matrix/shaper ICC profile requires XYZ connection space")
+    illuminant = np.array(struct.unpack_from(">3i", profile, 68)) / 65536
+    if not np.allclose(illuminant, [0.9642, 1.0, 0.8249], atol=1e-4, rtol=0):
+        raise ValueError("ICC header must use the D50 connection-space illuminant")
+    count = struct.unpack_from(">I", profile, 128)[0]
+    if count > 128 or 132 + count * 12 > len(profile):
+        raise ValueError("Invalid ICC tag directory")
+    tags = {}
+    for index in range(count):
+        signature, offset, size = struct.unpack_from(">4sII", profile, 132 + index * 12)
+        if offset < 132 + count * 12 or size < 12 or offset + size > len(profile) or signature in tags:
+            raise ValueError("Invalid ICC tag bounds")
+        if signature[:3] in (b"A2B", b"B2A", b"D2B", b"B2D"):
+            raise ValueError("ICC LUT transforms are outside the matrix/shaper contract")
+        tags[signature] = profile[offset : offset + size]
+    curves = [tags.get(channel + b"TRC") for channel in (b"r", b"g", b"b")]
+    if curves[0] is None or not all(curve == curves[0] for curve in curves):
+        raise ValueError("RGB ICC profile requires identical channel transfer curves")
+    curve = curves[0]
+    grid = np.linspace(0, 1, 65536)
+    if curve[:4] == b"curv":
+        length = struct.unpack_from(">I", curve, 8)[0]
+        if length == 0:
+            values = grid
+        elif length == 1 and len(curve) >= 14:
+            gamma = struct.unpack_from(">H", curve, 12)[0] / 256
+            values = grid**gamma
+        elif 2 <= length <= 65536 and len(curve) >= 12 + length * 2:
+            samples = np.frombuffer(curve, dtype=">u2", count=length, offset=12) / 65535
+            values = np.interp(grid, np.linspace(0, 1, length), samples)
+        else:
+            raise ValueError("Unsupported ICC sampled curve")
+    elif curve[:4] == b"para":
+        kind = struct.unpack_from(">H", curve, 8)[0]
+        lengths = (1, 3, 4, 5, 7)
+        if kind > 4 or len(curve) < 12 + 4 * lengths[kind]:
+            raise ValueError("Unsupported ICC parametric curve")
+        params = np.frombuffer(curve, dtype=">i4", count=lengths[kind], offset=12) / 65536
+        gamma = params[0]
+        if kind == 0:
+            values = grid**gamma
+        else:
+            aa, bb = params[1:3]
+            if aa <= 0:
+                raise ValueError("Invalid ICC curve slope")
+            cc = params[3] if kind >= 2 else 0
+            if kind <= 2:
+                values = np.where(grid >= -bb / aa, np.maximum(aa * grid + bb, 0) ** gamma + cc, cc)
+            else:
+                dd = params[4]
+                ee, ff = params[5:7] if kind == 4 else (0, 0)
+                values = np.where(grid >= dd, np.maximum(aa * grid + bb, 0) ** gamma + ee, cc * grid + ff)
+    else:
+        raise ValueError("Unsupported ICC transfer curve")
+    if not np.isfinite(values).all() or np.any(np.diff(values) < 0) or abs(values[0]) > 1e-4 or abs(values[-1] - 1) > 1e-4:
+        raise ValueError("ICC transfer must monotonically span black to white")
+    return grid, values
+
+
+def _validate_rgb_profile(profile: bytes, *, prophoto: bool) -> tuple[np.ndarray, np.ndarray]:
+    grid, values = _icc_curve(profile)
+    parsed = ImageCms.ImageCmsProfile(io.BytesIO(profile)).profile
+    if not parsed.is_matrix_shaper or parsed.xcolor_space.strip() != "RGB":
+        raise ValueError("Only RGB matrix/shaper ICC profiles are supported")
+    matrix = np.array([parsed.red_colorant[0], parsed.green_colorant[0], parsed.blue_colorant[0]]).T
+    if prophoto:
+        if parsed.media_white_point is None or not np.allclose(
+            parsed.media_white_point[0], [0.9642, 1.0, 0.8249], atol=3e-4, rtol=0
+        ):
+            raise ValueError("ProPhoto RGB ICC profile requires a D50 media white point")
+        expected = PROPHOTO_TO_XYZ
+    else:
+        reference = ImageCms.createProfile("sRGB")
+        expected = np.array([reference.red_colorant[0], reference.green_colorant[0], reference.blue_colorant[0]]).T
+    if not np.allclose(matrix, expected, atol=3e-4, rtol=0):
+        raise ValueError("ICC primaries do not match " + ("ProPhoto RGB" if prophoto else "sRGB"))
+    if not prophoto:
+        expected_curve = np.where(grid <= 0.04045, grid / 12.92, ((grid + 0.055) / 1.055) ** 2.4)
+        if not np.allclose(values, expected_curve, atol=3e-4, rtol=0):
+            raise ValueError("ICC transfer does not match encoded sRGB")
+    return grid, values
+
+
+def _rgb_samples(img: np.ndarray) -> np.ndarray:
+    samples = np.asarray(img, dtype=np.float32)
+    if samples.ndim != 3 or samples.shape[-1] != 3 or 0 in samples.shape or not np.isfinite(samples).all():
+        raise ValueError("Expected finite HWC RGB samples")
+    return np.clip(samples, 0, 1)
+
+
+def linear_prophoto_to_srgb(img: np.ndarray) -> np.ndarray:
+    """Convert linear D50 ProPhoto to encoded sRGB, clipping destination gamut."""
+    matrix = XYZ_TO_SRGB @ D50_TO_D65 @ PROPHOTO_TO_XYZ
+    linear = np.clip(_rgb_samples(img) @ matrix.T, 0, 1)
+    encoded = np.where(linear <= 0.0031308, 12.92 * linear, 1.055 * linear ** (1 / 2.4) - 0.055)
+    return encoded.astype(np.float32)
+
+
 def load_image_float(path: Path) -> np.ndarray:
-    """Load an image as a clipped 0..1 float array while preserving bit depth."""
-    image = Image.open(path)
-    try:
-        arr = np.asarray(image)
-    finally:
-        close = getattr(image, "close", None)
-        if callable(close):
-            close()
-
+    """Load TIFF without RGB truncation; decode embedded ProPhoto transfer."""
+    profile = None
+    if path.suffix.lower() in {".tif", ".tiff"}:
+        with tifffile.TiffFile(path) as tif:
+            if len(tif.pages) != 1:
+                raise ValueError("Editorial intermediates require one RGB TIFF page")
+            arr = tif.pages[0].asarray()
+            tag = tif.pages[0].tags.get(34675)
+            profile = bytes(tag.value) if tag else None
+    else:
+        with Image.open(path) as image:
+            arr = np.asarray(image)
     if np.issubdtype(arr.dtype, np.integer):
-        scale = float(np.iinfo(arr.dtype).max)
-        return np.clip(arr.astype(np.float32) / scale, 0.0, 1.0)
+        arr = arr.astype(np.float32) / float(np.iinfo(arr.dtype).max)
+    result = _rgb_samples(arr)
+    if profile:
+        grid, curve = _validate_rgb_profile(profile, prophoto=True)
+        result = np.interp(result, grid, curve).astype(np.float32)
+    return result
 
-    return np.clip(arr.astype(np.float32), 0.0, 1.0)
 
-
-# FIXED: Properly save 16-bit TIFFs
 def save_tiff16_prophoto(img: np.ndarray, path: Path, icc_bytes: Optional[bytes]) -> None:
-    """Save 16-bit TIFF preserving full bit depth."""
-    img16 = np.clip(np.round(img * 65535.0), 0, 65535).astype(np.uint16)
+    """Atomically store real uint16 RGB, encoded to the accompanying ICC TRC."""
+    profile = icc_bytes if icc_bytes is not None else linear_prophoto_icc()
+    grid, curve = _validate_rgb_profile(profile, prophoto=True)
+    encoded = np.interp(_rgb_samples(img), curve, grid)
+    img16 = np.rint(encoded * 65535).astype(np.uint16)
 
-    # Create PIL Image directly from uint16 array
-    # PIL can handle multi-channel uint16 arrays properly
-    im = Image.fromarray(img16, mode="RGB")
-
-    # Use atomic write to prevent corruption
     def _write(p: Path):
-        im.save(
-            str(p),
-            format="TIFF",
-            compression="tiff_lzw",
-            icc_profile=icc_bytes,
-        )
+        tifffile.imwrite(p, img16, photometric="rgb", compression="lzw", metadata=None, iccprofile=profile)
 
     atomic_write(path, _write)
 
 
+def _srgb_icc() -> bytes:
+    profile = bytearray(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+    profile[24:36] = struct.pack(">6H", 2026, 1, 1, 0, 0, 0)
+    profile[84:100] = bytes(16)
+    return bytes(profile)
+
+
 def save_jpeg_srgb(img: np.ndarray, path: Path, icc_bytes: Optional[bytes], quality: int = 96) -> None:
     """Save 8-bit JPEG with sRGB color space."""
-    img8 = np.clip(np.round(img * 255.0), 0, 255).astype(np.uint8)
-    im = Image.fromarray(img8, mode="RGB")
+    profile = icc_bytes if icc_bytes is not None else _srgb_icc()
+    _validate_rgb_profile(profile, prophoto=False)
+    img8 = np.rint(_rgb_samples(img) * 255.0).astype(np.uint8)
+    im = Image.fromarray(img8)
 
     # Use atomic write
     def _write(p: Path):
@@ -817,7 +893,7 @@ def save_jpeg_srgb(img: np.ndarray, path: Path, icc_bytes: Optional[bytes], qual
             format="JPEG",
             quality=int(quality),
             subsampling=0,
-            icc_profile=icc_bytes,
+            icc_profile=profile,
             optimize=True,
         )
 
@@ -839,12 +915,18 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
         new_w = long_edge
         new_h = int(h * (new_w / w))
 
-    out = (
-        np.array(
-            Image.fromarray((img * 255).astype(np.uint8)).resize((new_w, new_h), Image.LANCZOS)  # pylint: disable=no-member
-        ).astype(np.float32)
-        / 255.0
+    out = np.stack(
+        [
+            np.asarray(
+                Image.fromarray(img[..., channel].astype(np.float32)).resize(
+                    (max(1, new_w), max(1, new_h)), Image.Resampling.LANCZOS
+                )
+            )
+            for channel in range(3)
+        ],
+        axis=-1,
     )
+    out = np.clip(out, 0, 1).astype(np.float32)
     return out
 
 
@@ -888,10 +970,22 @@ def auto_upright_small(img: np.ndarray, max_deg: float = 3.0) -> np.ndarray:
 # ----------------------------- grading ------------------------------------- #
 
 
+def _contrast_luminance(img: np.ndarray, exponent: float) -> np.ndarray:
+    """Monotone contrast about 18% linear gray without subtracting shadow light."""
+    pixels = _rgb_samples(img)
+    luminance = np.sum(pixels * PROPHOTO_TO_XYZ[1], axis=-1, keepdims=True)
+    pivot = 0.18
+    mapped = np.where(
+        luminance <= pivot,
+        pivot * np.maximum(luminance / pivot, 0) ** exponent,
+        1 - (1 - pivot) * np.maximum((1 - luminance) / (1 - pivot), 0) ** exponent,
+    )
+    gain = np.divide(mapped, luminance, out=np.ones_like(luminance), where=luminance > 0)
+    return np.clip(pixels * gain, 0, 1).astype(np.float32)
+
+
 def s_curve(img: np.ndarray, strength: float = 0.12) -> np.ndarray:
-    x = img
-    a = max(0.0, min(0.45, strength))
-    return np.clip((1 + a) * (x - 0.5) + 0.5, 0, 1)
+    return _contrast_luminance(img, 1 + max(0, min(0.45, strength)))
 
 
 def adjust_exposure(img: np.ndarray, ev: float) -> np.ndarray:
@@ -902,22 +996,47 @@ def adjust_exposure(img: np.ndarray, ev: float) -> np.ndarray:
 
 
 def adjust_contrast(img: np.ndarray, amount: float) -> np.ndarray:
-    # amount in [-50..+50] approx
-    k = np.tanh(amount / 50.0) * 0.6
-    return np.clip((img - 0.5) * (1 + k) + 0.5, 0, 1)
+    return _contrast_luminance(img, 1 + np.tanh(amount / 50) * 0.6)
+
+
+def _rgb_to_hsv(img: np.ndarray) -> np.ndarray:
+    """Float HSV; hue is degrees, saturation/value stay in [0, 1]."""
+    values = _rgb_samples(img)
+    high, low = values.max(axis=-1), values.min(axis=-1)
+    chroma = high - low
+    hue = np.zeros_like(high)
+    dominant = values.argmax(axis=-1)
+    for index, offset in ((0, 0), (1, 2), (2, 4)):
+        delta = values[..., (index + 1) % 3] - values[..., (index + 2) % 3]
+        ratio = np.divide(delta, chroma, out=np.zeros_like(chroma), where=chroma > 0)
+        hue = np.where((dominant == index) & (chroma > 0), ratio + offset, hue)
+    saturation = np.divide(chroma, high, out=np.zeros_like(high), where=high > 0)
+    return np.stack([(hue % 6) * 60, saturation, high], axis=-1)
+
+
+def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
+    hue, saturation, value = np.moveaxis(hsv, -1, 0)
+    sector = (hue / 60).astype(np.int32) % 6
+    fraction = (hue / 60) % 1
+    pp = value * (1 - saturation)
+    qq = value * (1 - saturation * fraction)
+    tt = value * (1 - saturation * (1 - fraction))
+    result = np.empty_like(hsv)
+    for index, components in enumerate(
+        ((value, tt, pp), (qq, value, pp), (pp, value, tt), (pp, qq, value), (tt, pp, value), (value, pp, qq))
+    ):
+        mask = sector == index
+        for channel, component in enumerate(components):
+            result[..., channel][mask] = component[mask]
+    return result
 
 
 def adjust_saturation(img: np.ndarray, delta: float) -> np.ndarray:
     if abs(delta) < 1e-6:
         return img
-
-    # RGB -> HSL-like via PIL for simplicity
-    pil = Image.fromarray((img * 255).astype(np.uint8), "RGB").convert("HSV")
-    h, s, v = [np.array(ch, dtype=np.float32) / 255.0 for ch in pil.split()]
-    s = np.clip(s + (delta / 100.0), 0, 1)
-    hsv = np.stack([h, s, v], axis=-1)
-    out = Image.fromarray((hsv * 255).astype(np.uint8), "HSV").convert("RGB")
-    return np.array(out).astype(np.float32) / 255.0
+    hsv = _rgb_to_hsv(img)
+    hsv[..., 1] = np.clip(hsv[..., 1] + delta / 100, 0, 1)
+    return _hsv_to_rgb(hsv)
 
 
 def split_tone(
@@ -929,31 +1048,18 @@ def split_tone(
 ) -> np.ndarray:
     if (sh_h is None or sh_s <= 0) and (hi_h is None or hi_s <= 0):
         return img
-
-    hsv = Image.fromarray((img * 255).astype(np.uint8), "RGB").convert("HSV")
-    H, S, V = [np.array(c, dtype=np.float32) / 255.0 for c in hsv.split()]
-
-    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
-    mask_sh = np.clip(1.0 - (luma * 2.0), 0.0, 1.0)
-    mask_hi = np.clip((luma * 2.0) - 1.0, 0.0, 1.0)
-
-    if sh_h is not None and sh_s > 0:
-        H = (H * (1 - mask_sh)) + ((sh_h / 360.0) * mask_sh)
-        S = np.clip(S + sh_s * mask_sh, 0, 1)
-
-    if hi_h is not None and hi_s > 0:
-        H = (H * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
-        S = np.clip(S + hi_s * mask_hi, 0, 1)
-
-    out = Image.merge(
-        "HSV",
-        [
-            Image.fromarray((H * 255).astype(np.uint8)),
-            Image.fromarray((S * 255).astype(np.uint8)),
-            Image.fromarray((V * 255).astype(np.uint8)),
-        ],
-    ).convert("RGB")
-    return np.array(out).astype(np.float32) / 255.0
+    hsv = _rgb_to_hsv(img)
+    luma = np.sum(img * PROPHOTO_TO_XYZ[1], axis=-1)
+    for target, strength, mask in (
+        (sh_h, sh_s, np.clip(1 - luma * 2, 0, 1)),
+        (hi_h, hi_s, np.clip(luma * 2 - 1, 0, 1)),
+    ):
+        if target is not None and strength > 0:
+            # Blend hue along the shortest circular path, preserving float precision.
+            delta = (float(target) - hsv[..., 0] + 180) % 360 - 180
+            hsv[..., 0] = (hsv[..., 0] + delta * mask) % 360
+            hsv[..., 1] = np.clip(hsv[..., 1] + strength * mask, 0, 1)
+    return _hsv_to_rgb(hsv)
 
 
 def vignette(img: np.ndarray, strength: float = 0.08) -> np.ndarray:
@@ -998,7 +1104,7 @@ def style_grade(img: np.ndarray, style: str, params: Dict) -> np.ndarray:
 
 
 def median_luma(img: np.ndarray) -> float:
-    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    luma = np.sum(img * PROPHOTO_TO_XYZ[1], axis=-1)
     return float(np.median(luma))
 
 
@@ -1013,7 +1119,7 @@ def normalize_exposure(imgs: List[np.ndarray], target_median: float = 0.42) -> L
 
 def neutralize_wb_near_white(img: np.ndarray) -> np.ndarray:
     # Neutralizes only near-white areas to limit color cast without shifting palette.
-    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    luma = np.sum(img * PROPHOTO_TO_XYZ[1], axis=-1)
     mask = (luma > 0.7).astype(np.float32)[..., None]
 
     if mask.sum() < 1000:
@@ -1034,18 +1140,23 @@ def remove_dust_spots(img: np.ndarray) -> np.ndarray:
     if cv2 is None:
         return img
 
-    g = (img * 255).astype(np.uint8)
-    gray = cv2.cvtColor(g, cv2.COLOR_RGB2GRAY)
+    gray = np.rint(np.sum(_rgb_samples(img) * PROPHOTO_TO_XYZ[1], axis=-1) * 255).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
     tophat = cv2.morphologyEx(255 - gray, cv2.MORPH_TOPHAT, kernel)
     _, mask = cv2.threshold(tophat, 220, 255, cv2.THRESH_BINARY)
     mask = cv2.medianBlur(mask, 5)
-    inpainted = cv2.inpaint(g, mask, 3, cv2.INPAINT_TELEA)
-    return (inpainted.astype(np.float32) / 255.0).clip(0, 1)
+    # Telea uses absolute intensity-scale terms: unit-range float input can ring
+    # across the whole [0, 1] range. Use its 0..255 scale without quantizing, then
+    # restore the linear working range. Only mask detection uses integer samples.
+    inpainted = np.stack(
+        [cv2.inpaint(img[..., channel].astype(np.float32) * 255.0, mask, 3, cv2.INPAINT_TELEA) for channel in range(3)],
+        axis=-1,
+    )
+    return np.clip(inpainted / 255.0, 0, 1)
 
 
 def reduce_hotspots(img: np.ndarray) -> np.ndarray:
-    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    luma = np.sum(img * PROPHOTO_TO_XYZ[1], axis=-1)
     mask = (luma > 0.95).astype(np.float32)[..., None]
     softened = np.clip(img * (1 - 0.2 * mask), 0, 1)
     return softened
@@ -1055,9 +1166,7 @@ def unsharp_mask(img: np.ndarray, amount: float = 0.2, radius: float = 1.2, thre
     if amount <= 0:
         return img
 
-    pil = Image.fromarray((img * 255).astype(np.uint8), "RGB")
-    blur = pil.filter(Image.Filter.GaussianBlur(radius))  # pylint: disable=no-member
-    low = np.array(blur).astype(np.float32) / 255.0
+    low = gaussian_filter(img, sigma=(radius, radius, 0), mode="reflect")
     high = img - low
     mask = np.where(np.abs(high) > threshold, high, 0.0)
     out = np.clip(img + amount * mask, 0, 1)
@@ -1073,17 +1182,18 @@ def group_hdr_candidates(files: List[Path], gap_sec: float = 2.0) -> List[List[P
     if exifread is None:
         return []
 
-    def dt(path: Path) -> float:
+    def dt(path: Path) -> Optional[float]:
         try:
             with path.open("rb") as f:
                 tags = exifread.process_file(f, details=False, stop_tag="EXIF DateTimeOriginal")
                 dt_str = str(tags.get("EXIF DateTimeOriginal") or tags.get("Image DateTime") or "")
                 # "YYYY:MM:DD HH:MM:SS"
-                from datetime import datetime
+                from datetime import datetime, timezone
 
-                return datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").timestamp()
+                # Only wall-time differences are used for bracket grouping.
+                return datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
         except Exception:
-            return 0.0
+            return None
 
     files_sorted = sorted(files, key=lambda p: (p.parent.name, p.name))
     times = [dt(p) for p in files_sorted]
@@ -1092,6 +1202,11 @@ def group_hdr_candidates(files: List[Path], gap_sec: float = 2.0) -> List[List[P
     buf: List[Path] = []
 
     for i, p in enumerate(files_sorted):
+        if times[i] is None:
+            if len(buf) >= 3:
+                groups.append(buf[:])
+            buf = []
+            continue
         if not buf:
             buf = [p]
             continue
@@ -1109,45 +1224,123 @@ def group_hdr_candidates(files: List[Path], gap_sec: float = 2.0) -> List[List[P
     return groups
 
 
+def _hdr_capture_settings(path: Path) -> tuple[float, float, float]:
+    if exifread is None:
+        raise RuntimeError("HDR requires exifread to verify shutter, aperture and ISO metadata")
+    with path.open("rb") as handle:
+        tags = exifread.process_file(handle, details=False)
+    settings = []
+    for name in ("EXIF ExposureTime", "EXIF FNumber", "EXIF ISOSpeedRatings"):
+        tag = tags.get(name)
+        if tag is None or not getattr(tag, "values", None):
+            raise ValueError(f"Missing HDR capture metadata: {name} for {path.name}")
+        value = tag.values[0]
+        number = float(value.num) / float(value.den) if hasattr(value, "num") else float(value)
+        if not np.isfinite(number) or number <= 0:
+            raise ValueError(f"Invalid HDR capture metadata: {name}")
+        settings.append(number)
+    return tuple(settings)
+
+
 def hdr_merge_debvec(paths: List[Path]) -> np.ndarray:
-    if cv2 is None:
-        raise RuntimeError("OpenCV not available for HDR merge.")
+    """Merge linear RAW radiance using measured exposure times.
 
-    ims = [raw_to_prophoto_tiff(p) for p in paths]
+    The legacy function name is retained. Linear RAWs need no estimated camera
+    response curve; saturation-weighted radiance replaces 8-bit Debevec input
+    with fictitious equal exposures. A shared logarithmic shoulder maps the
+    merged radiance into the existing unit-range photographic output contract.
+    """
+    if len(paths) < 2:
+        raise ValueError("HDR requires at least two distinct exposures")
+    settings = [_hdr_capture_settings(path) for path in paths]
+    if len({item[0] for item in settings}) < 2:
+        raise ValueError("HDR requires distinct measured shutter times")
+    if any(not np.allclose(item[1:], settings[0][1:], rtol=1e-4) for item in settings[1:]):
+        raise ValueError("HDR bracket aperture and ISO must remain constant")
+    images = [_rgb_samples(raw_to_prophoto_tiff(path)) for path in paths]
+    if any(image.shape != images[0].shape for image in images[1:]):
+        raise ValueError("HDR inputs must have identical geometry and be aligned")
+    total = np.zeros_like(images[0], dtype=np.float64)
+    weights = np.zeros_like(total)
+    times = [setting[0] for setting in settings]
+    for image, seconds in zip(images, times):
+        weight = np.maximum(0, 1 - np.abs(image * 2 - 1))
+        total += weight * image / seconds
+        weights += weight
+    # Fully clipped highlights use the shortest exposure; fully black stays black.
+    fallback = images[int(np.argmin(times))] / min(times)
+    radiance = np.divide(total, weights, out=fallback.astype(np.float64), where=weights > 1e-8)
+    reference = radiance * float(np.median(times))
+    peak = reference.max(axis=-1, keepdims=True)
+    white = max(1.0, float(np.percentile(peak, 99.9)))
+    mapped_peak = np.log1p(peak) / np.log1p(white)
+    scale = np.divide(mapped_peak, peak, out=np.ones_like(peak), where=peak > 0)
+    return np.clip(reference * scale, 0, 1).astype(np.float32)
 
-    # Convert to 8-bit BGR for OpenCV HDR calibration
-    ims_8u = [(im * 255).astype(np.uint8) for im in ims]
 
-    times = np.array([1.0] * len(ims), dtype=np.float32)  # fallback if EXIF missing
-
-    merge = cv2.createMergeDebevec()
-    hdr = merge.process(ims_8u, times=times)
-
-    # Tone map moderately then map back to 16-bit-like float [0..1]
-    tonemap = cv2.createTonemapDurand(gamma=1.0, contrast=4.0, saturation=1.0)
-    ldr = tonemap.process(hdr)
-    ldr = np.clip(ldr, 0, 1)
-
-    # Convert from BGR to RGB
-    ldr = ldr[..., ::-1]
-    return ldr.astype(np.float32)
+def _panorama_registration(previous: np.ndarray, current: np.ndarray) -> np.ndarray:
+    """Estimate current -> previous geometry from disposable 8-bit features."""
+    detector = cv2.SIFT_create()
+    features = []
+    for image in (previous, current):
+        proxy = np.rint(linear_prophoto_to_srgb(image) * 255).astype(np.uint8)
+        gray = cv2.cvtColor(proxy, cv2.COLOR_RGB2GRAY)
+        features.append(detector.detectAndCompute(gray, None))
+    (previous_keys, previous_desc), (current_keys, current_desc) = features
+    if previous_desc is None or current_desc is None:
+        raise ValueError("Panorama requires overlapping textured photographs")
+    pairs = cv2.BFMatcher().knnMatch(current_desc, previous_desc, k=2)
+    matches = [pair[0] for pair in pairs if len(pair) == 2 and pair[0].distance < 0.75 * pair[1].distance]
+    if len(matches) < 12:
+        raise ValueError("Insufficient unambiguous panorama feature matches")
+    source = np.float32([current_keys[match.queryIdx].pt for match in matches])
+    target = np.float32([previous_keys[match.trainIdx].pt for match in matches])
+    transform, inliers = cv2.findHomography(source, target, cv2.RANSAC, 3.0, maxIters=2000, confidence=0.995)
+    if transform is None or inliers is None or int(inliers.sum()) < 8 or not np.isfinite(transform).all():
+        raise ValueError("Panorama registration failed geometric verification")
+    return transform
 
 
 def stitch_pano(paths: List[Path]) -> np.ndarray:
+    """Register adjacent views, then warp/blend original float ProPhoto samples."""
     if cv2 is None:
-        raise RuntimeError("OpenCV not available for panorama stitching.")
-
-    ims = [raw_to_prophoto_tiff(p) for p in paths]
-    ims_8u = [(im * 255).astype(np.uint8)[..., ::-1] for im in ims]  # RGB->BGR
-
-    stitcher = cv2.Stitcher_create(cv2.Stitcher_PANORAMA)
-    status, pano_bgr = stitcher.stitch(ims_8u)
-
-    if status != cv2.Stitcher_OK:
-        raise RuntimeError(f"Stitching failed with status {status}")
-
-    pano_rgb = pano_bgr[..., ::-1].astype(np.float32) / 255.0
-    return np.clip(pano_rgb, 0, 1)
+        raise RuntimeError("OpenCV not available for panorama stitching")
+    if len(paths) < 2:
+        raise ValueError("Panorama requires at least two overlapping photographs")
+    images = [_rgb_samples(raw_to_prophoto_tiff(path)) for path in paths]
+    transforms = [np.eye(3)]
+    for previous, current in zip(images, images[1:]):
+        transforms.append(transforms[-1] @ _panorama_registration(previous, current))
+    corners = []
+    for image, transform in zip(images, transforms):
+        height, width = image.shape[:2]
+        points = np.float32([[[0, 0], [width, 0], [width, height], [0, height]]])
+        denominator = np.c_[points[0], np.ones(4)] @ transform[2]
+        if np.any(np.abs(denominator) < 1e-6) or not (np.all(denominator > 0) or np.all(denominator < 0)):
+            raise ValueError("Panorama projective horizon crosses an input image")
+        corners.append(cv2.perspectiveTransform(points, transform)[0])
+    bounds = np.concatenate(corners)
+    if not np.isfinite(bounds).all():
+        raise ValueError("Panorama transform has unbounded extent")
+    left, top = np.floor(bounds.min(axis=0)).astype(int)
+    right, bottom = np.ceil(bounds.max(axis=0)).astype(int)
+    width, height = int(right - left), int(bottom - top)
+    budget = 4 * sum(image.shape[0] * image.shape[1] for image in images)
+    if width <= 0 or height <= 0 or max(width, height) >= 32767 or width * height > budget:
+        raise ValueError("Panorama canvas exceeds bounded warp geometry")
+    translation = np.array([[1, 0, -left], [0, 1, -top], [0, 0, 1]], dtype=np.float64)
+    total = np.zeros((height, width, 3), dtype=np.float32)
+    weights = np.zeros((height, width), dtype=np.float32)
+    for image, transform in zip(images, transforms):
+        hh, ww = image.shape[:2]
+        yy, xx = np.ogrid[:hh, :ww]
+        feather = np.minimum(np.minimum(yy + 1, hh - yy), np.minimum(xx + 1, ww - xx)).astype(np.float32)
+        matrix = translation @ transform
+        warped_weight = cv2.warpPerspective(feather, matrix, (width, height), flags=cv2.INTER_LINEAR)
+        warped = cv2.warpPerspective(image * feather[..., None], matrix, (width, height), flags=cv2.INTER_LINEAR)
+        total += warped
+        weights += warped_weight
+    return np.clip(np.divide(total, weights[..., None], out=total, where=weights[..., None] > 0), 0, 1)
 
 
 # ------------------------------ exports ------------------------------------ #
@@ -1168,10 +1361,10 @@ def export_assets(
     p_img = unsharp_mask(img, amount=float(sharpen_print_amt), radius=1.2, threshold=0.0)
     save_tiff16_prophoto(p_img, print_path, icc_prophoto)
 
-    # Web JPEG (sRGB; using the same RGB primaries approximated by ICC embedding)
+    # Resize/sharpen in the linear working space, then convert primaries and transfer.
     w_img = resize_long_edge(img, int(web_long_edge))
     w_img = unsharp_mask(w_img, amount=float(sharpen_web_amt), radius=1.2, threshold=0.0)
-    save_jpeg_srgb(w_img, web_path, icc_srgb, quality=int(jpeg_quality))
+    save_jpeg_srgb(linear_prophoto_to_srgb(w_img), web_path, icc_srgb, quality=int(jpeg_quality))
 
 
 # ---------------------------- metadata IPTC -------------------------------- #
@@ -1215,28 +1408,30 @@ def embed_iptc_exiftool(img_path: Path, row: Dict[str, str]) -> None:
 
     add("XMP-iptcCore:Location", row.get("location"), "location")
 
-    args.append(str(img_path))
-    subprocess.run(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def write_metadata(temp_path: Path) -> None:
+        shutil.copyfile(img_path, temp_path)
+        subprocess.run(args + [str(temp_path.resolve())], check=True, capture_output=True, timeout=60)
+
+    atomic_write(img_path, write_metadata)
 
 
 def embed_iptc_fallback_jpeg(img_path: Path, row: Dict[str, str]) -> None:
-    if piexif is None or img_path.suffix.lower() not in {".jpg", ".jpeg"}:
-        return
+    if img_path.suffix.lower() not in {".jpg", ".jpeg"}:
+        raise ValueError("The piexif metadata fallback supports JPEG files only")
+    if piexif is None:
+        raise RuntimeError("JPEG metadata requires ExifTool or the optional piexif runtime")
 
-    try:
-        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+    original = img_path.read_bytes()
+    exif_dict = piexif.load(original)
+    if row.get("copyright"):
+        exif_dict["0th"][piexif.ImageIFD.Copyright] = row["copyright"].encode("utf-8")
+    if row.get("creator"):
+        exif_dict["0th"][piexif.ImageIFD.Artist] = row["creator"].encode("utf-8")
 
-        if row.get("copyright"):
-            exif_dict["0th"][piexif.ImageIFD.Copyright] = row["copyright"].encode("utf-8")
-
-        if row.get("creator"):
-            exif_dict["0th"][piexif.ImageIFD.Artist] = row["creator"].encode("utf-8")
-
-        exif_bytes = piexif.dump(exif_dict)
-        im = Image.open(img_path)
-        im.save(img_path, "JPEG", exif=exif_bytes, quality="keep")
-    except Exception as e:
-        LOG.warning("piexif fallback failed for %s: %s", img_path, e)
+    # Insert an EXIF segment without decoding/re-encoding JPEG pixels or losing ICC.
+    updated = io.BytesIO()
+    piexif.insert(piexif.dump(exif_dict), original, updated)
+    atomic_write(img_path, lambda temp_path: temp_path.write_bytes(updated.getvalue()))
 
 
 # ------------------------------- pipeline ---------------------------------- #
@@ -1247,6 +1442,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     cfg = PipelineConfig.from_yaml(config_path)
     lay = Layout.build(cfg)
     lay.create()
+    failures = []
 
     # Offload + optional rename
     raws_copied = mirror_offload(cfg, lay)
@@ -1255,11 +1451,18 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     # Selects template + contact sheet from embedded previews (fast)
     _selects_csv = ensure_selects_csv(cfg, lay, raws)  # noqa: F841
     raws = filter_selects(cfg, raws)
+    if not raws:
+        raise ValueError("No selected RAW inputs; no editorial outputs were produced")
+    stems = [raw.stem.casefold() for raw in raws]
+    if len(set(stems)) != len(stems):
+        raise ValueError("Selected RAW inputs need unique stems for TIFF/JPEG outputs; enable renaming or split the run")
 
     # Decode RAW → BaseTIFF
     LOG.info("Decoding RAW to 16-bit ProPhoto base TIFFs")
     base_outputs: List[Path] = []
-    icc_prophoto = load_icc_bytes(Path(cfg.icc.get("prophoto_path", ""))) if cfg.icc.get("prophoto_path") else None
+    icc_prophoto = (
+        load_icc_bytes(Path(cfg.icc.get("prophoto_path", "")).expanduser()) if cfg.icc.get("prophoto_path") else None
+    )
 
     for rp in tqdm(raws, desc="RAW→TIFF"):
         try:
@@ -1269,12 +1472,15 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             base_outputs.append(out)
         except Exception as e:
             LOG.error("RAW decode failed %s: %s", rp, e)
+            failures.append(str(e))
 
     # Optional HDR
     hdr_paths: List[Path] = []
     if cfg.processing.get("enable_hdr", False):
         LOG.info("HDR merge enabled")
         groups = group_hdr_candidates(raws, float(cfg.processing.get("hdr_group_gap_sec", 2.0)))
+        if not groups:
+            raise ValueError("HDR requested but no complete timestamped exposure brackets were found")
         for g in tqdm(groups, desc="HDR groups"):
             try:
                 hdr = hdr_merge_debvec(g)
@@ -1283,6 +1489,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 hdr_paths.append(out)
             except Exception as e:
                 LOG.warning("HDR merge failed for %s: %s", [p.name for p in g], e)
+                failures.append(str(e))
 
     # Optional Pano
     pano_paths: List[Path] = []
@@ -1292,8 +1499,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             try:
                 files = [next((p for p in raws if p.name == fn), None) for fn in group]
                 files = [p for p in files if p]
-                if len(files) < 2:
-                    continue
+                if len(files) != len(group) or len(files) < 2:
+                    raise ValueError("Panorama group must name at least two selected RAW inputs")
 
                 pano = stitch_pano(files)
                 out = lay.WORK_PANO / tiff_filename(files[0].stem, "_PANO")
@@ -1301,6 +1508,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 pano_paths.append(out)
             except Exception as e:
                 LOG.warning("Pano stitch failed for %s: %s", group, e)
+                failures.append(str(e))
 
     # Collect sources for alignment/variants: base + hdr + pano
     sources = base_outputs + hdr_paths + pano_paths
@@ -1318,6 +1526,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 aligned_paths.append(out)
             except Exception as e:
                 LOG.warning("Upright failed %s: %s", p, e)
+                failures.append(str(e))
     else:
         aligned_paths = sources
 
@@ -1341,6 +1550,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
         except Exception as e:
             LOG.warning("Variants failed %s: %s", p, e)
+            failures.append(str(e))
 
     # Per-style consistency normalization
     LOG.info("Normalizing per-style exposure to target median")
@@ -1368,7 +1578,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 save_tiff16_prophoto(im, pt, icc_prophoto)
 
     # Export print & web
-    icc_srgb = load_icc_bytes(Path(cfg.icc.get("srgb_path", ""))) if cfg.icc.get("srgb_path") else None
+    icc_srgb = load_icc_bytes(Path(cfg.icc.get("srgb_path", "")).expanduser()) if cfg.icc.get("srgb_path") else None
 
     manifest = {"project": cfg.project_name, "exports": []}
 
@@ -1443,12 +1653,19 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 if not row:
                     continue
 
-                if has_exiftool():
+                if ef:
                     embed_iptc_exiftool(img, row)
+                else:
+                    LOG.warning("TIFF IPTC/XMP embedding requires ExifTool; no TIFF tags were added to %s", img)
 
     # Manifest + zip
     manifest_path = lay.DOCS_MANIFESTS / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    if failures or not manifest["exports"]:
+        raise RuntimeError(
+            f"Editorial run incomplete: {len(failures)} processing failure(s), {len(manifest['exports'])} exports"
+        )
 
     if cfg.deliver.get("zip", True):
         zip_path = cfg.project_root / f"{safe_name(cfg.project_name)}_EXPORT.zip"

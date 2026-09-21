@@ -1,5 +1,12 @@
 # Layered Dependency Management - Implementation Summary
 
+> **Historical implementation summary; superseded for operator use.** Use the
+> [requirements guide](../../requirements/README.md) and
+> [ADR-032](../architecture/ADR-032-dependency-pinning-strategy.md) for the current
+> generic six-lock transaction, separate target-owned ML/DA3 lanes, Python 3.11
+> compiler, and advisory hash pilot. The former `ml.txt`, manual lock creation,
+> and broad compilation instructions below are historical, not supported setup.
+
 ## Overview
 
 Successfully implemented a comprehensive layered dependency management system for the Transformation Portal project using pip-tools, following Python Packaging Authority (PyPA) best practices.

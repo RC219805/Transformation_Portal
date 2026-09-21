@@ -1,6 +1,6 @@
 # Transformation Portal CLI Reference
 
-Last source review: 2026-09-12
+Last source review: 2026-09-21
 
 This is the current operator reference for repository CLI entrypoints. It is a
 live support document, not a historical release report. Prefer the Makefile and
@@ -38,12 +38,36 @@ environment signals, not as proof that the core CLI is broken.
 | Entrypoint | Current role | Invocation |
 | --- | --- | --- |
 | Root package CLI | Recipe-driven processing and repo metadata | `.venv/bin/python -m transformation_portal ...` |
-| Lux Depth V3 | Canonical image/depth/APEX pipeline | `.venv/bin/lux-depth-v3 ...` |
+| Lux Depth V3 | Production image/depth/APEX baseline | `.venv/bin/lux-depth-v3 ...` |
+| LuxDepthV4 candidate | Opt-in photographic execution | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v4 ...` |
+| LuxDepthV5 candidate | Opt-in depth evidence and photographic execution | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v5 ...` |
+| MaterialsV4 candidate | Source-bound material evidence, response policy, and evaluation | `PYTHONPATH=src .venv/bin/python -m transformation_portal.materials_v4 ...` |
 | PBR helper CLI | Generate PBR maps from depth assets | `.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli ...` |
 | Depth-aware DOF | Apply depth-aware focus rendering from an image and `.npy` depth | `.venv/bin/depth-aware-dof ...` |
 | Presence Security | Sessionized Presence Compiler parameters, manifest anchor payloads, and watermark helpers | `.venv/bin/presence-security ...` |
 | TIFF batch processor | Batch 16-bit TIFF finishing | `.venv/bin/luxury-tiff-batch ...` |
 | Compatibility Typer CLIs | Legacy direct command groups for render/process/analyze helpers | `.venv/bin/transform-render`, `.venv/bin/transform-process`, `.venv/bin/transform-analyze` |
+
+## Opt-In Successor Entrypoints
+
+Installing current source registers `lux-depth-v4`, `lux-depth-v5`, and
+`materials-v4`. The module forms above also work when an existing editable
+environment has not refreshed its console scripts. Inspect their commands with:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v4 --help
+PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v5 --help
+PYTHONPATH=src .venv/bin/python -m transformation_portal.materials_v4 --help
+```
+
+Use the [V4 reference](../reference/LUX_DEPTH_V4.md),
+[V5 reference](../reference/LUX_DEPTH_V5.md), and
+[MaterialsV4 guide](../guides/MATERIALS_V4.md) for explicit color interpretation,
+private inputs, new output directories, supplied evidence, and acceptance gates.
+V3 remains the production baseline and rollback path. MaterialsV4 supplies
+material evidence and bounded photographic response; it does not replace
+physical PBR reconstruction. A successful plan or local contract test does not
+establish representative photographic or native performance acceptance.
 
 ## Root Package CLI
 
