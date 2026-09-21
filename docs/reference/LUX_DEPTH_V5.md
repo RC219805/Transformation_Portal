@@ -67,6 +67,91 @@ DA3 source revision `95a2adea1a8180104bf51937409034bdec70a244` only. Advancing t
 revision requires auditing the recipe; this is not a generic DA3 compatibility
 adapter. Explicit precision does not promise bitwise CPU/MPS equivalence.
 
+## Managed job execution
+
+`POST /v1/jobs` accepts the opt-in `lux-depth-v5` pipeline. The shared
+`JobExecutionService` coordinates HTTP-admitted jobs and standalone workers:
+subprocess lifetime, cancellation, lease-bound execution, and verified generation
+publication use the same service. Existing routes, response envelopes, SSE event
+names, and artifact retrieval remain unchanged. V3 remains the default pipeline.
+
+Enable managed V5 only after applying `make db-upgrade` through
+`0007_photography_bindings` and deploying matching API and worker code. Configure
+both hosts with Postgres/Redis authority, the same protected shared execution
+root, and the governed runtime selections:
+
+```bash
+export TP_LUX_V5_MANAGED_ENABLED=1
+export TP_ORCHESTRATOR_STATE_BACKEND=postgres
+export TP_ORCHESTRATOR_QUEUE_BACKEND=redis
+export TP_DATABASE_URL='postgresql+asyncpg://user:password@db.example/service'
+export TP_REDIS_URL='redis://redis.example:6379/0'
+export TP_ORCHESTRATOR_EXECUTION_ROOT=/protected/shared/execution
+export TRANSFORMATION_PORTAL_DA3_PYTHON=/governed/da3/.venv-da3/bin/python
+# Optional, when RAW inputs or depth-cache reuse are required:
+export TRANSFORMATION_PORTAL_RAW_PYTHON=/governed/raw/.venv-raw/bin/python
+export TP_LUX_V5_CACHE_DIR=/protected/shared/photography-cache
+```
+
+Use the [distributed Postgres runbook](../runtimes/orchestrator-postgres.md) for
+execution-root permissions and worker startup. Server-selected interpreters and
+cache paths cannot be supplied in job arguments. The optional cache is isolated
+under `TP_LUX_V5_CACHE_DIR/<tenant_id>`; leave the setting absent to disable it.
+Worker policy rechecks tenant authorization, runtime selections, and data paths
+before execution. In pilot tenant mode, include `lux-depth-v5` in
+`TP_PILOT_ALLOWED_PIPELINES` and use the authenticated frontdoor as usual.
+
+Submit a request using strict snake_case argument names and JSON types:
+
+```json
+{
+  "pipeline": "lux-depth-v5",
+  "args": {
+    "input_dir": "/authorized/tenant/photos",
+    "output_dir": "/authorized/tenant/output-v5",
+    "input_color": "srgb",
+    "device": "mps",
+    "precision": "fp32",
+    "refinement": "guided_bilinear",
+    "preview_maps": false
+  }
+}
+```
+
+Paths must satisfy the existing server and tenant allowlists. Numeric strings,
+unknown options, shell arguments, and runtime/cache overrides are rejected.
+Optional `companions_manifest` and `materials_manifest` paths are admitted and
+revalidated with the same tenant boundary. `GET /v1/readiness` reports the V5
+prerequisites separately; readiness is not proof of native inference.
+
+Admission retains exact `tp.execution.plan.v4` bytes and separately stores the
+closed `tp.job.photography.bindings.v1` physical-path carrier on the immutable
+dispatch attempt. `DispatchLocator.plan_digest` remains SHA256 of the complete
+canonical plan bytes; the embedded semantic plan fingerprint is independently
+verified. The bindings have their own digest recorded in admission evidence.
+Neither queue messages nor mutable API projections can supply replacement
+execution authority. Publication revalidates the exact plan digest, semantic
+evidence, artifact hashes, active limits, and dispatch fence before visibility.
+The normal job artifact `items` descriptors derive from verified inventory
+records, without rescanning outputs through the legacy artifact scanner.
+Blocking verification runs off the async event loop so lease heartbeats can
+continue during large photographic reads and reconstruction.
+
+The worker checks database claim authority again immediately before launch,
+without extending its lease. Database checks and OS process creation are not one
+atomic transaction; cancellation and heartbeat supervision remain active.
+Abrupt worker `SIGKILL` or host failure can prevent the in-process reaper from
+cleaning up children, so deployments still need host-level process supervision.
+The publication fence remains authoritative even when cleanup is interrupted.
+
+Migration 0007 leaves existing V1 attempts with null bindings. Stop new admission
+and drain workers before deployment or rollback; API and worker releases must
+understand the installed plan and binding schemas. The migration refuses
+downgrade while any V5 attempt remains, including terminal tombstones. Do not
+delete immutable attempts to bypass this guard; keep a compatible release or
+repair forward. This integration does not promote native quality or performance
+acceptance.
+
 ## Depth and finishing semantics
 
 The native model raster is preserved, including padding and model sky
@@ -201,6 +286,7 @@ fixtures.
 
 ```bash
 make test-lux-depth-v5-contract
+make test-lux-depth-v5-managed-contract
 ```
 
 This checks controlled-worker contracts, evidence tampering, publication
@@ -209,3 +295,18 @@ MaterialsV4 regression tests. Native cold/cache/optional-input checks, repeated
 uncached precision comparisons, representative photography, ground-truth depth,
 and performance measurements are separate acceptance evidence. Do not infer
 those outcomes from a local contract-suite pass.
+
+For the managed service gate, provision a dedicated disposable Postgres database
+whose name ends in `_test`, migrate it with `make db-upgrade`, and
+provide Redis. The service fixtures truncate that database:
+
+```bash
+export TP_DISPATCH_TEST_DATABASE_URL='postgresql+asyncpg://user:password@localhost/lux_v5_test'
+export TP_DISPATCH_TEST_REDIS_URL='redis://localhost:6379/15'
+TP_DATABASE_URL="$TP_DISPATCH_TEST_DATABASE_URL" make db-upgrade
+make test-lux-depth-v5-managed-services
+```
+
+This gate exercises real immutable storage, migration guards, and the managed
+job path. Controlled inference fixtures prove coordination and publication
+contracts; they do not establish photographic quality or native performance.

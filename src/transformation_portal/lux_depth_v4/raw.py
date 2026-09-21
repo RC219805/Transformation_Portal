@@ -16,14 +16,19 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Callable, Mapping, TypedDict
+from typing import Any, Callable, Mapping, NotRequired, TypedDict
 
 import numpy as np
 
 from transformation_portal.core.execution_plan import decode_bounded_json_object
 from transformation_portal.core.raw_runtime import RAW_WORKER_MODULE, resolve_raw_python_for_execution
 from transformation_portal.ingest.canonical_json import dumps_json
-from transformation_portal.lux_depth_v4.backend import _signal_process_group, require_process_supervisor, worker_environment
+from transformation_portal.lux_depth_v4.backend import (
+    _signal_process_group,
+    require_process_supervisor,
+    validate_process_group_ownership,
+    worker_environment,
+)
 from transformation_portal.lux_depth_v4.io import snapshot
 
 _RAW_SUFFIXES = frozenset({".arw", ".cr2", ".dng", ".nef"})
@@ -39,6 +44,7 @@ class _WorkerArguments(TypedDict):
     resources: Mapping[str, Any]
     cancellation: Callable[[], bool] | None
     deadline: float
+    own_process_group: NotRequired[bool]
 
 
 def _positive_limit(resources: Mapping[str, Any], key: str) -> int:
@@ -48,15 +54,15 @@ def _positive_limit(resources: Mapping[str, Any], key: str) -> int:
     return value
 
 
-def _stop_group(process: subprocess.Popen) -> None:
+def _stop_group(process: subprocess.Popen, *, own_process_group: bool = True) -> None:
     """Reap the leader and terminate descendants even when the leader exited."""
-    _signal_process_group(process, signal.SIGTERM)
+    _signal_process_group(process, signal.SIGTERM, own_process_group=own_process_group)
     try:
         process.wait(timeout=0.5)
     except subprocess.TimeoutExpired:
         pass
     finally:
-        _signal_process_group(process, signal.SIGKILL)
+        _signal_process_group(process, signal.SIGKILL, own_process_group=own_process_group)
         process.wait(timeout=3)
 
 
@@ -68,8 +74,10 @@ def _run_command(
     cancellation: Callable[[], bool] | None,
     deadline: float,
     log_name: str,
+    own_process_group: bool = True,
 ) -> None:
     """Observe resource use; these watchdogs are not hard OS isolation."""
+    validate_process_group_ownership(own_process_group)
     psutil = require_process_supervisor()
     memory_limit = _positive_limit(resources, "memory_mib") * 1024 * 1024
     output_limit = _positive_limit(resources, "max_output_bytes")
@@ -86,7 +94,7 @@ def _run_command(
             stderr=subprocess.STDOUT,
             cwd=root,
             env=worker_environment(),
-            start_new_session=True,
+            start_new_session=own_process_group,
         )
         try:
             while True:
@@ -120,7 +128,7 @@ def _run_command(
                     tail = diagnostic.read(3000).decode(errors="replace")
                 raise RuntimeError(f"Strict RAW worker failed: {tail}")
         finally:
-            _stop_group(process)
+            _stop_group(process, own_process_group=own_process_group)
 
 
 def _run_worker(
@@ -132,6 +140,7 @@ def _run_worker(
     resources: Mapping[str, Any],
     cancellation: Callable[[], bool] | None,
     deadline: float,
+    own_process_group: bool = True,
 ) -> tuple[Path, dict[str, Any]]:
     output_array = root / f"{command_name}.npy"
     output_json = root / f"{command_name}.json"
@@ -158,6 +167,7 @@ def _run_worker(
         cancellation=cancellation,
         deadline=deadline,
         log_name=f"{command_name}.log",
+        own_process_group=own_process_group,
     )
     raw, _ = snapshot(root, output_json, maximum_bytes=_MAX_METADATA_BYTES)
     return output_array, decode_bounded_json_object(raw)
@@ -212,8 +222,10 @@ def decode_raw(
     python: str,
     resources: Mapping[str, Any],
     cancellation: Callable[[], bool] | None = None,
+    own_process_group: bool = True,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Decode only the admitted immutable snapshot through the strict RAW worker."""
+    validate_process_group_ownership(own_process_group)
     maximum_bytes = _positive_limit(resources, "max_input_bytes")
     max_pixels = _positive_limit(resources, "max_pixels")
     seconds = _positive_limit(resources, "wall_time_seconds")
@@ -244,6 +256,8 @@ def decode_raw(
             "cancellation": cancellation,
             "deadline": deadline,
         }
+        if not own_process_group:
+            common["own_process_group"] = False
         _, probe = _run_worker("probe", **common)
         unrotated_size = _dimensions(probe, max_pixels)
         if unrotated_size[0] * unrotated_size[1] * 12 + 8192 > resources["max_output_bytes"]:

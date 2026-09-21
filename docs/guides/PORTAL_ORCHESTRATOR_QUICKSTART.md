@@ -47,6 +47,10 @@ export TP_READY_VERBOSE=1
 
 ## API Contract Notes
 
+Managed `lux-depth-v5` jobs are an explicit opt-in with Postgres/Redis authority;
+V3 remains the default. See [managed V5 execution](../reference/LUX_DEPTH_V5.md#managed-job-execution)
+for the strict request contract, migration, server runtime settings, and gates.
+
 As of PR #1562, the health/readiness routes are backed by typed OpenAPI
 response models. That change documents the contract shape for generated clients;
 it does not change the existing response bodies for `/healthz`, `/ready`, or

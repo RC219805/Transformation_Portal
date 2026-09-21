@@ -84,9 +84,23 @@ def probe_device(interpreter: str, requested: str) -> str:
     return device
 
 
-def _signal_process_group(process: subprocess.Popen, signum: int) -> None:
+def validate_process_group_ownership(own_process_group: bool) -> None:
+    """Inherited groups require the fixed managed consumer's isolated session."""
+    if type(own_process_group) is not bool:
+        raise ValueError("Process-group ownership must be explicit boolean policy")
+    if not own_process_group and (os.name != "posix" or os.getsid(0) != os.getpid() or os.getpgrp() != os.getpid()):
+        raise RuntimeError("Inherited native workers require an orchestrator-owned isolated session")
+
+
+def _signal_process_group(process: subprocess.Popen, signum: int, *, own_process_group: bool = True) -> None:
     """Reap a zombie leader before retrying macOS's transient EPERM response."""
     process.poll()
+    if not own_process_group:
+        # The managed parent owns all descendants. Local cleanup may only
+        # signal this direct child; never signal the inherited parent group.
+        if process.returncode is None:
+            process.send_signal(signum)
+        return
     try:
         os.killpg(process.pid, signum)
     except ProcessLookupError:
@@ -112,7 +126,16 @@ class DA3Session:
     }
     _REQUIRED_ARRAYS = frozenset({"native_depth"})
 
-    def __init__(self, interpreter: str, plan: CarriedDepthPlan, *, cancellation: Callable[[], bool] | None = None) -> None:
+    def __init__(
+        self,
+        interpreter: str,
+        plan: CarriedDepthPlan,
+        *,
+        cancellation: Callable[[], bool] | None = None,
+        own_process_group: bool = True,
+    ) -> None:
+        validate_process_group_ownership(own_process_group)
+        self._own_process_group = own_process_group
         if not interpreter or not Path(interpreter).is_file():
             raise RuntimeError("Governed DA3 Python is missing; set TRANSFORMATION_PORTAL_DA3_PYTHON")
         self.plan = plan
@@ -128,7 +151,7 @@ class DA3Session:
             stdout=subprocess.PIPE,
             stderr=self._stderr,
             env=worker_environment(),
-            start_new_session=True,
+            start_new_session=own_process_group,
         )
         self._buffer = b""
         assert self.process.stdin is not None
@@ -267,13 +290,13 @@ class DA3Session:
             return
         self._closed = True
         # Descendants can outlive an exited leader. Signal the dedicated group.
-        _signal_process_group(self.process, signal.SIGTERM)
+        _signal_process_group(self.process, signal.SIGTERM, own_process_group=getattr(self, "_own_process_group", True))
         if self.process.poll() is None:
             try:
                 self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 pass
-        _signal_process_group(self.process, signal.SIGKILL)
+        _signal_process_group(self.process, signal.SIGKILL, own_process_group=getattr(self, "_own_process_group", True))
         self.process.wait(timeout=3)
         for handle in (self.process.stdin, self.process.stdout, self._stderr):
             if handle is not None:

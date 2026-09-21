@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import threading
 from dataclasses import replace
 
 import numpy as np
 import pytest
 
 from tests.lux_depth_v5.test_evidence import completed, rehash  # noqa: F401 - shared fixture registration
+from transformation_portal.lux_depth_v5.evidence import verify_execution_evidence_v3
 from transformation_portal.lux_depth_v5.publication import publication_paths, publish_result, validate_publication_plan
 from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher, validate_manifest
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
@@ -17,6 +20,8 @@ pytestmark = pytest.mark.unit
 
 
 def test_publication_reuses_the_fenced_generation_commit(completed, tmp_path):
+    assert completed.fence.locator.plan_digest == hashlib.sha256(completed.prepared.canonical_plan_bytes).hexdigest()
+    assert completed.fence.locator.plan_digest != completed.result.plan_fingerprint_sha256
     commits = []
 
     class Records:
@@ -32,6 +37,38 @@ def test_publication_reuses_the_fenced_generation_commit(completed, tmp_path):
     assert commits[0]["run_summary"]["pipeline"] == "lux_depth_v5"
     assert commits[0]["run_summary"]["production_acceptance"] == "pending"
     assert commits[0]["artifacts"]["schema"] == "tp.lux.delivery.v3"
+
+
+def test_semantic_verification_allows_worker_heartbeat_before_publication(completed, tmp_path, monkeypatch):
+    from transformation_portal.lux_depth_v5 import evidence
+
+    verifying, heartbeat = threading.Event(), threading.Event()
+
+    def slow_verify(*args, **kwargs):
+        verifying.set()
+        assert heartbeat.wait(timeout=3), "Semantic verification blocked the worker heartbeat event loop"
+        return verify_execution_evidence_v3(*args, **kwargs)
+
+    monkeypatch.setattr(evidence, "verify_execution_evidence_v3", slow_verify)
+
+    class Records:
+        async def commit_generation(self, fence, **kwargs):
+            assert fence == completed.fence and heartbeat.is_set()
+            return validate_manifest(kwargs["manifest_bytes"], fence=fence, generation_id=kwargs["generation_id"])
+
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=Records())
+
+    async def exercise():
+        async def renew_heartbeat():
+            assert await asyncio.to_thread(verifying.wait, 3)
+            heartbeat.set()
+
+        published, _ = await asyncio.gather(
+            publish_result(completed.result, publisher=publisher, fence=completed.fence), renew_heartbeat()
+        )
+        return published
+
+    assert asyncio.run(exercise())["files"]
 
 
 def test_reservation_accounts_for_all_unknown_optional_carriers(completed):
@@ -82,3 +119,50 @@ def test_result_and_dispatch_fence_bind_the_verified_generation(completed, tmp_p
     publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
     with pytest.raises(ValueError, match="does not match|differs"):
         asyncio.run(publish_result(result, publisher=publisher, fence=completed.fence))
+
+
+@pytest.mark.parametrize("mutation", ["wrong_digest", "semantic_digest", "changed_plan_bytes"])
+def test_dispatch_binds_exact_plan_bytes_independently_of_semantic_fingerprint(completed, mutation):
+    result, fence = completed.result, completed.fence
+    if mutation == "wrong_digest":
+        fence = replace(fence, locator=replace(fence.locator, plan_digest="f" * 64))
+    elif mutation == "semantic_digest":
+        fence = replace(fence, locator=replace(fence.locator, plan_digest=result.plan_fingerprint_sha256))
+    else:
+        # Rehashed evidence cannot authorize a different representation of the
+        # admitted canonical plan, even when its parsed semantics still match.
+        path = result.output_root / "execution-plan.json"
+        path.write_bytes(path.read_bytes() + b"\n")
+        rehash(completed, "execution-plan.json")
+    verify_execution_evidence_v3(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+    class ForbiddenPublisher:
+        async def publish(self, *args, **kwargs):
+            pytest.fail("A plan with the wrong byte digest reached publication")
+
+    with pytest.raises(ValueError, match="plan bytes do not match the admitted dispatch plan"):
+        asyncio.run(publish_result(result, publisher=ForbiddenPublisher(), fence=fence))
+
+
+def test_verified_plan_record_must_match_dispatch_even_when_admitted_bytes_are_restored(completed, monkeypatch):
+    from transformation_portal.lux_depth_v5 import evidence
+
+    result, fence = completed.result, completed.fence
+    path = result.output_root / "execution-plan.json"
+    admitted_bytes = path.read_bytes()
+    path.write_bytes(admitted_bytes + b"\n")
+    rehash(completed, "execution-plan.json")
+
+    def verify_then_restore(*args, **kwargs):
+        verified = verify_execution_evidence_v3(*args, **kwargs)
+        path.write_bytes(admitted_bytes)
+        return verified
+
+    monkeypatch.setattr(evidence, "verify_execution_evidence_v3", verify_then_restore)
+
+    class ForbiddenPublisher:
+        async def publish(self, *args, **kwargs):
+            pytest.fail("Verified staging hash differed from the admitted plan")
+
+    with pytest.raises(ValueError, match="plan bytes do not match the admitted dispatch plan"):
+        asyncio.run(publish_result(result, publisher=ForbiddenPublisher(), fence=fence))

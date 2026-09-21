@@ -133,12 +133,16 @@ Postgres job repository and event store, finalizes artifacts through the
 configured artifact store, and drains on `SIGINT`/`SIGTERM`.
 
 Opt-in distributed authority requires the full migration chain through
-`0003_dispatch_authority`, `0004_bounded_event_replay`, and
-`0005_generation_cleanup`. Follow the
+`0003_dispatch_authority`, `0004_bounded_event_replay`,
+`0005_generation_cleanup`, `0006_periodic_generation_scrub`, and
+`0007_photography_bindings`. The V5 opt-in adds immutable, separately digested
+physical bindings; existing V1 attempts retain null bindings. Follow the
 [Postgres orchestrator runbook](../runtimes/orchestrator-postgres.md) for
 configuration, authority, recovery, and rollback. Workers revalidate the frozen
 plan's input, output, model/runtime, and secondary data paths against their
 current policy before creating an attempt directory or starting a subprocess.
+For the opt-in managed V5 request and runtime configuration, see the
+[managed photography guide](../reference/LUX_DEPTH_V5.md#managed-job-execution).
 
 If a broker heartbeat fails, the worker signals cancellation to its executor
 immediately because lease ownership cannot be confirmed. The executor must
@@ -279,6 +283,9 @@ For a failed pilot deployment:
 
 Keep the original shared execution root mounted and configured until both active
 work and terminal private-workspace cleanup have finished.
+Migration 0007 cannot be downgraded while any V5 dispatch attempt exists,
+including terminal tombstones. Keep a compatible API/worker release or repair
+forward; immutable execution bindings must not be removed to force rollback.
 
 ## Backup And Restore
 

@@ -181,6 +181,8 @@ class DispatchAttemptModel(Base):
     dispatch_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     plan_digest: Mapped[str] = mapped_column(ForeignKey("dispatch_plans.digest"), nullable=False)
+    execution_bindings: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    execution_bindings_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     api_version: Mapped[str] = mapped_column(String(16), nullable=False)
     output_root: Mapped[str] = mapped_column(Text, nullable=False)
     requested_output_root: Mapped[str] = mapped_column(Text, nullable=False)
@@ -196,6 +198,13 @@ class DispatchAttemptModel(Base):
     finished_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     __table_args__ = (
         CheckConstraint("lease_epoch >= 0"),
+        CheckConstraint(
+            "(execution_bindings IS NULL AND execution_bindings_digest IS NULL) OR "
+            "(execution_bindings IS NOT NULL AND execution_bindings_digest IS NOT NULL AND "
+            "octet_length(execution_bindings) BETWEEN 1 AND 65536 AND "
+            "execution_bindings_digest ~ '^[0-9a-f]{64}$')",
+            name="ck_dispatch_execution_bindings",
+        ),
         Index(
             "ix_dispatch_terminal_cleanup_due",
             cleanup_checked_at.asc().nulls_first(),

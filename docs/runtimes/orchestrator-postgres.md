@@ -93,11 +93,18 @@ Indices: `jobs(created_at)`, `jobs(state)`, `jobs(finished_at)`,
 
 The three job tables are created by
 `migrations/versions/0001_initial_orchestrator_schema.py`. Apply the complete
-migration chain through `0006_periodic_generation_scrub`: 0002 adds operational
+migration chain through `0007_photography_bindings`: 0002 adds operational
 audit, 0003 adds admission/dispatch/publication authority, 0004 bounds replay
-with monotonic counters, 0005 tracks private attempt/staging cleanup, and 0006
-adds an indexed periodic scrub cursor for late writes from orphaned subprocesses.
+with monotonic counters, 0005 tracks private attempt/staging cleanup, 0006
+adds an indexed periodic scrub cursor for late writes from orphaned subprocesses,
+and 0007 adds immutable physical bindings for opt-in managed V5 photography.
 Do not stop at an earlier revision.
+
+Existing V1 attempts retain null physical bindings. Migration 0007 refuses
+downgrade while any V5 attempt remains, including terminal tombstones; retain a
+compatible API/worker release or repair forward. See the
+[managed V5 guide](../reference/LUX_DEPTH_V5.md#managed-job-execution) for activation
+and request contracts.
 
 ## Migrations
 
@@ -222,11 +229,14 @@ never lower a limit below its active count.
 An accepted HTTP job remains queued through a Redis outage. Its committed
 outbox retries the same locator; queued database records also repair Redis
 loss after an acknowledged delivery. Workers atomically claim each dispatch
-once, then reconstruct a fixed local entrypoint from the exact canonical
-`tp.execution.plan.v1` bytes. Broker payloads contain only immutable job,
+once, then reconstruct a fixed local entrypoint from the exact canonical plan
+bytes. Existing Lux/archive jobs use `tp.execution.plan.v1`; opt-in V5 photography
+uses `tp.execution.plan.v4` plus separately digested immutable physical bindings.
+Broker payloads contain only immutable job,
 attempt, dispatch, tenant, plan-digest, and version fields. Neither broker
-payloads nor operational records contain an executable command. Lux consumes
-its prepared plan through the current Lux executor; archive operations use
+payloads nor operational records contain an executable command. The shared job
+execution service selects the versioned photography adapter for V5 and preserves
+the current Lux executor for V1; archive operations use
 closed, operation-specific configurations with the current archive runner.
 This does not activate the separately gated Spatial/CAS executor convergence.
 

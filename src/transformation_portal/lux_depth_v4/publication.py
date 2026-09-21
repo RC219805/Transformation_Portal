@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -120,11 +121,17 @@ async def _publish_result(
     result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence, profile: Any = None
 ) -> dict[str, Any]:
     """Versioned verification/reservation reuse the same dispatch visibility fence."""
+    arguments = await asyncio.to_thread(_prepare_publication, result, publisher=publisher, fence=fence, profile=profile)
+    return await publisher.publish(fence, **arguments)
+
+
+def _prepare_publication(
+    result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence, profile: Any = None
+) -> dict[str, Any]:
+    """Keep bounded file verification and numerical reconstruction off the event loop."""
     root = directory_path(result.output_root)
     if str(root) != fence.output_root or Path(result.evidence_path) != root / "execution-evidence.json":
         raise ValueError("Completed V4 output root does not match the dispatch fence")
-    if result.plan_fingerprint_sha256 != fence.locator.plan_digest:
-        raise ValueError("Completed V4 plan does not match the admitted dispatch plan")
     verifier = verify_execution_evidence_v2 if profile is None else profile.verify_evidence
     verified = verifier(root, expected_plan_sha256=result.plan_fingerprint_sha256)
     evidence = verified.to_payload()
@@ -137,7 +144,13 @@ async def _publish_result(
         or result.depth_cache_misses != evidence["cache"]["misses"]
     ):
         raise ValueError("V4 result summary differs from verified completion")
-    plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
+    plan_bytes, plan_snapshot = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
+    # Dispatch binds the complete admitted bytes, including the fingerprint
+    # field; evidence separately binds the semantic fingerprint within them.
+    # Bind the verified record too: it becomes the publisher's staging hash.
+    verified_plan = next(record for record in verified.artifacts if record.path == "execution-plan.json")
+    if plan_snapshot["sha256"] != fence.locator.plan_digest or verified_plan.sha256 != fence.locator.plan_digest:
+        raise ValueError("Completed photographic plan bytes do not match the admitted dispatch plan")
     plan = (parse_photography_plan if profile is None else profile.parse_plan)(plan_bytes)
     if plan.plan_fingerprint_sha256 != result.plan_fingerprint_sha256:
         raise ValueError("Managed publication plan changed after completion verification")
@@ -150,22 +163,21 @@ async def _publish_result(
     if any(record.size_bytes > limits.max_file_bytes for record in verified.artifacts):
         raise ValueError("Managed output exceeds publisher file-byte limit")
     expected = {record.path: {"size_bytes": record.size_bytes, "sha256": record.sha256} for record in verified.artifacts}
-    return await publisher.publish(
-        fence,
-        inventory,
-        state="succeeded",
-        exit_code=0,
-        artifacts={
+    return {
+        "files": inventory,
+        "state": "succeeded",
+        "exit_code": 0,
+        "artifacts": {
             "schema": "tp.lux.delivery.v2" if profile is None else profile.delivery_schema,
             "paths": list(inventory),
             "execution_evidence": "execution-evidence.json",
         },
-        run_summary={
+        "run_summary": {
             "pipeline": "lux_depth_v4" if profile is None else profile.pipeline,
             "plan_schema": plan.schema,
             "plan_fingerprint_sha256": result.plan_fingerprint_sha256,
             "input_count": result.input_count,
             "production_acceptance": "pending",
         },
-        expected_file_integrity=expected,
-    )
+        "expected_file_integrity": expected,
+    }

@@ -6,6 +6,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import threading
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -139,7 +140,9 @@ def completed(tmp_path, monkeypatch, request):
         0,
         1,
     )
-    locator = DispatchLocator("job_fixture", "attempt", "dispatch", result.plan_fingerprint_sha256, "tenant")
+    locator = DispatchLocator(
+        "job_fixture", "attempt", "dispatch", hashlib.sha256(prepared.canonical_plan_bytes).hexdigest(), "tenant"
+    )
     fence = DispatchFence(locator, "worker", 1, 0.0, str(root), str(tmp_path / "requested"))
     return result, fence, evidence
 
@@ -242,6 +245,8 @@ def test_runtime_identity_parser_is_not_bypassed(completed, monkeypatch):
 
 def test_publication_reuses_generation_commit_and_preserves_pending_acceptance(completed, tmp_path):
     result, fence, _ = completed
+    assert fence.locator.plan_digest == hashlib.sha256((result.output_root / "execution-plan.json").read_bytes()).hexdigest()
+    assert fence.locator.plan_digest != result.plan_fingerprint_sha256
     commits = []
 
     class Records:
@@ -255,6 +260,41 @@ def test_publication_reuses_generation_commit_and_preserves_pending_acceptance(c
     assert {item["path"] for item in manifest["files"]} == set(result.artifact_paths)
     assert len(commits) == 1
     assert commits[0]["run_summary"]["production_acceptance"] == "pending"
+
+
+def test_verification_allows_worker_heartbeat_before_async_publication(completed, tmp_path, monkeypatch):
+    from transformation_portal.lux_depth_v4 import publication
+
+    result, fence, _ = completed
+    verifying, heartbeat = threading.Event(), threading.Event()
+    snapshot = publication.snapshot
+
+    def slow_snapshot(*args, **kwargs):
+        verifying.set()
+        assert heartbeat.wait(timeout=3), "Verification blocked the worker heartbeat event loop"
+        return snapshot(*args, **kwargs)
+
+    monkeypatch.setattr(publication, "snapshot", slow_snapshot)
+
+    class Records:
+        async def commit_generation(self, observed, **kwargs):
+            assert observed == fence and heartbeat.is_set()
+            return validate_manifest(kwargs["manifest_bytes"], fence=fence, generation_id=kwargs["generation_id"])
+
+    publisher = GenerationPublisher(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=Records())
+
+    async def exercise():
+        async def renew_heartbeat():
+            assert await asyncio.to_thread(verifying.wait, 3)
+            heartbeat.set()
+
+        completed_publication, _ = await asyncio.gather(
+            publish_result(result, publisher=publisher, fence=fence), renew_heartbeat()
+        )
+        return completed_publication
+
+    manifest = asyncio.run(exercise())
+    assert {item["path"] for item in manifest["files"]} == set(result.artifact_paths)
 
 
 @pytest.mark.parametrize("completed", [False], indirect=True)
@@ -296,13 +336,15 @@ def test_managed_publication_rejects_unreserved_artifacts(completed, tmp_path):
         asyncio.run(publish_result(result, publisher=publisher, fence=fence))
 
 
-@pytest.mark.parametrize("mutation", ["root", "plan", "inventory", "summary"])
+@pytest.mark.parametrize("mutation", ["root", "plan", "semantic", "inventory", "summary"])
 def test_fence_or_result_mismatch_never_calls_publisher(completed, mutation):
     result, fence, _ = completed
     if mutation == "root":
         fence = replace(fence, output_root=str(result.output_root.parent))
     elif mutation == "plan":
         fence = replace(fence, locator=replace(fence.locator, plan_digest="f" * 64))
+    elif mutation == "semantic":
+        result = replace(result, plan_fingerprint_sha256="f" * 64)
     elif mutation == "inventory":
         result = replace(result, artifact_paths=result.artifact_paths[:-1])
     else:
@@ -313,6 +355,58 @@ def test_fence_or_result_mismatch_never_calls_publisher(completed, mutation):
             pytest.fail("Invalid completion reached publication")
 
     with pytest.raises(ValueError):
+        asyncio.run(publish_result(result, publisher=ForbiddenPublisher(), fence=fence))
+
+
+@pytest.mark.parametrize("mutation", ["semantic_digest", "changed_plan_bytes"])
+def test_dispatch_binds_exact_plan_bytes_independently_of_semantic_fingerprint(completed, mutation):
+    result, fence, payload = completed
+    if mutation == "semantic_digest":
+        fence = replace(fence, locator=replace(fence.locator, plan_digest=result.plan_fingerprint_sha256))
+    else:
+        # Whitespace preserves parsed semantics but changes the admitted bytes.
+        path = result.output_root / "execution-plan.json"
+        raw = path.read_bytes() + b"\n"
+        path.write_bytes(raw)
+        row = next(item for item in payload["artifacts"] if item["kind"] == "plan")
+        row.update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+        _rewrite(result, payload)
+    # Completion can remain semantically valid while the dispatch binding fails.
+    ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+    class ForbiddenPublisher:
+        async def publish(self, *args, **kwargs):
+            pytest.fail("A plan with the wrong byte digest reached publication")
+
+    with pytest.raises(ValueError, match="plan bytes do not match the admitted dispatch plan"):
+        asyncio.run(publish_result(result, publisher=ForbiddenPublisher(), fence=fence))
+
+
+def test_verified_plan_record_must_match_dispatch_even_when_admitted_bytes_are_restored(completed, monkeypatch):
+    from transformation_portal.lux_depth_v4 import publication
+
+    result, fence, payload = completed
+    path = result.output_root / "execution-plan.json"
+    admitted_bytes = path.read_bytes()
+    changed_bytes = admitted_bytes + b"\n"
+    path.write_bytes(changed_bytes)
+    row = next(item for item in payload["artifacts"] if item["kind"] == "plan")
+    row.update(sha256=hashlib.sha256(changed_bytes).hexdigest(), size_bytes=len(changed_bytes))
+    _rewrite(result, payload)
+    verify = publication.verify_execution_evidence_v2
+
+    def verify_then_restore(*args, **kwargs):
+        verified = verify(*args, **kwargs)
+        path.write_bytes(admitted_bytes)
+        return verified
+
+    monkeypatch.setattr(publication, "verify_execution_evidence_v2", verify_then_restore)
+
+    class ForbiddenPublisher:
+        async def publish(self, *args, **kwargs):
+            pytest.fail("Verified staging hash differed from the admitted plan")
+
+    with pytest.raises(ValueError, match="plan bytes do not match the admitted dispatch plan"):
         asyncio.run(publish_result(result, publisher=ForbiddenPublisher(), fence=fence))
 
 

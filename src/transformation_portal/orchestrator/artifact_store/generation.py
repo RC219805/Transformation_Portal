@@ -12,7 +12,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.artifact_limits import configured_max_indexed_artifacts
@@ -154,9 +154,20 @@ async def _verify_staged(store: ArtifactStore, job_id: str, path: str, size: int
 class GenerationPublisher:
     """Stages bytes first; only a successful database commit grants visibility."""
 
-    def __init__(self, *, artifact_store: ArtifactStore, record_store: Any) -> None:
+    def __init__(
+        self,
+        *,
+        artifact_store: ArtifactStore,
+        record_store: Any,
+        publication_guard: Callable[[], None] | None = None,
+    ) -> None:
         self._artifacts = artifact_store
         self._records = record_store
+        self._publication_guard = publication_guard
+
+    def _assert_publication_allowed(self) -> None:
+        if self._publication_guard is not None:
+            self._publication_guard()
 
     @property
     def limits(self) -> GenerationPublicationLimits:
@@ -180,6 +191,7 @@ class GenerationPublisher:
         error: Optional[dict[str, Any]] = None,
         expected_file_integrity: Optional[Mapping[str, Mapping[str, Any]]] = None,
     ) -> dict[str, Any]:
+        self._assert_publication_allowed()
         if len(files) > MAX_GENERATION_FILES:
             raise ArtifactStoreError("generation artifact count exceeds limit")
         expected = None
@@ -212,6 +224,7 @@ class GenerationPublisher:
             raise ArtifactStoreError("generation output root must be absolute and canonical")
         with tempfile.TemporaryDirectory(prefix="tp-generation-") as temporary:
             for index, (relative, source) in enumerate(sorted(files.items())):
+                self._assert_publication_allowed()
                 relative = _normalize_relative_path(relative)
                 source = Path(source)
                 if not source.is_relative_to(output_root) or ".." in source.parts:
@@ -260,6 +273,10 @@ class GenerationPublisher:
                 len(raw),
                 hashlib.sha256(raw).hexdigest(),
             )
+        # No await may separate this process-local revocation check from the
+        # authoritative commit invocation. The database still validates its
+        # fence transactionally; a commit already begun owns the linearization.
+        self._assert_publication_allowed()
         return await self._records.commit_generation(
             fence,
             generation_id=generation_id,
