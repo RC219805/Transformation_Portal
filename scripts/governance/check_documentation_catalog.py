@@ -27,7 +27,9 @@ REVIEW_STATUSES = {"source-reviewed", "inherited-classification", "historical-ev
 EVIDENCE_TIERS = {"source-contract", "inventory-only", "historical-record", "generated-metadata"}
 DOCUMENT_SUFFIXES = {".md", ".mdx", ".rst"}
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-INLINE_LINK = re.compile(r"!?\[[^\]\n]*\]\((<[^>\n]+>|(?:\\.|[^\s)])+)(?:\s+[\"'][^\n]*?[\"'])?\)")
+# Escape pairs and ordinary destination characters must be disjoint: allowing
+# backslashes in both alternatives makes malformed destinations exponential.
+INLINE_LINK = re.compile(r"!?\[[^\]\n]*\]\((<[^>\n]+>|(?:\\.|[^\\\s)])+)(?:\s+[\"'][^\n]*?[\"'])?\)")
 REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[([^\]]+)\]:\s*(<[^>]+>|\S+)")
 REFERENCE_LINK = re.compile(r"!?\[([^\]\n]+)\]\[([^\]\n]*)\]")
 HTML_LINK = re.compile(r"<(?:a|img)\b[^>]*\b(?:href|src)=[\"']([^\"']+)[\"']", re.IGNORECASE)

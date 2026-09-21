@@ -12,7 +12,7 @@ pytestmark = pytest.mark.unit
 AGENTS = Path(__file__).resolve().parents[1] / ".github" / "agents"
 sys.path.insert(0, str(AGENTS))
 
-from rag_system.authority import CATALOG_PATH, DocumentationCatalog  # noqa: E402
+from rag_system.authority import CATALOG_PATH, EVIDENCE_TIERS, REVIEW_STATUSES, DocumentationCatalog  # noqa: E402
 from rag_system.citation import CitationGenerator  # noqa: E402
 from rag_system.indexer import RepositoryIndexer  # noqa: E402
 from rag_system.reranker import ResultReranker  # noqa: E402
@@ -102,6 +102,63 @@ def test_malformed_classification_fails_closed(corpus, malformed):
         docs(RepositoryIndexer(root, use_cache=False))["docs/current.md"].metadata["documentation"]["authority"]
         == "unverified"
     )
+
+
+def test_review_metadata_enums_match_governed_catalog_schema():
+    import runpy
+
+    validator = runpy.run_path(str(AGENTS.parents[1] / "scripts/governance/check_documentation_catalog.py"))
+    assert REVIEW_STATUSES == validator["REVIEW_STATUSES"]
+    assert EVIDENCE_TIERS == validator["EVIDENCE_TIERS"]
+
+
+@pytest.mark.parametrize("classification", ["historical", "archive-only"])
+@pytest.mark.parametrize("field", ["review_status", "evidence_tier"])
+@pytest.mark.parametrize("invalid", ["unsupported-evidence-value", ["historical-evidence"]])
+def test_invalid_review_metadata_cannot_verify_cached_history(corpus, classification, field, invalid):
+    root, entries = corpus
+    entries[1].update(classification=classification, review_status="historical-evidence", evidence_tier="historical-record")
+    write_catalog(root, entries)
+    indexer = RepositoryIndexer(root)
+    assert docs(indexer)["docs/old.md"].metadata["documentation"]["authority"] == "historical"
+
+    entries[1][field] = invalid
+    write_catalog(root, entries)
+    chunks = list(docs(indexer).values())
+    authority = next(chunk for chunk in chunks if chunk.file_path == "docs/old.md").metadata["documentation"]
+    assert authority["authority"] == "unverified"
+    assert authority["verification"] == "invalid-entry"
+    retriever = HybridRetriever(enable_vector_search=False)
+    retriever.index(chunks)
+    assert retriever.retrieve("deployment identity", retrieval_mode="historical") == []
+    all_results = retriever.retrieve("deployment identity", retrieval_mode="all")
+    assert any(result.file_path == "docs/old.md" for result in all_results)
+    generator = CitationGenerator()
+    citations = generator.format_citations(generator.generate_citations(all_results))
+    assert "unverified (invalid-entry)" in citations
+    assert "historical (verified)" not in citations
+
+
+@pytest.mark.parametrize("classification", ["historical", "archive-only"])
+@pytest.mark.parametrize(
+    "review_status,evidence_tier",
+    [
+        ("source-reviewed", "source-contract"),
+        ("inherited-classification", "inventory-only"),
+        ("historical-evidence", "historical-record"),
+        ("generated-snapshot", "generated-metadata"),
+    ],
+)
+def test_valid_review_metadata_preserves_historical_retrieval(corpus, classification, review_status, evidence_tier):
+    root, entries = corpus
+    entries[1].update(classification=classification, review_status=review_status, evidence_tier=evidence_tier)
+    write_catalog(root, entries)
+    retriever = HybridRetriever(enable_vector_search=False)
+    retriever.index(RepositoryIndexer(root, use_cache=False).index_repository())
+    history = retriever.retrieve("deployment identity", retrieval_mode="historical")
+    assert [result.file_path for result in history] == ["docs/old.md"]
+    assert history[0].metadata["documentation"]["authority"] == "historical"
+    assert history[0].metadata["documentation"]["verification"] == "verified"
 
 
 @pytest.mark.parametrize("state", ["missing", "invalid", "wrong-schema"])

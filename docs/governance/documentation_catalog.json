@@ -188,7 +188,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "6a6d33b8cad0baee21ea8ca4209f6a3a1f3b723cae4e2e137b170196061c7333",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -204,12 +204,12 @@
       "source_sha256": {
         ".github/agents/rag_system/indexer.py": "6887183f9cb0d780785692623c652330f4b3be9546d847fec0f3d26e6a3cd21b",
         ".github/agents/rag_system/retriever.py": "6fdc151fa778d5e8009d54ab15ef49dbc7aa39f81264c06dfbc326d19f0a1b0e",
-        ".github/agents/rag_system/authority.py": "cd18ba370f6c407816facd7b1605533f1c47ec42b62347958094909a5bfea916",
+        ".github/agents/rag_system/authority.py": "dabf4e9e8b393e4200612f334967ebb329eac1eacd3931b9d06cf989309351d0",
         ".github/agents/rag_system/reranker.py": "722fe1d3860a21f9f6dd04e0602bca489aac98af2f8a6467192dbc8b105674c6",
         ".github/agents/rag_system/citation.py": "e92566466234e9d727eff0d46ef1c56202d4e4cf7532d71ea5269f359c1cb1fa",
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
-        "tests/test_rag_documentation_authority.py": "393e5afbd458b48446cf18f74a97ff2695e4643a5b6186760e8feb920a5f68eb",
+        "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
         "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
       },
       "validation_commands": [
@@ -227,7 +227,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "03710ff9be2b791439ce75c29512679914555920552f083325928d78b903d19b",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -243,12 +243,12 @@
       "source_sha256": {
         ".github/agents/rag_system/indexer.py": "6887183f9cb0d780785692623c652330f4b3be9546d847fec0f3d26e6a3cd21b",
         ".github/agents/rag_system/retriever.py": "6fdc151fa778d5e8009d54ab15ef49dbc7aa39f81264c06dfbc326d19f0a1b0e",
-        ".github/agents/rag_system/authority.py": "cd18ba370f6c407816facd7b1605533f1c47ec42b62347958094909a5bfea916",
+        ".github/agents/rag_system/authority.py": "dabf4e9e8b393e4200612f334967ebb329eac1eacd3931b9d06cf989309351d0",
         ".github/agents/rag_system/reranker.py": "722fe1d3860a21f9f6dd04e0602bca489aac98af2f8a6467192dbc8b105674c6",
         ".github/agents/rag_system/citation.py": "e92566466234e9d727eff0d46ef1c56202d4e4cf7532d71ea5269f359c1cb1fa",
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
-        "tests/test_rag_documentation_authority.py": "393e5afbd458b48446cf18f74a97ff2695e4643a5b6186760e8feb920a5f68eb",
+        "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
         "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
       },
       "validation_commands": [
@@ -410,7 +410,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "b32350525d780b4ab18eab9d8a693ffc55ae42a575b7e01856ae0c10c628a8af",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -426,12 +426,12 @@
       "source_sha256": {
         ".github/agents/rag_system/indexer.py": "6887183f9cb0d780785692623c652330f4b3be9546d847fec0f3d26e6a3cd21b",
         ".github/agents/rag_system/retriever.py": "6fdc151fa778d5e8009d54ab15ef49dbc7aa39f81264c06dfbc326d19f0a1b0e",
-        ".github/agents/rag_system/authority.py": "cd18ba370f6c407816facd7b1605533f1c47ec42b62347958094909a5bfea916",
+        ".github/agents/rag_system/authority.py": "dabf4e9e8b393e4200612f334967ebb329eac1eacd3931b9d06cf989309351d0",
         ".github/agents/rag_system/reranker.py": "722fe1d3860a21f9f6dd04e0602bca489aac98af2f8a6467192dbc8b105674c6",
         ".github/agents/rag_system/citation.py": "e92566466234e9d727eff0d46ef1c56202d4e4cf7532d71ea5269f359c1cb1fa",
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
-        "tests/test_rag_documentation_authority.py": "393e5afbd458b48446cf18f74a97ff2695e4643a5b6186760e8feb920a5f68eb",
+        "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
         "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
       },
       "validation_commands": [
@@ -577,7 +577,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "562f6882c62e569b152b4f5d03d78adedc3bb04fe204c30287491dfa90315e93",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -593,12 +593,12 @@
       "source_sha256": {
         ".github/agents/rag_system/indexer.py": "6887183f9cb0d780785692623c652330f4b3be9546d847fec0f3d26e6a3cd21b",
         ".github/agents/rag_system/retriever.py": "6fdc151fa778d5e8009d54ab15ef49dbc7aa39f81264c06dfbc326d19f0a1b0e",
-        ".github/agents/rag_system/authority.py": "cd18ba370f6c407816facd7b1605533f1c47ec42b62347958094909a5bfea916",
+        ".github/agents/rag_system/authority.py": "dabf4e9e8b393e4200612f334967ebb329eac1eacd3931b9d06cf989309351d0",
         ".github/agents/rag_system/reranker.py": "722fe1d3860a21f9f6dd04e0602bca489aac98af2f8a6467192dbc8b105674c6",
         ".github/agents/rag_system/citation.py": "e92566466234e9d727eff0d46ef1c56202d4e4cf7532d71ea5269f359c1cb1fa",
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
-        "tests/test_rag_documentation_authority.py": "393e5afbd458b48446cf18f74a97ff2695e4643a5b6186760e8feb920a5f68eb",
+        "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
         "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
       },
       "validation_commands": [
@@ -712,7 +712,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "f6209227debf895dffbf1e3d494e0f1f0408924bfb7a70bf6f88ffd5ca8a4858",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -728,12 +728,12 @@
       "source_sha256": {
         ".github/agents/rag_system/indexer.py": "6887183f9cb0d780785692623c652330f4b3be9546d847fec0f3d26e6a3cd21b",
         ".github/agents/rag_system/retriever.py": "6fdc151fa778d5e8009d54ab15ef49dbc7aa39f81264c06dfbc326d19f0a1b0e",
-        ".github/agents/rag_system/authority.py": "cd18ba370f6c407816facd7b1605533f1c47ec42b62347958094909a5bfea916",
+        ".github/agents/rag_system/authority.py": "dabf4e9e8b393e4200612f334967ebb329eac1eacd3931b9d06cf989309351d0",
         ".github/agents/rag_system/reranker.py": "722fe1d3860a21f9f6dd04e0602bca489aac98af2f8a6467192dbc8b105674c6",
         ".github/agents/rag_system/citation.py": "e92566466234e9d727eff0d46ef1c56202d4e4cf7532d71ea5269f359c1cb1fa",
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
-        "tests/test_rag_documentation_authority.py": "393e5afbd458b48446cf18f74a97ff2695e4643a5b6186760e8feb920a5f68eb",
+        "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
         "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
       },
       "validation_commands": [
@@ -1004,15 +1004,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "b056f1d4b8e121dc4eec6f5a8bbb255c48d20e8f375d03478c9ecd2d8ebb52e3",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -1477,15 +1477,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "0dd24b81f1129ee7295c17f52257df1e8e5dd5490a4d3ddbac1ce1670df0ffac",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -7790,15 +7790,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "5853e433e2b4484cb000b54d3b522712cf73456681c6ab949f394aef43485417",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -7815,15 +7815,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "3cc9cf9be95331bf305bffeb2f8113c2aed902024c552225fcce0ff6d0dd0301",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -7840,15 +7840,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "82d97ad8b4628725aa09cb6ca98f7f7762e64ab4d281e03958177f9636e4c79c",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9452,15 +9452,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
       "content_sha256": "a109378c13624363d842ee85733f92f614a6cf73f397eb5aa0af65b7efdbccea",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
       ],
       "source_sha256": {
-        "scripts/governance/check_documentation_catalog.py": "12af5117028db4a6add021ecdf1654ec2150056818cf4df5661e75e8b5a742a5",
-        "tests/test_documentation_catalog.py": "e10b72c3351309628d69b9aef0ddf0805052b48c535161423317ebfe187c9bc1"
+        "scripts/governance/check_documentation_catalog.py": "435f02eb4dcdeb54881809d58a64936a91a23691918e1523cfb74582c20f44fc",
+        "tests/test_documentation_catalog.py": "5806ebfa443eb34c63d98555b92406caf0fd527f3a9a2333309644846810b1ec"
       },
       "validation_commands": [
         "make check-documentation-catalog",

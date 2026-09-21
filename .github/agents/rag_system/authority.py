@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional
 CATALOG_PATH = "docs/governance/documentation_catalog.json"
 CATALOG_SCHEMA = "tp.documentation.catalog.v1"
 CLASSIFICATIONS = {"canonical", "current-support", "mixed", "historical", "archive-only"}
+REVIEW_STATUSES = {"source-reviewed", "inherited-classification", "historical-evidence", "generated-snapshot"}
+EVIDENCE_TIERS = {"source-contract", "inventory-only", "historical-record", "generated-metadata"}
 RETRIEVAL_MODES = ("operator", "historical", "all")
 
 
@@ -166,6 +168,8 @@ class DocumentationCatalog:
             or not isinstance(digest, str)
             or not re.fullmatch(r"[0-9a-f]{64}", digest)
             or not all(isinstance(entry.get(key), str) and entry[key].strip() for key in strings)
+            or entry["review_status"] not in REVIEW_STATUSES
+            or entry["evidence_tier"] not in EVIDENCE_TIERS
             or not re.fullmatch(r"[0-9a-f]{40}", entry["source_commit"])
             or not isinstance(successors, list)
             or not all(_relative_path(successor) for successor in successors)

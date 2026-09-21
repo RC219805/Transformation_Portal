@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -210,6 +211,46 @@ def test_missing_local_targets_and_same_page_anchors_are_blocking(tmp_path: Path
     errors = _validate(tmp_path, _catalog(source))
     assert any("missing local link" in error for error in errors)
     assert any("missing heading #unknown" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("markdown", "destination"),
+    [
+        (r"[Guide](guide\(draft\).md)", r"guide\(draft\).md"),
+        (r"[Guide](guide\].md)", r"guide\].md"),
+        (r"[Guide](guide\!.md)", r"guide\!.md"),
+        (r"[Guide](guide\\draft.md)", r"guide\\draft.md"),
+        ('[Guide](guide.md "Quoted title")', "guide.md"),
+        ("[Guide](guide.md 'Quoted title')", "guide.md"),
+        ('[Guide](<guide with spaces.md> "Title")', "guide with spaces.md"),
+        (r"![Image](image\(draft\).png)", r"image\(draft\).png"),
+    ],
+)
+def test_inline_link_destination_escape_and_title_compatibility(markdown: str, destination: str) -> None:
+    assert catalog_check.local_links(markdown) == [(1, destination)]
+
+
+@pytest.mark.parametrize("escape", [r"\!", "\\", r"\)"], ids=["punctuation", "backslash", "closing-parenthesis"])
+def test_unterminated_escaped_destinations_do_not_backtrack_exponentially(escape: str) -> None:
+    # Execute both public link validation and navigation labeling in a child so
+    # the original exponential pattern fails with a bounded timeout, not a hang.
+    text = "[broken](" + escape * 10_000 + "\n[OK](target.md)\n"
+    program = (
+        "import sys\n"
+        "from scripts.governance.check_documentation_catalog import local_links, _visible_navigation_context\n"
+        "text = sys.stdin.read()\n"
+        "assert local_links(text) == [(2, 'target.md')]\n"
+        "assert _visible_navigation_context(text)[2] == '[OK]'\n"
+    )
+    subprocess.run(
+        [sys.executable, "-c", program],
+        input=text,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=10,
+        cwd=Path(__file__).resolve().parents[1],
+    )
 
 
 def test_current_navigation_requires_explicit_dated_evidence_routing(tmp_path: Path) -> None:
