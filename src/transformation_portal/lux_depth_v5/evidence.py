@@ -28,6 +28,7 @@ from transformation_portal.lux_depth_v4.io import snapshot
 from transformation_portal.lux_depth_v4.photography import create_proxy, linear_to_srgb, output_srgb_icc
 
 from .photography import align_depth, enhance_master_v5, generate_preview_maps_v5
+from .preview import MAX_PREVIEW_BYTES, preview_descriptor, preview_samples, preview_shape
 
 MAX_ICC_BYTES = 16 * 1024 * 1024
 
@@ -169,9 +170,13 @@ def _verify_photograph(root: Path, input_id: str, source: dict, payload: dict, d
         "depth_response",
     }
     materials = "materials_v4" in payload["configuration"]
+    browser_preview = "browser_preview" in payload["configuration"]
     if materials:
         keys.add("materials_baseline")
-    if set(descriptor) != keys or descriptor["schema"] != "tp.lux.photograph.v2" or descriptor["input_id"] != input_id:
+    if browser_preview:
+        keys.add("browser_preview")
+    schema = "tp.lux.photograph.v3" if browser_preview else "tp.lux.photograph.v2"
+    if set(descriptor) != keys or descriptor["schema"] != schema or descriptor["input_id"] != input_id:
         raise ValueError("V5 photograph descriptor has an invalid closed schema")
     shape_value = descriptor["source"].get("shape") if isinstance(descriptor["source"], dict) else None
     if (
@@ -297,9 +302,53 @@ def _verify_photograph(root: Path, input_id: str, source: dict, payload: dict, d
         preview = {"status": "disabled", "classification": "depth_derived_preview"}
     if descriptor["preview_maps"] != preview:
         raise ValueError("V5 preview receipt differs from its declared recipe")
+    if browser_preview:
+        expected_files.add(f"{input_id}/preview.png")
+        _verify_browser_preview(root, f"{input_id}/preview.png", final, descriptor["browser_preview"], declared)
     if {name for name in declared if name.startswith(f"{input_id}/")} != expected_files:
         raise ValueError("V5 inventory differs from the exact admitted photographic products")
     _verify_delivery(root, f"{input_id}/delivery.tif", final, descriptor["delivery"], declared)
+
+
+def _verify_browser_preview(root: Path, relative: str, master: ImageMaster, descriptor: dict, declared: dict) -> None:
+    """Decode only a bounded admitted PNG and independently reconstruct its samples."""
+    from PIL import Image
+
+    record = declared.get(relative)
+    if not isinstance(record, dict) or record.get("kind") != "image":
+        raise ValueError("V5 completion omits photographic browser preview")
+    if descriptor != preview_descriptor(master, relative_path=relative):
+        raise ValueError("V5 browser preview receipt differs from the admitted photographic recipe")
+    raw, observed = snapshot(root, root / relative, maximum_bytes=MAX_PREVIEW_BYTES)
+    if any(observed[key] != record[key] for key in ("path", "size_bytes", "sha256")):
+        raise ValueError("V5 browser preview changed after inventory verification")
+    height, width = preview_shape(master.shape)
+    # Pillow downconverts RGB/RGBA16 to uint8 and does not expose the encoded
+    # bit depth through image.mode. Bind the actual IHDR recipe before decode.
+    if (
+        len(raw) < 33
+        or raw[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        or raw[16:24] != width.to_bytes(4, "big") + height.to_bytes(4, "big")
+        or raw[24:29] != bytes((8, 6 if master.alpha is not None else 2, 0, 0, 0))
+    ):
+        raise ValueError("V5 browser preview geometry, encoding, or color contract differs")
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            if (
+                image.format != "PNG"
+                or image.size != (width, height)
+                or image.mode != ("RGBA" if master.alpha is not None else "RGB")
+            ):
+                raise ValueError("V5 browser preview geometry, encoding, or color contract differs")
+            # PNG metadata can follow IDAT. Decode only after the geometry is
+            # bounded, then validate the complete metadata rather than the
+            # partial header state exposed by Image.open().
+            image.load()
+            if getattr(image, "n_frames", 1) != 1 or image.info != {"icc_profile": output_srgb_icc()}:
+                raise ValueError("V5 browser preview geometry, encoding, or color contract differs")
+            _same(np.asarray(image), preview_samples(master), "browser preview pixels")
+    except (OSError, SyntaxError) as exc:
+        raise ValueError("V5 browser preview is not a valid bounded PNG") from exc
 
 
 class _EvidenceProfile:

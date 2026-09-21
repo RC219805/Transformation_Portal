@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -254,6 +255,14 @@ class ManagedPhotographyPublisher(GenerationPublisher):
                     "fingerprint_status": "ok",
                 }
             )
+            if re.fullmatch(r"input-[0-9]{4}/delivery\.tif", relative):
+                preview = str(path.parent / "preview.png")
+                if preview in files:
+                    # Associate only the same input's independently verified
+                    # preview. Never discover a filesystem sibling or imply
+                    # that browsers can decode the archival TIFF itself.
+                    items[-1]["preview_url"] = job_artifacts._artifact_url(fence.locator.job_id, preview)
+                    items[-1]["preview_mime_type"] = "image/png"
         projected = {**artifacts, "items": items, "indexed_count": len(items), "truncated": False}
         if len(canonicalize_json(projected)) > limits.max_manifest_bytes:
             raise ArtifactStoreError("Managed photography artifact projection exceeds its metadata byte limit")

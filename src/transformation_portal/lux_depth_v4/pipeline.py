@@ -420,10 +420,15 @@ def _run(
                             arrays["alpha.npy"] = master.alpha
                         if artifact.confidence is not None:
                             arrays["depth-confidence.npy"] = artifact.confidence
+                        browser_preview = None
+                        if profile is not None and "browser_preview" in configuration:
+                            browser_preview, preview_descriptor = profile.browser_preview(master, current_id)
+                            profile_descriptor["browser_preview"] = preview_descriptor
                         estimate = (
                             sum(array.nbytes + 256 for array in arrays.values())
                             + master.pixels.shape[0] * master.pixels.shape[1] * 8
                             + 1024 * 1024
+                            + (len(browser_preview) if browser_preview is not None else 0)
                         )
                         if estimate + written > resources["max_output_bytes"] or estimate > shutil.disk_usage(root).free:
                             raise RuntimeError("Photographic output exceeds the disk budget")
@@ -449,6 +454,14 @@ def _run(
                         delivery = write_delivery(master, destination / "delivery.tif")
                         delivery["path"] = f"{current_id}/delivery.tif"
                         observe(destination / "delivery.tif", "image", current_id)
+                        if browser_preview is not None:
+                            write_evidence(
+                                root,
+                                f"{current_id}/preview.png",
+                                browser_preview,
+                                maximum_bytes=resources["max_output_bytes"] - written,
+                            )
+                            observe(destination / "preview.png", "image", current_id)
                         descriptor = {
                             "schema": "tp.lux.photograph.v1",
                             "input_id": current_id,
@@ -481,6 +494,7 @@ def _run(
                             "output.delivery": delivery,
                             "output.master": f"{current_id}/master.npy",
                             "output.evidence": f"{current_id}/photograph.json",
+                            **({"output.preview": f"{current_id}/preview.png"} if browser_preview is not None else {}),
                         }
 
                     operations = {"preprocess": preprocess, "depth": depth, "enhance": enhance, "output": output}

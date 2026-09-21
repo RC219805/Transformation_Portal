@@ -104,9 +104,19 @@ def managed(request_case, monkeypatch, tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tamper", [False, True])
 async def test_managed_service_runs_graph_and_publishes_independently_verified_v5_inventory(managed, monkeypatch, tamper):
+    from transformation_portal.lux_depth_v5 import evidence
+
     service, job, repository, _events, artifacts, records, fence, prepared = managed
     await repository.create(job)
     commands = []
+    verifications = []
+    verify = evidence.verify_execution_evidence_v3
+
+    def count_verification(*args, **kwargs):
+        verifications.append(args[0])
+        return verify(*args, **kwargs)
+
+    monkeypatch.setattr(evidence, "verify_execution_evidence_v3", count_verification)
 
     async def controlled_child(*argv, **kwargs):
         commands.append(argv)
@@ -124,6 +134,9 @@ async def test_managed_service_runs_graph_and_publishes_independently_verified_v
             )
             == 0
         )
+        # The consumer verifies its private export independently. Count only
+        # parent-side publication after that process has completed.
+        verifications.clear()
         if tamper:
             (output / "input-0000/delivery.tif").write_bytes(b"forged photographic output")
 
@@ -147,6 +160,7 @@ async def test_managed_service_runs_graph_and_publishes_independently_verified_v
         assert await service.execute(fence.locator, asyncio.Event()) == 0
     finally:
         _dispatch_fence.reset(token)
+    assert verifications == [Path(fence.output_root)]
     if tamper:
         assert not records.commits
         assert len(records.finishes) == 1
@@ -172,7 +186,7 @@ async def test_managed_service_runs_graph_and_publishes_independently_verified_v
         assert descriptor["fingerprint_status"] == "ok"
         assert descriptor["relative_path"] == item["path"]
     assert descriptors["input-0000/delivery.tif"]["browser_previewable"] is False
-    assert "preview_url" not in descriptors["input-0000/delivery.tif"]
+    assert descriptors["input-0000/delivery.tif"]["preview_url"] == descriptors["input-0000/preview.png"]["url"]
     delivery = next(item for item in manifest["files"] if item["path"] == "input-0000/delivery.tif")
     stream = await artifacts.open_bytes(job.id, delivery["storage_path"])
     data = b"".join([chunk async for chunk in stream])
@@ -469,7 +483,7 @@ async def test_managed_photography_revocation_rejects_pickup_before_spawn(manage
 async def test_observed_cancellation_during_publication_cannot_commit_success(managed, monkeypatch, boundary):
     import threading
 
-    from transformation_portal.orchestrator import photography_adapter
+    from transformation_portal.lux_depth_v5.publication import _PublicationProfile
 
     service, job, repository, _events, artifacts, records, fence, prepared = managed
     await repository.create(job)
@@ -504,14 +518,14 @@ async def test_observed_cancellation_during_publication_cannot_commit_success(ma
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", completed_child)
     if boundary == "verification":
-        original_verify = photography_adapter.verify_photography_dispatch_result
+        original_verify = _PublicationProfile.verify_evidence
 
         def delayed_verification(*args, **kwargs):
             loop.call_soon_threadsafe(blocked.set)
             assert resume_verification.wait(timeout=5), "parent verifier was not released"
             return original_verify(*args, **kwargs)
 
-        monkeypatch.setattr(photography_adapter, "verify_photography_dispatch_result", delayed_verification)
+        monkeypatch.setattr(_PublicationProfile, "verify_evidence", staticmethod(delayed_verification))
     else:
         original_write = artifacts.write_immutable_file
 

@@ -4,12 +4,12 @@ Browser smoke validation for the portal UI against a live backend.
 
 This script launches a disposable Chrome instance with the DevTools protocol
 enabled, drives the real portal UI in a browser context, and verifies the build
-surface across all four pipelines plus one safe archive dispatch.
+surface across all five pipelines plus one safe archive dispatch.
 
 Coverage:
 1. Portal loads in a real browser and renders expected controls.
 2. Health check reports the backend as online.
-3. Build view cycles through `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
+3. Build view cycles through V3, opt-in V5, and all three archive gates.
 4. Archive gating fields and canonical command badges match the selected stage.
 5. `archive-gate-b` and `archive-gate-c` stay blocked without a rights manifest.
 6. A safe `archive-gate-a` dispatch succeeds from the real UI.
@@ -931,6 +931,9 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('fieldsLuxDepth');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    photographyFieldsVisible: visible('fieldsLuxV5'),
+    photographyTargetSize: value('v5TargetSize'),
+    photographyPrecision: value('v5Precision'),
     flagsShellVisible: (() => {
       const el = document.getElementById('flags-shell');
       return !!(el && !el.classList.contains('hidden'));
@@ -2235,6 +2238,46 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         connection.evaluate(_click_expression("#closeEffectiveConfigBtn"))
 
+        print("portal-browser-smoke: verifying opt-in V5 controls and readiness", flush=True)
+        connection.evaluate(
+            _set_pipeline_form_expression(
+                api_key=args.api_key,
+                pipeline="lux-depth-v5",
+                input_dir=str(archive_root),
+                output_dir=str(output_dir.parent / (output_dir.name + "-v5")),
+                build_step="3",
+            )
+        )
+        photography_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and value.get("pipeline") == "lux-depth-v5"
+                and bool(value.get("photographyFieldsVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="V5 photographic controls",
+        )
+        _expect(not photography_state.get("archiveFieldsVisible"), "V5 must not expose archive controls")
+        _expect(not photography_state.get("luxFieldsVisible"), "V5 must not expose V3-only controls")
+        _expect(photography_state.get("photographyTargetSize") == "518", "V5 must retain target size 518")
+        _expect(photography_state.get("photographyPrecision") == "fp32", "V5 must retain FP32 by default")
+        readiness_status, readiness_body = _request_json(base_url, "/v1/readiness", api_key=args.api_key)
+        _expect(readiness_status == 200, "V5 smoke requires the existing readiness endpoint")
+        if readiness_body.get("data", {}).get("pipelines", {}).get("lux-depth-v5", {}).get("status") == "blocked":
+            blocked_photography = _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: isinstance(value, dict) and bool(value.get("runJobDisabled")),
+                timeout_seconds=args.timeout_seconds,
+                description="unavailable V5 dispatch to remain blocked",
+            )
+            _expect(blocked_photography.get("runJobDisabled"), "Unavailable V5 must remain blocked")
+
+        # Resume the original Configure -> archive Paths navigation check after
+        # inspecting V5's Outputs step; changing pipelines preserves later steps.
+        connection.evaluate(_click_expression("#buildStepTab1"))
         print("portal-browser-smoke: verifying archive-gate-b blocked state", flush=True)
         gate_b_state = _poll(
             connection,

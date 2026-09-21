@@ -43,6 +43,8 @@ def publication_paths(payload: Mapping[str, Any]) -> tuple[str, ...]:
             names.append("materials-baseline.npy")
         if payload["configuration"]["preview_maps"]:
             names.extend(("preview-normal.npy", "preview-roughness.npy", "preview-ao.npy"))
+        if "browser_preview" in payload["configuration"]:
+            names.append("preview.png")
         paths.extend(f"{item['id']}/{name}" for name in names)
     return tuple(paths)
 
@@ -69,3 +71,12 @@ class _PublicationProfile:
 async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence) -> dict[str, Any]:
     """Publish only semantically verified artifacts under the already admitted fence."""
     return await _publish_result(result, publisher=publisher, fence=fence, profile=_PublicationProfile)
+
+
+async def _publish_admitted_result(
+    plan_bytes: bytes, *, publisher: GenerationPublisher, fence: DispatchFence
+) -> dict[str, Any]:
+    """Verify an admitted managed completion once before the existing staging fence."""
+    return await _publish_result(
+        None, publisher=publisher, fence=fence, profile=_PublicationProfile, admitted_plan_bytes=plan_bytes
+    )

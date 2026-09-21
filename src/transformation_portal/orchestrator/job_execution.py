@@ -270,11 +270,9 @@ class JobExecutionService(Generic[_JobT]):
                     fence, state=job.state, exit_code=job.exit_code, error=job.error
                 )
                 return
-            from transformation_portal.lux_depth_v5.publication import publish_result
-            from transformation_portal.orchestrator.photography_adapter import verify_photography_dispatch_result
+            from transformation_portal.lux_depth_v5.publication import _publish_admitted_result
 
-            result = await asyncio.to_thread(verify_photography_dispatch_result, raw, output_root=Path(fence.output_root))
-            await publish_result(result, publisher=publisher, fence=fence)
+            await _publish_admitted_result(raw, publisher=publisher, fence=fence)
             return
         await asyncio.to_thread(self.runtime.index_artifacts, job)
         self.runtime.refresh_summary(job)

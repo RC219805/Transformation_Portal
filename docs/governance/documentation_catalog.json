@@ -2199,6 +2199,22 @@
       "prior_review_status": "inventory-only classification"
     },
     {
+      "path": "docs/analysis/HTTP_PORTAL_LUX_SUCCESSOR_2026-09-21.md",
+      "classification": "historical",
+      "maintenance_area": "docs/analysis",
+      "scope": "Dated September 21 HTTP/portal and opt-in LuxDepthV5 forensic implementation and validation evidence. This snapshot does not promote production authority, a React migration, native performance, or photographic acceptance.",
+      "successors": [],
+      "review_status": "historical-evidence",
+      "evidence_tier": "historical-record",
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
+      "content_sha256": "107d2a00f6ae81504974a92a3e815e6eefd2c3338c18bcd5701124eead5bb107",
+      "source_references": [],
+      "source_sha256": {},
+      "validation_commands": [],
+      "prior_classification": null,
+      "prior_review_status": null
+    },
+    {
       "path": "docs/analysis/INVESTIGATION_REPORT.md",
       "classification": "historical",
       "maintenance_area": "docs/analysis",
@@ -4190,7 +4206,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
       "content_sha256": "c30aff258cfa073c9fdc2e3814c8f30f1eb28d3535d50b8c76e3588bff5cc3e2",
       "source_references": [
         "app.py",
@@ -4204,7 +4220,7 @@
         "src/transformation_portal/core/execution_plan.py": "a660f4ff87154aaab4f93f8855f12f514059cf9f574412887f8e19505c765606",
         "src/transformation_portal/core/execution_plan_v2.py": "046c6f56ce79e16fec9d80376a0b24668fcf4bb14d7e6e0380214bb4867e451e",
         "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
-        "src/transformation_portal/core/execution_plan_v4.py": "144fe0b03d0c70d9a3577099d1f630e642765366e6b5fdbc757bd6f8f8afc3de"
+        "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -4764,7 +4780,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
       "content_sha256": "f030ae08597c15b244cd926880230692a68b401ca562c03c0758f1f93ec27eeb",
       "source_references": [
         "app.py",
@@ -4778,7 +4794,7 @@
         "src/transformation_portal/core/execution_plan.py": "a660f4ff87154aaab4f93f8855f12f514059cf9f574412887f8e19505c765606",
         "src/transformation_portal/core/execution_plan_v2.py": "046c6f56ce79e16fec9d80376a0b24668fcf4bb14d7e6e0380214bb4867e451e",
         "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
-        "src/transformation_portal/core/execution_plan_v4.py": "144fe0b03d0c70d9a3577099d1f630e642765366e6b5fdbc757bd6f8f8afc3de"
+        "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -9268,15 +9284,27 @@
       "path": "docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md",
       "classification": "canonical",
       "maintenance_area": "docs/guides",
-      "scope": "Classification inherited from the September 12 inventory; no current paragraph-level source certification. Historical commands remain evidence only.",
+      "scope": "Inherited canonical frontdoor guide; the September 21 update reviews only opt-in V5 Build/Review integration and artifact URL encoding. Listed references are pointers for that bounded review, not a new paragraph-level source certification of all deployment, authentication, and service guidance.",
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "1ec5b99020b119a00cc5f67dde5f505a2c920031",
-      "content_sha256": "b0f98acc8550555ea12e1c5c8fd9c8586e45c49ad8526883372e5c1d15560fe1",
-      "source_references": [],
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
+      "content_sha256": "30b9d659d220b7e75d948c857c41d60aa507efc26ba4ef2a6e14a73301f24ae8",
+      "source_references": [
+        "web/secure-landing/app/v1/[...path]/route.js",
+        "portal.html",
+        "web/secure-landing/portal-src/internal/photography.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/tests/routes.test.mjs",
+        "web/secure-landing/tests/photography.test.mjs",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs"
+      ],
       "source_sha256": {},
-      "validation_commands": [],
+      "validation_commands": [
+        "make check-documentation-catalog",
+        "make test-portal-contract",
+        "make test-frontdoor-contract"
+      ],
       "prior_classification": "canonical",
       "prior_review_status": "source-reviewed changes"
     },
@@ -14509,20 +14537,40 @@
       "path": "docs/reference/EXECUTION_PLAN_V4.md",
       "classification": "canonical",
       "maintenance_area": "docs/reference",
-      "scope": "Additive V5 plan contract; earlier plan versions and production defaults independent.",
+      "scope": "Source-reviewed opt-in V5 plan, versioned browser-preview recipe and output graph, semantic evidence, compatibility readers, and fenced publication. Earlier plans and V3 production defaults remain independent; no native or photographic acceptance is implied.",
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "fa0a25c3c486eb61bfd7852029f674cdc978abb7cc7c58eb85eb98893acb0b65",
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
+      "content_sha256": "fab0c658dd06d92c83ad9f22f2dfd9f0d51da6813aaf2180f8217ec76eb2951d",
       "source_references": [
-        "src/transformation_portal/core/execution_plan_v4.py"
+        "src/transformation_portal/core/execution_plan_v4.py",
+        "src/transformation_portal/schemas/execution/plan.v4.schema.json",
+        "src/transformation_portal/lux_depth_v5/lifecycle.py",
+        "src/transformation_portal/lux_depth_v5/evidence.py",
+        "src/transformation_portal/lux_depth_v5/preview.py",
+        "src/transformation_portal/lux_depth_v5/publication.py",
+        "src/transformation_portal/lux_depth_v4/publication.py",
+        "tests/lux_depth_v5/test_lifecycle.py",
+        "tests/lux_depth_v5/test_evidence.py",
+        "tests/lux_depth_v5/test_publication.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/core/execution_plan_v4.py": "144fe0b03d0c70d9a3577099d1f630e642765366e6b5fdbc757bd6f8f8afc3de"
+        "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e",
+        "src/transformation_portal/schemas/execution/plan.v4.schema.json": "9f176f9bb8b5eb515cbd9bee4ff42e22251f83207c4cf7ca5cdbfffc1a264e47",
+        "src/transformation_portal/lux_depth_v5/lifecycle.py": "2a3bc40e22b5646dfda969ec9f32275e35a8df1ec9ac39b9f83ac9c67505ae5a",
+        "src/transformation_portal/lux_depth_v5/evidence.py": "9199910c1f2035282fe51c5429b179a5d0a05a9e7dcbf6ffeee64688b833e765",
+        "src/transformation_portal/lux_depth_v5/preview.py": "1cdf51e89283125df286e2f3de6a07cb7bc931ec697f0414933f20eeb1eeb68e",
+        "src/transformation_portal/lux_depth_v5/publication.py": "5f68f203b9f65d256d4cb9fe2996bbcd6968d28dc3420b97b02c72fec21129a1",
+        "src/transformation_portal/lux_depth_v4/publication.py": "845193b8593f7567258f9ee648ce04f87d07e78d5d781d5596018468af078dab",
+        "tests/lux_depth_v5/test_lifecycle.py": "8d231d3aed4af0e9753b86a703183eb1f4a43ff69fe9bbf68065670b677220fd",
+        "tests/lux_depth_v5/test_evidence.py": "5810f79252f471a84798a7289520d5cf8e303b1bfb0ad0d12b87023ed591651e",
+        "tests/lux_depth_v5/test_publication.py": "290e6134fd5cc411afa120227025a1b0c7fc49bdf63f4e6753c57a6c1d885dfe"
       },
       "validation_commands": [
-        "make check-documentation-catalog"
+        "make check-documentation-catalog",
+        "make test-lux-depth-v5-contract",
+        "make test-lux-depth-v5-managed-contract"
       ],
       "prior_classification": null,
       "prior_review_status": null
@@ -14589,22 +14637,62 @@
       "path": "docs/reference/LUX_DEPTH_V5.md",
       "classification": "canonical",
       "maintenance_area": "docs/reference",
-      "scope": "Opt-in V5 validity/precision candidate and managed execution; default target 518, production and broad photographic acceptance pending.",
+      "scope": "Source-reviewed opt-in V5 candidate commands and managed portal integration, server-owned admission, bounded photographic browser previews, and compatibility with older plans/evidence. Target 518 and V3 production baseline remain unchanged; native performance and broad photographic acceptance remain separate gates.",
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "3fd36debae59812cf2c65d3ae8f8837cf10441c2dc59abd847afe6b18d295b0c",
+      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
+      "content_sha256": "ea230fed7ea071c301813fea26dcc339bd9780214f6b646e8d2fd0212824559f",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
-        "src/transformation_portal/core/execution_plan_v4.py"
+        "src/transformation_portal/core/execution_plan_v4.py",
+        "src/transformation_portal/lux_depth_v5/lifecycle.py",
+        "src/transformation_portal/lux_depth_v5/pipeline.py",
+        "src/transformation_portal/lux_depth_v5/preview.py",
+        "src/transformation_portal/lux_depth_v5/evidence.py",
+        "src/transformation_portal/portal/photography_jobs.py",
+        "src/transformation_portal/orchestrator/job_execution.py",
+        "src/transformation_portal/orchestrator/photography_adapter.py",
+        "portal.html",
+        "web/secure-landing/portal-src/internal/photography.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "tests/lux_depth_v5/test_preview.py",
+        "tests/lux_depth_v5/test_pipeline.py",
+        "tests/orchestrator/test_managed_photography_api.py",
+        "tests/orchestrator/test_managed_photography_publisher.py",
+        "web/secure-landing/tests/photography.test.mjs",
+        "web/secure-landing/tests/preview-request-races.test.mjs",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs"
       ],
       "source_sha256": {
         "src/transformation_portal/lux_depth_v5/__main__.py": "0fa472cf0535eca4563e1dfc89598912628b89b471b31985eb15cd21431e7c46",
-        "src/transformation_portal/core/execution_plan_v4.py": "144fe0b03d0c70d9a3577099d1f630e642765366e6b5fdbc757bd6f8f8afc3de"
+        "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e",
+        "src/transformation_portal/lux_depth_v5/lifecycle.py": "2a3bc40e22b5646dfda969ec9f32275e35a8df1ec9ac39b9f83ac9c67505ae5a",
+        "src/transformation_portal/lux_depth_v5/pipeline.py": "b561679a70aaeb60aa6cec754d50e5dca6d78a1b3d9299e67b274fb646d5348c",
+        "src/transformation_portal/lux_depth_v5/preview.py": "1cdf51e89283125df286e2f3de6a07cb7bc931ec697f0414933f20eeb1eeb68e",
+        "src/transformation_portal/lux_depth_v5/evidence.py": "9199910c1f2035282fe51c5429b179a5d0a05a9e7dcbf6ffeee64688b833e765",
+        "src/transformation_portal/portal/photography_jobs.py": "d6bd5ae88d5a0fd0a03080d9e7034f4bf3d54877510a59251a73e852f68cbd7b",
+        "src/transformation_portal/orchestrator/job_execution.py": "f1de59c1b3b983ef40c0b296cb50a311bb1485583ad4c610c42e2a15d84d5ade",
+        "src/transformation_portal/orchestrator/photography_adapter.py": "567ef91c1a748a8bd9919437d4ade64660938b63674aee845cd96e5b8b341723",
+        "portal.html": "0857ab9471134f188acd2b3a427b987696c6553e66fa011fbf51b76b4380aded",
+        "web/secure-landing/portal-src/internal/photography.js": "4e98919b6c49af02adeecfe0ee0bfb93a4ca83ab47aa826ebed303010d6055ee",
+        "web/secure-landing/portal-src/portal.template.js": "7393c887704a175db95ab3fced1b7f3db35901249cf4b36f242600ebf2a7b358",
+        "tests/lux_depth_v5/test_preview.py": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
+        "tests/lux_depth_v5/test_pipeline.py": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
+        "tests/orchestrator/test_managed_photography_api.py": "62bf532f8a7f6971b8f178a44fe7824371b016d2ac48037411f0c86590210dab",
+        "tests/orchestrator/test_managed_photography_publisher.py": "7b5e95b6e1e2635e3a547ec0bc3cd4c51aa10b4156041a268ff1d58bea40fd2b",
+        "web/secure-landing/tests/photography.test.mjs": "56c3074a50d9eee7c20cdebc51c28e506babf6d8aeb24ba02fd2f4abd261f04d",
+        "web/secure-landing/tests/preview-request-races.test.mjs": "90fdf27402365694e39239131a471c7075a5501fa7fb9f90b6915b9adc42a90a",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "fa8968375515c40dca5229854adfa6655e65980be8e7045033795b9293e53970"
       },
       "validation_commands": [
-        "make check-documentation-catalog"
+        "make check-documentation-catalog",
+        "make test-lux-depth-v5-contract",
+        "make test-lux-depth-v5-managed-contract",
+        "make test-lux-depth-v5-managed-services",
+        "make test-portal-contract",
+        "make test-frontdoor-contract",
+        "make validate-portal-browser"
       ],
       "prior_classification": null,
       "prior_review_status": null

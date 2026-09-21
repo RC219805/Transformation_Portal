@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -118,41 +119,75 @@ async def publish_result(result: LuxDepthV4Result, *, publisher: GenerationPubli
 
 
 async def _publish_result(
-    result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence, profile: Any = None
+    result: LuxDepthV4Result | None,
+    *,
+    publisher: GenerationPublisher,
+    fence: DispatchFence,
+    profile: Any = None,
+    admitted_plan_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Versioned verification/reservation reuse the same dispatch visibility fence."""
-    arguments = await asyncio.to_thread(_prepare_publication, result, publisher=publisher, fence=fence, profile=profile)
+    arguments = await asyncio.to_thread(
+        _prepare_publication,
+        result,
+        publisher=publisher,
+        fence=fence,
+        profile=profile,
+        admitted_plan_bytes=admitted_plan_bytes,
+    )
     return await publisher.publish(fence, **arguments)
 
 
 def _prepare_publication(
-    result: LuxDepthV4Result, *, publisher: GenerationPublisher, fence: DispatchFence, profile: Any = None
+    result: LuxDepthV4Result | None,
+    *,
+    publisher: GenerationPublisher,
+    fence: DispatchFence,
+    profile: Any = None,
+    admitted_plan_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Keep bounded file verification and numerical reconstruction off the event loop."""
-    root = directory_path(result.output_root)
-    if str(root) != fence.output_root or Path(result.evidence_path) != root / "execution-evidence.json":
+    parse_plan = parse_photography_plan if profile is None else profile.parse_plan
+    if result is None:
+        if type(admitted_plan_bytes) is not bytes:
+            raise ValueError("Managed publication requires exact admitted plan bytes")
+        admitted_plan = parse_plan(admitted_plan_bytes)
+        if hashlib.sha256(admitted_plan_bytes).hexdigest() != fence.locator.plan_digest:
+            raise ValueError("Managed publication bytes do not match the dispatch fence")
+        fingerprint = admitted_plan.plan_fingerprint_sha256
+        root = directory_path(Path(fence.output_root))
+        evidence_path = root / "execution-evidence.json"
+    else:
+        if admitted_plan_bytes is not None:
+            raise ValueError("Publication must use either a completed result or admitted plan bytes")
+        root = directory_path(result.output_root)
+        evidence_path = Path(result.evidence_path)
+        fingerprint = result.plan_fingerprint_sha256
+    if str(root) != fence.output_root or evidence_path != root / "execution-evidence.json":
         raise ValueError("Completed V4 output root does not match the dispatch fence")
     verifier = verify_execution_evidence_v2 if profile is None else profile.verify_evidence
-    verified = verifier(root, expected_plan_sha256=result.plan_fingerprint_sha256)
+    verified = verifier(root, expected_plan_sha256=fingerprint)
     evidence = verified.to_payload()
     inventory = {record.path: root / record.path for record in verified.artifacts}
-    if len(result.artifact_paths) != len(inventory) or set(result.artifact_paths) != set(inventory):
+    if result is not None and (len(result.artifact_paths) != len(inventory) or set(result.artifact_paths) != set(inventory)):
         raise ValueError("V4 result artifact inventory differs from verified completion")
-    if (
+    if result is not None and (
         result.input_count != len(evidence["inputs"])
         or result.depth_cache_hits != evidence["cache"]["hits"]
         or result.depth_cache_misses != evidence["cache"]["misses"]
     ):
         raise ValueError("V4 result summary differs from verified completion")
     plan_bytes, plan_snapshot = snapshot(root, root / "execution-plan.json", maximum_bytes=MAX_EVIDENCE_BYTES)
+    if admitted_plan_bytes is not None and plan_bytes != admitted_plan_bytes:
+        raise ValueError("Completed photographic plan differs from the exact admitted bytes")
     # Dispatch binds the complete admitted bytes, including the fingerprint
     # field; evidence separately binds the semantic fingerprint within them.
     # Bind the verified record too: it becomes the publisher's staging hash.
     verified_plan = next(record for record in verified.artifacts if record.path == "execution-plan.json")
     if plan_snapshot["sha256"] != fence.locator.plan_digest or verified_plan.sha256 != fence.locator.plan_digest:
         raise ValueError("Completed photographic plan bytes do not match the admitted dispatch plan")
-    plan = (parse_photography_plan if profile is None else profile.parse_plan)(plan_bytes)
-    if plan.plan_fingerprint_sha256 != result.plan_fingerprint_sha256:
+    plan = parse_plan(plan_bytes)
+    if plan.plan_fingerprint_sha256 != fingerprint:
         raise ValueError("Managed publication plan changed after completion verification")
     payload = plan.to_payload()
     limits = publisher.limits
@@ -175,8 +210,8 @@ def _prepare_publication(
         "run_summary": {
             "pipeline": "lux_depth_v4" if profile is None else profile.pipeline,
             "plan_schema": plan.schema,
-            "plan_fingerprint_sha256": result.plan_fingerprint_sha256,
-            "input_count": result.input_count,
+            "plan_fingerprint_sha256": fingerprint,
+            "input_count": len(evidence["inputs"]),
             "production_acceptance": "pending",
         },
         "expected_file_integrity": expected,

@@ -32,6 +32,12 @@ EXPECTED_SAM2_TILING_PATH_REGEXES = [
     r"(^|/)tests/test_app_orchestrator_runtime\.py$",
     r"(^|/)web/secure-landing/portal-src/portal\.template\.js$",
 ]
+EXPECTED_CATALOG_PATH_REGEX = r"^docs/governance/documentation_catalog\.json$"
+EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
+    r'^\n?        "(?:\.github|src|tests|scripts|web|config|schemas|requirements|policy)/'
+    r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
+    r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
+)
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -100,11 +106,12 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         return errors + ["gitleaks config must define exactly one generic-api-key rule extension"]
 
     allowlists = matching_rules[0].get("allowlists", [])
-    if not isinstance(allowlists, list) or len(allowlists) != 2:
-        return errors + ["generic-api-key rule extension must define exactly two narrow allowlists"]
+    if not isinstance(allowlists, list) or len(allowlists) != 3:
+        return errors + ["generic-api-key rule extension must define exactly three narrow allowlists"]
 
     auth_allowlist_found = False
     sam2_allowlist_found = False
+    catalog_allowlist_found = False
     for allowlist in allowlists:
         if not isinstance(allowlist, dict):
             return errors + ["generic-api-key allowlists must be TOML tables"]
@@ -121,6 +128,8 @@ def _validate_config(config: dict[str, object]) -> list[str]:
             auth_allowlist_found = True
         elif path_patterns == EXPECTED_SAM2_TILING_PATH_REGEXES and match_patterns == [EXPECTED_SAM2_TILING_MATCH_REGEX]:
             sam2_allowlist_found = True
+        elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_SOURCE_HASH_REGEX]:
+            catalog_allowlist_found = True
         else:
             errors.append("generic-api-key allowlists must be scoped only to approved false-positive patterns")
 
@@ -128,6 +137,8 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         errors.append("generic-api-key allowlist must match only the generated auth failure false-positive branch")
     if not sam2_allowlist_found:
         errors.append("generic-api-key allowlist must match only the SAM2 tiling flag false positive")
+    if not catalog_allowlist_found:
+        errors.append("generic-api-key allowlist must match only documentation catalog source SHA256 lines")
 
     return errors
 

@@ -69,6 +69,21 @@ adapter. Explicit precision does not promise bitwise CPU/MPS equivalence.
 
 ## Managed job execution
 
+In the portal **Build** view, select **lux-depth-v5 (Opt-in photography)**,
+choose input/output paths, and configure the photographic controls on the
+Outputs step. The default comparison is 518/FP32; 1008 remains explicit.
+Color interpretation, device, refinement, bounded strength/clarity, and optional
+MaterialsV4/calibration manifests use the closed V5 request contract. V3 presets,
+staged uploads, and V3-only flags are not applied to V5. Saved profiles preserve
+the separate photographic configuration.
+
+Dispatch requires a current successful configuration preview and server
+readiness. Disabled or unavailable V5 servers remain blocked with their
+prerequisite reasons. Preview checks are advisory; admission and the worker
+revalidate paths, runtime authority, resources, and the exact frozen plan.
+The [September 21 HTTP/portal audit evidence](../analysis/HTTP_PORTAL_LUX_SUCCESSOR_2026-09-21.md)
+records the integration decision and validation boundaries.
+
 `POST /v1/jobs` accepts the opt-in `lux-depth-v5` pipeline. The shared
 `JobExecutionService` coordinates HTTP-admitted jobs and standalone workers:
 subprocess lifetime, cancellation, lease-bound execution, and verified generation
@@ -100,6 +115,22 @@ under `TP_LUX_V5_CACHE_DIR/<tenant_id>`; leave the setting absent to disable it.
 Worker policy rechecks tenant authorization, runtime selections, and data paths
 before execution. In pilot tenant mode, include `lux-depth-v5` in
 `TP_PILOT_ALLOWED_PIPELINES` and use the authenticated frontdoor as usual.
+
+New plans also declare a photographic browser preview. Each input's final
+master produces a PNG with a maximum edge of 1600 pixels, 8-bit sRGB encoding,
+and preserved alpha. Reduction averages linear light with premultiplied alpha.
+This is a Review derivative; the float master and 16-bit TIFF remain the
+precision outputs. The PNG is reserved before execution and included in the
+verified inventory and `tp.lux.photograph.v3` receipt. Depth `preview_maps`
+remain separate numeric NPY derivatives.
+
+Upgrade API and workers together before admitting these plans. Updated readers
+continue to accept older plans and `tp.lux.photograph.v2`; execution of an older
+plan retains its original artifact set. Older workers cannot consume the new
+preview recipe. Drain new-plan jobs before rolling back the implementation, or
+disable managed V5 and use V3. The existing output and plan envelopes retain
+their versions; the new optional recipe and descriptor are described in the
+[plan contract](EXECUTION_PLAN_V4.md#output-and-publication).
 
 Submit a request using strict snake_case argument names and JSON types:
 
@@ -199,6 +230,8 @@ validity/support scores, depth-finishing baseline and receipt, and optional
 calibrated metric arrays, alpha/ICC, previews, and MaterialsV4 baseline. The
 batch includes its immutable plan, exact file inventory, runtime/model identity,
 and cache hit/miss evidence. `production_acceptance` remains pending.
+Newly prepared plans also include the bounded sRGB PNG browser preview; legacy
+plans retain their original inventory without this derivative.
 
 Use `transformation_portal.lux_depth_v5.evidence.verify_execution_evidence_v3`
 to verify a completed directory. Managed publication independently verifies the

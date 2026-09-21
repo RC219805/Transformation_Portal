@@ -29,3 +29,11 @@ paths = [
   '''(^|/)tests/test_app_orchestrator_runtime\.py$''',
   '''(^|/)web/secure-landing/portal-src/portal\.template\.js$''',
 ]
+
+[[rules.allowlists]]
+description = "Ignore byte-verified documentation catalog source SHA256 values"
+condition = "AND"
+regexTarget = "line"
+# The catalog checker independently compares these source bindings with file bytes.
+regexes = ['''^\n?        "(?:\.github|src|tests|scripts|web|config|schemas|requirements|policy)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$''']
+paths = ['''^docs/governance/documentation_catalog\.json$''']

@@ -3053,6 +3053,9 @@ test("shared UI tokens stay synced to the canonical source", () => {
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
   const env = withTempEnvironment();
+  const restoreFetch = withMockedAccessCerts(async () => {
+    assert.fail("CSRF rejection must not contact the backend");
+  });
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -3084,6 +3087,7 @@ test("v1 POST rejects requests missing valid same-origin CSRF protections", asyn
     assert.equal(response.status, 403);
     assert.equal(body.error.code, "INVALID_CSRF");
   } finally {
+    restoreFetch();
     env.cleanup();
   }
 });
@@ -3510,6 +3514,76 @@ test("v1 forwards browser traceparent upstream and includes trace id in queue-ac
       restoreFetch();
     }
   } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 preserves literal artifact path segments and the original query", async () => {
+  const env = withTempEnvironment();
+  let restoreFetch = () => {};
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    const observed = [];
+    restoreFetch = withMockedAccessCerts(async (url) => {
+      observed.push(String(url));
+      return new Response("image bytes", { headers: { "content-type": "image/png" } });
+    });
+    for (const filename of ["photo #1.png", "photo?1.png", "100% ready.png", "%2e%2e", "café.png"]) {
+      const segments = ["jobs", "job-123", "artifacts", "nested folder", filename];
+      const pathname = `/v1/${segments.map(encodeURIComponent).join("/")}`;
+      const request = buildRequest(`https://portal.example.com${pathname}?download=1&label=a%23b`, {
+        headers: {
+          cookie: `__Host-tp_session=${session.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        }
+      });
+      const response = await route.GET(request, { params: Promise.resolve({ path: segments }) });
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), "image bytes");
+      assert.equal(observed.at(-1), `http://127.0.0.1:8000${pathname}?download=1&label=a%23b`);
+    }
+    assert.equal(observed.length, 5);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("v1 rejects ambiguous decoded path segments before contacting the backend", async () => {
+  const env = withTempEnvironment();
+  let restoreFetch = () => {};
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    let upstreamCalls = 0;
+    restoreFetch = withMockedAccessCerts(async () => {
+      upstreamCalls += 1;
+      return new Response("unexpected");
+    });
+    for (const segment of [".", "..", "../portal", "a/b", "a\\b", "", "a\u0000b", "a\nb", "\ud800"]) {
+      const request = buildRequest("https://portal.example.com/v1/jobs/invalid", {
+        headers: {
+          cookie: `__Host-tp_session=${session.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        }
+      });
+      const response = await route.GET(request, { params: { path: ["jobs", segment] } });
+      assert.equal(response.status, 400, JSON.stringify(segment));
+      const body = await response.json();
+      assert.equal(body.schema, "tp.orchestrator.error.v1");
+      assert.equal(body.error.code, "INVALID_PATH");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    restoreFetch();
     env.cleanup();
   }
 });

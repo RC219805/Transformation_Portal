@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
+import struct
+import zlib
 from types import SimpleNamespace
 
 import numpy as np
@@ -83,6 +86,20 @@ def completed(tmp_path, monkeypatch, request):
         ),
         publisher=publisher if options.get("managed", True) else None,
     )
+    if options.get("legacy_plan"):
+        from dataclasses import replace
+
+        from transformation_portal.core.execution_plan_v2 import digest_payload
+        from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4, depth_photography_nodes
+
+        legacy_payload = prepared.plan.to_payload()
+        legacy_payload["configuration"].pop("browser_preview")
+        legacy_payload["nodes"] = depth_photography_nodes(
+            legacy_payload["configuration"], companions=companion_path is not None
+        )
+        legacy_payload.pop("plan_fingerprint_sha256")
+        legacy_payload["plan_fingerprint_sha256"] = digest_payload(legacy_payload)
+        prepared = replace(prepared, plan=ExecutionPlanV4.from_payload(legacy_payload))
     root = prepared.output_root
     root.mkdir()
     plan = prepared.plan.to_payload()
@@ -150,6 +167,12 @@ def completed(tmp_path, monkeypatch, request):
         "materials": {"status": "abstained", "reason": "no_authoritative_masks"},
         "preview_maps": preview_report,
     }
+    if "browser_preview" in plan["configuration"]:
+        from transformation_portal.lux_depth_v5.preview import encode_preview
+
+        preview_bytes, preview_receipt = encode_preview(master, relative_path=f"{input_id}/preview.png")
+        (destination / "preview.png").write_bytes(preview_bytes)
+        descriptor.update(schema="tp.lux.photograph.v3", browser_preview=preview_receipt)
     (destination / "photograph.json").write_bytes(canonicalize_json(descriptor))
     (root / "execution-plan.json").write_bytes(prepared.canonical_plan_bytes)
     artifacts = []
@@ -159,7 +182,7 @@ def completed(tmp_path, monkeypatch, request):
         kind = (
             "plan"
             if path.name == "execution-plan.json"
-            else "descriptor" if path.suffix == ".json" else "image" if path.suffix == ".tif" else "array"
+            else "descriptor" if path.suffix == ".json" else "image" if path.suffix in {".tif", ".png"} else "array"
         )
         raw = path.read_bytes()
         artifacts.append(
@@ -239,13 +262,107 @@ def verify(completed):
 
 @pytest.mark.parametrize(
     "completed",
-    [{}, {"alpha": True, "icc": True, "previews": True, "calibration": True}, {"unknown_sky": True}],
+    [{}, {"alpha": True, "icc": True, "previews": True, "calibration": True}, {"unknown_sky": True}, {"legacy_plan": True}],
     indirect=True,
 )
 def test_complete_products_are_reconstructed_with_optional_geometry(completed):
     result = verify(completed)
     assert {artifact.path for artifact in result.artifacts} == set(completed.result.artifact_paths)
     assert result.to_payload()["schema"] == "tp.lux.execution.evidence.v3"
+
+
+@pytest.mark.parametrize("mutation", ["pixels", "geometry", "icc", "receipt", "missing"])
+def test_rehashed_browser_preview_forgery_is_rejected(completed, mutation):
+    from PIL import Image
+
+    root = completed.result.output_root
+    relative = "input-0000/preview.png"
+    if mutation == "receipt":
+        completed.descriptor["browser_preview"]["color_space"] = "linear_srgb"
+        (root / "input-0000/photograph.json").write_bytes(canonicalize_json(completed.descriptor))
+        rehash(completed, "input-0000/photograph.json")
+    elif mutation == "missing":
+        (root / relative).unlink()
+        completed.evidence["artifacts"] = [row for row in completed.evidence["artifacts"] if row["path"] != relative]
+        completed.result.evidence_path.write_bytes(canonicalize_json(completed.evidence))
+    else:
+        with Image.open(root / relative) as image:
+            samples = np.array(image)
+        if mutation == "pixels":
+            samples[0, 0, 0] ^= 1
+        elif mutation == "geometry":
+            samples = samples[:1, :1]
+        with Image.fromarray(samples) as image:
+            image.save(root / relative, icc_profile=None if mutation == "icc" else output_srgb_icc())
+        rehash(completed, relative)
+    with pytest.raises(ValueError, match="browser preview"):
+        verify(completed)
+
+
+@pytest.mark.parametrize("chunk_type", [b"iCCP", b"tEXt"])
+def test_rehashed_browser_preview_rejects_metadata_after_pixel_data(completed, chunk_type):
+    from PIL import Image
+
+    relative = "input-0000/preview.png"
+    path = completed.result.output_root / relative
+    raw = path.read_bytes()
+    data = b"foreign\x00\x00" + zlib.compress(b"foreign ICC profile") if chunk_type == b"iCCP" else b"forged\x00metadata"
+    chunk = struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    # The generated PNG ends with the standard, empty IEND chunk. Place a
+    # correctly checksummed metadata chunk after IDAT and before that terminator.
+    assert raw[-8:-4] == b"IEND"
+    altered = raw[:-12] + chunk + raw[-12:]
+    with Image.open(io.BytesIO(altered)) as image:
+        assert image.info == {"icc_profile": output_srgb_icc()}
+        image.load()
+        assert image.info != {"icc_profile": output_srgb_icc()}
+    path.write_bytes(altered)
+    rehash(completed, relative)
+    with pytest.raises(ValueError, match="browser preview"):
+        verify(completed)
+
+
+@pytest.mark.parametrize("completed", [{}, {"alpha": True}], indirect=True)
+def test_rehashed_browser_preview_rejects_16_bit_pixels_hidden_by_decoder(completed):
+    from PIL import Image
+
+    relative = "input-0000/preview.png"
+    path = completed.result.output_root / relative
+    with Image.open(path) as image:
+        expected = np.array(image)
+    samples = expected.astype(np.uint16) * 256 + 255
+    scanlines = b"".join(b"\0" + row.astype(">u2").tobytes() for row in samples)
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    height, width, channels = expected.shape
+    raw = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 16, 6 if channels == 4 else 2, 0, 0, 0))
+        + chunk(b"iCCP", b"ICC Profile\0\0" + zlib.compress(output_srgb_icc()))
+        + chunk(b"IDAT", zlib.compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
+    with Image.open(io.BytesIO(raw)) as image:
+        # Pillow truncates the low byte, concealing an encoding that differs
+        # from both the declared eight-bit format and the expected samples.
+        np.testing.assert_array_equal(np.asarray(image), expected)
+    path.write_bytes(raw)
+    rehash(completed, relative)
+    with pytest.raises(ValueError, match="browser preview.*encoding"):
+        verify(completed)
+
+
+@pytest.mark.parametrize("completed", [{"legacy_plan": True}], indirect=True)
+def test_legacy_plan_cannot_authorize_an_unplanned_browser_preview(completed):
+    completed.descriptor["schema"] = "tp.lux.photograph.v3"
+    completed.descriptor["browser_preview"] = {}
+    relative = "input-0000/photograph.json"
+    (completed.result.output_root / relative).write_bytes(canonicalize_json(completed.descriptor))
+    rehash(completed, relative)
+    with pytest.raises(ValueError, match="closed schema"):
+        verify(completed)
 
 
 @pytest.mark.parametrize(

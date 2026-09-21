@@ -74,7 +74,8 @@ def test_semantic_verification_allows_worker_heartbeat_before_publication(comple
 def test_reservation_accounts_for_all_unknown_optional_carriers(completed):
     payload = completed.prepared.plan.to_payload()
     paths = publication_paths(payload)
-    assert len(paths) == 18
+    assert len(paths) == 19
+    assert "input-0000/preview.png" in paths
     assert "input-0000/source-icc.npy" in paths
     assert "input-0000/alpha.npy" in paths
     assert "input-0000/depth-confidence.npy" not in paths
@@ -82,7 +83,7 @@ def test_reservation_accounts_for_all_unknown_optional_carriers(completed):
     with pytest.raises(ValueError, match="limits changed"):
         validate_publication_plan(payload, replace(limits, max_files=17))
     payload["publication"]["max_files"] = 17
-    with pytest.raises(ValueError, match="reserves 18"):
+    with pytest.raises(ValueError, match="reserves 19"):
         validate_publication_plan(payload, replace(limits, max_files=17))
 
 

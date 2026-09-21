@@ -138,7 +138,19 @@ async function streamSse(upstream, session, traceparent) {
 async function handleProxy(request, { params }) {
   const resolvedParams = typeof params?.then === "function" ? await params : params;
   const pathSegments = Array.isArray(resolvedParams?.path) ? resolvedParams.path : [];
-  const pathname = `/v1/${pathSegments.join("/")}`;
+  // Next supplies decoded segments. Re-encode filenames before URL parsing so
+  // literal query/fragment characters cannot change the upstream target.
+  let pathname = "/v1/";
+  let invalidPath = pathSegments.length === 0;
+  try {
+    invalidPath ||= pathSegments.some((segment) => (
+      typeof segment !== "string" || !segment || segment === "." || segment === ".."
+      || /[\\/\u0000-\u001f\u007f]/.test(segment)
+    ));
+    if (!invalidPath) pathname += pathSegments.map(encodeURIComponent).join("/");
+  } catch {
+    invalidPath = true;
+  }
   const sseRequest = isSsePath(pathname);
   const requestTraceparent = resolveRequestTraceparent(request);
   const traceId = traceIdFromTraceparent(requestTraceparent);
@@ -204,6 +216,10 @@ async function handleProxy(request, { params }) {
       });
       return errorEnvelope(403, "INVALID_CSRF", "csrf token validation failed", { path: pathname }, requestTraceparent);
     }
+  }
+
+  if (invalidPath) {
+    return errorEnvelope(400, "INVALID_PATH", "invalid API path", {}, requestTraceparent);
   }
 
   const config = getConfig();
