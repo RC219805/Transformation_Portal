@@ -177,7 +177,15 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
             assert json.loads(bindings)["input_root"] == str(request_case.input_dir)
             queued = await redis.hget(prefix + ":dispatch:v1:job:" + job_id, "request")
             assert DispatchLocator.from_json(queued) == locator
-            assert set(json.loads(queued)) == set(DispatchLocator.__dataclass_fields__)
+            assert set(json.loads(queued)) == {
+                "schema",
+                "job_id",
+                "attempt_id",
+                "dispatch_id",
+                "plan_digest",
+                "tenant_id",
+                "api_version",
+            }
             assert "runtime_python" not in queued and "argv" not in queued
 
             with log_path.open("wb") as log:
