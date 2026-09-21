@@ -8,7 +8,7 @@ from PIL import Image
 
 from transformation_portal.core.execution_identity_v5 import materialize_stage_identity
 from transformation_portal.core.execution_plan_v2 import digest_payload, parse_execution_plan
-from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4
+from transformation_portal.core.execution_plan_v4 import BROWSER_PREVIEW_RECIPE, ExecutionPlanV4, depth_photography_nodes
 from transformation_portal.lux_depth_v4.lifecycle import LuxDepthV4Request
 from transformation_portal.lux_depth_v5 import LuxDepthV5Request, prepare
 
@@ -83,6 +83,33 @@ def test_native_identity_reuses_inference_for_artistic_changes_only(request_v5):
     assert original.plan_fingerprint_sha256 != finish.plan_fingerprint_sha256
     assert _depth_identity(original) == _depth_identity(finish)
     assert _depth_identity(original) != _depth_identity(precision)
+
+
+def test_browser_preview_is_plan_bound_and_legacy_plans_remain_readable(request_v5):
+    current = prepare(request_v5).plan
+    payload = current.to_payload()
+    assert payload["configuration"]["browser_preview"] == BROWSER_PREVIEW_RECIPE
+    assert payload["nodes"][3]["configuration"]["browser_preview"] == BROWSER_PREVIEW_RECIPE
+    assert payload["nodes"][3]["outputs"]["preview"] == "tp.image.browser_preview.v1"
+    payload["configuration"].pop("browser_preview")
+    payload["nodes"] = depth_photography_nodes(payload["configuration"])
+    payload.pop("plan_fingerprint_sha256")
+    payload["plan_fingerprint_sha256"] = digest_payload(payload)
+    legacy = ExecutionPlanV4.from_payload(payload)
+    assert legacy.plan_fingerprint_sha256 != current.plan_fingerprint_sha256
+    assert _depth_identity(legacy) == _depth_identity(current)
+    assert "preview" not in legacy.to_payload()["nodes"][3]["outputs"]
+
+
+@pytest.mark.parametrize("recipe", ["unversioned", True, {"max_edge": 999999}])
+def test_browser_preview_recipe_rejects_rehashed_unknown_policy(request_v5, recipe):
+    payload = prepare(request_v5).plan.to_payload()
+    payload["configuration"]["browser_preview"] = recipe
+    payload["nodes"] = depth_photography_nodes(payload["configuration"])
+    payload.pop("plan_fingerprint_sha256")
+    payload["plan_fingerprint_sha256"] = digest_payload(payload)
+    with pytest.raises(ValueError):
+        ExecutionPlanV4.from_payload(payload)
 
 
 def test_v4_executor_rejects_v5_carrier(request_v5):

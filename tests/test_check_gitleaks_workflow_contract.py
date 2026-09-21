@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import re
 from pathlib import Path
@@ -45,6 +46,13 @@ paths = [
   '''{gitleaks_contract.EXPECTED_SAM2_TILING_PATH_REGEXES[1]}''',
   '''{gitleaks_contract.EXPECTED_SAM2_TILING_PATH_REGEXES[2]}''',
 ]
+
+[[rules.allowlists]]
+description = "Ignore byte-verified documentation catalog source SHA256 values"
+condition = "AND"
+regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
+regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX}''']
+paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
 """
 
 
@@ -210,3 +218,70 @@ def test_wrong_match_regex_is_reported() -> None:
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
     assert "generic-api-key allowlist must match only the generated auth failure false-positive branch" in errors
+
+
+@pytest.mark.parametrize("prefix", ["", "\n"])
+@pytest.mark.parametrize("suffix", ["", ","])
+def test_catalog_source_hash_allowlist_matches_only_a_complete_source_binding(prefix: str, suffix: str) -> None:
+    digest = hashlib.sha256(b"catalog source binding fixture").hexdigest()
+    line = f'{prefix}        "tests/orchestrator/test_example_api.py": "{digest}"{suffix}'
+    assert re.search(gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX, "docs/governance/documentation_catalog.json")
+    assert re.search(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, line)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["credential_key", "non_hash", "uppercase", "short", "long", "indentation", "trailing_secret", "traversal"],
+)
+def test_catalog_source_hash_allowlist_rejects_secret_lookalikes(mutation: str) -> None:
+    digest = hashlib.sha256(b"catalog source binding fixture").hexdigest()
+    source = "tests/orchestrator/test_example_api.py"
+    if mutation == "credential_key":
+        source = "api_key"
+    elif mutation == "non_hash":
+        digest = "not-a-source-hash-" + digest
+    elif mutation == "uppercase":
+        digest = digest.upper()
+    elif mutation == "short":
+        digest = digest[:-1]
+    elif mutation == "long":
+        digest += "a"
+    elif mutation == "traversal":
+        source = "tests/../credentials/api.py"
+    line = f'        "{source}": "{digest}",'
+    if mutation == "indentation":
+        line = line[1:]
+    elif mutation == "trailing_secret":
+        line += f' "api_key": "{digest}"'
+    assert re.search(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, line) is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "docs/governance/documentation_catalog_copy.json",
+        "docs/governance/credentials.json",
+        "tests/docs/governance/documentation_catalog.json",
+        "docs/governance/documentation_catalog.json.backup",
+    ],
+)
+def test_catalog_source_hash_allowlist_does_not_match_other_files(path: str) -> None:
+    assert re.search(gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX, path) is None
+
+
+@pytest.mark.parametrize("mutation", ["path", "line", "condition"])
+def test_catalog_source_hash_exception_cannot_be_widened(mutation: str) -> None:
+    config = valid_config_text()
+    if mutation == "path":
+        config = config.replace(gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX, r"docs/governance/.*")
+    elif mutation == "line":
+        config = config.replace(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, r"[0-9a-f]{64}")
+    else:
+        index = config.rindex('condition = "AND"')
+        config = config[:index] + config[index:].replace('condition = "AND"', 'condition = "OR"', 1)
+    errors = gitleaks_contract.validate_gitleaks_contract(config, valid_ci_workflow_text(), valid_firewall_workflow_text())
+    assert errors
+    if mutation == "condition":
+        assert "generic-api-key allowlists must require AND semantics" in errors
+    else:
+        assert "generic-api-key allowlist must match only documentation catalog source SHA256 lines" in errors

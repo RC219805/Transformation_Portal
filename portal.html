@@ -580,6 +580,7 @@ Contract notes:
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
                             <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                 <option value="lux-depth-v3">lux-depth-v3</option>
+                                <option value="lux-depth-v5">lux-depth-v5 (Opt-in photography)</option>
                                 <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
                                 <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
                                 <option value="archive-gate-c">archive-gate-c (METS Export)</option>
@@ -762,6 +763,27 @@ Contract notes:
                                 <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" required aria-required="true" aria-describedby="outputDirStatus" aria-errormessage="outputDirStatus" />
                                 <p id="outputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose the governed destination for generated outputs.</p>
                             </div>
+                        </div>
+                    </section>
+
+                    <section id="fieldsLuxV5" data-build-step-panel="3" class="hidden pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="lux-v5-controls">
+                        <div>
+                            <p class="section-kicker">Step 3 · Opt-in successor</p>
+                            <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">LuxDepthV5 photography</h3>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">V5 extends the V4 photography foundation with verified execution and outputs. V3 remains the production baseline and rollback path.</p>
+                            <p id="v5ControlsHint" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Use 518 for normal comparisons. 1008 requires separate performance and photographic acceptance. Optional manifests must already exist in the server's authorized inputs. Model runtime and cache locations are managed by the server.</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" aria-describedby="v5ControlsHint">
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5InputColor">Input color</label><select id="v5InputColor" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors"><option value="auto">auto (Read image metadata)</option><option value="srgb">sRGB</option><option value="linear_srgb">Linear sRGB</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5Device">Compute device</label><select id="v5Device" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors"><option value="cpu">CPU</option><option value="mps">MPS (macOS)</option><option value="auto">Auto</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5Precision">Precision</label><select id="v5Precision" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors"><option value="fp32">FP32 (Default)</option><option value="fp16">FP16</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5TargetSize">Depth target size</label><select id="v5TargetSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors"><option value="518">518 (Default)</option><option value="1008">1008 (Comparison only)</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5Refinement">Depth refinement</label><select id="v5Refinement" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors"><option value="guided_bilinear">Guided bilinear</option><option value="bilinear">Bilinear</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5Strength">Enhancement strength</label><input id="v5Strength" type="number" required min="0" max="1" step="0.01" value="0.25" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors" /></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5Clarity">Clarity</label><input id="v5Clarity" type="number" required min="0" max="1" step="0.01" value="0" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors" /></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5PreviewMaps"><input id="v5PreviewMaps" type="checkbox" /> Include depth preview maps</label></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5MaterialsManifest">MaterialsV4 manifest (Optional)</label><input id="v5MaterialsManifest" type="text" autocomplete="off" spellcheck="false" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors" /></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v5CompanionsManifest">Companion manifest (Optional)</label><input id="v5CompanionsManifest" type="text" autocomplete="off" spellcheck="false" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors" /></div>
                         </div>
                     </section>
 

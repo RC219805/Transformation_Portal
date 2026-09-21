@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from tests.lux_depth_v5.test_evidence import completed, rehash  # noqa: F401 - shared fixture registration
+from transformation_portal.lux_depth_v5.publication import _publish_admitted_result
 from transformation_portal.orchestrator.artifact_store.base import ArtifactStoreError
+from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
 from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
 from transformation_portal.orchestrator.photography_adapter import ManagedPhotographyPublisher
@@ -34,6 +40,7 @@ async def test_projection_matches_manifest_without_scanning_or_discovering_previ
         integrity[relative] = {"size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
     (output / "input-0000/unverified.png").write_bytes(b"must not be listed")
     (output / "input-0000/delivery.tif.preview.png").write_bytes(b"unverified preview")
+    (output / "input-0000/preview.png").write_bytes(b"unverified V5 preview")
     monkeypatch.setattr(job_artifacts, "_index_job_artifacts", lambda **_kw: pytest.fail("scanned output tree"))
     monkeypatch.setattr(job_artifacts, "_artifact_preview_proxy_path", lambda *_a: pytest.fail("discovered preview sibling"))
     locator = DispatchLocator("job_items", "attempt", "dispatch", "a" * 64, "tenant")
@@ -90,6 +97,42 @@ async def test_projection_matches_manifest_without_scanning_or_discovering_previ
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "delivery,preview,linked",
+    [
+        ("input-0000/delivery.tif", "input-0000/preview.png", True),
+        ("input-0000/delivery.tif", "input-0001/preview.png", False),
+        ("input-0000/delivery.tif", None, False),
+        ("arbitrary/delivery.tif", "arbitrary/preview.png", False),
+    ],
+)
+async def test_browser_proxy_requires_the_same_verified_photographic_input(tmp_path, monkeypatch, delivery, preview, linked):
+
+    async def project_only(_self, _fence, _files, **kwargs):
+        return kwargs["artifacts"]
+
+    monkeypatch.setattr(GenerationPublisher, "publish", project_only)
+    paths = ["execution-evidence.json", delivery, *([preview] if preview is not None else [])]
+    locator = DispatchLocator("job_previews", "attempt", "dispatch", "a" * 64, "tenant")
+    fence = DispatchFence(locator, "worker", 1, 100, str(tmp_path), str(tmp_path))
+    projected = await ManagedPhotographyPublisher(artifact_store=None, record_store=None).publish(
+        fence,
+        {path: tmp_path / path for path in paths},
+        state="succeeded",
+        exit_code=0,
+        artifacts={"schema": "tp.lux.delivery.v3", "paths": paths, "execution_evidence": "execution-evidence.json"},
+        run_summary={},
+        expected_file_integrity={path: {"size_bytes": 1, "sha256": "a" * 64} for path in paths},
+    )
+    item = next(item for item in projected["items"] if item["path"] == delivery)
+    assert item["browser_previewable"] is False
+    assert ("preview_url" in item) is linked
+    if linked:
+        assert item["preview_url"] == job_artifacts._artifact_url(locator.job_id, preview)
+        assert item["preview_mime_type"] == "image/png"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mismatch", ["missing_integrity", "unverified_path", "wrong_profile"])
 async def test_projection_rejects_inventory_that_is_not_the_exact_verified_v5_set(tmp_path, mismatch):
     files = {"execution-evidence.json": tmp_path / "does-not-exist"}
@@ -124,13 +167,10 @@ async def test_projection_rejects_inventory_that_is_not_the_exact_verified_v5_se
 async def test_existing_admission_reservation_already_bounds_complete_portal_projection(
     tmp_path, monkeypatch, preview_maps, materials, calibration, input_count
 ):
-    from dataclasses import replace
-
     from transformation_portal.core.execution_plan_v2 import MAX_INPUTS
     from transformation_portal.ingest.canonical_json import canonicalize_json
     from transformation_portal.lux_depth_v4 import publication as shared_publication
     from transformation_portal.lux_depth_v5.publication import publication_paths, validate_publication_plan
-    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
     limits = GenerationPublisher(artifact_store=None, record_store=None).limits
     configuration = {"target_size": 56, "preview_maps": preview_maps}
@@ -194,3 +234,40 @@ async def test_existing_admission_reservation_already_bounds_complete_portal_pro
     projection_header = {**projected, "paths": [], "items": [], "indexed_count": 2 + MAX_INPUTS * 22}
     reservation_header = {**reservation, "files": []}
     assert len(canonicalize_json(projection_header)) <= len(canonicalize_json(reservation_header))
+
+
+@pytest.mark.parametrize("mutation", ["wrong_digest", "semantic_digest", "changed_plan_bytes", "semantic_forgery"])
+def test_admitted_publication_rejects_forgery_before_staging(completed, monkeypatch, mutation):
+    plan_bytes, fence = completed.prepared.canonical_plan_bytes, completed.fence
+    if mutation == "wrong_digest":
+        fence = replace(fence, locator=replace(fence.locator, plan_digest="f" * 64))
+    elif mutation == "semantic_digest":
+        fence = replace(fence, locator=replace(fence.locator, plan_digest=completed.result.plan_fingerprint_sha256))
+    elif mutation == "changed_plan_bytes":
+        path = completed.result.output_root / "execution-plan.json"
+        path.write_bytes(plan_bytes + b"\n")
+        rehash(completed, "execution-plan.json")
+    else:
+        relative = "input-0000/relative-depth.npy"
+        path = completed.result.output_root / relative
+        depth = np.load(path)
+        depth[10, 10] += 0.1
+        np.save(path, depth, allow_pickle=False)
+        rehash(completed, relative)
+    publisher = GenerationPublisher(artifact_store=None, record_store=None)
+    monkeypatch.setattr(publisher, "publish", lambda *_a, **_kw: pytest.fail("Invalid evidence reached staging"))
+    with pytest.raises(ValueError, match="dispatch fence|exact admitted bytes|independently reconstructed"):
+        asyncio.run(_publish_admitted_result(plan_bytes, publisher=publisher, fence=fence))
+
+
+def test_admitted_publication_rechecks_staged_bytes_after_semantic_verification(completed, tmp_path):
+    class ChangedAfterVerification(GenerationPublisher):
+        async def publish(self, fence, files, **kwargs):
+            files["input-0000/delivery.tif"].write_bytes(b"changed after verification")
+            return await super().publish(fence, files, **kwargs)
+
+    publisher = ChangedAfterVerification(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
+    with pytest.raises(ArtifactStoreError):
+        asyncio.run(
+            _publish_admitted_result(completed.prepared.canonical_plan_bytes, publisher=publisher, fence=completed.fence)
+        )

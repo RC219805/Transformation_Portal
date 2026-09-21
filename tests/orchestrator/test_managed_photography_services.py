@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -21,6 +22,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 from redis.asyncio import Redis
 from sqlalchemy import text
 
@@ -226,10 +228,24 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
                 assert descriptor["fingerprint_status"] == "ok"
                 assert descriptor["url"] == descriptor["download_url"]
                 assert descriptor["download_url"].endswith(f"/jobs/{job_id}/artifacts/{relative}")
-            for relative in ("execution-plan.json", "execution-evidence.json", "input-0000/delivery.tif"):
+            assert descriptors["input-0000/delivery.tif"]["browser_previewable"] is False
+            assert descriptors["input-0000/delivery.tif"]["preview_url"] == descriptors["input-0000/preview.png"]["url"]
+            assert descriptors["input-0000/delivery.tif"]["preview_mime_type"] == "image/png"
+            for relative in (
+                "execution-plan.json",
+                "execution-evidence.json",
+                "input-0000/delivery.tif",
+                "input-0000/preview.png",
+            ):
                 download = await client.get(descriptors[relative]["download_url"])
                 assert download.status_code == 200, download.text
                 assert hashlib.sha256(download.content).hexdigest() == inventory[relative]["sha256"]
+                if relative.endswith("preview.png"):
+                    assert download.headers["content-type"] == "image/png"
+                    with Image.open(io.BytesIO(download.content)) as preview:
+                        assert preview.format == "PNG" and preview.mode == "RGB"
+                        assert 0 < min(preview.size) <= max(preview.size) <= 1600
+                        assert preview.info.get("icc_profile")
             delivered_plan = await client.get(f"{api_prefix}/jobs/{job_id}/artifacts/execution-plan.json")
             assert delivered_plan.content == plan_bytes
             hidden = await client.get(

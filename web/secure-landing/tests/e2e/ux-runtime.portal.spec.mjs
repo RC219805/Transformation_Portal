@@ -74,6 +74,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
     cancelRequests: 0,
     eventStreamRequests: 0,
     jobSubmissions: 0,
+    submittedPayloads: [],
+    previewPayloads: [],
     presetRequests: 0,
   };
 
@@ -296,6 +298,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
 
     if (pathname === "/v1/jobs" && method === "POST") {
       runtime.jobSubmissions += 1;
+      runtime.submittedPayloads.push(request.postDataJSON());
       await fulfillJson(route, {
         success: true,
         data: { id: "job-dispatched", events_url: "/v1/jobs/job-dispatched/events" },
@@ -321,6 +324,9 @@ async function installHydratedPortalRoutes(page, options = {}) {
 
     if (pathname === "/v1/config-preview") {
       const requestPayload = request.postDataJSON();
+      runtime.previewPayloads.push(requestPayload);
+      const isPhotography = requestPayload?.pipeline === "lux-depth-v5";
+      if (options.previewDelayMs) await new Promise((resolve) => setTimeout(resolve, options.previewDelayMs));
       const args = requestPayload?.args || {};
       await fulfillJson(route, {
         success: true,
@@ -331,9 +337,11 @@ async function installHydratedPortalRoutes(page, options = {}) {
           field_errors: preview.field_errors,
           field_warnings: preview.field_warnings,
           inactive_fields: preview.inactive_fields,
-          readiness: { status: "ready", missing_prerequisites: [] },
+          readiness: isPhotography && options.photographyBlocked
+            ? { status: "blocked", missing_prerequisites: [{ severity: "blocked", reason: "photography_disabled", field: "pipeline", message: "Managed LuxDepthV5 is not enabled on this server." }] }
+            : { status: "ready", missing_prerequisites: [] },
           estimate_summary: { runtime_band: "low", gpu_pressure: "low", research_risk: "none" },
-          argv_preview: "lux-depth-v3 --input-dir ./input_images --output-dir ./output/lux_depth_v3_apex",
+          argv_preview: isPhotography ? "" : "lux-depth-v3 --input-dir ./input_images --output-dir ./output/lux_depth_v3_apex",
         },
       });
       return;
@@ -396,6 +404,33 @@ async function gotoHydratedPortal(page, target = "/portal") {
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
+  test("capability catalog loads only for Overview and renders the latest draft after loading", async ({ page }) => {
+    await installHydratedPortalRoutes(page);
+    let overviewRequests = 0;
+    let releaseOverview;
+    const overviewGate = new Promise((resolve) => { releaseOverview = resolve; });
+    await page.route("**/__mock-portal/portal-overview.js", async (route) => {
+      overviewRequests += 1;
+      await overviewGate;
+      await route.fallback();
+    });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await expect(page.locator("#runJobBtn")).toBeEnabled();
+    expect(overviewRequests).toBe(0);
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator("body")).toHaveAttribute("data-console-view", "review");
+    expect(overviewRequests).toBe(0);
+    await page.locator('[data-view-link="overview"]').click();
+    await expect.poll(() => overviewRequests).toBe(1);
+    await page.locator('[data-view-link="build"]').click();
+    await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+    await page.locator('[data-view-link="overview"]').click();
+    releaseOverview();
+    await expect(page.locator('[data-capability-id="lux_depth_v5"]')).toHaveAttribute("data-capability-status", "enabled");
+    await expect(page.locator("#capabilityMatrix")).toContainText("LuxDepthV5");
+    expect(overviewRequests).toBe(1);
+  });
+
   test("direct-debug credentials remain page-only and are never restored after reload", async ({ page }, testInfo) => {
     const errors = [];
     const requests = [];
@@ -1677,4 +1712,173 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
         { inert: false, ariaHidden: null },
       ]);
   });
+});
+
+
+test("@portal-browser V5 photography uses isolated controls and preview-backed dispatch", async ({ page }, testInfo) => {
+  const runtime = await installHydratedPortalRoutes(page, { keepEventStreamOpen: true, previewDelayMs: 100 });
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await expect(page.locator("#pipelineSelect")).toHaveValue("lux-depth-v3");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab3").click();
+  await expect(page.locator('[data-ui="lux-v5-controls"]')).toBeVisible();
+  await expect(page.locator("#fieldsLuxDepth")).toBeHidden();
+  await expect(page.locator("#fieldsArchiveGate")).toBeHidden();
+  await expect(page.locator("#v5TargetSize")).toHaveValue("518");
+  await expect(page.locator("#v5Precision")).toHaveValue("fp32");
+  await page.locator("#v5InputColor").selectOption("srgb");
+  await page.locator("#v5Strength").fill("0.35");
+  await page.locator("#v5Strength").blur();
+  await page.locator("#v5PreviewMaps").check();
+  await expect.poll(() => runtime.previewPayloads.filter((payload) => payload.pipeline === "lux-depth-v5").at(-1)?.args.strength).toBe(0.35);
+  await expectNoHorizontalOverflow(page);
+  await expectNoWcagViolations(page, "V5 photography controls");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("lux-v5-controls.png"), fullPage: true });
+  await testInfo.attach("LuxDepthV5 controls", { path: testInfo.outputPath("lux-v5-controls.png"), contentType: "image/png" });
+  await page.locator("#buildStepTab4").click();
+  await expect(page.locator("#runJobBtn")).toBeEnabled();
+  await expect(page.locator("#cliPreview")).toContainText("Managed LuxDepthV5 dispatch");
+  await expect(page.locator("#expectedOutputsList")).toContainText("Enhanced photography");
+  await page.locator("#runJobBtn").click();
+  await expect.poll(() => runtime.jobSubmissions).toBe(1);
+  const submitted = runtime.submittedPayloads[0];
+  expect(submitted.pipeline).toBe("lux-depth-v5");
+  expect(submitted.args).toMatchObject({ target_size: 518, precision: "fp32", input_color: "srgb", strength: 0.35, preview_maps: true });
+  for (const key of ["archive_command", "manifest_jsonl", "preset", "materials_v3", "enable_segmentation", "runtime_python", "cache_dir"]) {
+    expect(submitted.args).not.toHaveProperty(key);
+  }
+});
+
+test("@portal-browser V5 server opt-in gate blocks dispatch and switching back preserves V3", async ({ page }, testInfo) => {
+  const runtime = await installHydratedPortalRoutes(page, { photographyBlocked: true });
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab4").click();
+  await expect(page.locator("#runJobBtn")).toBeDisabled();
+  await expect(page.locator("#nextBestActionDetail")).toContainText("Managed LuxDepthV5 is not enabled");
+  expect(runtime.jobSubmissions).toBe(0);
+  await expectNoHorizontalOverflow(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("lux-v5-blocked.png"), fullPage: true });
+  await testInfo.attach("LuxDepthV5 server gate", { path: testInfo.outputPath("lux-v5-blocked.png"), contentType: "image/png" });
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v3");
+  await expect(page.locator("#runJobBtn")).toBeEnabled();
+  await page.locator("#buildStepTab3").click();
+  await expect(page.locator("#fieldsLuxDepth")).toBeVisible();
+  await expect(page.locator("#fieldsLuxV5")).toBeHidden();
+  await expect(page.locator("#modelKey")).toHaveValue("da3-metric");
+});
+
+test("@portal-browser V5 preview errors cannot bypass the dispatch guard", async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, { preview: { field_errors: [{ field: "precision", code: "invalid_argument", message: "CPU requires FP32 precision." }] } });
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab4").click();
+  await expect(page.locator("#runJobBtn")).toBeDisabled();
+  await expect(page.locator("#nextBestActionDetail")).toContainText("CPU requires FP32 precision");
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+
+test("@portal-browser V5 photography profiles retain successor settings after reload", async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab3").click();
+  await page.locator("#v5TargetSize").selectOption("1008");
+  await page.locator("#v5Refinement").selectOption("bilinear");
+  await page.locator("#saveProfileBtn").click();
+  await page.locator("#profileManagerName").fill("V5 comparison");
+  await page.locator('[data-profile-action="save"]').click();
+  await expect(page.locator("#profileSelect")).toHaveValue("V5 comparison");
+  const profile = await page.evaluate((key) => JSON.parse(localStorage.getItem(key))["V5 comparison"], managedProfileStorageKey(runtime.actor));
+  expect(profile.pipeline).toBe("lux-depth-v5");
+  expect(profile.config.photography.targetSize).toBe("1008");
+  await page.locator('[data-profile-action="close"]').click();
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-bootstrap-status", "ready");
+  await expect(page.locator("#pipelineSelect")).toHaveValue("lux-depth-v5");
+  await page.locator("#buildStepTab3").click();
+  await expect(page.locator("#v5TargetSize")).toHaveValue("1008");
+  await expect(page.locator("#v5Refinement")).toHaveValue("bilinear");
+});
+
+test("@portal-browser V5 Review displays the verified PNG proxy and retains the archival TIFF download target", async ({ page }, testInfo) => {
+  const jobId = "job-v5-review";
+  const deliveryPath = "input-0000/delivery.tif";
+  const previewPath = "input-0000/preview.png";
+  const deliveryUrl = `/v1/jobs/${jobId}/artifacts/${deliveryPath}`;
+  const previewUrl = `/v1/jobs/${jobId}/artifacts/${previewPath}`;
+  // Matches PortalPhotographyGenerationPublisher: same-input verified proxy,
+  // archival TIFF stays non-browser-previewable and owns its download URL.
+  const completedJob = {
+    id: jobId,
+    pipeline: "lux-depth-v5",
+    state: "succeeded",
+    progress: 100,
+    logs_tail: ["[INFO] Verified photography outputs published."],
+    artifacts: {
+      schema: "tp.lux.delivery.v3",
+      execution_evidence: "execution-evidence.json",
+      items: [
+        {
+          name: "delivery.tif", path: deliveryPath, relative_path: deliveryPath,
+          artifact_type: "image", media_kind: "image", previewable: true, browser_previewable: false,
+          content_type: "image/tiff", mime_type: "image/tiff", url: deliveryUrl, download_url: deliveryUrl,
+          preview_url: previewUrl, preview_mime_type: "image/png", size_bytes: 4096,
+          sha256: "a".repeat(64), fingerprint_status: "ok",
+          display_hint: { role: "review_preview", priority: 850, label: "Review Preview" },
+        },
+        {
+          name: "preview.png", path: previewPath, relative_path: previewPath,
+          artifact_type: "image", media_kind: "image", previewable: true, browser_previewable: true,
+          content_type: "image/png", mime_type: "image/png", url: previewUrl, download_url: previewUrl,
+          size_bytes: 68, sha256: "b".repeat(64), fingerprint_status: "ok",
+          display_hint: { role: "supporting_preview", priority: 700, label: "Supporting Preview" },
+        },
+      ],
+      indexed_count: 2,
+      truncated: false,
+    },
+    created_at: "2026-09-21T20:00:00Z",
+    finished_at: "2026-09-21T20:00:05Z",
+    updated_at: "2026-09-21T20:00:05Z",
+  };
+  await installHydratedPortalRoutes(page, { jobs: [completedJob] });
+  const imageRequests = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "image") imageRequests.push(new URL(request.url()).pathname);
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}&artifact=${encodeURIComponent(deliveryPath)}`);
+  const image = page.locator("#artifactPreviewSoloImage");
+  await expect(image).toBeVisible();
+  await expect(image).toHaveAttribute("src", new RegExp(`${previewPath.replaceAll(".", "\\.")}$`));
+  await expect.poll(() => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator("#artifactSelectionTitle")).toContainText("delivery.tif");
+  expect(imageRequests).toContain(previewUrl);
+  expect(imageRequests).not.toContain(deliveryUrl);
+  await expect(page.locator("#artifactCompareBtn")).toBeHidden();
+  await expect(page.locator("#reviewCompareSummary")).not.toContainText("Paired comparison available");
+  const downloadButton = page.locator("#downloadArtifactBtn");
+  await expect(downloadButton).toBeEnabled();
+  await expect(downloadButton).toHaveAttribute("data-url", deliveryUrl);
+  await expect(downloadButton).toHaveAttribute("data-filename", "delivery.tif");
+  // Exercise the actual button -> download-anchor binding. Artifact byte serving
+  // is independently covered by managed service tests; avoid a browser download
+  // transport dependency on this intercepted, synthetic response fixture.
+  await page.evaluate(() => {
+    document.addEventListener("click", (event) => {
+      const anchor = event.target.closest?.("a[download]");
+      if (!anchor) return;
+      event.preventDefault();
+      window.__v5DownloadTarget = { href: anchor.getAttribute("href"), filename: anchor.download };
+    });
+  });
+  await downloadButton.click();
+  await expect.poll(() => page.evaluate(() => window.__v5DownloadTarget)).toEqual({ href: deliveryUrl, filename: "delivery.tif" });
+  await expectNoHorizontalOverflow(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("lux-v5-review.png"), fullPage: true });
+  await testInfo.attach("LuxDepthV5 TIFF with verified PNG preview", { path: testInfo.outputPath("lux-v5-review.png"), contentType: "image/png" });
 });

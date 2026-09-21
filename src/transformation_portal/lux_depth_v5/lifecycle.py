@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from transformation_portal.core.execution_plan_v3 import parse_photography_plan
 from transformation_portal.core.execution_plan_v4 import (
+    BROWSER_PREVIEW_RECIPE,
     ExecutionPlanV4,
     depth_photography_nodes,
     legacy_validation_projection,
@@ -108,7 +109,10 @@ class _PreparationProfile:
             raise ValueError("Unsupported V5 precision or refinement policy")
         if request.model_key not in ("da3-metric", "da3_metric"):
             raise ValueError("Initial V5 baseline supports only governed da3_metric")
-        return {"depth": {"precision": request.precision, "refinement": request.refinement}}
+        return {
+            "depth": {"precision": request.precision, "refinement": request.refinement},
+            "browser_preview": BROWSER_PREVIEW_RECIPE,
+        }
 
     @staticmethod
     def validate_inputs(inputs: list[dict[str, Any]]) -> None:

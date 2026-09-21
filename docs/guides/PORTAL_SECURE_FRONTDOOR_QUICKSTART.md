@@ -24,6 +24,21 @@ the incoming path and query are copied. Session cookies and Access assertions
 are forwarded to the configured frontdoor, with redirects returned to the
 browser rather than followed by the Worker.
 
+## Opt-in photographic jobs
+
+The existing Build workflow exposes `lux-depth-v5` with separate photographic
+controls and server-backed preview/readiness checks. V3 remains the default.
+Enable V5 only on matching, migrated Postgres/Redis API and worker deployments;
+follow [managed V5 setup](../reference/LUX_DEPTH_V5.md#managed-job-execution).
+V4 is the execution foundation and a separate CLI comparison path, not an
+additional managed pipeline selector. Newly prepared V5 plans provide verified,
+bounded sRGB PNG previews in Review alongside their precision TIFF/NPY downloads;
+legacy plans retain their original output inventory.
+
+Managed artifact URLs preserve reserved characters in filenames by encoding
+each path segment. Literal filename characters must not be interpreted as URL
+fragments or queries; existing artifact links remain the retrieval authority.
+
 ## Required Environment
 
 Create front-door env vars from `web/secure-landing/.env.example`.

@@ -137,7 +137,9 @@ def test_cold_graph_serializes_native_status_and_verifies_all_derivatives(reques
     result = execute(request_case)
     descriptor = photograph(result)
     assert result.depth_cache_misses == SessionFixture.calls == 1
-    assert descriptor["schema"] == "tp.lux.photograph.v2"
+    assert descriptor["schema"] == "tp.lux.photograph.v3"
+    assert descriptor["browser_preview"]["path"] == "input-0000/preview.png"
+    assert "input-0000/preview.png" in result.artifact_paths
     assert descriptor["depth"]["schema"] == "tp.depth.artifact.v3"
     assert descriptor["depth"]["sky_status"] == "model_mask"
     assert descriptor["depth"]["confidence_status"] == "unavailable"
@@ -149,6 +151,22 @@ def test_cold_graph_serializes_native_status_and_verifies_all_derivatives(reques
     assert not array(result, "depth-valid.npy")[:2].any()
     assert array(result, "native-sky.npy")[:2].all()
     assert tifffile.imread(result.output_root / "input-0000/delivery.tif").dtype == np.uint16
+
+
+def test_legacy_plan_executes_original_inventory_without_browser_preview(request_case):
+    from transformation_portal.core.execution_plan_v2 import digest_payload
+    from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4, depth_photography_nodes
+
+    prepared = prepare(request_case)
+    payload = prepared.plan.to_payload()
+    payload["configuration"].pop("browser_preview")
+    payload["nodes"] = depth_photography_nodes(payload["configuration"])
+    payload.pop("plan_fingerprint_sha256")
+    payload["plan_fingerprint_sha256"] = digest_payload(payload)
+    result = pipeline.run(replace(prepared, plan=ExecutionPlanV4.from_payload(payload)))
+    verify_execution_evidence_v3(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+    assert photograph(result)["schema"] == "tp.lux.photograph.v2"
+    assert "input-0000/preview.png" not in result.artifact_paths
 
 
 def test_sky_invalid_and_unknown_pixels_receive_no_depth_or_clarity_edit(request_case):

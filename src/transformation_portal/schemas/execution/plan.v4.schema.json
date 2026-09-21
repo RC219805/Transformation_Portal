@@ -167,6 +167,10 @@
         "preview_maps": {
           "type": "boolean"
         },
+        "browser_preview": {
+          "description": "Optional versioned photographic browser derivative. Absent in legacy V5 plans, which retain their original output inventory.",
+          "const": "linear_srgb_premultiplied_box_png_v1"
+        },
         "materials_v4": {
           "$ref": "#/$defs/materials_policy"
         },

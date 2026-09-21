@@ -15,6 +15,7 @@ from transformation_portal.core.execution_plan_v3 import materials_photography_n
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
 PLAN_SCHEMA = "tp.execution.plan.v4"
+BROWSER_PREVIEW_RECIPE = "linear_srgb_premultiplied_box_png_v1"
 
 
 def depth_photography_nodes(configuration: Mapping[str, Any], *, companions: bool = False) -> list[dict[str, Any]]:
@@ -45,6 +46,9 @@ def depth_photography_nodes(configuration: Mapping[str, Any], *, companions: boo
         depth_baseline="enhance.depth_baseline", depth_response="enhance.depth_response", aligned="enhance.aligned"
     )
     nodes[3]["configuration"]["depth"] = copy.deepcopy(configuration["depth"])
+    if "browser_preview" in configuration:
+        nodes[3]["configuration"]["browser_preview"] = configuration["browser_preview"]
+        nodes[3]["outputs"]["preview"] = "tp.image.browser_preview.v1"
     if companions:
         nodes[2]["inputs"]["calibration"] = "$calibration"
         nodes[3]["inputs"]["calibration"] = "$calibration"
@@ -58,6 +62,7 @@ def legacy_validation_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected["schema"] = "tp.execution.plan.v3" if materials else "tp.execution.plan.v2"
     projected["pipeline"] = "lux_depth_v4"
     projected["configuration"].pop("depth")
+    projected["configuration"].pop("browser_preview", None)
     factory = materials_photography_nodes if materials else photography_nodes
     projected["nodes"] = factory(
         projected["configuration"], companions=any("companions" in item for item in projected["inputs"])

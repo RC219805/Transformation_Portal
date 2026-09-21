@@ -101,6 +101,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
   const bootstrapReady = Boolean(input.bootstrapReady);
   const authMode = lower(input.authMode || "managed_unavailable");
   const isLux = pipeline === LUX_PIPELINE;
+  const isPhotography = pipeline === "lux-depth-v5";
   const isArchive = ARCHIVE_PIPELINES.has(pipeline);
   const previewBlocked = hasPreviewErrors(preview) || hasBlockedReadiness(readiness, readinessIssues);
   const archivePrereqIssue = hasArchivePrereqIssue(readinessIssues);
@@ -149,6 +150,30 @@ export function buildPortalCapabilityCatalog(input = {}) {
       detail: "Preset, depth backend, model, segmentation, deliverable, and preview contracts are configured in Build."
     }),
     makeRow({
+      id: "lux_depth_v5",
+      group: "Build",
+      label: "LuxDepthV5 photography",
+      status: !backendOk ? "offline" : isPhotography ? previewBlocked ? "blocked" : lower(readiness?.status) === "ready" ? "enabled" : "gated" : "available",
+      summary: isPhotography ? "Current draft targets the opt-in photography successor." : "Opt-in photography is selectable when the server supports managed V5.",
+      detail: "Server readiness and preview authorize dispatch. V3 remains the production baseline; 518 remains the default target size."
+    }),
+    makeRow({
+      id: "lux_depth_v4",
+      group: "Build",
+      label: "LuxDepthV4 foundation",
+      status: "not_portal_controlled",
+      summary: "V4 provides the photography foundation used by V5.",
+      detail: "Standalone V4 remains a CLI workflow; the managed portal exposes the admitted V5 pipeline."
+    }),
+    makeRow({
+      id: "materials_v4",
+      group: "Build",
+      label: "MaterialsV4 evidence",
+      status: !isPhotography ? "not_portal_controlled" : backendStatus(backendOk, Boolean(text(args.materials_manifest))),
+      summary: text(args.materials_manifest) ? "Existing MaterialsV4 evidence is selected." : "An existing MaterialsV4 manifest may be supplied to V5.",
+      detail: "The server validates and binds the manifest. The portal does not fabricate material evidence."
+    }),
+    makeRow({
       id: "archive_gates",
       group: "Build",
       label: "Archive gates",
@@ -161,7 +186,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
       id: "da3_apache",
       group: "Build",
       label: "DA3 Apache path",
-      status: backendStatus(backendOk, isLux && !depthProActive),
+      status: backendStatus(backendOk, (isLux || isPhotography) && !depthProActive),
       summary: depthProActive ? "Depth Pro is selected instead of the Apache DA3 path." : "DA3 Apache-backed depth is selected.",
       detail: "The default DA3 path stays the primary governed Lux depth route."
     }),
@@ -310,6 +335,18 @@ export function buildPortalCapabilityCatalog(input = {}) {
       detail: "The portal should report this governance surface without inventing execution controls."
     })
   ];
+
+  if (isPhotography) {
+    const v3Only = new Set(["depth_pro", "materials_v3", "pbr_generation", "segmentation", "sam2_segmentation", "reconstruction", "raw_ingest", "runtime_tuning", "run_card"]);
+    for (const row of rows) {
+      if (!v3Only.has(row.id)) continue;
+      row.status = "not_portal_controlled";
+      row.statusLabel = statusLabel(row.status);
+      row.summary = "This control belongs to the LuxDepthV3 workflow.";
+      row.detail = "V5 uses its own photography request and server-owned runtime contract.";
+      row.nextAction = "";
+    }
+  }
 
   const blockedRows = rows.filter((row) => ["blocked", "needs_ack", "missing_runtime", "offline", "gated"].includes(row.status));
   const preferredNext = blockedRows.find((row) => row.status === "blocked")

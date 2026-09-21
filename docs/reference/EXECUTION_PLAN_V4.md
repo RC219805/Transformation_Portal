@@ -34,10 +34,10 @@ job. See [managed V5 execution](LUX_DEPTH_V5.md#managed-job-execution).
 | enhance | `tp.stage.lux.enhance.v3` | Validity-aware alignment, bounded finishing receipt, optional MaterialsV4 |
 | output | `tp.stage.lux.output.v3` | Full-resolution delivery, native/derived arrays, and reconstructible evidence |
 
-The additional configuration object is exactly:
+Newly prepared V5 plans include these additional configuration fields:
 
 ```json
-{"depth":{"precision":"fp32","refinement":"guided_bilinear"}}
+{"depth":{"precision":"fp32","refinement":"guided_bilinear"},"browser_preview":"linear_srgb_premultiplied_box_png_v1"}
 ```
 
 `precision` allows `fp32` and `fp16`; `refinement` allows `bilinear` and
@@ -45,6 +45,14 @@ The additional configuration object is exactly:
 Only governed `da3_metric` is authorized. Legacy companion material masks are
 rejected; explicit MaterialsV4 evidence and camera-calibration companions are
 supported.
+
+The optional `browser_preview` field selects the closed, versioned recipe
+`linear_srgb_premultiplied_box_png_v1`. It is bound into the output node's
+configuration and declares `output.preview` as `tp.image.browser_preview.v1`.
+Legacy plans without it remain valid and retain their original graph and
+artifact set. Changing only this presentation recipe does not change the native
+depth cache identity. Matching upgraded API and worker consumers are required
+for newly prepared plans.
 
 ## Native inference identity
 
@@ -64,7 +72,8 @@ remains separate.
 ## Output and publication
 
 Completion uses `tp.lux.execution.evidence.v3`, photograph descriptors use
-`tp.lux.photograph.v2`, and native depth uses `tp.depth.artifact.v3`.
+`tp.lux.photograph.v3` for preview-bearing plans (`tp.lux.photograph.v2` for
+legacy plans), and native depth uses `tp.depth.artifact.v3`.
 `tp.depth.aligned.v1` describes master-grid derivatives and
 `tp.depth.response.v1` describes photographic finishing. Failure evidence is
 `tp.lux.execution.failure.v3` and cannot authorize publication.
@@ -81,6 +90,20 @@ V5 verifier reconstructs geometry, depth derivatives, finishing, and delivery
 from the stored source master and native arrays; hash-only consistency does not
 establish semantic validity. Verification does not certify physical scene depth
 or recover original source-file bytes from a master array.
+
+The browser preview is a PNG bounded to a 1600-pixel maximum edge and a bounded
+encoded size. It area-reduces the final master in linear light, premultiplies
+alpha during reduction, and encodes 8-bit sRGB with its ICC profile. The
+photograph receipt binds its geometry, recipe, master content hash, and color
+interpretation. Independent verification reconstructs the samples, alpha, and
+ICC and checks the declared inventory. It never treats a preview as the master
+or as evidence of measured depth accuracy. Legacy plans cannot acquire an
+undeclared preview during execution or publication.
+
+Managed publication derives completion from one independent semantic
+verification against the exact admitted bytes. It still checks the plan digest,
+artifact hashes during staging, resource reservation, cancellation, and the
+generation fence before making outputs visible.
 
 ## Validation
 

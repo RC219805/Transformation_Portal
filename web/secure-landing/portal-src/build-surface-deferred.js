@@ -68,7 +68,7 @@ export function createDeferredBuildSurfaceApi(host) {
                 : 'Set the source folder for the next run.';
         }
         if (fieldName === 'output_dir') {
-            return currentPayload.pipeline === 'lux-depth-v3'
+            return ['lux-depth-v3', 'lux-depth-v5'].includes(currentPayload.pipeline)
                 ? 'Choose the governed destination for generated outputs.'
                 : 'Choose the governed destination for stage outputs.';
         }

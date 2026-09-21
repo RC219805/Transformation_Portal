@@ -200,11 +200,7 @@ def _portal_profile_source_content() -> str:
 
 @lru_cache(maxsize=1)
 def _portal_overview_source_content() -> str:
-    """Overview surface placeholder. The April 2026 Overview audit verdict
-    (commit fe2ed28) recorded that no Overview-only render code is large
-    enough to justify a real carve, so this file is intentionally a
-    documented seam — the factory returns an empty API and the build
-    pipeline emits a 100-byte placeholder bundle for manifest plumbing."""
+    """Deferred Overview capability catalog and row rendering."""
     return PORTAL_OVERVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
@@ -2607,7 +2603,7 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert "function setBuildStep(nextStep, options) {" in content
     assert "const settings = options && typeof options === 'object' ? options : {};" in content
     assert "emitPortalEvent('step_completed'" in content
-    assert "state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2" in update_body
+    assert "!isLuxPipeline(state.pipeline) && state.portalUi.buildStep < 2" in update_body
     assert "setupBuildStepper();" in init_body
     assert "if (els.heroRunBtn) {" in content
     assert "navigateConsoleView('build');" in content
@@ -2787,9 +2783,10 @@ def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview
     assert 'id="overviewCapabilitySkeletonState"' in content
     assert 'id="capabilityMatrix"' in content
     assert 'data-ui="capability-matrix"' in content
-    assert "row.dataset.ui = 'capability-row';" in content
-    assert "dataset.capabilityId" in content
-    assert "dataset.capabilityStatus" in content
+    overview = _portal_overview_source_content()
+    assert "row.dataset.ui = 'capability-row';" in overview
+    assert "dataset.capabilityId" in overview
+    assert "dataset.capabilityStatus" in overview
     assert 'id="profileShellSkeletonState"' in content
     assert 'id="buildStepperSkeletonState"' in content
     assert 'id="parametersShellSkeletonState"' in content
@@ -3190,7 +3187,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
     metadata_body = _extract_js_function_body(content, "fetchConfigMetadata")
-    preview_body = _extract_js_function_body(content, "fetchConfigPreview")
+    preview_body = _extract_js_function_body(content, "_fetchConfigPreview")
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
@@ -3328,7 +3325,7 @@ def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contra
 
 def test_portal_preview_recovers_from_stale_and_transient_service_failures() -> None:
     content = _portal_bundle_content()
-    fetch_body = _extract_js_function_body(content, "fetchConfigPreview")
+    fetch_body = _extract_js_function_body(content, "_fetchConfigPreview")
     schedule_body = _extract_js_function_body(content, "scheduleConfigPreview")
     clear_body = _extract_js_function_body(content, "_clearConfigPreviewServiceRetry")
     retry_body = _extract_js_function_body(content, "_scheduleConfigPreviewServiceRetry")
@@ -3342,7 +3339,7 @@ def test_portal_preview_recovers_from_stale_and_transient_service_failures() -> 
     catch_index = fetch_body.rfind(catch_marker)
     assert catch_index >= 0, "fetchConfigPreview catch block not found"
     catch_block = fetch_body[catch_index:]
-    assert "if (_configPreviewRequestKey(generatePayload()) !== requestKey) {" in catch_block
+    assert "if (!request.isCurrent() || _configPreviewRequestKey(generatePayload()) !== requestKey) {" in catch_block
     assert "_scheduleConfigPreviewServiceRetry();" in catch_block
 
     assert "_scheduleConfigPreviewServiceRetry();" in fetch_body

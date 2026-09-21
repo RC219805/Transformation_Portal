@@ -228,7 +228,7 @@ test("config-preview service retry honours the rate-limit hint and re-reads the 
   // does not replay a stale snapshot.
   const retryFn = portalTemplate.slice(
     portalTemplate.indexOf("function _scheduleConfigPreviewServiceRetry"),
-    portalTemplate.indexOf("async function fetchConfigPreview")
+    portalTemplate.indexOf("function fetchConfigPreview")
   );
   assert.ok(
     retryFn.includes("const payload = generatePayload();"),

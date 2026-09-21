@@ -1,6 +1,9 @@
+import { createPhotographyConfig } from "./photography.js";
+
 export function createPortalConfigState() {
   return {
     preset: "premium",
+    photography: createPhotographyConfig(),
     inputDir: "./input_images",
     outputDir: "./output/lux_depth_v3_apex",
     qualityTier: "premium",

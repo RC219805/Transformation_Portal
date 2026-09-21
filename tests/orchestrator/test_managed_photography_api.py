@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -37,6 +39,7 @@ def configured(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "ALLOWED_INPUT_ROOTS", [tmp_path])
     monkeypatch.setattr(app, "ALLOWED_OUTPUT_ROOTS", [tmp_path])
     monkeypatch.setattr(app, "PILOT_CONTROL_PLANE_ENABLED", False)
+    (tmp_path / "in").mkdir()
     return {"pipeline": "lux-depth-v5", "args": {"input_dir": str(tmp_path / "in"), "output_dir": str(tmp_path / "out")}}
 
 
@@ -76,6 +79,58 @@ def test_preview_keeps_response_shape_and_opt_in_defaults(configured):
     assert preview["normalized_args"]["target_size"] == 518
     assert preview["normalized_args"]["precision"] == "fp32"
     assert preview["argv_preview"] == ""
+
+
+@pytest.mark.parametrize("field", ["input_dir", "companions_manifest", "materials_manifest"])
+def test_preview_rejects_missing_input_paths_without_reading_or_creating_files(configured, tmp_path, monkeypatch, field):
+    configured["args"][field] = str(tmp_path / "absent")
+    monkeypatch.setattr(Path, "read_bytes", lambda _path: pytest.fail("Preview read file contents"))
+    preview = app._build_config_preview(configured)
+    assert any(issue["field"] == field for issue in preview["field_errors"])
+    assert not Path(configured["args"]["output_dir"]).exists()
+
+
+@pytest.mark.parametrize("layout", ["same", "nested_output", "parent_output", "file_ancestor", "manifest_overlap"])
+def test_preview_rejects_output_layout_that_cannot_be_prepared(configured, tmp_path, layout):
+    source = Path(configured["args"]["input_dir"])
+    if layout == "same":
+        output = source
+    elif layout == "nested_output":
+        output = source / "output"
+    elif layout == "parent_output":
+        output = source.parent
+    elif layout == "file_ancestor":
+        ancestor = tmp_path / "file"
+        ancestor.write_text("occupied", encoding="utf-8")
+        output = ancestor / "output"
+    else:
+        evidence = tmp_path / "evidence"
+        evidence.mkdir()
+        manifest = evidence / "materials.json"
+        manifest.write_text("{}", encoding="utf-8")
+        configured["args"]["materials_manifest"] = str(manifest)
+        output = evidence / "output"
+    configured["args"]["output_dir"] = str(output)
+    preview = app._build_config_preview(configured)
+    assert any(issue["field"] == "output_dir" for issue in preview["field_errors"])
+
+
+def test_readiness_import_does_not_load_photographic_execution_or_materials():
+    repo = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from transformation_portal.portal.photography_jobs import managed_photography_readiness; "
+            "managed_photography_readiness(); "
+            "assert 'transformation_portal.lux_depth_v5.lifecycle' not in sys.modules; "
+            "assert 'transformation_portal.materials_v4.engine' not in sys.modules",
+        ],
+        env={**os.environ, "PYTHONPATH": str(repo / "src")},
+        capture_output=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr.decode()
 
 
 @pytest.mark.parametrize("field", ["strength", "materials_policy", "unexpected"])

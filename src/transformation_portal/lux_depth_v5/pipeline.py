@@ -72,6 +72,12 @@ class _ExecutionProfile:
     identity = staticmethod(materialize_stage_identity)
 
     @staticmethod
+    def browser_preview(master: Any, input_id: str) -> tuple[bytes, dict[str, Any]]:
+        from .preview import encode_preview
+
+        return encode_preview(master, relative_path=f"{input_id}/preview.png")
+
+    @staticmethod
     def validate_publication_plan(payload: dict, limits: Any) -> None:
         from .publication import validate_publication_plan
 
@@ -137,7 +143,7 @@ class _ExecutionProfile:
         if aligned.metric_map_m is not None:
             arrays["aligned-metric-depth-m.npy"] = aligned.metric_map_m
         descriptor = {
-            "schema": "tp.lux.photograph.v2",
+            "schema": "tp.lux.photograph.v3" if "browser_preview" in configuration else "tp.lux.photograph.v2",
             "aligned_depth": {
                 "evidence": aligned.to_payload(),
                 "content_sha256": aligned.content_hash(),
