@@ -14680,7 +14680,7 @@
         "tests/lux_depth_v5/test_preview.py": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
         "tests/lux_depth_v5/test_pipeline.py": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
         "tests/orchestrator/test_managed_photography_api.py": "62bf532f8a7f6971b8f178a44fe7824371b016d2ac48037411f0c86590210dab",
-        "tests/orchestrator/test_managed_photography_publisher.py": "94e925d2b87bb22e4787ab04e7f1f5a50716301b2e7af82e40c3e2979a4bed66",
+        "tests/orchestrator/test_managed_photography_publisher.py": "7b5e95b6e1e2635e3a547ec0bc3cd4c51aa10b4156041a268ff1d58bea40fd2b",
         "web/secure-landing/tests/photography.test.mjs": "56c3074a50d9eee7c20cdebc51c28e506babf6d8aeb24ba02fd2f4abd261f04d",
         "web/secure-landing/tests/preview-request-races.test.mjs": "90fdf27402365694e39239131a471c7075a5501fa7fb9f90b6915b9adc42a90a",
         "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "fa8968375515c40dca5229854adfa6655e65980be8e7045033795b9293e53970"

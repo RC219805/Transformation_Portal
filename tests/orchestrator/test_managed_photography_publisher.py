@@ -262,9 +262,11 @@ def test_admitted_publication_rejects_forgery_before_staging(completed, monkeypa
 
 def test_admitted_publication_rechecks_staged_bytes_after_semantic_verification(completed, tmp_path):
     class ChangedAfterVerification(GenerationPublisher):
-        async def publish(self, fence, files, **kwargs):
+        async def publish(self, fence, files, *, state, exit_code, artifacts, run_summary, **kwargs):
             files["input-0000/delivery.tif"].write_bytes(b"changed after verification")
-            return await super().publish(fence, files, **kwargs)
+            return await super().publish(
+                fence, files, state=state, exit_code=exit_code, artifacts=artifacts, run_summary=run_summary, **kwargs
+            )
 
     publisher = ChangedAfterVerification(artifact_store=LocalArtifactStore(root_dir=tmp_path / "store"), record_store=None)
     with pytest.raises(ArtifactStoreError):
