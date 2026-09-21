@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.93
+boto3==1.43.98
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.93
+botocore==1.43.98
     # via
     #   -c all.txt
     #   boto3
@@ -55,7 +55,7 @@ fastapi==0.141.1
     # via
     #   -c all.txt
     #   -r base.in
-greenlet==3.5.5
+greenlet==3.5.6
     # via
     #   -c all.txt
     #   sqlalchemy
@@ -63,7 +63,7 @@ h11==0.16.0
     # via
     #   -c all.txt
     #   uvicorn
-idna==3.19
+idna==3.20
     # via
     #   -c all.txt
     #   anyio
@@ -185,7 +185,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.0.52
+sqlalchemy[asyncio]==2.0.54
     # via
     #   -c all.txt
     #   -r base.in
@@ -196,7 +196,7 @@ starlette==1.6.0
     #   -c all.txt
     #   -r base.in
     #   fastapi
-threadpoolctl==3.6.0
+threadpoolctl==3.7.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -229,7 +229,7 @@ typing-inspection==0.4.4
     #   -c all.txt
     #   fastapi
     #   pydantic
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   -c all.txt
     #   botocore
