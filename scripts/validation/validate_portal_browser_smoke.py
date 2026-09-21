@@ -1262,17 +1262,6 @@ def _set_pipeline_form_expression(
     sessionStorage.removeItem('tp_portal_transient_draft');
   }} catch {{}}
   setValue('apiKeyInput', cfg.api_key);
-  try {{
-    localStorage.removeItem('tp_api_key');
-    if (cfg.api_key) {{
-      sessionStorage.setItem('tp_api_key', cfg.api_key);
-    }} else {{
-      sessionStorage.removeItem('tp_api_key');
-    }}
-  }} catch {{}}
-  if (typeof _persistApiKeyFromInputs === 'function') {{
-    _persistApiKeyFromInputs();
-  }}
   setValue('pipelineSelect', cfg.pipeline);
   setValue('inputDir', cfg.input_dir);
   setValue('outputDir', cfg.output_dir);
@@ -2150,9 +2139,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             bool(lux_context_state.get("advancedFlagsOpen")),
             f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
-        if bool(lux_context_state.get("captioningDetailsVisible")) and bool(
-            lux_context_state.get("captioningToggleDisabled")
-        ):
+        if bool(lux_context_state.get("captioningDetailsVisible")) and bool(lux_context_state.get("captioningToggleDisabled")):
             _expect(
                 not bool(lux_context_state.get("captioningEnabledChecked")),
                 f"Feature-gated FastVLM captioning must stay disabled when visible: {lux_context_state}",

@@ -111,6 +111,22 @@ def test_portal_browser_parse_args_defaults_api_key_to_empty_when_env_is_unset(
     assert args.api_key == ""
 
 
+def test_portal_browser_form_enters_api_key_without_browser_storage():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_page_credentials")
+    expression = module._set_pipeline_form_expression(
+        api_key="page-only-test-token",
+        pipeline="lux-depth-v3",
+        input_dir="/tmp/input",
+        output_dir="/tmp/output",
+    )
+
+    assert "setValue('apiKeyInput', cfg.api_key);" in expression
+    assert "dispatch(el, 'input');" in expression
+    assert "dispatch(el, 'change');" in expression
+    assert "tp_api_key" not in expression
+    assert "_persistApiKeyFromInputs" not in expression
+
+
 def test_portal_browser_parse_args_supports_local_backend_spawn_flag():
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_spawn_backend")
 

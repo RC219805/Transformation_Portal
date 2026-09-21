@@ -5193,8 +5193,8 @@ function _resetProtectedFamilySuppression(family) {
 }
 
 function _handleDirectDebugApiKeyUpdate(options = null) {
-    const resumeStreams = Boolean(options.resumeStreams);
-    _persistApiKeyFromInputs();
+    const resumeStreams = Boolean(options?.resumeStreams);
+    _syncApiKeyInputState();
     _resetProtectedFamilySuppression();
     if (!resumeStreams) return;
     resumeBlockedJobStreamsAfterAuthUpdate();
@@ -5292,12 +5292,18 @@ function _bootstrapSurfaceSummary() {
     };
 }
 
-function _clearStoredApiKeyState(clearPersisted = true) {
-    if (clearPersisted) {
+function _syncApiKeyInputState() {
+    // Legacy browser credentials are discarded, never read or migrated. Each
+    // store may be unavailable independently (for example under privacy rules).
+    try {
         localStorage.removeItem(API_KEY_STORAGE_KEY);
+    } catch { /* Storage access must not block bootstrap or credential clearing. */ }
+    try {
         sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+    } catch { /* Still clear page memory when either storage backend is denied. */ }
+    if (!_isBootstrapReady() || _isManagedAuthMode()) {
+        if (els.apiKeyInput) els.apiKeyInput.value = '';
     }
-    if (els.apiKeyInput) els.apiKeyInput.value = '';
 }
 
 function _stagedUploadsSupportedForState() {
@@ -5454,7 +5460,6 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         : bootstrap.authMode === 'direct_debug'
             ? 'direct_debug'
             : 'managed_unavailable';
-    const isManagedMode = mode !== 'direct_debug';
     state.auth = {
         mode,
         csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
@@ -5484,13 +5489,10 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
     state.rum.bootstrapTraceparent = bootstrapTraceparent;
     state.rum.enabled = Boolean(state.auth.features.rumTelemetry);
     _setBootstrapStatus(nextStatus, options.reason || '', options.httpStatus || 0);
-    if (_isBootstrapReady() && isManagedMode) {
-        _clearStoredApiKeyState(true);
-    }
     if (!_rumTelemetryEnabled()) {
         state.rum.queuedSamples = [];
     }
-    _loadApiKeyIntoInputs();
+    _syncApiKeyInputState();
     _syncBootstrapUi();
     if (_rumTelemetryEnabled()) {
         void _flushQueuedPortalRumSamples();
@@ -5672,51 +5674,10 @@ function _normalizeApiToken(raw) {
     return value;
 }
 
-function _persistApiKeyFromInputs() {
-    if (!_isBootstrapReady()) {
-        _clearStoredApiKeyState(false);
-        return;
-    }
-    if (_isManagedAuthMode()) {
-        _clearStoredApiKeyState(true);
-        return;
-    }
-    const token = _normalizeApiToken(els.apiKeyInput ? els.apiKeyInput.value : '');
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    if (!token) {
-        sessionStorage.removeItem(API_KEY_STORAGE_KEY);
-        return;
-    }
-    sessionStorage.setItem(API_KEY_STORAGE_KEY, token);
-}
-
-function _loadApiKeyIntoInputs() {
-    if (!_isBootstrapReady()) {
-        _clearStoredApiKeyState(false);
-        return;
-    }
-    if (_isManagedAuthMode()) {
-        _clearStoredApiKeyState(true);
-        return;
-    }
-    const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';
-    const sessionValue = sessionStorage.getItem(API_KEY_STORAGE_KEY) || '';
-    const stored = sessionValue || localValue;
-    if (localValue && !sessionValue) {
-        sessionStorage.setItem(API_KEY_STORAGE_KEY, localValue);
-    }
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    if (els.apiKeyInput) els.apiKeyInput.value = stored;
-}
-
 function _currentApiToken() {
     if (!_isBootstrapReady()) return '';
     if (_isManagedAuthMode()) return '';
-    return _normalizeApiToken(
-        (els.apiKeyInput && els.apiKeyInput.value) ||
-        sessionStorage.getItem(API_KEY_STORAGE_KEY) ||
-        ''
-    );
+    return _normalizeApiToken(els.apiKeyInput ? els.apiKeyInput.value : '');
 }
 
 function _buildAuthHeaders(base = {}, method = 'GET', options = null) {

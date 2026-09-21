@@ -277,7 +277,9 @@ The operator UI now supports two modes:
   - Treats `401/403` bootstrap failures as session/auth failures and redirects back to `/login`.
 - `direct_debug`
   - Served directly from the FastAPI origin for local troubleshooting.
-  - Keeps the existing API-key workflow.
+  - Keeps API-key entry in page memory only; reloads require re-entry.
+  - Never reads or writes credentials in local or session storage. Legacy
+    `tp_api_key` entries are removed independently from both stores when accessible.
   - Must not be treated as the normal production browser path.
 
 FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startup. The front door exposes its own `GET /portal/bootstrap` for managed mode.

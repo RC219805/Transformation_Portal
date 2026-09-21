@@ -8,7 +8,7 @@
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,297 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,298 lines total
 - **Required PR check snapshot (2026-09-18 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
@@ -24,7 +24,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 |---|------|------|----------|-----------|-------------|----------------|
 | 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1363 | **Keep** — primary PR gate; aggregated `CI Gate` check; lightweight documentation catalog, maintained-link and editorial lock validation |
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 614 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
-| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 970 | **Keep pending equivalence proof** — trusted `workflow_run` verification includes resolution, isolation, security, coverage, and flake-analysis evidence. A passing upstream `CI Gate` alone does not prove this workflow redundant. |
+| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 971 | **Keep pending equivalence proof** — trusted `workflow_run` verification includes resolution, isolation, security, coverage, and flake-analysis evidence. A passing upstream `CI Gate` alone does not prove this workflow redundant. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 231 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
 | 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | Failing checks; see remote snapshot | 114 | **Keep** — GitHub semantic SAST for Actions, Python, and JavaScript/TypeScript; includes frontdoor and Worker source. |
@@ -64,6 +64,10 @@ The post-CI firewall remains `workflow_run`-only and verifies the exact upstream
 SHA after a successful same-repository push/manual run. It is not redundant
 merely because `CI Gate` passed. The consolidation text below is retained as a
 historical proposal; no retirement or policy change is authorized by this doc.
+
+Post-CI core tests use the push firewall's `pytest -n auto` parallelism within
+the existing 20-minute job limit. Both retain the same positive marker selection
+and coverage reports; post-CI also retains its per-Python JSON test evidence.
 
 ---
 

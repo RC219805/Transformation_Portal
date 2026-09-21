@@ -612,7 +612,7 @@ Contract notes:
                             <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
                             <div id="apiKeySection" class="mt-4 hidden">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
-                                <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens are session-only and never persisted in browser local storage.</p>
+                                <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens stay in this page only. Reloading clears them; browser storage is never used.</p>
                                 <div class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
                                     <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
                                 </div>

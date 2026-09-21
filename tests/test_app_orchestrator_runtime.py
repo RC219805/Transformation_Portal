@@ -1541,14 +1541,15 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     content = _portal_bundle_content()
-    clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
+    clear_body = _extract_js_function_body(content, "_syncApiKeyInputState")
     summary_body = _extract_js_function_body(content, "_bootstrapSurfaceSummary")
     sync_body = _extract_js_function_body(content, "_syncBootstrapUi")
 
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
-    assert "_clearStoredApiKeyState(true);" in content
-    assert "_loadApiKeyIntoInputs();" in content
+    assert "_syncApiKeyInputState();" in content
+    assert "if (!_isBootstrapReady() || _isManagedAuthMode()) {" in clear_body
+    assert "if (els.apiKeyInput) els.apiKeyInput.value = '';" in clear_body
     assert 'id="connectionDetails"' in content
     assert 'data-ui="connection-details"' in content
     assert 'id="portalAccessState"' in content
@@ -1664,23 +1665,20 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 
 
-def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
+def test_portal_direct_debug_api_key_is_page_memory_only() -> None:
     content = _portal_bundle_content()
-    persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
-    load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
+    sync_body = _extract_js_function_body(content, "_syncApiKeyInputState")
 
-    assert "localStorage.setItem(API_KEY_STORAGE_KEY, token);" not in persist_body
-    assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, token);" in persist_body
-    assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in persist_body
-    assert "const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';" in load_body
-    assert "const sessionValue = sessionStorage.getItem(API_KEY_STORAGE_KEY) || '';" in load_body
-    assert "const stored = sessionValue || localValue;" in load_body
-    assert "if (localValue && !sessionValue) {" in load_body
-    assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, localValue);" in load_body
-    assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in load_body
-    assert "localStorage.getItem(API_KEY_STORAGE_KEY)" not in current_token_body
-    assert "sessionStorage.getItem(API_KEY_STORAGE_KEY)" in current_token_body
+    assert "_normalizeApiToken(els.apiKeyInput ? els.apiKeyInput.value : '');" in current_token_body
+    assert "Storage" not in current_token_body
+    for store in ("localStorage", "sessionStorage"):
+        assert f"{store}.removeItem(API_KEY_STORAGE_KEY);" in sync_body
+        assert f"{store}.getItem(API_KEY_STORAGE_KEY)" not in content
+        assert f"{store}.setItem(API_KEY_STORAGE_KEY" not in content
+    assert "_persistApiKeyFromInputs" not in content
+    assert "_loadApiKeyIntoInputs" not in content
+    assert "Direct-debug tokens stay in this page only." in _portal_html_content()
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
@@ -1708,15 +1706,12 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
 
 def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
     content = _portal_bundle_content()
-    persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
-    load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
+    sync_body = _extract_js_function_body(content, "_syncApiKeyInputState")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
 
     assert 'data-bootstrap-status="pending"' in content
-    assert "if (!_isBootstrapReady()) {" in persist_body
-    assert "_clearStoredApiKeyState(false);" in persist_body
-    assert "if (!_isBootstrapReady()) {" in load_body
-    assert "_clearStoredApiKeyState(false);" in load_body
+    assert "if (!_isBootstrapReady() || _isManagedAuthMode()) {" in sync_body
+    assert "if (els.apiKeyInput) els.apiKeyInput.value = '';" in sync_body
     assert "if (!_isBootstrapReady()) return '';" in current_token_body
     assert "function _buildAuthHeaders(base = {}, method = 'GET', options = null) {" in content
     assert "if (!_isBootstrapReady()) {" in content

@@ -155,7 +155,7 @@ guarantee secure erasure from storage, backups, or process memory.
 
 ### Open Dependency Risk: Accelerate Checkpoint Indexes
 
-As reviewed on 2026-09-13 UTC, the supported Darwin arm64 ML lock contains
+As reviewed on 2026-09-21 UTC, the supported Darwin arm64 ML lock contains
 `accelerate==1.14.0`, affected by
 [GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79).
 Its sharded checkpoint loaders accept paths outside the checkpoint directory
@@ -175,7 +175,9 @@ device mapping, dispatch and offload remain supported. The required
 `Dependency Security` job now runs
 `python scripts/validation/check_accelerate_loading.py`, which rejects direct
 and aliased imports, statically resolved attribute aliases, and literal
-`getattr` references to the affected APIs. This source gate does not inspect
+`getattr` references to the affected APIs. Alias provenance is retained
+conservatively across scopes and reimports so an unrelated name reuse cannot
+hide a prohibited loader reference. This source gate does not inspect
 third-party packages or dynamically computed Python expressions; repeat the
 reachability review when the optional ML closure changes.
 
