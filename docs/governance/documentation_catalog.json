@@ -188,7 +188,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "6a6d33b8cad0baee21ea8ca4209f6a3a1f3b723cae4e2e137b170196061c7333",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -210,7 +210,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -227,7 +227,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "03710ff9be2b791439ce75c29512679914555920552f083325928d78b903d19b",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -249,7 +249,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -410,7 +410,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "b32350525d780b4ab18eab9d8a693ffc55ae42a575b7e01856ae0c10c628a8af",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -432,7 +432,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -577,7 +577,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "562f6882c62e569b152b4f5d03d78adedc3bb04fe204c30287491dfa90315e93",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -599,7 +599,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -712,7 +712,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "f6209227debf895dffbf1e3d494e0f1f0408924bfb7a70bf6f88ffd5ca8a4858",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -734,7 +734,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -1477,8 +1477,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cca8610f561177f4a0e148551582707bb1815fda",
-      "content_sha256": "0dd24b81f1129ee7295c17f52257df1e8e5dd5490a4d3ddbac1ce1670df0ffac",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
+      "content_sha256": "5083b5934e0db09806a55d331c5ff1a353f4eca7e2fbb1f081dd2b1c243d38b4",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
@@ -2240,6 +2240,22 @@
       "evidence_tier": "historical-record",
       "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
       "content_sha256": "8644d4a2bf77b4f2666ed6bfbb425baf26d2dd56ae913279221322748b882e7a",
+      "source_references": [],
+      "source_sha256": {},
+      "validation_commands": [],
+      "prior_classification": null,
+      "prior_review_status": null
+    },
+    {
+      "path": "docs/analysis/LUX_DEPTH_V6_FORENSIC_SUCCESSOR_2026-09-22.md",
+      "classification": "historical",
+      "maintenance_area": "docs/analysis",
+      "scope": "Dated V4/V5 forensic findings, bounded V6 implementation decisions and explicit remaining acceptance requirements; retained historical evidence is not a fresh inference run or current operator guidance.",
+      "successors": [],
+      "review_status": "historical-evidence",
+      "evidence_tier": "historical-record",
+      "source_commit": "080db2a9d1a8153fbb9abf954cc0a7330f24228a",
+      "content_sha256": "14920888fb91bc24b3a023ca5202d239ad8f655ec6731f6ef2f2097c1d61f57c",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -6240,8 +6256,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "53f335db17733bd30ae7d613f8ac64ec7a9022fa21dfb87c4773459285e4c7cd",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
+      "content_sha256": "09316cb2b8a5ce469c35d3084bb8454c2cf7fa0d4fdc721716caa6038b1da8e7",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
         "tests/test_documentation_operator_examples.py",
@@ -6250,7 +6266,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9198,7 +9214,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "a150c68032340581124a9c8cf66394e150044d75b304b83a22e48154f390c123",
       "source_references": [
         "Makefile",
@@ -9206,7 +9222,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "1f4e9442bd9250a7e99f8c0cd41131938e3256a873bcc5b02d7666f4ff8e8da8",
+        "Makefile": "173f3b4f5edce560d10aea9ca55b65efc6723224e93a6b3e8839490c0b97b587",
         "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
         "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
       },
@@ -9633,7 +9649,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "2de8e158e1b725ea8eab26ed779d410e3257d86fa22501ad8bf8e9ba3ff7f787",
       "source_references": [
         "Makefile",
@@ -9641,7 +9657,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "1f4e9442bd9250a7e99f8c0cd41131938e3256a873bcc5b02d7666f4ff8e8da8",
+        "Makefile": "173f3b4f5edce560d10aea9ca55b65efc6723224e93a6b3e8839490c0b97b587",
         "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
         "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
       },
@@ -9739,7 +9755,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "bde9140e2011018eb923f0aeeb0bba2373740414dac8af16b9c1a7f5ff531fc3",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -9749,7 +9765,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -13034,7 +13050,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "9451a850895b649967bd1fbd68fe34398a41f1a06c4484374f2a2f2ca76a6842",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -13044,7 +13060,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf"
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -14637,11 +14653,13 @@
       "path": "docs/reference/LUX_DEPTH_V5.md",
       "classification": "canonical",
       "maintenance_area": "docs/reference",
-      "scope": "Source-reviewed opt-in V5 candidate commands and managed portal integration, server-owned admission, bounded photographic browser previews, and compatibility with older plans/evidence. Target 518 and V3 production baseline remain unchanged; native performance and broad photographic acceptance remain separate gates.",
-      "successors": [],
+      "scope": "Source-reviewed opt-in V5 candidate commands and managed portal integration, server-owned admission, bounded photographic browser previews, and compatibility with older plans/evidence. Target 518 and V3 production baseline remain unchanged; native performance and broad photographic acceptance remain separate gates. V6 succeeds only standalone reconstruction/grading of retained verified V5 evidence; V5 inference, managed dispatch and existing execution contracts remain authoritative.",
+      "successors": [
+        "docs/reference/LUX_DEPTH_V6.md"
+      ],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "ea230fed7ea071c301813fea26dcc339bd9780214f6b646e8d2fd0212824559f",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
@@ -14693,6 +14711,70 @@
         "make test-portal-contract",
         "make test-frontdoor-contract",
         "make validate-portal-browser"
+      ],
+      "prior_classification": null,
+      "prior_review_status": null
+    },
+    {
+      "path": "docs/reference/LUX_DEPTH_V6.md",
+      "classification": "canonical",
+      "maintenance_area": "docs/reference",
+      "scope": "Opt-in standalone V6 reconstruction, explicit grading, bounded SDR delivery and semantic replay from a retained verified V5 bundle. Does not replace V5 inference or managed dispatch, authenticate camera pixels independently, provide full native-binary attestation, or establish photographic, HDR or production acceptance.",
+      "successors": [],
+      "review_status": "source-reviewed",
+      "evidence_tier": "source-contract",
+      "source_commit": "080db2a9d1a8153fbb9abf954cc0a7330f24228a",
+      "content_sha256": "b28d31c958d62a7659668d6b8223aeb34246e630628401177454d549f04e8734",
+      "source_references": [
+        "Makefile",
+        "pyproject.toml",
+        "src/transformation_portal/lux_depth_v6/__init__.py",
+        "src/transformation_portal/lux_depth_v6/__main__.py",
+        "src/transformation_portal/lux_depth_v6/source.py",
+        "src/transformation_portal/lux_depth_v6/reconstruction.py",
+        "src/transformation_portal/lux_depth_v6/color.py",
+        "src/transformation_portal/lux_depth_v6/plan.py",
+        "src/transformation_portal/lux_depth_v6/pipeline.py",
+        "src/transformation_portal/lux_depth_v6/products.py",
+        "src/transformation_portal/lux_depth_v6/evidence.py",
+        "src/transformation_portal/lux_depth_v6/evaluation.py",
+        "src/transformation_portal/lux_depth_v4/photography.py",
+        "src/transformation_portal/lux_depth_v5/photography.py",
+        "tests/lux_depth_v6/conftest.py",
+        "tests/lux_depth_v6/test_source.py",
+        "tests/lux_depth_v6/test_reconstruction.py",
+        "tests/lux_depth_v6/test_color.py",
+        "tests/lux_depth_v6/test_plan.py",
+        "tests/lux_depth_v6/test_pipeline.py",
+        "tests/lux_depth_v6/test_evaluation.py"
+      ],
+      "source_sha256": {
+        "Makefile": "173f3b4f5edce560d10aea9ca55b65efc6723224e93a6b3e8839490c0b97b587",
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36",
+        "src/transformation_portal/lux_depth_v6/__init__.py": "6327358f5e5cd1a53be764838f80514ca1c1b75d19d69738f7e9689b50bc2c7c",
+        "src/transformation_portal/lux_depth_v6/__main__.py": "877bdf55a8d6d6472a3837cb302a6140cd05f1e538ca94243f785bdc5ba6cd24",
+        "src/transformation_portal/lux_depth_v6/source.py": "96b8000fe8c74f6b5ff10fef3224f01bb82fc3e809008d1e1df8956c0a027aa5",
+        "src/transformation_portal/lux_depth_v6/reconstruction.py": "68f0d1c806fa7967308f732edeae846731fab75c666f1a2a75a7a335b7ca2f5e",
+        "src/transformation_portal/lux_depth_v6/color.py": "38fe29d3d950312116707c2519b9a2748c053d55299c870172c7cd7081f89bd3",
+        "src/transformation_portal/lux_depth_v6/plan.py": "1485b706ea3844b0a49a53d5a1a6474ecf26c4d14fb8235e6380d1e47d3c5642",
+        "src/transformation_portal/lux_depth_v6/pipeline.py": "844c8b60aff39ea5e9b586ac17a3839600940319c896104f9243736776e3c5e6",
+        "src/transformation_portal/lux_depth_v6/products.py": "9aec9daaafe25cc9323a5c9893394dcb8475007afbe54e009615ee5b1c2a4f9a",
+        "src/transformation_portal/lux_depth_v6/evidence.py": "58235e939141d1131a2e66d63a53d840d4ec5ccc22821ce2fbdecab57ead6812",
+        "src/transformation_portal/lux_depth_v6/evaluation.py": "574ace11cc55fe978ef8052d802d3afeb5c048bfa80b51f2b31f855b2aff3498",
+        "src/transformation_portal/lux_depth_v4/photography.py": "b9b933fd67b3dfda2d190d3f8042c5ea7f5faaedd01017f9ac1b00631ff6adab",
+        "src/transformation_portal/lux_depth_v5/photography.py": "efc84273209a598054b61982445813db0f9dd4d1631ce1af94b72a113f24099b",
+        "tests/lux_depth_v6/conftest.py": "04c5ca592eb837b2a7e8cc93d0f54c49ac65064d8c4eef1f926a4eb1d4953c85",
+        "tests/lux_depth_v6/test_source.py": "7cfacf5734296b97531836c4d634f3792c172923aabe308dd126525906a66ed6",
+        "tests/lux_depth_v6/test_reconstruction.py": "b358416833993e5cd9518e857a9f787b5c63c5a1e18e60a3dd1cac71c0458f3f",
+        "tests/lux_depth_v6/test_color.py": "7d9de94d8bb42634ebf79d7dd9270bcfb430d740db0df8348bef251bd0ea627b",
+        "tests/lux_depth_v6/test_plan.py": "d6f9231862542850c15e04f04dc05c87fb638e83a5db65ffad714d4515f6324a",
+        "tests/lux_depth_v6/test_pipeline.py": "fbb3248a4a450e6178dfde2d02387a07492ea3b362312755275d16491dfe2386",
+        "tests/lux_depth_v6/test_evaluation.py": "3ae1aac08a769ed69633671de6372ecbea56fb472c89e0945f1eadc6440e9a6e"
+      },
+      "validation_commands": [
+        "make test-lux-depth-v6-contract",
+        "make check-documentation-catalog",
+        "make test-documentation-contract"
       ],
       "prior_classification": null,
       "prior_review_status": null
@@ -16481,14 +16563,14 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "3b654bd62c5f6ea29a37752ec14f41462f37738be4ec1fa0e3d9f30ec3a36529",
       "source_references": [
         "pyproject.toml",
         ".github/workflows/build.yml"
       ],
       "source_sha256": {
-        "pyproject.toml": "4627979639a850a4acc1d8bdf76d71da437b53b06be8031f3bb9ef490a5bd7bf",
+        "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36",
         ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be"
       },
       "validation_commands": [
@@ -16985,7 +17067,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
       "content_sha256": "4e75a5e1dd14d71121d2f79abcc22d70b2753b8e90ea46babdb5a39fba324e3e",
       "source_references": [
         "requirements/Makefile",
@@ -16997,7 +17079,7 @@
       ],
       "source_sha256": {
         "requirements/Makefile": "2af3e148bed4c2f8570d7c810bc0017eb13f95d90576aa50607c6a872e06cf64",
-        "Makefile": "1f4e9442bd9250a7e99f8c0cd41131938e3256a873bcc5b02d7666f4ff8e8da8",
+        "Makefile": "173f3b4f5edce560d10aea9ca55b65efc6723224e93a6b3e8839490c0b97b587",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
         "requirements/locks/editorial-darwin-arm64-py312.txt": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",

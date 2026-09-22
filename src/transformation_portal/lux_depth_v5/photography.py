@@ -121,13 +121,17 @@ class AlignedDepth:
         )
 
 
-def _native_discontinuity_support(evidence: DepthEvidence, y0: np.ndarray, x0: np.ndarray) -> np.ndarray:
+def _native_discontinuity_support(
+    evidence: DepthEvidence, y0: np.ndarray, x0: np.ndarray, *, require_persistent_groups: bool = False
+) -> np.ndarray:
     """Require two stable groups in a complete 4x4 native neighborhood.
 
     A 2x2 footprint cannot distinguish a one-dimensional affine slope from two
-    surfaces. Both groups must persist in the surrounding native samples. Use
-    raw float64 values for this check so clipped percentile derivatives cannot
-    disguise slopes or overflow the local range calculation.
+    surfaces. The legacy recipe checks group membership only. The v3 recipe
+    additionally requires each group to have four samples, including two outside
+    the central footprint. This rejects isolated native outliers without claiming
+    that RGB agreement establishes a physical surface. Use raw float64 values so
+    clipped percentile derivatives cannot disguise slopes or overflow the range.
     """
     height, width = evidence.transform.resized_shape
     usable = evidence.valid_mask
@@ -142,13 +146,25 @@ def _native_discontinuity_support(evidence: DepthEvidence, y0: np.ndarray, x0: n
     low, high = central.min(axis=0), central.max(axis=0)
     tolerance = (high - low) * _NATIVE_CLUSTER_TOLERANCE
     supported = (y0 >= 1) & (y0 + 2 < height) & (x0 >= 1) & (x0 + 2 < width) & (high > low)
+    group_counts = np.zeros((2, *supported.shape), dtype=np.uint8) if require_persistent_groups else None
+    outer_counts = np.zeros_like(group_counts) if group_counts is not None else None
     for dy in (-1, 0, 1, 2):
         y = np.clip(y0 + dy, 0, height - 1)
         for dx in (-1, 0, 1, 2):
             x = np.clip(x0 + dx, 0, width - 1)
             values = native[y, x].astype(np.float64)
             supported &= usable[y, x]
-            supported &= (np.abs(values - low) <= tolerance) | (np.abs(values - high) <= tolerance)
+            lower = np.abs(values - low) <= tolerance
+            upper = np.abs(values - high) <= tolerance
+            supported &= lower | upper
+            if group_counts is not None and outer_counts is not None:
+                group_counts[0] += lower
+                group_counts[1] += upper
+                if dy in (-1, 2) or dx in (-1, 2):
+                    outer_counts[0] += lower
+                    outer_counts[1] += upper
+    if group_counts is not None and outer_counts is not None:
+        supported &= (group_counts >= 4).all(axis=0) & (outer_counts >= 2).all(axis=0)
     return supported
 
 
@@ -159,6 +175,8 @@ def _guided_selection(
     relative: np.ndarray,
     valid: np.ndarray,
     metric: np.ndarray | None,
+    *,
+    require_persistent_groups: bool = False,
 ) -> dict[str, Any]:
     """Select existing surface samples only at supported two-cluster boundaries.
 
@@ -192,7 +210,7 @@ def _guided_selection(
             upper = samples >= high - span * 0.20
             edge = available & valid[top:bottom, left:right] & (span >= _MIN_DEPTH_SPAN) & (lower | upper).all(axis=0)
             if edge.any():
-                edge &= _native_discontinuity_support(evidence, y0, x0)
+                edge &= _native_discontinuity_support(evidence, y0, x0, require_persistent_groups=require_persistent_groups)
             count = int(edge.sum())
             candidates += count
             if not count:
@@ -225,7 +243,7 @@ def _guided_selection(
                 metric_samples = np.stack([evidence.metric_map_m[y, x] for y, x in indices])
                 selected_metric = np.take_along_axis(metric_samples, chosen[None], axis=0)[0]
                 np.copyto(metric[top:bottom, left:right], selected_metric, where=accepted)
-    return {
+    receipt = {
         "candidate_pixels": candidates,
         "refined_pixels": refined,
         "ambiguous_pixels": ambiguous,
@@ -239,6 +257,11 @@ def _guided_selection(
         "fallback": "valid_weighted_bilinear",
         "quality_acceptance": "unestablished",
     }
+    if require_persistent_groups:
+        receipt["native_support"] = "complete_4x4_persistent_two_depth_groups"
+        receipt["minimum_native_samples_per_group"] = 4
+        receipt["minimum_outer_samples_per_group"] = 2
+    return receipt
 
 
 def align_depth(
@@ -248,10 +271,15 @@ def align_depth(
     *,
     refinement: str = "guided_bilinear",
 ) -> AlignedDepth:
-    """Reconstruct master-grid derivatives without changing native evidence."""
+    """Reconstruct master-grid derivatives without changing native evidence.
+
+    ``guided_bilinear`` preserves the legacy V5 evidence recipe. The explicit
+    ``guided_bilinear_v3`` derivative requires persistent native groups and is
+    available to successor consumers; it does not reinterpret existing plans.
+    """
     if not isinstance(evidence, DepthEvidence) or not isinstance(master, ImageMaster) or not isinstance(proxy, ImageProxy):
         raise ValueError("Alignment requires typed depth, master, and proxy evidence")
-    if refinement not in {"guided_bilinear", "bilinear"}:
+    if refinement not in {"guided_bilinear", "guided_bilinear_v3", "bilinear"}:
         raise ValueError("Unsupported depth refinement recipe")
     master_hash = master.content_hash()
     if (
@@ -278,8 +306,10 @@ def align_depth(
         metric = metric.copy()
         if not np.array_equal(metric_valid, valid):
             raise ValueError("Metric and relative alignment support disagree")
-    if refinement == "guided_bilinear" and valid.any():
-        recipe = _guided_selection(evidence, master, proxy, relative, valid, metric)
+    if refinement in {"guided_bilinear", "guided_bilinear_v3"} and valid.any():
+        recipe = _guided_selection(
+            evidence, master, proxy, relative, valid, metric, require_persistent_groups=refinement == "guided_bilinear_v3"
+        )
     else:
         recipe = {"candidate_pixels": 0, "refined_pixels": 0, "ambiguous_pixels": 0}
     return AlignedDepth(
@@ -292,7 +322,11 @@ def align_depth(
         master_content_hash=master_hash,
         metric_map_m=metric,
         metadata={
-            "recipe": "bounded_two_surface_rgb_selection_v2" if refinement == "guided_bilinear" else "valid_bilinear_v1",
+            "recipe": {
+                "guided_bilinear": "bounded_two_surface_rgb_selection_v2",
+                "guided_bilinear_v3": "bounded_two_surface_rgb_selection_v3",
+                "bilinear": "valid_bilinear_v1",
+            }[refinement],
             "refinement": refinement,
             "geometry": proxy.transform.to_payload(),
             "native_preserved": True,

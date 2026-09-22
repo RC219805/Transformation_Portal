@@ -30,6 +30,7 @@ runtime, photographic, hosted-service, and production acceptance stay separate.
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
 | LuxDepthV4 candidate | [V4 photography and evaluation](reference/LUX_DEPTH_V4.md) |
 | LuxDepthV5 candidate | [V5 depth evidence and evaluation](reference/LUX_DEPTH_V5.md), [Execution Plan V4](reference/EXECUTION_PLAN_V4.md) |
+| LuxDepthV6 opt-in standalone candidate | [Verified V5 reconstruction, grading, and SDR delivery](reference/LUX_DEPTH_V6.md); V5 inference and managed dispatch remain separate |
 | MaterialsV4 candidate | [Evidence and response guide](guides/MATERIALS_V4.md), [Execution Plan V3](reference/EXECUTION_PLAN_V3.md) |
 | CLI entrypoint reference | [CLI Reference](cli/CLI_REFERENCE.md) |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |

@@ -61,8 +61,9 @@ def test_high_frequency_rgb_texture_cannot_create_depth_edges_on_smooth_native_g
     assert guided.metadata["refined_pixels"] == 0
 
 
+@pytest.mark.parametrize("refinement", ["guided_bilinear", "guided_bilinear_v3"])
 @pytest.mark.parametrize("kind", ["affine", "steep_smooth", "narrow_valid_band"])
-def test_rgb_boundary_cannot_turn_native_slope_into_surface_jump(kind):
+def test_rgb_boundary_cannot_turn_native_slope_into_surface_jump(kind, refinement):
     """Large local range alone is not evidence of a native discontinuity."""
     shape, target, split = ((518, 1036), 518, 260) if kind == "narrow_valid_band" else ((56, 112), 14, 28)
     pixels = np.full((*shape, 3), 0.1, np.float32)
@@ -83,13 +84,14 @@ def test_rgb_boundary_cannot_turn_native_slope_into_surface_jump(kind):
     supported_differences = evidence.valid_mask[1:] & evidence.valid_mask[:-1]
     assert np.max(np.abs(np.diff(relative, axis=0))[supported_differences]) > 0.1
     baseline = align_depth(evidence, master, proxy, refinement="bilinear")
-    guided = align_depth(evidence, master, proxy)
+    guided = align_depth(evidence, master, proxy, refinement=refinement)
     np.testing.assert_array_equal(guided.relative_depth, baseline.relative_depth)
     assert guided.metadata["candidate_pixels"] == guided.metadata["refined_pixels"] == 0
 
 
+@pytest.mark.parametrize("refinement", ["guided_bilinear", "guided_bilinear_v3"])
 @pytest.mark.parametrize("missing", ["sky", "numeric", "image_border"])
-def test_guidance_abstains_when_outer_native_discontinuity_support_is_missing(missing):
+def test_guidance_abstains_when_outer_native_discontinuity_support_is_missing(missing, refinement):
     master, proxy, evidence = scene()
     native, sky = evidence.native_depth.copy(), evidence.sky_mask.copy()
     if missing == "sky":
@@ -105,19 +107,20 @@ def test_guidance_abstains_when_outer_native_discontinuity_support_is_missing(mi
         native[:, 0] = 1  # The discontinuity has no left outer neighbor.
     evidence = build_depth_evidence(native, sky, proxy, master.source_sha256)
     baseline = align_depth(evidence, master, proxy, refinement="bilinear")
-    guided = align_depth(evidence, master, proxy)
+    guided = align_depth(evidence, master, proxy, refinement=refinement)
     np.testing.assert_array_equal(guided.relative_depth, baseline.relative_depth)
     assert guided.metadata["candidate_pixels"] == 0
 
 
-def test_no_color_boundary_cannot_sharpen_noisy_depth():
+@pytest.mark.parametrize("refinement", ["guided_bilinear", "guided_bilinear_v3"])
+def test_no_color_boundary_cannot_sharpen_noisy_depth(refinement):
     master, _, _ = scene()
     master = replace(master, pixels=np.full_like(master.pixels, 0.4))
     proxy = create_proxy(master, 28)
     native = np.random.default_rng(771).uniform(1, 2, proxy.transform.padded_shape).astype(np.float32)
     evidence = build_depth_evidence(native, np.zeros_like(native, bool), proxy, master.source_sha256)
     bilinear = align_depth(evidence, master, proxy, refinement="bilinear")
-    guided = align_depth(evidence, master, proxy)
+    guided = align_depth(evidence, master, proxy, refinement=refinement)
     np.testing.assert_array_equal(guided.relative_depth, bilinear.relative_depth)
     assert guided.metadata["refined_pixels"] == 0
 
@@ -275,3 +278,88 @@ def test_invalid_response_settings_fail_closed(kwargs):
     master, proxy, evidence = scene()
     with pytest.raises(ValueError, match="finite"):
         enhance_master_v5(master, align_depth(evidence, master, proxy), **kwargs)
+
+
+def test_versioned_guidance_abstains_on_isolated_depth_outlier_over_rgb_texture():
+    """A texture-colored singleton is not a persistent second native surface."""
+    pixels = np.full((112, 112, 3), 0.1, np.float32)
+    pixels[:, 84:] = 0.8
+    pixels[38:46, 38:46] = 0.8
+    master = ImageMaster(pixels, "a" * 64, 16)
+    proxy = create_proxy(master, 28)
+    native = np.ones((28, 28), np.float32)
+    native[:, 21:] = 2
+    native[10, 10] = 2
+    evidence = build_depth_evidence(native, np.zeros_like(native, bool), proxy, master.source_sha256)
+    baseline = align_depth(evidence, master, proxy, refinement="bilinear")
+    legacy = align_depth(evidence, master, proxy)
+    persistent = align_depth(evidence, master, proxy, refinement="guided_bilinear_v3")
+    region = (slice(32, 52), slice(32, 52))
+    # Keep legacy bytes verifiable; they exhibit the historical amplification.
+    assert legacy.relative_depth[region].mean() == pytest.approx(0.16)
+    assert baseline.relative_depth[region].mean() == pytest.approx(0.04)
+    np.testing.assert_array_equal(persistent.relative_depth[region], baseline.relative_depth[region])
+    np.testing.assert_array_equal(evidence.native_depth, native)
+    assert legacy.metadata["recipe"] == "bounded_two_surface_rgb_selection_v2"
+    assert persistent.metadata["recipe"] == "bounded_two_surface_rgb_selection_v3"
+    assert persistent.metadata["minimum_native_samples_per_group"] == 4
+    assert persistent.metadata["minimum_outer_samples_per_group"] == 2
+    # A genuine two-plane boundary in the same image still receives refinement.
+    assert persistent.metadata["refined_pixels"] > 0
+
+
+def test_versioned_guidance_requires_group_support_outside_central_footprint():
+    from transformation_portal.lux_depth_v5.photography import _native_discontinuity_support
+
+    master, proxy, evidence = scene()
+    native = np.ones(evidence.shape, np.float32)
+    native[6, 10:12] = 2
+    native[7, 10] = 2
+    native[5, 10] = 2
+    evidence = build_depth_evidence(native, evidence.sky_mask, proxy, master.source_sha256)
+    y, x = np.array([[6]]), np.array([[10]])
+    # Four samples belong to the minority group, but only one lies outside
+    # the central 2x2 footprint. Membership counts alone cannot authorize it.
+    assert _native_discontinuity_support(evidence, y, x).item()
+    assert not _native_discontinuity_support(evidence, y, x, require_persistent_groups=True).item()
+
+
+def test_versioned_guidance_retains_thin_native_surface_support():
+    from transformation_portal.lux_depth_v5.photography import _native_discontinuity_support
+
+    master, proxy, evidence = scene()
+    native = np.ones(evidence.shape, np.float32)
+    native[:, 10] = 2
+    evidence = build_depth_evidence(native, evidence.sky_mask, proxy, master.source_sha256)
+    assert _native_discontinuity_support(evidence, np.array([[6]]), np.array([[9]]), require_persistent_groups=True).item()
+
+
+def test_versioned_guidance_is_independent_of_scratch_tile_size(monkeypatch):
+    from transformation_portal.lux_depth_v5 import photography
+
+    master, proxy, evidence = scene()
+    normal = align_depth(evidence, master, proxy, refinement="guided_bilinear_v3")
+    monkeypatch.setattr(photography, "_MAX_CHUNK_PIXELS", 37)
+    tiled = align_depth(evidence, master, proxy, refinement="guided_bilinear_v3")
+    np.testing.assert_array_equal(normal.relative_depth, tiled.relative_depth)
+    assert normal.metadata["refined_pixels"] == tiled.metadata["refined_pixels"]
+
+
+@pytest.mark.parametrize("seed", [19, 37, 91])
+def test_versioned_guidance_only_abstains_from_legacy_selections(seed):
+    """The stricter recipe cannot select new depths on adversarial two-level noise."""
+    rng = np.random.default_rng(seed)
+    pixels = np.repeat(rng.choice([0.1, 0.8], (56, 112, 1)), 3, axis=2).astype(np.float32)
+    master = ImageMaster(pixels, "a" * 64, 16)
+    proxy = create_proxy(master, 28)
+    native = rng.choice([1.0, 2.0], proxy.transform.padded_shape).astype(np.float32)
+    sky = rng.random(native.shape) < 0.02
+    evidence = build_depth_evidence(native, sky, proxy, master.source_sha256)
+    baseline = align_depth(evidence, master, proxy, refinement="bilinear")
+    legacy = align_depth(evidence, master, proxy)
+    persistent = align_depth(evidence, master, proxy, refinement="guided_bilinear_v3")
+    assert np.all(
+        (persistent.relative_depth == baseline.relative_depth) | (persistent.relative_depth == legacy.relative_depth)
+    )
+    np.testing.assert_array_equal(persistent.valid_mask, baseline.valid_mask)
+    np.testing.assert_array_equal(persistent.support_confidence, baseline.support_confidence)
