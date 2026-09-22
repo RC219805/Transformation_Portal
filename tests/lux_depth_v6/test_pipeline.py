@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from tests.lux_depth_v5.test_pipeline import execute, request_case  # noqa: F401
+from tests.lux_depth_v5.test_pipeline import execute
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
 from transformation_portal.lux_depth_v6.__main__ import main
@@ -25,8 +25,8 @@ from transformation_portal.lux_depth_v6.plan import GradePlan, LuxDepthV6Request
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture
-def v5_parent(request_case):
+@pytest.fixture(name="v5_parent")
+def fixture_v5_parent(request_case):
     return execute(request_case).output_root
 
 
@@ -149,7 +149,7 @@ def test_directory_replacement_cannot_redirect_product_write(v5_parent, tmp_path
     with pytest.raises(ArtifactEvidenceError):
         run(prepared)
     assert displaced.is_dir()
-    assert list(outside.iterdir()) == []
+    assert not list(outside.iterdir())
     assert not (target / "evidence.json").exists()
     assert not (displaced / "evidence.json").exists()
 

@@ -17,6 +17,9 @@ from transformation_portal.lux_depth_v6.color import (
 
 pytestmark = pytest.mark.unit
 
+# Largest finite IEEE 754 binary32 value.
+FLOAT32_MAX = float.fromhex("0x1.fffffep+127")
+
 
 def master(pixels, alpha=None):
     return ImageMaster(np.asarray(pixels, np.float32), "a" * 64, 32, alpha)
@@ -91,7 +94,7 @@ def test_nonopaque_grade_samples_remain_bitwise_protected():
 
 
 def test_float32_overflow_fails_without_modifying_source():
-    source = master([[[np.finfo(np.float32).max] * 3]])
+    source = master([[[FLOAT32_MAX] * 3]])
     before = source.pixels.tobytes()
     with pytest.raises(ValueError, match="finite float32"):
         grade_master(source, GradeRecipe(exposure_stops=1))
@@ -138,7 +141,7 @@ def test_soft_gamut_contraction_is_bounded_and_preserves_linear_chroma_direction
 
 
 def test_extreme_hdr_render_is_finite_and_double_render_is_rejected():
-    maximum = np.finfo(np.float32).max
+    maximum = FLOAT32_MAX
     source = master([[[maximum, maximum, maximum], [-maximum, maximum, -maximum]]])
     result, _ = render_master(source, RenderRecipe())
     assert np.isfinite(result.pixels).all()

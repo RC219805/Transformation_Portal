@@ -333,6 +333,7 @@ CI, managed-service deployment, or photographic release acceptance.
 | `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 make test-lux-depth-v6-contract` | 949 passed; includes V6, V5, V4, MaterialsV4, and shared evidence/plan contracts |
 | `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 make test-lux-depth-v5-managed-contract` | 252 passed; offline managed regression lane |
 | `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/pytest tests/lux_depth_v6 tests/structural -q` | 161 passed |
+| `PYTHON_BIN=.venv-lint/bin/python LINT_RUNNER_GITHUB_EVENT_NAME=pull_request ./scripts/lint_runner.sh pr` | Passed, including strict Pylint; separate targeted Pylint also covered the new fixture module |
 | `PATH=/private/tmp/tp-node22-npm11-bin:$PATH TP_LINT_PYTHON=/Users/richardcheetham/Desktop/Transformation_Portal/.venv-lint/bin/python PYTHONDONTWRITEBYTECODE=1 make ci` | Passed, including fast tests, orchestrator contracts, and frontdoor contracts; orchestrator lane reported 1498 passed and 57 skipped |
 | `PATH=/private/tmp/tp-node22-npm11-bin:$PATH PYTHONDONTWRITEBYTECODE=1 make validate-ci` | Passed |
 | `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/mypy --config-file=mypy.ini src/transformation_portal/lux_depth_v6 src/transformation_portal/lux_depth_v4/photography.py src/transformation_portal/lux_depth_v5/photography.py` | Passed, 12 source files |
@@ -351,6 +352,12 @@ were environment failures; the same supported paths passed with the required
 host access. A new CLI serialization-guard violation was repaired to use the
 repository canonical JSON writer before the successful CI run. The obsolete
 historical ramp remains rejected as documented above.
+The initial hosted lint job reported test-only Pylint inference and fixture
+shadowing diagnostics (`E1101`, `E1136`, `W0621`, plus import/truth-test style
+findings). Shared fixture registration, an exact binary32 limit, and explicit
+receipt checks repaired the tests without suppressing lint rules or changing
+photographic processing. Strict PR lint and all 161 V6/structural tests passed;
+logs are retained under `/private/tmp/lux-v6-pr-validation/lint-remediation-*`.
 The fresh PR worktree's initial frontend build rejected an external
 `node_modules` symlink. Installing the pinned dependencies inside the worktree
 resolved that environment issue; the subsequent complete `make ci` passed.

@@ -8,7 +8,6 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from tests.lux_depth_v5 import test_evidence as v5_evidence
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
 from transformation_portal.lux_depth_v6 import source as source_module
@@ -21,7 +20,6 @@ from transformation_portal.lux_depth_v6.source import (
 )
 
 pytestmark = pytest.mark.unit
-completed = v5_evidence.completed
 
 
 def test_admits_verified_v5_and_loads_exact_retained_images(completed):

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.lux_depth_v5.test_evidence import completed as _v5_completed
 from transformation_portal.lux_depth_v6 import plan as plan_module
 from transformation_portal.lux_depth_v6 import products
 from transformation_portal.lux_depth_v6.pipeline import run
@@ -20,7 +19,6 @@ from transformation_portal.lux_depth_v6.plan import (
 from transformation_portal.lux_depth_v6.source import prepare_source
 
 pytestmark = pytest.mark.unit
-completed = _v5_completed
 
 
 def test_processing_identity_binds_product_encoder_source():

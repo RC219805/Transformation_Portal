@@ -65,7 +65,9 @@ def test_fully_opaque_alpha_allows_depth_finishing():
     original, evidence, proxy, configuration = fixture(np.ones((56, 112), np.float32))
     baseline, receipt = reconstruct_baseline(original, evidence, proxy, configuration)
     assert not receipt["alpha_abstention"]
-    assert receipt["depth_response"]["changed_pixels"] > 0
+    response = receipt["depth_response"]
+    assert isinstance(response, dict)
+    assert dict(response)["changed_pixels"] > 0
     np.testing.assert_array_equal(baseline.alpha, original.alpha)
 
 
@@ -110,7 +112,9 @@ def test_zero_response_retains_original_photographic_pixel_bits():
     configuration.update(strength=0, clarity=0)
     baseline, receipt = reconstruct_baseline(original, evidence, proxy, configuration)
     assert baseline.pixels.tobytes() == original.pixels.tobytes()
-    assert receipt["depth_response"]["changed_pixels"] == 0
+    response = receipt["depth_response"]
+    assert isinstance(response, dict)
+    assert dict(response)["changed_pixels"] == 0
 
 
 def test_unknown_sky_evidence_remains_protected_in_successor():
@@ -118,4 +122,6 @@ def test_unknown_sky_evidence_remains_protected_in_successor():
     evidence = build_depth_evidence(evidence.native_depth, None, proxy, original.source_sha256)
     baseline, receipt = reconstruct_baseline(original, evidence, proxy, configuration)
     assert baseline.pixels.tobytes() == original.pixels.tobytes()
-    assert receipt["depth_response"]["authorized_pixels"] == 0
+    response = receipt["depth_response"]
+    assert isinstance(response, dict)
+    assert dict(response)["authorized_pixels"] == 0
