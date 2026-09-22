@@ -883,6 +883,8 @@ def test_portal_routed_shell_hidden_rules_preserve_responsive_display_utilities(
     route_shell_rule = re.search(
         (
             r"#overview-shell\.hidden,\s*"
+            r"#overviewStatsSkeletonState\.hidden,\s*"
+            r"#overviewStatsRow\.hidden,\s*"
             r"#console-grid\.hidden,\s*"
             r"#build-shell\.hidden,\s*"
             r"#jobs-shell\.hidden\s*\{(?P<body>[^}]*)}"

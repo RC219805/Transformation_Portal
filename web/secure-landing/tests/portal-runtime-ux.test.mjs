@@ -20,6 +20,25 @@ function between(text, startNeedle, endNeedle) {
   return text.slice(start, end);
 }
 
+test("required degraded prerequisites count as blocking checks, not advisories", () => {
+  const checklist = between(portal, 'function _dispatchChecklistItems', 'function renderGovernanceBanner');
+  const build = new Function('state', `
+    const parseBoolLike = Boolean;
+    const _currentPreviewForPayload = () => ({status: 'ready'});
+    const _effectivePreviewSnapshot = _currentPreviewForPayload;
+    const currentPipelineReadinessIssues = () => [{severity: 'degraded', message: 'Supply an archive index.'}];
+    const currentPresetDescriptor = () => ({});
+    const currentPipelineDispatchStatus = () => 'degraded';
+    const _presetRequiresResearchAcknowledgments = () => false;
+    ${checklist}
+    return _dispatchChecklistItems;
+  `)({ pipeline: 'archive-gate-a', backendOk: true });
+  const checks = build({args: {}});
+  assert.equal(checks.find((item) => item.label === 'Dispatch readiness').tone, 'block');
+  assert.equal(checks.find((item) => item.label === 'Archive governance').tone, 'block');
+  assert.equal(checks.filter((item) => item.tone === 'warn').length, 0);
+});
+
 test("workspace navigation uses page-current semantics and keeps Review reachable empty", () => {
   const activeLink = between(portal, "function setActiveWorkspaceLink", "function _portalStatusRegion");
   const rail = between(portal, "function setupSectionRail", "function _minimumBuildStep");

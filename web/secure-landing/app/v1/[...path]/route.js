@@ -20,6 +20,64 @@ import { normalizeTraceparent, resolveRequestTraceparent, traceIdFromTraceparent
 
 export const runtime = "nodejs";
 
+// Canonical fields checked by the backend's tenant path admission. Only this
+// typed denial is operator-correctable; unknown 401/403 responses still mean
+// that the server-to-server authentication boundary failed.
+const TENANT_PATH_FIELDS = new Set([
+  "input_dir", "output_dir", "companions_manifest", "materials_manifest",
+  "sam2_checkpoint_path", "cameras_sidecar_path", "fastvlm_python_executable",
+  "fastvlm_mlx_vlm_dir", "vlm_captioning_model", "archive_index", "manifest_jsonl",
+  "archive_root", "out_dir", "hash_manifest", "report_path", "out_jsonl",
+  "out_summary", "policy_yaml", "bag_dir", "report_json", "out_ledger", "out_xml",
+  "out_prov_jsonld", "out_stac_catalog", "out_stac_items_dir", "rights_jsonl"
+]);
+const TENANT_PATH_DENIAL_TIMEOUT_MS = 1000;
+
+async function readTenantPathDenial(upstream) {
+  if (!upstream.body || !/^application\/json(?:\s*;|$)/i.test(upstream.headers.get("content-type") || "")) {
+    return null;
+  }
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  const expiresAt = performance.now() + TENANT_PATH_DENIAL_TIMEOUT_MS;
+  let timeoutId;
+  // This bounds only error classification, not the existing upstream request
+  // or SSE lifetime. One deadline covers the entire body, including slow drip.
+  const deadline = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("tenant path denial read timed out")), TENANT_PATH_DENIAL_TIMEOUT_MS);
+  });
+  let text = "";
+  let bytes = 0;
+  try {
+    for (;;) {
+      // Already-queued empty chunks can otherwise starve the timer callback.
+      if (performance.now() >= expiresAt) return null;
+      const { value, done } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 4096) return null;
+      text += decoder.decode(value, { stream: true });
+    }
+    const envelope = JSON.parse(text + decoder.decode());
+    const error = envelope?.error;
+    if (
+      envelope?.schema !== "tp.orchestrator.error.v1" || envelope.success !== false || envelope.data !== null
+      || error?.code !== "FORBIDDEN" || error?.details?.reason !== "tenant_path_outside_workspace"
+      || !TENANT_PATH_FIELDS.has(error.details.field)
+    ) return null;
+    // Reconstruct the envelope; never forward arbitrary upstream messages,
+    // filesystem paths, or extra diagnostic fields across the frontdoor.
+    return { field: error.details.field, reason: "tenant_path_outside_workspace" };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    // A broken upstream cancel hook must not keep the managed error pending.
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 function errorEnvelope(status, code, message, details = {}, traceparent = "") {
   return applySecurityHeaders(
     NextResponse.json(
@@ -305,10 +363,20 @@ async function handleProxy(request, { params }) {
     );
   }
 
+  if (
+    config.pilotControlPlaneEnabled && upstream.status === 403 && request.method === "POST"
+    && (pathname === "/v1/config-preview" || pathname === "/v1/jobs")
+  ) {
+    const pathDenial = await readTenantPathDenial(upstream);
+    if (pathDenial) {
+      return errorEnvelope(403, "FORBIDDEN", "tenant admission failed", pathDenial, requestTraceparent);
+    }
+  }
+
   const upstreamFailureReason = classifyUpstreamFailureStatus(upstream.status);
   if (upstreamFailureReason) {
     try {
-      await upstream.body?.cancel();
+      void upstream.body?.cancel().catch(() => {});
     } catch {
       // The body is discarded; retain the managed error envelope if closing fails.
     }

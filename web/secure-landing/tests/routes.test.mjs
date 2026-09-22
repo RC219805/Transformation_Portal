@@ -3446,6 +3446,153 @@ test("v1 normalizes upstream auth responses into managed config failures", async
   }
 });
 
+test("v1 preserves only typed tenant path denials as actionable managed validation failures", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret",
+    TP_PILOT_CONTROL_PLANE_ENABLED: "1",
+    TP_FRONTDOOR_IDENTITY_SECRET: "dedicated-frontdoor-identity-secret-for-tests"
+  });
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+  const denial = (field) => ({
+    schema: "tp.orchestrator.error.v1", success: false, data: null,
+    error: {
+      code: "FORBIDDEN",
+      message: "upstream private diagnostic must not reach the browser",
+      details: { field, reason: "tenant_path_outside_workspace", private_path: "/private/other-tenant" }
+    }
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    const cases = [
+      { path: "config-preview", field: "input_dir", accepted: true },
+      { path: "config-preview", field: "output_dir", accepted: true },
+      { path: "config-preview", field: "materials_manifest", accepted: true },
+      { path: "jobs", field: "companions_manifest", accepted: true },
+      { path: "config-preview", field: "untrusted_field" },
+      { path: "config-preview", field: "input_dir", status: 401 },
+      { path: "config-preview", field: "input_dir", change: (body) => { body.error.code = "UNAUTHORIZED"; } },
+      { path: "config-preview", field: "input_dir", change: (body) => { body.error.details.reason = "actor_tenant_not_allowed"; } },
+      { path: "config-preview", field: "input_dir", change: (body) => { body.success = true; } },
+      { path: "config-preview", field: "input_dir", change: (body) => { body.schema = "unknown"; } },
+      { path: "config-preview", field: "input_dir", body: "not json" },
+      { path: "config-preview", field: "input_dir", change: (body) => { body.error.message = "x".repeat(4097); } },
+      { path: "config-preview", field: "input_dir", contentType: "text/plain" },
+      { path: "config-preview", field: "input_dir", pilot: false },
+      { path: "jobs/job-id/cancel", field: "input_dir" }
+    ];
+    for (const entry of cases) {
+      process.env.TP_PILOT_CONTROL_PLANE_ENABLED = entry.pilot === false ? "0" : "1";
+      const body = denial(entry.field);
+      entry.change?.(body);
+      const restoreFetch = withMockedAccessCerts(async () => new Response(entry.body ?? JSON.stringify(body), {
+        status: entry.status ?? 403,
+        headers: { "content-type": entry.contentType ?? "application/json" }
+      }));
+      try {
+        const response = await route.POST(buildRequest(`https://portal.example.com/v1/${entry.path}`, {
+          method: "POST",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${session.id}`,
+            "Cf-Access-Jwt-Assertion": createAccessJwt(),
+            origin: "https://portal.example.com",
+            "x-csrf-token": session.csrfToken,
+            "content-type": "application/json",
+            traceparent
+          }),
+          body: JSON.stringify({ pipeline: "lux-depth-v5", args: {} })
+        }), { params: { path: entry.path.split("/") } });
+        const result = await response.json();
+        assert.equal(response.status, entry.accepted ? 403 : 503, JSON.stringify(entry));
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal(response.headers.get("traceparent"), traceparent);
+        if (entry.accepted) {
+          assert.deepEqual(result, {
+            schema: "tp.orchestrator.error.v1", success: false, data: null,
+            error: {
+              code: "FORBIDDEN", message: "tenant admission failed",
+              details: { field: entry.field, reason: "tenant_path_outside_workspace" }
+            }
+          });
+        } else {
+          assert.equal(result.error.code, "AUTH_CONFIGURATION_ERROR");
+          assert.equal(result.error.details.reason, "config_failure");
+        }
+        assert.doesNotMatch(JSON.stringify(result), /other-tenant|private diagnostic|private_path/);
+      } finally {
+        restoreFetch();
+      }
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 tenant denial classification bounds stalled reads and never waits for cancellation", { timeout: 7000 }, async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret",
+    TP_PILOT_CONTROL_PLANE_ENABLED: "1",
+    TP_FRONTDOOR_IDENTITY_SECRET: "dedicated-frontdoor-identity-secret-for-tests"
+  });
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    for (const mode of ["stalled", "slow-drip", "empty-chunks", "oversized", "non-json"]) {
+      let intervalId;
+      let cancelled = false;
+      const stream = new ReadableStream({
+        start(controller) {
+          if (mode === "oversized") controller.enqueue(new Uint8Array(4097));
+          if (mode === "slow-drip") intervalId = setInterval(() => controller.enqueue(new Uint8Array([32])), 25);
+        },
+        pull(controller) {
+          if (mode === "empty-chunks") controller.enqueue(new Uint8Array());
+        },
+        cancel() {
+          cancelled = true;
+          clearInterval(intervalId);
+          return new Promise(() => {});
+        }
+      });
+      const restoreFetch = withMockedAccessCerts(async () => new Response(stream, {
+        status: 403,
+        headers: { "content-type": mode === "non-json" ? "text/plain" : "application/json" }
+      }));
+      try {
+        const response = await route.POST(buildRequest("https://portal.example.com/v1/config-preview", {
+          method: "POST",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${session.id}`,
+            "Cf-Access-Jwt-Assertion": createAccessJwt(),
+            origin: "https://portal.example.com",
+            "x-csrf-token": session.csrfToken,
+            "content-type": "application/json"
+          }),
+          body: JSON.stringify({ pipeline: "lux-depth-v5", args: {} })
+        }), { params: { path: ["config-preview"] } });
+        assert.equal(response.status, 503, mode);
+        const result = await response.json();
+        assert.equal(result.error.code, "AUTH_CONFIGURATION_ERROR", mode);
+        assert.equal(result.error.details.reason, "config_failure", mode);
+        assert.equal(cancelled, true, mode);
+        assert.equal(stream.locked, false, mode);
+      } finally {
+        clearInterval(intervalId);
+        restoreFetch();
+      }
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 forwards browser traceparent upstream and includes trace id in queue-action audits", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"

@@ -9304,8 +9304,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "b0016599213adae69530dc7ebdf7c850b703a61f",
-      "content_sha256": "30b9d659d220b7e75d948c857c41d60aa507efc26ba4ef2a6e14a73301f24ae8",
+      "source_commit": "79a4dd790f80c0968ad804498066eb07dd822685",
+      "content_sha256": "df8a3b8f8dc0e8fe558736748daf1f29c06429ec62b6e2bf18c47e3de11b43f0",
       "source_references": [
         "web/secure-landing/app/v1/[...path]/route.js",
         "portal.html",
@@ -14659,7 +14659,7 @@
       ],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "b3759f7e3d8150399fba960163264e1d11b67462",
+      "source_commit": "79a4dd790f80c0968ad804498066eb07dd822685",
       "content_sha256": "ea230fed7ea071c301813fea26dcc339bd9780214f6b646e8d2fd0212824559f",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
@@ -14692,16 +14692,16 @@
         "src/transformation_portal/portal/photography_jobs.py": "d6bd5ae88d5a0fd0a03080d9e7034f4bf3d54877510a59251a73e852f68cbd7b",
         "src/transformation_portal/orchestrator/job_execution.py": "f1de59c1b3b983ef40c0b296cb50a311bb1485583ad4c610c42e2a15d84d5ade",
         "src/transformation_portal/orchestrator/photography_adapter.py": "567ef91c1a748a8bd9919437d4ade64660938b63674aee845cd96e5b8b341723",
-        "portal.html": "0857ab9471134f188acd2b3a427b987696c6553e66fa011fbf51b76b4380aded",
+        "portal.html": "ea34499d3bf41eb027b539076e9fa1ed24d3ed58089df5f617edf60a81273ab1",
         "web/secure-landing/portal-src/internal/photography.js": "4e98919b6c49af02adeecfe0ee0bfb93a4ca83ab47aa826ebed303010d6055ee",
-        "web/secure-landing/portal-src/portal.template.js": "7393c887704a175db95ab3fced1b7f3db35901249cf4b36f242600ebf2a7b358",
+        "web/secure-landing/portal-src/portal.template.js": "12f6b04d39469d7d1db6ad14856f8fb8077c35daa512a17033547754c18e30d3",
         "tests/lux_depth_v5/test_preview.py": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
         "tests/lux_depth_v5/test_pipeline.py": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
         "tests/orchestrator/test_managed_photography_api.py": "62bf532f8a7f6971b8f178a44fe7824371b016d2ac48037411f0c86590210dab",
         "tests/orchestrator/test_managed_photography_publisher.py": "7b5e95b6e1e2635e3a547ec0bc3cd4c51aa10b4156041a268ff1d58bea40fd2b",
-        "web/secure-landing/tests/photography.test.mjs": "56c3074a50d9eee7c20cdebc51c28e506babf6d8aeb24ba02fd2f4abd261f04d",
-        "web/secure-landing/tests/preview-request-races.test.mjs": "90fdf27402365694e39239131a471c7075a5501fa7fb9f90b6915b9adc42a90a",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "fa8968375515c40dca5229854adfa6655e65980be8e7045033795b9293e53970"
+        "web/secure-landing/tests/photography.test.mjs": "232476c5d86a566b296b301ba74b9e992173d3ad73a85e85d996905594226963",
+        "web/secure-landing/tests/preview-request-races.test.mjs": "e28d2efd11594998b37510b839ccc597eea60a72e41cdab7881bbb37a9575eb1",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "ac383ea62640db43ee068133f703186e85ecc1abaa3dc442555c56dd884dad5e"
       },
       "validation_commands": [
         "make check-documentation-catalog",

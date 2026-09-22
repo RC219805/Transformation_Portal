@@ -12,6 +12,11 @@ export const PORTAL_CAPABILITY_STATUSES = Object.freeze([
 const STATUS_SET = new Set(PORTAL_CAPABILITY_STATUSES);
 const LUX_PIPELINE = "lux-depth-v3";
 const ARCHIVE_PIPELINES = new Set(["archive-gate-a", "archive-gate-b", "archive-gate-c"]);
+const ATTENTION_STATUSES = new Set(["blocked", "needs_ack", "missing_runtime", "offline", "gated"]);
+const V3_ONLY_ROWS = new Set([
+  "depth_pro", "materials_v3", "pbr_generation", "segmentation", "sam2_segmentation",
+  "reconstruction", "raw_ingest", "runtime_tuning", "run_card", "fastvlm_captioning"
+]);
 
 function boolLike(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -29,6 +34,10 @@ function text(value) {
 
 function lower(value) {
   return text(value).toLowerCase();
+}
+
+function object(value, fallback = {}) {
+  return value && typeof value === "object" ? value : fallback;
 }
 
 function statusLabel(status) {
@@ -62,7 +71,7 @@ function backendStatus(backendOk, active, inactive = "available") {
   return active ? "enabled" : inactive;
 }
 
-function makeRow({ id, group, label, status, summary, detail, nextAction = "" }) {
+function makeRow({ id, group, label, status, summary, detail = "", nextAction = "" }) {
   const normalizedStatus = normalizeCapabilityStatus(status);
   return {
     id,
@@ -85,25 +94,28 @@ export function normalizeCapabilityStatus(value, fallback = "available") {
 
 export function buildPortalCapabilityCatalog(input = {}) {
   const pipeline = text(input.pipeline || LUX_PIPELINE);
-  const args = input.args && typeof input.args === "object" ? input.args : {};
-  const features = input.features && typeof input.features === "object" ? input.features : {};
-  const readiness = input.readiness && typeof input.readiness === "object" ? input.readiness : null;
+  const args = object(input.args);
+  const features = object(input.features);
+  const readiness = object(input.readiness, null);
   const readinessIssues = Array.isArray(input.readinessIssues) ? input.readinessIssues : [];
-  const preview = input.preview && typeof input.preview === "object" ? input.preview : null;
+  const preview = object(input.preview, null);
   const jobs = Array.isArray(input.jobs) ? input.jobs : [];
-  const activeJob = input.activeJob && typeof input.activeJob === "object" ? input.activeJob : null;
-  const reviewJob = input.reviewJob && typeof input.reviewJob === "object" ? input.reviewJob : null;
-  const captioningRuntimeReadiness = input.captioningRuntimeReadiness
-    && typeof input.captioningRuntimeReadiness === "object"
-    ? input.captioningRuntimeReadiness
-    : {};
+  const activeJob = object(input.activeJob, null);
+  const reviewJob = object(input.reviewJob, null);
+  const captioningReadiness = object(input.captioningRuntimeReadiness);
   const backendOk = Boolean(input.backendOk);
   const bootstrapReady = Boolean(input.bootstrapReady);
   const authMode = lower(input.authMode || "managed_unavailable");
   const isLux = pipeline === LUX_PIPELINE;
   const isPhotography = pipeline === "lux-depth-v5";
   const isArchive = ARCHIVE_PIPELINES.has(pipeline);
-  const previewBlocked = hasPreviewErrors(preview) || hasBlockedReadiness(readiness, readinessIssues);
+  // The host supplies only the preview matched to the current draft. A failed
+  // request may have no field errors (for example, an authentication failure).
+  const previewBlocked = lower(preview?.status) === "error"
+    || hasPreviewErrors(preview) || hasBlockedReadiness(readiness, readinessIssues);
+  const previewReady = lower(preview?.status) === "ready"
+    && (!text(preview?.pipeline) || preview.pipeline === pipeline)
+    && !previewBlocked;
   const archivePrereqIssue = hasArchivePrereqIssue(readinessIssues);
   const segmentationEnabled = boolLike(args.enable_segmentation, false);
   const segmentationBackend = lower(args.segmentation_backend || "efficientsam");
@@ -112,7 +124,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
   const depthBackend = lower(args.depth_backend || "da3");
   const depthProActive = depthBackend === "depth_pro";
   const captioningEnabled = boolLike(args.vlm_captioning_enabled, false);
-  const captioningRuntimeStatus = lower(captioningRuntimeReadiness.status || "off");
+  const captioningRuntimeStatus = lower(captioningReadiness.status || "off");
   const stagedUploadSupported = Boolean(input.stagedUploadSupported);
   const hasJobs = jobs.length > 0;
   const activeJobState = lower(activeJob?.state || activeJob?.status || "");
@@ -128,58 +140,68 @@ export function buildPortalCapabilityCatalog(input = {}) {
       group: "Entry",
       label: "Managed access",
       status: !bootstrapReady ? "gated" : authMode === "managed" ? "enabled" : "gated",
-      summary: authMode === "managed" ? "Server-side credential handoff is active." : "Managed handoff is not active.",
-      detail: "Sourced from /portal/bootstrap; browser API key entry stays disabled in managed mode.",
-      nextAction: authMode === "managed" ? "Continue through the managed console." : "Recover access before privileged work."
+      summary: bootstrapReady && authMode === "managed" ? "Managed sign-in is active." : "Managed sign-in is not active.",
+      detail: "No browser API key is needed.",
+      nextAction: bootstrapReady && authMode === "managed" ? "" : "Recover managed access before starting a run."
     }),
     makeRow({
       id: "direct_debug",
       group: "Entry",
       label: "Direct debug",
       status: authMode === "direct_debug" && features.directDebug !== false ? "enabled" : "gated",
-      summary: authMode === "direct_debug" ? "Direct-debug controls are available." : "Direct-debug entry is gated by auth mode.",
-      detail: "This is a bootstrap-controlled fallback, not a managed operator default.",
-      nextAction: authMode === "direct_debug" ? "Enter an API key for this page only." : "Use managed login."
+      summary: authMode === "direct_debug" ? "Direct-debug controls are available." : "Managed sign-in does not require direct debug.",
+      detail: "For standalone troubleshooting only.",
+      nextAction: authMode === "direct_debug" ? "Enter an API key for this page only." : ""
     }),
     makeRow({
       id: "lux_depth_v3",
       group: "Build",
       label: "Lux Depth v3",
       status: backendStatus(backendOk, isLux),
-      summary: isLux ? "Current draft targets the Lux depth pipeline." : "Lux depth remains selectable from the pipeline menu.",
-      detail: "Preset, depth backend, model, segmentation, deliverable, and preview contracts are configured in Build."
+      summary: isLux ? "Selected for this draft." : "Select this pipeline in Build.",
+      detail: "Production baseline; configure outputs in Build."
     }),
     makeRow({
       id: "lux_depth_v5",
       group: "Build",
       label: "LuxDepthV5 photography",
-      status: !backendOk ? "offline" : isPhotography ? previewBlocked ? "blocked" : lower(readiness?.status) === "ready" ? "enabled" : "gated" : "available",
-      summary: isPhotography ? "Current draft targets the opt-in photography successor." : "Opt-in photography is selectable when the server supports managed V5.",
-      detail: "Server readiness and preview authorize dispatch. V3 remains the production baseline; 518 remains the default target size."
+      status: !backendOk ? "offline" : isPhotography ? previewBlocked ? "blocked" : lower(readiness?.status) === "ready" && previewReady ? "enabled" : "gated" : "available",
+      summary: !isPhotography
+        ? "Opt-in photography, when enabled by the server."
+        : previewBlocked
+          ? "Resolve draft errors before starting a run."
+          : !previewReady
+            ? "Validate this draft in Build."
+            : "Configuration preview passed.",
+      detail: "Requires preview and readiness. Default size: 518; V3 remains the baseline.",
+      nextAction: !isPhotography ? "" : !previewReady
+          ? "Open Build to validate the current draft."
+          : lower(readiness?.status) !== "ready"
+            ? "Open Build to review photography readiness."
+            : ""
     }),
     makeRow({
       id: "lux_depth_v4",
       group: "Build",
       label: "LuxDepthV4 foundation",
       status: "not_portal_controlled",
-      summary: "V4 provides the photography foundation used by V5.",
-      detail: "Standalone V4 remains a CLI workflow; the managed portal exposes the admitted V5 pipeline."
+      summary: "Standalone V4 CLI foundation for V5."
     }),
     makeRow({
       id: "materials_v4",
       group: "Build",
       label: "MaterialsV4 evidence",
       status: !isPhotography ? "not_portal_controlled" : backendStatus(backendOk, Boolean(text(args.materials_manifest))),
-      summary: text(args.materials_manifest) ? "Existing MaterialsV4 evidence is selected." : "An existing MaterialsV4 manifest may be supplied to V5.",
-      detail: "The server validates and binds the manifest. The portal does not fabricate material evidence."
+      summary: "Use an existing MaterialsV4 evidence manifest.",
+      detail: "Supply existing evidence; the server validates it."
     }),
     makeRow({
       id: "archive_gates",
       group: "Build",
       label: "Archive gates",
-      status: !backendOk ? "offline" : archivePrereqIssue ? "needs_ack" : isArchive ? "enabled" : "available",
-      summary: isArchive ? "Current draft targets an archive gate." : "Fixity, BagIt, and METS gates remain portal-dispatchable.",
-      detail: "Archive roots, indexes, and rights manifests are governed by readiness and config-preview validation.",
+      status: !backendOk ? "offline" : isArchive && archivePrereqIssue ? "needs_ack" : isArchive ? "enabled" : "available",
+      summary: isArchive ? "Archive gate selected." : "Fixity, BagIt, and METS workflows.",
+      detail: "Validate archive paths and manifests in Build.",
       nextAction: archivePrereqIssue ? "Supply the required archive index or manifest before dispatch." : ""
     }),
     makeRow({
@@ -187,56 +209,61 @@ export function buildPortalCapabilityCatalog(input = {}) {
       group: "Build",
       label: "DA3 Apache path",
       status: backendStatus(backendOk, (isLux || isPhotography) && !depthProActive),
-      summary: depthProActive ? "Depth Pro is selected instead of the Apache DA3 path." : "DA3 Apache-backed depth is selected.",
-      detail: "The default DA3 path stays the primary governed Lux depth route."
+      summary: isPhotography ? "DA3 Metric selected." : isLux
+        ? depthProActive ? "Depth Pro selected instead." : "DA3 depth selected."
+        : "Depth estimation for Lux workflows."
     }),
     makeRow({
       id: "depth_pro",
       group: "Build",
       label: "Depth Pro",
       status: !backendOk ? "offline" : depthProActive && ackMissing(args, ["accept_apple_depth_pro_research_license"]) ? "needs_ack" : depthProActive ? "enabled" : "available",
-      summary: depthProActive ? "Research-only depth backend is selected." : "Research-only depth backend is available as a governed option.",
-      detail: "Depth Pro requires explicit Apple research-license acknowledgment before dispatch."
+      summary: "Optional research depth backend.",
+      detail: "Requires Apple research-license acknowledgment.",
+      nextAction: depthProActive && ackMissing(args, ["accept_apple_depth_pro_research_license"])
+        ? "Acknowledge the research license in Build or change backend." : ""
     }),
     makeRow({
       id: "materials_v3",
       group: "Build",
       label: "Materials V3",
       status: backendStatus(backendOk, isLux && boolLike(args.materials_v3, false)),
-      summary: boolLike(args.materials_v3, false) ? "Material estimation outputs are enabled." : "Material estimation outputs are available.",
-      detail: "Controlled by the Lux deliverables switch and reflected in config preview."
+      summary: "Estimate materials for the run."
     }),
     makeRow({
       id: "pbr_generation",
       group: "Build",
       label: "PBR generation",
       status: backendStatus(backendOk, isLux && boolLike(args.pbr, false)),
-      summary: boolLike(args.pbr, false) ? "PBR maps are enabled for the run." : "PBR maps can be enabled for Lux runs.",
-      detail: "PBR is a dispatchable Lux output flag, not a separate route."
+      summary: "Generate PBR maps."
     }),
     makeRow({
       id: "segmentation",
       group: "Build",
       label: "Segmentation",
       status: backendStatus(backendOk, isLux && segmentationEnabled),
-      summary: segmentationEnabled ? `Segmentation is enabled via ${segmentationBackend || "backend"}.` : "Segmentation is available for Lux runs.",
-      detail: "Backend and strictness controls stay visible when segmentation is enabled."
+      summary: segmentationEnabled ? `Selected: ${segmentationBackend}.` : "Optional segmentation masks.",
+      detail: "Choose a backend and strictness in Build."
     }),
     makeRow({
       id: "sam2_segmentation",
       group: "Build",
       label: "SAM2 segmentation",
       status: !backendOk ? "offline" : sam2Active && text(args.sam2_checkpoint_path) === "" ? "missing_runtime" : sam2Active ? "enabled" : "available",
-      summary: sam2Active ? "SAM2 is the selected segmentation backend." : "SAM2 tuning is available when SAM2 is selected.",
-      detail: "Checkpoint, tiling, generator, and concurrency controls are portal-configurable."
+      summary: "Segmentation with SAM2.",
+      detail: "Set checkpoint and tiling in Build.",
+      nextAction: sam2Active && !text(args.sam2_checkpoint_path)
+        ? "Set the SAM2 checkpoint in Build or change backend." : ""
     }),
     makeRow({
       id: "reconstruction",
       group: "Build",
       label: "Reconstruction",
       status: !backendOk ? "offline" : reconstructionEnabled && ackMissing(args, ["accept_research_tools_license"]) ? "needs_ack" : reconstructionEnabled ? "enabled" : "available",
-      summary: reconstructionEnabled ? "Scene reconstruction is enabled." : "Scene reconstruction is available as an experimental Lux option.",
-      detail: "Grouping, sidecar, tier, iterations, and debug-bundle controls are portal-configurable."
+      summary: "Experimental scene reconstruction.",
+      detail: "Configure scene grouping and cameras in Build.",
+      nextAction: reconstructionEnabled && ackMissing(args, ["accept_research_tools_license"])
+        ? "Acknowledge the research tools license in Build or disable reconstruction." : ""
     }),
     makeRow({
       id: "raw_ingest",
@@ -244,131 +271,173 @@ export function buildPortalCapabilityCatalog(input = {}) {
       label: "RAW ingest",
       status: backendStatus(backendOk, isLux && lower(args.raw_ingest_mode || "auto") !== "auto"),
       summary: `RAW ingest mode is ${lower(args.raw_ingest_mode || "auto") || "auto"}.`,
-      detail: "RAW mode is configurable; white-balance and demosaic policy remain backend-locked."
+      detail: "White balance and demosaic are server-managed."
     }),
     makeRow({
       id: "runtime_tuning",
       group: "Build",
       label: "Runtime tuning",
       status: !backendOk ? "offline" : isLux && (text(args.max_workers) || text(args.max_gpu_workers) || text(args.log_level)) ? "enabled" : "available",
-      summary: "CPU/GPU worker caps and log level are configurable for Lux runs.",
-      detail: "Auto remains the default unless the operator pins bounded runtime values."
+      summary: "Set worker limits and log level in Build.",
+      detail: "Auto is the default."
     }),
     makeRow({
       id: "run_card",
       group: "Build",
       label: "Run-card proofs",
       status: backendStatus(backendOk, isLux && boolLike(args.emit_run_card, false)),
-      summary: boolLike(args.run_card_include_proofs, false) ? "Run-card proof capture is enabled." : "Run-card emission is available; proof capture is optional.",
-      detail: "Run cards are dispatchable outputs and proof inclusion is controlled in Build."
+      summary: boolLike(args.run_card_include_proofs, false) ? "Proof capture enabled." : "Optional run cards and proofs."
     }),
     makeRow({
       id: "staged_uploads",
       group: "Build",
       label: "Staged uploads",
       status: !stagedUploadSupported ? "not_portal_controlled" : !bootstrapReady || !features.stagedUploads ? "gated" : "available",
-      summary: stagedUploadSupported ? "Staged upload controls are visible for supported pipelines." : "Current pipeline does not support portal staging.",
-      detail: "The rollout flag controls whether the visible staged-upload controls are interactive."
+      summary: stagedUploadSupported ? "Upload controls supported." : "Unavailable for this pipeline.",
+      detail: "Availability depends on server configuration."
     }),
     makeRow({
       id: "fastvlm_captioning",
       group: "Review",
       label: "FastVLM sidecars",
       status: !isLux ? "not_portal_controlled" : !bootstrapReady || !features.fastVlmCaptioning ? "gated" : captioningEnabled && captioningRuntimeStatus === "missing_runtime" ? "missing_runtime" : captioningEnabled && captioningRuntimeStatus === "invalid_config" ? "blocked" : captioningEnabled ? "enabled" : "available",
-      summary: captioningEnabled ? "Advisory caption sidecars are enabled." : "Advisory caption controls are visible for Lux runs.",
-      detail: "FastVLM remains advisory review metadata and never satisfies quality gates."
+      summary: captioningEnabled ? "Advisory captions enabled." : "Optional advisory captions.",
+      detail: "Captions do not satisfy quality gates.",
+      nextAction: captioningEnabled
+        ? "Repair FastVLM configuration in Build or disable captions." : ""
     }),
     makeRow({
       id: "job_queue",
       group: "Operate",
       label: "Queue",
       status: !backendOk ? "offline" : hasJobs || hasActiveStream ? "enabled" : "available",
-      summary: hasJobs ? `${jobs.length} job${jobs.length === 1 ? "" : "s"} loaded.` : "Queue controls are ready when the backend is online.",
-      detail: "Operate reflects queued, running, succeeded, failed, canceled, and partial jobs."
+      summary: hasJobs ? `${jobs.length} job${jobs.length === 1 ? "" : "s"} loaded.` : "No jobs loaded.",
+      detail: "Follow job progress in Operate."
     }),
     makeRow({
       id: "sse_stream",
       group: "Operate",
       label: "SSE freshness",
       status: !backendOk ? "offline" : hasActiveStream ? "enabled" : "available",
-      summary: hasActiveStream ? "Active job stream context is present." : "SSE reconnect and freshness monitoring are available.",
-      detail: "Freshness and transport warnings stay observable in Operate and Review."
+      summary: "Follow progress with live job updates.",
+      detail: "Connection warnings appear in Operate and Review."
     }),
     makeRow({
       id: "artifact_review",
       group: "Review",
       label: "Artifact review",
       status: !backendOk ? "offline" : hasReviewArtifacts ? "enabled" : "available",
-      summary: hasReviewArtifacts ? "Reviewable artifact context is loaded." : "Artifact review is available once jobs produce outputs.",
-      detail: "Review surfaces align artifacts, provenance, thumbnails, compare state, and action buttons."
+      summary: hasReviewArtifacts ? "Outputs loaded." : "Available after a run produces outputs.",
+      detail: "Inspect and compare outputs in Review."
     }),
     makeRow({
       id: "artifact_viewer",
       group: "Review",
       label: "Artifact viewer modal",
       status: !bootstrapReady || !features.artifactViewerModal ? "gated" : hasReviewArtifacts ? "enabled" : "available",
-      summary: features.artifactViewerModal ? "Modal artifact viewing is in this cohort." : "Modal artifact viewing is rollout-gated.",
-      detail: "The fallback artifact panel remains available when the modal is gated."
+      summary: "Inspect outputs in an expanded viewer.",
+      detail: "The standard review panel remains available."
     }),
     makeRow({
       id: "review_surface",
       group: "Review",
       label: "Deferred review surface",
       status: !bootstrapReady || !features.reviewSurfaceDeferred ? "gated" : "available",
-      summary: features.reviewSurfaceDeferred ? "Deferred review assets may load on demand." : "Deferred review loading is rollout-gated.",
-      detail: "The host keeps selector and fallback behavior stable while review assets load."
+      summary: features.reviewSurfaceDeferred ? "Review loads on demand." : "Review loads with the portal."
     }),
     makeRow({
       id: "portal_rum",
       group: "Operate",
       label: "Portal RUM",
       status: !bootstrapReady || !features.rumTelemetry ? "gated" : "enabled",
-      summary: features.rumTelemetry ? "Portal RUM is enabled for this cohort." : "Portal RUM is rollout-gated.",
-      detail: "No new event families are required for the capability catalog."
+      summary: "Session performance and reliability telemetry."
     }),
     makeRow({
       id: "plugin_trust",
       group: "Governance",
       label: "Plugin trust",
       status: "not_portal_controlled",
-      summary: "Plugin trust policy is documented and governed outside this browser shell.",
-      detail: "The portal should report this governance surface without inventing execution controls."
+      summary: "Plugin trust is managed outside the portal.",
+      detail: "Use the repository governance workflow."
     })
   ];
 
-  if (isPhotography) {
-    const v3Only = new Set(["depth_pro", "materials_v3", "pbr_generation", "segmentation", "sam2_segmentation", "reconstruction", "raw_ingest", "runtime_tuning", "run_card"]);
-    for (const row of rows) {
-      if (!v3Only.has(row.id)) continue;
+  const currentPipelineId = isPhotography ? "lux_depth_v5" : isLux ? "lux_depth_v3" : "archive_gates";
+  for (const row of rows) {
+    row.scope = "current";
+    if (["lux_depth_v4", "plugin_trust"].includes(row.id)) {
+      row.scope = "external";
+      row.statusLabel = row.id === "lux_depth_v4" ? "CLI workflow" : "External governance";
+    } else if (V3_ONLY_ROWS.has(row.id) && !isLux) {
+      row.scope = "other_workflow";
       row.status = "not_portal_controlled";
-      row.statusLabel = statusLabel(row.status);
-      row.summary = "This control belongs to the LuxDepthV3 workflow.";
-      row.detail = "V5 uses its own photography request and server-owned runtime contract.";
+      row.statusLabel = "LuxDepthV3 only";
+      row.summary = "Available in LuxDepthV3.";
+      row.detail = "Select Lux Depth v3 in Build.";
       row.nextAction = "";
+    } else if (row.id === "materials_v4" && !isPhotography) {
+      row.scope = "other_workflow";
+      row.statusLabel = "LuxDepthV5 only";
+    } else if (["lux_depth_v3", "lux_depth_v5", "archive_gates"].includes(row.id) && row.id !== currentPipelineId) {
+      row.scope = "other_workflow";
+    } else if (row.id === "da3_apache" && !isLux && !isPhotography) {
+      row.scope = "other_workflow";
+    } else if (row.id === "staged_uploads" && !stagedUploadSupported) {
+      row.scope = "other_workflow";
+      row.statusLabel = "Other pipelines";
+    } else if (row.id === "direct_debug" && authMode !== "direct_debug") {
+      row.scope = "other_workflow";
+      row.statusLabel = "Not used in managed access";
+    } else if (row.id === "managed_access" && authMode === "direct_debug") {
+      row.scope = "other_workflow";
+      row.statusLabel = "Managed entry";
     }
   }
 
-  const blockedRows = rows.filter((row) => ["blocked", "needs_ack", "missing_runtime", "offline", "gated"].includes(row.status));
-  const preferredNext = blockedRows.find((row) => row.status === "blocked")
-    || blockedRows.find((row) => row.status === "needs_ack")
-    || blockedRows.find((row) => row.status === "missing_runtime")
-    || blockedRows.find((row) => row.status === "offline")
-    || blockedRows.find((row) => row.status === "gated")
-    || rows.find((row) => row.status === "available")
-    || rows[0];
+  const currentPipelineRow = rows.find((row) => row.id === currentPipelineId);
+  if (currentPipelineRow) {
+    if (!backendOk) currentPipelineRow.nextAction = "Restore the backend connection before starting a run.";
+    else if (previewBlocked && currentPipelineRow.status !== "needs_ack") {
+      currentPipelineRow.status = "blocked";
+      currentPipelineRow.statusLabel = statusLabel(currentPipelineRow.status);
+      currentPipelineRow.nextAction = "Open Build to resolve the configuration preview or readiness error.";
+    } else if (isPhotography && currentPipelineRow.status === "gated") {
+      currentPipelineRow.statusLabel = previewReady ? "Readiness pending" : "Preview pending";
+    }
+  }
+
+  // Rollout gates for optional controls are informational. Only the active entry
+  // path, current pipeline, and selected options may interrupt the operator.
+  const requiredIds = new Set([authMode === "direct_debug" ? "direct_debug" : "managed_access", currentPipelineId]);
+  if (isLux) {
+    if (depthProActive) requiredIds.add("depth_pro");
+    if (sam2Active) requiredIds.add("sam2_segmentation");
+    if (reconstructionEnabled) requiredIds.add("reconstruction");
+    if (captioningEnabled) requiredIds.add("fastvlm_captioning");
+  }
+  const currentRows = rows.filter((row) => row.scope === "current");
+  const blockedRows = currentRows.filter((row) => requiredIds.has(row.id) && ATTENTION_STATUSES.has(row.status));
+  let preferredNext = blockedRows.find((row) => row.group === "Entry");
+  for (const status of ["offline", "blocked", "needs_ack", "missing_runtime", "gated"]) {
+    if (preferredNext) break;
+    preferredNext = blockedRows.find((row) => row.status === status);
+  }
 
   return {
     rows,
     summary: {
       total: rows.length,
-      enabled: rows.filter((row) => row.status === "enabled").length,
+      current: currentRows.length,
+      enabled: currentRows.filter((row) => row.status === "enabled").length,
+      available: currentRows.filter((row) => row.status === "available").length,
+      outsideWorkflow: rows.length - currentRows.length,
       actionable: blockedRows.length,
       previewBlocked,
       nextActionCapabilityId: preferredNext?.id || "",
-      nextActionStatus: preferredNext?.status || "available",
+      nextActionStatus: preferredNext?.status || "enabled",
       nextActionLabel: preferredNext
         ? `${preferredNext.label}: ${preferredNext.nextAction || preferredNext.summary}`
-        : "Capability catalog is ready."
+        : "Current workflow capabilities are ready. Configure options in Build."
     }
   };
 }

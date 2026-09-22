@@ -803,13 +803,20 @@
 
 .capability-row__header {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.75rem;
 }
 
 .capability-row__copy {
+    flex: 1 1 8rem;
     min-width: 0;
+}
+
+.capability-row__header > .capability-row__status {
+    max-width: 100%;
+    white-space: normal;
 }
 
 .capability-row__group {

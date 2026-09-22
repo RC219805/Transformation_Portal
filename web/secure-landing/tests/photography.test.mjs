@@ -43,7 +43,7 @@ test("photography validation preserves invalid input for server rejection instea
 
 test("V5 capability rows expose readiness and do not advertise V3-only output controls", () => {
   for (const status of ["ready", "blocked"]) {
-    const catalog = buildPortalCapabilityCatalog({ pipeline: "lux-depth-v5", backendOk: true, bootstrapReady: true, readiness: { status }, args: { materials_manifest: "/inputs/materials.json" } });
+    const catalog = buildPortalCapabilityCatalog({ pipeline: "lux-depth-v5", backendOk: true, bootstrapReady: true, readiness: { status }, preview: { pipeline: "lux-depth-v5", status: "ready", field_errors: [] }, args: { materials_manifest: "/inputs/materials.json" } });
     const row = (id) => catalog.rows.find((item) => item.id === id);
     assert.equal(row("lux_depth_v5").status, status === "ready" ? "enabled" : "blocked");
     assert.equal(row("lux_depth_v4").status, "not_portal_controlled");
