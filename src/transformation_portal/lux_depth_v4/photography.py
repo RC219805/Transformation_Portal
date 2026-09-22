@@ -199,7 +199,12 @@ def decode_master(
             profile = image.info.get("icc_profile")
             if image_format == "PNG" and "srgb" in image.info:
                 declared_color = "srgb"
-            pixels = np.asarray(image)
+            # RGB/gray PNG color-key transparency lives in tRNS metadata rather
+            # than an alpha channel. Materialize it before normalizing geometry.
+            if image_format == "PNG" and "transparency" in image.info:
+                pixels = np.asarray(image.convert("RGBA"))
+            else:
+                pixels = np.asarray(image)
 
     pixels = _orient(pixels, orientation)
     if pixels.dtype not in {np.dtype("uint8"), np.dtype("uint16"), np.dtype("float32")}:

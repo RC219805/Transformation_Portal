@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transformation-portal"
-version = "0.6.0"
+version = "0.7.0"
 description = "Professional image and video processing toolkit for luxury real estate rendering and architectural visualization."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -171,6 +171,7 @@ transform-analyze = "transformation_portal.cli:analyze_cli"
 lux-depth-v3 = "transformation_portal.lux_depth_v3.__main__:app"
 lux-depth-v4 = "transformation_portal.lux_depth_v4.__main__:main"
 lux-depth-v5 = "transformation_portal.lux_depth_v5.__main__:main"
+lux-depth-v6 = "transformation_portal.lux_depth_v6.__main__:main"
 materials-v4 = "transformation_portal.materials_v4.__main__:main"
 
 # Depth-aware post-processing CLI

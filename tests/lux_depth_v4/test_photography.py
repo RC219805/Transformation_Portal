@@ -98,6 +98,22 @@ def test_alpha_is_separate_and_not_transfer_encoded(tmp_path):
     assert report["alpha_preserved"]
 
 
+@pytest.mark.parametrize("mode,key", [("RGB", (255, 0, 0)), ("L", 128)])
+def test_png_color_key_transparency_survives_ingest_and_delivery(mode, key, tmp_path):
+    shape = (14, 14, 3) if mode == "RGB" else (14, 14)
+    pixels = np.zeros(shape, np.uint8)
+    pixels[:7] = key
+    stream = io.BytesIO()
+    Image.fromarray(pixels).save(stream, format="PNG", transparency=key)
+    with Image.open(io.BytesIO(stream.getvalue())) as reference:
+        expected = np.asarray(reference.convert("RGBA"))
+    master = decode_master(stream.getvalue(), source_name="transparent.png", input_color="srgb")
+    np.testing.assert_array_equal(master.alpha, expected[..., 3].astype(np.float32) / 255)
+    np.testing.assert_allclose(master.pixels, srgb_to_linear(expected[..., :3].astype(np.float32) / 255))
+    report = write_delivery(master, tmp_path / "delivery.tif")
+    np.testing.assert_array_equal(tifffile.imread(report["path"])[..., 3], expected[..., 3].astype(np.uint16) * 257)
+
+
 def test_float_master_retains_out_of_range_until_delivery(tmp_path):
     array = np.array([[[-0.1, 0.5, 2.0]]], dtype=np.float32)
     master = decode_master(_tiff(array), source_name="hdr.tif")
