@@ -321,6 +321,20 @@ progress event was missed; other states retain the reported progress value.
 Startup feature flags control capability exposure; they do not rewrite saved
 Build drafts. Review restored settings before preview or dispatch.
 
+Overview separates backend connectivity from draft dispatch readiness. Its
+readiness and next-action text use the same guard as the dispatch button;
+a reachable backend does not make a pending or rejected preview ready. Checks
+show blocking issues separately from advisories. The capability summary counts
+active and available options for the current workflow. Expand **Other workflows
+and tools** for V3-only controls, other pipelines, and command-line tools.
+
+In managed tenant mode, paths must satisfy the tenant boundary: its workspace,
+CAS, or a specifically approved shared runtime location, as applicable to the
+field. An unauthorized saved local path is rejected with HTTP 403
+and `tenant_path_outside_workspace`; the preview identifies the field to correct
+in Build. This is a path validation failure, not a request to sign in again or
+enter a browser API key. Authentication failures continue to fail closed.
+
 Build starts with four steps: Configure, Paths, Outputs, and Dispatch. Pipeline
 and saved-profile controls sit beside the active step on wide screens and
 stack above it on smaller screens. Next names the destination step and moves

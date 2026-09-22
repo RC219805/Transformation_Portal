@@ -220,6 +220,9 @@ const els = {
     capabilitySummaryBadge: _domId('capabilitySummaryBadge'),
     capabilitySummaryDetail: _domId('capabilitySummaryDetail'),
     capabilityMatrix: _domId('capabilityMatrix'),
+    capabilityOtherMatrix: _domId('capabilityOtherMatrix'),
+    capabilityOtherSummary: _domId('capabilityOtherSummary'),
+    overviewNextAction: _domId('overviewNextAction'),
     presetHeadline: _domId('presetHeadline'),
     presetStabilityBadge: _domId('presetStabilityBadge'),
     backendModeBadge: _domId('backendModeBadge'),
@@ -3938,7 +3941,6 @@ function renderCapabilityChips(payload) {
     const args = payload?.args || {};
     const chips = [];
     const readiness = currentPipelineReadiness();
-    const dispatchStatus = currentPipelineDispatchStatus();
     if (state.pipeline === 'lux-depth-v3') {
         chips.push(`Preset ${String(args.preset || state.config.preset || 'custom')}`);
         if (readiness?.canary_status) chips.push(`Canary ${titleCaseToken(readiness.canary_status, 'Unknown')}`);
@@ -3949,7 +3951,7 @@ function renderCapabilityChips(payload) {
         chips.push(`Command ${canonicalArchiveCommand(state.pipeline)}`);
     }
     chips.push(state.backendOk ? 'Live backend connected' : 'Backend offline');
-    if (dispatchStatus || readiness?.status) chips.push(`Readiness ${titleCaseToken(dispatchStatus || readiness.status, 'Unknown')}`);
+    chips.push(_overviewDispatchSummary(payload).label);
     if (parseBoolLike(args.enable_segmentation, false)) {
         chips.push(`Segmentation ${String(args.segmentation_backend || 'enabled')}`);
     }
@@ -4373,7 +4375,7 @@ function _dispatchChecklistItems(payload) {
             label: 'Preview normalization',
             detail: String(previewErrors[0]?.message || preview?.error || 'Preview validation is blocking dispatch.')
         });
-    } else if (preview?.status === 'loading') {
+    } else if (!preview || preview.status !== 'ready') {
         items.push({
             tone: 'warn',
             label: 'Preview normalization',
@@ -4409,16 +4411,16 @@ function _dispatchChecklistItems(payload) {
 
     const blockedReadinessIssue = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked');
     const warnedReadinessIssue = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() !== 'blocked');
-    if (blockedReadinessIssue || dispatchStatus === 'blocked') {
+    if (blockedReadinessIssue || dispatchStatus === 'blocked' || dispatchStatus === 'degraded') {
         items.push({
             tone: 'block',
             label: 'Dispatch readiness',
             detail: String(
-                blockedReadinessIssue?.message
+                blockedReadinessIssue?.message || warnedReadinessIssue?.message
                 || 'A pipeline prerequisite is still blocking dispatch.'
             )
         });
-    } else if (warnedReadinessIssue || dispatchStatus === 'degraded') {
+    } else if (warnedReadinessIssue) {
         items.push({
             tone: 'warn',
             label: 'Dispatch readiness',
@@ -4495,7 +4497,7 @@ function _dispatchChecklistItems(payload) {
         items.push({ tone: 'warn', label: 'Opt-in photography successor', detail: 'V5 remains opt-in while photographic quality and performance are evaluated. V3 remains the production baseline and rollback path.' });
     } else {
         items.push({
-            tone: dispatchStatus === 'blocked' ? 'block' : dispatchStatus === 'degraded' ? 'warn' : 'pass',
+            tone: dispatchStatus === 'blocked' || dispatchStatus === 'degraded' ? 'block' : 'pass',
             label: 'Archive governance',
             detail: dispatchStatus === 'blocked'
                 ? 'Canonical archive prerequisites are still missing for this stage.'
@@ -4567,13 +4569,22 @@ function renderGovernanceBanner(payload) {
     });
 }
 
+function _overviewDispatchSummary(payload) {
+    const dispatch = _dispatchReadinessSnapshot(payload);
+    const checks = _dispatchChecklistItems(payload);
+    const preview = _currentPreviewForPayload(payload);
+    const blockingCount = checks.filter((item) => item.tone === 'block').length;
+    const warningCount = checks.filter((item) => item.tone === 'warn').length;
+    const label = !state.backendOk ? 'Backend offline'
+        : dispatch.canRun ? (warningCount ? 'Ready with advisories' : 'Ready for dispatch')
+            : dispatch.tone === 'info' ? (!preview || preview.status === 'loading' ? 'Preview pending' : 'Checking readiness')
+                : 'Dispatch blocked';
+    return { ...dispatch, label, blockingCount, warningCount };
+}
+
 function renderPresetIntelligence(payload) {
     const preset = currentPresetDescriptor();
-    const diagnostics = state.lastDiagnostics || {};
-    const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
-    const readiness = currentPipelineReadiness();
-    const dispatchStatus = currentPipelineDispatchStatus();
-    const readinessIssues = currentPipelineReadinessIssues();
+    const dispatch = _overviewDispatchSummary(payload);
     const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
 
     if (els.presetHeadline) els.presetHeadline.textContent = String(preset.label || preset.name || 'custom');
@@ -4589,8 +4600,7 @@ function renderPresetIntelligence(payload) {
         els.presetStabilityBadge.textContent = titleCaseToken(preset.stability, 'Custom');
     }
     if (els.backendModeBadge) {
-        const readinessLabel = dispatchStatus || readiness?.status ? titleCaseToken(dispatchStatus || readiness?.status, 'Unknown') : 'Unknown';
-        els.backendModeBadge.textContent = state.backendOk ? `Backend Live • ${readinessLabel}` : 'Backend Offline';
+        els.backendModeBadge.textContent = state.backendOk ? 'Backend connected' : 'Backend offline';
     }
     if (els.heroInputDir) {
         els.heroInputDir.textContent = truncateMiddle(payload?.args?.input_dir || state.config.inputDir || './input_images', 52);
@@ -4601,21 +4611,13 @@ function renderPresetIntelligence(payload) {
         els.heroOutputDir.title = String(payload?.args?.output_dir || state.config.outputDir || './output');
     }
     if (els.heroReadinessLabel) {
-        if (!state.backendOk) {
-            els.heroReadinessLabel.textContent = 'Backend offline';
-        } else if (dispatchStatus === 'blocked') {
-            els.heroReadinessLabel.textContent = 'Dispatch blocked';
-        } else if (dispatchStatus === 'degraded') {
-            els.heroReadinessLabel.textContent = 'Prerequisites still required';
-        } else if (warnings.length === 0) {
-            els.heroReadinessLabel.textContent = 'Ready for dispatch';
-        } else {
-            els.heroReadinessLabel.textContent = titleCaseToken(diagnostics.healthLabel || 'warnings detected', 'Warnings detected');
-        }
+        els.heroReadinessLabel.textContent = dispatch.label;
+        els.heroReadinessLabel.dataset.tone = dispatch.tone;
     }
     if (els.heroWarningCount) {
-        els.heroWarningCount.textContent = String(warnings.length + readinessIssues.length);
+        els.heroWarningCount.textContent = `${dispatch.blockingCount} blocking · ${dispatch.warningCount} advisory`;
     }
+    if (els.overviewNextAction) els.overviewNextAction.textContent = dispatch.detail;
     if (els.presetBuilderHint) {
         const sectionLabel = advancedSections.length > 0
             ? `Advanced focus: ${advancedSections.join(', ')}.`
@@ -4637,11 +4639,7 @@ function renderMissionControl(payload = null) {
             : state.pipeline === 'lux-depth-v5' ? 'V5 photography (opt-in)' : canonicalArchiveCommand(state.pipeline) || 'archive';
     }
     if (els.heroModeValue) {
-        const readiness = currentPipelineReadiness();
-        const dispatchStatus = currentPipelineDispatchStatus();
-        els.heroModeValue.textContent = state.backendOk
-            ? `Live backend • ${titleCaseToken(dispatchStatus || readiness?.status || 'unknown', 'Unknown')}`
-            : 'Backend offline';
+        els.heroModeValue.textContent = state.backendOk ? 'Backend connected' : 'Backend offline';
     }
     if (els.heroQueueValue) {
         const queueLabel = els.heroQueueValue.previousElementSibling;
@@ -7966,22 +7964,28 @@ function _previewFailureDetails(preview = null) {
     const reason = String(matchedPreview?.error_reason || matchedPreview?.error || '').trim().toLowerCase();
 
     if (reason === 'auth_failure' || reason === 'preview_auth_failed') {
+        const recovery = state.auth?.mode === 'managed'
+            ? 'Ask the operator to check the frontdoor and backend authentication configuration; no browser API key is needed.'
+            : 'Ensure the portal API key matches TP_API_KEY before dispatch.';
         return {
             reason: 'auth_failure',
             summaryLabel: 'Preview auth failed',
             healthLabel: 'preview auth failed',
-            luxBlockedMessage: 'BLOCKED: Preview-backed validation could not authenticate. Ensure the portal API key matches TP_API_KEY before dispatch.',
+            luxBlockedMessage: `BLOCKED: Preview-backed validation could not authenticate. ${recovery}`,
             archiveWarningMessage: 'WARNING: Preview-backed validation could not authenticate. Local rendering is shown until preview auth is restored.',
-            toastMessage: 'Preview-backed validation could not authenticate. Ensure the portal API key matches TP_API_KEY.',
+            toastMessage: `Preview-backed validation could not authenticate. ${recovery}`,
             telemetryReason: 'preview_auth_failed'
         };
     }
     if (reason === 'validation_error' || reason === 'preview_validation_error') {
+        const issue = matchedPreview?.field_errors?.[0];
         return {
             reason: 'validation_error',
             summaryLabel: 'Preview invalid',
             healthLabel: 'preview invalid',
-            luxBlockedMessage: 'BLOCKED: Preview-backed validation rejected the current Lux configuration. Review the active inputs and retry.',
+            luxBlockedMessage: issue?.message
+                ? `BLOCKED: ${issue.message}`
+                : 'BLOCKED: Preview-backed validation rejected the current Lux configuration. Review the active inputs and retry.',
             archiveWarningMessage: 'WARNING: Preview-backed validation rejected the current configuration. Local rendering is shown until the request is corrected.',
             toastMessage: 'Preview-backed validation rejected the current configuration. Review the active inputs and retry.',
             telemetryReason: 'preview_validation_error'
@@ -8305,7 +8309,7 @@ function applyLuxMetadataToControls() {
 
 function _previewIssueForField(fieldName, payload = null) {
     const preview = _currentPreviewForPayload(payload);
-    if (!preview || preview.status !== 'ready') return null;
+    if (!preview || !['ready', 'error'].includes(preview.status)) return null;
     const errors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
     const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
     const error = errors.find((item) => String(item?.field || '') === fieldName);
@@ -8574,6 +8578,14 @@ async function _fetchConfigPreview(payload, request) {
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
             const errorDetails = errorPayload.details && typeof errorPayload.details === 'object' ? errorPayload.details : {};
+            const tenantPathDenied = res.status === 403 && errorPayload.code === 'FORBIDDEN'
+                && errorDetails.reason === 'tenant_path_outside_workspace'
+                && /^[a-z][a-z0-9_]{0,63}$/.test(String(errorDetails.field || ''));
+            const pathIssue = tenantPathDenied ? {
+                field: errorDetails.field,
+                code: 'tenant_path_outside_workspace',
+                message: `${titleCaseToken(errorDetails.field.replace(/_dir$/, '_directory'), 'Path')} must use a path authorized for this workspace. Review the path in Build.`
+            } : null;
             // 429 is a transient rate-limit event, not a 4xx validation
             // failure of the user's draft. Route it to the service-retry
             // path so the existing scheduled retry runs against the
@@ -8583,7 +8595,8 @@ async function _fetchConfigPreview(payload, request) {
                 ? portalInternals.parseRateLimitRetryHint(res)
                 : null;
             const classifiedFailure = _previewFailureDetails({
-                error_reason: res.status === 401 || res.status === 403
+                error_reason: tenantPathDenied ? 'validation_error'
+                    : res.status === 401 || res.status === 403 || errorPayload.code === 'AUTH_CONFIGURATION_ERROR'
                     ? 'auth_failure'
                     : isRateLimited
                         ? 'service_failure'
@@ -8599,7 +8612,8 @@ async function _fetchConfigPreview(payload, request) {
                 requestKey,
                 error: String(errorPayload.code || '').trim().toLowerCase() || 'preview_unavailable',
                 error_reason: classifiedFailure.reason,
-                error_status: res.status
+                error_status: res.status,
+                field_errors: pathIssue ? [pathIssue] : []
             });
             if (classifiedFailure.reason === 'service_failure') {
                 _scheduleConfigPreviewServiceRetry(rateLimitHint);

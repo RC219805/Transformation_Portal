@@ -283,10 +283,11 @@ Contract notes:
                         <p id="heroReadinessLabel" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">No warnings</p>
                     </div>
                     <div class="panel-subtle rounded-2xl p-4">
-                        <p class="stat-label">Warning Count</p>
+                        <p class="stat-label">Checks to review</p>
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
+                <p id="overviewNextAction" class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">Confirm the current draft in Build before dispatch.</p>
                 <details id="overviewRuntimeClarityShell" class="quiet-disclosure mt-6">
                     <summary class="quiet-disclosure__summary">
                         <div>
@@ -358,10 +359,10 @@ Contract notes:
                 <summary class="capability-stack-header capability-disclosure__summary">
                     <span class="capability-disclosure__copy">
                         <span class="stat-label">Capabilities</span>
-                        <span id="capabilitySummaryDetail" class="capability-stack-summary">Capability status will align to bootstrap, readiness, preview, and review state.</span>
+                        <span id="capabilitySummaryDetail" class="capability-stack-summary">Checking options for the current workflow.</span>
                     </span>
                     <span class="capability-disclosure__meta">
-                        <span id="capabilitySummaryBadge" class="capability-summary-badge" data-capability-status="available">0/0 enabled</span>
+                        <span id="capabilitySummaryBadge" class="capability-summary-badge" data-capability-status="available">Checking options</span>
                         <span class="capability-disclosure__closed-label" aria-hidden="true">View all</span>
                         <span class="capability-disclosure__open-label" aria-hidden="true">Hide details</span>
                     </span>
@@ -369,6 +370,13 @@ Contract notes:
                 <div class="capability-disclosure__body">
                     <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
                     <div id="capabilityMatrix" class="capability-matrix" data-ui="capability-matrix" role="list" aria-label="Portal capability status matrix"></div>
+                </div>
+            </details>
+            <details class="quiet-disclosure lg:col-span-12" data-ui="other-workflow-capabilities">
+                <summary class="quiet-disclosure__summary"><span id="capabilityOtherSummary">Other workflows and tools</span></summary>
+                <div class="quiet-disclosure__body">
+                    <p class="text-sm leading-7 text-slate-600 dark:text-slate-300">These options belong to another workflow or run outside the portal. They are not missing requirements for this draft.</p>
+                    <div id="capabilityOtherMatrix" class="capability-matrix" role="list" aria-label="Other workflow and tool capabilities"></div>
                 </div>
             </details>
         </section>

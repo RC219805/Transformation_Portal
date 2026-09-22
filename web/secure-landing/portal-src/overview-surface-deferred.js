@@ -9,9 +9,9 @@ export function createDeferredOverviewSurfaceApi(host) {
         const catalog = buildPortalCapabilityCatalog(getCapabilityContext(payload));
         if (els.capabilitySummaryBadge) {
             const enabledCount = Number(catalog.summary?.enabled) || 0;
-            const totalCount = Number(catalog.summary?.total) || 0;
+            const availableCount = Number(catalog.summary?.available) || 0;
             const nextStatus = normalizeCapabilityStatus(catalog.summary?.nextActionStatus, 'available');
-            els.capabilitySummaryBadge.textContent = `${enabledCount}/${totalCount} enabled`;
+            els.capabilitySummaryBadge.textContent = `${enabledCount} active · ${availableCount} available`;
             els.capabilitySummaryBadge.dataset.capabilityStatus = nextStatus;
         }
         if (els.capabilitySummaryDetail) {
@@ -19,6 +19,7 @@ export function createDeferredOverviewSurfaceApi(host) {
         }
 
         const fragment = document.createDocumentFragment();
+        const otherFragment = document.createDocumentFragment();
         catalog.rows.forEach((capability) => {
             const row = document.createElement('article');
             row.className = 'capability-row';
@@ -58,10 +59,15 @@ export function createDeferredOverviewSurfaceApi(host) {
             detail.textContent = capability.detail || '';
 
             row.append(header, summary, detail);
-            fragment.appendChild(row);
+            if (capability.scope === 'current') fragment.appendChild(row);
+            else otherFragment.appendChild(row);
         });
 
         els.capabilityMatrix.replaceChildren(fragment);
+        if (els.capabilityOtherMatrix) els.capabilityOtherMatrix.replaceChildren(otherFragment);
+        if (els.capabilityOtherSummary) {
+            els.capabilityOtherSummary.textContent = `Other workflows and tools (${catalog.summary.outsideWorkflow})`;
+        }
     }
 
     return { renderCapabilityMatrix };

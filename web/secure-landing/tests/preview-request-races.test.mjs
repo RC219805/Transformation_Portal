@@ -32,6 +32,7 @@ function harness(fetch) {
     _previewFailureDetails: ({ error_reason }) => ({ reason: error_reason }),
     _reconcilePreviewRepairedPaths: (value) => value,
     _normalizeNextBestAction: (value) => value,
+    titleCaseToken: (value) => String(value).replaceAll('_', ' '),
     renderCLI() {}, renderPreRunDiagnostics() {}, _syncBootstrapGuardedControls() {}, emitPortalEvent() {},
     _syncApiKeyInputState() {}, resumeBlockedJobStreamsAfterAuthUpdate() {}, checkBackend() {},
     fetchConfigMetadata() {}, fetchPresetsForPipeline() {}, fetchReadiness() {},
@@ -60,6 +61,34 @@ test("new-key refresh sends a second request and late old-key 401 cannot suppres
   assert.equal(h.state.preview.status, "ready");
   assert.equal(h.suppression.size, 0);
   assert.equal(h.retries(), 0);
+});
+
+test("tenant path denial is editable validation and does not suppress later previews", async () => {
+  let allowed = false;
+  const h = harness(async () => allowed ? success() : new Response(JSON.stringify({
+    error: { code: 'FORBIDDEN', message: 'tenant admission failed', details: {
+      field: 'input_dir', reason: 'tenant_path_outside_workspace'
+    } }
+  }), { status: 403 }));
+  await h.context.fetchConfigPreview(h.context.generatePayload());
+  assert.equal(h.state.preview.error_reason, 'validation_error');
+  assert.equal(h.state.preview.field_errors[0].field, 'input_dir');
+  assert.match(h.state.preview.field_errors[0].message, /path authorized for this workspace/);
+  assert.equal(h.suppression.size, 0);
+  assert.equal(h.retries(), 0);
+  allowed = true;
+  await h.context.fetchConfigPreview(h.context.generatePayload());
+  assert.equal(h.state.preview.status, 'ready');
+});
+
+test("unknown forbidden and frontdoor auth configuration failures remain auth failures", async () => {
+  for (const [status, code] of [[403, 'FORBIDDEN'], [503, 'AUTH_CONFIGURATION_ERROR']]) {
+    const h = harness(async () => new Response(JSON.stringify({ error: { code } }), { status }));
+    await h.context.fetchConfigPreview(h.context.generatePayload());
+    assert.equal(h.state.preview.error_reason, 'auth_failure');
+    assert.equal(h.state.preview.field_errors.length, 0);
+    assert.equal(h.retries(), 0);
+  }
 });
 
 test("a stalled preview response body times out, releases same-key work, and permits a fresh retry", async () => {

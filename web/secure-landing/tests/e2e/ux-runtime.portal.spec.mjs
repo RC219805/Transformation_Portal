@@ -159,6 +159,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
 
   await page.route("**/portal/bootstrap", async (route) => {
     runtime.bootstrapRequests += 1;
+    if (options.bootstrapGate) await options.bootstrapGate;
     if (runtime.bootstrapRequests <= Number(options.bootstrapFailureCount || 0)) {
       await fulfillJson(route, {
         reason: "upstream_unavailable",
@@ -326,8 +327,17 @@ async function installHydratedPortalRoutes(page, options = {}) {
       const requestPayload = request.postDataJSON();
       runtime.previewPayloads.push(requestPayload);
       const isPhotography = requestPayload?.pipeline === "lux-depth-v5";
+      if (isPhotography && options.photographyPreviewGate) await options.photographyPreviewGate;
       if (options.previewDelayMs) await new Promise((resolve) => setTimeout(resolve, options.previewDelayMs));
       const args = requestPayload?.args || {};
+      if (options.previewTenantDenied && args.input_dir !== '/tenant/input') {
+        await fulfillJson(route, { schema: 'tp.orchestrator.error.v1', success: false, data: null,
+          error: { code: 'FORBIDDEN', message: 'tenant admission failed', details: {
+            field: 'input_dir', reason: 'tenant_path_outside_workspace'
+          } }
+        }, 403);
+        return;
+      }
       await fulfillJson(route, {
         success: true,
         data: {
@@ -399,8 +409,18 @@ async function gotoHydratedPortal(page, target = "/portal") {
   await expect(page.locator("body")).toHaveAttribute("data-bootstrap-status", "ready");
   await expect(page.locator("#healthText")).toHaveText("Backend Online");
   await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
-  // Bootstrap readiness can precede the paint applying inherited theme colors.
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  // Theme colors propagate through inherited control transitions after bootstrap.
+  // Wait for the rendered state; two animation frames do not settle every child.
+  const themeColor = await page.locator('html').evaluate((element) =>
+    element.classList.contains('dark') ? 'rgb(241, 245, 249)' : 'rgb(15, 23, 42)'
+  );
+  await expect(page.locator('body')).toHaveCSS('color', themeColor);
+  for (const id of ['pipelineSelect', 'profileSelect', 'presetSelect', 'qualityTier', 'depthDevice']) {
+    const control = page.locator(`#${id}`);
+    if (!await control.isVisible()) continue;
+    await expect(control).toHaveCSS('color', themeColor);
+    await expect(control).toHaveCSS('-webkit-text-fill-color', themeColor);
+  }
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
@@ -1881,4 +1901,77 @@ test("@portal-browser V5 Review displays the verified PNG proxy and retains the 
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("lux-v5-review.png"), fullPage: true });
   await testInfo.attach("LuxDepthV5 TIFF with verified PNG preview", { path: testInfo.outputPath("lux-v5-review.png"), contentType: "image/png" });
+});
+
+for (const width of [390, 1440]) {
+  test(`@portal-browser Overview hides completed skeletons and explains V5 path denial at ${width}px`, async ({ page }, testInfo) => {
+    let releaseBootstrap;
+    const bootstrapGate = new Promise((resolve) => { releaseBootstrap = resolve; });
+    const runtime = await installHydratedPortalRoutes(page, { bootstrapGate, previewTenantDenied: true });
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto('/portal?view=overview');
+    await expect(page.locator('#overviewStatsSkeletonState')).toBeVisible();
+    await expect(page.locator('#overviewStatsRow')).toBeHidden();
+    releaseBootstrap();
+    await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'ready');
+    await expect(page.locator('#overviewStatsSkeletonState')).toBeHidden();
+    await expect(page.locator('#overviewStatsRow')).toBeVisible();
+    await page.locator('[data-view-link="build"]').click();
+    await page.locator('#pipelineSelect').selectOption('lux-depth-v5');
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#nextBestActionDetail')).toContainText('path authorized for this workspace');
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    await page.locator('[data-view-link="overview"]').click();
+    await expect(page.locator('#heroReadinessLabel')).toHaveText('Dispatch blocked');
+    await expect(page.locator('#backendModeBadge')).toHaveText('Backend connected');
+    await expect(page.locator('#heroModeValue')).toHaveText('Backend connected');
+    await expect(page.locator('#overviewNextAction')).toContainText('path authorized for this workspace');
+    await expect(page.locator('#heroWarningCount')).toContainText('1 blocking');
+    await expect(page.locator('#capabilitySummaryDetail')).not.toContainText('Use managed login');
+    await expect(page.locator('#capabilitySummaryBadge')).not.toContainText('/26');
+    await page.locator('#overviewCapabilityRow > summary').click();
+    await expect(page.locator('#capabilityMatrix [data-capability-id="lux_depth_v5"]')).toHaveAttribute('data-capability-status', 'blocked');
+    await expect(page.locator('#capabilityMatrix [data-capability-id="segmentation"]')).toHaveCount(0);
+    await expect(page.locator('#capabilityOtherMatrix [data-capability-id="segmentation"]')).toBeHidden();
+    await page.locator('[data-ui="other-workflow-capabilities"] > summary').click();
+    await expect(page.locator('#capabilityOtherMatrix [data-capability-id="segmentation"]')).toBeVisible();
+    for (const capability of ['direct_debug', 'plugin_trust']) {
+      const label = page.locator(`#capabilityOtherMatrix [data-capability-id="${capability}"] .capability-row__copy`);
+      await expect(label).toBeVisible();
+      expect((await label.boundingBox()).width).toBeGreaterThanOrEqual(100);
+    }
+    await expectNoHorizontalOverflow(page);
+    await expectNoWcagViolations(page, `Overview path denial ${width}`);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath(`overview-path-denial-${width}.png`), fullPage: true });
+    await testInfo.attach(`Overview path denial ${width}`, { path: testInfo.outputPath(`overview-path-denial-${width}.png`), contentType: 'image/png' });
+    await page.locator('[data-view-link="build"]').click();
+    await page.locator('#buildStepTab2').click();
+    await expect(page.locator('#inputDirStatus')).toContainText('path authorized for this workspace');
+    await expect(page.locator('#inputDir')).toHaveAttribute('aria-invalid', 'true');
+    await page.locator('#inputDir').fill('/tenant/input');
+    await page.locator('#inputDir').blur();
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeEnabled();
+    await page.locator('[data-view-link="overview"]').click();
+    await expect(page.locator('#heroReadinessLabel')).toHaveText('Ready with advisories');
+    await expect(page.locator('#heroWarningCount')).toHaveText('0 blocking · 1 advisory');
+    expect(runtime.jobSubmissions).toBe(0);
+  });
+}
+
+test('@portal-browser Overview never treats a pending V5 preview as ready', async ({ page }) => {
+  let releasePreview;
+  const photographyPreviewGate = new Promise((resolve) => { releasePreview = resolve; });
+  await installHydratedPortalRoutes(page, { photographyPreviewGate });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('lux-depth-v5');
+  await page.locator('[data-view-link="overview"]').click();
+  await expect(page.locator('#heroReadinessLabel')).toHaveText('Preview pending');
+  await expect(page.locator('#capabilitySummaryDetail')).toContainText('Open Build');
+  await expect(page.locator('#backendModeBadge')).toHaveText('Backend connected');
+  await expect(page.locator('[data-capability-id="lux_depth_v5"]')).toHaveAttribute('data-capability-status', 'gated');
+  releasePreview();
+  await expect(page.locator('#heroReadinessLabel')).toHaveText('Ready with advisories');
+  await expect(page.locator('[data-capability-id="lux_depth_v5"]')).toHaveAttribute('data-capability-status', 'enabled');
 });
