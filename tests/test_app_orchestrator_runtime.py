@@ -1522,7 +1522,10 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert 'aria-describedby="stagedUploadStatus stagedUploadError"' in html
     assert 'id="stagedUploadFilesInput"' in html
     assert 'id="stagedUploadFolderInput"' in html
-    assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
+    assert (
+        "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'archive-gate-a']);"
+        in content
+    )
     assert "function _stagedUploadsSupportedForState() {" in content
     assert "function _stagedUploadsEnabledForState() {" in content
     assert "function _stagedUploadsVisibleForState() {" in content

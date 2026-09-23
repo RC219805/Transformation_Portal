@@ -40,6 +40,7 @@ from transformation_portal.core.execution_plan import (
     with_execution_plan_fingerprint,
 )
 from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4
+from transformation_portal.core.execution_plan_v5 import ExecutionPlanV5
 from transformation_portal.ingest.canonical_json import TP_CANONICAL_JSON_PROFILE
 from transformation_portal.orchestrator.artifact_store._filesystem import open_directory, open_source_file
 from transformation_portal.orchestrator.artifact_store.generation import (
@@ -75,9 +76,15 @@ def _canonical_plan(data: bytes) -> CanonicalExecutionPlan:
 
 def validate_dispatch_plan(
     plan_bytes: bytes, execution_bindings: bytes | None = None
-) -> CanonicalExecutionPlan | ExecutionPlanV4:
+) -> CanonicalExecutionPlan | ExecutionPlanV4 | ExecutionPlanV5:
     """Statically allowlist plan families and their exact physical-binding carrier."""
     schema = decode_bounded_json_object(plan_bytes).get("schema")
+    if schema == "tp.execution.plan.v5":
+        from transformation_portal.orchestrator.photography_v6_adapter import validate_v6_dispatch
+
+        if execution_bindings is None:
+            raise ExecutionPlanError("V6 dispatch requires immutable photography bindings")
+        return validate_v6_dispatch(plan_bytes, execution_bindings)
     if schema == "tp.execution.plan.v4":
         if execution_bindings is None:
             raise ExecutionPlanError("V5 dispatch requires immutable photography bindings")
@@ -432,7 +439,18 @@ def execute_dispatch_plan(
     validate_execution_workspace(workspace, root)
     try:
         execution_root = workspace / "outputs"
-        if isinstance(plan, ExecutionPlanV4):
+        if isinstance(plan, ExecutionPlanV5):
+            from transformation_portal.lux_depth_v6.managed import run as run_managed_v6
+            from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
+            from transformation_portal.orchestrator.photography_v6_adapter import consume_v6_dispatch
+
+            assert execution_bindings is not None
+            prepared_v6 = consume_v6_dispatch(plan_bytes, execution_bindings, execution_root=execution_root)
+            limits = GenerationPublicationLimits.from_payload(plan.to_payload()["publication"])
+            output_descriptor = _pin_output_directory(root)
+            run_managed_v6(prepared_v6, publication_limits=limits, managed_process_group=managed_process_group)
+            return_code = 0
+        elif isinstance(plan, ExecutionPlanV4):
             from transformation_portal.lux_depth_v5.pipeline import run
             from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
 

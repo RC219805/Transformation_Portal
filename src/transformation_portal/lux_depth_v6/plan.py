@@ -19,9 +19,11 @@ from transformation_portal.lux_depth_v4.io import directory_path
 from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
 
 from .color import GradeRecipe, RenderRecipe
+from .depth_maps import DepthMapRecipe
 from .source import SourceLimits, VerifiedV5Source, prepare_source
 
 PLAN_SCHEMA = "tp.lux.grade.plan.v1"
+DEPTH_PLAN_SCHEMA = "tp.lux.grade.plan.v2"
 MAX_PLAN_BYTES = 16 * 1024 * 1024
 _MODULES = (
     "transformation_portal.lux_depth_v6.color",
@@ -43,10 +45,10 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def processing_identity() -> dict[str, Any]:
+def processing_identity(*, depth_maps: bool = False) -> dict[str, Any]:
     """Bind the implementation and numeric/encoding dependencies used by replay."""
     modules = {}
-    for name in _MODULES:
+    for name in _processing_modules(depth_maps):
         module = importlib.import_module(name)
         filename = module.__file__
         if filename is None or Path(filename).suffix != ".py":
@@ -56,6 +58,15 @@ def processing_identity() -> dict[str, Any]:
         "modules": modules,
         "dependencies": {name: version(name) for name in ("numpy", "Pillow", "scipy", "tifffile", "imagecodecs")},
     }
+
+
+def _processing_modules(depth_maps: bool) -> tuple[str, ...]:
+    return _MODULES + (("transformation_portal.lux_depth_v6.depth_maps",) if depth_maps else ())
+
+
+def depth_recipe(payload: dict[str, Any]) -> DepthMapRecipe | None:
+    """Read the optional recipe only after closed GradePlan validation."""
+    return DepthMapRecipe.from_payload(payload["depth_maps"]) if payload["schema"] == DEPTH_PLAN_SCHEMA else None
 
 
 @dataclass(frozen=True)
@@ -81,9 +92,18 @@ class GradePlan:
         if type(self.canonical_bytes) is not bytes or len(self.canonical_bytes) > MAX_PLAN_BYTES:
             raise ValueError("Grade plan must be bounded canonical JSON bytes")
         payload = decode_bounded_json_object(self.canonical_bytes)
+        has_depth = payload.get("schema") == DEPTH_PLAN_SCHEMA
         keys = {"schema", "pipeline", "source", "grade", "render", "limits", "processing", "production_acceptance"}
-        if set(payload) != keys or payload["schema"] != PLAN_SCHEMA or payload["pipeline"] != "lux_depth_v6":
+        if has_depth:
+            keys.add("depth_maps")
+        if (
+            set(payload) != keys
+            or payload["schema"] not in (PLAN_SCHEMA, DEPTH_PLAN_SCHEMA)
+            or payload["pipeline"] != "lux_depth_v6"
+        ):
             raise ValueError("Invalid closed V6 grade plan")
+        if has_depth:
+            DepthMapRecipe.from_payload(payload["depth_maps"])
         if canonicalize_json(payload) != self.canonical_bytes or payload["production_acceptance"] != "not_established":
             raise ValueError("Grade plan must be canonical and cannot authorize production acceptance")
         GradeRecipe.from_payload(payload["grade"])
@@ -106,7 +126,8 @@ class GradePlan:
             raise ValueError("V6 requires a bounded nonempty image inventory")
         identifiers = []
         for item in images:
-            if not isinstance(item, dict) or set(item) != {"input_id", "shape", "master_sha256"}:
+            image_keys = {"input_id", "shape", "master_sha256"} | ({"native_shape"} if has_depth else set())
+            if not isinstance(item, dict) or set(item) != image_keys:
                 raise ValueError("Invalid V6 source image")
             identifier = item["input_id"]
             if (
@@ -125,13 +146,22 @@ class GradePlan:
                 raise ValueError("Invalid V6 image dimensions")
             if shape[0] * shape[1] > 100_000_000:
                 raise ValueError("V6 image exceeds the pixel ceiling")
+            if has_depth:
+                native = item["native_shape"]
+                if (
+                    not isinstance(native, list)
+                    or len(native) != 2
+                    or any(type(n) is not int or not 1 <= n <= 100_000_000 for n in native)
+                    or native[0] * native[1] > 100_000_000
+                ):
+                    raise ValueError("Invalid V6 native depth dimensions")
             _require_digest(item["master_sha256"])
         if identifiers != sorted(set(identifiers)):
             raise ValueError("V6 image inventory must be sorted and unique")
         processing = payload["processing"]
         if not isinstance(processing, dict) or set(processing) != {"modules", "dependencies"}:
             raise ValueError("Invalid V6 processing identity")
-        if not isinstance(processing["modules"], dict) or set(processing["modules"]) != set(_MODULES):
+        if not isinstance(processing["modules"], dict) or set(processing["modules"]) != set(_processing_modules(has_depth)):
             raise ValueError("V6 processing source inventory differs")
         for value in processing["modules"].values():
             _require_digest(value)
@@ -166,13 +196,20 @@ def validate_resources(payload: dict[str, Any]) -> None:
     source = payload["source"]
     limits = source["limits"]
     reserve = 2 * MAX_PLAN_BYTES
+    has_depth = payload["schema"] == DEPTH_PLAN_SCHEMA
     for image in source["images"]:
         pixels = image["shape"][0] * image["shape"][1]
         if pixels > limits["max_pixels"]:
             raise ValueError("V6 image exceeds its admitted per-image pixel budget")
-        if pixels * 256 + 256 * 1024**2 > limits["memory_mib"] * 1024**2:
+        native_pixels = image["native_shape"][0] * image["native_shape"][1] if has_depth else 0
+        memory = pixels * (320 if has_depth else 256) + native_pixels * 128 + 256 * 1024**2
+        if memory > limits["memory_mib"] * 1024**2:
             raise ValueError("V6 image exceeds conservative reconstruction/replay memory admission")
         reserve += pixels * 48 + MAX_PREVIEW_BYTES + 2 * 1024**2
+        if has_depth:
+            # Four native carriers, five aligned carriers (including optional
+            # calibrated meters), float TIFF, bounded scalar PNGs and headers.
+            reserve += native_pixels * 7 + pixels * 18 + 12 * 1024**2
     if reserve > payload["limits"]["max_output_bytes"]:
         raise ValueError("V6 output reservation exceeds the admitted byte budget")
 
@@ -185,6 +222,7 @@ class LuxDepthV6Request:
     render: RenderRecipe = field(default_factory=RenderRecipe)
     source_limits: SourceLimits = field(default_factory=SourceLimits)
     output_limits: OutputLimits = field(default_factory=OutputLimits)
+    depth_maps: DepthMapRecipe | None = None
 
 
 @dataclass(frozen=True)
@@ -198,14 +236,19 @@ class PreparedLuxExecutionV6:
         return self.plan.canonical_bytes
 
 
-def source_binding(source: VerifiedV5Source) -> dict[str, Any]:
+def source_binding(source: VerifiedV5Source, *, depth_maps: bool = False) -> dict[str, Any]:
     return {
         "digest": source.source_digest,
         "plan_sha256": digest(source.canonical_plan_bytes),
         "evidence_sha256": digest(source.canonical_evidence_bytes),
         "limits": source.limits.to_payload(),
         "images": [
-            {"input_id": image.input_id, "shape": list(image.shape), "master_sha256": image.master_sha256}
+            {
+                "input_id": image.input_id,
+                "shape": list(image.shape),
+                "master_sha256": image.master_sha256,
+                **({"native_shape": image.descriptor["depth"]["shape"]} if depth_maps else {}),
+            }
             for image in source.images
         ],
     }
@@ -223,6 +266,8 @@ def prepare(request: LuxDepthV6Request, *, cancellation: Callable[[], bool] | No
     ):
         if type(value) is not expected:
             raise TypeError("V6 request requires exact typed recipes and limits")
+    if request.depth_maps is not None and type(request.depth_maps) is not DepthMapRecipe:
+        raise TypeError("V6 depth maps require an exact typed recipe")
     output = directory_path(request.output_dir, allow_missing=True)
     source_root = directory_path(request.input_dir)
     if output.exists() or not output.parent.is_dir():
@@ -231,13 +276,15 @@ def prepare(request: LuxDepthV6Request, *, cancellation: Callable[[], bool] | No
         raise ValueError("V6 output and parent evidence must be disjoint")
     source = prepare_source(source_root, limits=request.source_limits, cancellation=cancellation)
     payload = {
-        "schema": PLAN_SCHEMA,
+        "schema": DEPTH_PLAN_SCHEMA if request.depth_maps is not None else PLAN_SCHEMA,
         "pipeline": "lux_depth_v6",
-        "source": source_binding(source),
+        "source": source_binding(source, depth_maps=request.depth_maps is not None),
         "grade": request.grade.to_payload(),
         "render": request.render.to_payload(),
         "limits": request.output_limits.to_payload(),
-        "processing": processing_identity(),
+        "processing": processing_identity(depth_maps=request.depth_maps is not None),
         "production_acceptance": "not_established",
     }
+    if request.depth_maps is not None:
+        payload["depth_maps"] = request.depth_maps.to_payload()
     return PreparedLuxExecutionV6(GradePlan(canonicalize_json(payload)), source, output)

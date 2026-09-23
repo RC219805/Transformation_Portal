@@ -156,15 +156,24 @@ class ExecutionPolicy:
     def _validate_photography_paths(
         self, locator: DispatchLocator, plan_bytes: bytes, output_root: Path, bindings_bytes: bytes
     ) -> None:
+        from transformation_portal.core.execution_plan import decode_bounded_json_object
         from transformation_portal.orchestrator.photography_adapter import (
             PhotographyBindings,
             server_runtime_bindings,
             validate_photography_dispatch,
         )
 
-        if not managed_photography_enabled():
+        v6 = decode_bounded_json_object(plan_bytes).get("schema") == "tp.execution.plan.v5"
+        enabled = managed_v6_photography_enabled() if v6 else managed_photography_enabled()
+        pipeline = "lux-depth-v6" if v6 else "lux-depth-v5"
+        if not enabled:
             raise DispatchAuthorityLost("managed photography is disabled on this worker")
-        validate_photography_dispatch(plan_bytes, bindings_bytes)
+        if v6:
+            from transformation_portal.orchestrator.photography_v6_adapter import validate_v6_dispatch
+
+            validate_v6_dispatch(plan_bytes, bindings_bytes)
+        else:
+            validate_photography_dispatch(plan_bytes, bindings_bytes)
         bound = PhotographyBindings(bindings_bytes).to_payload()
         data_paths = [Path(bound["input_root"]), output_root]
         data_paths.extend(Path(bound[name]) for name in ("companion_root", "materials_root") if bound[name] is not None)
@@ -172,7 +181,7 @@ class ExecutionPolicy:
         if self.pilot_enabled:
             if (
                 self.allowed_tenants and locator.tenant_id not in self.allowed_tenants
-            ) or "lux-depth-v5" not in self.allowed_pipelines:
+            ) or pipeline not in self.allowed_pipelines:
                 raise DispatchAuthorityLost("dispatch tenant or pipeline is no longer allowed")
             if self.manager is None:
                 raise DispatchAuthorityLost("tenant manager is unavailable")
@@ -206,6 +215,10 @@ class ExecutionPolicy:
 
 def managed_photography_enabled() -> bool:
     return os.getenv("TP_LUX_V5_MANAGED_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def managed_v6_photography_enabled() -> bool:
+    return os.getenv("TP_LUX_V6_MANAGED_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def server_photography_cache_root(tenant_id: str) -> Path | None:

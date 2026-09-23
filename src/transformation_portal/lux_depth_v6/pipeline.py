@@ -19,7 +19,7 @@ from transformation_portal.lux_depth_v4.io import directory_path
 
 from .color import GradeRecipe, RenderRecipe
 from .evidence import EVIDENCE_SCHEMA, verify_artifacts
-from .plan import GradePlan, PreparedLuxExecutionV6, digest, processing_identity, source_binding
+from .plan import GradePlan, PreparedLuxExecutionV6, depth_recipe, digest, processing_identity, source_binding
 from .products import image_products
 from .source import validate_source
 
@@ -30,6 +30,7 @@ class LuxDepthV6Result:
     evidence_path: Path
     plan_sha256: str
     input_count: int
+    canonical_evidence_bytes: bytes = b""
 
 
 def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | None = None) -> LuxDepthV6Result:
@@ -37,6 +38,7 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
         raise TypeError("V6 execution requires the exact prepared grading carrier")
     plan = GradePlan(prepared.canonical_plan_bytes)
     payload = plan.to_payload()
+    depth_maps = depth_recipe(payload)
     started = time.monotonic()
 
     def check() -> None:
@@ -46,7 +48,9 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
             raise RuntimeError("V6 execution exceeded its wall-time budget")
 
     check()
-    if payload["source"] != source_binding(prepared.source) or payload["processing"] != processing_identity():
+    if payload["source"] != source_binding(prepared.source, depth_maps=depth_maps is not None) or payload[
+        "processing"
+    ] != processing_identity(depth_maps=depth_maps is not None):
         raise ValueError("Prepared V6 source or processing identity changed")
     validate_source(prepared.source, cancellation=cancellation)
     root = directory_path(prepared.output_root, allow_missing=True)
@@ -81,7 +85,9 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
                     check()
                     _validate_pinned_root_namespace(pinned)
                     os.mkdir(image.input_id, mode=0o700, dir_fd=pinned.descriptor)
-                    for relative, data in image_products(prepared.source, image.input_id, grade, render, checkpoint=check):
+                    for relative, data in image_products(
+                        prepared.source, image.input_id, grade, render, checkpoint=check, depth_maps=depth_maps
+                    ):
                         write(relative, data)
                 records.sort(key=lambda item: item["path"])
                 verify_artifacts(root, plan, prepared.source, records, checkpoint=check, completed=False)
@@ -101,4 +107,4 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
                 # Keep the exact failed attempt for inspection; never overwrite or
                 # remove unrelated paths, and never label partial products complete.
                 raise
-    return LuxDepthV6Result(root, root / "evidence.json", plan.sha256, len(prepared.source.images))
+    return LuxDepthV6Result(root, root / "evidence.json", plan.sha256, len(prepared.source.images), evidence)

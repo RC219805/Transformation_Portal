@@ -101,6 +101,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-orchestrator-contract`,
   `make test-orchestrator-http-contract`, and
   `make validate-orchestrator-http` when a backend is running.
+- Opt-in V6 contracts: `make test-lux-depth-v6-contract` and
+  `make test-lux-depth-v6-managed-contract`. The service lane is
+  `make test-lux-depth-v6-managed-services` with a migrated dedicated `*_test`
+  `TP_DISPATCH_TEST_DATABASE_URL` and `TP_DISPATCH_TEST_REDIS_URL`; missing
+  services are not acceptance. V3 remains the production default.
 - Frontdoor/browser contracts:
   `make test-portal-contract`, `make test-frontdoor-contract`,
   `make test-accessibility-browser`, `make validate-portal-css-layer-parity`,
@@ -223,6 +228,13 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   on backend hosts, then run `make run-orchestrator-worker` with
   `TP_ORCHESTRATOR_STATE_BACKEND=postgres`, `TP_ORCHESTRATOR_QUEUE_BACKEND=redis`,
   `TP_DATABASE_URL`, and `TP_REDIS_URL` set.
+- Managed V6: deploy matching API/worker code and packaged plan V5 schema,
+  apply `make db-upgrade` through `0007_photography_bindings`, and enable
+  `TP_LUX_V6_MANAGED_ENABLED=1` independently of V5. Use Postgres/Redis, a
+  protected shared `TP_ORCHESTRATOR_EXECUTION_ROOT`, server-owned runtimes,
+  tenant authorization, and current preview/readiness. V6 accepts original
+  photographs and publishes verified TIFF, draft PNG, and depth products;
+  Materials inputs are unsupported. See [the V6 guide](docs/reference/LUX_DEPTH_V6.md).
 - Container smoke:
   `docker compose run --rm tp-init`,
   `docker compose up --build transformation-portal-cpu`, and

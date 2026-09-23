@@ -284,7 +284,14 @@ test-lux-depth-v5-contract:
 
 .PHONY: test-lux-depth-v6-contract
 test-lux-depth-v6-contract:
-	@PYTHONPATH=src "$(PY)" -m pytest -q tests/lux_depth_v6 tests/lux_depth_v5 tests/lux_depth_v4 tests/core/test_depth_evidence.py tests/core/test_execution_plan_v2.py tests/materials_v4
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/lux_depth_v6 tests/lux_depth_v5 tests/lux_depth_v4 tests/core/test_depth_evidence.py tests/core/test_execution_plan_v2.py tests/materials_v4 tests/test_audit_lux_depth_v6_reconstruction.py
+
+.PHONY: test-lux-depth-v6-managed-contract test-lux-depth-v6-managed-services
+test-lux-depth-v6-managed-contract:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/orchestrator/test_managed_v6_api.py tests/orchestrator/test_photography_v6_adapter.py tests/orchestrator/test_managed_v6_execution.py tests/orchestrator/test_job_execution_service.py tests/orchestrator/test_execution_dispatch.py tests/orchestrator/test_worker_process_contract.py
+
+test-lux-depth-v6-managed-services:
+	@PYTHONPATH=src "$(PY)" -m pytest -q tests/orchestrator/test_managed_v6_services.py
 
 .PHONY: test-lux-depth-v5-managed-contract test-lux-depth-v5-managed-services
 test-lux-depth-v5-managed-contract:

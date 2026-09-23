@@ -39,3 +39,15 @@ test("Review normalizes same-origin absolute proxy URLs and does not equate inva
   assert.equal(context._artifactsSharePreviewUrl(artifact("first.png", { url: "" }), artifact("second.png", { url: "" })), false);
   assert.equal(context._artifactsSharePreviewUrl({ preview_url: "https://outside.example/x" }, { url: "https://outside.example/x" }), false);
 });
+
+test("explicit comparison groups prevent fallback from photographs to depth or validity maps", () => {
+  const photo = { ...delivery, display_hint: { compare_group: 'input-0000/photography', priority: 1200 } };
+  const photoProxy = { ...preview, display_hint: { compare_group: 'input-0000/photography', priority: 1100 } };
+  const depth = artifact('input-0000/depth-relative.tif', { preview_url: '/depth-preview.png', display_hint: { compare_group: 'input-0000/depth-relative', priority: 650 } });
+  const validity = artifact('input-0000/depth-preview-valid.png', { display_hint: { compare_group: 'input-0000/validity', priority: 550 } });
+  const ungrouped = artifact('input-0000/unrelated.png');
+  const artifacts = [photo, photoProxy, depth, validity, ungrouped];
+  for (const primary of [photo, photoProxy, depth, validity]) {
+    assert.equal(context.findCompareArtifact(primary, artifacts), null);
+  }
+});

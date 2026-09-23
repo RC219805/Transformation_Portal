@@ -168,11 +168,11 @@ test("capability counts describe the current workflow separately from other work
   const catalog = buildPortalCapabilityCatalog(managedInput({
     preview: { status: "ready", field_errors: [] }
   }));
-  assert.equal(catalog.summary.total, 26);
+  assert.equal(catalog.summary.total, 27);
   assert.equal(catalog.summary.current, 10);
   assert.equal(catalog.summary.enabled, 3);
   assert.equal(catalog.summary.available, 4);
-  assert.equal(catalog.summary.outsideWorkflow, 16);
+  assert.equal(catalog.summary.outsideWorkflow, 17);
   assert.equal(catalog.summary.current + catalog.summary.outsideWorkflow, catalog.summary.total);
   assert.equal(catalog.summary.actionable, 0);
   assert.equal(catalog.summary.nextActionCapabilityId, "");

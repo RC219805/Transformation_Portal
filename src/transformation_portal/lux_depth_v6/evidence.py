@@ -12,7 +12,7 @@ from transformation_portal.lux_depth_v4.evidence import _inventory
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 
 from .color import GradeRecipe, RenderRecipe
-from .plan import MAX_PLAN_BYTES, GradePlan, digest, processing_identity, source_binding
+from .plan import MAX_PLAN_BYTES, GradePlan, depth_recipe, digest, processing_identity, source_binding, validate_resources
 from .products import image_products
 from .source import SourceLimits, VerifiedV5Source, prepare_source, validate_source
 
@@ -40,9 +40,13 @@ def verify_artifacts(
 ) -> None:
     """Replay every expected product; an updated inventory alone proves nothing."""
     payload = plan.to_payload()
-    if payload["source"] != source_binding(source) or payload["processing"] != processing_identity():
+    depth_maps = depth_recipe(payload)
+    if payload["source"] != source_binding(source, depth_maps=depth_maps is not None) or payload[
+        "processing"
+    ] != processing_identity(depth_maps=depth_maps is not None):
         raise ValueError("V6 source or processing identity differs from the frozen plan")
-    if not isinstance(records, list) or len(records) > 8193:
+    maximum_records = (21 if depth_maps is not None else 8) * len(source.images) + 1
+    if not isinstance(records, list) or len(records) > maximum_records:
         raise ValueError("V6 inventory exceeds its bound")
     declared: dict[str, dict[str, Any]] = {}
     total = 0
@@ -71,7 +75,9 @@ def verify_artifacts(
     check_product("plan.json", plan.canonical_bytes)
     grade, render = GradeRecipe.from_payload(payload["grade"]), RenderRecipe.from_payload(payload["render"])
     for image in source.images:
-        for relative, data in image_products(source, image.input_id, grade, render, checkpoint=checkpoint):
+        for relative, data in image_products(
+            source, image.input_id, grade, render, checkpoint=checkpoint, depth_maps=depth_maps
+        ):
             check_product(relative, data)
     if set(declared) != seen:
         raise ValueError("V6 inventory contains unexpected products")
@@ -80,7 +86,7 @@ def verify_artifacts(
         raise ValueError("V6 output namespace differs from the exact product inventory")
     checkpoint()
     validate_source(source, cancellation=lambda: _cancelled(checkpoint))
-    if payload["processing"] != processing_identity():
+    if payload["processing"] != processing_identity(depth_maps=depth_maps is not None):
         raise ValueError("V6 processing source changed during verification")
 
 
@@ -144,6 +150,10 @@ def verify_execution_evidence(
                     for name in ("max_input_bytes", "max_pixels", "memory_mib")
                 }
             )
+            # The caller's tighter budget applies to reconstruction and product
+            # replay as well as retained-parent admission. Keep exact frozen
+            # plan bytes/source identity unchanged after this extra preflight.
+            validate_resources({**payload, "source": {**payload["source"], "limits": constrained.to_payload()}})
             prepare_source(source_root, limits=constrained, cancellation=lambda: _cancelled(checkpoint))
         source = prepare_source(source_root, limits=admitted_limits, cancellation=lambda: _cancelled(checkpoint))
         verify_artifacts(root, plan, source, evidence["artifacts"], checkpoint=checkpoint, completed=True)

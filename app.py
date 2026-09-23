@@ -1822,7 +1822,7 @@ async def _persist_job_state(job: Job) -> None:
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
-ALLOWED_PIPELINES = {"lux-depth-v3", "lux-depth-v5", *ARCHIVE_GATE_PIPELINES}
+ALLOWED_PIPELINES = {"lux-depth-v3", "lux-depth-v5", "lux-depth-v6", *ARCHIVE_GATE_PIPELINES}
 ARCHIVE_GATE_DEFAULT_COMMANDS = {
     "archive-gate-a": "fixity-scan",
     "archive-gate-b": "bag-build",
@@ -2963,7 +2963,11 @@ def _evaluate_pipeline_readiness(
     if isinstance(args, dict):
         normalized_args, _, normalization_errors = _normalize_operator_payload_paths(pipeline, args)
 
-    if pipeline == "lux-depth-v5":
+    if pipeline == "lux-depth-v6":
+        from transformation_portal.portal.photography_v6_jobs import managed_v6_readiness
+
+        readiness_payload = managed_v6_readiness()
+    elif pipeline == "lux-depth-v5":
         from transformation_portal.portal.photography_jobs import managed_photography_readiness
 
         readiness_payload = managed_photography_readiness()
@@ -4093,6 +4097,15 @@ def _preview_next_best_action(
             "action": "dispatch_ready",
             "field": "run_job",
             "label": "Execute the Lux run",
+            "detail": "Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.",
+            "tone": "ready",
+        }
+    if pipeline in {"lux-depth-v5", "lux-depth-v6"}:
+        version = "V6" if pipeline == "lux-depth-v6" else "V5"
+        return {
+            "action": "dispatch_ready",
+            "field": "run_job",
+            "label": f"Dispatch LuxDepth{version} photography",
             "detail": "Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.",
             "tone": "ready",
         }
@@ -6402,10 +6415,15 @@ def _build_config_preview(
     args = payload.get("args")
     if not isinstance(args, dict):
         args = {}
-    if pipeline == "lux-depth-v5":
-        from transformation_portal.portal.photography_jobs import photography_config_preview
+    if pipeline in {"lux-depth-v5", "lux-depth-v6"}:
+        if pipeline == "lux-depth-v6":
+            from transformation_portal.portal.photography_v6_jobs import v6_config_preview
 
-        preview = photography_config_preview(args, policy=_execution_policy())
+            preview = v6_config_preview(args, policy=_execution_policy())
+        else:
+            from transformation_portal.portal.photography_jobs import photography_config_preview
+
+            preview = photography_config_preview(args, policy=_execution_policy())
         preview["next_best_action"] = _preview_next_best_action(
             pipeline=pipeline, errors=preview["field_errors"], warnings=[], readiness_snapshot=preview["readiness"]
         )
@@ -8143,8 +8161,10 @@ def _argv_from_request(
     if pipeline not in ALLOWED_PIPELINES:
         raise _PortalValidationReasonError("Unsupported pipeline", reason="unsupported_pipeline")
 
-    if pipeline == "lux-depth-v5":
-        raise _PortalValidationReasonError("V5 requires immutable distributed dispatch", reason="unsupported_pipeline")
+    if pipeline in {"lux-depth-v5", "lux-depth-v6"}:
+        raise _PortalValidationReasonError(
+            f"{pipeline} requires immutable distributed dispatch", reason="unsupported_pipeline"
+        )
 
     args = execution_args if isinstance(execution_args, dict) else payload.get("args")
     if not isinstance(args, dict):
@@ -9466,7 +9486,14 @@ async def readiness(request: Request) -> JSONResponse:
         except IdentityConfigurationError:
             return _pilot_identity_configuration_error()
     pipeline_data: Dict[str, Any] = {}
-    for pipeline_name in ("lux-depth-v3", "lux-depth-v5", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
+    for pipeline_name in (
+        "lux-depth-v3",
+        "lux-depth-v5",
+        "lux-depth-v6",
+        "archive-gate-a",
+        "archive-gate-b",
+        "archive-gate-c",
+    ):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
 
     audit_response = await _record_pilot_audit(
@@ -9912,11 +9939,11 @@ async def _create_job(
         )
 
     try:
-        if pipeline == "lux-depth-v5":
-            # V5 has no request-derived command surface. Only the immutable plan
+        if pipeline in {"lux-depth-v5", "lux-depth-v6"}:
+            # Photography has no request-derived command surface. Only the immutable plan
             # consumer may construct its fixed worker command after admission.
             if not _uses_dispatch_authority():
-                raise ValueError("V5 requires immutable distributed dispatch")
+                raise ValueError(f"{pipeline} requires immutable distributed dispatch")
             argv = []
         else:
             argv = _argv_from_request(payload, execution_args=execution_args)
@@ -11216,7 +11243,7 @@ async def _create_distributed_job(
     tenant_id = pilot_tenant.tenant_id if pilot_tenant is not None else "default"
     jid = "job_" + uuid.uuid4().hex
     effective_request = {"pipeline": pipeline, "args": dict(execution_args), "tenant_id": tenant_id}
-    if pipeline == "lux-depth-v5":
+    if pipeline in {"lux-depth-v5", "lux-depth-v6"}:
         # Preview resolves optional manifests after the initial raw-path guard.
         # Reauthorize those normalized paths before preparation reads evidence.
         path_error = await _pilot_enforce_request_paths(pilot_tenant, effective_request, action="job_create", request=request)
@@ -11224,7 +11251,20 @@ async def _create_distributed_job(
             return path_error
     execution_bindings = None
     try:
-        if pipeline == "lux-depth-v5":
+        if pipeline == "lux-depth-v6":
+            from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+            from transformation_portal.orchestrator.photography_v6_adapter import prepare_v6_dispatch
+            from transformation_portal.portal.photography_v6_jobs import managed_v6_readiness, v6_request
+
+            _enforce_job_readiness_preflight(pipeline, managed_v6_readiness())
+            photography_v6 = v6_request(execution_args, tenant_id=tenant_id)
+            prepared_v6 = await asyncio.to_thread(
+                prepare_v6_dispatch,
+                photography_v6,
+                publisher=GenerationPublisher(artifact_store=_artifact_store(), record_store=get_operational_record_store()),
+            )
+            plan_bytes, execution_bindings = prepared_v6.plan_bytes, prepared_v6.bindings_bytes
+        elif pipeline == "lux-depth-v5":
             from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
             from transformation_portal.orchestrator.photography_adapter import prepare_photography_dispatch
             from transformation_portal.portal.photography_jobs import managed_photography_readiness, photography_request

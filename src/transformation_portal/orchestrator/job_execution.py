@@ -187,8 +187,11 @@ class JobExecutionService(Generic[_JobT]):
                 if resolved_output != output_root:
                     raise DispatchAuthorityLost("admitted output root changed before worker pickup")
                 plan = validate_dispatch_plan(raw, execution_bindings=bindings)
-                if plan.schema == "tp.execution.plan.v4":
-                    from transformation_portal.lux_depth_v5.publication import validate_publication_plan
+                if plan.schema in {"tp.execution.plan.v4", "tp.execution.plan.v5"}:
+                    if plan.schema == "tp.execution.plan.v5":
+                        from transformation_portal.lux_depth_v6.publication import validate_publication_plan
+                    else:
+                        from transformation_portal.lux_depth_v5.publication import validate_publication_plan
 
                     publisher = GenerationPublisher(
                         artifact_store=self.runtime.artifact_store(), record_store=self.runtime.operational_records()
@@ -255,7 +258,11 @@ class JobExecutionService(Generic[_JobT]):
                 raise DispatchAuthorityLost("publication canceled before generation commit")
 
         publisher_type = GenerationPublisher
-        if schema == "tp.execution.plan.v4":
+        if schema == "tp.execution.plan.v5":
+            from transformation_portal.orchestrator.photography_v6_adapter import ManagedV6PhotographyPublisher
+
+            publisher_type = ManagedV6PhotographyPublisher
+        elif schema == "tp.execution.plan.v4":
             from transformation_portal.orchestrator.photography_adapter import ManagedPhotographyPublisher
 
             publisher_type = ManagedPhotographyPublisher
@@ -264,13 +271,16 @@ class JobExecutionService(Generic[_JobT]):
             record_store=self.runtime.operational_records(),
             publication_guard=require_publication_authority,
         )
-        if schema == "tp.execution.plan.v4" and raw is not None:
+        if schema in {"tp.execution.plan.v4", "tp.execution.plan.v5"} and raw is not None:
             if job.state != "succeeded" or job.exit_code != 0:
                 await self.runtime.operational_records().finish_dispatch(
                     fence, state=job.state, exit_code=job.exit_code, error=job.error
                 )
                 return
-            from transformation_portal.lux_depth_v5.publication import _publish_admitted_result
+            if schema == "tp.execution.plan.v5":
+                from transformation_portal.lux_depth_v6.publication import _publish_admitted_result
+            else:
+                from transformation_portal.lux_depth_v5.publication import _publish_admitted_result
 
             await _publish_admitted_result(raw, publisher=publisher, fence=fence)
             return

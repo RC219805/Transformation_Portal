@@ -14,7 +14,8 @@ from transformation_portal.lux_depth_v4.photography import linear_to_srgb, outpu
 from transformation_portal.lux_depth_v5.preview import encode_preview
 
 from .color import GradeRecipe, RenderRecipe, grade_master, render_master
-from .reconstruction import reconstruct_baseline
+from .depth_maps import DepthMapRecipe, depth_map_products
+from .reconstruction import reconstruct_baseline, reconstruct_depth_baseline
 from .source import VerifiedV5Source, load_depth_inputs
 
 
@@ -59,6 +60,7 @@ def image_products(
     render: RenderRecipe,
     *,
     checkpoint: Callable[[], None],
+    depth_maps: DepthMapRecipe | None = None,
 ) -> Iterator[tuple[str, bytes]]:
     """Reconstruct one photograph; retain unbounded grade separately from display."""
     from transformation_portal.core.execution_plan import decode_bounded_json_object
@@ -66,7 +68,18 @@ def image_products(
     checkpoint()
     original, depth, proxy = load_depth_inputs(source, input_id)
     configuration = decode_bounded_json_object(source.canonical_plan_bytes)["configuration"]
-    baseline, reconstruction = reconstruct_baseline(original, depth, proxy, configuration)
+    if depth_maps is None:
+        baseline, reconstruction = reconstruct_baseline(original, depth, proxy, configuration)
+    else:
+        baseline, reconstruction, aligned, depth_receipt = reconstruct_depth_baseline(
+            original, depth, proxy, configuration, depth_maps
+        )
+        # Emit while native evidence is live, before allocating grade/display
+        # masters. Semantic replay uses this same bounded product stream.
+        for relative, data in depth_map_products(depth, aligned, depth_receipt, input_id):
+            checkpoint()
+            yield relative, data
+        del aligned, depth_receipt, data
     del original, depth, proxy
     checkpoint()
     graded, grade_receipt = grade_master(baseline, grade)
@@ -74,7 +87,7 @@ def image_products(
     display, render_receipt = render_master(graded, render)
     checkpoint()
     descriptor: dict[str, Any] = {
-        "schema": "tp.lux.graded_photograph.v1",
+        "schema": "tp.lux.graded_photograph.v1" if depth_maps is None else "tp.lux.graded_photograph.v2",
         "input_id": input_id,
         "parent_source_digest": source.source_digest,
         "reconstruction": reconstruction,
@@ -85,6 +98,8 @@ def image_products(
         "render": render_receipt,
         "production_acceptance": "not_established",
     }
+    if depth_maps is not None:
+        descriptor["depth_maps"] = {"path": f"{input_id}/depth.json", "recipe": depth_maps.to_payload()}
     arrays = [("baseline.npy", baseline.pixels), ("master.npy", graded.pixels), ("display.npy", display.pixels)]
     if graded.alpha is not None:
         arrays.append(("alpha.npy", graded.alpha))

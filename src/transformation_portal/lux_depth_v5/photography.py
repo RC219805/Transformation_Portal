@@ -168,6 +168,65 @@ def _native_discontinuity_support(
     return supported
 
 
+def _count_native_bits(values: np.ndarray) -> np.ndarray:
+    """Count the occupied cells of an unsigned 16-bit native neighborhood."""
+    values = values - ((values >> 1) & np.uint16(0x5555))
+    values = (values & np.uint16(0x3333)) + ((values >> 2) & np.uint16(0x3333))
+    values = (values + (values >> 4)) & np.uint16(0x0F0F)
+    return (values + (values >> 8)) & np.uint16(0x001F)
+
+
+def _connected_native_discontinuity_support(evidence: DepthEvidence, y0: np.ndarray, x0: np.ndarray) -> np.ndarray:
+    """Require persistent four-connected support for every selectable sample.
+
+    Counts alone allow separated native outliers to masquerade as a persistent
+    surface. Each central sample must belong to a same-depth component with at
+    least four cells, including two outside the central footprint. The component
+    is confined to the complete 4x4 neighborhood; it establishes local support,
+    not physical surface accuracy. Sixteen-bit flood fills keep scratch bounded.
+    """
+    supported = _native_discontinuity_support(evidence, y0, x0, require_persistent_groups=True)
+    if not supported.any():
+        return supported
+    # The preceding complete-neighborhood guard excludes the image boundary.
+    # These unclamped indices therefore identify sixteen distinct native cells;
+    # repeated edge samples can never inflate component or outer-ring counts.
+    rows, columns = y0[supported], x0[supported]
+    central = np.stack([evidence.native_depth[rows + dy, columns + dx] for dy, dx in ((0, 0), (0, 1), (1, 0), (1, 1))])
+    central = central.astype(np.float64)
+    low, high = central.min(axis=0), central.max(axis=0)
+    tolerance = (high - low) * _NATIVE_CLUSTER_TOLERANCE
+    groups = np.zeros((2, len(rows)), dtype=np.uint16)
+    for row in range(4):
+        for column in range(4):
+            samples = evidence.native_depth[rows + row - 1, columns + column - 1].astype(np.float64)
+            bit = np.uint16(1 << (4 * row + column))
+            groups[0] |= np.where(np.abs(samples - low) <= tolerance, bit, np.uint16(0))
+            groups[1] |= np.where(np.abs(samples - high) <= tolerance, bit, np.uint16(0))
+    connected = np.ones(len(rows), dtype=bool)
+    # Bits 5, 6, 9 and 10 are the central 2x2 footprint. Do not connect
+    # diagonals or wrap horizontal neighbors across the 4x4 row boundary.
+    outer = np.uint16(0xF99F)
+    for seed in (5, 6, 9, 10):
+        bit = np.uint16(1 << seed)
+        group = np.where((groups[0] & bit) != 0, groups[0], groups[1])
+        component = np.full(len(rows), bit, dtype=np.uint16)
+        for _ in range(15):
+            neighbors = (
+                ((component & np.uint16(0x7777)) << 1)
+                | ((component & np.uint16(0xEEEE)) >> 1)
+                | (component << 4)
+                | (component >> 4)
+            )
+            expanded = component | (neighbors & group)
+            if np.array_equal(expanded, component):
+                break
+            component = expanded
+        connected &= (_count_native_bits(component) >= 4) & (_count_native_bits(component & outer) >= 2)
+    supported[supported] = connected
+    return supported
+
+
 def _guided_selection(
     evidence: DepthEvidence,
     master: ImageMaster,
@@ -177,6 +236,7 @@ def _guided_selection(
     metric: np.ndarray | None,
     *,
     require_persistent_groups: bool = False,
+    require_connected_groups: bool = False,
 ) -> dict[str, Any]:
     """Select existing surface samples only at supported two-cluster boundaries.
 
@@ -188,6 +248,9 @@ def _guided_selection(
     source_valid = evidence.valid_mask
     height, width = master.shape
     small_height, small_width = proxy.transform.resized_shape
+    # A high-resolution master repeats each native footprint many times. Cache
+    # topology only for visited candidate footprints, on the bounded native grid.
+    native_topology = np.full((small_height, small_width), -1, dtype=np.int8) if require_connected_groups else None
     refined = candidates = ambiguous = 0
     tile_width = min(width, _MAX_CHUNK_PIXELS)
     tile_height = max(1, _MAX_CHUNK_PIXELS // tile_width)
@@ -210,7 +273,18 @@ def _guided_selection(
             upper = samples >= high - span * 0.20
             edge = available & valid[top:bottom, left:right] & (span >= _MIN_DEPTH_SPAN) & (lower | upper).all(axis=0)
             if edge.any():
-                edge &= _native_discontinuity_support(evidence, y0, x0, require_persistent_groups=require_persistent_groups)
+                if native_topology is None:
+                    edge &= _native_discontinuity_support(
+                        evidence, y0, x0, require_persistent_groups=require_persistent_groups
+                    )
+                else:
+                    footprints = np.unique((y0 * small_width + x0)[edge])
+                    rows, columns = np.divmod(footprints, small_width)
+                    missing = native_topology[rows, columns] < 0
+                    rows, columns = rows[missing], columns[missing]
+                    if len(rows):
+                        native_topology[rows, columns] = _connected_native_discontinuity_support(evidence, rows, columns)
+                    edge &= native_topology[y0, x0] == 1
             count = int(edge.sum())
             candidates += count
             if not count:
@@ -261,6 +335,11 @@ def _guided_selection(
         receipt["native_support"] = "complete_4x4_persistent_two_depth_groups"
         receipt["minimum_native_samples_per_group"] = 4
         receipt["minimum_outer_samples_per_group"] = 2
+    if require_connected_groups:
+        receipt["native_support"] = "complete_4x4_connected_two_depth_groups"
+        receipt["native_connectivity"] = "four_connected_per_central_sample"
+        receipt["minimum_native_samples_per_component"] = 4
+        receipt["minimum_outer_samples_per_component"] = 2
     return receipt
 
 
@@ -275,11 +354,13 @@ def align_depth(
 
     ``guided_bilinear`` preserves the legacy V5 evidence recipe. The explicit
     ``guided_bilinear_v3`` derivative requires persistent native groups and is
-    available to successor consumers; it does not reinterpret existing plans.
+    available to successor consumers. ``guided_bilinear_v4`` additionally
+    requires connected support for every selectable native sample. Neither
+    successor derivative reinterprets existing plans.
     """
     if not isinstance(evidence, DepthEvidence) or not isinstance(master, ImageMaster) or not isinstance(proxy, ImageProxy):
         raise ValueError("Alignment requires typed depth, master, and proxy evidence")
-    if refinement not in {"guided_bilinear", "guided_bilinear_v3", "bilinear"}:
+    if refinement not in {"guided_bilinear", "guided_bilinear_v3", "guided_bilinear_v4", "bilinear"}:
         raise ValueError("Unsupported depth refinement recipe")
     master_hash = master.content_hash()
     if (
@@ -306,9 +387,16 @@ def align_depth(
         metric = metric.copy()
         if not np.array_equal(metric_valid, valid):
             raise ValueError("Metric and relative alignment support disagree")
-    if refinement in {"guided_bilinear", "guided_bilinear_v3"} and valid.any():
+    if refinement in {"guided_bilinear", "guided_bilinear_v3", "guided_bilinear_v4"} and valid.any():
         recipe = _guided_selection(
-            evidence, master, proxy, relative, valid, metric, require_persistent_groups=refinement == "guided_bilinear_v3"
+            evidence,
+            master,
+            proxy,
+            relative,
+            valid,
+            metric,
+            require_persistent_groups=refinement in {"guided_bilinear_v3", "guided_bilinear_v4"},
+            require_connected_groups=refinement == "guided_bilinear_v4",
         )
     else:
         recipe = {"candidate_pixels": 0, "refined_pixels": 0, "ambiguous_pixels": 0}
@@ -325,6 +413,7 @@ def align_depth(
             "recipe": {
                 "guided_bilinear": "bounded_two_surface_rgb_selection_v2",
                 "guided_bilinear_v3": "bounded_two_surface_rgb_selection_v3",
+                "guided_bilinear_v4": "bounded_two_surface_rgb_selection_v4",
                 "bilinear": "valid_bilinear_v1",
             }[refinement],
             "refinement": refinement,

@@ -1,18 +1,19 @@
-# LuxDepthV6 retained-evidence grading
+# LuxDepthV6 managed photography, grading, and depth maps
 
-LuxDepthV6 is an opt-in, standalone finishing successor for a completed,
-independently verified LuxDepthV5 generation. It reconstructs a conservative
-photographic baseline from the retained original pixels and native depth,
-applies explicit color controls in floating point, and renders a separate SDR
-delivery. It does not start new model inference or authorize a managed portal
-job. LuxDepthV3 remains the production default and rollback path.
+LuxDepthV6 is an opt-in photographic successor with two entry points. Managed
+portal/API jobs accept original photographs, run governed V5 inference, and
+finish the retained result with explicit grading, SDR rendering, and depth
+products. The standalone CLI finishes an existing, independently verified V5
+generation without new inference. Both reconstruct a conservative photographic
+baseline from retained original pixels and native depth. LuxDepthV3 remains the
+production default and rollback path.
 
 V6 establishes reproducible processing and output verification. Representative
 photographic quality, calibrated color accuracy, and production acceptance remain
 unestablished. Its display transforms are local versioned recipes, not ACES,
 AgX, camera profiling, or HDR delivery.
 
-## Source requirements
+## Retained-source requirements
 
 Keep the complete V5 output directory described in the
 [V5 operator guide](LUX_DEPTH_V5.md). V6 verifies its canonical execution plan,
@@ -34,11 +35,12 @@ applies to its fully opaque pixels; nonopaque pixels remain unchanged in the
 unbounded graded master. Display rendering can change RGB for delivery while
 preserving the alpha samples.
 
-## Plan, run, and verify
+## Standalone plan, run, and verify
 
 Run from the repository root with the supported core environment. V6 uses the
-existing NumPy, Pillow, SciPy, tifffile, and imagecodecs dependencies; it requires
-neither a new model download nor a new ML runtime.
+existing NumPy, Pillow, SciPy, tifffile, and imagecodecs dependencies. Retained
+finishing requires neither a new model download nor an ML runtime; managed
+fresh inference requires the governed DA3 runtime described below.
 
 Choose an existing V5 generation and a new, disjoint V6 output directory whose
 parent already exists:
@@ -90,6 +92,196 @@ prepared = prepare(
 result = run(prepared)
 ```
 
+## Managed portal and API execution
+
+In **Build**, select **lux-depth-v6 (Grading and depth outputs)**, choose original
+photograph input/output paths, and configure inference and V6 finishing on the
+Outputs step. This input is a photograph directory, not a retained V5 output
+bundle. Saved profiles keep V6 controls separate from V3 and V5. Build requires
+a current successful configuration preview and server readiness. Those checks
+are advisory: admission and workers revalidate authorized paths, physical
+runtime bindings, resources, and the immutable plan.
+
+Deploy matching API and worker code and the packaged plan schema together.
+Apply `make db-upgrade` through `0007_photography_bindings`; V6 reuses that
+migration's immutable physical bindings and needs no additional migration.
+Before upgrades or rollback, stop admission and drain workers. An older worker
+cannot consume `tp.execution.plan.v5`; disable V6 admission and drain those jobs
+before returning to older worker code.
+
+Load the existing managed service environment in each terminal. It must already
+provide `TP_DATABASE_URL`, `TP_REDIS_URL`, backend/frontdoor authentication, a
+protected shared `TP_ORCHESTRATOR_EXECUTION_ROOT`, authorized input/output roots,
+and executable `TRANSFORMATION_PORTAL_DA3_PYTHON`. Configure the following on
+both API and worker hosts:
+
+```bash
+export TP_LUX_V6_MANAGED_ENABLED=1
+export TP_ORCHESTRATOR_STATE_BACKEND=postgres
+export TP_ORCHESTRATOR_QUEUE_BACKEND=redis
+export TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED=0
+```
+
+The V6 flag is independent: `TP_LUX_V5_MANAGED_ENABLED` need not be enabled.
+In pilot tenant mode, add `lux-depth-v6` to the existing
+`TP_PILOT_ALLOWED_PIPELINES` list on API and workers. Keep
+`TP_PILOT_CONTROL_PLANE_ENABLED=1` and the same dedicated
+`TP_FRONTDOOR_IDENTITY_SECRET` on backend and frontdoor; use the authenticated
+frontdoor and the actor's authorized tenant paths. Do not expose backend keys
+in browser storage or request bodies. Runtime and optional cache selections
+are server-owned. Optional RAW ingest uses `TRANSFORMATION_PORTAL_RAW_PYTHON`;
+optional governed depth-cache reuse uses the shared
+`TP_LUX_V5_CACHE_DIR/<tenant_id>` namespace. See the
+[distributed Postgres runbook](../runtimes/orchestrator-postgres.md) for service
+setup and execution-root protections.
+
+With those settings loaded and Postgres/Redis running, start each long-running
+process in its own terminal, from the repository root:
+
+```bash
+# Backend terminal; apply migrations before starting the API.
+make db-upgrade
+make run-backend-local-noreload
+```
+
+```bash
+# Worker terminal; load the same managed environment and flags first.
+make run-orchestrator-worker
+```
+
+```bash
+# Frontdoor terminal; load managed auth and use the supported Node 22 runtime.
+make run-frontdoor-local
+```
+
+`GET /v1/readiness` reports V6 separately. Submit the same strict JSON body to
+`POST /v1/config-preview` and then `POST /v1/jobs` after correcting any reported
+errors. The managed frontdoor preserves the existing session authentication and
+response envelopes:
+
+```json
+{
+  "pipeline": "lux-depth-v6",
+  "args": {
+    "input_dir": "/authorized/tenant/photos",
+    "output_dir": "/authorized/tenant/output-v6",
+    "model_key": "da3-metric",
+    "input_color": "srgb",
+    "device": "mps",
+    "precision": "fp32",
+    "target_size": 518,
+    "refinement": "guided_bilinear",
+    "strength": 0.25,
+    "clarity": 0.0,
+    "exposure_stops": 0.0,
+    "white_balance": [1.0, 1.0, 1.0],
+    "contrast": 1.0,
+    "pivot": 0.18,
+    "saturation": 1.0,
+    "render": "perceptual_srgb",
+    "shoulder": 0.8,
+    "depth_refinement": "guided_bilinear_v4"
+  }
+}
+```
+
+The API also accepts the common bounded resource fields and optional
+`companions_manifest` for source-bound calibration. It rejects unknown fields,
+numeric strings, runtime/cache overrides, and non-null `materials_manifest` or
+`materials_policy` before admission. Managed V6 always emits depth products;
+there is no managed `depth_maps=false` option. The inherited `preview_maps`
+option controls optional retained V5 numeric previews, not V6 depth delivery.
+`refinement` freezes retained V5 reconstruction; `depth_refinement` selects the
+V6 reconstruction shared by its photographic baseline and depth products.
+
+The composite `tp.execution.plan.v5` freezes the embedded V5
+`tp.execution.plan.v4` inference plan, every finishing recipe, processing
+identity, and publication/resource limits before inference. Exact canonical
+plan bytes and the separate `tp.job.photography.bindings.v1` carrier remain
+immutable dispatch authority. The complete managed generation contains:
+
+```text
+execution-plan.json          # admitted composite plan
+execution-evidence.json      # complete composite inventory after verification
+source-v5/                  # complete retained V5 plan, evidence, and products
+v6/plan.json                # source-bound tp.lux.grade.plan.v2
+v6/evidence.json            # independently replayable finishing completion
+v6/input-0000/delivery.tif   # 16-bit sRGB photographic delivery
+v6/input-0000/preview.png    # bounded 8-bit sRGB photographic draft
+v6/input-0000/depth-*.npy    # validity/support products; see inventory below
+v6/input-0000/depth-relative.tif
+v6/input-0000/depth-preview.png
+```
+
+Each additional input has its own `input-NNNN` directory. Publication verifies
+both stages, their exact inventories, and the dispatch fence before exposing
+any successful generation. It rejects completion changes after semantic replay.
+Review prioritizes the photographic TIFF with its same-input PNG derivative;
+depth previews and retained V5 evidence remain separately identified.
+
+Managed `max_input_bytes` defaults to 1 GiB per original input, with a 2 GiB
+ceiling. `max_pixels` is capped at 100 million. `max_output_bytes` defaults to
+64 GiB for the **entire generation**, including retained V5, V6 finishing, and
+outer records. The admitted total is the smaller of that request and the
+publisher's total-byte limit. After reserving 17 MiB for the outer plan and
+completion, each stage receives `floor((total - 17 MiB) / 2)` bytes. Finishing's
+retained-source byte ceiling equals the inference-stage budget. Publisher
+file-count, per-file, and manifest limits can reject a batch before inference;
+actual image geometry is also checked against finishing memory/output
+reservations. The execution deadline covers both stages together. Increasing a
+byte ceiling does not establish photographic acceptance or add model detail.
+
+## Optional depth reconstruction and maps
+
+Pass `--depth-maps` when planning and running to select the versioned
+`tp.lux.grade.plan.v2` contract. Existing commands without that flag retain the
+V1 plan, historical reconstruction recipe, and photographic artifact set.
+Verification reads the recorded recipe; omit the execution flags with `--verify`.
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --input-dir "$TP_V6_PARENT" --output-dir "$TP_V6_OUTPUT" --depth-maps --plan
+
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --input-dir "$TP_V6_PARENT" --output-dir "$TP_V6_OUTPUT" --depth-maps
+
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --input-dir "$TP_V6_PARENT" --output-dir "$TP_V6_OUTPUT" --verify
+```
+
+In Python, set `depth_maps=DepthMapRecipe()` on `LuxDepthV6Request`; import
+`DepthMapRecipe` from `transformation_portal.lux_depth_v6`. The optional
+`--depth-refinement` selector requires `--depth-maps` and accepts `bilinear`,
+`guided_bilinear_v3`, or the default `guided_bilinear_v4`.
+
+V4 requires each selectable native sample to belong to a connected same-depth
+surface in its complete 4-by-4 native neighborhood. This prevents disconnected
+noise from passing the earlier sample-count test and being amplified by RGB
+texture. The same reconstructed depth feeds both the photographic baseline and
+the exported scalar products. Native evidence remains unchanged. Alpha
+abstention and unknown sky produce no usable reconstructed surfaces.
+
+The additional products are:
+
+| Artifact | Meaning |
+| --- | --- |
+| `native-depth.npy` | Exact float32 native model API output, including invalid numeric sentinels |
+| `native-numeric-valid.npy`, `native-support.npy`, `native-sky.npy` | Numeric validity, unpadded support, and sky evidence; unavailable sky is explicitly marked in the descriptor |
+| `relative-depth.npy`, `depth-relative.tif` | Float32 depth at the original photograph's dimensions; normalized near 0, far 1 |
+| `depth-valid.npy`, `depth-support.npy`, `depth-support-score.npy` | Usable-surface mask, image support, and interpolation support; the score is not an accuracy probability |
+| `metric-depth-m.npy` | Optional reconstructed meters, only when the retained parent supplies calibration |
+| `depth-preview.png`, `depth-preview-valid.png` | Bounded 16-bit grayscale visualization and its validity mask; nearest pixel-center sampling, maximum edge 1600 |
+| `depth.json` | Geometry, source hashes, recipe, calibration, validity semantics, and product hashes |
+
+Consult the validity mask: zero may mean either a valid near sample or an invalid
+location. The preview has no photographic gamma/ICC transform. Original-size
+reconstruction increases the sampling grid, not the model's inference resolution
+or measured physical accuracy. Request a larger supported target during new
+managed V6 or V5 inference to obtain a denser native grid; retained-only V6
+finishing cannot recover absent detail.
+See the [dated forensic evaluation](../analysis/LUX_DEPTH_V6_DEPTH_MAP_FORENSICS_2026-09-23.md)
+for synthetic regression results and the remaining photographic acceptance work.
+
 ## Color controls
 
 | CLI control | Default | Accepted range and meaning |
@@ -124,9 +316,14 @@ unchanged. `soft_srgb` provides the earlier linear-luminance shoulder with chrom
 contraction toward neutral; it does not promise perceptual hue constancy.
 `clip_srgb` provides an explicit independent-channel clipping comparison.
 
-The working space remains extended linear sRGB. Unsupported input profiles and
-RAW highlight clipping in the original V5 ingest cannot be repaired by labeling
-the pixels differently or by increasing output bit depth. V6 does not add a
+The working space remains extended linear sRGB. Automatic input-color selection
+fails closed on ambiguous pixels or unsupported ICC profiles. Explicit
+`input_color="srgb"` or `"linear_srgb"` declares an interpretation; it is not an
+ICC conversion. Convert Adobe RGB or another unsupported profile with a
+color-managed tool before submitting sRGB pixels. RAW uses the governed decoder's
+linear-sRGB output; do not assign encoded sRGB to RAW. Unsupported input profiles
+and RAW highlight clipping in the original V5 ingest cannot be repaired by
+labeling pixels differently or by increasing output bit depth. V6 does not add a
 wide-gamut ingest transform or recover missing sensor or native-depth detail.
 
 ## Outputs and replay
@@ -143,7 +340,7 @@ Each input has separate artifacts:
 | `preview.png` | Bounded 8-bit sRGB browser derivative, maximum edge 1600 pixels; reduction handles premultiplied alpha |
 | `photograph.json` | Baseline/master/display descriptors and reconstruction, grade, render, and encoding receipts |
 
-The generation root contains `plan.json` and, only after all products pass
+The standalone generation root (managed `v6/`) contains `plan.json` and, only after all products pass
 semantic replay, `evidence.json`. The plan binds parent evidence, recipes,
 resource ceilings, processing source hashes, and dependency versions.
 Verification checks exact expected products and independently regenerates their
@@ -173,7 +370,7 @@ an immutable master and a measured receipt.
 
 ## Resource and validation boundaries
 
-Defaults are 64 GiB retained input, 64 GiB output, 100 million pixels per image,
+Standalone defaults are 64 GiB retained input, 64 GiB output, 100 million pixels per image,
 16 GiB admitted memory, and 3600 seconds execution time. The conservative V6
 memory admission is `pixels * 256 + 256 MiB` per image; the upstream verification
 also accounts for its proxy and ICC storage. Output admission reserves every
@@ -185,14 +382,33 @@ verification checkpoints.
 These checks are cooperative: they do not preempt an individual NumPy/SciPy or
 encoding operation in progress, and are not a hard process-isolation deadline.
 
+Depth-enabled plans also bind the verified native dimensions. Their per-image
+memory admission is `master_pixels * 320 + native_pixels * 128 + 256 MiB`.
+Additional output admission reserves `native_pixels * 7 + master_pixels * 18 +
+12 MiB`, including an enforced 8 MiB combined depth-preview ceiling, headers,
+and metadata. Products are streamed before grade/display masters are allocated.
+
 Use the focused validation gate:
 
 ```bash
 make test-lux-depth-v6-contract
+make test-lux-depth-v6-managed-contract
+
+PYTHONPATH=src ./.venv/bin/python scripts/analysis/audit_lux_depth_v6_reconstruction.py \
+  --output /private/tmp/lux-depth-v6-reconstruction.json
 ```
 
+For the Postgres/Redis HTTP-to-worker lane, configure
+`TP_DISPATCH_TEST_DATABASE_URL` (or `TP_PHOTOGRAPHY_TEST_DATABASE_URL`) with a
+dedicated migrated `*_test` database and `TP_DISPATCH_TEST_REDIS_URL`, then run
+`make test-lux-depth-v6-managed-services`. Missing services skip that lane;
+skipped tests are not live-service acceptance. Its inference is controlled,
+while dispatch, worker execution, verification, and artifact publication are real.
+
 Synthetic contracts establish arithmetic, identity, failure handling, and
-replay behavior. Production promotion additionally needs representative interior
+replay behavior. The [dated native smoke](../analysis/LUX_DEPTH_V6_DEPTH_MAP_FORENSICS_2026-09-23.md#fresh-native-managed-composite-smoke)
+records one real-model raw-photograph-to-V6 generation; it does not establish
+hosted portal acceptance or physical depth accuracy. Production promotion additionally needs representative interior
 and exterior photographs, controlled color references, paired full-frame and
 100% inspection, native runtime acceptance, and measured performance. Preserve
 V3 and the retained V5 source until those independent acceptance gates pass.

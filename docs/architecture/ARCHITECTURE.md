@@ -146,8 +146,13 @@ Plan schema versions and product versions are separate contracts:
 | `tp.execution.plan.v2` | LuxDepthV4 without MaterialsV4 | Opt-in photographic graph; [V4 interface](../reference/LUX_DEPTH_V4.md#public-boundary) |
 | `tp.execution.plan.v3` | LuxDepthV4 with `--materials-manifest` | Explicit MaterialsV4 evidence and response; [V3 contract](../reference/EXECUTION_PLAN_V3.md) |
 | `tp.execution.plan.v4` | LuxDepthV5 | Opt-in depth evidence and photographic graph; [V4 contract](../reference/EXECUTION_PLAN_V4.md) |
+| `tp.execution.plan.v5` | Managed LuxDepthV6 | Opt-in composite freezing V5 inference plus V6 grade/render/depth recipes before execution; [managed V6 contract](../reference/LUX_DEPTH_V6.md#managed-portal-and-api-execution) |
 
-Later plans do not silently replace earlier contracts. V4/V5 candidates still
+Standalone V6 finishing uses `tp.lux.grade.plan.v1` or the depth-enabled
+`tp.lux.grade.plan.v2` against a verified retained V5 generation. Those grading
+plans do not authorize fresh model inference or replace the managed composite.
+
+Later plans do not silently replace earlier contracts. V4/V5/V6 candidates still
 require representative photographic, native runtime, cache/optional-input, and
 performance acceptance before any production promotion.
 

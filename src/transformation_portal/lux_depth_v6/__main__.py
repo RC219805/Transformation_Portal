@@ -9,6 +9,7 @@ from pathlib import Path
 from transformation_portal.ingest.canonical_json import dumps_json
 
 from .color import GradeRecipe, RenderRecipe
+from .depth_maps import DepthMapRecipe
 from .evidence import verify_execution_evidence
 from .pipeline import run
 from .plan import LuxDepthV6Request, OutputLimits, prepare
@@ -35,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--saturation", type=float, default=1.0)
     parser.add_argument("--render", choices=("perceptual_srgb", "soft_srgb", "clip_srgb"), default="perceptual_srgb")
     parser.add_argument("--shoulder", type=float, default=0.8)
+    parser.add_argument("--depth-maps", action="store_true", help="Export verified native and master-grid depth products")
+    parser.add_argument(
+        "--depth-refinement",
+        choices=("bilinear", "guided_bilinear_v3", "guided_bilinear_v4"),
+        help="Requires --depth-maps; default: guided_bilinear_v4",
+    )
     parser.add_argument("--max-input-bytes", type=int, default=64 * 1024**3)
     parser.add_argument("--max-output-bytes", type=int, default=64 * 1024**3)
     parser.add_argument("--max-pixels", type=int, default=100_000_000)
@@ -42,6 +49,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wall-time-seconds", type=int, default=3600)
     args = parser.parse_args(argv)
     try:
+        if args.depth_refinement is not None and not args.depth_maps:
+            raise ValueError("--depth-refinement requires --depth-maps")
+        if args.verify and args.depth_maps:
+            raise ValueError("--verify reads the recorded depth recipe; omit --depth-maps and --depth-refinement")
         limits = SourceLimits(args.max_input_bytes, args.max_pixels, args.memory_mib)
         if args.verify:
             verified = verify_execution_evidence(
@@ -67,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
                 RenderRecipe(args.render, args.shoulder),
                 limits,
                 OutputLimits(args.max_output_bytes, args.wall_time_seconds),
+                DepthMapRecipe(args.depth_refinement or "guided_bilinear_v4") if args.depth_maps else None,
             )
         )
         if args.plan:

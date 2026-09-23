@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tp.execution.plan.v5",
+  "title": "Execution Plan V5: managed LuxDepthV6 photographic generation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "canonicalization",
+    "pipeline",
+    "plan_fingerprint_sha256",
+    "inference",
+    "finishing",
+    "processing",
+    "resources",
+    "publication"
+  ],
+  "properties": {
+    "schema": {
+      "const": "tp.execution.plan.v5"
+    },
+    "canonicalization": {
+      "const": "tp.canonical.json.v1"
+    },
+    "pipeline": {
+      "const": "lux_depth_v6"
+    },
+    "plan_fingerprint_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "inference": {
+      "type": "object",
+      "description": "Independently validated closed tp.execution.plan.v4 authority."
+    },
+    "finishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grade",
+        "render",
+        "depth_maps"
+      ],
+      "properties": {
+        "grade": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "exposure_stops",
+            "white_balance",
+            "contrast",
+            "pivot",
+            "saturation"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.lux.grade.v1"
+            },
+            "exposure_stops": {
+              "type": "number",
+              "minimum": -8,
+              "maximum": 8
+            },
+            "white_balance": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "number",
+                "minimum": 0.25,
+                "maximum": 4
+              }
+            },
+            "contrast": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            },
+            "pivot": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "saturation": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            }
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "mode",
+            "shoulder"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.lux.sdr_render.v1"
+            },
+            "mode": {
+              "enum": [
+                "perceptual_srgb",
+                "soft_srgb",
+                "clip_srgb"
+              ]
+            },
+            "shoulder": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 0.95
+            }
+          }
+        },
+        "depth_maps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "refinement"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.lux.depth_maps.v1"
+            },
+            "refinement": {
+              "enum": [
+                "bilinear",
+                "guided_bilinear_v3",
+                "guided_bilinear_v4"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "processing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modules",
+        "dependencies"
+      ],
+      "properties": {
+        "modules": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 32,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^transformation_portal\\.[a-z0-9_.]+$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "numpy",
+            "Pillow",
+            "scipy",
+            "tifffile",
+            "imagecodecs"
+          ],
+          "properties": {
+            "numpy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "Pillow": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "scipy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "tifffile": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "imagecodecs": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_pixels",
+        "max_input_bytes",
+        "max_output_bytes",
+        "wall_time_seconds",
+        "memory_mib",
+        "inference_slots"
+      ],
+      "properties": {
+        "max_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "max_input_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1099511627776
+        },
+        "wall_time_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "memory_mib": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 262144
+        },
+        "inference_slots": {
+          "const": 1
+        }
+      }
+    },
+    "publication": {
+      "description": "Optional managed-generation limits frozen before admission; standalone plans omit this binding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_files",
+        "max_file_bytes",
+        "max_total_bytes",
+        "max_manifest_bytes"
+      ],
+      "properties": {
+        "max_files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_file_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_total_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_manifest_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

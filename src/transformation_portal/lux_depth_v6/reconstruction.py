@@ -13,13 +13,48 @@ import numpy as np
 
 from transformation_portal.core.depth_evidence import DepthEvidence
 from transformation_portal.core.image_artifact import ImageMaster, ImageProxy, artifact_content_hash
-from transformation_portal.lux_depth_v5.photography import align_depth, enhance_master_v5
+from transformation_portal.lux_depth_v5.photography import AlignedDepth, align_depth, enhance_master_v5
+
+from .depth_maps import DepthMapRecipe, reconstruct_depth
 
 
 def _response_setting(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1 or not np.isfinite(value):
         raise ValueError("Upstream strength and clarity must be finite numbers in [0,1]")
     return float(value)
+
+
+def reconstruct_depth_baseline(
+    original: ImageMaster,
+    evidence: DepthEvidence,
+    proxy: ImageProxy,
+    configuration: Mapping[str, Any],
+    recipe: DepthMapRecipe,
+) -> tuple[ImageMaster, dict[str, Any], AlignedDepth, dict[str, Any]]:
+    """Use one frozen alignment for both photographic response and scalar maps."""
+    if not isinstance(configuration, Mapping) or not isinstance(configuration.get("depth"), Mapping):
+        raise ValueError("Reconstruction requires the verified upstream depth configuration")
+    depth = configuration["depth"]
+    if depth.get("refinement") not in ("bilinear", "guided_bilinear") or depth.get("precision") != evidence.precision:
+        raise ValueError("Upstream refinement or precision does not authorize this depth evidence")
+    strength = _response_setting(configuration.get("strength"))
+    clarity = _response_setting(configuration.get("clarity"))
+    aligned, depth_receipt = reconstruct_depth(original, evidence, proxy, recipe)
+    baseline, response = original, None
+    if not depth_receipt["alpha_abstention"]:
+        baseline, response = enhance_master_v5(original, aligned, strength=strength, clarity=clarity)
+    receipt = {
+        **depth_receipt,
+        "schema": "tp.lux.depth_reconstruction.v2",
+        "recipe": "shared_depth_map_reconstruction_v1",
+        "upstream_refinement": depth["refinement"],
+        "refinement": recipe.refinement,
+        "strength": strength,
+        "clarity": clarity,
+        "depth_response": response,
+        "baseline_content_sha256": baseline.content_hash(),
+    }
+    return baseline, receipt, aligned, depth_receipt
 
 
 def reconstruct_baseline(
