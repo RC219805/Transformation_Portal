@@ -9230,7 +9230,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "41a626ccf991e06a1218b08670f6f137c616b6fb",
+      "source_commit": "d04c8b317c43eee91b920504fea6447cd8d7bae5",
       "content_sha256": "a150c68032340581124a9c8cf66394e150044d75b304b83a22e48154f390c123",
       "source_references": [
         "Makefile",
@@ -9238,7 +9238,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "24248a639b065537315a7fe98bc38b7af7c452ccdf84480adb33b797551e1f6e",
+        "Makefile": "2f6c494c6b93acfe323c5e52e5962655ab5ea7432cc91eacac3fccb214aa36f8",
         "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
         "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
       },
@@ -9665,7 +9665,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "41a626ccf991e06a1218b08670f6f137c616b6fb",
+      "source_commit": "d04c8b317c43eee91b920504fea6447cd8d7bae5",
       "content_sha256": "2de8e158e1b725ea8eab26ed779d410e3257d86fa22501ad8bf8e9ba3ff7f787",
       "source_references": [
         "Makefile",
@@ -9673,7 +9673,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "24248a639b065537315a7fe98bc38b7af7c452ccdf84480adb33b797551e1f6e",
+        "Makefile": "2f6c494c6b93acfe323c5e52e5962655ab5ea7432cc91eacac3fccb214aa36f8",
         "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
         "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
       },
@@ -14739,8 +14739,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7a2d7ab1a300a400e4a20c51e20566571e31306d",
-      "content_sha256": "913da902e07055763b2a9a90469361fbbd920447b285d184027f949e8196ca96",
+      "source_commit": "d04c8b317c43eee91b920504fea6447cd8d7bae5",
+      "content_sha256": "fe27db76c2dac2a236eb0686b2a52dc9f3f1049ea93be9f9b2f9ecd10d2f1977",
       "source_references": [
         "Makefile",
         "pyproject.toml",
@@ -14793,7 +14793,7 @@
         "src/transformation_portal/core/execution_plan_v2.py"
       ],
       "source_sha256": {
-        "Makefile": "24248a639b065537315a7fe98bc38b7af7c452ccdf84480adb33b797551e1f6e",
+        "Makefile": "2f6c494c6b93acfe323c5e52e5962655ab5ea7432cc91eacac3fccb214aa36f8",
         "pyproject.toml": "d0568754e108e425ffccd8157a8b7658ec783eb2fec80728302cec40e9a6cb36",
         "src/transformation_portal/lux_depth_v6/__init__.py": "c1bf7aebca676ac39597b2439d6bf82f795c6036b1bb381881201c12dbe026f7",
         "src/transformation_portal/lux_depth_v6/__main__.py": "012d40640b758edc7df4cd13b7085a2b6a27a1a7d904548117c62a8767ebba23",
@@ -17143,7 +17143,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "41a626ccf991e06a1218b08670f6f137c616b6fb",
+      "source_commit": "d04c8b317c43eee91b920504fea6447cd8d7bae5",
       "content_sha256": "4e75a5e1dd14d71121d2f79abcc22d70b2753b8e90ea46babdb5a39fba324e3e",
       "source_references": [
         "requirements/Makefile",
@@ -17155,7 +17155,7 @@
       ],
       "source_sha256": {
         "requirements/Makefile": "2af3e148bed4c2f8570d7c810bc0017eb13f95d90576aa50607c6a872e06cf64",
-        "Makefile": "24248a639b065537315a7fe98bc38b7af7c452ccdf84480adb33b797551e1f6e",
+        "Makefile": "2f6c494c6b93acfe323c5e52e5962655ab5ea7432cc91eacac3fccb214aa36f8",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
         "requirements/locks/editorial-darwin-arm64-py312.txt": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",

@@ -291,7 +291,11 @@ test-lux-depth-v6-managed-contract:
 	@PYTHONPATH=src "$(PY)" -m pytest -q tests/orchestrator/test_managed_v6_api.py tests/orchestrator/test_photography_v6_adapter.py tests/orchestrator/test_managed_v6_execution.py tests/orchestrator/test_job_execution_service.py tests/orchestrator/test_execution_dispatch.py tests/orchestrator/test_worker_process_contract.py
 
 test-lux-depth-v6-managed-services:
-	@PYTHONPATH=src "$(PY)" -m pytest -q tests/orchestrator/test_managed_v6_services.py
+	@if [ -z "$(TP_DISPATCH_TEST_DATABASE_URL)" ] || [ -z "$(TP_DISPATCH_TEST_REDIS_URL)" ]; then \
+		echo "ERROR: set TP_DISPATCH_TEST_DATABASE_URL to a dedicated migrated *_test database and TP_DISPATCH_TEST_REDIS_URL."; \
+		exit 1; \
+	fi
+	@PYTHONPATH=src TP_DISPATCH_TEST_DATABASE_URL="$(TP_DISPATCH_TEST_DATABASE_URL)" TP_PHOTOGRAPHY_TEST_DATABASE_URL="$(TP_DISPATCH_TEST_DATABASE_URL)" TP_DISPATCH_TEST_REDIS_URL="$(TP_DISPATCH_TEST_REDIS_URL)" "$(PY)" -m pytest -q tests/orchestrator/test_managed_v6_services.py
 
 .PHONY: test-lux-depth-v5-managed-contract test-lux-depth-v5-managed-services
 test-lux-depth-v5-managed-contract:

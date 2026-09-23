@@ -399,10 +399,13 @@ PYTHONPATH=src ./.venv/bin/python scripts/analysis/audit_lux_depth_v6_reconstruc
 ```
 
 For the Postgres/Redis HTTP-to-worker lane, configure
-`TP_DISPATCH_TEST_DATABASE_URL` (or `TP_PHOTOGRAPHY_TEST_DATABASE_URL`) with a
+`TP_DISPATCH_TEST_DATABASE_URL` with a
 dedicated migrated `*_test` database and `TP_DISPATCH_TEST_REDIS_URL`, then run
-`make test-lux-depth-v6-managed-services`. Missing services skip that lane;
-skipped tests are not live-service acceptance. Its inference is controlled,
+`make test-lux-depth-v6-managed-services`. The Make gate fails before pytest
+if either setting is missing and binds `TP_PHOTOGRAPHY_TEST_DATABASE_URL` to
+the selected dispatch database, overriding any ambient alias. Direct pytest
+collection may skip unconfigured services; skipped tests are not live-service
+acceptance. Its inference is controlled,
 while dispatch, worker execution, verification, and artifact publication are real.
 
 Synthetic contracts establish arithmetic, identity, failure handling, and
