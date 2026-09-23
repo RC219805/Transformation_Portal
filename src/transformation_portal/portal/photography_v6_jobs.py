@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import Field, ValidationError, field_validator
 
+from transformation_portal.core.execution_plan_v5 import ENVELOPE_RESERVE
 from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
 from transformation_portal.orchestrator.photography_adapter import server_runtime_bindings
 from transformation_portal.portal.photography_jobs import (
@@ -25,6 +26,7 @@ class PhotographyV6JobArgs(PhotographyJobArgs):
     """Flat JSON controls; depth products are mandatory and bindings stay server-owned."""
 
     max_pixels: int = Field(default=100_000_000, ge=1, le=100_000_000)
+    max_output_bytes: int = Field(default=64 * 1024**3, ge=ENVELOPE_RESERVE + 2, le=1024**4)
     exposure_stops: float = Field(default=0.0, ge=-8, le=8)
     white_balance: list[Annotated[float, Field(ge=0.25, le=4)]] = Field(
         default_factory=lambda: [1.0, 1.0, 1.0], min_length=3, max_length=3

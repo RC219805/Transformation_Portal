@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from importlib.resources import files
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 import app
+from transformation_portal.core.execution_plan_v5 import ENVELOPE_RESERVE, stage_output_budget
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.portal.photography_v6_jobs import PhotographyV6JobArgs, managed_v6_readiness, v6_request
 
@@ -54,6 +56,9 @@ def configured(tmp_path, monkeypatch):
         ("argv", ["id"]),
         ("depth_maps", False),
         ("max_pixels", 100_000_001),
+        ("max_output_bytes", 1),
+        ("max_output_bytes", ENVELOPE_RESERVE),
+        ("max_output_bytes", ENVELOPE_RESERVE + 1),
         ("target_size", 519),
         ("exposure_stops", True),
         ("exposure_stops", 8.1),
@@ -97,6 +102,28 @@ def test_preview_has_closed_v6_defaults_and_independent_readiness(configured):
     assert preview["argv_preview"] == ""
     assert preview["next_best_action"]["label"] == "Dispatch LuxDepthV6 photography"
     assert PhotographyV6JobArgs.model_json_schema()["additionalProperties"] is False
+
+
+def test_v6_output_budget_boundary_reserves_both_stages_and_envelopes(configured):
+    configured["args"]["max_output_bytes"] = ENVELOPE_RESERVE + 2
+    preview = app._build_config_preview(configured)
+    assert not preview["field_errors"]
+    request = v6_request(preview["execution_args"], tenant_id="default")
+    assert stage_output_budget(request.inference.max_output_bytes) == 1
+    assert PhotographyV6JobArgs.model_json_schema()["properties"]["max_output_bytes"]["minimum"] == ENVELOPE_RESERVE + 2
+    plan_schema = json.loads(files("transformation_portal.schemas.execution").joinpath("plan.v5.schema.json").read_bytes())
+    assert plan_schema["properties"]["resources"]["properties"]["max_output_bytes"]["minimum"] == ENVELOPE_RESERVE + 2
+
+
+@pytest.mark.asyncio
+async def test_output_budget_without_two_stage_reservation_cannot_reach_admission(configured, monkeypatch):
+    configured["args"]["max_output_bytes"] = ENVELOPE_RESERVE + 1
+    admit = AsyncMock(side_effect=AssertionError("Unreservable V6 output budget reached admission"))
+    monkeypatch.setattr(app, "_create_distributed_job", admit)
+    result = await app._create_job(configured)
+    assert result.status_code == 400
+    assert json.loads(result.body)["error"]["details"]["field"] == "max_output_bytes"
+    admit.assert_not_called()
 
 
 @pytest.mark.parametrize("field", ["input_dir", "companions_manifest"])

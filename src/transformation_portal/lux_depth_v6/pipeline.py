@@ -47,12 +47,17 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
         if time.monotonic() - started > payload["limits"]["wall_time_seconds"]:
             raise RuntimeError("V6 execution exceeded its wall-time budget")
 
+    def source_cancelled() -> bool:
+        check()
+        return False
+
     check()
     if payload["source"] != source_binding(prepared.source, depth_maps=depth_maps is not None) or payload[
         "processing"
     ] != processing_identity(depth_maps=depth_maps is not None):
         raise ValueError("Prepared V6 source or processing identity changed")
-    validate_source(prepared.source, cancellation=cancellation)
+    validate_source(prepared.source, cancellation=source_cancelled)
+    check()
     root = directory_path(prepared.output_root, allow_missing=True)
     if root != prepared.output_root or root.exists() or not root.parent.is_dir():
         raise ValueError("V6 output must still be new with its admitted parent")

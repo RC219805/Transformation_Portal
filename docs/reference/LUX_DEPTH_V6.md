@@ -230,6 +230,9 @@ file-count, per-file, and manifest limits can reject a batch before inference;
 actual image geometry is also checked against finishing memory/output
 reservations. The execution deadline covers both stages together. Increasing a
 byte ceiling does not establish photographic acceptance or add model detail.
+Preview and request validation reject `max_output_bytes` below 17,825,794
+bytes (the outer reservation plus at least one byte per stage). This is a
+structural minimum; actual publication and image reservations require more.
 
 ## Optional depth reconstruction and maps
 
@@ -274,7 +277,9 @@ The additional products are:
 | `depth.json` | Geometry, source hashes, recipe, calibration, validity semantics, and product hashes |
 
 Consult the validity mask: zero may mean either a valid near sample or an invalid
-location. The preview has no photographic gamma/ICC transform. Original-size
+location. Relative-depth normalization uses float64 arithmetic for a positive
+percentile span that would round to zero in float32; stored depth remains
+float32 and ordinary-depth arithmetic is unchanged. The preview has no photographic gamma/ICC transform. Original-size
 reconstruction increases the sampling grid, not the model's inference resolution
 or measured physical accuracy. Request a larger supported target during new
 managed V6 or V5 inference to obtain a denser native grid; retained-only V6
@@ -300,6 +305,8 @@ including signed zero. The float master retains negative and above-white values;
 operations that exceed finite float32 representation fail instead of clipping
 the master. Non-finite values, booleans masquerading as numbers, unknown recipe
 fields, and unsupported recipe versions are rejected.
+Changing saturation also preserves exact equal-channel RGB after exposure,
+white balance, and contrast, including finite HDR neutrals and signed zero.
 
 Oklab uses the [published 2021 reference transform](https://bottosson.github.io/posts/oklab/).
 Numerical support for signed RGB does not establish perceptual accuracy for
@@ -352,6 +359,11 @@ is not silently treated as equivalent.
 Verification securely snapshots the completion record again after replay. A
 record that changes, disappears, or gains a link alias during verification is
 rejected instead of returning the completion bytes cached at entry.
+After semantic replay and retained-source revalidation, verification rehashes
+every output and checks the exact namespace again. This detects changes during
+those operations and adds one bounded read of each output. Standalone
+verification remains a point-in-time check; keep generation directories
+protected from concurrent writers.
 
 The processing identity covers the selected Python source files and dependency
 version strings used by this recipe. It is a same-environment replay boundary,
@@ -372,13 +384,14 @@ an immutable master and a measured receipt.
 
 Standalone defaults are 64 GiB retained input, 64 GiB output, 100 million pixels per image,
 16 GiB admitted memory, and 3600 seconds execution time. The conservative V6
-memory admission is `pixels * 256 + 256 MiB` per image; the upstream verification
-also accounts for its proxy and ICC storage. Output admission reserves every
-float product, TIFF, bounded PNG, metadata, plan, and completion before writing.
+memory admission is `pixels * 256 + 256 MiB` per image without depth products,
+or `pixels * 320 + native_pixels * 128 + 256 MiB` with depth products; the
+upstream verification also accounts for its proxy and ICC storage. Output
+admission reserves every float product, TIFF, bounded PNG, metadata, plan, and completion before writing.
 These ceilings are frozen and rechecked by plan parsing and source admission.
 They are conservative numerical admission bounds, not hard operating-system
 memory isolation. Cancellation and deadlines are observed at processing and
-verification checkpoints.
+verification checkpoints, including retained-source validation before output creation.
 These checks are cooperative: they do not preempt an individual NumPy/SciPy or
 encoding operation in progress, and are not a hard process-isolation deadline.
 
@@ -415,3 +428,7 @@ hosted portal acceptance or physical depth accuracy. Production promotion additi
 and exterior photographs, controlled color references, paired full-frame and
 100% inspection, native runtime acceptance, and measured performance. Preserve
 V3 and the retained V5 source until those independent acceptance gates pass.
+
+The [2026-09-23 forensic audit](../analysis/LUX_DEPTH_V6_FORENSIC_AUDIT_2026-09-23.md)
+records reproduced completion-integrity, deadline, neutral-grading, depth
+normalization and managed budget-validation repairs, their regression evidence, and residual limits.

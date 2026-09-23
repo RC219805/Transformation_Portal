@@ -131,7 +131,14 @@ class DepthEvidence:
         result = np.zeros(self.shape, dtype=np.float32)
         limits = self._relative_limits()
         if limits is not None and limits[1] > limits[0]:
-            result[self.valid_mask] = np.clip((self.native_depth[self.valid_mask] - limits[0]) / (limits[1] - limits[0]), 0, 1)
+            samples = self.native_depth[self.valid_mask]
+            span = limits[1] - limits[0]
+            # Percentile interpolation can produce a positive span that rounds
+            # to zero in float32. Widen only that case; ordinary derivatives
+            # retain their established float32 arithmetic and exact bytes.
+            if span <= float(np.finfo(np.float32).smallest_subnormal) / 2:
+                samples = samples.astype(np.float64)
+            result[self.valid_mask] = np.clip((samples - limits[0]) / span, 0, 1)
         return immutable_array(result, np.float32)
 
     def to_payload(self) -> dict[str, Any]:
