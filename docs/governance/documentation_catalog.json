@@ -14739,7 +14739,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "41a626ccf991e06a1218b08670f6f137c616b6fb",
+      "source_commit": "7a2d7ab1a300a400e4a20c51e20566571e31306d",
       "content_sha256": "913da902e07055763b2a9a90469361fbbd920447b285d184027f949e8196ca96",
       "source_references": [
         "Makefile",
@@ -14819,7 +14819,7 @@
         "tests/lux_depth_v6/test_depth_map_pipeline.py": "b7b082af5d25b163fc803df7f93483d14adf507d8097be0d37058f7c5d7cc797",
         "tests/lux_depth_v6/test_depth_reconstruction_quality.py": "47e5de5ad8908129fd4b30ebc3c5ee7d274a7f98e544d4ff4e3b673874f25a15",
         "scripts/analysis/audit_lux_depth_v6_reconstruction.py": "952d5338ba613c224faf600c2bb068cab0daf55005d7659471920f56e9d1d961",
-        "tests/test_audit_lux_depth_v6_reconstruction.py": "4789ad462352bdf0f7fe44282e89b54c362fddff5ff2476cfe1ce3b9cc49b17b",
+        "tests/test_audit_lux_depth_v6_reconstruction.py": "d4014120ca8a2f1c793e58bf848d48e3f067c3ce17fcf4f785fe402e8796e919",
         "app.py": "c297202b8ac251068290652f972176122982ed5be6d61a357824dda24f384306",
         "src/transformation_portal/core/execution_plan_v5.py": "2d71c7cb6a7011ec47a2b212deec901de8aef56300cab67360050ef9ae2e74ed",
         "src/transformation_portal/schemas/execution/plan.v5.schema.json": "b92d67d8f75abb1f3deb41748b78063b4b5fe7f2fdbc891042b5a62b85a542d7",

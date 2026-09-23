@@ -1,5 +1,6 @@
 """Forensic reconstruction measurements preserve evidence and label their limits."""
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -8,9 +9,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.analysis import audit_lux_depth_v6_reconstruction as audit
-
 pytestmark = pytest.mark.unit
+
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "analysis" / "audit_lux_depth_v6_reconstruction.py"
+_SPEC = importlib.util.spec_from_file_location("audit_lux_depth_v6_reconstruction", _SCRIPT)
+assert _SPEC is not None and _SPEC.loader is not None
+audit = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(audit)
 
 
 def test_measurements_match_analytical_errors_and_exact_adjacent_edges():
