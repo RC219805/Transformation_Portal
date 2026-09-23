@@ -73,9 +73,16 @@ In the portal **Build** view, select **lux-depth-v5 (Opt-in photography)**,
 choose input/output paths, and configure the photographic controls on the
 Outputs step. The default comparison is 518/FP32; 1008 remains explicit.
 Color interpretation, device, refinement, bounded strength/clarity, and optional
-MaterialsV4/calibration manifests use the closed V5 request contract. V3 presets,
-staged uploads, and V3-only flags are not applied to V5. Saved profiles preserve
-the separate photographic configuration.
+MaterialsV4/calibration manifests use the closed V5 request contract. V3 presets
+and V3-only flags are not applied to V5. Shared staged uploads support V5 and V6
+when enabled for the authenticated portal cohort; the returned staged input path
+remains subject to tenant authorization. Saved profiles preserve the separate
+photographic configuration.
+
+For explicit grading, separate SDR rendering, and reconstructed depth delivery,
+see the independently enabled [managed V6 successor](LUX_DEPTH_V6.md#managed-portal-and-api-execution).
+V6 freezes V5 inference within its composite plan and rejects Materials inputs;
+it does not change the V5 request or V3 production default.
 
 Dispatch requires a current successful configuration preview and server
 readiness. Disabled or unavailable V5 servers remain blocked with their

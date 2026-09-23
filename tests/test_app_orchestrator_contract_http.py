@@ -2766,6 +2766,13 @@ def test_readiness_contract_reports_pipeline_status_matrix(
             "runner_details": {"adapter": "tp.job.photography.bindings.v1"},
             "notes": [],
         },
+        "lux-depth-v6": {
+            "status": "blocked",
+            "canonical_command": "lux-depth-v6",
+            "missing_prerequisites": [{"reason": "photography_v6_disabled", "severity": "blocked"}],
+            "runner_details": {"adapter": "tp.job.photography.bindings.v1"},
+            "notes": [],
+        },
         "archive-gate-a": {
             "status": "degraded",
             "canonical_command": "fixity-scan",
@@ -2821,6 +2828,7 @@ def test_readiness_contract_reports_pipeline_status_matrix(
     assert body["data"]["server"]["auth_mode"] == "direct_debug"
     assert body["data"]["pipelines"]["lux-depth-v3"]["canary_status"] == "degraded"
     assert body["data"]["pipelines"]["lux-depth-v5"]["status"] == "blocked"
+    assert body["data"]["pipelines"]["lux-depth-v6"]["status"] == "blocked"
     assert body["data"]["pipelines"]["archive-gate-a"]["status"] == "degraded"
     assert body["data"]["pipelines"]["archive-gate-b"]["status"] == "blocked"
     assert body["data"]["pipelines"]["archive-gate-c"]["canonical_command"] == "mets-export"

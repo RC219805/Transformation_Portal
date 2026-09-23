@@ -39,6 +39,15 @@ Core entry points:
 - Portal/orchestrator HTTP surfaces with liveness (`/healthz`, `/ready`) plus operator-truth readiness at `/v1/readiness`
 - Determinism, manifest, run-card, and provenance layers for governed execution
 
+Execution-plan versions are separate from pipeline versions. V3 remains the
+production baseline on `tp.execution.plan.v1`; opt-in V5 consumes
+`tp.execution.plan.v4`. [Managed V6](docs/reference/LUX_DEPTH_V6.md#managed-portal-and-api-execution)
+uses `tp.execution.plan.v5` to freeze original-photograph inference and V6
+finishing before execution, producing verified photographic TIFF, draft PNG,
+and depth products. [Standalone V6](docs/reference/LUX_DEPTH_V6.md#standalone-plan-run-and-verify)
+uses `tp.lux.grade.plan.v1`/`v2` to finish retained V5 evidence without fresh
+inference. See the [execution contract table](docs/architecture/ARCHITECTURE.md#execution-preparation-and-activation-boundaries).
+
 Quick discovery:
 ```bash
 lux-depth-v3 --help
@@ -80,7 +89,7 @@ Portal surfaces:
   - `/` public Dynamic Neural Access homepage
   - `/login` operator login
   - `/portal` governed operator console
-- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines. The backend health/readiness routes now have typed OpenAPI response models while preserving their existing wire shapes.
+- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix, including separately gated V5 and V6 photography. The backend health/readiness routes now have typed OpenAPI response models while preserving their existing wire shapes.
 - Shared public branding assets now live at `web/secure-landing/public/brand/dna-symbol-*.svg`, `web/secure-landing/public/brand/dna-lockup-*.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces **Node 22.x only** for install, dev, test, build, and start flows.

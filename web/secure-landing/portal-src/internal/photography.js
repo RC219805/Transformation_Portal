@@ -1,7 +1,15 @@
 // Managed photography uses its own closed request contract. V3 settings must
 // never leak into this payload; runtime and cache bindings remain server-owned.
 export function isLuxPipeline(pipeline) {
-  return pipeline === "lux-depth-v3" || pipeline === "lux-depth-v5";
+  return pipeline === "lux-depth-v3" || isPhotographyPipeline(pipeline);
+}
+
+export function isPhotographyPipeline(pipeline) {
+  return pipeline === "lux-depth-v5" || pipeline === "lux-depth-v6";
+}
+
+export function photographyVersion(pipeline) {
+  return pipeline === "lux-depth-v6" ? "V6" : "V5";
 }
 
 export function createPhotographyConfig() {

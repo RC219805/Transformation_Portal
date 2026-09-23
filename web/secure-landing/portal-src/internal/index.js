@@ -9,4 +9,5 @@ export * from "./routing.js";
 export * from "./state.js";
 export * from "./stream-transport.js";
 export * from "./photography.js";
+export * from "./photography-v6.js";
 export * from "./latest-request.js";

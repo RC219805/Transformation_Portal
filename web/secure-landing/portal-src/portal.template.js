@@ -78,11 +78,12 @@ const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabl
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
     'lux-depth-v5',
+    'lux-depth-v6',
     'archive-gate-a',
     'archive-gate-b',
     'archive-gate-c'
 ]);
-const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);
+const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'archive-gate-a']);
 const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
 const EVENT_SOURCE_READY_STATE_OPEN = 1;
 const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -121,6 +122,8 @@ let deferredReviewSurfaceLoadLastToastAt = 0;
 
 const portalInternals = __PortalInternal;
 const isLuxPipeline = portalInternals.isLuxPipeline;
+const isPhotographyPipeline = portalInternals.isPhotographyPipeline;
+const photographyVersion = portalInternals.photographyVersion;
 const configPreviewRequests = portalInternals.createLatestRequestCoordinator();
 const portalRoute = portalInternals.createPortalRouteHelpers(window);
 const portalDom = portalInternals.createDomContract(document, {
@@ -434,6 +437,8 @@ const els = {
 
     fieldsLuxDepth: _domId('fieldsLuxDepth'),
     fieldsLuxV5: _domId('fieldsLuxV5'),
+    fieldsLuxV6: _domId('fieldsLuxV6'),
+    photographyV6: Object.fromEntries(Object.keys(portalInternals.createPhotographyV6Config()).map((key) => [key, _domId(`v6${key[0].toUpperCase()}${key.slice(1)}`)])),
     photography: Object.fromEntries(['inputColor', 'device', 'precision', 'targetSize', 'refinement', 'strength', 'clarity', 'previewMaps', 'materialsManifest', 'companionsManifest'].map((key) => [key, _domId(`v5${key[0].toUpperCase()}${key.slice(1)}`)])),
     fieldsArchiveGate: _domId('fieldsArchiveGate'),
     advancedFlagsDetails: _domId('advancedFlagsDetails'),
@@ -2767,10 +2772,10 @@ function renderBuildStepPulse(payload = null) {
     }
     const draftValue = state.pipeline === 'lux-depth-v3'
         ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
-        : state.pipeline === 'lux-depth-v5' ? 'V5 photography (opt-in)' : canonicalArchiveCommand(state.pipeline) || 'archive';
+        : isPhotographyPipeline(state.pipeline) ? `${photographyVersion(state.pipeline)} photography (opt-in)` : canonicalArchiveCommand(state.pipeline) || 'archive';
     const draftMeta = state.pipeline === 'lux-depth-v3'
         ? `${String(state.pipeline || 'lux-depth-v3')} • ${titleCaseToken(currentPayload?.args?.quality_tier || state.config.qualityTier || 'premium', 'Premium')} posture`
-        : state.pipeline === 'lux-depth-v5' ? `V5 photography • ${currentPayload.args.target_size} / ${currentPayload.args.precision}` : `${String(state.pipeline || 'archive')} • deterministic archive stage`;
+        : isPhotographyPipeline(state.pipeline) ? `${photographyVersion(state.pipeline)} photography • ${currentPayload.args.target_size} / ${currentPayload.args.precision}` : `${String(state.pipeline || 'archive')} • deterministic archive stage`;
 
     _setSummaryCard(els.buildPulseDraftCard, null, els.buildPulseDraft, els.buildPulseDraftMeta, {
         value: draftValue,
@@ -2854,7 +2859,7 @@ function renderConsoleContextRibbon() {
     const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
     const draftValue = state.pipeline === 'lux-depth-v3'
         ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
-        : state.pipeline === 'lux-depth-v5' ? 'V5 photography (opt-in)' : canonicalArchiveCommand(state.pipeline) || 'archive';
+        : isPhotographyPipeline(state.pipeline) ? `${photographyVersion(state.pipeline)} photography (opt-in)` : canonicalArchiveCommand(state.pipeline) || 'archive';
 
     _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
         label: 'Live lane',
@@ -3070,6 +3075,12 @@ const BUILD_STEP_CONTENT = Object.freeze({
             summary: 'Check the preview and resolve any issues before starting the run.'
         }
     ],
+    photographyV6: [
+        { label: 'Configure', meta: 'Grading and depth outputs.', title: '1. Choose LuxDepthV6', summary: 'Process source photographs through governed inference, grading, and depth reconstruction.' },
+        { label: 'Paths', meta: 'Upload photographs and choose a fresh output.', title: '2. Set photography paths', summary: 'Choose files or a folder, then select a new authorized destination.' },
+        { label: 'Outputs', meta: 'Inference, grade, render, and depth.', title: '3. Configure V6 outputs', summary: 'Set image interpretation and depth controls, then adjust the photographic grade and display rendering.' },
+        { label: 'Dispatch', meta: 'Preview and server readiness.', title: '4. Review and dispatch V6', summary: 'A successful current preview and server readiness are required. TIFF, draft PNG, and depth outputs are included.' }
+    ],
     photography: [
         { label: 'Configure', meta: 'Opt-in photography successor.', title: '1. Choose the photography successor', summary: 'LuxDepthV5 builds on V4. V3 remains the production baseline and rollback path.' },
         { label: 'Paths', meta: 'Inputs and fresh output destination.', title: '2. Set photography paths', summary: 'Select the source images and a new destination for verified photography outputs.' },
@@ -3105,7 +3116,7 @@ const BUILD_STEP_CONTENT = Object.freeze({
 });
 
 function _currentBuildStepContent() {
-    return state.pipeline === 'lux-depth-v5' ? BUILD_STEP_CONTENT.photography : state.pipeline === 'lux-depth-v3' ? BUILD_STEP_CONTENT.lux : BUILD_STEP_CONTENT.archive;
+    return state.pipeline === 'lux-depth-v6' ? BUILD_STEP_CONTENT.photographyV6 : isPhotographyPipeline(state.pipeline) ? BUILD_STEP_CONTENT.photography : state.pipeline === 'lux-depth-v3' ? BUILD_STEP_CONTENT.lux : BUILD_STEP_CONTENT.archive;
 }
 
 function _minimumBuildStep() {
@@ -3606,7 +3617,8 @@ function findCompareArtifact(primaryArtifact, artifacts) {
                 && artifactCompareGroup(candidate) === primaryGroup
             ))
         )[0] || null;
-        if (hintedCandidate) return hintedCandidate;
+        // Explicit groups describe comparable content; never fall back across them.
+        return hintedCandidate;
     }
     const primary = artifactNameParts(primaryArtifact);
     const primaryExt = primary.fileName.includes('.') ? primary.fileName.split('.').pop().toLowerCase() : '';
@@ -3802,8 +3814,8 @@ function _derivePresetResearchFlag(preset, fallbackName = '') {
 }
 
 function currentPresetDescriptor() {
-    if (state.pipeline === 'lux-depth-v5') {
-        return { name: 'photography', label: 'LuxDepthV5 photography', stability: 'opt-in', description: 'V4 foundation with immutable V5 execution and verified outputs. V3 remains the production baseline.', is_research: false, recommended_args: {}, advanced_sections: [] };
+    if (isPhotographyPipeline(state.pipeline)) {
+        return { name: 'photography', label: `LuxDepth${photographyVersion(state.pipeline)} photography`, stability: 'opt-in', description: 'Verified photography and depth outputs. V3 remains the production baseline.', is_research: false, recommended_args: {}, advanced_sections: [] };
     }
     if (state.pipeline !== 'lux-depth-v3') {
         return {
@@ -3944,8 +3956,8 @@ function renderCapabilityChips(payload) {
     if (state.pipeline === 'lux-depth-v3') {
         chips.push(`Preset ${String(args.preset || state.config.preset || 'custom')}`);
         if (readiness?.canary_status) chips.push(`Canary ${titleCaseToken(readiness.canary_status, 'Unknown')}`);
-    } else if (state.pipeline === 'lux-depth-v5') {
-        chips.push('V5 opt-in photography', `DA3 Metric ${args.target_size || 518}`, `${args.device || 'cpu'} / ${args.precision || 'fp32'}`);
+    } else if (isPhotographyPipeline(state.pipeline)) {
+        chips.push(`${photographyVersion(state.pipeline)} opt-in photography`, `DA3 Metric ${args.target_size || 518}`, `${args.device || 'cpu'} / ${args.precision || 'fp32'}`);
         if (args.materials_manifest) chips.push('MaterialsV4 evidence');
     } else {
         chips.push(`Command ${canonicalArchiveCommand(state.pipeline)}`);
@@ -4493,8 +4505,8 @@ function _dispatchChecklistItems(payload) {
                 detail: 'FastVLM caption sidecars are advisory review metadata and are not used for quality gates.'
             });
         }
-    } else if (state.pipeline === 'lux-depth-v5') {
-        items.push({ tone: 'warn', label: 'Opt-in photography successor', detail: 'V5 remains opt-in while photographic quality and performance are evaluated. V3 remains the production baseline and rollback path.' });
+    } else if (isPhotographyPipeline(state.pipeline)) {
+        items.push({ tone: 'warn', label: 'Opt-in photography successor', detail: `${photographyVersion(state.pipeline)} remains opt-in while photographic quality and performance are evaluated. V3 remains the production baseline and rollback path.` });
     } else {
         items.push({
             tone: dispatchStatus === 'blocked' || dispatchStatus === 'degraded' ? 'block' : 'pass',
@@ -4636,7 +4648,7 @@ function renderMissionControl(payload = null) {
     if (els.heroPresetValue) {
         els.heroPresetValue.textContent = state.pipeline === 'lux-depth-v3'
             ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
-            : state.pipeline === 'lux-depth-v5' ? 'V5 photography (opt-in)' : canonicalArchiveCommand(state.pipeline) || 'archive';
+            : isPhotographyPipeline(state.pipeline) ? `${photographyVersion(state.pipeline)} photography (opt-in)` : canonicalArchiveCommand(state.pipeline) || 'archive';
     }
     if (els.heroModeValue) {
         els.heroModeValue.textContent = state.backendOk ? 'Backend connected' : 'Backend offline';
@@ -8264,7 +8276,7 @@ function _effectivePreviewSnapshot(payload = null) {
         execution_args: { ...(currentPayload.args || {}) },
         submitted_args: { ...(currentPayload.args || {}) },
         readiness: null,
-        estimate_summary: currentPayload.pipeline === 'lux-depth-v5' ? {} : _buildLocalEstimateSummary(currentPayload.args || {}),
+        estimate_summary: isPhotographyPipeline(currentPayload.pipeline) ? {} : _buildLocalEstimateSummary(currentPayload.args || {}),
         debug_bundle_summary: _buildLocalDebugBundleSummary(currentPayload.args || {}),
         captioning_summary: _buildLocalCaptioningSummary(currentPayload.args || {}),
         next_best_action: _buildLocalNextBestAction(currentPayload, preview),
@@ -8741,7 +8753,7 @@ function _effectiveReadinessSummary(readiness) {
 }
 
 function renderReconstructionRuntimeSummary(payload = null) {
-    if (state.pipeline === 'lux-depth-v5') {
+    if (isPhotographyPipeline(state.pipeline)) {
         renderEffectiveConfigDrawer(payload || generatePayload());
         return;
     }
@@ -8932,7 +8944,7 @@ function renderEffectiveConfigDrawer(payload = null, preview = null) {
     if (els.effectiveEstimateLabel) {
         els.effectiveEstimateLabel.textContent = String(
             effectivePreview.estimate_summary?.summary_label
-            || (currentPayload.pipeline === 'lux-depth-v5' ? 'V5 performance requires measured runtime evidence.' : _buildLocalEstimateSummary(currentPayload.args || {}).summary_label)
+            || (isPhotographyPipeline(currentPayload.pipeline) ? 'Photography performance requires measured runtime evidence.' : _buildLocalEstimateSummary(currentPayload.args || {}).summary_label)
             || 'No preview estimate yet.'
         );
     }
@@ -9583,7 +9595,7 @@ function _firstInvalidBuildInput() {
         els.outputDir,
         els.archiveIndexPath,
         els.rightsManifestPath,
-        ...(state.pipeline === 'lux-depth-v5' ? Object.values(els.photography) : [])
+        ...(isPhotographyPipeline(state.pipeline) ? Object.values(state.pipeline === 'lux-depth-v6' ? els.photographyV6 : els.photography) : [])
     ];
     for (const input of candidates) {
         if (!input || typeof input.checkValidity !== 'function') continue;
@@ -9594,6 +9606,7 @@ function _firstInvalidBuildInput() {
 }
 
 function _buildControlForPreviewField(fieldName) {
+    const photographyControls = state.pipeline === 'lux-depth-v6' ? els.photographyV6 : els.photography;
     const controls = {
         input_dir: els.inputDir,
         output_dir: els.outputDir,
@@ -9609,15 +9622,17 @@ function _buildControlForPreviewField(fieldName) {
         log_level: els.runtime.logLevel,
         verbose: els.flags.verbose,
         quiet: els.flags.quiet,
-        input_color: els.photography.inputColor,
-        device: els.photography.device,
-        precision: els.photography.precision,
-        target_size: els.photography.targetSize,
-        strength: els.photography.strength,
-        clarity: els.photography.clarity,
-        refinement: els.photography.refinement,
-        materials_manifest: els.photography.materialsManifest,
-        companions_manifest: els.photography.companionsManifest,
+        input_color: photographyControls.inputColor,
+        device: photographyControls.device,
+        precision: photographyControls.precision,
+        target_size: photographyControls.targetSize,
+        strength: photographyControls.strength,
+        clarity: photographyControls.clarity,
+        refinement: photographyControls.refinement,
+        materials_manifest: photographyControls.materialsManifest,
+        companions_manifest: photographyControls.companionsManifest,
+        ...Object.fromEntries(Object.entries(portalInternals.PHOTOGRAPHY_V6_FIELDS).map(([key, field]) => [field, photographyControls[key]]).filter(([, control]) => control)),
+        white_balance: els.photographyV6.whiteBalanceR,
         debug_bundle_acknowledged: els.debugBundleAcknowledge
     };
     return controls[String(fieldName || '').trim()] || null;
@@ -9632,6 +9647,8 @@ function _buildStepForControl(control) {
 
 function _focusInvalidBuildControl(control, options = {}) {
     if (!control || typeof control.focus !== 'function') return false;
+    const disclosure = control.closest('details');
+    if (disclosure) disclosure.open = true;
     const step = _buildStepForControl(control);
     if (step !== null) setBuildStep(step, { silent: true });
     window.requestAnimationFrame(() => {
@@ -9653,7 +9670,7 @@ function updateUIFromState() {
         els.fieldsArchiveGate.classList.add('hidden');
         if (els.presetBuilderShell) els.presetBuilderShell.classList.remove('hidden');
         if (els.flagsShell) els.flagsShell.classList.remove('hidden');
-    } else if (state.pipeline === 'lux-depth-v5') {
+    } else if (isPhotographyPipeline(state.pipeline)) {
         els.fieldsLuxDepth.classList.add('hidden');
         els.fieldsArchiveGate.classList.add('hidden');
         if (els.presetBuilderShell) els.presetBuilderShell.classList.add('hidden');
@@ -9665,6 +9682,11 @@ function updateUIFromState() {
         if (els.flagsShell) els.flagsShell.classList.add('hidden');
     }
     if (els.fieldsLuxV5) els.fieldsLuxV5.classList.toggle('hidden', state.pipeline !== 'lux-depth-v5');
+    if (els.fieldsLuxV6) els.fieldsLuxV6.classList.toggle('hidden', state.pipeline !== 'lux-depth-v6');
+    state.config.photographyV6 = { ...portalInternals.createPhotographyV6Config(), ...state.config.photographyV6 };
+    for (const [key, control] of Object.entries(els.photographyV6)) {
+        if (control) control.value = state.config.photographyV6[key];
+    }
     state.config.photography = { ...portalInternals.createPhotographyConfig(), ...state.config.photography };
     for (const [key, control] of Object.entries(els.photography)) {
         if (!control) continue;
@@ -9923,7 +9945,9 @@ function generatePayload() {
         output_dir: outputDirValue
     };
 
-    if (p === 'lux-depth-v5') {
+    if (p === 'lux-depth-v6') {
+        args = { ...args, ...portalInternals.buildPhotographyV6Args(c.photographyV6, els.photographyV6) };
+    } else if (p === 'lux-depth-v5') {
         args = { ...args, ...portalInternals.buildPhotographyArgs(c.photography, els.photography) };
     } else if (p === 'lux-depth-v3') {
         const canonicalLuxArgs = buildCanonicalLuxDepthArgs(c);
@@ -9966,8 +9990,10 @@ function renderPreRunDiagnostics(payload) {
     let healthState = 'good';
     let healthLabel = 'good';
 
-    if (payload.pipeline === 'lux-depth-v5') {
-        expectedOutputs.push('Enhanced photography', 'Verified execution evidence', 'Depth maps');
+    if (isPhotographyPipeline(payload.pipeline)) {
+        expectedOutputs.push(...(payload.pipeline === 'lux-depth-v6'
+            ? ['16-bit TIFF photography', 'Draft PNG', 'Float depth TIFF and arrays', '16-bit depth preview and validity masks', 'Verified execution evidence']
+            : ['Enhanced photography', 'Verified execution evidence', 'Depth maps']));
         if (payload.args.preview_maps) expectedOutputs.push('Depth preview maps');
         if (payload.args.materials_manifest) expectedOutputs.push('MaterialsV4 response evidence');
         const preview = _currentPreviewForPayload(payload);
@@ -10337,8 +10363,8 @@ function renderCLI() {
     } else if (preview && preview.status === 'ready' && previewErrors.length > 0) {
         const firstError = previewErrors[0];
         els.cliPreview.textContent = `# Preview blocked\n# ${String(firstError?.message || 'Resolve preview validation issues to view the effective argv.')}`;
-    } else if (payload.pipeline === 'lux-depth-v5') {
-        els.cliPreview.textContent = '# Managed LuxDepthV5 dispatch\n# The server freezes and verifies an immutable execution plan.\n# Review the request payload and resolved configuration below.';
+    } else if (isPhotographyPipeline(payload.pipeline)) {
+        els.cliPreview.textContent = `# Managed LuxDepth${photographyVersion(payload.pipeline)} dispatch\n# The server freezes and verifies an immutable execution plan.\n# Review the request payload and resolved configuration below.`;
     } else {
         els.cliPreview.textContent = cli.join('\n');
     }
@@ -10424,7 +10450,7 @@ function bindInputs() {
             else state[key] = e.target.value;
             if (!category && key === 'outputBitDepth') delete state.config.emit_master16;
             if (key === 'pipeline') {
-                const defaultOutputs = { 'lux-depth-v3': './output/lux_depth_v3_apex', 'lux-depth-v5': './output/lux_depth_v5' };
+                const defaultOutputs = { 'lux-depth-v3': './output/lux_depth_v3_apex', 'lux-depth-v5': './output/lux_depth_v5', 'lux-depth-v6': './output/lux_depth_v6' };
                 if (defaultOutputs[previousPipeline] && defaultOutputs[state.pipeline]
                     && state.config.outputDir === defaultOutputs[previousPipeline]) {
                     state.config.outputDir = defaultOutputs[state.pipeline];
@@ -10518,6 +10544,9 @@ function bindInputs() {
         });
     };
 
+    for (const [key, control] of Object.entries(els.photographyV6)) {
+        safeBindText(control, 'photographyV6', key);
+    }
     for (const [key, control] of Object.entries(els.photography)) {
         if (key === 'previewMaps') safeBindCheck(control, 'photography', key);
         else safeBindText(control, 'photography', key);
@@ -11818,7 +11847,9 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         if (data.args) {
             _migrateDeprecatedLuxOutputConfig(data.args);
             const c = state.config;
-            if (state.pipeline === 'lux-depth-v5') {
+            if (state.pipeline === 'lux-depth-v6') {
+                c.photographyV6 = portalInternals.photographyV6ConfigFromArgs(data.args, c.photographyV6);
+            } else if (state.pipeline === 'lux-depth-v5') {
                 c.photography = portalInternals.photographyConfigFromArgs(data.args, c.photography);
             }
             if ('emit_master16' in data.args) c.emit_master16 = data.args.emit_master16;

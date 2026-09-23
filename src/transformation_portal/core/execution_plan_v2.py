@@ -295,6 +295,10 @@ def parse_execution_plan(data: bytes | str) -> Any:
     from transformation_portal.core.execution_plan import parse_execution_plan_json
 
     payload = decode_bounded_json_object(data)
+    if payload.get("schema") == "tp.execution.plan.v5":
+        from transformation_portal.core.execution_plan_v5 import ExecutionPlanV5
+
+        return ExecutionPlanV5.from_payload(payload)
     if payload.get("schema") == "tp.execution.plan.v4":
         from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4
 

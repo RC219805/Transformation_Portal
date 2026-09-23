@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isPhotographyPipeline, photographyVersion } from "../portal-src/internal/photography.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const source = (name) => readFileSync(path.resolve(__dirname, `../portal-src/${name}`), "utf8");
@@ -22,7 +23,7 @@ function between(text, startNeedle, endNeedle) {
 
 test("required degraded prerequisites count as blocking checks, not advisories", () => {
   const checklist = between(portal, 'function _dispatchChecklistItems', 'function renderGovernanceBanner');
-  const build = new Function('state', `
+  const build = new Function('state', 'isPhotographyPipeline', 'photographyVersion', `
     const parseBoolLike = Boolean;
     const _currentPreviewForPayload = () => ({status: 'ready'});
     const _effectivePreviewSnapshot = _currentPreviewForPayload;
@@ -32,7 +33,7 @@ test("required degraded prerequisites count as blocking checks, not advisories",
     const _presetRequiresResearchAcknowledgments = () => false;
     ${checklist}
     return _dispatchChecklistItems;
-  `)({ pipeline: 'archive-gate-a', backendOk: true });
+  `)({ pipeline: 'archive-gate-a', backendOk: true }, isPhotographyPipeline, photographyVersion);
   const checks = build({args: {}});
   assert.equal(checks.find((item) => item.label === 'Dispatch readiness').tone, 'block');
   assert.equal(checks.find((item) => item.label === 'Archive governance').tone, 'block');

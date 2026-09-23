@@ -190,6 +190,13 @@ def verify_photography_dispatch_result(plan_bytes: bytes, *, output_root: Path) 
 class ManagedPhotographyPublisher(GenerationPublisher):
     """Project the verified V5 inventory into ordinary portal artifact items."""
 
+    delivery_schema = "tp.lux.delivery.v3"
+    delivery_pattern = r"input-[0-9]{4}/delivery\.tif"
+    pipeline_version = "V5"
+
+    def _decorate_item(self, relative: str, item: dict[str, Any], files: Mapping[str, Path], fence: DispatchFence) -> None:
+        """Allow a versioned projection to specialize verified display metadata."""
+
     async def publish(
         self,
         fence: DispatchFence,
@@ -207,7 +214,7 @@ class ManagedPhotographyPublisher(GenerationPublisher):
         limits = self.limits
         paths = artifacts.get("paths")
         if (
-            artifacts.get("schema") != "tp.lux.delivery.v3"
+            artifacts.get("schema") != self.delivery_schema
             or artifacts.get("execution_evidence") != "execution-evidence.json"
             or not isinstance(paths, list)
             or len(paths) != len(files)
@@ -216,7 +223,9 @@ class ManagedPhotographyPublisher(GenerationPublisher):
             or set(expected_file_integrity) != set(files)
             or len(files) > limits.max_files
         ):
-            raise ArtifactStoreError("Managed photography projection requires the exact verified V5 inventory")
+            raise ArtifactStoreError(
+                f"Managed photography projection requires the exact verified {self.pipeline_version} inventory"
+            )
         items: list[dict[str, Any]] = []
         for relative in sorted(files):
             normalized = job_artifacts._normalize_artifact_relative_path(relative)
@@ -255,7 +264,7 @@ class ManagedPhotographyPublisher(GenerationPublisher):
                     "fingerprint_status": "ok",
                 }
             )
-            if re.fullmatch(r"input-[0-9]{4}/delivery\.tif", relative):
+            if re.fullmatch(self.delivery_pattern, relative):
                 preview = str(path.parent / "preview.png")
                 if preview in files:
                     # Associate only the same input's independently verified
@@ -263,6 +272,7 @@ class ManagedPhotographyPublisher(GenerationPublisher):
                     # that browsers can decode the archival TIFF itself.
                     items[-1]["preview_url"] = job_artifacts._artifact_url(fence.locator.job_id, preview)
                     items[-1]["preview_mime_type"] = "image/png"
+            self._decorate_item(relative, items[-1], files, fence)
         projected = {**artifacts, "items": items, "indexed_count": len(items), "truncated": False}
         if len(canonicalize_json(projected)) > limits.max_manifest_bytes:
             raise ArtifactStoreError("Managed photography artifact projection exceeds its metadata byte limit")
