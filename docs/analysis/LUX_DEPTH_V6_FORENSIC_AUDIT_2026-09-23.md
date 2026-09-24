@@ -71,6 +71,15 @@ The dedicated subprocess rerun and the complete post-fix gate passed outside
 the sandbox. These were environment failures; no subprocess contracts were
 weakened or skipped.
 
+### CI follow-up on 2026-09-24
+
+The first hosted PR run rejected three regression fixture expressions because
+CI-pinned Pylint reported `np.finfo(np.float32).smallest_subnormal` as a missing
+member. The fixtures now construct the same smallest positive float32 value
+with `np.nextafter(np.float32(0), np.float32(1))`. The value, dtype and bytes are
+identical; numerical assertions, runtime behavior and lint policy are unchanged.
+This was a lint-tool inference failure, not a failed numerical regression.
+
 ## Preserved contracts and remaining limits
 
 - Routes, response envelopes, selectors, artifact names, inference defaults,

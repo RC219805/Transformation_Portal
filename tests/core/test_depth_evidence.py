@@ -188,7 +188,7 @@ def test_constant_depth_is_not_artificially_stretched():
     assert evidence.to_payload()["relative_derivative"]["status"] == "constant"
 
 
-@pytest.mark.parametrize("base", [np.finfo(np.float32).smallest_subnormal, np.finfo(np.float32).tiny])
+@pytest.mark.parametrize("base", [np.nextafter(np.float32(0), np.float32(1)), np.finfo(np.float32).tiny])
 def test_subnormal_percentile_span_keeps_finite_positive_depth_usable(base):
     master, proxy, native, sky = fixture((10, 10), 14)
     native[:] = base
@@ -206,7 +206,7 @@ def test_subnormal_percentile_span_keeps_finite_positive_depth_usable(base):
     assert not relative.flags.writeable
 
 
-@pytest.mark.parametrize("scale", [np.float32(1), np.finfo(np.float32).smallest_subnormal])
+@pytest.mark.parametrize("scale", [np.float32(1), np.nextafter(np.float32(0), np.float32(1))])
 def test_representable_percentile_span_retains_existing_float32_bytes(scale):
     master, proxy, native, sky = fixture()
     native = np.arange(1, native.size + 1, dtype=np.float32).reshape(native.shape) * scale

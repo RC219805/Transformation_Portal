@@ -151,7 +151,7 @@ def test_native_nonfinite_and_invalid_samples_are_retained_only_in_native_author
 
 def test_subnormal_native_range_reconstructs_and_exports_finite_depth():
     master, _, proxy = scene(shape=(10, 10))
-    smallest = np.finfo(np.float32).smallest_subnormal
+    smallest = np.nextafter(np.float32(0), np.float32(1))
     native = np.full(proxy.transform.padded_shape, smallest, np.float32)
     native[9, 9] = np.nextafter(smallest, np.float32(np.inf))
     evidence = build_depth_evidence(native, np.zeros(native.shape, bool), proxy, master.source_sha256)

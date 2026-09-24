@@ -2270,8 +2270,8 @@
       "successors": [],
       "review_status": "historical-evidence",
       "evidence_tier": "historical-record",
-      "source_commit": "0528cbbc2d5e3cab9a2572322984823187f6e061",
-      "content_sha256": "6c31fefd9ac2980d63d2a7eaebc6104af6d9d0040cfa62bcee0acd107b28628d",
+      "source_commit": "78fbd54c252efd29612ad013f22280810b28c822",
+      "content_sha256": "8b2df7f770f54d4fe615ae10fd8b60c2ebdebd1b182de86262f2c6a4cc33613e",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -14755,7 +14755,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "0528cbbc2d5e3cab9a2572322984823187f6e061",
+      "source_commit": "78fbd54c252efd29612ad013f22280810b28c822",
       "content_sha256": "802930b1edd998a83514d9c2ef5ecfec9875b4a66297fa80cb02f2b634d6cd8d",
       "source_references": [
         "Makefile",
@@ -14834,7 +14834,7 @@
         "tests/lux_depth_v6/test_pipeline.py": "5fb9010cbba2f65ec42f267d14dfcd5a6062f9327e5cacdec14e022ea43b4ae0",
         "tests/lux_depth_v6/test_evaluation.py": "3ae1aac08a769ed69633671de6372ecbea56fb472c89e0945f1eadc6440e9a6e",
         "src/transformation_portal/lux_depth_v6/depth_maps.py": "8a59e57cc5b67e3050f05f8422174e0e8fef4636e03fc9f143de2e19b20ef25d",
-        "tests/lux_depth_v6/test_depth_maps.py": "3b012dae80db9133a85117cff02cf6680c309f5fadd8fb23e75048e617a2c9dd",
+        "tests/lux_depth_v6/test_depth_maps.py": "79594f5c0a0bc7afce27cfa85a8bd1351430b237bec304b0150be9a90f898551",
         "tests/lux_depth_v6/test_depth_map_pipeline.py": "b7b082af5d25b163fc803df7f93483d14adf507d8097be0d37058f7c5d7cc797",
         "tests/lux_depth_v6/test_depth_reconstruction_quality.py": "47e5de5ad8908129fd4b30ebc3c5ee7d274a7f98e544d4ff4e3b673874f25a15",
         "scripts/analysis/audit_lux_depth_v6_reconstruction.py": "952d5338ba613c224faf600c2bb068cab0daf55005d7659471920f56e9d1d961",
@@ -14863,7 +14863,7 @@
         "src/transformation_portal/core/execution_plan_v2.py": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
         "tests/lux_depth_v6/test_publication_integrity.py": "45328cb3aea5d986ace117c1d585816c6cb609818c16c4c684d21caaa06df0a7",
         "src/transformation_portal/core/depth_evidence.py": "0580fdfb65069c2112fcb8ad52666cedb2ba6a25f39ccdd3b11487d64e34fe9f",
-        "tests/core/test_depth_evidence.py": "f9d00938bb68414e03bf13d236f5e12254bc2fb6215a21d13df821283a37b2a0"
+        "tests/core/test_depth_evidence.py": "c381835aab5940b6b2664c5878c4324a95f56f5c0e205db37ef00f9a1cf66123"
       },
       "validation_commands": [
         "make test-lux-depth-v6-contract",
