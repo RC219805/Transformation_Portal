@@ -149,6 +149,22 @@ def test_native_nonfinite_and_invalid_samples_are_retained_only_in_native_author
     assert evidence.native_depth.tobytes() == before
 
 
+def test_subnormal_native_range_reconstructs_and_exports_finite_depth():
+    master, _, proxy = scene(shape=(10, 10))
+    smallest = np.nextafter(np.float32(0), np.float32(1))
+    native = np.full(proxy.transform.padded_shape, smallest, np.float32)
+    native[9, 9] = np.nextafter(smallest, np.float32(np.inf))
+    evidence = build_depth_evidence(native, np.zeros(native.shape, bool), proxy, master.source_sha256)
+    with np.errstate(divide="raise", invalid="raise"):
+        aligned, _, outputs, _ = products(master, evidence, proxy, DepthMapRecipe())
+    assert aligned.valid_mask.all()
+    assert np.isfinite(aligned.relative_depth).all()
+    assert aligned.relative_depth[9, 9] == 1
+    assert np.count_nonzero(aligned.relative_depth) == 1
+    assert array(outputs["native-depth.npy"]).tobytes() == native.tobytes()
+    np.testing.assert_array_equal(array(outputs["relative-depth.npy"]), aligned.relative_depth)
+
+
 def test_float_tiff_preserves_relative_bits_and_png_is_true_16_bit_grayscale():
     _, _, outputs, descriptor = products(*scene())
     expected = array(outputs["relative-depth.npy"])

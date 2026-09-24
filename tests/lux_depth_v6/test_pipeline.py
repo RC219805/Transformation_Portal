@@ -129,6 +129,29 @@ def test_cancellation_never_creates_completion(v5_parent, tmp_path):
     assert not prepared.output_root.exists()
 
 
+def test_deadline_interrupts_source_validation_before_output_creation(v5_parent, tmp_path, monkeypatch):
+    from transformation_portal.lux_depth_v6 import pipeline, source
+
+    prepared = prepare(LuxDepthV6Request(v5_parent, tmp_path / "v6", output_limits=OutputLimits(wall_time_seconds=1)))
+    elapsed = 0.0
+    read_count = 0
+    snapshot = source.snapshot
+
+    def slow_snapshot(*args, **kwargs):
+        nonlocal elapsed, read_count
+        result = snapshot(*args, **kwargs)
+        read_count += 1
+        elapsed = 2.0
+        return result
+
+    monkeypatch.setattr(pipeline.time, "monotonic", lambda: elapsed)
+    monkeypatch.setattr(source, "snapshot", slow_snapshot)
+    with pytest.raises(RuntimeError, match="wall-time budget"):
+        run(prepared)
+    assert read_count == 1
+    assert not prepared.output_root.exists()
+
+
 @pytest.mark.parametrize("replace_root", [True, False])
 def test_directory_replacement_cannot_redirect_product_write(v5_parent, tmp_path, monkeypatch, replace_root):
     from transformation_portal.lux_depth_v6 import pipeline

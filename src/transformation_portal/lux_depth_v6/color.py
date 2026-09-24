@@ -183,9 +183,15 @@ def grade_master(master: ImageMaster, recipe: GradeRecipe) -> tuple[ImageMaster,
             multiplier[nonzero] = (np.abs(luminance[nonzero]) / recipe.pivot) ** (recipe.contrast - 1)
             candidate *= multiplier[:, None]
         if recipe.saturation != 1:
+            # Rounded Oklab matrices assign tiny chroma to exact RGB neutrals.
+            # Preserve the already exposed/balanced/contrasted values: changing
+            # their saturation must not add a tint or overflow finite HDR gray.
+            neutral = np.all(candidate == candidate[:, :1], axis=1)
             lab = linear_srgb_to_oklab(candidate)
             lab[:, 1:] *= recipe.saturation
-            candidate = oklab_to_linear_srgb(lab)
+            chroma_adjusted = oklab_to_linear_srgb(lab)
+            chroma_adjusted[neutral] = candidate[neutral]
+            candidate = chroma_adjusted
         if not np.isfinite(candidate).all() or np.any(np.abs(candidate) > np.finfo(np.float32).max):
             raise ValueError("Grade exceeds finite float32 master representation")
         stored = candidate.astype(np.float32)

@@ -85,6 +85,26 @@ def test_saturation_zero_is_neutral_and_signed_hdr_is_finite():
     np.testing.assert_allclose(result.pixels[..., 1], result.pixels[..., 2], atol=1e-7)
 
 
+@pytest.mark.parametrize("saturation", [0.0, 0.25, 0.5, 1.5, 2.0])
+def test_saturation_preserves_exact_neutrals_through_finite_float32_extremes(saturation):
+    levels = np.array([-FLOAT32_MAX, -16, -1, -0.18, -0.0, 0.0, 0.18, 1, 16, FLOAT32_MAX], np.float32)
+    source = master(np.repeat(levels[None, :, None], 3, axis=-1))
+    result, receipt = grade_master(source, GradeRecipe(saturation=saturation))
+    assert result.pixels.tobytes() == source.pixels.tobytes()
+    assert receipt["changed_pixels"] == 0
+    assert receipt["max_abs_delta"] == 0
+
+
+def test_neutral_chroma_preservation_keeps_prior_white_balance_and_contrast():
+    source = master([[[0.5, 0.25, 0.125]]])
+    recipe = GradeRecipe(exposure_stops=1, white_balance=(0.5, 1, 2), contrast=1.5)
+    expected, _ = grade_master(source, recipe)
+    assert expected.pixels.tobytes() != source.pixels.tobytes()
+    for saturation in (0.25, 0.5, 1.5, 2.0):
+        result, _ = grade_master(source, replace(recipe, saturation=saturation))
+        assert result.pixels.tobytes() == expected.pixels.tobytes()
+
+
 def test_nonopaque_grade_samples_remain_bitwise_protected():
     source = master([[[-0.0, 2, -1], [0.4, 0.5, 0.6], [0.1, 0.2, 0.3]]], np.array([[0, 0.5, 1]], np.float32))
     result, receipt = grade_master(source, GradeRecipe(exposure_stops=2, contrast=1.3, saturation=1.2))

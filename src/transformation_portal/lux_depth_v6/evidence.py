@@ -81,13 +81,23 @@ def verify_artifacts(
             check_product(relative, data)
     if set(declared) != seen:
         raise ValueError("V6 inventory contains unexpected products")
-    expected_files = seen | ({"evidence.json"} if completed else set())
-    if _inventory(root) != expected_files:
-        raise ValueError("V6 output namespace differs from the exact product inventory")
     checkpoint()
     validate_source(source, cancellation=lambda: _cancelled(checkpoint))
     if payload["processing"] != processing_identity(depth_maps=depth_maps is not None):
         raise ValueError("V6 processing source changed during verification")
+    # Replay and retained-source validation can outlive an earlier product
+    # snapshot. Rebind all replayed bytes before authorizing completion so an
+    # output changed during those phases cannot inherit their verification.
+    for relative in sorted(seen):
+        checkpoint()
+        record = declared[relative]
+        _, observed = snapshot(root, root / relative, maximum_bytes=record["size_bytes"], retain_bytes=False)
+        if observed != record:
+            raise ValueError(f"V6 output bytes changed during verification: {relative}")
+    expected_files = seen | ({"evidence.json"} if completed else set())
+    if _inventory(root) != expected_files:
+        raise ValueError("V6 output namespace differs from the exact product inventory")
+    checkpoint()
 
 
 def _cancelled(checkpoint: Callable[[], None]) -> bool:

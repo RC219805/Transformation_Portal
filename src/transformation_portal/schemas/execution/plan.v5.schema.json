@@ -222,7 +222,7 @@
         },
         "max_output_bytes": {
           "type": "integer",
-          "minimum": 1,
+          "minimum": 17825794,
           "maximum": 1099511627776
         },
         "wall_time_seconds": {

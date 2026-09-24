@@ -188,6 +188,38 @@ def test_constant_depth_is_not_artificially_stretched():
     assert evidence.to_payload()["relative_derivative"]["status"] == "constant"
 
 
+@pytest.mark.parametrize("base", [np.nextafter(np.float32(0), np.float32(1)), np.finfo(np.float32).tiny])
+def test_subnormal_percentile_span_keeps_finite_positive_depth_usable(base):
+    master, proxy, native, sky = fixture((10, 10), 14)
+    native[:] = base
+    native[9, 9] = np.nextafter(np.float32(base), np.float32(np.inf))
+    evidence = build_depth_evidence(native, sky, proxy, master.source_sha256)
+    before = evidence.native_depth.tobytes()
+    with np.errstate(divide="raise", invalid="raise"):
+        relative = evidence.relative_depth()
+    expected = np.zeros_like(native)
+    expected[9, 9] = 1
+    np.testing.assert_array_equal(relative, expected)
+    assert relative.dtype == np.float32
+    assert evidence.valid_mask[:10, :10].all()
+    assert evidence.native_depth.tobytes() == before
+    assert not relative.flags.writeable
+
+
+@pytest.mark.parametrize("scale", [np.float32(1), np.nextafter(np.float32(0), np.float32(1))])
+def test_representable_percentile_span_retains_existing_float32_bytes(scale):
+    master, proxy, native, sky = fixture()
+    native = np.arange(1, native.size + 1, dtype=np.float32).reshape(native.shape) * scale
+    native[0, :3] = [0, -1, np.nan]
+    sky[1, :3] = True
+    evidence = build_depth_evidence(native, sky, proxy, master.source_sha256)
+    low, high = (float(value) for value in np.percentile(native[evidence.valid_mask], [1, 99]))
+    assert np.float32(high - low) > 0
+    expected = np.zeros_like(native)
+    expected[evidence.valid_mask] = np.clip((native[evidence.valid_mask] - low) / (high - low), 0, 1)
+    assert evidence.relative_depth().tobytes() == expected.tobytes()
+
+
 def test_tampered_calibration_geometry_is_rejected():
     master, proxy, native, sky = fixture()
     record = companion(master)
