@@ -29,4 +29,4 @@ pillow-heif==1.7.0  # Governed DA3 baseline
 safetensors==0.7.0  # Governed DA3 baseline
 trimesh==4.11.5  # Governed DA3 baseline
 addict==2.4.0  # Governed DA3 baseline
-pre-commit==4.5.1  # Governed DA3 baseline
+pre-commit==4.6.2  # Governed DA3 baseline
