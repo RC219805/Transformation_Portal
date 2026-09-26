@@ -26,7 +26,7 @@ from transformation_portal.lux_depth_v4.io import directory_path, pinned_directo
 if TYPE_CHECKING:
     from transformation_portal.lux_depth_v4.backend import CarriedDepthPlan
     from transformation_portal.materials_v4.engine import ResponsePolicy
-    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
 
 _SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw"})
 
@@ -193,14 +193,27 @@ def prepare(request: LuxDepthV4Request, *, publisher: GenerationPublisher | None
     return _prepare(request, publisher=publisher)
 
 
-def _prepare(request: Any, *, publisher: GenerationPublisher | None = None, profile: Any = None) -> Any:
+def _prepare(
+    request: Any,
+    *,
+    publisher: GenerationPublisher | None = None,
+    publication_limits: GenerationPublicationLimits | None = None,
+    profile: Any = None,
+) -> Any:
     """Shared discovery and admission; public version boundaries select a fixed profile."""
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
+
+    if publisher is not None and publication_limits is not None:
+        raise ValueError("Specify a publisher or explicit publication limits, never both")
+    if publisher is not None:
+        publication_limits = publisher.limits
+    if publication_limits is not None and type(publication_limits) is not GenerationPublicationLimits:
+        raise TypeError("Publication admission requires exact GenerationPublicationLimits")
     configuration, resources = _configuration_and_resources(request)
     if profile is not None:
         configuration.update(profile.configuration(request))
     if request.materials_policy is not None and request.materials_manifest is None:
         raise ValueError("A Materials V4 policy requires an explicit materials manifest")
-    publication_limits = None if publisher is None else publisher.limits
     if publication_limits is not None:
         resources["max_output_bytes"] = min(resources["max_output_bytes"], publication_limits.max_total_bytes)
     root = directory_path(request.input_dir)

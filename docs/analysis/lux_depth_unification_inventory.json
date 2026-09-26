@@ -1,0 +1,3755 @@
+{
+  "archive_member_inventories": [
+    {
+      "inspection": "central_directory_only_no_extraction_no_execution",
+      "members": [
+        {
+          "compressed_size_bytes": 7842,
+          "crc32": "edbdcfbd",
+          "path": "lux_depth_v3_precision_arch_fixes_plus_upgrades.patch",
+          "review_depth": "inventory_only",
+          "size_bytes": 25043
+        },
+        {
+          "compressed_size_bytes": 2915,
+          "crc32": "678e2917",
+          "path": "postprocessing.py",
+          "review_depth": "inventory_only",
+          "size_bytes": 8952
+        },
+        {
+          "compressed_size_bytes": 3254,
+          "crc32": "ecc64ad6",
+          "path": "preprocessing.py",
+          "review_depth": "inventory_only",
+          "size_bytes": 9804
+        },
+        {
+          "compressed_size_bytes": 1687,
+          "crc32": "417bbac0",
+          "path": "input_discovery.py",
+          "review_depth": "inventory_only",
+          "size_bytes": 5476
+        },
+        {
+          "compressed_size_bytes": 13332,
+          "crc32": "450bff45",
+          "path": "orchestrator.py",
+          "review_depth": "inventory_only",
+          "size_bytes": 55525
+        },
+        {
+          "compressed_size_bytes": 4705,
+          "crc32": "aabb3eb4",
+          "path": "__main__.py",
+          "review_depth": "inventory_only",
+          "size_bytes": 16249
+        },
+        {
+          "compressed_size_bytes": 4393,
+          "crc32": "675747e5",
+          "path": "README.md",
+          "review_depth": "inventory_only",
+          "size_bytes": 11904
+        }
+      ],
+      "path": "src/transformation_portal/lux_depth_v3_precision_arch_fixes_plus_upgrades_files.zip"
+    }
+  ],
+  "audit_date": "2026-09-26",
+  "baseline_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+  "counts": {
+    "by_area": {
+      "canonical_facade": 3,
+      "documentation": 26,
+      "historical": 4,
+      "lux_depth_v3": 82,
+      "lux_depth_v4": 16,
+      "lux_depth_v5": 11,
+      "lux_depth_v6": 16,
+      "managed_or_publication": 7,
+      "materials_v4": 11,
+      "packaging_or_operator_support": 12,
+      "predecessor_surface": 8,
+      "shared_core_contract": 11,
+      "shared_depth_or_predecessor": 34,
+      "validation": 125
+    },
+    "by_review_depth": {
+      "boundary_review": 102,
+      "full_source_review": 55,
+      "inventory_only": 209
+    },
+    "files": 366
+  },
+  "digest_scope": "current_working_file_bytes; baseline_git_blob is separately recorded",
+  "files": [
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "628aff761fa961729349a2aa916dc3954548183d",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "Makefile",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "7f0c5bfc841d38e0498101f5671c6ac7c3427747bfa3f18bc410d11467a8a688",
+      "size_bytes": 48241
+    },
+    {
+      "area": "historical",
+      "baseline_git_blob": "6b21d4bba6631cdb4ddeb6f97c157ec8a04a52cb",
+      "disposition": "historical_reference_only",
+      "path": "archive/scripts/pipelines/lux_render_pipeline_plus_v3.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "f2be737e3ca2413c1e07c117dc6a71c5fcd4d84916532c483a4335be74013189",
+      "size_bytes": 17360
+    },
+    {
+      "area": "historical",
+      "baseline_git_blob": "5ce221ef7e8e976786e10ce33d109f43eb7be3af",
+      "disposition": "historical_reference_only",
+      "path": "docs/_archive/2026-Q1-consolidation/V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c3600183d3bd85aeea57bc872e12557d9bdf156e8edfaff47c9e1e0468f5d782",
+      "size_bytes": 27211
+    },
+    {
+      "area": "historical",
+      "baseline_git_blob": "686d43f610835b0e07ba241c87135fea3c5377f3",
+      "disposition": "historical_reference_only",
+      "path": "docs/_archive/2026-Q1-consolidation/V2_ENHANCEMENT_QUICK_REF.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "152966917c61df5c62224d6f3b071a91690d272e80cdcb20173ec86d41d576a7",
+      "size_bytes": 6879
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "fef2e96e48cb72965af570c3fb623383608daaa6",
+      "disposition": "supporting_documentation",
+      "path": "docs/analysis/DEPTH_FORENSIC_AND_LUX_DEPTH_V5_SUCCESSOR_2026-09-20.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "0234e21be9a32fbb299dd70fe146f9690b868d2f6f61816be36b71e8f43eaa9d",
+      "size_bytes": 36565
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "2a069c89102745cf148bdb580e1cb70581ddc91e",
+      "disposition": "supporting_documentation",
+      "path": "docs/analysis/LUX_DEPTH_V5_IMPLEMENTATION_VALIDATION_2026-09-20.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8644d4a2bf77b4f2666ed6bfbb425baf26d2dd56ae913279221322748b882e7a",
+      "size_bytes": 14993
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "f920ae89b338a9cff0511995051569a03b79ff88",
+      "disposition": "supporting_documentation",
+      "path": "docs/analysis/LUX_DEPTH_V6_DEPTH_MAP_FORENSICS_2026-09-23.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2e7749d541ddd15b68800c85a12c7a057899aa4604ae93e6a2d9fd6ad28c000e",
+      "size_bytes": 26533
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "edaedc4e2b3a7d200f323565f8331013f658741e",
+      "disposition": "supporting_documentation",
+      "path": "docs/analysis/LUX_DEPTH_V6_FORENSIC_AUDIT_2026-09-23.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8b2df7f770f54d4fe615ae10fd8b60c2ebdebd1b182de86262f2c6a4cc33613e",
+      "size_bytes": 9210
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "842c7faa4b408226469cafb5853c7c13144bc569",
+      "disposition": "supporting_documentation",
+      "path": "docs/analysis/LUX_DEPTH_V6_FORENSIC_SUCCESSOR_2026-09-22.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "14920888fb91bc24b3a023ca5202d239ad8f655ec6731f6ef2f2097c1d61f57c",
+      "size_bytes": 29323
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "2e859a1b5f898df44fe5323da169d2966bed102d",
+      "disposition": "supporting_documentation",
+      "path": "docs/api/modules/lux_depth_v3.rst",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5f1c96ed5835f23483ca5f852c3facad4345914f29de279535d97a7f48322afe",
+      "size_bytes": 1809
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "1d340ed0a801e9e31936aceecfbccd47abd85816",
+      "disposition": "supporting_documentation",
+      "path": "docs/architecture/ADR-051-execution-artifact-authority-designation.md",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "4b9445fb9a597771a69eaa4ae3a0b02cce9175d9c1e1d25ecdba2810b0b79737",
+      "size_bytes": 72367
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "05ff58f49d856b905afb1dae78de1bdb11f71d47",
+      "disposition": "supporting_documentation",
+      "path": "docs/cli/CLI_REFERENCE.md",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "01aab0c4af9234f981ff2367875de5954890674acee5712d42e216725309e2e8",
+      "size_bytes": 13755
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "3299d21f881c07b7c7c90fd056ac59fff2a5d12f",
+      "disposition": "supporting_documentation",
+      "path": "docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9e4b6e00ece723e1d61175f1d255881dfcfcf6714396cffd65590ac29ee4a294",
+      "size_bytes": 31554
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "ca1874ff1981db698a601e7351b426ea5f04f771",
+      "disposition": "supporting_documentation",
+      "path": "docs/deliverables/FULL_ENHANCED_LUX_DEPTH_V3_TEST_REPORT.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "450c861b84710980f305f06c4013ce96e1b69f631b2ae9760e30004c33eb0fac",
+      "size_bytes": 14038
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "943e9d9314d1424bc72a0be49532104ea2577267",
+      "disposition": "supporting_documentation",
+      "path": "docs/deliverables/TEST_REPORT_LUX_DEPTH_V3_APEX.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "ab26d7334f6c0fd8a57aef59ed19342b8442a2595d6881e1c14775553ff5606c",
+      "size_bytes": 7401
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "a04e034d9237f9d38004d6e712c0094e4be38e19",
+      "disposition": "supporting_documentation",
+      "path": "docs/fixes/FIX_LUX_RENDER_PIPELINE.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6b1aa06703bd4c0f5ab8bd4f29514b36f3927d075808e72f3c006041165e44d2",
+      "size_bytes": 5051
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "202cd57a468968fd958e3e3541d01dc56630f597",
+      "disposition": "supporting_documentation",
+      "path": "docs/guides/CHANGELOG_V2_ENHANCEMENT.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f0f54acd0fb25db1fd7fbeddfa0a90a8a4ca6d791faefba4688466e9f91a9918",
+      "size_bytes": 4613
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "9ed392878afb2177f8f7542aec7e7d5343865925",
+      "disposition": "supporting_documentation",
+      "path": "docs/guides/LUX_DEPTH_CONFIG_KNOB_CHECKLIST.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "51b415e353bc75e0119a96cd5d274cfa6800680a6b7ba0de207657e37e2cf02b",
+      "size_bytes": 1056
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "dd39189135b5151931f4ea119d20ec5be788b56f",
+      "disposition": "supporting_documentation",
+      "path": "docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "dc82057ea67ebeae026050d1ef052a34d06e1ebb176e7fb857b5262a43010b22",
+      "size_bytes": 19004
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "45e1a49b34a9562bb4c50cc0ec531a9e541cb67e",
+      "disposition": "supporting_documentation",
+      "path": "docs/guides/UNIFIED_LUXURY_PIPELINE.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "7e84faffa7b6e94c9e8ae90eaf0d1ce3a9b92f12dae8129c10ff409400c4af05",
+      "size_bytes": 17364
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "2a5c0eb3b07084b55011068e3faacbcf4412b572",
+      "disposition": "supporting_documentation",
+      "path": "docs/guides/V2_ENHANCEMENT_QUICKSTART.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b01ca04cd5952e9c620990a068eef235817be116e9e732728172db0af3ad7af9",
+      "size_bytes": 9189
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "0ff2e1f5354ba18a865f4b4435c2273d2780dfce",
+      "disposition": "supporting_documentation",
+      "path": "docs/historical/V2_ENHANCEMENT_FINAL_REPORT.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5d62cbdf314feb6a927ba31967e6785e138b50497e2ad2376f80e2524b4f5d83",
+      "size_bytes": 13534
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "90afa431028ad66dc44e0329c7829fa872a60ee0",
+      "disposition": "supporting_documentation",
+      "path": "docs/historical/script-audits/AD_EDITORIAL_POST_PIPELINE_V2_ENHANCEMENTS.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5ddabd33410966383927cf403a3cdf0265ede54a451bb771fe608378418c52d3",
+      "size_bytes": 16446
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "1a3e941e376f969f9f9f3f3adc5f06590763e07c",
+      "disposition": "supporting_documentation",
+      "path": "docs/performance/unified_luxury_batch_io_benchmark.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "85d6dc4176ae533755f19a8c8c388ffc2ecfd7977292fe045d3b317b91200d7d",
+      "size_bytes": 3395
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": null,
+      "disposition": "supporting_documentation",
+      "path": "docs/reference/LUX_DEPTH.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a55347e963a002005913057bd0820a6ed369c6687f59704a12dbd60eeeb61a20",
+      "size_bytes": 9697
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "eb74acda836ffa66476807fd51594bc488cf1b16",
+      "disposition": "supporting_documentation",
+      "path": "docs/reference/LUX_DEPTH_V4.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d08665a9f33bc913bcce3913a3c64cc1b871f46753e16cc61a977a7d99bfaaf5",
+      "size_bytes": 20952
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "9aa8134c6de055647189597d5388b79c5d4e6da5",
+      "disposition": "supporting_documentation",
+      "path": "docs/reference/LUX_DEPTH_V5.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e12b852ed7fb899c9978f7c765a5e3883b0ef2035f9edc12f343c092e424b1f6",
+      "size_bytes": 20008
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "c3a5b9b5378f5c125cd6a819a378ffed49a577cf",
+      "disposition": "supporting_documentation",
+      "path": "docs/reference/LUX_DEPTH_V6.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "ccfc3f45e5259901668570bf463b4cd480f3a556a377fd7395e7673e69e867ae",
+      "size_bytes": 28125
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "0eb81c6def309ab5e0ba22575d5ef03a4d67f7be",
+      "disposition": "supporting_documentation",
+      "path": "docs/reports/PR_SUMMARY_LUX_DEPTH_V3.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d184c5911cb7047ffeb0e4952eff426ed2336e2ccd37301eac440c450e344a78",
+      "size_bytes": 9302
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "2dca7ea82db80d5ed8074401bcff8d8b67108526",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "examples/unified_luxury_pipeline_examples.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3ae5a7b799e8800808404aa6c4df596b5dc5784f2ad0096bc2659326d687148a",
+      "size_bytes": 11383
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "d37dd7244864aa1a177d4fc3a0891e54e2db663e",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "pyproject.toml",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6",
+      "size_bytes": 10497
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "e420b26b274fd9b9c33655473aa208c67cf24ac8",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/analysis/audit_lux_depth_v6_reconstruction.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "952d5338ba613c224faf600c2bb068cab0daf55005d7659471920f56e9d1d961",
+      "size_bytes": 9977
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "9407d455b1356a5dead97737e08dcedec6d20ca3",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "scripts/enhance_image.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "479ece0e2e494bf046f40d3d328a0721784173fe19d0fd0ea6e3acfeae445960",
+      "size_bytes": 19047
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "4fc3e095dd8aaaff68fc416935588cd5f9e262fd",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "scripts/pipelines/lux_render_pipeline.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "dd2304f8594965b74555bd5d4281157591685c3ac063b07040ce26f1e34ff29c",
+      "size_bytes": 1248
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "98fedf479417e11bc3bc137d5e0411227f30052d",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "scripts/pipelines/unified_luxury_pipeline.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a2ad289e6aae40c57d6d7cab0a9c4ed94ab3b6428dbef40c8043101f7218c617",
+      "size_bytes": 9642
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "89d691cb651e24a1c1053bbd1892918931371a8d",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "scripts/pipelines/unified_luxury_pipeline_with_context.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "c98abf3eeb34290e729a287bfe597b7b60feab98010dc76d0c3c84f6e4a805e5",
+      "size_bytes": 11929
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "108eeaf21e620e403852560e2e264ebdc986a54b",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/validation/evaluate_lux_depth_v4.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "595522dad036387afdcbfa24a535336950d367d60beab75d9c573ba8ddd1c26c",
+      "size_bytes": 2726
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "35618489a1bb956c4b3a885c43d11033adeb8702",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/validation/evaluate_lux_depth_v5.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f79db0b52fdde5651f390d680f1712ae3602d88e8b3da18db783ffab5d52664b",
+      "size_bytes": 1111
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "9cdb419a4fdb1488102d4511b1af187123db15ae",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/validation/validate_lux_depth_v3_16bit_output.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "151fe9628c0139201fe6c768ce82324efe50e5eabd4e2516009e7d51065b4aff",
+      "size_bytes": 12617
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "65bc64e8e93d57d88613a96974ff292c0cc81b0e",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/validation/verify_lux_depth_v3_16bit_handoff.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a4cf7003ca258f88d5aa801c727e780abafbb56a17c223f65121ae25f86557d9",
+      "size_bytes": 7747
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "b82f5d8e97e6e50d8b81ebad956f3752b2545d0b",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/verification/verify_lux_depth_v3_surface.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "648fb5f8472223b3d49689712486291c817307a205587dfa33652173cb3f38b8",
+      "size_bytes": 7305
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "db6c983845b6cdcb2f7b52897c8eb086a292a409",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "scripts/verify_lux_depth_v3_surface.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d7a38c24f54836965170212291905c9ad233ad891295d3e27b9e8f540ce37f1f",
+      "size_bytes": 654
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "9b0d5c8e4ae73786223e30c07f25a949f97ac129",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/depth_artifact.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c17bab5bd4eca0f8337694082c49418f87c2cf70776bfa4f1c2b07dd01277a69",
+      "size_bytes": 7123
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "45ee5de42b89ac1d0caba31b1368e3a525acf49a",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/depth_evidence.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "0580fdfb65069c2112fcb8ad52666cedb2ba6a25f39ccdd3b11487d64e34fe9f",
+      "size_bytes": 13603
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "853841b7bcc67f3c239421c0da79eeb5e051a804",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_identity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5c095f6323565eeb11e52813c77883e46dc8bb50c74ee0a1553a3d0db5735449",
+      "size_bytes": 35467
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "2d81b67953e4cfbbe8ceef7ad509cce5f5f83778",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_identity_v3.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c69c73e7c8347af7b59b0ca80b9cdad51f08aa23c255df88b6dcc6da2cd5000a",
+      "size_bytes": 39441
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "ac1cb7bf83713f958eb18a4cca6cf192c545c1c6",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_identity_v4.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6c48995a16bf7766e16edb3446076cceb657e750118ec391df1d23565bf053b1",
+      "size_bytes": 5040
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "100e1d44ca5f9e95379d1c3072cbd26c7adc4c6e",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_identity_v5.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f86083ba00248bb4bf4165f1000cf99d3ada02abb9cb3c21f14b135c4bc1efe6",
+      "size_bytes": 2416
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "37eec0765847522ec8a490168b4ae5dbce4e38cf",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_plan.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a660f4ff87154aaab4f93f8855f12f514059cf9f574412887f8e19505c765606",
+      "size_bytes": 50233
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "0664d5752c25522886f0b6105d5b068f1bfa4b34",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_plan_v2.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
+      "size_bytes": 15184
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "95ac1f6a9577e49d04a656522d952a3d1c1765a0",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_plan_v3.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
+      "size_bytes": 7237
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "6d255f76ff47fd78921ddf08da4c2af869c331f7",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_plan_v4.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e",
+      "size_bytes": 6139
+    },
+    {
+      "area": "shared_core_contract",
+      "baseline_git_blob": "6d2ecd8eb446693a9b7da802ea2cb71bdfdec57b",
+      "disposition": "reuse_existing_plan_and_identity_authority",
+      "path": "src/transformation_portal/core/execution_plan_v5.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "2d71c7cb6a7011ec47a2b212deec901de8aef56300cab67360050ef9ae2e74ed",
+      "size_bytes": 4850
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "4c69727554de304587532b0583193799df977a42",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c419be8b06578bc50fd89f8b15d6b33ca925bf952042caa02f5bce36c4ed7e7b",
+      "size_bytes": 1420
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "0c9a9027929b3dbd515d0f8b15350f129c153c11",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c347a15298c537389cafb832a35afce4cc4f1c2bcbb83ce7f2cb3016bacfedbe",
+      "size_bytes": 1842
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "643d6a11adef9dd94a3f3e5c451f42ef35fa196f",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/cache.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "88cdf5615091a4447e6019b99e1551caa1902345e1eb0d4822bc677d6454ad9a",
+      "size_bytes": 7257
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "7964dafae1ad7ef8c7a352023c8f78156c5e2845",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/da2.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a42bfab1e34cf7ac5163af8de8a809532b592357b0730303add1c9a444f75b73",
+      "size_bytes": 11729
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "8e15007b0b935551670175df4b78a3cfb240aa87",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/da3.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "4f6e2df2c98038c8171d0970be434edb3c814fb79e6ce146b2cc53be959da32c",
+      "size_bytes": 66593
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "57813daa7f67b1cb5c153ea254cae468668c5a6d",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/da3_runtime_identity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8a55a588d54d7cd24583ae6e06c849b87c5b452d66e24da3f6966906856f85b9",
+      "size_bytes": 133512
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "2dd82f1e70bc61b1ced048d7ac8fbc939a283431",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/da3_worker.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "ac2c82e0606cf2270dfdd5f0b7b1df5a7c38de7996fc7e862394c57fe98ad1a8",
+      "size_bytes": 27104
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "674eff1ae683e4b9ee5e40ebec4f4b94b536cc58",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/depth_pro.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "640394423e72983b378d5a683906c21cd74cfe135ff99fe068bfcb6e6bb09458",
+      "size_bytes": 28550
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "0cbc72c852950bdce825769a12402e0e3c282c19",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/depth_pro_worker.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f9a0a54c225a3f15ff035fc38c648b6c2db7d5446e6338ccc7e1906cc918abbb",
+      "size_bytes": 12497
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "00d439ff2c16554fcd3798d4d7dc525e10bbc312",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/depthcrafter.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8ed345c38d1319f520a462c35c4ed6e29dad3c8fdd29874e1c31e38e6f3250e5",
+      "size_bytes": 15379
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "3541d06616a34d4fb86caf58e29e477c3beb87ff",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/ensemble.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "630cadcfc83ce14ac20232768b5883d108dc85c496af8508595170cd4a339e72",
+      "size_bytes": 36930
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "36e559b47fb16dcb32d5406c22951104db49f829",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/protocol.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "404f846c3979637bbdcab09f8a8aec30250967212f5087132ed0e09fc5d5f977",
+      "size_bytes": 8784
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "cd88aab4b61124203b5cdaf732e60227b3fbb257",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/registry.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "79dfb66bdec72757e1bd57f9dfd876a2652312b49fdc5a1bc041eb9cd0dc4b19",
+      "size_bytes": 15769
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "12fb5d6984c286350c95e8591d8d01f09448d6ce",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/backends/synthetic.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "64f991c13fdacc7987c90f07f318fe5453035bcb29d88ef26fb911d51897166a",
+      "size_bytes": 5082
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "56ab90ddd25361f80df2df0ed54d00f5a75e37c8",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/depth_aware_dof.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f356e869f57196a1eb6e51e84ab9310c3a423cf8d2eb3ae285f1c84131482189",
+      "size_bytes": 27272
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "5910e2b560426eb36d1f562d0f8a5e9b81a21463",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/depth_processor.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8b7dd88ea5a5161351be93e78bdbdc2fd7d2621d989e70e98045213675c4bee6",
+      "size_bytes": 4927
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "9d7be8cefd75a0a53d9c649f76dd8eff67aeb755",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/models/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "bfc0848b790410fc8ede8135483ac8d015221c6ae3d238c2296c5d0d309eba86",
+      "size_bytes": 3291
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "7c274c0a21a4f2cc1f22d258598f32aef9246e1a",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/models/coreml_wrapper.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d2cc7eb96ec8049e586d3064c0b12565c66cf21150895939d5751d7d2a14b690",
+      "size_bytes": 4564
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "7265dd631901e8b8d91fedbc02d0659525d20847",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/models/depth_anything_v2.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "fec218601f014f3ce04134b148cb9ed94b10db0cbe40ddd5539f8f23ffa1b46e",
+      "size_bytes": 33034
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "ece72de85a20985e1a8b9763045585b1ebd5d19a",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b3cd560205e17f2dc055b258a86d287fd85e68e55b4893ea2de26d17c77ee176",
+      "size_bytes": 35496
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "1864d39b89e7f38c5f69a01c1fa2053fdf66d276",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e2af324002256853060b1d972d5d9a680198f1a4c3c4fd7cf3ff2ac757450260",
+      "size_bytes": 365
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "8c945ad3275e21cb16028e2c811bf338649230a1",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/atmospheric_effects.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3fe2dbc975fae7e221842980edaed0f65464fafe470cb08102e3a20ad2b1b062",
+      "size_bytes": 11304
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "51eb335ba2e508690b0885f39e5842a712386263",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/base.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "bc0e4976a034e8325e2170361192a5e40365d6845e350bfb1cb1cc651272dea0",
+      "size_bytes": 2557
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "bfcc23ef7eb96ee8677117a63d51ec190e6cc753",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/depth_aware_denoise.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9692d71f7c99c85c2bc092d6951d870d67254c1c710c4d99f2943012a0309aa7",
+      "size_bytes": 9677
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "213b20dfcbc2eea16abe6aff9ae700a7b9fa6b3c",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/depth_guided_filters.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f9eba646e8f7b3d0d8d24ced9274f2773b58c527cac4f1ec1753ebad52d5436c",
+      "size_bytes": 13010
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "9dcbdd9abfc471ec9fc422a6d064a73601edbaa5",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/numba_kernels.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "afa0ea10d2aef7a2b314f0ffd889de492e13f349fd297ecc43dd15f0c2a1aa16",
+      "size_bytes": 13855
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "f19eae8048ce0f22d451cdd093388746d114f510",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/processors/zone_tone_mapping.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "53af2a0393aaf2b9a47365fe96db195d2f9a9ba5ef50ac7540eb0919a54c109c",
+      "size_bytes": 12914
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "4d0495dde7166a017605e0ff6b4a9746b8a55149",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/tools.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f732a0d300be77522c633bb938ee184e2dd1c396e183b0dda3fc5ed2041331b5",
+      "size_bytes": 38834
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "8ab25e3979755ea0d4a69fea9ea707217fee5e00",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/utils/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b67ff7acf20d3ea4b473770261c885439022728b7f9f331b1e04cb22266fc013",
+      "size_bytes": 703
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "8bd21fce3ddf728fe2c9f2071c06e9cf43b6af5b",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/utils/cache.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3eafd238ab8b64395281587cd771c003fda0900d33b45df4797696d080aa5778",
+      "size_bytes": 15027
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "d0f40538471a5042bb31fb9434ed2c05488a74f3",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/utils/depth_utils.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5b3ebfc9dca44ecdbb366b7cc583ebb27aed7c30e763858bd89a066634a65a08",
+      "size_bytes": 14060
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "50187c9bca6e696fe2d964ca245960358972d6e3",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth/utils/image_utils.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "4b0bbf87b4dc4f9f532f15de97f69867a6396ed1c9a0cb572f23d3a38833ac04",
+      "size_bytes": 10786
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "1cfa6f694aee3930b3e9d8073d0a4e7ef4c72920",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth_intelligence/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d63204f811a590b35ea76e90458b007068482a88cba0e05b44e03cd4d837366d",
+      "size_bytes": 1668
+    },
+    {
+      "area": "shared_depth_or_predecessor",
+      "baseline_git_blob": "4b754d85ff9bd6c083a6da314a8178c7983a1a6e",
+      "disposition": "retain_existing_backend_boundary",
+      "path": "src/transformation_portal/depth_intelligence/depth_estimator.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "39e68c1b64eaa8bd88bf7336cc0bddc5c57f65be3ce01fad67b4c5f1e92aa9de",
+      "size_bytes": 10410
+    },
+    {
+      "area": "canonical_facade",
+      "baseline_git_blob": null,
+      "disposition": "new_integration_surface",
+      "path": "src/transformation_portal/lux_depth/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "1dad2547e83cf7eb4d2f4c83e19ff3e144ed07f276f5376db39bca825d3966f3",
+      "size_bytes": 1646
+    },
+    {
+      "area": "canonical_facade",
+      "baseline_git_blob": null,
+      "disposition": "new_integration_surface",
+      "path": "src/transformation_portal/lux_depth/__main__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "95c9c31e57d473197044fffb739462fa23d06733f58e812fb3595b7337726149",
+      "size_bytes": 12184
+    },
+    {
+      "area": "canonical_facade",
+      "baseline_git_blob": null,
+      "disposition": "new_integration_surface",
+      "path": "src/transformation_portal/lux_depth/lifecycle.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "3e9922812ebcc5a24dfab4792005649b8c84804487a772e876d38423c3437441",
+      "size_bytes": 10156
+    },
+    {
+      "area": "documentation",
+      "baseline_git_blob": "79e733dc09238cd771f993f837bc21559427e85d",
+      "disposition": "supporting_documentation",
+      "path": "src/transformation_portal/lux_depth_v3/README.md",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5c262c1fdc71ac7a1cdfee2e884b0a6d1833c7a4f056bb0467ec2dff213baed4",
+      "size_bytes": 20109
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "2a1a3b4af80b8ee0d473268079e4e0ef1ccad43f",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "ffd6050931d14fb173f178ff5a8b0c583b22cad7a5d8e58143e5f76911f5fe81",
+      "size_bytes": 3793
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ea0e6c87ba41922b6aa42cc269dac893da7c1aae",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/__main__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
+      "size_bytes": 48055
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "339df4c619e0f1e3d2610201b72aabcf3e91c438",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/_backend_contract.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "650c9bbfdc644c2a6569f2920d5a39ed7bc37c2d826c551dce1b5d61129d526c",
+      "size_bytes": 2873
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "fffc39eec9693ef8d2bcc3ac1cc9f8baca173daa",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/_benchmark_contract.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "18bb53ad11870e142c418a087f672ec558a4fc8afd101d8790841395ff7315d6",
+      "size_bytes": 1477
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "fc58e61e4ab41ce53d0be729f357b05856ba6840",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/apex_codes.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d72f303ff63d4d7171cf995665af55cf396b3913ee73ad6ec1a561ac9ff75aa5",
+      "size_bytes": 1670
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "983b29905bc84eb3b2cfb5420e46a6ca3e847dcb",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/artifact_manager.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "6bbeb34f1c07591ea441bc2330c7fd0d52742310695abb4f604ca3dde23755ba",
+      "size_bytes": 19082
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "28795e54f63c537d2331170ff983637204c875c8",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/artifact_tree.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "577eba103751bbc7ee3a37592422b535b0e45e0df358f9dd121b34e2a62b3320",
+      "size_bytes": 14050
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "0d817f4648f10dc5b8c74b1d759d1a80b65853cc",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/batch_stats.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a707cd0c773e97d724ccbf649fee44fb5f6a27df214d5423e65d3017a6acf9fb",
+      "size_bytes": 3281
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "fc9679d4b7d87c50f0310e615878e0f3c6ce78a1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/bootstrap/__init__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "0df5aaa0bb69507ea6f00b29f05ad84eb39ffdbf9b31060977cd270a1263890f",
+      "size_bytes": 378
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "b13e319873585567cb8af048fc31cf1152741979",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/bootstrap/sky_seed.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "1a9f4be3220bab2cbe1a9f555ff609437c14482226b6cb17b0b1abae345bb360",
+      "size_bytes": 7598
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "e195187be32ada2186fd57b0e4821507a90ad1e2",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/camera_metadata_loader.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "b8c577d1a186af957a08dd27c5f388c0828ffa6dd2959a2d2c84037673687a11",
+      "size_bytes": 9303
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "63897c8689e5aa1b92fa861fc7184df108f3c731",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/config.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d320b354b4b3a3ff0366d318306a79fa4924a8196add83b4e42f82715de4909a",
+      "size_bytes": 29774
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "928138bc03262b96b1ec47b108e653e02b8dea69",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/config_resolver.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "632c2c86fafbfe56e63d78a0a6fb8ab2cf42d359d6b8c5b2f99564063ef53381",
+      "size_bytes": 52960
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "8dab52f315ae8c37ae5eeb131db4e75005c96744",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/contracts/__init__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "f99ad673a66bf352f550591f9b3e2a4a58d53800a7363df808a7ae24647c1fc3",
+      "size_bytes": 580
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "020e8f79c4fbeb7ada50fbf7d518bad094cfce44",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/contracts/depth_artifact.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "8bef4d2abd1e9d7d10b60bab28949ffd07964397b64e3e2949145467e2703d7f",
+      "size_bytes": 17761
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "3c599414051e2152f474f873ea776b396e0f5806",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/coreml_backend.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5ec8b547dac07c02efc43e9093643cec1c21c37cacbd011ba9e6866d5fcdf800",
+      "size_bytes": 11486
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ee0e82956713ed520327da3641bd9044248691de",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/da3_integration.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "106cdedf304acc9f3831baaa1f0624931d55a70d513dd4dff26778d13016de87",
+      "size_bytes": 267
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ab4f5a0315624e396105e84d557919c57bc93317",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/da3_model_backend.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "f24276ddd96b2d2c7fe6e8305e5ed7ed204b7edbef94c02405deaaf327863143",
+      "size_bytes": 907
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "6678231f3b5ec856e94ca85442dec2bb4737d7fd",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/depth_cache.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "7104d83ef1b6d12c5a2cc622f8afdd0fe42442f938c3c3d0ef355256132a0220",
+      "size_bytes": 111420
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "e8f67f87b07cff4ac04451ed0859ad280e64601d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/depth_cache_runtime.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "7e35e780924c7314ee60bbb0d261f724d361bf56461159fedefabaf76c6b3812",
+      "size_bytes": 7852
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "215ef4ecefa841e0d210fde796a0b3a95e9520ff",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/depth_writer.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "be8474c6f30b3ff51f099fe8251ff9982a7d7f5811617ad7c95686b9a919837f",
+      "size_bytes": 13558
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "5b60b7b4ed0aeb1665694ee046da6125a39258bf",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/execution_engine.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "8d719e4779320baf5b90c276f300da0d13b3f9dacc298596565fb8e087b87994",
+      "size_bytes": 29806
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "cda46baf1a453070bd695f013e76b0249506016d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/execution_evidence.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "b53c5a105d4bd42cb007d327f0f0704fa76702d1f5035341ee77bef017037def",
+      "size_bytes": 174706
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ce77567640394e30ad1332a177eecc7f1af82377",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/execution_lifecycle.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5ce9244e1d643719b8966b0bc726d8a3129b9aa3b0e1b1c10c1fed6ffdb9b73b",
+      "size_bytes": 73102
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "91670ba6062526892c647622f3a52ba867e5914c",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/execution_plan_adapter.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "2ee0858c13165c22594161fd3181afd81a3f2bf6cd0c28c4c71104f5d1c2570b",
+      "size_bytes": 37226
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "50f894e0e9eb0f8fc0abbfa58ac21fb17d93b127",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/inference.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "c92819d1896b185e723a23450db46ec21d69a930a3885ecb2683a78c16aa299e",
+      "size_bytes": 36764
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "95a14a944ec0cdedb5da27c1e39c1813fe5a86dc",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/ingest_adapter.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5fb0955167da894e3d8677681a39b45e4dccc16d2fd09dae9cf479bb3c546cd0",
+      "size_bytes": 10139
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "449091b1e4eed5f4fa96e9c9c5d3b92e6ffb927f",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/input_discovery.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d7312ec551dd69bebdfab8784ce4272a0549f3cb1a25db775c993e27b8bdb4a3",
+      "size_bytes": 8308
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "4749908a17c50ed93e6b85f55faf9f39f74f3dc9",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/input_manager.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "6ecb73dbb08c8ebf0f30e5d2493eb7fe46024b21a0ff33062a8b07b7a27b7ff0",
+      "size_bytes": 14769
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ae24c148d9743b6b9f92d929da63b92fcbebf338",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/io_atomic.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5ce866dbef65c1a1bf675ab3326c30720749e142041ba9cbf2a66fcafff34a6d",
+      "size_bytes": 20730
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "5af5914685a80d36051ea4880919625c40653e82",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/linear_verify.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "050af0f37b0cba0c388e25927166e3d2120ebb46ffcfc918f3dd6688868021f7",
+      "size_bytes": 13293
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "bf20f556c32b10ac9bb0250dd058b8dde60a7595",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/manifest.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "98b8140360e67b0c5c9d18c2bdda73433b20d8268cea5b644bc36c316b65f270",
+      "size_bytes": 26047
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "e92df9d7be846825a6d82d50db0fcf62cb1dbe4d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/material_confidence_contract.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "bfb2a7bc0f68d1e002624d6e8c8e8218490d3918c97a5c972c770712636bdcf9",
+      "size_bytes": 1125
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "1f5f4e119978f17248782f9a235d01fa9dcef91d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/materials_v3.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "369bbba358b482042b00b0cd1d34016ce421d0bae8085d1c9c769723a93454ee",
+      "size_bytes": 10925
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "94c93a4f51ef45c301f92a211cab85e4b5da0e86",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/materials_v3_response.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "9f358d052614c236396c717879e861099a34cd003e150b952a0af1774e56e55c",
+      "size_bytes": 6251
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "ae0a299d74154632e0fdfb48848f9c05d30e5653",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/materials_v3_taxonomy.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "39a8f361be56abe7277e4aa504a37389c83970cfca9028617968149f6ba4db12",
+      "size_bytes": 908
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "685be93073fd4b92dfc8e5a22802c5d3596e3b07",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/model_registry.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "3b81480d96509095d4165fa8ae6270c704516c4305d6d977e703fc7cac67ce47",
+      "size_bytes": 11075
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "a6842d344eca29891920442a0b1dacbadfa08eee",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/model_resolution.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "b81da2af81870398523881ddc20136dfcc051bb3da3dffc744c379d6a51ce471",
+      "size_bytes": 19298
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "9e3b3568ff0a8589231a638e68c5d4a985151d43",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/orchestrator.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "dcdb16f7ded014122b767044986b7e9c6c73494ac2d5d5542b49c62babf8a5dc",
+      "size_bytes": 439670
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "8f1b1d0ce3a7a41b39ea12afc7928bb595df3fdf",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/path_aliasing.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "9cdb02b31576a235956f8474f0b4b7acde7fa0a4ec670ab1feedb0ca99ddeebe",
+      "size_bytes": 1304
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "668d6037d3e00b4d41b82b744e329088577964d5",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pbr.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "0cc887c6f6472368a897970cdb965786bcac67dc0b54e8803c6bf02fc4ad8fa1",
+      "size_bytes": 16708
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "42cee9aa6ea27f00b17f7b0b4ec90c1706be940d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pbr_cli.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "f96b1f87d5e3136198782c4a573a8af1dc12cc228859b6bd1c12194b0042962e",
+      "size_bytes": 18156
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "3dbd059c812509ef4b5bf2c21ce87129c0b4eccc",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pbr_presets.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d0609f2e5c7035e2eead5de839253f37b0a6765335c43d803835cd6658b3e5fc",
+      "size_bytes": 7377
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "b820e3116ce4451857ebfea495078eb39b171955",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pbr_processor.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "48ae8a0e5959e86c36cba6bf47129ceeec58bbc2b8e8f67f981c7864083da7a5",
+      "size_bytes": 6108
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "25bf2ddd3134eeea633d0a5ca5e1dc3161eaec3c",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pbr_writer.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d38ffc23d527c7b6b50298468af6a7fbb6c38a5616c5d7e5c078475941c83233",
+      "size_bytes": 2576
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "55d842456d11ec6f818892e707efe446b15ffa13",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pipeline_coordinator.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "502a38001c761d3287e4d0a7ff42475f1360697906dbeb0b0a1d6f51507761bf",
+      "size_bytes": 48364
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "b7c13ca4b97dc9cbddcfe48a269845e7d7f17d5f",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pixel_ops_decider.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5ebabad2767d810e33a94391a4906d9edae6b9495e4ebf51afebe851c299212e",
+      "size_bytes": 6901
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "53521ad64084771e6dac0fc47fe8babeaa2ffe02",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pixel_ops_executor.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "14891b750333c302ffe22761702d301b41d14a2413638cc0a07c772771ab9985",
+      "size_bytes": 23252
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "378177b2c2d7f562ebeb2e0c025f8b1eca374eb0",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/pixel_ops_registry.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "e8a23f0b3112ad6883b91fe2ef0411abdb52d80dce5cbb924fb0e4c270483e39",
+      "size_bytes": 14329
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "1773ecce043a43d2537884e1d6e06b778775c92d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/postprocessing.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "c8341719884793dfb354b4a4723fd524dc29ee2acd73f7bb35eb3ccf29fa861b",
+      "size_bytes": 11907
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "6c85b0adbc4ff02e2ae1483c26bad936c8633d81",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/preprocessing.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "b871ced51cf901fe3376e465f3a9ea3de08d1d2bb7ef9500f11f9c9cdb602b20",
+      "size_bytes": 36530
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "479538f4c93bc5a20a858d39ed2247dd96d6ef91",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/protocols/__init__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "0c6ab0b8be0129e02443138c37568ee389d27a19f483792cadf527901d612f69",
+      "size_bytes": 608
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "aeda4f0ef6a8676b84b8f804479d602b6c11bd39",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/protocols/depth_model.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a1e3e3fcb0dbe2373292a9fc60d007403db5fafb2b3a3271047ae6b46245a255",
+      "size_bytes": 18908
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "a17ea85987597e7356ef3f96a65205c95f903b1d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/protocols/segmentation_backend.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "3abd6aa9e00de5c57c06e9a2bb61ea3bffea141316d110159627513919b6e6cd",
+      "size_bytes": 5404
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "583f97ee80dacb1ec0cc3e38055c7bdff045f266",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/provenance.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a49a78c643acb2e114f7f80d92a94d072026c86f452bbe96aff563eaa0be8de5",
+      "size_bytes": 22255
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "a841ea216c02f843696fb8ac2d1239c2d3aba851",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/raw_loader.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "50ef44d5edf7b09fc8ffe9308f7025c5dafb2da2210cca51a7ae73510ee12e87",
+      "size_bytes": 9718
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "583ff35bf75303245a1e8bd58769cd4f4865781b",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/reconstruction_manifest.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "30232d9f75872d6d65427d157da58eca7f2b5ea683392a97081885598d4da664",
+      "size_bytes": 9554
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "268db7c978a84bf693f917632e5813ddcf10cfda",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/reconstruction_runner.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "90315e5ee4cac25da287c8062408a8c593f8a1092bff4cde9ec8c750a8e90cc6",
+      "size_bytes": 18976
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "d9d60f6e3828943685996fa6f8de9293dd0abc4d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/resolved_invocation.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "134e0cfe3c2f5b0bc29bdadf2efa412d18611b447ac666f1cb710b53bc71f2bf",
+      "size_bytes": 15792
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "6db76a1ab38761de87ae971aea79a7b1688cdc13",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/run_card_contract.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "adab1ed974e03872cb1d6a33cf24078e7f017fd5d0a4715ae9785435d5a117e1",
+      "size_bytes": 6087
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "0fd1a2d6f4837745e50cc0479648f2338ffacbf1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/scene_context.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d9cb5af24951ac9dd366656db97d3eb13bf61faaf1502ee77b70f684c860c015",
+      "size_bytes": 2740
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "75aaf5f5e412ed5096de49843336db6eb90fdb8c",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/scene_groups.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "5fa04247a23d72dd320fdb08218464bb7e44d6709297ed838df6cfeb53633639",
+      "size_bytes": 12855
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "b8c848a7d66854873e0bacbe4ab0de6e69bcc461",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/scene_integrity.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "ea7a4d72e17649c262265825056a62de763582e45bd271497ade12251109db7a",
+      "size_bytes": 28422
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "76bb7c34b1a49df8a3909616347daf1e598c8b23",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/scene_preflight.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "8e6abf564b7d6ac46454d392d96b77656e940229ef1ff8597b066f1dda243093",
+      "size_bytes": 6286
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "06b0822f213113b261d6faccc4dc6571e84635ba",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/security.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "ce01fa74320627cc8b757bd9101cd4f7bc3565af75b81f9d0c085a31dc1f76b4",
+      "size_bytes": 10448
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "48266ef81e143c86a95f3c965dee955c9c45adbf",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/__init__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "541d469c47f57a7bc107c25c770db883f3c3ce8c7370b672a91249ba080b2fa5",
+      "size_bytes": 2193
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "073ccce2ce347f89978c77c41eb5e0ce729d591e",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/_cache.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "78a11e80698d20beaac97325bebcf1bf5db3d91ac939c321929ef65a245916e3",
+      "size_bytes": 15789
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "317084ab5d0497b3bfbfa9ef8fae47f3524b1874",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/efficient_sam.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "485328a556654eb8364e9284d40169a0fc1cf8a639c291f299063d954d24b106",
+      "size_bytes": 42764
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "6693f571750e743b28b72dfd542962ab6adf29c3",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/registry.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a7b77f84169385330607b8d47e2f2dad5a63a71aee344c3eefef0c8b1b1bafb5",
+      "size_bytes": 23332
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "9eaea9b46f272d0aad0f0466c7dc2a8c604af6dd",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/sam2.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "45d5db8c9f743911bd650cdd6ef91201b0247baf8d3a42d8350ddc5b566869df",
+      "size_bytes": 18742
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "4617c2f023c7a013820d658104491bed7f94db70",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/sam_vit_h.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "fe3f7f802d669b98cbf502ffb0b43c96d36a99cc27b00c92be33ad09fcbb4c54",
+      "size_bytes": 14724
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "dee8a976be74572285e80424fc03724aa88d1a6d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation/stub.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "2dba231ea1e35643314712e4792c43a55a470f40c06b9e3efdb786b7f499df00",
+      "size_bytes": 1323
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "52cef66007a74ec3d113b5c12a4898c9d8182ce2",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/segmentation_backend.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "07a31ce296dd3631ffd1448905b3f1596dc39d95e79d3a2995a93a2b412c63e5",
+      "size_bytes": 7797
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "91367311310bfe1dec30d747ba455af433f7385c",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/v2_enhance.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "22e096f164096ae76056730fe5a09b2fe6c84fd5cbe0a373179a4fbca15786bb",
+      "size_bytes": 40347
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "5862bba67e8e20913d020f5bef5e29f22477febb",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/v2_presets.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "dfeea7b29ed03cbef1a5a0e0e18802f0969619b3e9d2d2f78dd217483c6e18da",
+      "size_bytes": 6691
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "566e03b062306ba1677b297863d9308ee6b88813",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/v2_runner.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "e8a78178076941898e4580371a97dff1dbf8ccd8d137736a03c98c2432f916b9",
+      "size_bytes": 14293
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "0873f33a5a3f12fbdc3e360aa730bc2ef3384f57",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/__init__.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "fb6bc614e67b884abcf5272f5e7f42ff07655cce5cc9d9471e20ad82c9ea55ee",
+      "size_bytes": 1049
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "11ad0f487add29e6a8f992eba978a99680acddb1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/jsonschema_formats.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "63a2ceb3dd677000f227bfdcd4cf091a51df646346624ff12d15d6d592c33dc8",
+      "size_bytes": 1254
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "77ed5ac833f9e796d347e788525b34ad4b0e9c82",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/release_assessment.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "3c4be2b93754f4d3da46d894f76fe30a9666fa26b83a7434d7a0c74932aa050c",
+      "size_bytes": 8804
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "69a71f581766558e9b1cb7058e6b6a4ed4abaa12",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/run_card_backend_semantics.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "49a2c08b6d7d87112e2b941280df2b864949c2b1fced7c7c327f9c22b73fbf30",
+      "size_bytes": 4498
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "25e9460ace8f698d119a2aa477bfa0ff76adba05",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/run_card_integrity.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "2a396e9cb6c5a9e9c2391f460c77a37abdd1476840291a87a41373cb95d2f6b4",
+      "size_bytes": 30606
+    },
+    {
+      "area": "lux_depth_v3",
+      "baseline_git_blob": "e23166fe612067ab47df320b7239523821b560f1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v3/validators/run_card_validator.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "a801fef961da5649c2930c3be850343691790dbc14a92e6294a4de67eb30a4ae",
+      "size_bytes": 16010
+    },
+    {
+      "area": "historical",
+      "baseline_git_blob": "52340018fe68a4accbb4c5dab2fa91e86135ceb0",
+      "disposition": "historical_reference_only",
+      "path": "src/transformation_portal/lux_depth_v3_precision_arch_fixes_plus_upgrades_files.zip",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "95509f5bba2827dc3f8471881f41abf9954132ef4c451badfdd5657bebb3c9d8",
+      "size_bytes": 38960
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "c0da3f77e288b6bcbcdaa60516f3b7acaf6e3003",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "bbd66495a768ecd78df2ca2f090725bba5730398a6dfebcebaec25d9e56d96b3",
+      "size_bytes": 938
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "c6b9d0f4f8518981beb3632eca61d902ad5c1b48",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/__main__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c22877b060053255a0e7fc04b58fa79d149ff704aac3036c52ff6025c5ebfd1c",
+      "size_bytes": 5086
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "d2a3f1e20db32ac0a1848f00629dff1b611fe9e1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/_bytecode.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c40d73ae86c878975a522cdc5db1bebd67825ea6bd1d5836524b3675cded6b59",
+      "size_bytes": 6353
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "0581decc2f85f824fc75a343ffe720d0b9544fc6",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/backend.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "44caa25b3b0dd2a422c4597b3910a0cbc985d53338266254e24a41d3849aefb1",
+      "size_bytes": 13932
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "60cd0a65a1b4c82c6b4f0da5c07ff38a99a9bc4d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/companions.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "244a558fbbf6503223aad0ac58ad08a3f56baa0e650e7bf2fd9ee40bb8265a62",
+      "size_bytes": 15768
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "4b9578a8bc142ecdaf615941e69ff7f966221560",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/evaluation.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "fe7cfbba80c67bec512226a1e6b17ab9abc8d88ebc1666e0d73de629b20818e5",
+      "size_bytes": 27480
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "726d013e69c54f5126c3c62d5443e090bd40183d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/evidence.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "642e311de6e35316e1b0e96c88808020b3380bb29e3db5a648f7bfa8b6c5a761",
+      "size_bytes": 28240
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "0595f3e863fd984668a6958cec336ac38c9dd4c5",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/io.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "896488f619461ea608011a0c5b14e1b55ba557f37a389fd14c99940b5cbff1a5",
+      "size_bytes": 3937
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "68a21b632a94b49576019329ad5c11c9faf18c69",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/lifecycle.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "91ae729b09f75d85513799832e3f793cc44423b9d46623baf4bc2f84ef21b03c",
+      "size_bytes": 16144
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "947bdfe08aa5124bfcb63ad6e5bc429eeede27bb",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/materials.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "27c314c6a15eaf179aa92b1f9a53c0d39bad3799c74d023842148b0967151553",
+      "size_bytes": 7066
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "b0e026d9ae3600acb49317e97ad1e34ff3cb8d1a",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/photography.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "b9b933fd67b3dfda2d190d3f8042c5ea7f5faaedd01017f9ac1b00631ff6adab",
+      "size_bytes": 27412
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "8d29468f629e65a22cfcd0344c8ee059636465ae",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/pipeline.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "84ff6ee2f3b507727f229a577f967842dad2f605c395ca699fbf51a4240290af",
+      "size_bytes": 34637
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "fb03e02429a2067efbceff7d3899fe79d81c002d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/publication.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "845193b8593f7567258f9ee648ce04f87d07e78d5d781d5596018468af078dab",
+      "size_bytes": 10667
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "689e7976e41054951d8b076a6c457ed459540fce",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/raw.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c1330c6ce82eb8921dd912a53ff85b02bdb26a4ab44eeee42727e2aa2795252a",
+      "size_bytes": 12816
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "50674c8ca2a0de6c0b21c6e226c604bef8807820",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/runtime.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "64f4ec1c2db6992223942aeabfe335327f067420f947a9df31528a07612e6416",
+      "size_bytes": 12933
+    },
+    {
+      "area": "lux_depth_v4",
+      "baseline_git_blob": "e4b9aa2c8f49400a4b1470ebe335260d1f204548",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v4/worker.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "13b84ba36978a7773598f4016db32dc015994d1aa306869a769288114d550e8f",
+      "size_bytes": 7793
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "5741fe86ac6ae2bfef6943f1708b743ca623d0df",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "7087cdd9ccc595a37bd5d4c0a8fdfa35fd806e092e95e813b10a51ffacf753bf",
+      "size_bytes": 221
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "11612b8281d1c94d82bb4a5d3ddac457650c7205",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/__main__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "0fa472cf0535eca4563e1dfc89598912628b89b471b31985eb15cd21431e7c46",
+      "size_bytes": 774
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "f762d376c960495f6c570d239c16ee3ee387ecbb",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/backend.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "be571e24db954dc392cc8ecea77b64166e92c3b12edcdda1d68820f03d97764e",
+      "size_bytes": 1731
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "58d1fb649a110b76d5a3dfb26d976223c6c9c6ca",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/evaluation.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "23a8bd1aaf22d189d4f81a47cb158df593b01796c195d979b91a4069d7e8d066",
+      "size_bytes": 29810
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "8b666fb45730dcaf32a6921640152ef485b9d704",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/evidence.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "9199910c1f2035282fe51c5429b179a5d0a05a9e7dcbf6ffeee64688b833e765",
+      "size_bytes": 19347
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "599e3182da3705401823718869132f9f535101b0",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/lifecycle.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "1116105082f03a8db8df9bf9f29b4c8729c9155faf77a66035e3352f08522e04",
+      "size_bytes": 5204
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "c3de48aeadde22d7a1a223358515c25d92d8381d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/photography.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "49e78b3d917ae85e4fc24cad4dff84cac820fe57040a504084f10a3b8ceac8c4",
+      "size_bytes": 27082
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "d54579ab1ad6cf23881f475a805612990bfd66be",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/pipeline.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "b561679a70aaeb60aa6cec754d50e5dca6d78a1b3d9299e67b274fb646d5348c",
+      "size_bytes": 8055
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "5c5fd9ba33ac2665149b70316e77cb772c6f69a4",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/preview.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "1cdf51e89283125df286e2f3de6a07cb7bc931ec697f0414933f20eeb1eeb68e",
+      "size_bytes": 3575
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "ee4c161e46e650d3c3dce0d2ad7eecf2c68e6d0e",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/publication.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "5f68f203b9f65d256d4cb9fe2996bbcd6968d28dc3420b97b02c72fec21129a1",
+      "size_bytes": 3599
+    },
+    {
+      "area": "lux_depth_v5",
+      "baseline_git_blob": "cb9568cada99fdd807c177beaf84aa56b5db4d75",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v5/worker.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "7b48bcbb76f4710f28c10a12031bc96eebedc8e05ef42082dd24765d6617210b",
+      "size_bytes": 9269
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "e4ec2b5478e624e37140f7f6eb4e40becadd84fd",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c1bf7aebca676ac39597b2439d6bf82f795c6036b1bb381881201c12dbe026f7",
+      "size_bytes": 351
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "05460d546495fb75c93b06ecdd3e3d52e8718119",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/__main__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "e105638b463a2b128da37e59da235a1c2fa1685a7988acd26b7d757f8e6f83ed",
+      "size_bytes": 8882
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "c1bde98833b8326a5aafdfd2750d52d1108ac4c1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/color.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "14fd34c34e93255c8dd665fa83447e6ec5d130910e2112012995bce60d8f04ce",
+      "size_bytes": 16464
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "da7e2280161ffde21ba4e1833a5415696091d1a1",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/depth_maps.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "8a59e57cc5b67e3050f05f8422174e0e8fef4636e03fc9f143de2e19b20ef25d",
+      "size_bytes": 14078
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "c1eb43b58ccbe1533dcd359eb81317297217a655",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/depth_pro.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "3903210760f8e70fdacc81726259792cc37badba832fe4d876aac415b18f214c",
+      "size_bytes": 28885
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "44fb8a102a2c79f316074417bb837353d2de8b8d",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/depth_pro_backend.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c1f1e73ce5539cfe366aad5eed5c039c08319374d6033f6241ef67276583a194",
+      "size_bytes": 22877
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "96fb353099857270fcdee78a882c4c4fbdd527b4",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/depth_pro_products.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "db435fc03d348152e6e877d9c06568ad1fb1bb5ad8c215eac73ea0ee2513de4f",
+      "size_bytes": 11690
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "520de1800b84099046af2af85b731c70e1cc43ee",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/evaluation.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "574ace11cc55fe978ef8052d802d3afeb5c048bfa80b51f2b31f855b2aff3498",
+      "size_bytes": 8486
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "050ae04e8e38ec7659e7965ad84baf4b7819c9dc",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/evidence.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "a00c63433b067a0b91f9ee352ad397294e44fc1b7be37a6e913282430c99f918",
+      "size_bytes": 8948
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "692d7b45290ca290cade4b1b66d8390ae41c0043",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/managed.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "7d952f9fce6dcf860a41c1864743a9fe4d4c481ccc0f9ea16ab8e0dff1c2444d",
+      "size_bytes": 18894
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "037fb732731bd3cf612a326d0bb2e0fff8e4e0f9",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/pipeline.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "19764928c0c4a13983c8dbbe7c558b80a82b2c4d80500dedbacfe761fd285e06",
+      "size_bytes": 5389
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "9d5734e5aa728344af8ecf9866af359631bb5eaa",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/plan.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "ad0f7196a6fa504030c7b7fea751cc8708b4ae7c0960e9a2f6932f13d54ac5bc",
+      "size_bytes": 13596
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "774bdf9db70ae1be3ee9eb196401e70db6eab8d3",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/products.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "e5ccd279a318cf171d9db816b62870fe338ac8b3fa4dafcafcd43906119b618d",
+      "size_bytes": 4867
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "e35b37cd6efbba35a2fb3813dba0796e88ce8a9c",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/publication.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "e9f7e21f60dee778201a4678bfafa3e675e586cd03e903f5a1a2244818698e01",
+      "size_bytes": 4654
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "1d93e5a2a153a45c5e5b621fa59c3622866e4d22",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/reconstruction.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "f08bbfaf5174dd72702a8d19d39de5329b46b656ef03f4f99370217b34e670c6",
+      "size_bytes": 6109
+    },
+    {
+      "area": "lux_depth_v6",
+      "baseline_git_blob": "2b1d10447cdaa7e6ff74282839ec1d8033598e9b",
+      "disposition": "retain_versioned_authority",
+      "path": "src/transformation_portal/lux_depth_v6/source.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "96b8000fe8c74f6b5ff10fef3224f01bb82fc3e809008d1e1df8956c0a027aa5",
+      "size_bytes": 18892
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "d35f307cbfd8e3d0f50bd4c4de346acd076f4cca",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/__init__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "6592a8defbc8704d3011cb5d9d6ce85f2e29756bf0bf8e68b3abf0da56afce42",
+      "size_bytes": 494
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "85366719a5b663fad794aa1a6bbbe3bfb14a9db7",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/__main__.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "f992929a939c29aa4e4df239fd19bb0448d97495ac42def34052733e4bc64aec",
+      "size_bytes": 10356
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "64f68f683cfbabff8ef0b4d0a217b7112f46ae96",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/artifacts.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "ba09209cd63331cbd2bf2d7cdc4805aa231c1164efb5722477ec429228e600de",
+      "size_bytes": 12574
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "dee586d0f974a39e5c35ed53b29d1a636bc731b1",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/contracts.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "22d25b0d6526235c6b6972e7801f9cd5f14500c3fc4549ae9f7655e639be00e0",
+      "size_bytes": 13589
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "a3e20935b3c25227cfce96d50ad97f822b1e3cb0",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/engine.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "29fc3ea5869f82e6fddb7a4454ed84ee97f30cc65c112727d4f31f6d1155b430",
+      "size_bytes": 19559
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "64c6fdf4011decc3fdc9d8e0b123b697b3ef3f1a",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/evaluation.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "1febcb3f06569c7957b8dbe247df556d496f6d0abcb79e5d372cdc9276a01649",
+      "size_bytes": 18460
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "4e69d74e10718f108f9db14b4df9af9d7c9fdd27",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/inference.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "78ff08f960ac27ff44f29bfed7cae683afc4fb9b17a89001a934fee386383102",
+      "size_bytes": 19770
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "8c7b68eecfc40803df806e727b9de4e579924482",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/operations.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "ec2fa3132e5b4078b014485f1848b4a7df5204eb514bf3596de42c55e8872916",
+      "size_bytes": 4026
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "ae5fa5429553aadc6436f40aece3d58ab93a5d03",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/proposal.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "6500f9f4af066eba160540c6fa393dbd6908c46faebc8a408bb980c9710d2fa6",
+      "size_bytes": 7369
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "b0f30fb9f9719b7a709363c3ad2e4ba0d6caca19",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/semantics.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "618cac5c5e7db4b67205861f8a8ed40c75418fa23d91eece2d75009b191c43ed",
+      "size_bytes": 6262
+    },
+    {
+      "area": "materials_v4",
+      "baseline_git_blob": "bc183f2529c72050995be87b490aace1d4fca83a",
+      "disposition": "retain_verified_materials_authority",
+      "path": "src/transformation_portal/materials_v4/taxonomy.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c97479a8e2259c2fee467d6f98809fe456df011ed68596ad4ee19c0c1ba82b3d",
+      "size_bytes": 2465
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "60758eb3fb87f8f002b110e70e63f88520bb7399",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/orchestrator/execution_dispatch.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d5c9fd6e046b5405fd4180ad3fd9a323801780b1f65d89b44196f7ac2eb52bbe",
+      "size_bytes": 26277
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "91523f1da81996321d332177e4ff62ae71eac664",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/orchestrator/photography_adapter.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "4eeca7ad8c9708a0c12b89ff660f21abd93419010ed4b526e98be752e380d683",
+      "size_bytes": 13700
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "37260bb887f190fdca2a4e4f44852a4ed52cda2e",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/orchestrator/photography_v6_adapter.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "c1322b85fc28274cd7aad635a75a41e4b871a01558eec3cbf6a85352445a917c",
+      "size_bytes": 6397
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "649b8f0995b3412bf5880b3ea75bdd924ff5cf7d",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "src/transformation_portal/pipelines/lux_render_pipeline.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "75426ebbd75e6039838ac4075ce72b4f4129294d3fad8e9bbb2b5be6e953051d",
+      "size_bytes": 59821
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "880cef357486206efd64be97bca3c3c076e28144",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "src/transformation_portal/pipelines/unified_luxury_pipeline.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "2239ee71b67df5d19d32355c8e35bef759c07eb5424ea173149b4524074007ca",
+      "size_bytes": 70319
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "71b9ae35b66cb4b17feacb46aebba7e7f0bbcf1c",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/portal/photography_jobs.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d6bd5ae88d5a0fd0a03080d9e7034f4bf3d54877510a59251a73e852f68cbd7b",
+      "size_bytes": 9017
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "a12fa6f8cc2f786a75419eb209db5f55574b5d78",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/portal/photography_v6_jobs.py",
+      "review_basis": "Complete module read reported by the assigned lineage auditor.",
+      "review_depth": "full_source_review",
+      "sha256": "fb72edf5536cd7a73fa6bae4fe785a11a23067f442405976225c899bc830a154",
+      "size_bytes": 6044
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "3733e4a12d3570237d2b1542487e03d6907293a1",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "src/transformation_portal/stage_graph/stages/depth.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "558c0c7d2219acb67d598b57d14f116c8cc1aa369dd6fb8d6e2c462e0a42979e",
+      "size_bytes": 5075
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "a5a59ef18993827d8eef1386fe08d20ebc7fbe26",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "src/transformation_portal/stage_graph/stages/depth_pro.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "4d1d061b9b237a9281dd92f062bd1c0770feb95eb8ce40cfad470023ffddfcbf",
+      "size_bytes": 20921
+    },
+    {
+      "area": "packaging_or_operator_support",
+      "baseline_git_blob": "560e9ec108903f1b1cca87ab4efef393af034e1d",
+      "disposition": "preserve_or_extend_entry_contract",
+      "path": "src/transformation_portal/stage_graph/stages/enhancement.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "d293d268a421894fef2589bffde7d91142cff01626f31af2268579cfd96d6f27",
+      "size_bytes": 22231
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "0a43a632ac5fcd293a8538c58987769e1bc39b84",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/storage/cas_store.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6cb6ba9aae356073ebec7c54f7883fb35b1bcf94d22aebacc4ca16280c8e9295",
+      "size_bytes": 30146
+    },
+    {
+      "area": "managed_or_publication",
+      "baseline_git_blob": "1dc831a2d1692fe8e8079304db1a5132d2fa588a",
+      "disposition": "preserve_existing_contract",
+      "path": "src/transformation_portal/storage/merkle_dag.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "15ca7c4e0850de543fd58d866cf6aed8aec7a396fe5533752a1eb9e2f2a3ab14",
+      "size_bytes": 12207
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "7fa51f5f758faca64c8c5f2bc76fc8259dbddc33",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/benchmarks/test_lux_depth_v3_perf_smoke.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "24249ce94e2032122653bac923bb0792ed376cc58f0a2ca73bb572cea2e122e0",
+      "size_bytes": 28771
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "396796ff589e82d50cb276ea6bb8bff39931103e",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/fixtures/lux_depth_v3/documented_workflows.v1.json",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3524ad7347aa6da594c80e2e1d3a9a92f991e60fd8ff5bd062967d07261a7c72",
+      "size_bytes": 13166
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": null,
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8d401e507ee05e6ed6c709f32704997faec5360629740d9b87182615c0207d1e",
+      "size_bytes": 39
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": null,
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth/conftest.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e43ec0f17469a79dc6d37b17d8fdea912b4bcc4974655dbbe37fbbf58df392db",
+      "size_bytes": 303
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": null,
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth/test_cli.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a6c1335d2373c96701970b5d7678eb03b6943dbebd091cd30ab423679298ab8e",
+      "size_bytes": 11833
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": null,
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth/test_composition.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "89432f8275dcc5f3bb8c8f0c603b90e29cb09230b275a01e554f6e4d7c89b973",
+      "size_bytes": 6626
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": null,
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth/test_lifecycle.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "106542a9c8fcffc0f8da626203437761368d284c3fdf34175f83ca67982ee908",
+      "size_bytes": 13872
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "6a5f8b70f120ac5590f9aa332f55b9e034e5b1d1",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "55566d4e53e4894449208cdbba3042ebacd176aec1180df0c0caf5579f770add",
+      "size_bytes": 33
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "319a01dafde47116caa3b6805f1d88beef302492",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_artifact_manager.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "803fa4940e75213776c92cfc4202fbbfa57d719c0375811e0b4f3a187fe40bdd",
+      "size_bytes": 21184
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "18315598afa47ab0fb88b0efdad5d6fcac9a9873",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_artifact_tree.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "75d954ff0ed3e645f12b3d0b1033db9bc70af2cc1a7ca2f0316122cca6d50366",
+      "size_bytes": 6570
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "d419437e8cdc8717d08eb79b60ae831c2b8c71d0",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_backend_contract.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2abba67e00f51565e829bb75a94c4daacce33622d1df1bfe581fd0a8521114d7",
+      "size_bytes": 3426
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "966323044c8b4e64f5e6faf824ff19ab08f85775",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_camera_metadata_loader.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "66cb483147220d15e606f7ac150345b93edc371b19cff985e9f72a3d2aff60cd",
+      "size_bytes": 4466
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "b3ef1397c84d8cb83ef80342da6903e2e74ea8d3",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_camera_sidecar_authority.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2571396eaedb84f860ed05be17c28de6ae5f54d549977429c890f50a32552d74",
+      "size_bytes": 12574
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "969ad238979b60065682051c69e02e0170f318b1",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_cli_plan_mode.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "229756faa713d7c04c78dead311dfb74f904cd2d804f6e8e56d135df81d829ac",
+      "size_bytes": 15741
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "42667de66028403cc4d56356055c26275d4cf555",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_config_resolver.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "440cafcafe07cb9093a604a08158d23068b55d5131ebcf823f6b98db08ef4f5c",
+      "size_bytes": 52683
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "437aa71b377ac8b10ce722cd71b6c131aa0fef13",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_confined_artifact_snapshot.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "28487698016b468edb253cea0830726f5ea94a92faa845a4b4b30f50c442b03b",
+      "size_bytes": 4164
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "c5f7c8c739ef529d9cc1de7344307863d5464f62",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_coreml_backend.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "473bde623f1fd964e83b623b7f3780c49b15e61d87eb4c101556f831b5a9c098",
+      "size_bytes": 10424
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "60dddd05284ebed0676d57377b4a08d365fa8f60",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_da3_runtime_contract.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "25839b71cfa24444f0f13c6d4be6e3d724bd790d4695d156b52fb71b1c941644",
+      "size_bytes": 7239
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "cc1f32cbf49f194e111c174b35908c525dce7646",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_depth_cache_concurrency.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "44e004196d8bbcae445ac4084895b55e425d23b625537e0fcf50d0474db0806e",
+      "size_bytes": 16451
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2d9bd410897816692475f3cb29edb9c0cde2eae1",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_depth_cache_identity_v3.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d0d9a447f3569ad1a5c4b2be16cd54073d8109cf57d15c96089febe5dac72be6",
+      "size_bytes": 73009
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e70f3453d24170c14230d0c4290a983d78b0acb1",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_depth_cache_runtime.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2a78785cb27f00283e3540a0ad52291235e65bd8c77c8819b9876c4d04a4f5c2",
+      "size_bytes": 27718
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "268a40773e8472492147dc77a5f1c6fa70840d4b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_depth_pro_runtime_contract.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "a72ee4d55bab2f3c2cfda14bd54ab227bd3a6868a98df7baa114d74d3245d369",
+      "size_bytes": 10682
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f821066a8cadc6d08efc843b864e5963ae08b0d4",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_documented_workflows.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2c22a3fbcff727da4d9b54fbb1226435507b245927a5baa8fe1f1ff4296c46ab",
+      "size_bytes": 9767
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "63e335bfc63b1b585aba0254cdb3f2e5e67d283d",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_execution_engine.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "7eeb2f5add2371afc10ba1740dca4c4800d906cd1a20a750bdb7b0489fe7d133",
+      "size_bytes": 41085
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f93420f6946a37d548436ca7c3bea935616039df",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_execution_evidence.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f1219fd1b6d095a75a8c51561d14a6c633258ee04bf990d43e84c3d7dd995836",
+      "size_bytes": 236315
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "71475244a73093f0c0ee5ee50b7588f4dc3bb955",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_execution_lifecycle.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "885292612d75af6bc87ac22c0d3edf4d34962d296169aa8e9c61c87ca7810e0c",
+      "size_bytes": 49960
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "96d37a9be388b6654305d6af6a1157af177663f7",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_execution_plan_adapter.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e12647387ce036d558061d368a06e78a774baf777a65da6718318205b4149715",
+      "size_bytes": 17330
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e5955b7b546a922d85033347aa7c02562b45a3ed",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_import_integrity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c414d2f8d7901326703d72a890f361d0fba0525410c5d68054cdcf85ae4f91e9",
+      "size_bytes": 10118
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "ae0720d7c118f7f374901c4c551284b1b30263fa",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_input_manager.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3bffdfd4890c2f89e6843766ac4f08b8bd80b7ec2f74fd1426f83eebdae44e83",
+      "size_bytes": 23292
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "4697f828b730d9b066c7c29846dd9976c2a27a0d",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_model_registry_resolution.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3c97956938c28f8dca0914082e88c35c170f960a47a0a0707653ea06e5a8dbf1",
+      "size_bytes": 14909
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a3655805a6c559040eb38e9793a26ee79bf1983c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_backend_resolution.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d0686bdac7eba6a290694bd33769be5fc84c6cba282abe4de49ba0c72da381ed",
+      "size_bytes": 23238
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "74348e91d58e30327143d011d1d3ce3d21ab8165",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_dispatch.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "30867a640d618a9cea4c7587befcdc2ab49515ec6ed5c5c6030c6199ce419242",
+      "size_bytes": 17248
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "328562bd034a11a08c036b43e8b0d74ff274dd36",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_helpers.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9b0ef5490fb024ed54436101a5a69efc265253de3410a62b4a3c9a77679424f9",
+      "size_bytes": 20997
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "30aaa24c4549985f21e124879bcf09ff38606290",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_input_discovery.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2ffa31639f4f48a2ba5885979bdc55ede3806841ca6334745b91b04c658f01f9",
+      "size_bytes": 7802
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "1372a5d057a02b168427e481b7d11d6afd3ad361",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_manifests.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "43965b1e4bfe06c1e27e8fe8e7403bf270494e916c219217614ae9b25353007c",
+      "size_bytes": 21562
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "43cf2196bf3e51637af34345c101f00f9d871bbd",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_partial_failure.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "42259443cb78da9edc961d3273d19a40210e73d14188ab5cffc7bec9c9277c10",
+      "size_bytes": 17620
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "3f55c5a4bbe3c0ab9bdfd4fd233d6a33a30ea58d",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_preview.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "da69265e7f514e574a96d23c8337e758fb7aa1da72e5af8b217561432c131260",
+      "size_bytes": 17220
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "99d4802864ed3f5a9e5cb457452f81a0bb02045f",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_quality_tier_vs_preset.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "693034e89b7b67576063f93f7e05586ae4676bcd5eb12030f131a2278b853fa0",
+      "size_bytes": 7234
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a563e70a5a5b52fc066927f1f9ba993dd75a6f3a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_run_card_provenance.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "555c8ec4424265ed0061cdcaf2e7221cce137a6919caf2ef6d18c73a4420ccb6",
+      "size_bytes": 26519
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "1680fc83cd73c3a22d8aa8df56775d4292473500",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_orchestrator_smoke.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d224273819f522f871b9ac22807add951ad6fbcabacc75db8a8ac8840250ee5b",
+      "size_bytes": 4522
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "d96a2162d66d3ed7ca832bd8534f467664fc4b89",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_output_flag_deprecation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "70748acb23b17911c5f00712dd2f627fa5fcc30b2dad7a4060c701a8b2072692",
+      "size_bytes": 6773
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "81b62653d9dacd988f60c4cbf7c34aa4e1203d7a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_phase_c_raw_ingest.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "19a2750d9a6aef65782f47345b24483d66f5ff2190d2b9ab60187fb8c8ba4c30",
+      "size_bytes": 9850
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "714149df978cb768c1d94d2a1ec02267210130e9",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_pipeline_coordinator.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "01ef365bc1c6489bb4071340e922e8c67d030c1696a0530be69bc9294086b69a",
+      "size_bytes": 36851
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f096cff2fdbda3ae4bbe215b9c31f46b55059e77",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_prepared_execution_callsites.py",
+      "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
+      "review_depth": "boundary_review",
+      "sha256": "74208b1a83ccfd2e41bfd0525114644bb783c7b029966aa8ea041945f1d6c3b5",
+      "size_bytes": 17956
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "cc8056bac320fb3a963a346946563a1bea5f0d6b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_raw_ingest_regression.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "50f41896f3bbae9c093836a73bf14a3716e8483681b50585b44c148a42ee6723",
+      "size_bytes": 984
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "8ab95fbd8d76c163459521d548159951fe47de74",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_reconstruction_diagnostics.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "1fdcafad0923eb756a82003ef8dbb27fe318911896d9c5271b932d3ed80b5082",
+      "size_bytes": 3778
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "7f69e4ea26a2bdde77e9c62b954e3215cef873ba",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_reconstruction_manifest.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3db1fa80ece8272c120cd1d11029293ec273229b60b31a7107905b3fd45a30be",
+      "size_bytes": 7684
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "6590e1f4e5bc53dddad0787204ed1d8f0562efb5",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_reconstruction_runner.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "67fac81ff35ff1293ba32963315891540e63be6870230b82a818d84a0123c5b0",
+      "size_bytes": 12917
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "eadb6eaf2584f02de1deb5d0c6bd03649f7584b5",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_resolved_invocation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "364c1a7b42f8a60965f9d6d556805ac4b84b0897329c215bcc5ebd1015b848ad",
+      "size_bytes": 56750
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "4d39bb63e10c63933f2c7a819d9e5ded7d42108b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_scene_context.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "110f3453e71015f17392a7104f493f928ad170383a24511017f7dfb905203f42",
+      "size_bytes": 3036
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "651000d802d739c2cdd931f23f4dc949728146c4",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_scene_groups.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "27b34e4e06f3ed20c0d49ab592bc626259ac4df5986c77dc8bab409626d81f7d",
+      "size_bytes": 14079
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "8cb3b2c9531b47cdb9b3bbeadb7931c9b3d24ae3",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_scene_integrity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f6f2b7d7d04241f33ddc1b9c9570c647ece41cf01696a0de9f18da57100a6e0d",
+      "size_bytes": 22819
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "13a1f57a42166835bfd89c92a3c8acff090c920f",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_scene_preflight.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "7ccf04affb347badd78a5244e813a4080abfb43cb1b1d3b3d98e76c3ad5b4420",
+      "size_bytes": 4075
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "9be7c129a2289cc9b0e05545f85a6fd8859dfb27",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_segmentation_package_exports.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b95f09c960e039e943592e83cb1e9b59f1e0d45105e200df4e9fbd1ccd7846a2",
+      "size_bytes": 3368
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "8043f3c7ed722392b7b265980e570710c7f44975",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/test_shared_executor_boundary_parity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f4ffad7dfdbd2dc5828fe347764ed3b3c77d67da31e6615dcd16b83ab2fe56ad",
+      "size_bytes": 12182
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "7d35aa176651ee41107a0eafd45c7e3708ed95de",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "485b6c73edb7767c173263c292d6685d90af1042fbadf03f40ea8e873e3f577c",
+      "size_bytes": 49
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "eaf46656605d960b6334377fac38182572c94f49",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_jsonschema_formats.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "0fe8f308dbf9fb4942d55c3acb0ddf76c54f14d0e930d7958c62e2b0c8be6cd5",
+      "size_bytes": 3192
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "0a0f3e106bfc5887c7bebeca09994b0eaee099ed",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_release_assessment.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e451dd454f24fcf832d3126b4954ee6c2be60037e124289e48a3ab31518e2a15",
+      "size_bytes": 17257
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "5572611179f25ea76bfb1f83fe57904b61c1270c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_run_card_backend_semantics.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8ffcc6052deab32ce6570338155b182e8df1121fdc427f2c65a6db7170b6d1a6",
+      "size_bytes": 10680
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "ca597c0a02983d2154d9151c8e90ff5b0f1183cf",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_run_card_integrity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "eb2374f605cb9c1d79b1280461c673b255ba7ffbd1f271a21b3158b308b3b733",
+      "size_bytes": 16206
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "21c382bc3daf5d2393f9457d20d852eb7edd9f06",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_run_card_validator.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2c4b788e9bb1c0205549a46df1a09d1ddc1408c1a9aeb0fa9ec4e6613953d89a",
+      "size_bytes": 16399
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "c98975b034a5ba034e1183359caa814ce077999c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v3/validators/test_vlm_captioning_run_card.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "81cdeebc239aed9b164b1e488396ec2f2269d2ea7b89b764afac0246117efd84",
+      "size_bytes": 4838
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e035c3a5fed02e1f28eb829b074d4b60bc960a87",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_backend.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "075b2b25e6267240ba6d63e62591ea3a3c26726e3cf8573466c1812c5f6f687d",
+      "size_bytes": 9594
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "3723264f181593c0ff9ee1a5af18ec57c4680b3b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_bytecode.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9bb20efad7df1380a4f0fa4e94476d4224c9ec0ed1bdfd28d455fb67d942aac0",
+      "size_bytes": 5440
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "649b39610ee7898d0611957842cb608530f06bdb",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_companions.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "eff6ad3bd9c4672ea1864dd6d401440ac51049683bbc8f2ce1f61ad1f725875e",
+      "size_bytes": 11107
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e02725206ae3db80b1b8265f2b29fb9a59570aa6",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_core_imports.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b837012ce26821b413ea82a9ff196e6741526d5dc07bac9ce29a7367d5c99f47",
+      "size_bytes": 1701
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "b004baf681f46325c4d9e868fd6a84426fe887fc",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_evaluation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e196851c7fe11571b9127b6bf13f7668a44030bd77e4c6cf113e566a4fd5f5d3",
+      "size_bytes": 13093
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "aad055768cc08e992a19d858a14c4696b805393b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_lifecycle.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6106c0179a10352aba956574e936739191ef4fed15f304d658cbc8bf2d6bfdc6",
+      "size_bytes": 15004
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "d42de5ad16bf9e1623903467dfa55ec222f26489",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_materials_v4.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "99988121eefe2f1483baec4607b03b6a972d585079d67ccd9bc49562f8679907",
+      "size_bytes": 9539
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "fd3b548d6f7bfda59f6a365acfa1c453e9cce63b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_materials_v4_verification.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c0e2ecb3a56ef887417cbd0de9bf5dfa07294e5cdff298aeaadf7ac97c64dcac",
+      "size_bytes": 9238
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2bef7581519e1126312f279ff9a2a8fbdece5560",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_photography.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "0e08befd90a46dc9854934f2dc5b2cf0e985b93b512a71060328e6b4082ea4a6",
+      "size_bytes": 17792
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f647dff9fb4e4c2e3f0ff2330cb44c0b5567b150",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "7a84452ff3a00b03748b0502e8224804cf40bac4ae955f532f2367e477939b14",
+      "size_bytes": 18337
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "b5af39b82bff21570af48a3867439587a02177cf",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_publication.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "cd70ab172c84eaabd42b86586b7cc97967dd40ba2372299963df71078779d4ba",
+      "size_bytes": 23891
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "4ee3fb8a3b3653d4aa6caf71b7dfb338b74b834e",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_publication_admission.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "618f4cb7cb275363ca66ea7d8e77616d8550ffbbfeb6d9a9df369b17bce61062",
+      "size_bytes": 8848
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "fcc685ed563ec605a7eef460873e8f579275c98c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_raw.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5e7f6a7436dcd0337bd0b819985ea862d87ba06f1a13426ae13cfc70fc24c59b",
+      "size_bytes": 9704
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "cc1667a6aa46ea45bdb9928ecafd2a6367831bbb",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v4/test_runtime.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "59c5753121899fd03f3af6d5aaf23c129810da57cdbd3698669452504fe1f4c4",
+      "size_bytes": 9845
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "992b39416e5b917005292d0f9cde71222cdac5cd",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3ddd8ec3ad2285d794518a2abbeb53fcd6445d9cb6614ce4cf34f8b25554b870",
+      "size_bytes": 53
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "6b41f9fa3107f83cf443c74d25f93f94280e7fed",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_backend.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "67ddba05d71e838fc0713962bd1c17fa007b332d1b808141181a511f3dca9eb4",
+      "size_bytes": 17141
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "4338535b1a7d0eb400b7b244fda92dca894cd09c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_evaluation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "bf7d235ced750e5690c2f4353fd61d2b385739d345477c2404e68c75b481d76a",
+      "size_bytes": 19290
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a29fe06188b5bda8bce0322274e3696ee7dce255",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_evidence.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5810f79252f471a84798a7289520d5cf8e303b1bfb0ad0d12b87023ed591651e",
+      "size_bytes": 20530
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "eea6aecc1148fd4ae38c779d4baf9f7e20393d9b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_lifecycle.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8d231d3aed4af0e9753b86a703183eb1f4a43ff69fe9bbf68065670b677220fd",
+      "size_bytes": 6893
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a46deddecd76b44da35a18a406f6ef580deda4a9",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_photography.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c9a0c60e0f365fea230dcbac3020ec5df5d157fb090c618822c513f70960301a",
+      "size_bytes": 18813
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "3c925ebfa5e3a0d958266ca2349013a39057e6f3",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
+      "size_bytes": 14672
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "c87df0c998ffcfca8be2697db4171617e937de41",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_preview.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
+      "size_bytes": 4804
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "b5d2ea661c1dd1dd1f345a4aa16d6fb907fe3905",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v5/test_publication.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "290e6134fd5cc411afa120227025a1b0c7fc49bdf63f4e6753c57a6c1d885dfe",
+      "size_bytes": 8337
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a75132f8951c05c7f8417c2b62f7ae483627ace2",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "32ff90a43028d24e62d86213cb157d8793febfccb0e53730f156e98850a3248d",
+      "size_bytes": 71
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "09c92ae616fa871bf760ebfb72e358109547be15",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/conftest.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "04c5ca592eb837b2a7e8cc93d0f54c49ac65064d8c4eef1f926a4eb1d4953c85",
+      "size_bytes": 265
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "1f3bcf80a15c8b27012aa9791be6ecd843271da6",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_color.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "646f41d60a0f39a6a84d4ff47fdd5ed6439b29640d97cfd1dde6b2b1e0096c08",
+      "size_bytes": 14059
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "9837c93436215870063308bea7721f042334eba9",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_map_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b7b082af5d25b163fc803df7f93483d14adf507d8097be0d37058f7c5d7cc797",
+      "size_bytes": 8546
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "338ad3aadafb097a5d2cb99ee80bf5a2f5ac76cd",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_maps.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "79594f5c0a0bc7afce27cfa85a8bd1351430b237bec304b0150be9a90f898551",
+      "size_bytes": 15625
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2d22d801ce6143e51a3010ace54764f3c3d8467a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_pro_backend.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "943b8e8eb948f6fa30d2c3f8b96a8df27ef027a9f94db5e5be2f63d0c5cf0d03",
+      "size_bytes": 12571
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "0bc411500b9e7880ef189a57e7c5b4ac087f779b",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_pro_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "bcbfbaeec4397e056373ad425f10dbd948e48fa0f3f9f40f80881af7e0f3a437",
+      "size_bytes": 14867
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "ac3667af8fab6e00e6571ae085eebbc59d4b8d06",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_pro_products.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2dde0b5d429f4a2e8642b73f790242d5f58d4279aa3fc345140331c444275442",
+      "size_bytes": 10243
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "aadfba188802a65a502475c46ae158309b0bef50",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_depth_reconstruction_quality.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "47e5de5ad8908129fd4b30ebc3c5ee7d274a7f98e544d4ff4e3b673874f25a15",
+      "size_bytes": 10910
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "3eae4114ca7815487826c38e237ac1cf6a483e73",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_evaluation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3ae1aac08a769ed69633671de6372ecbea56fb472c89e0945f1eadc6440e9a6e",
+      "size_bytes": 4697
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "8968a2793eae18f0025d297eff0df39fb3711009",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_managed.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8ebb4d3d933aed7a2a91de0422aad5462242700cf1f6c472b74679501c93df65",
+      "size_bytes": 11529
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2dc0a7077d316c24ce1c4c5217194333eabf3d11",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5fb9010cbba2f65ec42f267d14dfcd5a6062f9327e5cacdec14e022ea43b4ae0",
+      "size_bytes": 9962
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "18e7711ec044a281613690b72ac680b449087a0e",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_plan.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d6f9231862542850c15e04f04dc05c87fb638e83a5db65ffad714d4515f6324a",
+      "size_bytes": 5374
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f7fa67267ebaa13dd1969e1ba5857fef550623bd",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_publication_integrity.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "45328cb3aea5d986ace117c1d585816c6cb609818c16c4c684d21caaa06df0a7",
+      "size_bytes": 1836
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "058253d7d5b3a8363af1cb4ef135a1e14838a2c7",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_reconstruction.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b358416833993e5cd9518e857a9f787b5c63c5a1e18e60a3dd1cac71c0458f3f",
+      "size_bytes": 6350
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a0286a8b35a06ce7b70c77478bfac11b99580b0a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/lux_depth_v6/test_source.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "7cfacf5734296b97531836c4d634f3792c172923aabe308dd126525906a66ed6",
+      "size_bytes": 8354
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "4e8882a984777a0750d1911992e355f1a5f9f565",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "baaf588f79422c72faf112292038fd7efc61cb606720e6e522851f53dfa276d3",
+      "size_bytes": 50
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "f6d7ca13d3c539e55ab75e4e9095d206b9ee6a35",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_artifacts.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6739adab61663ed0d0bd13f911a958458e6d0b744caf46679a495a04e879ab02",
+      "size_bytes": 12150
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "02bca648c5aa80d3d33af405e73c140944380235",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_cli.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c619579d6c9ee24a381ee9e97595a1a2a79e0a80b4bdf08252b2ec9161610a4b",
+      "size_bytes": 5355
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "54296d71253efdccd5c0ebb45a0c46aedaee8c59",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_contracts.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "026eb34881486c3514e3fb6c3e5c586990c59b7ab4666e6a8c49dce25213a6cc",
+      "size_bytes": 6434
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e7b05b7331364c8b846ff658c97130fa9a35f45a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_engine.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d2e5a2c7853b9fd435f82d2af690f91d16c8e2e92edaeb8e504794c8efac590e",
+      "size_bytes": 12182
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2bdacd921e94610e8141a3b3569b812f7de7123a",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_evaluation.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d4161fe03f60e3eac0e8f0431c7ed44e4261cb90885a44b2bcb14f39ba319ae6",
+      "size_bytes": 7717
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e3e5d8310ddbee3872e3903ab87196cfa839a152",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_inference.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "148f074f7cb2ec588f3bda1f8f0f1f5cfb6816f527ba0d2b768bb4f040ad9eb8",
+      "size_bytes": 13312
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "bfb3de2df211739b987b4d90442cb69749ea0b88",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/materials_v4/test_operations.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "c605d38dc8bedbcdaa24e80e4b98d7d9c44f6ce1eef633985f3e7fbff3b78abd",
+      "size_bytes": 2870
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "a39ded8dfecc5338883197a0576d1b24af67d387",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/orchestrator/test_photography_v6_adapter.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "490132b81f91b3eee882e6b5ce8d1b3b64b6f6974035d9ee5aef0a2feb565d2e",
+      "size_bytes": 13079
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "0e7e8e078860893fd98a23987431ce2fdada49de",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_audit_lux_depth_v6_reconstruction.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "d4014120ca8a2f1c793e58bf848d48e3f067c3ce17fcf4f785fe402e8796e919",
+      "size_bytes": 5176
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "3c2baa3dd507299602cff74355aa885325a8e4e7",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_cli.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f63564a5452a2821fb9a03e840a85ff1e3916766a29acd1a67b8e6ac8143046b",
+      "size_bytes": 53316
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "106a3ccae87bfee7f8e866d3b45f0bdef2817964",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_config.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "3856bf7f51e45ee23d08d408a435e8dc1edabb14461784e1c6e499c5c619c68d",
+      "size_bytes": 11693
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "773d3987d54e4dcdcd2efdc786b77d9b480ccc9c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_critical_fixes.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "fd8524d031a66c76944d0b35a23167ff47caeac9842309746939e2d4c5ca8a97",
+      "size_bytes": 19619
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "aaee2b2af3459984dab7bdd658beaf0a31e75a93",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_doc_sync.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5b3468a03c2b203eca3a5e864c8372b304f290c632971d5bde053f66d58d120c",
+      "size_bytes": 3715
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "68bc4432862872444a78fe42f79216ce9590f0ae",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_imports.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9822f549a1b62525fcda3497c819637d2e144878095da946b6b5548a8076687a",
+      "size_bytes": 12998
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "43fe1521a53da40e1f434ad2262b8ef600766143",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v3_security.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b02888006fb8972d6d7c3adc834f24082fb2e59baf994316e9c0aeaefaf8fd4c",
+      "size_bytes": 10777
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "eaed6f95a0be3639a7edd4ad20dbcf11972114e0",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_depth_v6_managed_services_makefile.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "347537ff1c2eab5fcb557d379342bb07fd80a9ec41501da5890affd7fedeaa80",
+      "size_bytes": 3080
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "53148ec460e61d813823d791e1627f68ec2caa18",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_lux_render_pipeline_smoke.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "9a65cf67d02c63d6309e6d2c4a6e422efcd5dc8d67a78bbfdefe0a9b51938ae6",
+      "size_bytes": 4898
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "0b84124719b1e319fdd2f4965a07319d4badb535",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_unified_luxury_batch_io_benchmark.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "6040fa43e89d43fa2bbabbb12edc9f5d6a4394563ca97c2c2d9277689788bfde",
+      "size_bytes": 5917
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "bec1c26be7c0543df1f4bfaba1668a09c338fe6c",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_unified_luxury_pipeline.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "2f33769bd9f768bf6756ee0f4afc4bf644c0f932889c9dbf88e8eed5e9024413",
+      "size_bytes": 39614
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "307f03650f0681676b3a18978fb7cdf7cf61e121",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_v2_enhance.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "b192f39bd525663b708c4d029b41580b2c7f9c3e8be3b088de83631465e0d83c",
+      "size_bytes": 64602
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "2ef5f6dd2304b1a630a5529bda3292ab8acd5d1d",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/test_v2_runner.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "f4f7d26d6d88a6d024d9a2d06f8661819a483a442b6acd948751c8ed9e0d41ee",
+      "size_bytes": 29448
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/unit/lux_depth_v3/__init__.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "area": "validation",
+      "baseline_git_blob": "6d56347e15211d698e685241b2f7563c8752a8a2",
+      "disposition": "retain_or_extend_contract_coverage",
+      "path": "tests/unit/lux_depth_v3/test_v2_enhance_quality_firewall.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "8f441f8fef1d9cd3e2730aeb31571606e8bba3cd8c7dbcd75f16ae5b3e2ebe55",
+      "size_bytes": 9530
+    },
+    {
+      "area": "predecessor_surface",
+      "baseline_git_blob": "856c6b906fe7bd4dc5669d90659ea691caa26847",
+      "disposition": "retain_compatibility_no_algorithm_copy",
+      "path": "tools/benchmark_unified_luxury_batch_io.py",
+      "review_basis": "Path discovery and byte digest only; no source-review claim.",
+      "review_depth": "inventory_only",
+      "sha256": "5f2075c1b714459dff591cb48aa58450e8280c67af2d3a79c04d2fe83a16d069",
+      "size_bytes": 22231
+    }
+  ],
+  "review_depth_definitions": {
+    "boundary_review": "Targeted trust, data or execution boundaries read; not a complete module review.",
+    "full_source_review": "Assigned auditor reports complete module read; not proof of correctness or runtime acceptance.",
+    "inventory_only": "Discovered and hashed; source not claimed reviewed."
+  },
+  "schema": "tp.audit.lux_depth.inventory.v1",
+  "scope": "All files in live LuxDepth V3-V6, MaterialsV4 and new canonical facade; named historical Lux/V2 surfaces; selected shared contracts, managed integrations, tests and supporting operator documents. Not all dependency source or repository files."
+}
