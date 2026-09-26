@@ -5,7 +5,7 @@
 // the real navigation, keyboard, cancellation, validation, and overlay logic.
 
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -78,6 +78,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     previewPayloads: [],
     uploadBodies: [],
     presetRequests: 0,
+    stagedUploadRequests: [],
   };
 
   await page.addInitScript(({ transientDraft, legacyApiKeys }) => {
@@ -295,10 +296,39 @@ async function installHydratedPortalRoutes(page, options = {}) {
 
     if (pathname === "/v1/uploads/staging" && method === "POST") {
       runtime.uploadBodies.push(request.postData());
-      await fulfillJson(route, { success: true, data: {
-        batch_id: "batch-photography", input_dir: "/tenant/uploads/batch-photography/input",
-        summary: { file_count: 1, total_bytes: 8 }, files: [], warnings: []
-      } });
+      const batchId = options.stagedUploadBatchId ?? "batch-photography";
+      const formData = await new Response(request.postDataBuffer(), {
+        headers: { "Content-Type": request.headers()["content-type"] },
+      }).formData();
+      const files = formData.getAll("files").map((file) => ({ name: file.name }));
+      const manifest = JSON.parse(formData.get("client_manifest"));
+      runtime.stagedUploadRequests.push({ files, manifest, headers: request.headers() });
+      await fulfillJson(route, {
+        schema: "tp.orchestrator.upload_staging.v1",
+        success: true,
+        data: {
+          batch_id: batchId,
+          input_dir: `/tenant/uploads/${batchId}/input`,
+          metadata_dir: `/tenant/uploads/${batchId}/_portal`,
+          artifacts: {
+            baseline_manifest_path: `/tenant/uploads/${batchId}/_portal/baseline.json`,
+            capture_metadata_path: `/tenant/uploads/${batchId}/_portal/capture.json`,
+            upload_receipt_path: `/tenant/uploads/${batchId}/_portal/receipt.json`,
+          },
+          received_at_epoch_seconds: 1700000000,
+          summary: {
+            file_count: files.length,
+            // CDP omits disk-backed multipart file bytes; use the browser's
+            // manifest sizes for this mocked receipt, not transport evidence.
+            total_bytes: manifest.files.reduce((total, file) => total + file.size_bytes, 0),
+            capture_metadata_enabled: false,
+            capture_metadata_record_count: 0,
+            top_level_roots: [],
+            warnings: [],
+          },
+        },
+        error: null,
+      });
       return;
     }
 
@@ -1744,6 +1774,75 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
   });
 });
 
+
+for (const selection of ["files", "folder"]) {
+  test(`@portal-browser V5 staged uploads accept Choose ${selection} and refresh the draft`, async ({ page }, testInfo) => {
+    const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true, stagedUploadBatchId: "upload-v5-fixture" });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+    await page.locator("#buildStepTab2").click();
+    await expect(page.locator('[data-ui="staged-upload-shell"]')).toBeVisible();
+    await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-capability-status", "available");
+    const outputDirectory = await page.locator("#outputDir").inputValue();
+    const imageBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    let selectedFiles = { name: "sample.png", mimeType: "image/png", buffer: imageBytes };
+    const expectedPaths = selection === "folder"
+      ? ["photography/nested/detail.png", "photography/sample.png"]
+      : ["sample.png"];
+    if (selection === "folder") {
+      const directory = testInfo.outputPath("photography");
+      await mkdir(path.join(directory, "nested"), { recursive: true });
+      await writeFile(path.join(directory, "sample.png"), imageBytes);
+      await writeFile(path.join(directory, "nested", "detail.png"), imageBytes);
+      selectedFiles = directory;
+    }
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.locator(`[data-ui="staged-upload-pick-${selection}"]`).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(selectedFiles);
+    await expect.poll(() => runtime.stagedUploadRequests.length).toBe(1);
+    const upload = runtime.stagedUploadRequests[0];
+    expect(upload.manifest.schema).toBe("tp.portal.upload_manifest.v1");
+    expect(upload.manifest.files.map((file) => file.relative_path).sort()).toEqual(expectedPaths);
+    expect(upload.files.map((file) => file.name))
+      .toEqual(upload.manifest.files.map((file) => file.relative_path));
+    expect(upload.manifest.files.map((file) => file.size_bytes)).toEqual(expectedPaths.map(() => imageBytes.length));
+    expect(upload.headers["x-csrf-token"]).toBe("hydrated-ux-csrf");
+    await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/upload-v5-fixture/input");
+    await expect(page.locator("#outputDir")).toHaveValue(outputDirectory);
+    await expect(page.locator("#stagedUploadSummary")).toContainText(`Staged ${expectedPaths.length} file`);
+    await expect(page.locator("#stagedUploadError")).toBeEmpty();
+    await expect.poll(() => runtime.previewPayloads.filter((payload) => payload.pipeline === "lux-depth-v5").at(-1)?.args.input_dir)
+      .toBe("/tenant/uploads/upload-v5-fixture/input");
+    await expect(page.locator("#stagedUploadFilesInput")).toHaveValue("");
+    await expect(page.locator("#stagedUploadFolderInput")).toHaveValue("");
+    expect(runtime.jobSubmissions).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath(`lux-v5-staged-${selection}.png`), fullPage: true });
+    await testInfo.attach(`LuxDepthV5 staged ${selection}`, {
+      path: testInfo.outputPath(`lux-v5-staged-${selection}.png`), contentType: "image/png",
+    });
+  });
+}
+
+test("@portal-browser V5 staged uploads remain disabled outside the rollout cohort", async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, { stagedUploads: false });
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab2").click();
+  const shell = page.locator('[data-ui="staged-upload-shell"]');
+  await expect(shell).toBeVisible();
+  await expect(shell).toHaveAttribute("data-capability-status", "gated");
+  await expect(page.locator("#stagedUploadStatus")).toContainText("gated for this portal cohort");
+  for (const selector of ["#stagedUploadPickFilesBtn", "#stagedUploadPickFolderBtn", "#stagedUploadFilesInput", "#stagedUploadFolderInput"]) {
+    await expect(page.locator(selector)).toBeDisabled();
+  }
+  await expect(page.locator("#stagedUploadDropzone")).toHaveAttribute("aria-disabled", "true");
+  expect(runtime.stagedUploadRequests).toHaveLength(0);
+  expect(runtime.jobSubmissions).toBe(0);
+});
 
 test("@portal-browser V5 photography uses isolated controls and preview-backed dispatch", async ({ page }, testInfo) => {
   const runtime = await installHydratedPortalRoutes(page, { keepEventStreamOpen: true, previewDelayMs: 100 });

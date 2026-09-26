@@ -79,6 +79,16 @@ when enabled for the authenticated portal cohort; the returned staged input path
 remains subject to tenant authorization. Saved profiles preserve the separate
 photographic configuration.
 
+On the **Paths** step, **Choose files** or **Choose folder** stages source files
+when the staged-upload feature is enabled for your cohort. A successful upload
+replaces the Input Directory with the server staging directory and preserves
+nested folder paths. The path field itself accepts a server-accessible directory,
+not an individual image filename or a browser-local folder path. Uploading does
+not change Output Directory or dispatch a job; choose a fresh authorized output
+directory and obtain a new configuration preview. In pilot tenant mode, configure
+staging under the intended tenant's workspace or CAS root. Both input and output
+paths remain subject to tenant admission checks.
+
 For explicit grading, separate SDR rendering, and reconstructed depth delivery,
 see the independently enabled [managed V6 successor](LUX_DEPTH_V6.md#managed-portal-and-api-execution).
 V6 freezes V5 inference within its composite plan and rejects Materials inputs;
