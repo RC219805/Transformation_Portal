@@ -98,7 +98,10 @@ Its operations preserve existing native request and plan carriers:
 - `depth-pro`: explicit non-commercial research, requiring the isolated
   interpreter, checkpoint and both license acknowledgements.
 - `verify`: native semantic replay selected by the recorded schema; retained
-  finishing and Depth Pro require `--source-root`.
+  finishing and Depth Pro require `--source-root` and accept caller limits via
+  `--max-input-bytes`, `--max-pixels`, and `--memory-mib`. Defaults are 64 GiB,
+  100 million pixels, and 16,384 MiB; recorded plans cannot raise them.
+  Explicit source-limit flags are rejected for self-contained outputs.
 - `legacy`: pass remaining options directly to the existing V3 CLI.
 
 `--plan` emits exact canonical bytes without output creation or model inference;

@@ -350,3 +350,37 @@ Managed service lanes require their dedicated migrated Postgres/Redis test
 services. A missing service is an environment blocker, not a passing acceptance
 gate. New facade tests and any native/synthetic smoke evidence must be recorded
 separately from service-backed or production acceptance.
+
+## PR review and hosted CI remediation
+
+Review of PR #2169 identified a missing caller resource ceiling in the unified
+retained-source verifier. The native V6 and Depth Pro verifiers already intersect
+caller and recorded source limits, but the common API omitted that argument.
+The common API now supplies conservative native defaults when none are provided,
+accepts exact `SourceLimits`, and exposes the corresponding verification CLI
+flags. Explicit overrides fail closed on self-contained schemas that do not
+support this policy. Exact recorded plans and native replay algorithms remain
+unchanged.
+
+Hosted CI at `95efa7532041f73d903b354df46cf37aad12da4b` also found two test/release
+integration issues: ANSI sequences interrupted a legacy-help substring assertion,
+and the new console command required a minor version increment under the frozen
+entrypoint contract. Help assertions now inspect visible text in both forced-color
+and plain-output environments; the package and console-script snapshot advance
+from 0.7.0 to 0.8.0.
+
+The independent Secure Install Pilot failure occurred after successful lock
+compilation when validation could see only platformdirs versions through
+4.11.14. Another job installed 4.11.15 earlier in the same run. The retained
+pilot hashes match the published wheel and sdist, and a fresh hash-required,
+Python-3.11-targeted download passed. A stale index/cache response is suspected;
+dependency pins and lock governance were not changed to mask that failure.
+
+Remediation validation passed: `make test-lux-depth-contract` (1,304 tests),
+the V5 and V6 managed-contract targets (252 and 144 tests), `make ci-quick`,
+`make test-fast` (77 tests), and `make validate-ci`. The focused source-limit,
+CLI, and native-replay selection passed 152 tests; structural/version checks
+passed 27 plus 3 tests, and operator-example/RAG-authority checks passed 75.
+Mypy passed the two changed source modules. These counts overlap; the initial
+native trial and service evidence above remain evidence of the earlier source
+tree, not a new native-model trial of the remediation.

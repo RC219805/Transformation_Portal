@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from transformation_portal.lux_depth_v6.depth_pro import NativeDepthProRequest, PreparedNativeDepthPro
     from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request, PreparedManagedLuxExecutionV6
     from transformation_portal.lux_depth_v6.plan import LuxDepthV6Request, PreparedLuxExecutionV6
+    from transformation_portal.lux_depth_v6.source import SourceLimits
     from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
 
     LuxRequest = LuxDepthV4Request | LuxDepthV5Request | ManagedLuxDepthV6Request | LuxDepthV6Request | NativeDepthProRequest
@@ -124,6 +125,7 @@ def verify(
     *,
     source_root: Path | None = None,
     expected_plan_sha256: str | None = None,
+    source_limits: SourceLimits | None = None,
     cancellation: Callable[[], bool] | None = None,
 ) -> VerifiedLuxDepth:
     """Select a native verifier from bounded plan bytes, then replay and rehash.
@@ -132,6 +134,9 @@ def verify(
     the older unsigned-plan fingerprint. V4/V5 fingerprints are passed only to
     their native validators. Retained-V5 finishing and Depth Pro require their
     original source root; self-contained inference/composite outputs do not.
+    Source-dependent replay defaults to native SourceLimits and intersects those
+    caller budgets with the recorded plan. Self-contained verifiers do not
+    support source_limits and reject an explicit override.
     """
     from transformation_portal.core.execution_plan import decode_bounded_json_object
     from transformation_portal.core.execution_plan_v2 import require_digest
@@ -142,6 +147,11 @@ def verify(
             raise RuntimeError("LuxDepth verification cancelled")
 
     check()
+    if source_limits is not None:
+        from transformation_portal.lux_depth_v6.source import SourceLimits
+
+        if type(source_limits) is not SourceLimits:
+            raise TypeError("LuxDepth verification requires exact SourceLimits")
     if expected_plan_sha256 is not None:
         require_digest(expected_plan_sha256)
     root = directory_path(output_root)
@@ -155,6 +165,8 @@ def verify(
         if schema == "tp.execution.plan.v5":
             if source_root is not None:
                 raise ValueError("Composite verification uses its retained source-v5 namespace; omit source_root")
+            if source_limits is not None:
+                raise ValueError("Composite verification does not support source_limits; omit source limits")
             from transformation_portal.lux_depth_v6.managed import verify_managed_evidence
 
             managed_evidence = verify_managed_evidence(root, expected_plan_bytes=raw, cancellation=cancellation)
@@ -162,6 +174,8 @@ def verify(
         elif schema in {"tp.execution.plan.v2", "tp.execution.plan.v3", "tp.execution.plan.v4"}:
             if source_root is not None:
                 raise ValueError("Inference verification uses retained sources; omit source_root")
+            if source_limits is not None:
+                raise ValueError("Inference verification does not support source_limits; omit source limits")
             from transformation_portal.core.execution_plan_v3 import parse_photography_plan
             from transformation_portal.lux_depth_v4.evidence import verify_execution_evidence_v2
 
@@ -179,12 +193,18 @@ def verify(
         elif schema in {"tp.lux.grade.plan.v1", "tp.lux.grade.plan.v2", "tp.lux.depth_pro.plan.v1"}:
             if source_root is None:
                 raise ValueError("Finishing and Depth Pro verification require source_root")
+            from transformation_portal.lux_depth_v6.source import SourceLimits
+
             if schema == "tp.lux.depth_pro.plan.v1":
                 from transformation_portal.lux_depth_v6.depth_pro import verify as verifier_with_source
             else:
                 from transformation_portal.lux_depth_v6.evidence import verify_execution_evidence as verifier_with_source
             grade_evidence = verifier_with_source(
-                root, source_root=source_root, expected_plan_sha256=digest, cancellation=cancellation
+                root,
+                source_root=source_root,
+                expected_plan_sha256=digest,
+                source_limits=source_limits if source_limits is not None else SourceLimits(),
+                cancellation=cancellation,
             )
             evidence_bytes = grade_evidence.canonical_bytes
         else:

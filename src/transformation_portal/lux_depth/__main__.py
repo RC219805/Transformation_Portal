@@ -92,6 +92,10 @@ def _parser() -> argparse.ArgumentParser:
         "--source-root", "--input-dir", dest="source_root", type=Path, help="Retained source required by V6 replay"
     )
     verify.add_argument("--expected-plan-sha256", help="SHA-256 of the complete canonical plan bytes")
+    source_limits = verify.add_argument_group("Source replay limits (finish / depth-pro only)")
+    source_limits.add_argument("--max-input-bytes", type=int, help="Total source byte ceiling (default: 68719476736)")
+    source_limits.add_argument("--max-pixels", type=int, help="Per-image pixel ceiling (default: 100000000)")
+    source_limits.add_argument("--memory-mib", type=int, help="Memory ceiling in MiB (default: 16384)")
     commands.add_parser("legacy", add_help=False, help="Pass remaining arguments directly to the established V3 CLI")
     return parser
 
@@ -107,6 +111,19 @@ def _material_policy(path: Path | None) -> Any:
     root = directory_path(path.parent)
     raw, _ = snapshot(root, root / path.name, maximum_bytes=65536)
     return ResponsePolicy.from_payload(decode_bounded_json_object(raw))
+
+
+def _verification_source_limits(args: argparse.Namespace) -> Any:
+    values = {
+        name: getattr(args, name)
+        for name in ("max_input_bytes", "max_pixels", "memory_mib")
+        if getattr(args, name) is not None
+    }
+    if not values:
+        return None
+    from transformation_portal.lux_depth_v6.source import SourceLimits
+
+    return SourceLimits(**values)
 
 
 def _inference_request(args: argparse.Namespace) -> Any:
@@ -225,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.output_dir,
                     source_root=args.source_root,
                     expected_plan_sha256=args.expected_plan_sha256,
+                    source_limits=_verification_source_limits(args),
                     cancellation=lambda: bool(received_signal),
                 )
                 summary = {

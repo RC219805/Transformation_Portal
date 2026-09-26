@@ -8,8 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import signal
+import subprocess
+import sys
+from pathlib import Path
 
+import click
 import numpy as np
 import pytest
 import tifffile
@@ -19,6 +24,7 @@ from tests.lux_depth_v6 import test_depth_pro_pipeline as native_fixture
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth.__main__ import main
 from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request, prepare
+from transformation_portal.lux_depth_v6.plan import LuxDepthV6Request
 from transformation_portal.materials_v4.artifacts import write_evidence
 from transformation_portal.materials_v4.contracts import MaterialEvidence, RegionEvidence
 from transformation_portal.materials_v4.engine import ResponsePolicy
@@ -223,6 +229,47 @@ def test_depth_pro_uses_native_research_authority_and_verification(native_case, 
     assert json.loads(capsys.readouterr().out)["verified"] is True
 
 
+@pytest.mark.parametrize("route", ["finish", "depth-pro"])
+@pytest.mark.parametrize("flag", ["--max-input-bytes", "--max-pixels", "--memory-mib"])
+def test_verify_cli_applies_each_source_limit_to_real_outputs(request, route, flag, tmp_path, capsys):
+    from transformation_portal.lux_depth import lifecycle
+
+    if route == "finish":
+        source = v5_fixture.execute(request.getfixturevalue("request_case")).output_root
+        prepared = lifecycle.prepare(LuxDepthV6Request(source, tmp_path / "finished"))
+    else:
+        value = request.getfixturevalue("native_case")
+        source = value.input_dir
+        prepared = lifecycle.prepare(value)
+    result = lifecycle.run(prepared)
+    assert main(["verify", "--output-dir", str(result.output_root), "--source-root", str(source), flag, "1"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "lux-depth:" in captured.err
+    assert any(word in captured.err for word in ("bounded regular", "byte budget", "pixel", "memory admission"))
+
+
+@pytest.mark.parametrize("schema", ["tp.execution.plan.v4", "tp.execution.plan.v5"])
+@pytest.mark.parametrize("flag", ["--max-input-bytes", "--max-pixels", "--memory-mib"])
+def test_verify_cli_rejects_unsupported_source_limits(tmp_path, schema, flag, capsys):
+    (tmp_path / "execution-plan.json").write_bytes(canonicalize_json({"schema": schema}))
+    assert main(["verify", "--output-dir", str(tmp_path), flag, "1"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "does not support source_limits" in captured.err
+
+
+@pytest.mark.parametrize(
+    "flag,value",
+    [("--max-input-bytes", "0"), ("--max-pixels", "200000001"), ("--memory-mib", "-1")],
+)
+def test_verify_cli_rejects_invalid_limits_before_opening_output(tmp_path, flag, value, capsys):
+    assert main(["verify", "--output-dir", str(tmp_path / "absent"), flag, value]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "positive bounded integer" in captured.err
+
+
 @pytest.mark.parametrize("signum", [signal.SIGINT, signal.SIGTERM])
 def test_signal_cancellation_restores_handlers_and_refuses_completion(request_case, monkeypatch, capsys, signum):
     compute = v5_fixture.SessionFixture.compute
@@ -271,11 +318,27 @@ def test_policy_is_bounded_before_any_backend_or_output(request_case, tmp_path, 
     assert v5_fixture.SessionFixture.calls == 0
 
 
-def test_legacy_help_passes_through_to_v3(capsys):
-    assert main(["legacy", "--help"]) == 0
-    captured = capsys.readouterr()
-    assert "--quality-tier" in captured.out
-    assert "--output-bit-depth" in captured.out
+@pytest.mark.parametrize("color_environment", [None, "GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS", "NO_COLOR"])
+def test_legacy_help_passes_through_to_v3(color_environment):
+    environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2] / "src"), TERM="xterm-256color")
+    for name in ("GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS", "NO_COLOR", "_TYPER_FORCE_DISABLE_TERMINAL"):
+        environment.pop(name, None)
+    if color_environment is not None:
+        environment[color_environment] = "1"
+    # Typer reads its terminal environment at import, so isolate each scenario.
+    completed = subprocess.run(
+        [sys.executable, "-m", "transformation_portal.lux_depth", "legacy", "--help"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    if color_environment in {"GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS"}:
+        assert "\x1b[" in completed.stdout
+    help_text = click.unstyle(completed.stdout)
+    assert "--quality-tier" in help_text
+    assert "--output-bit-depth" in help_text
 
 
 def test_finish_rejects_unused_refinement(request_case, tmp_path, capsys):

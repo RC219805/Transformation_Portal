@@ -82,6 +82,15 @@ it is not the new CLI's byte digest. Cancellation returns a nonzero exit and
 never reports partial execution as successful. Keep failed outputs for
 inspection and retry into a new directory.
 
+Retained-V5 finishing and Depth Pro verification apply caller resource limits
+before source-pixel reads and replay. Defaults match the native CLI: 64 GiB of total
+source bytes, 100 million pixels per image, and 16,384 MiB of working memory.
+Override them with `verify --max-input-bytes`, `--max-pixels`, and `--memory-mib`,
+or pass `source_limits=SourceLimits(...)` to the Python `verify` function.
+Recorded plan limits can only tighten these caller limits. Explicit source-limit
+overrides are rejected for self-contained inference/composite outputs, whose
+native verifiers retain their existing admission contracts.
+
 An installed wheel registers `lux-depth`; a checkout with older console scripts
 can use the module commands above. Outside a checkout, install the supported
 core dependencies and point `TP_MODEL_LOCK_MANIFEST` at the governed

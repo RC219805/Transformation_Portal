@@ -201,8 +201,8 @@
       "path": "docs/cli/CLI_REFERENCE.md",
       "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
       "review_depth": "boundary_review",
-      "sha256": "01aab0c4af9234f981ff2367875de5954890674acee5712d42e216725309e2e8",
-      "size_bytes": 13755
+      "sha256": "c98fc1e5b43a9df512c3a92955359ebc7dd78d5c2b4daae1b23eea3c76114b58",
+      "size_bytes": 14006
     },
     {
       "area": "documentation",
@@ -331,8 +331,8 @@
       "path": "docs/reference/LUX_DEPTH.md",
       "review_basis": "Path discovery and byte digest only; no source-review claim.",
       "review_depth": "inventory_only",
-      "sha256": "a55347e963a002005913057bd0820a6ed369c6687f59704a12dbd60eeeb61a20",
-      "size_bytes": 9697
+      "sha256": "20d6ceca686af0df3efb597345fb7c6fec059e46e8c005be9070c333d89c8cdc",
+      "size_bytes": 10315
     },
     {
       "area": "documentation",
@@ -391,7 +391,7 @@
       "path": "pyproject.toml",
       "review_basis": "Public definitions and selected execution, trust, data, error or I/O boundaries inspected; no whole-module correctness claim.",
       "review_depth": "boundary_review",
-      "sha256": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6",
+      "sha256": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d",
       "size_bytes": 10497
     },
     {
@@ -971,8 +971,8 @@
       "path": "src/transformation_portal/lux_depth/__main__.py",
       "review_basis": "Complete module read reported by the assigned lineage auditor.",
       "review_depth": "full_source_review",
-      "sha256": "95c9c31e57d473197044fffb739462fa23d06733f58e812fb3595b7337726149",
-      "size_bytes": 12184
+      "sha256": "454e2c38704fb0f765f44781e7771040221d4535d455e8a8f972f259bca47951",
+      "size_bytes": 13061
     },
     {
       "area": "canonical_facade",
@@ -981,8 +981,8 @@
       "path": "src/transformation_portal/lux_depth/lifecycle.py",
       "review_basis": "Complete module read reported by the assigned lineage auditor.",
       "review_depth": "full_source_review",
-      "sha256": "3e9922812ebcc5a24dfab4792005649b8c84804487a772e876d38423c3437441",
-      "size_bytes": 10156
+      "sha256": "a567c88565665a0baf8bce1d2cd84aed1081683735c6921f388bd97ac536d3db",
+      "size_bytes": 11259
     },
     {
       "area": "documentation",
@@ -2531,8 +2531,8 @@
       "path": "tests/lux_depth/test_cli.py",
       "review_basis": "Path discovery and byte digest only; no source-review claim.",
       "review_depth": "inventory_only",
-      "sha256": "a6c1335d2373c96701970b5d7678eb03b6943dbebd091cd30ab423679298ab8e",
-      "size_bytes": 11833
+      "sha256": "e42964365b036dcb8124a8ca8034d6f51161d75994c4437422f36f85b1f6d3ae",
+      "size_bytes": 14905
     },
     {
       "area": "validation",
@@ -2551,8 +2551,8 @@
       "path": "tests/lux_depth/test_lifecycle.py",
       "review_basis": "Path discovery and byte digest only; no source-review claim.",
       "review_depth": "inventory_only",
-      "sha256": "106542a9c8fcffc0f8da626203437761368d284c3fdf34175f83ca67982ee908",
-      "size_bytes": 13872
+      "sha256": "bf4470bd5c4984f81141cd40bebc1cb57427813bb9d3adb23926cbb25a8c9f49",
+      "size_bytes": 18200
     },
     {
       "area": "validation",

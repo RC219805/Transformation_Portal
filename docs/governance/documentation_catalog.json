@@ -188,7 +188,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "6a6d33b8cad0baee21ea8ca4209f6a3a1f3b723cae4e2e137b170196061c7333",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -210,7 +210,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -227,7 +227,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "03710ff9be2b791439ce75c29512679914555920552f083325928d78b903d19b",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -249,7 +249,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -410,7 +410,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "b32350525d780b4ab18eab9d8a693ffc55ae42a575b7e01856ae0c10c628a8af",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -432,7 +432,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -577,7 +577,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "562f6882c62e569b152b4f5d03d78adedc3bb04fe204c30287491dfa90315e93",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -599,7 +599,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -712,7 +712,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "f6209227debf895dffbf1e3d494e0f1f0408924bfb7a70bf6f88ffd5ca8a4858",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -734,7 +734,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -2238,8 +2238,8 @@
       "successors": [],
       "review_status": "historical-evidence",
       "evidence_tier": "historical-record",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
-      "content_sha256": "870dafb0a13d65f9f9a4d9cd7bb92a697e0bff9b4947d4928aaebf6125d0a518",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
+      "content_sha256": "09dd06f239736d653fad0f7b9863e2abd7e0462b9fb3fb069a506ee9482f3e9a",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -2638,8 +2638,8 @@
       "successors": [],
       "review_status": "generated-snapshot",
       "evidence_tier": "generated-metadata",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
-      "content_sha256": "6d1ccc1a222b040ea0405430a1f287c2f5eb53bf997e4225b413d5de1dc8d878",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
+      "content_sha256": "fd32d7766989f02c7562630c1b0591c79b60f03600ba3476f623ec117c7e1c4d",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -6320,8 +6320,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
-      "content_sha256": "01aab0c4af9234f981ff2367875de5954890674acee5712d42e216725309e2e8",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
+      "content_sha256": "c98fc1e5b43a9df512c3a92955359ebc7dd78d5c2b4daae1b23eea3c76114b58",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
         "tests/test_documentation_operator_examples.py",
@@ -6330,7 +6330,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9819,7 +9819,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "bde9140e2011018eb923f0aeeb0bba2373740414dac8af16b9c1a7f5ff531fc3",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -9829,7 +9829,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -13114,7 +13114,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "9451a850895b649967bd1fbd68fe34398a41f1a06c4484374f2a2f2ca76a6842",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -13124,7 +13124,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -14695,8 +14695,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
-      "content_sha256": "a55347e963a002005913057bd0820a6ed369c6687f59704a12dbd60eeeb61a20",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
+      "content_sha256": "20d6ceca686af0df3efb597345fb7c6fec059e46e8c005be9070c333d89c8cdc",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
         "src/transformation_portal/lux_depth/__main__.py",
@@ -14710,14 +14710,14 @@
       ],
       "source_sha256": {
         "src/transformation_portal/lux_depth/__init__.py": "1dad2547e83cf7eb4d2f4c83e19ff3e144ed07f276f5376db39bca825d3966f3",
-        "src/transformation_portal/lux_depth/__main__.py": "95c9c31e57d473197044fffb739462fa23d06733f58e812fb3595b7337726149",
-        "src/transformation_portal/lux_depth/lifecycle.py": "3e9922812ebcc5a24dfab4792005649b8c84804487a772e876d38423c3437441",
+        "src/transformation_portal/lux_depth/__main__.py": "454e2c38704fb0f765f44781e7771040221d4535d455e8a8f972f259bca47951",
+        "src/transformation_portal/lux_depth/lifecycle.py": "a567c88565665a0baf8bce1d2cd84aed1081683735c6921f388bd97ac536d3db",
         "src/transformation_portal/lux_depth_v6/managed.py": "7d952f9fce6dcf860a41c1864743a9fe4d4c481ccc0f9ea16ab8e0dff1c2444d",
         "src/transformation_portal/orchestrator/photography_adapter.py": "4eeca7ad8c9708a0c12b89ff660f21abd93419010ed4b526e98be752e380d683",
         "src/transformation_portal/orchestrator/photography_v6_adapter.py": "c1322b85fc28274cd7aad635a75a41e4b871a01558eec3cbf6a85352445a917c",
         "src/transformation_portal/orchestrator/execution_dispatch.py": "d5c9fd6e046b5405fd4180ad3fd9a323801780b1f65d89b44196f7ac2eb52bbe",
         "Makefile": "7f0c5bfc841d38e0498101f5671c6ac7c3427747bfa3f18bc410d11467a8a688",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6"
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d"
       },
       "validation_commands": [
         "make test-lux-depth-contract",
@@ -14827,7 +14827,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "ccfc3f45e5259901668570bf463b4cd480f3a556a377fd7395e7673e69e867ae",
       "source_references": [
         "Makefile",
@@ -14891,7 +14891,7 @@
       ],
       "source_sha256": {
         "Makefile": "7f0c5bfc841d38e0498101f5671c6ac7c3427747bfa3f18bc410d11467a8a688",
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6",
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d",
         "src/transformation_portal/lux_depth_v6/__init__.py": "c1bf7aebca676ac39597b2439d6bf82f795c6036b1bb381881201c12dbe026f7",
         "src/transformation_portal/lux_depth_v6/__main__.py": "e105638b463a2b128da37e59da235a1c2fa1685a7988acd26b7d757f8e6f83ed",
         "src/transformation_portal/lux_depth_v6/depth_pro.py": "3903210760f8e70fdacc81726259792cc37badba832fe4d876aac415b18f214c",
@@ -16745,14 +16745,14 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
+      "source_commit": "95efa7532041f73d903b354df46cf37aad12da4b",
       "content_sha256": "3b654bd62c5f6ea29a37752ec14f41462f37738be4ec1fa0e3d9f30ec3a36529",
       "source_references": [
         "pyproject.toml",
         ".github/workflows/build.yml"
       ],
       "source_sha256": {
-        "pyproject.toml": "bb639a34d979059b4f770bbf36ea94cc80fbfa4e4f17f9f5589847343ae446f6",
+        "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d",
         ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be"
       },
       "validation_commands": [

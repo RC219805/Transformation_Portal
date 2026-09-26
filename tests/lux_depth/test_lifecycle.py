@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -26,14 +27,17 @@ from transformation_portal.lux_depth_v5 import evidence as v5_evidence
 from transformation_portal.lux_depth_v6.depth_maps import DepthMapRecipe
 from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request
 from transformation_portal.lux_depth_v6.plan import LuxDepthV6Request
+from transformation_portal.lux_depth_v6.source import SourceLimits
 from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 
 pytestmark = pytest.mark.unit
 v4_prepared = v4_pipeline.prepared
 _ROUTES = ("v4", "inference", "photography", "finishing", "depth-pro")
+_SOURCE_ROUTES = ("finishing", "finishing-no-depth", "depth-pro")
+_LARGE_SOURCE_LIMITS = SourceLimits(max_input_bytes=1024**4, max_pixels=200_000_000, memory_mib=262144)
 
 
-def _prepare_route(request, route):
+def _prepare_route(request, route, *, source_limits=None):
     if route == "v4":
         original = request.getfixturevalue("v4_prepared")
         monkeypatch = request.getfixturevalue("monkeypatch")
@@ -67,14 +71,19 @@ def _prepare_route(request, route):
         return unified.prepare(value), None
     if route == "depth-pro":
         value = request.getfixturevalue("native_case")
+        if source_limits is not None:
+            value = replace(value, source_limits=source_limits)
         return unified.prepare(value), value.input_dir
     value = request.getfixturevalue("request_case")
     if route == "photography":
         return unified.prepare(ManagedLuxDepthV6Request(value)), None
-    if route == "finishing":
+    if route in {"finishing", "finishing-no-depth"}:
         source = unified.run(unified.prepare(value))
         finishing = LuxDepthV6Request(
-            source.output_root, source.output_root.with_name("finished"), depth_maps=DepthMapRecipe()
+            source.output_root,
+            source.output_root.with_name("finished"),
+            source_limits=source_limits or SourceLimits(),
+            depth_maps=DepthMapRecipe() if route == "finishing" else None,
         )
         return unified.prepare(finishing), source.output_root
     return unified.prepare(value), None
@@ -85,8 +94,13 @@ def test_operator_import_is_lazy_and_has_no_numeric_or_neural_runtime():
 import sys
 import transformation_portal.lux_depth as lux
 from transformation_portal.lux_depth import prepare, run, verify, result_summary
+from transformation_portal.lux_depth.__main__ import main
 assert callable(prepare) and callable(run) and callable(verify) and callable(result_summary)
 assert 'PhotographyRequest' in dir(lux)
+try:
+    main(['verify', '--help'])
+except SystemExit as exc:
+    assert exc.code == 0
 assert not {'numpy', 'scipy', 'PIL', 'torch', 'transformers', 'depth_pro'} & set(sys.modules)
 """
     environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2] / "src"))
@@ -172,6 +186,73 @@ def test_source_dependent_evidence_requires_source_root(request, route):
     result = unified.run(prepared)
     with pytest.raises(ValueError, match="require source_root"):
         unified.verify(result.output_root)
+
+
+def _forbid_source_payload_replay(monkeypatch):
+    from transformation_portal.lux_depth_v6 import depth_pro, evidence, source
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Source limits must reject before reading images, loading arrays, or replaying products")
+
+    monkeypatch.setattr(source, "_inspect_image", forbidden)
+    monkeypatch.setattr(source, "verify_execution_evidence_v3", forbidden)
+    monkeypatch.setattr(evidence, "verify_artifacts", forbidden)
+    monkeypatch.setattr(depth_pro, "_verify_artifacts", forbidden)
+
+
+@pytest.mark.parametrize("route", _SOURCE_ROUTES)
+@pytest.mark.parametrize("field", ["max_input_bytes", "max_pixels", "memory_mib"])
+def test_caller_source_limits_reject_real_outputs_before_payload_reads(request, route, field, monkeypatch):
+    prepared, source_root = _prepare_route(request, route, source_limits=_LARGE_SOURCE_LIMITS)
+    result = unified.run(prepared)
+    _forbid_source_payload_replay(monkeypatch)
+    with pytest.raises(ValueError, match="bounded regular|byte budget|pixel|memory admission"):
+        unified.verify(result.output_root, source_root=source_root, source_limits=SourceLimits(**{field: 1}))
+    assert prepared.canonical_plan_bytes == (result.output_root / "plan.json").read_bytes()
+
+
+@pytest.mark.parametrize("route", _SOURCE_ROUTES)
+def test_recorded_limits_cannot_raise_default_verification_memory(request, route, monkeypatch):
+    prepared, source_root = _prepare_route(request, route, source_limits=_LARGE_SOURCE_LIMITS)
+    result = unified.run(prepared)
+    plan = prepared.plan.to_payload()
+    image = plan["inputs"][0] if route == "depth-pro" else plan["source"]["images"][0]
+    # Valid bounded geometry under the large recorded limits, but too large for
+    # default caller memory. Rehashing completion cannot authorize allocation.
+    image["shape"] = [8192, 8192]
+    raw = canonicalize_json(plan)
+    (result.output_root / "plan.json").write_bytes(raw)
+    completion = result.output_root / "evidence.json"
+    evidence = json.loads(completion.read_bytes())
+    evidence["plan_sha256"] = hashlib.sha256(raw).hexdigest()
+    completion.write_bytes(canonicalize_json(evidence))
+    _forbid_source_payload_replay(monkeypatch)
+    with pytest.raises(ValueError, match="memory admission"):
+        unified.verify(result.output_root, source_root=source_root)
+
+
+@pytest.mark.parametrize("route", _SOURCE_ROUTES)
+def test_explicit_source_limits_preserve_real_replay_and_exact_plan(request, route):
+    prepared, source_root = _prepare_route(request, route)
+    result = unified.run(prepared)
+    verified = unified.verify(result.output_root, source_root=source_root, source_limits=_LARGE_SOURCE_LIMITS)
+    assert verified.plan_sha256 == hashlib.sha256(prepared.canonical_plan_bytes).hexdigest()
+    assert verified.canonical_bytes == (result.output_root / "evidence.json").read_bytes()
+
+
+@pytest.mark.parametrize(
+    "schema", ["tp.execution.plan.v2", "tp.execution.plan.v3", "tp.execution.plan.v4", "tp.execution.plan.v5"]
+)
+def test_self_contained_schemas_reject_unsupported_limits_before_native_replay(tmp_path, schema):
+    (tmp_path / "execution-plan.json").write_bytes(canonicalize_json({"schema": schema}))
+    with pytest.raises(ValueError, match="does not support source_limits"):
+        unified.verify(tmp_path, source_limits=SourceLimits())
+
+
+@pytest.mark.parametrize("limits", [False, {"max_pixels": 1}, SimpleNamespace(**SourceLimits().to_payload())])
+def test_untyped_source_limits_fail_before_opening_output(tmp_path, limits):
+    with pytest.raises(TypeError, match="exact SourceLimits"):
+        unified.verify(tmp_path / "nonexistent", source_limits=limits)
 
 
 @pytest.mark.parametrize("mutation", ["changed", "ambiguous"])
