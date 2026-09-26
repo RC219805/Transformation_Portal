@@ -172,8 +172,9 @@ Notes:
 
 ## Optional Staged Upload Pilot Knobs
 
-Staged uploads stay additive and default-off. The browser feature appears only
-when the backend enable flag is on and the rollout cohort matches.
+Staged uploads stay additive and default-off. Build exposes file and folder
+controls for Lux Depth V3, Lux Depth V5, Lux Depth V6, and Archive Gate A. The controls become
+available when the backend enable flag is on and the rollout cohort matches.
 
 ```bash
 export TP_PORTAL_UPLOAD_STAGING_ENABLED=0
@@ -189,8 +190,9 @@ export TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0
 
 Notes:
 - `TP_PORTAL_UPLOAD_STAGING_ENABLED=0` keeps `features.stagedUploads=false` on both bootstrap surfaces and returns typed `404 not found` from `POST /v1/uploads/staging`.
-- `TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0` keeps the UI hidden even when the backend route is enabled.
-- `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`.
+- `TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0` keeps the controls disabled even when the backend route is enabled.
+- `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`. In pilot tenant mode, place staging under the intended tenant's workspace or CAS root so the returned input directory passes tenant admission.
+- A successful file or folder upload replaces Input Directory only. Output Directory must separately name an authorized destination; staging does not dispatch a job.
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
 
