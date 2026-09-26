@@ -1,6 +1,6 @@
 # Transformation Portal CLI Reference
 
-Last source review: 2026-09-22
+Last source review: 2026-09-26 (Lux entrypoint integration)
 
 This is the current operator reference for repository CLI entrypoints. It is a
 live support document, not a historical release report. Prefer the Makefile and
@@ -24,6 +24,7 @@ Use these quick checks before relying on a CLI surface:
 ```bash
 .venv/bin/python -m transformation_portal version
 .venv/bin/python -m transformation_portal --help
+PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth --help
 .venv/bin/lux-depth-v3 --help
 .venv/bin/depth-aware-dof --help
 .venv/bin/presence-security --help
@@ -38,10 +39,11 @@ environment signals, not as proof that the core CLI is broken.
 | Entrypoint | Current role | Invocation |
 | --- | --- | --- |
 | Root package CLI | Recipe-driven processing and repo metadata | `.venv/bin/python -m transformation_portal ...` |
+| Unified Lux Depth | Explicit original-photo processing, inference, finishing, research and verification through existing engines | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth ...` |
 | Lux Depth V3 | Production image/depth/APEX baseline | `.venv/bin/lux-depth-v3 ...` |
 | LuxDepthV4 candidate | Opt-in photographic execution | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v4 ...` |
 | LuxDepthV5 candidate | Opt-in depth evidence and photographic execution | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v5 ...` |
-| LuxDepthV6 candidate | Opt-in standalone reconstruction, grading, and SDR rendering from a verified V5 bundle | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v6 ...` |
+| LuxDepthV6 candidate | Opt-in retained-V5 finishing and standalone Depth Pro research | `PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth_v6 ...` |
 | MaterialsV4 candidate | Source-bound material evidence, response policy, and evaluation | `PYTHONPATH=src .venv/bin/python -m transformation_portal.materials_v4 ...` |
 | PBR helper CLI | Generate PBR maps from depth assets | `.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli ...` |
 | Depth-aware DOF | Apply depth-aware focus rendering from an image and `.npy` depth | `.venv/bin/depth-aware-dof ...` |
@@ -51,7 +53,7 @@ environment signals, not as proof that the core CLI is broken.
 
 ## Opt-In Successor Entrypoints
 
-Installing current source registers `lux-depth-v4`, `lux-depth-v5`, `lux-depth-v6`, and
+Installing current source registers `lux-depth`, `lux-depth-v4`, `lux-depth-v5`, `lux-depth-v6`, and
 `materials-v4`. The module forms above also work when an existing editable
 environment has not refreshed its console scripts. Inspect their commands with:
 
@@ -71,8 +73,41 @@ V3 remains the production baseline and rollback path. MaterialsV4 supplies
 material evidence and bounded photographic response; it does not replace
 physical PBR reconstruction. A successful plan or local contract test does not
 establish representative photographic or native performance acceptance.
-V6 consumes retained verified V5 output; it does not start model inference or
-replace V5 managed dispatch.
+The versioned V6 CLI defaults to retained verified V5 output and separately
+supports explicitly acknowledged Depth Pro research. Managed V5/V6 retain their
+existing pipeline IDs and authentication/publication contracts.
+
+## Unified Lux Depth
+
+Use the canonical `lux-depth` entrypoint, or its module form when an editable
+environment has not refreshed console scripts:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth --help
+PYTHONPATH=src .venv/bin/python -m transformation_portal.lux_depth process \
+  --input-dir /absolute/photos --output-dir /absolute/new-output \
+  --input-color srgb --device cpu --precision fp32 --plan
+```
+
+Its operations preserve existing native request and plan carriers:
+
+- `process`: original photographs through DA3/V5 inference and V6 finishing.
+- `infer`: V5 inference, including optional verified MaterialsV4 evidence.
+- `finish`: a complete retained V5 generation through V6; depth products are
+  enabled by default, with `--no-depth-maps` retaining the grade-only V1 plan.
+- `depth-pro`: explicit non-commercial research, requiring the isolated
+  interpreter, checkpoint and both license acknowledgements.
+- `verify`: native semantic replay selected by the recorded schema; retained
+  finishing and Depth Pro require `--source-root`.
+- `legacy`: pass remaining options directly to the existing V3 CLI.
+
+`--plan` emits exact canonical bytes without output creation or model inference;
+native runtime/device checks may still run during preparation. `process` does
+not accept Materials input because V6 cannot replay applied Materials responses.
+V3 remains the production default. Follow the
+[unified operator guide](../reference/LUX_DEPTH.md) for runtime setup, source
+requirements and acceptance boundaries. Validate the integrated local contracts
+with `make test-lux-depth-contract`.
 
 ## Root Package CLI
 

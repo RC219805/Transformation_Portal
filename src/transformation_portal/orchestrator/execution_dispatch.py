@@ -440,7 +440,7 @@ def execute_dispatch_plan(
     try:
         execution_root = workspace / "outputs"
         if isinstance(plan, ExecutionPlanV5):
-            from transformation_portal.lux_depth_v6.managed import run as run_managed_v6
+            from transformation_portal.lux_depth.lifecycle import run as run_managed_v6
             from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
             from transformation_portal.orchestrator.photography_v6_adapter import consume_v6_dispatch
 
@@ -451,7 +451,7 @@ def execute_dispatch_plan(
             run_managed_v6(prepared_v6, publication_limits=limits, managed_process_group=managed_process_group)
             return_code = 0
         elif isinstance(plan, ExecutionPlanV4):
-            from transformation_portal.lux_depth_v5.pipeline import run
+            from transformation_portal.lux_depth.lifecycle import run
             from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits
 
             assert execution_bindings is not None

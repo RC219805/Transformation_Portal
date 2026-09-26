@@ -45,7 +45,7 @@ def validate_v6_dispatch(plan_bytes: bytes, bindings_bytes: bytes) -> ExecutionP
 
 def prepare_v6_dispatch(request: ManagedLuxDepthV6Request, *, publisher: GenerationPublisher) -> PreparedV6Dispatch:
     """Freeze raw-photo inference and V6 finishing using server-owned runtimes."""
-    from transformation_portal.lux_depth_v6.managed import prepare
+    from transformation_portal.lux_depth.lifecycle import prepare
 
     runtime, raw = server_runtime_bindings()
     inference = request.inference
