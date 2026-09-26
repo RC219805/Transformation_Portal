@@ -1,11 +1,14 @@
 # LuxDepthV6 managed photography, grading, and depth maps
 
-LuxDepthV6 is an opt-in photographic successor with two entry points. Managed
+LuxDepthV6 is an opt-in photographic successor. Managed
 portal/API jobs accept original photographs, run governed V5 inference, and
 finish the retained result with explicit grading, SDR rendering, and depth
-products. The standalone CLI finishes an existing, independently verified V5
-generation without new inference. Both reconstruct a conservative photographic
-baseline from retained original pixels and native depth. LuxDepthV3 remains the
+products. By default, the standalone CLI finishes an existing, independently
+verified V5 generation without new inference. Both paths reconstruct a
+conservative photographic baseline from retained original pixels and native
+depth. A separate standalone Depth Pro option accepts original photographs for
+explicitly acknowledged non-commercial research, with model-estimated meter
+maps and grading that abstains from depth edits. LuxDepthV3 remains the
 production default and rollback path.
 
 V6 establishes reproducible processing and output verification. Representative
@@ -91,6 +94,77 @@ prepared = prepare(
 )
 result = run(prepared)
 ```
+
+## Standalone Depth Pro research
+
+Select `--depth-backend depth-pro` to run fresh Depth Pro inference on original
+top-level JPEG, PNG, or TIFF photographs. This is a local, non-commercial research
+path; it is not exposed through managed portal/API jobs and does not use the
+governed DA3 depth cache.
+Existing commands without this selector continue to require a verified V5
+generation. Managed V6 remains DA3 Metric only.
+
+Use the isolated Depth Pro interpreter installed by
+`scripts/setup/install_depth_pro_runtime.sh` and its pinned checkpoint. Both
+the native runner and its replay verifier require the optional ML-core process
+supervisor (`psutil`) in the parent interpreter. Both
+`--non-commercial-ok` and `--accept-apple-depth-pro-research-license` are
+required for preparation and execution. The flags record the caller's explicit
+acknowledgments; they do not authorize commercial use. Choose a new output
+directory disjoint from the original inputs, with an existing parent:
+
+```bash
+TP_V6_ORIGINALS=/absolute/original-photographs
+TP_V6_DEPTH_PRO_OUTPUT=/absolute/output-v6-depth-pro
+TP_V6_DEPTH_PRO_PYTHON=/absolute/.venv-depth-pro/bin/python
+TP_V6_DEPTH_PRO_CHECKPOINT=/absolute/checkpoints/depth_pro.pt
+
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --depth-backend depth-pro \
+  --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" \
+  --input-color srgb --depth-pro-python "$TP_V6_DEPTH_PRO_PYTHON" \
+  --depth-pro-checkpoint "$TP_V6_DEPTH_PRO_CHECKPOINT" --device mps \
+  --non-commercial-ok --accept-apple-depth-pro-research-license --plan
+
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --depth-backend depth-pro \
+  --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" \
+  --input-color srgb --depth-pro-python "$TP_V6_DEPTH_PRO_PYTHON" \
+  --depth-pro-checkpoint "$TP_V6_DEPTH_PRO_CHECKPOINT" --device mps \
+  --non-commercial-ok --accept-apple-depth-pro-research-license
+
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
+  --depth-backend depth-pro \
+  --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" --verify
+```
+
+Use `--device cpu` when an accelerator is unavailable. `--input-color srgb`
+declares the original pixels' encoding; it does not convert an unsupported ICC
+profile. The same explicit V6 grade and SDR-render controls apply. Depth Pro
+supplies neither a sky mask nor contracted accuracy confidence. Consequently,
+this route records sky evidence as unavailable and abstains from photographic
+depth edits. Numeric-valid meter samples and normalized previews do not
+authorize usable surfaces or prove physical distance accuracy. Meter values
+are model estimates, not measurements or supplied-camera calibration.
+
+The separate `tp.lux.depth_pro.plan.v1` plan binds original input hashes,
+photographic controls, model and worker authority, runtime identity, processing
+identity, and resource ceilings before inference. It does not reinterpret a
+V5 plan or emit DA3 native-evidence metadata. Completion retains native float32
+depth for deterministic product replay. Keep the originals and complete output
+generation: `--verify` uses the recorded native recipe and source root without
+loading the model or requesting another inference. It verifies retained-depth
+consistency and photographic processing; it does not independently authenticate
+the model inference or establish production acceptance.
+
+Each native input retains an `estimated-depth-meters.npy` array and float32
+`estimated-depth-meters.tif`, preserving invalid model samples. Consult
+`numeric-valid.npy` for finite-positive numeric support. `depth-preview.png`
+normalizes those samples for viewing; `depth-preview-numeric-valid.png` is its
+numeric mask. `depth.json` records these semantics and the inference receipt.
+The photographic `baseline.npy`, `master.npy`, `display.npy`, `delivery.tif`,
+`preview.png`, and `photograph.json` retain the V6 precision and encoding roles
+described below, with the original master as the abstaining baseline.
 
 ## Managed portal and API execution
 
@@ -347,7 +421,7 @@ Each input has separate artifacts:
 | `preview.png` | Bounded 8-bit sRGB browser derivative, maximum edge 1600 pixels; reduction handles premultiplied alpha |
 | `photograph.json` | Baseline/master/display descriptors and reconstruction, grade, render, and encoding receipts |
 
-The standalone generation root (managed `v6/`) contains `plan.json` and, only after all products pass
+The retained-V5 standalone generation root (managed `v6/`) contains `plan.json` and, only after all products pass
 semantic replay, `evidence.json`. The plan binds parent evidence, recipes,
 resource ceilings, processing source hashes, and dependency versions.
 Verification checks exact expected products and independently regenerates their
@@ -372,8 +446,8 @@ system component, or numerical kernel. Matching version strings alone do not
 prove equivalence across different binary builds or hosts; independently verify
 the products in the intended environment before claiming equivalence.
 
-Keep the complete V5 parent alongside the V6 result. V6 is not a standalone
-replacement for its upstream provenance bundle. An `ImageMaster` returned by
+For retained-V5 finishing, keep the complete V5 parent alongside the V6 result;
+the result does not replace its upstream provenance bundle. An `ImageMaster` returned by
 `render_master` is marked `color_domain="display_linear_srgb"`; passing it back
 to grading or rendering is rejected to prevent a second display transform.
 Low-level APIs are `grade_master(master, GradeRecipe(...))` and
@@ -382,7 +456,7 @@ an immutable master and a measured receipt.
 
 ## Resource and validation boundaries
 
-Standalone defaults are 64 GiB retained input, 64 GiB output, 100 million pixels per image,
+Retained-V5 standalone defaults are 64 GiB retained input, 64 GiB output, 100 million pixels per image,
 16 GiB admitted memory, and 3600 seconds execution time. The conservative V6
 memory admission is `pixels * 256 + 256 MiB` per image without depth products,
 or `pixels * 320 + native_pixels * 128 + 256 MiB` with depth products; the

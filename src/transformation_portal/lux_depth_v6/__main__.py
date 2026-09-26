@@ -1,4 +1,4 @@
-"""Standalone, opt-in V6 finishing of a retained verified V5 generation."""
+"""Standalone, opt-in V6 finishing and native non-commercial Depth Pro."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from transformation_portal.ingest.canonical_json import dumps_json
+from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
 
 from .color import GradeRecipe, RenderRecipe
 from .depth_maps import DepthMapRecipe
@@ -22,13 +23,20 @@ def main(argv: list[str] | None = None) -> int:
         description="Verify V5 evidence, reconstruct conservatively, grade the float master, and render SDR.",
     )
     parser.add_argument(
-        "--input-dir", required=True, type=Path, help="Completed V5 output directory; retain it for verification"
+        "--input-dir", required=True, type=Path, help="Completed V5 output, or originals with --depth-backend depth-pro"
     )
     parser.add_argument("--output-dir", required=True, type=Path, help="New V6 output directory (existing only with --verify)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="Emit canonical grade plan without creating output")
     action.add_argument("--verify", action="store_true", help="Verify existing V6 output against its retained V5 parent")
     parser.add_argument("--expected-plan-sha256", help="Expected V6 canonical-byte digest, for --verify")
+    parser.add_argument("--depth-backend", choices=("retained-v5", "depth-pro"), default="retained-v5")
+    parser.add_argument("--input-color", choices=("auto", "srgb", "linear_srgb"))
+    parser.add_argument("--depth-pro-python", type=Path)
+    parser.add_argument("--depth-pro-checkpoint", type=Path)
+    parser.add_argument("--device", choices=("cpu", "mps", "cuda"))
+    parser.add_argument("--non-commercial-ok", action="store_true")
+    parser.add_argument("--accept-apple-depth-pro-research-license", action="store_true")
     parser.add_argument("--exposure-stops", type=float, default=0.0)
     parser.add_argument("--white-balance", nargs=3, type=float, metavar=("R", "G", "B"), default=(1.0, 1.0, 1.0))
     parser.add_argument("--contrast", type=float, default=1.0)
@@ -54,6 +62,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.verify and args.depth_maps:
             raise ValueError("--verify reads the recorded depth recipe; omit --depth-maps and --depth-refinement")
         limits = SourceLimits(args.max_input_bytes, args.max_pixels, args.memory_mib)
+        if args.depth_backend == "depth-pro":
+            return _depth_pro(args, limits)
+        if any(
+            (
+                args.input_color,
+                args.depth_pro_python,
+                args.depth_pro_checkpoint,
+                args.device,
+                args.non_commercial_ok,
+                args.accept_apple_depth_pro_research_license,
+            )
+        ):
+            raise ValueError("Native model/color/license options require --depth-backend depth-pro")
         if args.verify:
             verified = verify_execution_evidence(
                 args.output_dir,
@@ -97,12 +118,77 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    except (OSError, ValueError, TypeError, RuntimeError) as exc:
+    except (OSError, ValueError, TypeError, RuntimeError, ArtifactEvidenceError) as exc:
         print(f"lux-depth-v6: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("lux-depth-v6: cancelled; no unverified completion is accepted", file=sys.stderr)
         return 130
+
+
+def _depth_pro(args: argparse.Namespace, limits: SourceLimits) -> int:
+    from . import depth_pro
+
+    if args.depth_refinement is not None:
+        raise ValueError("Depth Pro retains its native original grid; --depth-refinement is unsupported")
+    if args.verify:
+        if any(
+            (
+                args.input_color,
+                args.depth_pro_python,
+                args.depth_pro_checkpoint,
+                args.device,
+                args.non_commercial_ok,
+                args.accept_apple_depth_pro_research_license,
+            )
+        ):
+            raise ValueError("Depth Pro --verify reads recorded configuration; omit inference options")
+        verified = depth_pro.verify(
+            args.output_dir, source_root=args.input_dir, expected_plan_sha256=args.expected_plan_sha256, source_limits=limits
+        )
+        print(
+            dumps_json(
+                {"verified": True, "plan_sha256": verified.plan_sha256, "production_acceptance": "not_established"},
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.expected_plan_sha256 is not None:
+        raise ValueError("--expected-plan-sha256 is only valid with --verify")
+    if args.depth_pro_python is None or args.depth_pro_checkpoint is None:
+        raise ValueError("Depth Pro requires explicit --depth-pro-python and --depth-pro-checkpoint")
+    prepared = depth_pro.prepare(
+        depth_pro.NativeDepthProRequest(
+            args.input_dir,
+            args.output_dir,
+            args.depth_pro_python,
+            args.depth_pro_checkpoint,
+            device=args.device or "cpu",
+            non_commercial_ok=args.non_commercial_ok,
+            accept_license=args.accept_apple_depth_pro_research_license,
+            input_color=args.input_color or "auto",
+            grade=GradeRecipe(args.exposure_stops, tuple(args.white_balance), args.contrast, args.pivot, args.saturation),
+            render=RenderRecipe(args.render, args.shoulder),
+            source_limits=limits,
+            output_limits=OutputLimits(args.max_output_bytes, args.wall_time_seconds),
+        )
+    )
+    if args.plan:
+        sys.stdout.write(prepared.canonical_plan_bytes.decode("utf-8") + "\n")
+        return 0
+    result = depth_pro.run(prepared)
+    print(
+        dumps_json(
+            {
+                "output_root": str(result.output_root),
+                "plan_sha256": result.plan_sha256,
+                "input_count": result.input_count,
+                "production_acceptance": "not_established",
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
 
 
 if __name__ == "__main__":
