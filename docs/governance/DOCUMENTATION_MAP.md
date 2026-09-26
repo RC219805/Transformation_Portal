@@ -39,6 +39,7 @@ operator guidance unless they are linked here as canonical documents.
 | Machine-mode metadata API | [Machine Mode Contract](../api/MACHINE_MODE_CONTRACT.md) | Maintained |
 | Archive machine-mode API | [Archive Machine Mode Contract](../api/ARCHIVE_MACHINE_MODE_CONTRACT.md) | Maintained |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](../deployment/managed_paid_pilot_staging_runbook.md) | Maintained; provider-neutral procedure for rerunning the Phase 5.A gate against managed Postgres, Redis, and S3-compatible storage |
+| Unified LuxDepth | [Common CLI/API and original-to-delivery composition](../reference/LUX_DEPTH.md) | Shared V5/V6 managed and standalone entry; existing engines, authority, and V3 default retained |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
 | V3 pipeline operations | [Pipeline Operations Guide](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md) | Maintained V3 workflow exception within a historical directory; strict APEX admission remains required |
 | LuxDepthV4 candidate | [V4 photography and evaluation](../reference/LUX_DEPTH_V4.md) | Opt-in candidate; production acceptance and shared-executor cutover remain gated |

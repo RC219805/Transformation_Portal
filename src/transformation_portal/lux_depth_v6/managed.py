@@ -26,7 +26,14 @@ from transformation_portal.lux_depth_v3.execution_evidence import _pin_output_ro
 from transformation_portal.lux_depth_v4.evidence import VerifiedArtifact, _inventory
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot, write_evidence
 from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request, PreparedLuxExecutionV5, validate_prepared_bindings
-from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
+from transformation_portal.orchestrator.artifact_store.generation import (
+    MAX_GENERATION_BYTES,
+    MAX_GENERATION_FILE_BYTES,
+    MAX_GENERATION_FILES,
+    MAX_MANIFEST_BYTES,
+    GenerationPublicationLimits,
+    GenerationPublisher,
+)
 
 from .color import GradeRecipe, RenderRecipe
 from .depth_maps import DepthMapRecipe
@@ -86,14 +93,36 @@ class VerifiedManagedV6Evidence:
         return decode_bounded_json_object(self.canonical_bytes)
 
 
-def prepare(request: ManagedLuxDepthV6Request, *, publisher: GenerationPublisher) -> PreparedManagedLuxExecutionV6:
-    """Freeze all operator choices once, before any model or output creation."""
+def prepare(
+    request: ManagedLuxDepthV6Request,
+    *,
+    publisher: GenerationPublisher | None = None,
+    publication_limits: GenerationPublicationLimits | None = None,
+) -> PreparedManagedLuxExecutionV6:
+    """Freeze choices before model/output creation, with bounded local or managed admission.
+
+    Without a publisher, the same composite runs locally under the generation
+    limits. This admits products only; it does not authorize managed publication.
+    """
     from transformation_portal.lux_depth_v5.lifecycle import prepare as prepare_inference
 
     from .publication import validate_publication_plan
 
     if type(request) is not ManagedLuxDepthV6Request:
         raise TypeError("Managed V6 preparation requires its exact request carrier")
+    if publisher is not None and publication_limits is not None:
+        raise ValueError("Specify a publisher or explicit publication limits, never both")
+    if publisher is not None:
+        publication_limits = publisher.limits
+    elif publication_limits is None:
+        publication_limits = GenerationPublicationLimits(
+            max_files=MAX_GENERATION_FILES,
+            max_file_bytes=MAX_GENERATION_FILE_BYTES,
+            max_total_bytes=MAX_GENERATION_BYTES,
+            max_manifest_bytes=MAX_MANIFEST_BYTES,
+        )
+    if type(publication_limits) is not GenerationPublicationLimits:
+        raise TypeError("Publication admission requires exact GenerationPublicationLimits")
     for value, expected in (
         (request.inference, LuxDepthV5Request),
         (request.grade, GradeRecipe),
@@ -106,11 +135,12 @@ def prepare(request: ManagedLuxDepthV6Request, *, publisher: GenerationPublisher
         raise ValueError("Managed V6 cannot replay applied Materials responses")
     if request.inference.max_pixels > 100_000_000:
         raise ValueError("Managed V6 supports at most 100 million pixels per image")
-    total = min(request.inference.max_output_bytes, publisher.limits.max_total_bytes)
+    total = min(request.inference.max_output_bytes, publication_limits.max_total_bytes)
     budget = stage_output_budget(total)
     output = directory_path(request.inference.output_dir, allow_missing=True)
     inference = prepare_inference(
-        replace(request.inference, output_dir=output / SOURCE_DIRECTORY, max_output_bytes=budget), publisher=publisher
+        replace(request.inference, output_dir=output / SOURCE_DIRECTORY, max_output_bytes=budget),
+        publication_limits=publication_limits,
     )
     payload = {
         "schema": "tp.execution.plan.v5",
@@ -124,11 +154,11 @@ def prepare(request: ManagedLuxDepthV6Request, *, publisher: GenerationPublisher
         },
         "processing": managed_processing_identity(),
         "resources": {**inference.plan.to_payload()["resources"], "max_output_bytes": total},
-        "publication": publisher.limits.to_payload(),
+        "publication": publication_limits.to_payload(),
     }
     payload["plan_fingerprint_sha256"] = digest_payload(payload)
     plan = ExecutionPlanV5.from_payload(payload)
-    validate_publication_plan(plan.to_payload(), publisher.limits)
+    validate_publication_plan(plan.to_payload(), publication_limits)
     return PreparedManagedLuxExecutionV6(plan, inference)
 
 

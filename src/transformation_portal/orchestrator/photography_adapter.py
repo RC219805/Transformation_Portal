@@ -115,7 +115,7 @@ def validate_photography_dispatch(plan_bytes: bytes, bindings_bytes: bytes) -> E
 
 def prepare_photography_dispatch(request: LuxDepthV5Request, *, publisher: GenerationPublisher) -> PreparedPhotographyDispatch:
     """Freeze one V5 request using only the server's configured interpreters."""
-    from transformation_portal.lux_depth_v5.lifecycle import prepare
+    from transformation_portal.lux_depth.lifecycle import prepare
 
     runtime, raw = server_runtime_bindings()
     if request.runtime_python not in (None, runtime) or request.raw_python not in (None, raw):

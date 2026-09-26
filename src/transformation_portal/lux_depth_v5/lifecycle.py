@@ -20,7 +20,7 @@ from transformation_portal.lux_depth_v4 import lifecycle as legacy
 if TYPE_CHECKING:
     from transformation_portal.lux_depth_v3.model_resolution import ResolvedModel
     from transformation_portal.materials_v4.engine import ResponsePolicy
-    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
 
 
 @dataclass(frozen=True)
@@ -126,10 +126,18 @@ class _PreparationProfile:
         return validate_publication_plan(payload, limits)
 
 
-def prepare(request: LuxDepthV5Request, *, publisher: GenerationPublisher | None = None) -> PreparedLuxExecutionV5:
+def prepare(
+    request: LuxDepthV5Request,
+    *,
+    publisher: GenerationPublisher | None = None,
+    publication_limits: GenerationPublicationLimits | None = None,
+) -> PreparedLuxExecutionV5:
+    """Freeze admission using a publisher policy or explicit local limits."""
     if type(request) is not LuxDepthV5Request:
         raise TypeError("prepare requires LuxDepthV5Request")
-    prepared = legacy._prepare(request, publisher=publisher, profile=_PreparationProfile)
+    prepared = legacy._prepare(
+        request, publisher=publisher, publication_limits=publication_limits, profile=_PreparationProfile
+    )
     validate_prepared_bindings(prepared)
     authorize_model(prepared.plan)
     return prepared
