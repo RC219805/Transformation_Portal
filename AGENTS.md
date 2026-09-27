@@ -117,9 +117,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./.venv/bin/pytest tests/core/test_execution_plan.py tests/core/test_execution_identity_v3.py tests/lux_depth_v3/test_execution_plan_adapter.py tests/lux_depth_v3/test_execution_lifecycle.py tests/lux_depth_v3/test_prepared_execution_callsites.py tests/depth/backends/test_execution_plan_workers.py tests/stage_graph/test_stage_registry.py tests/test_validate_ci_config.py -q`.
 - Depth-cache authority contracts:
   `./.venv/bin/pytest tests/lux_depth_v3/test_depth_cache_identity_v3.py tests/lux_depth_v3/test_depth_cache_runtime.py tests/lux_depth_v3/test_depth_cache_concurrency.py -q`.
-- Opt-in successor contracts:
-  `make test-materials-v4-contract`, `make test-lux-depth-v5-contract`, and
-  `make test-lux-depth-v5-managed-contract`.
+- Unified and opt-in successor contracts:
+  `make test-lux-depth-contract`, `make test-materials-v4-contract`,
+  `make test-lux-depth-v5-contract`, and `make test-lux-depth-v5-managed-contract`.
   These prove local contracts only. LuxDepthV3 remains the production baseline
   and rollback path until representative photographic, native runtime,
   cache/optional-input, and performance acceptance pass independently.
@@ -393,6 +393,14 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/pipelines/process_source_tiffs_apex.sh`,
   `./scripts/pipelines/run_800_picacho_efficientsam_validation.sh`, and
   `./scripts/pipelines/hdr_production_pipeline.sh`.
+- Unified Lux workflow:
+  `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth process --input-dir <originals> --output-dir <new-path> --input-color <srgb|linear_srgb|auto> --device <cpu|mps|auto> --precision fp32 [--plan]`
+  composes DA3/V5 inference with V6 finishing while preserving the native
+  request, plan, evidence, and managed pipeline contracts. The explicit sibling
+  operations are `infer`, `finish`, `depth-pro`, `verify`, and `legacy`; use
+  `verify --output-dir <path>` for self-contained generations and add
+  `--source-root <path>` for retained-V5 or Depth Pro replay. V3 remains the
+  production default; follow [the unified guide](docs/reference/LUX_DEPTH.md).
 - Lux V3 resolver-only planning:
   `./.venv/bin/lux-depth-v3 --input-dir <path> --output-dir <path> --model-key da3-metric --plan`
   emits the execution-complete `tp.execution.plan.v1` canonical JSON after
