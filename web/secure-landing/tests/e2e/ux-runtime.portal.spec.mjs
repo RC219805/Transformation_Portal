@@ -366,10 +366,12 @@ async function installHydratedPortalRoutes(page, options = {}) {
     if (pathname === "/v1/config-preview") {
       const requestPayload = request.postDataJSON();
       runtime.previewPayloads.push(requestPayload);
-      const isPhotography = ["lux-depth-v5", "lux-depth-v6"].includes(requestPayload?.pipeline);
+      const isPhotography = ["lux-depth-v5", "lux-depth-v6", "lux-depth"].includes(requestPayload?.pipeline);
       if (isPhotography && options.photographyPreviewGate) await options.photographyPreviewGate;
+      if (requestPayload?.pipeline === "lux-depth" && requestPayload?.args?.workflow === "infer" && options.inferPreviewGate) await options.inferPreviewGate;
       if (options.previewDelayMs) await new Promise((resolve) => setTimeout(resolve, options.previewDelayMs));
       const args = requestPayload?.args || {};
+      const responsePreview = options.previewForPayload?.(requestPayload) || preview;
       if (options.previewTenantDenied && args.input_dir !== '/tenant/input') {
         await fulfillJson(route, { schema: 'tp.orchestrator.error.v1', success: false, data: null,
           error: { code: 'FORBIDDEN', message: 'tenant admission failed', details: {
@@ -384,11 +386,11 @@ async function installHydratedPortalRoutes(page, options = {}) {
           pipeline: requestPayload?.pipeline || "lux-depth-v3",
           normalized_args: args,
           execution_args: args,
-          field_errors: preview.field_errors,
-          field_warnings: preview.field_warnings,
-          inactive_fields: preview.inactive_fields,
+          field_errors: responsePreview.field_errors,
+          field_warnings: responsePreview.field_warnings,
+          inactive_fields: responsePreview.inactive_fields,
           readiness: isPhotography && options.photographyBlocked
-            ? { status: "blocked", missing_prerequisites: [{ severity: "blocked", reason: "photography_disabled", field: "pipeline", message: `Managed LuxDepth${requestPayload.pipeline === "lux-depth-v6" ? "V6" : "V5"} is not enabled on this server.` }] }
+            ? { status: "blocked", missing_prerequisites: [{ severity: "blocked", reason: "photography_disabled", field: "pipeline", message: `Managed ${requestPayload.pipeline === "lux-depth" ? "Lux Depth Unified" : requestPayload.pipeline === "lux-depth-v6" ? "LuxDepthV6" : "LuxDepthV5"} is not enabled on this server.` }] }
             : { status: "ready", missing_prerequisites: [] },
           estimate_summary: { runtime_band: "low", gpu_pressure: "low", research_risk: "none" },
           argv_preview: isPhotography ? "" : "lux-depth-v3 --input-dir ./input_images --output-dir ./output/lux_depth_v3_apex",
@@ -2085,10 +2087,12 @@ test('@portal-browser Overview never treats a pending V5 preview as ready', asyn
   await expect(page.locator('[data-capability-id="lux_depth_v5"]')).toHaveAttribute('data-capability-status', 'enabled');
 });
 
-test('@portal-browser V6 exposes every finishing control and dispatches only the current closed request', async ({ page }, testInfo) => {
+for (const pipeline of ['lux-depth-v6', 'lux-depth']) {
+const unified = pipeline === 'lux-depth';
+test(`@portal-browser ${unified ? 'Unified process' : 'V6'} exposes every finishing control and dispatches only the current closed request`, async ({ page }, testInfo) => {
   const runtime = await installHydratedPortalRoutes(page, { keepEventStreamOpen: true, previewDelayMs: 100 });
   await gotoHydratedPortal(page, '/portal?view=build');
-  await page.locator('#pipelineSelect').selectOption('lux-depth-v6');
+  await page.locator('#pipelineSelect').selectOption(pipeline);
   await page.locator('#buildStepTab3').click();
   await expect(page.locator('[data-ui="lux-v6-controls"]')).toBeVisible();
   await expect(page.locator('#fieldsLuxV5')).toBeHidden();
@@ -2106,29 +2110,32 @@ test('@portal-browser V6 exposes every finishing control and dispatches only the
   }
   await page.locator('#v6MemoryMib').blur();
   await expectNoHorizontalOverflow(page);
-  await expectNoWcagViolations(page, 'V6 finishing controls');
+  await expectNoWcagViolations(page, unified ? 'Unified process controls' : 'V6 finishing controls');
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: testInfo.outputPath('lux-v6-controls.png'), fullPage: true });
-  await testInfo.attach('LuxDepthV6 controls', { path: testInfo.outputPath('lux-v6-controls.png'), contentType: 'image/png' });
+  await page.screenshot({ path: testInfo.outputPath(unified ? 'lux-unified-process-controls.png' : 'lux-v6-controls.png'), fullPage: true });
+  await testInfo.attach(unified ? 'Lux Depth Unified controls' : 'LuxDepthV6 controls', { path: testInfo.outputPath(unified ? 'lux-unified-process-controls.png' : 'lux-v6-controls.png'), contentType: 'image/png' });
   await page.locator('#buildStepTab4').click();
   await expect(page.locator('#runJobBtn')).toBeEnabled();
-  await expect(page.locator('#cliPreview')).toContainText('Managed LuxDepthV6 dispatch');
+  await expect(page.locator('#cliPreview')).toContainText(unified ? 'Managed Lux Depth Unified dispatch (process)' : 'Managed LuxDepthV6 dispatch');
   for (const label of ['16-bit TIFF photography', 'Draft PNG', 'Float depth TIFF and arrays', '16-bit depth preview and validity masks']) {
     await expect(page.locator('#expectedOutputsList')).toContainText(label);
   }
   await page.locator('#runJobBtn').click();
   await expect.poll(() => runtime.jobSubmissions).toBe(1);
   const submitted = runtime.submittedPayloads[0];
-  expect(submitted.pipeline).toBe('lux-depth-v6');
+  expect(submitted.pipeline).toBe(pipeline);
   expect(submitted.args).toEqual({
-    input_dir: './input_images', output_dir: './output/lux_depth_v6', model_key: 'da3-metric',
+    ...(unified ? { workflow: 'process' } : {}),
+    input_dir: './input_images', output_dir: unified ? './output/lux_depth' : './output/lux_depth_v6', model_key: 'da3-metric',
     input_color: 'srgb', device: 'mps', precision: 'fp16', target_size: 1008, refinement: 'bilinear', strength: 0, clarity: 0.2,
     exposure_stops: -1.25, white_balance: [1.1, 0.9, 1.2], contrast: 1.2, pivot: 0.2, saturation: 0,
     render: 'soft_srgb', shoulder: 0.75, depth_refinement: 'guided_bilinear_v3', companions_manifest: '/inputs/camera.json',
     max_pixels: 20000000, max_input_bytes: 209715200, max_output_bytes: 4294967296, wall_time_seconds: 7200, memory_mib: 8192
   });
-  expect(runtime.previewPayloads.filter((payload) => payload.pipeline === 'lux-depth-v6').at(-1)).toEqual(submitted);
+  expect(runtime.previewPayloads.filter((payload) => payload.pipeline === pipeline).at(-1)).toEqual(submitted);
 });
+
+}
 
 test('@portal-browser V6 profiles persist all finishing settings without changing V5 or V3 drafts', async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page);
@@ -2200,11 +2207,15 @@ test('@portal-browser V6 pending preview remains gated in Build and Overview', a
   await expect(page.locator('[data-capability-id="lux_depth_v6"]')).toHaveAttribute('data-capability-status', 'enabled');
 });
 
-for (const pipeline of ['lux-depth-v5', 'lux-depth-v6']) {
-  test(`@portal-browser ${pipeline} stages selected files and folder paths through the existing upload contract`, async ({ page }) => {
+for (const [pipeline, workflow] of [['lux-depth-v5'], ['lux-depth-v6'], ['lux-depth', 'process'], ['lux-depth', 'infer']]) {
+  test(`@portal-browser ${pipeline}${workflow ? ` ${workflow}` : ''} stages selected files and folder paths through the existing upload contract`, async ({ page }) => {
     const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });
     await gotoHydratedPortal(page, '/portal?view=build');
     await page.locator('#pipelineSelect').selectOption(pipeline);
+    if (workflow) {
+      await page.locator('#buildStepTab3').click();
+      await page.locator('#unifiedWorkflow').selectOption(workflow);
+    }
     await page.locator('#buildStepTab2').click();
     await expect(page.locator('#stagedUploadPickFilesBtn')).toBeEnabled();
     await expect(page.locator('#stagedUploadPickFolderBtn')).toBeEnabled();
@@ -2230,8 +2241,10 @@ for (const pipeline of ['lux-depth-v5', 'lux-depth-v6']) {
   });
 }
 
-test('@portal-browser V6 Review prioritizes photography and previews depth without replacing precision downloads', async ({ page }, testInfo) => {
-  const jobId = 'job-v6-review';
+for (const pipeline of ['lux-depth-v6', 'lux-depth']) {
+const unified = pipeline === 'lux-depth';
+test(`@portal-browser ${unified ? 'Unified' : 'V6'} Review prioritizes photography and previews depth without replacing precision downloads`, async ({ page }, testInfo) => {
+  const jobId = unified ? 'job-unified-review' : 'job-v6-review';
   const prefix = 'v6/input-0000/';
   const artifactUrl = (name) => `/v1/jobs/${jobId}/artifacts/${prefix}${name}`;
   const artifact = (name, { priority, label, preview, role = 'supporting_preview' }) => ({
@@ -2240,11 +2253,11 @@ test('@portal-browser V6 Review prioritizes photography and previews depth witho
     content_type: name.endsWith('.png') ? 'image/png' : 'image/tiff', mime_type: name.endsWith('.png') ? 'image/png' : 'image/tiff',
     url: artifactUrl(name), download_url: artifactUrl(name), size_bytes: 4096,
     sha256: 'a'.repeat(64), fingerprint_status: 'ok', display_hint: { priority, label, role,
-      compare_group: `lux-depth-v6|input-0000|${name.startsWith('depth-preview-valid') ? 'depth-validity' : name.startsWith('depth-') ? 'relative-depth' : 'photograph'}` },
+      compare_group: `${pipeline}|input-0000|${name.startsWith('depth-preview-valid') ? 'depth-validity' : name.startsWith('depth-') ? 'relative-depth' : 'photograph'}` },
     ...(preview ? { preview_url: artifactUrl(preview), preview_mime_type: 'image/png' } : {})
   });
   const job = {
-    id: jobId, pipeline: 'lux-depth-v6', state: 'succeeded', progress: 100,
+    id: jobId, pipeline, state: 'succeeded', progress: 100,
     logs_tail: ['[INFO] Verified V6 photography and depth products published.'],
     created_at: '2026-09-23T20:00:00Z', finished_at: '2026-09-23T20:00:05Z', updated_at: '2026-09-23T20:00:05Z',
     artifacts: { schema: 'tp.lux.delivery.v4', indexed_count: 5, truncated: false, execution_evidence: 'execution-evidence.json', items: [
@@ -2269,8 +2282,8 @@ test('@portal-browser V6 Review prioritizes photography and previews depth witho
   await expect.poll(() => page.locator('#artifactPreviewSoloImage').evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
   await expectNoHorizontalOverflow(page);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: testInfo.outputPath('lux-v6-review.png'), fullPage: true });
-  await testInfo.attach('V6 photographic delivery with verified PNG preview', { path: testInfo.outputPath('lux-v6-review.png'), contentType: 'image/png' });
+  await page.screenshot({ path: testInfo.outputPath(unified ? 'lux-unified-review.png' : 'lux-v6-review.png'), fullPage: true });
+  await testInfo.attach('V6 photographic delivery with verified PNG preview', { path: testInfo.outputPath(unified ? 'lux-unified-review.png' : 'lux-v6-review.png'), contentType: 'image/png' });
   await page.goto(`/portal?view=review&job=${jobId}&artifact=${encodeURIComponent(`${prefix}depth-relative.tif`)}`);
   await expect(page.locator('#artifactSelectionTitle')).toContainText('depth-relative.tif');
   await expect(page.locator('#artifactCompareBtn')).toBeHidden();
@@ -2283,12 +2296,16 @@ test('@portal-browser V6 Review prioritizes photography and previews depth witho
   expect(imageRequests).toContain(artifactUrl('depth-preview.png'));
 });
 
-test('@portal-browser V6 controls remain usable at mobile width in dark mode', async ({ page }, testInfo) => {
+}
+
+for (const pipeline of ['lux-depth-v6', 'lux-depth']) {
+const unified = pipeline === 'lux-depth';
+test(`@portal-browser ${unified ? 'Unified' : 'V6'} controls remain usable at mobile width in dark mode`, async ({ page }, testInfo) => {
   await installHydratedPortalRoutes(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: 'dark' });
   await gotoHydratedPortal(page, '/portal?view=build');
-  await page.locator('#pipelineSelect').selectOption('lux-depth-v6');
+  await page.locator('#pipelineSelect').selectOption(pipeline);
   await page.locator('#buildStepTab3').click();
   await expect(page.locator('#v6InputColor')).toBeVisible();
   await page.locator('#v6ExposureStops').fill('0.5');
@@ -2296,8 +2313,152 @@ test('@portal-browser V6 controls remain usable at mobile width in dark mode', a
   await page.locator('#v6ResourceLimits > summary').click();
   await expect(page.locator('#v6MemoryMib')).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await expectNoWcagViolations(page, 'V6 mobile controls');
+  await expectNoWcagViolations(page, unified ? 'Unified mobile controls' : 'V6 mobile controls');
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: testInfo.outputPath('lux-v6-mobile.png'), fullPage: true });
-  await testInfo.attach('V6 mobile controls', { path: testInfo.outputPath('lux-v6-mobile.png'), contentType: 'image/png' });
+  await page.screenshot({ path: testInfo.outputPath(unified ? 'lux-unified-mobile.png' : 'lux-v6-mobile.png'), fullPage: true });
+  await testInfo.attach(unified ? 'Unified mobile controls' : 'V6 mobile controls', { path: testInfo.outputPath(unified ? 'lux-unified-mobile.png' : 'lux-v6-mobile.png'), contentType: 'image/png' });
+});
+
+}
+
+test('@portal-browser Unified infer dispatches its current closed request and keeps grading fields out', async ({ page }, testInfo) => {
+  const runtime = await installHydratedPortalRoutes(page, { keepEventStreamOpen: true });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth-v3');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await expect(page.locator('#unifiedWorkflow')).toHaveValue('process');
+  await page.locator('#unifiedWorkflow').selectOption('infer');
+  await expect(page.locator('#photographyV5Heading')).toHaveText('Lux Depth Unified inference');
+  await expect(page.locator('#fieldsLuxV6')).toBeHidden();
+  await page.locator('#v5InputColor').selectOption('srgb');
+  await page.locator('#v5Strength').fill('0');
+  await page.locator('#v5MaterialsManifest').fill('/inputs/materials.json');
+  await page.locator('#v5CompanionsManifest').fill('/inputs/camera.json');
+  await page.locator('#v5PreviewMaps').check();
+  await page.locator('#v5CompanionsManifest').blur();
+  await expectNoHorizontalOverflow(page);
+  await expectNoWcagViolations(page, 'Unified inference controls');
+  await page.screenshot({ path: testInfo.outputPath('lux-unified-infer-controls.png'), fullPage: true });
+  await testInfo.attach('Lux Depth Unified inference controls', { path: testInfo.outputPath('lux-unified-infer-controls.png'), contentType: 'image/png' });
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#cliPreview')).toContainText('Managed Lux Depth Unified dispatch (infer)');
+  await expect(page.locator('#expectedOutputsList')).toContainText('MaterialsV4 response evidence');
+  await expect(page.locator('#expectedOutputsList')).not.toContainText('Draft PNG');
+  await page.locator('#runJobBtn').click();
+  await expect.poll(() => runtime.jobSubmissions).toBe(1);
+  expect(runtime.submittedPayloads[0]).toEqual({ pipeline: 'lux-depth', args: {
+    input_dir: './input_images', output_dir: './output/lux_depth', workflow: 'infer', model_key: 'da3-metric',
+    input_color: 'srgb', device: 'cpu', precision: 'fp32', target_size: 518, refinement: 'guided_bilinear',
+    strength: 0, clarity: 0, preview_maps: true, materials_manifest: '/inputs/materials.json', companions_manifest: '/inputs/camera.json'
+  } });
+  expect(runtime.previewPayloads.filter((payload) => payload.pipeline === 'lux-depth').at(-1)).toEqual(runtime.submittedPayloads[0]);
+});
+
+test('@portal-browser Unified workflow drafts and profiles remain isolated from V5 and V6', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await page.locator('#v6ExposureStops').fill('1.5');
+  await page.locator('#v6ExposureStops').blur();
+  await page.locator('#unifiedWorkflow').selectOption('infer');
+  await page.locator('#v5Strength').fill('0.7');
+  await page.locator('#v5Strength').blur();
+  await page.locator('#pipelineSelect').selectOption('lux-depth-v5');
+  await expect(page.locator('#v5Strength')).toHaveValue('0.25');
+  await expect(page.locator('#unifiedWorkflow')).toBeHidden();
+  await page.locator('#pipelineSelect').selectOption('lux-depth-v6');
+  await expect(page.locator('#v6ExposureStops')).toHaveValue('0');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await expect(page.locator('#unifiedWorkflow')).toHaveValue('infer');
+  await expect(page.locator('#v5Strength')).toHaveValue('0.7');
+  await page.locator('#unifiedWorkflow').selectOption('process');
+  await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await page.locator('#saveProfileBtn').click();
+  await page.locator('#profileManagerName').fill('Unified workflows');
+  await page.locator('[data-profile-action="save"]').click();
+  await expect(page.locator('#profileSelect')).toHaveValue('Unified workflows');
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key))['Unified workflows'], managedProfileStorageKey(runtime.actor));
+  expect(saved.config.photographyUnified).toMatchObject({ workflow: 'process', process: { exposureStops: '1.5' }, infer: { strength: '0.7' } });
+  expect(saved.config.photographyV6.exposureStops).toBe(0);
+  expect(saved.config.photography.strength).toBe(0.25);
+  await page.locator('[data-profile-action="close"]').click();
+  await page.reload();
+  await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'ready');
+  await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await page.locator('#unifiedWorkflow').selectOption('infer');
+  await expect(page.locator('#v5Strength')).toHaveValue('0.7');
+});
+
+test('@portal-browser Unified changed workflow cannot reuse the previous successful preview', async ({ page }) => {
+  let releasePreview;
+  const inferPreviewGate = new Promise((resolve) => { releasePreview = resolve; });
+  const runtime = await installHydratedPortalRoutes(page, { inferPreviewGate });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await page.locator('#buildStepTab3').click();
+  await page.locator('#unifiedWorkflow').selectOption('infer');
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  await page.locator('[data-view-link="overview"]').click();
+  await expect(page.locator('[data-capability-id="lux_depth_unified"]')).toHaveAttribute('data-capability-status', 'gated');
+  expect(runtime.jobSubmissions).toBe(0);
+  releasePreview();
+  await expect(page.locator('[data-capability-id="lux_depth_unified"]')).toHaveAttribute('data-capability-status', 'enabled');
+});
+
+for (const workflow of ['process', 'infer']) {
+  test(`@portal-browser Unified ${workflow} requires managed server opt-in`, async ({ page }) => {
+    const runtime = await installHydratedPortalRoutes(page, { photographyBlocked: true });
+    await gotoHydratedPortal(page, '/portal?view=build');
+    await page.locator('#pipelineSelect').selectOption('lux-depth');
+    await page.locator('#buildStepTab3').click();
+    await page.locator('#unifiedWorkflow').selectOption(workflow);
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    await expect(page.locator('#nextBestActionDetail')).toContainText('Managed Lux Depth Unified is not enabled');
+    expect(runtime.jobSubmissions).toBe(0);
+  });
+}
+
+test('@portal-browser Unified request imports select their workflow and reject unknown workflow values', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, { previewForPayload: (payload) =>
+    payload.pipeline === 'lux-depth' && !['process', 'infer'].includes(payload.args.workflow)
+      ? { ...EMPTY_PREVIEW, field_errors: [{ field: 'workflow', code: 'invalid_argument', message: 'Choose process or infer.' }] }
+      : EMPTY_PREVIEW
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  const importRequest = async (args) => {
+    await page.locator('#fileInput').setInputFiles({ name: 'unified.json', mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({ pipeline: 'lux-depth', args })) });
+  };
+  await importRequest({ workflow: 'infer', input_dir: '/inputs/photos', output_dir: '/outputs/imported', strength: 0, preview_maps: true, materials_manifest: '/inputs/materials.json' });
+  await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await expect(page.locator('#unifiedWorkflow')).toHaveValue('infer');
+  await expect(page.locator('#v5Strength')).toHaveValue('0');
+  await expect(page.locator('#v5PreviewMaps')).toBeChecked();
+  await expect(page.locator('#v5MaterialsManifest')).toHaveValue('/inputs/materials.json');
+  await importRequest({ workflow: 'process', exposure_stops: 1.5, white_balance: [1.1, 1, 0.9], saturation: 0 });
+  await expect(page.locator('#unifiedWorkflow')).toHaveValue('process');
+  await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await expect(page.locator('#v6WhiteBalanceB')).toHaveValue('0.9');
+  await expect(page.locator('#v6Saturation')).toHaveValue('0');
+  await page.locator('#unifiedWorkflow').selectOption('infer');
+  await expect(page.locator('#v5MaterialsManifest')).toHaveValue('/inputs/materials.json');
+  for (const workflow of ['unsupported', null]) {
+    await importRequest({ workflow });
+    await expect(page.locator('#unifiedWorkflow')).toHaveValue('');
+    await expect(page.locator('#fieldsLuxV5')).toBeHidden();
+    await expect(page.locator('#fieldsLuxV6')).toBeHidden();
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+  }
+  expect(runtime.jobSubmissions).toBe(0);
 });

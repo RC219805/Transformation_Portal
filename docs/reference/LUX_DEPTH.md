@@ -169,18 +169,105 @@ for a normalized completion summary. Unsupported carriers and subclasses fail
 closed. Importing the package or CLI help does not import model runtimes.
 
 Managed V5/V6 admission adapters and the worker dispatcher call this same API.
-Their pipeline IDs, feature flags, signed actor/tenant policy, preview/readiness
-requirements, server runtime selection, schemas, artifact labels, and dispatch
-fences stay authoritative. Standalone Depth Pro is not a managed route.
-No frontend selector or route change is required. Existing V3 invocation is
-available through `python -m transformation_portal.lux_depth legacy --help`.
+Their existing pipeline IDs, feature flags, native schemas, and artifact labels
+remain supported. Existing V3 invocation is available through
+`python -m transformation_portal.lux_depth legacy --help`.
+
+## HTTP portal and managed access
+
+Select **Lux Depth Unified (opt-in)** in Build, then select **process** or
+**infer**. Each workflow retains its own draft. `process` accepts original
+photographs and publishes the verified finished photograph, draft preview,
+depth products, and retained inference evidence. `infer` exposes V5 inference
+and optional source-bound Materials controls. V3 remains the portal default.
+Staged file/folder uploads and authorized server directories use the existing
+upload contract. Build requires a successful preview of the current workflow
+and controls plus current readiness. Review uses verified PNG derivatives for
+display; TIFF/float artifacts retain precision authority.
+
+Managed `finish`, `depth-pro`, `verify`, and `legacy` workflow values are not
+accepted. Retained-generation finishing needs a distinct source-authority
+contract, and research execution needs its separate license/runtime boundary;
+use the standalone commands for these workflows.
+
+Deploy matching API and worker code, apply `make db-upgrade` through
+`0007_photography_bindings`, and load the managed service environment on each
+host. It must supply database/Redis URLs, backend/frontdoor authentication,
+authorized input/output roots, an executable governed
+`TRANSFORMATION_PORTAL_DA3_PYTHON`, and the same protected service-owned mode
+0700 `TP_ORCHESTRATOR_EXECUTION_ROOT`. See the
+[distributed runbook](../runtimes/orchestrator-postgres.md). Then configure both
+API and worker hosts:
+
+```bash
+export TP_LUX_DEPTH_MANAGED_ENABLED=1
+export TP_ORCHESTRATOR_STATE_BACKEND=postgres
+export TP_ORCHESTRATOR_QUEUE_BACKEND=redis
+export TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED=0
+```
+
+The Unified flag is independent of `TP_LUX_V5_MANAGED_ENABLED` and
+`TP_LUX_V6_MANAGED_ENABLED`. In pilot tenant mode, add `lux-depth` to the
+existing `TP_PILOT_ALLOWED_PIPELINES` list on API and workers. Keep authenticated
+frontdoor sessions, signed actor membership, and tenant-contained paths. The
+frontdoor and backend must use the same dedicated identity secret; browser
+storage and job bodies must never contain the backend API key. Runtime/RAW
+interpreters and the optional `TP_LUX_V5_CACHE_DIR/<tenant_id>` cache remain
+server-owned. Start `make run-backend-local-noreload`,
+`make run-orchestrator-worker`, and `make run-frontdoor-local` in separate
+terminals with the appropriate environment; the frontdoor requires Node 22.
+
+`GET /v1/readiness` includes `lux-depth` with its default `process` workflow.
+`GET /v1/config-metadata?pipeline=lux-depth` supplies closed JSON argument
+schemas for both supported workflows. Post the same payload to
+`POST /v1/config-preview` and `POST /v1/jobs`, correcting preview errors first:
+
+```json
+{
+  "pipeline": "lux-depth",
+  "args": {
+    "workflow": "process",
+    "input_dir": "/authorized/tenant/photos",
+    "output_dir": "/authorized/tenant/output-unified",
+    "input_color": "srgb",
+    "device": "mps",
+    "precision": "fp32",
+    "exposure_stops": 0.25
+  }
+}
+```
+
+Omitted `workflow` normalizes to `process`. For `infer`, select that workflow
+and omit finishing-only controls such as `exposure_stops`; unsupported fields
+are rejected rather than ignored. The preview reports readiness and plan schema
+for the selected workflow. Existing response envelopes, job routes, SSE,
+cancellation, and artifact URLs remain unchanged, including `/v2/jobs`.
+
+The immutable `tp.job.lux_depth.bindings.v1` envelope binds `pipeline`,
+`workflow`, and the native photography bindings to the existing admitted
+binding digest. `process` requires native plan V5; `infer` requires native plan
+V4. Workers recheck the Unified flag, exact pipeline grant, tenant paths,
+runtime selection, and cache namespace before executing the frozen plan.
+Historical V5/V6 grants cannot authorize Unified, or vice versa. Publication
+independently verifies the native output under the current dispatch fence and
+retains the native artifact/evidence schemas. The run summary reports
+`pipeline: lux_depth`, its workflow, and `engine_pipeline`.
+
+Rollback is to disable the Unified flag on API and workers while retaining
+matching worker code until Unified jobs are drained or canceled. Existing
+V3/V5/V6 selections remain available under their own policy. No database schema
+migration beyond the existing photography bindings columns is introduced.
 
 ## Validation
 
 ```bash
 make test-lux-depth-contract
+make test-lux-depth-managed-contract
 make test-lux-depth-v5-managed-contract
 make test-lux-depth-v6-managed-contract
+make test-orchestrator-http-contract
+make test-portal-contract
+make test-frontdoor-contract
 ```
 
 The unified lane runs the new composition/API/CLI contracts plus the V4, V5,
@@ -189,3 +276,11 @@ real decoding, precision, reconstruction, artifacts, and independent replay;
 they do not establish model accuracy. Service-backed gates still require their
 dedicated migrated Postgres/Redis services. Native photographic and hosted
 acceptance evidence must be reported separately.
+
+The service-backed Unified gate is `make test-lux-depth-managed-services` with
+`TP_DISPATCH_TEST_DATABASE_URL` naming a migrated dedicated `*_test` database
+and `TP_DISPATCH_TEST_REDIS_URL` set. It exercises both workflows through HTTP,
+Postgres, Redis, an external worker, and verified artifact retrieval, with a
+controlled inference worker. It is integration evidence, not neural-model or
+production acceptance. Browser validation uses `make validate-portal-browser`
+and `make validate-frontdoor-browser` with the supported browser prerequisites.

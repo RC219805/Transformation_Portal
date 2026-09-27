@@ -30,6 +30,7 @@ from transformation_portal.orchestrator.worker import RetryableExecutorUnavailab
 LOGGER = logging.getLogger(__name__)
 TERMINAL_JOB_STATES = frozenset({"succeeded", "partial", "failed", "canceled", "worker_lost"})
 _active_plan: ContextVar[bytes | None] = ContextVar("job_execution_plan", default=None)
+_active_bindings: ContextVar[bytes | None] = ContextVar("job_execution_bindings", default=None)
 
 
 class ExecutionJob(Protocol):
@@ -160,6 +161,7 @@ class JobExecutionService(Generic[_JobT]):
         bridge_task = asyncio.create_task(_bridge_cancel())
         execution_output_root = None
         plan_token = None
+        bindings_token = None
         try:
             if isinstance(request, DispatchLocator):
                 from transformation_portal.orchestrator.execution_dispatch import (
@@ -220,6 +222,7 @@ class JobExecutionService(Generic[_JobT]):
                     bindings_path=bindings_path,
                 )
                 plan_token = _active_plan.set(raw)
+                bindings_token = _active_bindings.set(bindings)
             else:
                 if not self.runtime.allow_legacy_commands:
                     raise DispatchAuthorityLost("external workers require an immutable dispatch locator")
@@ -230,6 +233,8 @@ class JobExecutionService(Generic[_JobT]):
         finally:
             if plan_token is not None:
                 _active_plan.reset(plan_token)
+            if bindings_token is not None:
+                _active_bindings.reset(bindings_token)
             if execution_output_root is not None:
                 from transformation_portal.orchestrator.execution_workspace import remove_execution_workspace
 
@@ -276,6 +281,13 @@ class JobExecutionService(Generic[_JobT]):
                 await self.runtime.operational_records().finish_dispatch(
                     fence, state=job.state, exit_code=job.exit_code, error=job.error
                 )
+                return
+            from transformation_portal.orchestrator.lux_depth_adapter import is_unified_bindings, publish_unified_result
+
+            bindings = _active_bindings.get()
+            if is_unified_bindings(bindings):
+                assert bindings is not None
+                await publish_unified_result(raw, bindings, publisher=publisher, fence=fence)
                 return
             if schema == "tp.execution.plan.v5":
                 from transformation_portal.lux_depth_v6.publication import _publish_admitted_result

@@ -109,7 +109,9 @@ export function buildPortalCapabilityCatalog(input = {}) {
   const isLux = pipeline === LUX_PIPELINE;
   const isPhotographyV5 = pipeline === "lux-depth-v5";
   const isPhotographyV6 = pipeline === "lux-depth-v6";
-  const isPhotography = isPhotographyV5 || isPhotographyV6;
+  const isUnified = pipeline === "lux-depth";
+  const isUnifiedInfer = isUnified && args.workflow === "infer";
+  const isPhotography = isPhotographyV5 || isPhotographyV6 || isUnified;
   const isArchive = ARCHIVE_PIPELINES.has(pipeline);
   // The host supplies only the preview matched to the current draft. A failed
   // request may have no field errors (for example, an authentication failure).
@@ -117,6 +119,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
     || hasPreviewErrors(preview) || hasBlockedReadiness(readiness, readinessIssues);
   const previewReady = lower(preview?.status) === "ready"
     && (!text(preview?.pipeline) || preview.pipeline === pipeline)
+    && (!isUnified || (preview?.normalized_args?.workflow || "process") === (args.workflow || "process"))
     && !previewBlocked;
   const archivePrereqIssue = hasArchivePrereqIssue(readinessIssues);
   const segmentationEnabled = boolLike(args.enable_segmentation, false);
@@ -137,9 +140,9 @@ export function buildPortalCapabilityCatalog(input = {}) {
   );
 
   const photographyRow = (version, selected) => makeRow({
-    id: `lux_depth_v${version}`,
+    id: version === "Unified" ? "lux_depth_unified" : `lux_depth_v${version}`,
     group: "Build",
-    label: `LuxDepthV${version} ${version === 6 ? "grading and depth" : "photography"}`,
+    label: version === "Unified" ? "Lux Depth Unified" : `LuxDepthV${version} ${version === 6 ? "grading and depth" : "photography"}`,
     status: !backendOk ? "offline" : selected ? previewBlocked ? "blocked" : lower(readiness?.status) === "ready" && previewReady ? "enabled" : "gated" : "available",
     summary: !selected
       ? "Opt-in photography, when enabled by the server."
@@ -148,7 +151,9 @@ export function buildPortalCapabilityCatalog(input = {}) {
         : !previewReady
           ? "Validate this draft in Build."
           : "Configuration preview passed.",
-    detail: version === 6
+    detail: version === "Unified"
+      ? "Choose process for grading and depth products, or infer for optional MaterialsV4 evidence. Each workflow requires its current preview and readiness; V3 remains the baseline."
+      : version === 6
       ? "Includes 16-bit TIFF photography, draft PNG, and depth outputs. Requires current preview and readiness; V3 remains the baseline."
       : "Requires preview and readiness. Default size: 518; V3 remains the baseline.",
     nextAction: !selected ? "" : !previewReady
@@ -187,6 +192,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
     }),
     photographyRow(5, isPhotographyV5),
     photographyRow(6, isPhotographyV6),
+    photographyRow("Unified", isUnified),
     makeRow({
       id: "lux_depth_v4",
       group: "Build",
@@ -198,7 +204,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
       id: "materials_v4",
       group: "Build",
       label: "MaterialsV4 evidence",
-      status: !isPhotographyV5 ? "not_portal_controlled" : backendStatus(backendOk, Boolean(text(args.materials_manifest))),
+      status: !isPhotographyV5 && !isUnifiedInfer ? "not_portal_controlled" : backendStatus(backendOk, Boolean(text(args.materials_manifest))),
       summary: "Use an existing MaterialsV4 evidence manifest.",
       detail: "Supply existing evidence; the server validates it."
     }),
@@ -369,7 +375,7 @@ export function buildPortalCapabilityCatalog(input = {}) {
     })
   ];
 
-  const currentPipelineId = isPhotographyV6 ? "lux_depth_v6" : isPhotographyV5 ? "lux_depth_v5" : isLux ? "lux_depth_v3" : "archive_gates";
+  const currentPipelineId = isUnified ? "lux_depth_unified" : isPhotographyV6 ? "lux_depth_v6" : isPhotographyV5 ? "lux_depth_v5" : isLux ? "lux_depth_v3" : "archive_gates";
   for (const row of rows) {
     row.scope = "current";
     if (["lux_depth_v4", "plugin_trust"].includes(row.id)) {
@@ -382,10 +388,10 @@ export function buildPortalCapabilityCatalog(input = {}) {
       row.summary = "Available in LuxDepthV3.";
       row.detail = "Select Lux Depth v3 in Build.";
       row.nextAction = "";
-    } else if (row.id === "materials_v4" && !isPhotographyV5) {
+    } else if (row.id === "materials_v4" && !isPhotographyV5 && !isUnifiedInfer) {
       row.scope = "other_workflow";
-      row.statusLabel = "LuxDepthV5 only";
-    } else if (["lux_depth_v3", "lux_depth_v5", "lux_depth_v6", "archive_gates"].includes(row.id) && row.id !== currentPipelineId) {
+      row.statusLabel = "Inference workflows";
+    } else if (["lux_depth_v3", "lux_depth_v5", "lux_depth_v6", "lux_depth_unified", "archive_gates"].includes(row.id) && row.id !== currentPipelineId) {
       row.scope = "other_workflow";
     } else if (row.id === "da3_apache" && !isLux && !isPhotography) {
       row.scope = "other_workflow";

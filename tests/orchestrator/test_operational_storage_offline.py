@@ -309,6 +309,93 @@ async def test_photography_admission_atomically_binds_physical_carrier_without_c
     assert binding_digests[0] != binding_digests[1]
 
 
+def _unified_inference_bindings(bindings):
+    return canonicalize_json(
+        {
+            "schema": "tp.job.lux_depth.bindings.v1",
+            "pipeline": "lux-depth",
+            "workflow": "infer",
+            "photography_bindings": json.loads(bindings),
+        }
+    )
+
+
+async def test_unified_admission_atomically_binds_route_and_native_authority(tmp_path):
+    plan_bytes, native = _photography_authority(tmp_path)
+    bindings = _unified_inference_bindings(native)
+    record = _record()
+    record.effective_request.update(pipeline="lux-depth", args={"workflow": "infer"})
+    session = Session(scalars=[*_capacities(active=0), 100.0], gets=[SimpleNamespace(canonical_bytes=plan_bytes)])
+    locator = await _admit(_store(session), record=record, plan_bytes=plan_bytes, execution_bindings=bindings)
+    attempt = next(model for model in session.added if isinstance(model, DispatchAttemptModel))
+    assert locator.plan_digest == hashlib.sha256(plan_bytes).hexdigest()
+    assert attempt.execution_bindings == bindings
+    assert attempt.execution_bindings_digest == hashlib.sha256(bindings).hexdigest()
+    evidence = next(model for model in session.added if isinstance(model, OperationalRecordModel))
+    assert json.loads(evidence.canonical_bytes)["execution_bindings_digest"] == attempt.execution_bindings_digest
+    assert session.trace[-1] == "COMMIT"
+
+
+@pytest.mark.parametrize("mismatch", ["pipeline", "workflow", "missing_workflow", "missing_args", "legacy_binding"])
+async def test_unified_admission_rejects_route_mismatch_before_capacity_or_transaction(tmp_path, mismatch):
+    plan_bytes, native = _photography_authority(tmp_path)
+    bindings = _unified_inference_bindings(native)
+    record = _record()
+    record.effective_request.update(pipeline="lux-depth", args={"workflow": "infer"})
+    if mismatch == "pipeline":
+        record.effective_request["pipeline"] = "lux-depth-v5"
+    elif mismatch == "workflow":
+        record.effective_request["args"]["workflow"] = "process"
+    elif mismatch == "missing_workflow":
+        record.effective_request["args"] = {}
+    elif mismatch == "missing_args":
+        record.effective_request.pop("args")
+    else:
+        bindings = native
+    session = Session()
+    with pytest.raises(RepositoryError, match="canonical execution authority and bindings"):
+        await _admit(_store(session), record=record, plan_bytes=plan_bytes, execution_bindings=bindings)
+    assert session.trace == []
+
+
+async def test_unified_authority_readback_retains_route_envelope_without_local_paths(tmp_path):
+    plan_bytes, native = _photography_authority(tmp_path)
+    bindings = _unified_inference_bindings(native)
+    attempt = _attempt(
+        plan_digest=hashlib.sha256(plan_bytes).hexdigest(),
+        execution_bindings=bindings,
+        execution_bindings_digest=hashlib.sha256(bindings).hexdigest(),
+    )
+    model = SimpleNamespace(canonical_bytes=plan_bytes)
+    store = _store(Session(gets=[attempt, model, attempt, model]))
+    locator = _fence(attempt).locator
+    assert await store.fetch_plan(locator) == plan_bytes
+    assert await store.fetch_execution_bindings(locator) == bindings
+
+
+@pytest.mark.parametrize("tamper", ["stale_digest", "workflow_mismatch"])
+@pytest.mark.parametrize("fetch_method", ["fetch_plan", "fetch_execution_bindings"])
+async def test_unified_authority_readback_rejects_binding_tampering(tmp_path, tamper, fetch_method):
+    plan_bytes, native = _photography_authority(tmp_path)
+    bindings = _unified_inference_bindings(native)
+    attempt = _attempt(
+        plan_digest=hashlib.sha256(plan_bytes).hexdigest(),
+        execution_bindings=bindings,
+        execution_bindings_digest=hashlib.sha256(bindings).hexdigest(),
+    )
+    changed = json.loads(bindings)
+    if tamper == "stale_digest":
+        changed["photography_bindings"]["input_root"] = "/changed/input/root"
+    else:
+        changed["workflow"] = "process"
+    attempt.execution_bindings = canonicalize_json(changed)
+    if tamper == "workflow_mismatch":
+        attempt.execution_bindings_digest = hashlib.sha256(attempt.execution_bindings).hexdigest()
+    store = _store(Session(gets=[attempt, SimpleNamespace(canonical_bytes=plan_bytes)]))
+    with pytest.raises(DispatchAuthorityLost):
+        await getattr(store, fetch_method)(_fence(attempt).locator)
+
+
 @pytest.mark.parametrize("invalid", ["missing", "extra", "noncanonical", "oversized", "legacy"])
 async def test_invalid_photography_authority_never_reserves_capacity(tmp_path, invalid):
     plan_bytes, bindings = _photography_authority(tmp_path)

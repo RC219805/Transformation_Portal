@@ -51,6 +51,15 @@ Managed `lux-depth-v5` jobs are an explicit opt-in with Postgres/Redis authority
 V3 remains the default. See [managed V5 execution](../reference/LUX_DEPTH_V5.md#managed-job-execution)
 for the strict request contract, migration, server runtime settings, and gates.
 
+**Lux Depth Unified** adds the opt-in `lux-depth` pipeline with `process`
+(original photographs through depth and finishing) and `infer` (depth with
+optional Materials) workflows. Enable `TP_LUX_DEPTH_MANAGED_ENABLED=1` on
+matching API and worker hosts and authorize `lux-depth` separately in pilot
+pipeline policy. The portal preserves separate workflow drafts, staged
+uploads, current-preview dispatch checks, and verified artifact review. See
+[Unified HTTP and managed access](../reference/LUX_DEPTH.md#http-portal-and-managed-access)
+for the complete deployment, request, permission, and rollback contract.
+
 As of PR #1562, the health/readiness routes are backed by typed OpenAPI
 response models. That change documents the contract shape for generated clients;
 it does not change the existing response bodies for `/healthz`, `/ready`, or
@@ -84,7 +93,9 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `GET /ready` returns a shallow backend liveness signal.
 - `GET /healthz` returns the backend's minimal liveness signal; the secure front
   door exposes its own `/healthz` route with the managed readiness checks.
-- `GET /v1/readiness` returns the operator-truth execution readiness matrix for `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
+- `GET /v1/readiness` returns the operator-truth execution readiness matrix for `lux-depth-v3`, `lux-depth`, `lux-depth-v5`, `lux-depth-v6`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
+- `GET /v1/config-metadata?pipeline=lux-depth` returns the closed argument schemas for Unified `process` and `infer` workflows; `pipeline=lux-depth-v3` retains the legacy metadata.
+- `POST /v1/config-preview` validates the selected pipeline and workflow before dispatch, including workflow-specific readiness.
 - `GET /portal/bootstrap` returns the standalone portal bootstrap contract for `direct_debug` mode.
 - `GET /v1/presets?pipeline=lux-depth-v3` dynamic UI preset catalog.
 - `POST /v1/uploads/staging` stages multipart browser uploads under a governed `input_dir` and returns the staged input path plus baseline/capture/receipt artifact paths.

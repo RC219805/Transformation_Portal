@@ -2751,6 +2751,13 @@ def test_readiness_contract_reports_pipeline_status_matrix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     readiness_map = {
+        "lux-depth": {
+            "status": "blocked",
+            "canonical_command": "lux-depth process",
+            "missing_prerequisites": [{"reason": "lux_depth_disabled", "severity": "blocked"}],
+            "runner_details": {"adapter": "tp.job.lux_depth.bindings.v1"},
+            "notes": [],
+        },
         "lux-depth-v3": {
             "status": "ready",
             "canonical_command": "lux-depth-v3",
