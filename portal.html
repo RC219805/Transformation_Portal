@@ -589,6 +589,7 @@ Contract notes:
                             <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                 <option value="lux-depth-v3">lux-depth-v3</option>
                                 <option value="lux-depth-v5">lux-depth-v5 (Opt-in photography)</option>
+                                <option value="lux-depth">Lux Depth Unified (opt-in)</option>
                                 <option value="lux-depth-v6">lux-depth-v6 (Grading and depth outputs)</option>
                                 <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
                                 <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
@@ -775,10 +776,21 @@ Contract notes:
                         </div>
                     </section>
 
+                    <section id="fieldsLuxUnified" data-build-step-panel="3" class="hidden pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="lux-unified-controls">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="unifiedWorkflow">Unified workflow</label>
+                            <select id="unifiedWorkflow" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors" required aria-describedby="unifiedWorkflowHint">
+                                <option value="process">Process photographs (grading and depth outputs)</option>
+                                <option value="infer">Infer depth (optional MaterialsV4 evidence)</option>
+                            </select>
+                            <p id="unifiedWorkflowHint" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Each workflow keeps its own settings and requires a current server preview. V3 remains the production baseline and rollback path.</p>
+                        </div>
+                    </section>
+
                     <section id="fieldsLuxV5" data-build-step-panel="3" class="hidden pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="lux-v5-controls">
                         <div>
                             <p class="section-kicker">Step 3 · Opt-in successor</p>
-                            <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">LuxDepthV5 photography</h3>
+                            <h3 id="photographyV5Heading" class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">LuxDepthV5 photography</h3>
                             <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">V5 extends the V4 photography foundation with verified execution and outputs. V3 remains the production baseline and rollback path.</p>
                             <p id="v5ControlsHint" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Use 518 for normal comparisons. 1008 requires separate performance and photographic acceptance. Optional manifests must already exist in the server's authorized inputs. Model runtime and cache locations are managed by the server.</p>
                         </div>
@@ -799,7 +811,7 @@ Contract notes:
                     <section id="fieldsLuxV6" data-build-step-panel="3" class="hidden pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="lux-v6-controls">
                         <div>
                             <p class="section-kicker">Step 3 · Grading and depth</p>
-                            <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">LuxDepthV6 photography</h3>
+                            <h3 id="photographyV6Heading" class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">LuxDepthV6 photography</h3>
                             <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Process source photographs into a 16-bit TIFF, a draft PNG, and verified depth outputs. V3 remains the production baseline.</p>
                             <p id="v6ControlsHint" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">518 is the default native depth size; higher values require more memory and do not guarantee improved accuracy. Full-size maps reconstruct retained native samples. Camera calibration is required for inferred metric depth. Convert unsupported source ICC profiles before upload.</p>
                         </div>

@@ -5,11 +5,11 @@ export function isLuxPipeline(pipeline) {
 }
 
 export function isPhotographyPipeline(pipeline) {
-  return pipeline === "lux-depth-v5" || pipeline === "lux-depth-v6";
+  return pipeline === "lux-depth-v5" || pipeline === "lux-depth-v6" || pipeline === "lux-depth";
 }
 
 export function photographyVersion(pipeline) {
-  return pipeline === "lux-depth-v6" ? "V6" : "V5";
+  return pipeline === "lux-depth" ? "Unified" : pipeline === "lux-depth-v6" ? "V6" : "V5";
 }
 
 export function createPhotographyConfig() {
@@ -53,4 +53,8 @@ export function photographyConfigFromArgs(args = {}, previous = {}) {
     if (Object.prototype.hasOwnProperty.call(args, field)) config[key] = args[field] ?? "";
   }
   return config;
+}
+
+export function photographyLabel(pipeline) {
+  return pipeline === "lux-depth" ? "Lux Depth Unified" : `LuxDepth${photographyVersion(pipeline)}`;
 }

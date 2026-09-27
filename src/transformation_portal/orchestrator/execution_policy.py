@@ -157,6 +157,11 @@ class ExecutionPolicy:
         self, locator: DispatchLocator, plan_bytes: bytes, output_root: Path, bindings_bytes: bytes
     ) -> None:
         from transformation_portal.core.execution_plan import decode_bounded_json_object
+        from transformation_portal.orchestrator.lux_depth_adapter import (
+            UnifiedBindings,
+            is_unified_bindings,
+            validate_unified_dispatch,
+        )
         from transformation_portal.orchestrator.photography_adapter import (
             PhotographyBindings,
             server_runtime_bindings,
@@ -164,8 +169,15 @@ class ExecutionPolicy:
         )
 
         v6 = decode_bounded_json_object(plan_bytes).get("schema") == "tp.execution.plan.v5"
-        enabled = managed_v6_photography_enabled() if v6 else managed_photography_enabled()
-        pipeline = "lux-depth-v6" if v6 else "lux-depth-v5"
+        unified = is_unified_bindings(bindings_bytes)
+        if unified:
+            validate_unified_dispatch(plan_bytes, bindings_bytes)
+            bindings_bytes = UnifiedBindings(bindings_bytes).photography_bindings_bytes
+            enabled = managed_lux_depth_enabled()
+            pipeline = "lux-depth"
+        else:
+            enabled = managed_v6_photography_enabled() if v6 else managed_photography_enabled()
+            pipeline = "lux-depth-v6" if v6 else "lux-depth-v5"
         if not enabled:
             raise DispatchAuthorityLost("managed photography is disabled on this worker")
         if v6:
@@ -219,6 +231,10 @@ def managed_photography_enabled() -> bool:
 
 def managed_v6_photography_enabled() -> bool:
     return os.getenv("TP_LUX_V6_MANAGED_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def managed_lux_depth_enabled() -> bool:
+    return os.getenv("TP_LUX_DEPTH_MANAGED_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def server_photography_cache_root(tenant_id: str) -> Path | None:

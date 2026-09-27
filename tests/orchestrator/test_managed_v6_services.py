@@ -60,9 +60,8 @@ def service_urls():
     return database_url, redis_url
 
 
-@pytest.mark.parametrize("api_prefix", ["/v1", "/v2"])
-async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_retained_evidence(
-    service_urls, request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str
+async def _managed_v6_round_trip(
+    service_urls, request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str, *, unified: bool = False
 ) -> None:
     database_url, redis_url = service_urls
 
@@ -88,7 +87,8 @@ async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_
         "TP_REDIS_URL": redis_url,
         "TP_REDIS_KEY_PREFIX": prefix,
         "TP_LUX_V5_MANAGED_ENABLED": "0",
-        "TP_LUX_V6_MANAGED_ENABLED": "1",
+        "TP_LUX_V6_MANAGED_ENABLED": "0" if unified else "1",
+        "TP_LUX_DEPTH_MANAGED_ENABLED": "1" if unified else "0",
         "TP_LUX_V5_CACHE_DIR": str(tmp_path / "managed-cache"),
         "TRANSFORMATION_PORTAL_DA3_PYTHON": sys.executable,
         "TP_ARTIFACT_STORE": "local",
@@ -138,8 +138,9 @@ async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_
             response = await client.post(
                 f"{api_prefix}/jobs",
                 json={
-                    "pipeline": "lux-depth-v6",
+                    "pipeline": "lux-depth" if unified else "lux-depth-v6",
                     "args": {
+                        **({"workflow": "process"} if unified else {}),
                         "input_dir": str(request_case.input_dir),
                         "output_dir": str(request_case.output_dir),
                         "input_color": "srgb",
@@ -162,7 +163,13 @@ async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_
             assert plan["inference"]["schema"] == "tp.execution.plan.v4"
             assert locator.plan_digest == hashlib.sha256(plan_bytes).hexdigest()
             assert locator.plan_digest != json.loads(plan_bytes)["plan_fingerprint_sha256"]
-            assert json.loads(bindings)["input_root"] == str(request_case.input_dir)
+            bound = json.loads(bindings)
+            if unified:
+                assert set(bound) == {"schema", "pipeline", "workflow", "photography_bindings"}
+                assert bound["schema"] == "tp.job.lux_depth.bindings.v1"
+                assert bound["pipeline"] == "lux-depth" and bound["workflow"] == "process"
+                bound = bound["photography_bindings"]
+            assert bound["input_root"] == str(request_case.input_dir)
             queued = await redis.hget(prefix + ":dispatch:v1:job:" + job_id, "request")
             assert DispatchLocator.from_json(queued) == locator
             assert set(json.loads(queued)) == {
@@ -216,7 +223,10 @@ async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_
                 "v6/input-0000/depth-preview-valid.png",
             } <= set(inventory)
             assert status.json()["data"]["artifacts"]["schema"] == "tp.lux.delivery.v4"
-            assert status.json()["data"]["run_summary"]["pipeline"] == "lux_depth_v6"
+            summary = status.json()["data"]["run_summary"]
+            assert summary["pipeline"] == ("lux_depth" if unified else "lux_depth_v6")
+            if unified:
+                assert summary["workflow"] == "process" and summary["engine_pipeline"] == "lux_depth_v6"
             descriptors = {item["relative_path"]: item for item in status.json()["data"]["artifacts"]["items"]}
             assert set(descriptors) == set(inventory)
             for relative, descriptor in descriptors.items():
@@ -337,9 +347,8 @@ async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_
         reset_artifacts()
 
 
-@pytest.mark.parametrize("revocation", ["canceled", "expired", "epoch", "holder"])
-async def test_v6_fenced_publication_rejects_cancel_and_stale_postgres_authority(
-    service_urls, request_case, tmp_path, monkeypatch, revocation
+async def _managed_v6_fenced_publication(
+    service_urls, request_case, tmp_path, monkeypatch, revocation, *, unified: bool = False
 ):
     """Valid output bytes cannot override a canceled or stale execution lease."""
     database_url, redis_url = service_urls
@@ -351,10 +360,18 @@ async def test_v6_fenced_publication_rejects_cancel_and_stale_postgres_authority
     publisher = ManagedV6PhotographyPublisher(
         artifact_store=LocalArtifactStore(root_dir=tmp_path / "artifacts"), record_store=records
     )
-    admitted = prepare_v6_dispatch(ManagedLuxDepthV6Request(request_case), publisher=publisher)
+    if unified:
+        from transformation_portal.orchestrator.lux_depth_adapter import prepare_unified_dispatch
+
+        admitted = prepare_unified_dispatch(ManagedLuxDepthV6Request(request_case), workflow="process", publisher=publisher)
+    else:
+        admitted = prepare_v6_dispatch(ManagedLuxDepthV6Request(request_case), publisher=publisher)
     job_id = "job_v6_fence_" + uuid.uuid4().hex
     record = _record(job_id)
-    record.request["pipeline"] = record.effective_request["pipeline"] = "lux-depth-v6"
+    record.request["pipeline"] = record.effective_request["pipeline"] = "lux-depth" if unified else "lux-depth-v6"
+    if unified:
+        record.request.setdefault("args", {})["workflow"] = "process"
+        record.effective_request.setdefault("args", {})["workflow"] = "process"
     locator = None
     try:
         locator = await records.admit(
@@ -407,7 +424,12 @@ async def test_v6_fenced_publication_rejects_cancel_and_stale_postgres_authority
         # Exercise actual independently verified V6 staging and the final database
         # transaction: staging is never sufficient to make a generation visible.
         with pytest.raises(DispatchAuthorityLost):
-            await _publish_admitted_result(admitted.plan_bytes, publisher=publisher, fence=fence)
+            if unified:
+                from transformation_portal.orchestrator.lux_depth_adapter import publish_unified_result
+
+                await publish_unified_result(admitted.plan_bytes, admitted.bindings_bytes, publisher=publisher, fence=fence)
+            else:
+                await _publish_admitted_result(admitted.plan_bytes, publisher=publisher, fence=fence)
         assert await records.committed_manifest(job_id, "tenant_a") is None
         engine, _ = await _SharedEngine.get(database_url)
         async with engine.connect() as connection:
@@ -428,3 +450,17 @@ async def test_v6_fenced_publication_rejects_cancel_and_stale_postgres_authority
         await broker.reset()
         await broker.close()
         await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.parametrize("api_prefix", ["/v1", "/v2"])
+async def test_v6_external_worker_keeps_admission_and_publishes_photo_depth_and_retained_evidence(
+    service_urls, request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str
+) -> None:
+    await _managed_v6_round_trip(service_urls, request_case, tmp_path, monkeypatch, api_prefix)
+
+
+@pytest.mark.parametrize("revocation", ["canceled", "expired", "epoch", "holder"])
+async def test_v6_fenced_publication_rejects_cancel_and_stale_postgres_authority(
+    service_urls, request_case, tmp_path, monkeypatch, revocation
+) -> None:
+    await _managed_v6_fenced_publication(service_urls, request_case, tmp_path, monkeypatch, revocation)

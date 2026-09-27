@@ -69,9 +69,8 @@ lifecycle.prepare = forbidden_prepare
 """
 
 
-@pytest.mark.parametrize("api_prefix", ["/v1", "/v2"])
-async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_artifacts(
-    request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str
+async def _managed_photography_round_trip(
+    request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str, *, unified: bool = False
 ) -> None:
     database_url = os.getenv("TP_PHOTOGRAPHY_TEST_DATABASE_URL")
     redis_url = os.getenv("TP_DISPATCH_TEST_REDIS_URL")
@@ -104,7 +103,9 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
         "TP_DATABASE_URL": database_url,
         "TP_REDIS_URL": redis_url,
         "TP_REDIS_KEY_PREFIX": prefix,
-        "TP_LUX_V5_MANAGED_ENABLED": "1",
+        "TP_LUX_V5_MANAGED_ENABLED": "0" if unified else "1",
+        "TP_LUX_V6_MANAGED_ENABLED": "0",
+        "TP_LUX_DEPTH_MANAGED_ENABLED": "1" if unified else "0",
         "TP_LUX_V5_CACHE_DIR": str(tmp_path / "managed-cache"),
         "TRANSFORMATION_PORTAL_DA3_PYTHON": sys.executable,
         "TP_ARTIFACT_STORE": "local",
@@ -154,8 +155,9 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
             response = await client.post(
                 f"{api_prefix}/jobs",
                 json={
-                    "pipeline": "lux-depth-v5",
+                    "pipeline": "lux-depth" if unified else "lux-depth-v5",
                     "args": {
+                        **({"workflow": "infer"} if unified else {}),
                         "input_dir": str(request_case.input_dir),
                         "output_dir": str(request_case.output_dir),
                         "input_color": "srgb",
@@ -176,7 +178,13 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
             assert json.loads(plan_bytes)["schema"] == "tp.execution.plan.v4"
             assert locator.plan_digest == hashlib.sha256(plan_bytes).hexdigest()
             assert locator.plan_digest != json.loads(plan_bytes)["plan_fingerprint_sha256"]
-            assert json.loads(bindings)["input_root"] == str(request_case.input_dir)
+            bound = json.loads(bindings)
+            if unified:
+                assert set(bound) == {"schema", "pipeline", "workflow", "photography_bindings"}
+                assert bound["schema"] == "tp.job.lux_depth.bindings.v1"
+                assert bound["pipeline"] == "lux-depth" and bound["workflow"] == "infer"
+                bound = bound["photography_bindings"]
+            assert bound["input_root"] == str(request_case.input_dir)
             queued = await redis.hget(prefix + ":dispatch:v1:job:" + job_id, "request")
             assert DispatchLocator.from_json(queued) == locator
             assert set(json.loads(queued)) == {
@@ -208,6 +216,10 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
                     assert worker.poll() is None, log_path.read_text()
                     await asyncio.sleep(0.1)
             assert status.json()["data"]["state"] == "succeeded", (status.text, log_path.read_text())
+            if unified:
+                summary = status.json()["data"]["run_summary"]
+                assert summary["pipeline"] == "lux_depth" and summary["workflow"] == "infer"
+                assert summary["engine_pipeline"] == "lux_depth_v5"
             native = json.loads(marker.read_text())
             assert native["pid"] != worker.pid
             assert native["pid"] == native["group"] == native["session"]
@@ -283,3 +295,10 @@ async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_ar
         reset_singletons()
         reset_queue()
         reset_artifacts()
+
+
+@pytest.mark.parametrize("api_prefix", ["/v1", "/v2"])
+async def test_managed_photography_round_trip_uses_exact_admission_and_fenced_artifacts(
+    request_case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_prefix: str
+) -> None:
+    await _managed_photography_round_trip(request_case, tmp_path, monkeypatch, api_prefix)

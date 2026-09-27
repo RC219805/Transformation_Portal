@@ -78,6 +78,11 @@ def validate_dispatch_plan(
     plan_bytes: bytes, execution_bindings: bytes | None = None
 ) -> CanonicalExecutionPlan | ExecutionPlanV4 | ExecutionPlanV5:
     """Statically allowlist plan families and their exact physical-binding carrier."""
+    from transformation_portal.orchestrator.lux_depth_adapter import is_unified_bindings, validate_unified_dispatch
+
+    if is_unified_bindings(execution_bindings):
+        assert execution_bindings is not None
+        return validate_unified_dispatch(plan_bytes, execution_bindings)
     schema = decode_bounded_json_object(plan_bytes).get("schema")
     if schema == "tp.execution.plan.v5":
         from transformation_portal.orchestrator.photography_v6_adapter import validate_v6_dispatch
@@ -432,6 +437,11 @@ def execute_dispatch_plan(
     """Consume frozen intent privately, then export through pinned authority."""
 
     plan = validate_dispatch_plan(plan_bytes, execution_bindings)
+    from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, is_unified_bindings
+
+    if is_unified_bindings(execution_bindings):
+        assert execution_bindings is not None
+        execution_bindings = UnifiedBindings(execution_bindings).photography_bindings_bytes
     root = _absolute_path(str(output_root), must_exist=False)
     output_descriptor = None
     owned_workspace = execution_workspace is None

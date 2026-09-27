@@ -232,10 +232,18 @@ The portal/orchestrator flow is:
    evidence, and advisory sidecars where enabled.
 ```
 
-The governed pipeline set exposed through `/v1/readiness` currently covers
-`lux-depth-v3` and archive gates A/B/C. Per-pipeline readiness can be `ready`,
-`degraded`, or `blocked`; transport success is not the same as dispatch
-readiness.
+The governed pipeline set exposed through `/v1/readiness` covers
+`lux-depth-v3`, `lux-depth`, `lux-depth-v5`, `lux-depth-v6`, and archive gates
+A/B/C. Unified, V5, and V6 have independent opt-in gates; V3 remains the
+production default. Per-pipeline readiness can be `ready`, `degraded`, or
+`blocked`; transport success is not the same as dispatch readiness.
+
+The [Unified managed route](../reference/LUX_DEPTH.md#http-portal-and-managed-access)
+uses native plan V5 for `process` and native plan V4 for `infer`.
+`tp.job.lux_depth.bindings.v1` binds the public pipeline and workflow to native
+photography bindings under the existing immutable dispatch digest. Workers
+recheck exact pipeline grants and runtime/path policy before native execution;
+publication retains native evidence verification and dispatch fencing.
 
 ## CLI And Runtime Entry Points
 

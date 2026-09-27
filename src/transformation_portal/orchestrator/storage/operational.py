@@ -125,8 +125,21 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         tenant_limit: int,
         execution_bindings: bytes | None = None,
     ) -> DispatchLocator:
+        from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, is_unified_bindings
+
         try:
             validate_dispatch_plan(plan_bytes, execution_bindings=execution_bindings)
+            unified = is_unified_bindings(execution_bindings)
+            if unified or record.effective_request.get("pipeline") == "lux-depth":
+                args = record.effective_request.get("args")
+                if (
+                    not unified
+                    or execution_bindings is None
+                    or record.effective_request.get("pipeline") != "lux-depth"
+                    or not isinstance(args, dict)
+                    or args.get("workflow", "process") != UnifiedBindings(execution_bindings).workflow
+                ):
+                    raise ValueError("Unified request differs from its immutable route authority")
         except (TypeError, ValueError) as exc:
             raise RepositoryError("admission requires exact canonical execution authority and bindings") from exc
         if record.state != "queued" or record.effective_request.get("tenant_id") != tenant_id:

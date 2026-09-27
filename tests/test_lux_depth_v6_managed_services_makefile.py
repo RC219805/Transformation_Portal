@@ -15,7 +15,9 @@ DATABASE_URL = "postgresql+asyncpg://test@127.0.0.1:5432/photography_test"
 REDIS_URL = "redis://127.0.0.1:6379/15"
 
 
-def _run_target(tmp_path: Path, configured: dict[str, str], *, pytest_exit: int = 0):
+def _run_target(
+    tmp_path: Path, configured: dict[str, str], *, pytest_exit: int = 0, target: str = "test-lux-depth-v6-managed-services"
+):
     invocation = tmp_path / "pytest-invocation.txt"
     python = tmp_path / "stub-python"
     python.write_text(
@@ -41,7 +43,7 @@ def _run_target(tmp_path: Path, configured: dict[str, str], *, pytest_exit: int 
         [
             "make",
             "--no-print-directory",
-            "test-lux-depth-v6-managed-services",
+            target,
             f"PY={python}",
             *(f"{name}={value}" for name, value in configured.items()),
         ],

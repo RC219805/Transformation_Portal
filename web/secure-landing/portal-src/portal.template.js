@@ -79,11 +79,12 @@ const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
     'lux-depth-v5',
     'lux-depth-v6',
+    'lux-depth',
     'archive-gate-a',
     'archive-gate-b',
     'archive-gate-c'
 ]);
-const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'archive-gate-a']);
+const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'lux-depth', 'archive-gate-a']);
 const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
 const EVENT_SOURCE_READY_STATE_OPEN = 1;
 const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -124,6 +125,7 @@ const portalInternals = __PortalInternal;
 const isLuxPipeline = portalInternals.isLuxPipeline;
 const isPhotographyPipeline = portalInternals.isPhotographyPipeline;
 const photographyVersion = portalInternals.photographyVersion;
+const photographyLabel = portalInternals.photographyLabel;
 const configPreviewRequests = portalInternals.createLatestRequestCoordinator();
 const portalRoute = portalInternals.createPortalRouteHelpers(window);
 const portalDom = portalInternals.createDomContract(document, {
@@ -438,6 +440,10 @@ const els = {
     fieldsLuxDepth: _domId('fieldsLuxDepth'),
     fieldsLuxV5: _domId('fieldsLuxV5'),
     fieldsLuxV6: _domId('fieldsLuxV6'),
+    fieldsLuxUnified: _domId('fieldsLuxUnified'),
+    unifiedWorkflow: _domId('unifiedWorkflow'),
+    photographyV5Heading: _domId('photographyV5Heading'),
+    photographyV6Heading: _domId('photographyV6Heading'),
     photographyV6: Object.fromEntries(Object.keys(portalInternals.createPhotographyV6Config()).map((key) => [key, _domId(`v6${key[0].toUpperCase()}${key.slice(1)}`)])),
     photography: Object.fromEntries(['inputColor', 'device', 'precision', 'targetSize', 'refinement', 'strength', 'clarity', 'previewMaps', 'materialsManifest', 'companionsManifest'].map((key) => [key, _domId(`v5${key[0].toUpperCase()}${key.slice(1)}`)])),
     fieldsArchiveGate: _domId('fieldsArchiveGate'),
@@ -3075,6 +3081,12 @@ const BUILD_STEP_CONTENT = Object.freeze({
             summary: 'Check the preview and resolve any issues before starting the run.'
         }
     ],
+    photographyUnified: [
+        { label: 'Configure', meta: 'Unified photography workflow.', title: '1. Choose Lux Depth Unified', summary: 'Choose complete photographic processing or inference with optional MaterialsV4 evidence. V3 remains the production baseline.' },
+        { label: 'Paths', meta: 'Upload photographs and choose a fresh output.', title: '2. Set photography paths', summary: 'Choose files or a folder, then select a new authorized destination.' },
+        { label: 'Outputs', meta: 'Workflow and photographic outputs.', title: '3. Configure Unified outputs', summary: 'Process includes grading and depth products. Infer accepts optional verified materials and companion manifests.' },
+        { label: 'Dispatch', meta: 'Current workflow preview and readiness.', title: '4. Review and dispatch Unified', summary: 'A successful preview of this exact workflow and configuration is required before dispatch.' }
+    ],
     photographyV6: [
         { label: 'Configure', meta: 'Grading and depth outputs.', title: '1. Choose LuxDepthV6', summary: 'Process source photographs through governed inference, grading, and depth reconstruction.' },
         { label: 'Paths', meta: 'Upload photographs and choose a fresh output.', title: '2. Set photography paths', summary: 'Choose files or a folder, then select a new authorized destination.' },
@@ -3116,7 +3128,7 @@ const BUILD_STEP_CONTENT = Object.freeze({
 });
 
 function _currentBuildStepContent() {
-    return state.pipeline === 'lux-depth-v6' ? BUILD_STEP_CONTENT.photographyV6 : isPhotographyPipeline(state.pipeline) ? BUILD_STEP_CONTENT.photography : state.pipeline === 'lux-depth-v3' ? BUILD_STEP_CONTENT.lux : BUILD_STEP_CONTENT.archive;
+    return state.pipeline === 'lux-depth' ? BUILD_STEP_CONTENT.photographyUnified : state.pipeline === 'lux-depth-v6' ? BUILD_STEP_CONTENT.photographyV6 : isPhotographyPipeline(state.pipeline) ? BUILD_STEP_CONTENT.photography : state.pipeline === 'lux-depth-v3' ? BUILD_STEP_CONTENT.lux : BUILD_STEP_CONTENT.archive;
 }
 
 function _minimumBuildStep() {
@@ -3815,7 +3827,7 @@ function _derivePresetResearchFlag(preset, fallbackName = '') {
 
 function currentPresetDescriptor() {
     if (isPhotographyPipeline(state.pipeline)) {
-        return { name: 'photography', label: `LuxDepth${photographyVersion(state.pipeline)} photography`, stability: 'opt-in', description: 'Verified photography and depth outputs. V3 remains the production baseline.', is_research: false, recommended_args: {}, advanced_sections: [] };
+        return { name: 'photography', label: `${photographyLabel(state.pipeline)} photography`, stability: 'opt-in', description: 'Verified photography and depth outputs. V3 remains the production baseline.', is_research: false, recommended_args: {}, advanced_sections: [] };
     }
     if (state.pipeline !== 'lux-depth-v3') {
         return {
@@ -9589,13 +9601,24 @@ function refreshArchiveFieldVisibility() {
     });
 }
 
+function _isCompositePhotography() {
+    return portalInternals.isCompositePhotographyPipeline(state.pipeline, state.config.photographyUnified?.workflow);
+}
+
+function _photographyDraft(workflow) {
+    return state.pipeline === 'lux-depth'
+        ? state.config.photographyUnified[workflow]
+        : state.config[workflow === 'process' ? 'photographyV6' : 'photography'];
+}
+
 function _firstInvalidBuildInput() {
     const candidates = [
         els.inputDir,
         els.outputDir,
         els.archiveIndexPath,
         els.rightsManifestPath,
-        ...(isPhotographyPipeline(state.pipeline) ? Object.values(state.pipeline === 'lux-depth-v6' ? els.photographyV6 : els.photography) : [])
+        ...(state.pipeline === 'lux-depth' ? [els.unifiedWorkflow] : []),
+        ...(isPhotographyPipeline(state.pipeline) ? Object.values(_isCompositePhotography() ? els.photographyV6 : els.photography) : [])
     ];
     for (const input of candidates) {
         if (!input || typeof input.checkValidity !== 'function') continue;
@@ -9606,7 +9629,7 @@ function _firstInvalidBuildInput() {
 }
 
 function _buildControlForPreviewField(fieldName) {
-    const photographyControls = state.pipeline === 'lux-depth-v6' ? els.photographyV6 : els.photography;
+    const photographyControls = _isCompositePhotography() ? els.photographyV6 : els.photography;
     const controls = {
         input_dir: els.inputDir,
         output_dir: els.outputDir,
@@ -9622,6 +9645,7 @@ function _buildControlForPreviewField(fieldName) {
         log_level: els.runtime.logLevel,
         verbose: els.flags.verbose,
         quiet: els.flags.quiet,
+        workflow: els.unifiedWorkflow,
         input_color: photographyControls.inputColor,
         device: photographyControls.device,
         precision: photographyControls.precision,
@@ -9681,17 +9705,24 @@ function updateUIFromState() {
         if (els.presetBuilderShell) els.presetBuilderShell.classList.add('hidden');
         if (els.flagsShell) els.flagsShell.classList.add('hidden');
     }
-    if (els.fieldsLuxV5) els.fieldsLuxV5.classList.toggle('hidden', state.pipeline !== 'lux-depth-v5');
-    if (els.fieldsLuxV6) els.fieldsLuxV6.classList.toggle('hidden', state.pipeline !== 'lux-depth-v6');
+    state.config.photographyUnified = portalInternals.createUnifiedPhotographyConfig(state.config.photographyUnified);
+    if (els.fieldsLuxUnified) els.fieldsLuxUnified.classList.toggle('hidden', state.pipeline !== 'lux-depth');
+    if (els.unifiedWorkflow) els.unifiedWorkflow.value = state.config.photographyUnified.workflow;
+    if (els.fieldsLuxV5) els.fieldsLuxV5.classList.toggle('hidden', state.pipeline !== 'lux-depth-v5' && !(state.pipeline === 'lux-depth' && state.config.photographyUnified.workflow === 'infer'));
+    if (els.fieldsLuxV6) els.fieldsLuxV6.classList.toggle('hidden', !_isCompositePhotography());
+    if (els.photographyV5Heading) els.photographyV5Heading.textContent = state.pipeline === 'lux-depth' ? 'Lux Depth Unified inference' : 'LuxDepthV5 photography';
+    if (els.photographyV6Heading) els.photographyV6Heading.textContent = state.pipeline === 'lux-depth' ? 'Lux Depth Unified processing' : 'LuxDepthV6 photography';
+    if (els.fieldsLuxV6) els.fieldsLuxV6.dataset.photographyPipeline = state.pipeline;
+    if (els.fieldsLuxV5) els.fieldsLuxV5.dataset.photographyPipeline = state.pipeline;
     state.config.photographyV6 = { ...portalInternals.createPhotographyV6Config(), ...state.config.photographyV6 };
     for (const [key, control] of Object.entries(els.photographyV6)) {
-        if (control) control.value = state.config.photographyV6[key];
+        if (control) control.value = _photographyDraft('process')[key];
     }
     state.config.photography = { ...portalInternals.createPhotographyConfig(), ...state.config.photography };
     for (const [key, control] of Object.entries(els.photography)) {
         if (!control) continue;
-        if (key === 'previewMaps') control.checked = Boolean(state.config.photography[key]);
-        else control.value = state.config.photography[key];
+        if (key === 'previewMaps') control.checked = Boolean(_photographyDraft('infer')[key]);
+        else control.value = _photographyDraft('infer')[key];
     }
     refreshArchiveFieldVisibility();
     if (!isLuxPipeline(state.pipeline) && state.portalUi.buildStep < 2) {
@@ -9945,7 +9976,9 @@ function generatePayload() {
         output_dir: outputDirValue
     };
 
-    if (p === 'lux-depth-v6') {
+    if (p === 'lux-depth') {
+        args = { ...args, ...portalInternals.buildUnifiedPhotographyArgs(c.photographyUnified, { process: els.photographyV6, infer: els.photography }) };
+    } else if (p === 'lux-depth-v6') {
         args = { ...args, ...portalInternals.buildPhotographyV6Args(c.photographyV6, els.photographyV6) };
     } else if (p === 'lux-depth-v5') {
         args = { ...args, ...portalInternals.buildPhotographyArgs(c.photography, els.photography) };
@@ -9991,7 +10024,7 @@ function renderPreRunDiagnostics(payload) {
     let healthLabel = 'good';
 
     if (isPhotographyPipeline(payload.pipeline)) {
-        expectedOutputs.push(...(payload.pipeline === 'lux-depth-v6'
+        expectedOutputs.push(...(portalInternals.isCompositePhotographyPipeline(payload.pipeline, payload.args.workflow)
             ? ['16-bit TIFF photography', 'Draft PNG', 'Float depth TIFF and arrays', '16-bit depth preview and validity masks', 'Verified execution evidence']
             : ['Enhanced photography', 'Verified execution evidence', 'Depth maps']));
         if (payload.args.preview_maps) expectedOutputs.push('Depth preview maps');
@@ -10364,7 +10397,7 @@ function renderCLI() {
         const firstError = previewErrors[0];
         els.cliPreview.textContent = `# Preview blocked\n# ${String(firstError?.message || 'Resolve preview validation issues to view the effective argv.')}`;
     } else if (isPhotographyPipeline(payload.pipeline)) {
-        els.cliPreview.textContent = `# Managed LuxDepth${photographyVersion(payload.pipeline)} dispatch\n# The server freezes and verifies an immutable execution plan.\n# Review the request payload and resolved configuration below.`;
+        els.cliPreview.textContent = `# Managed ${photographyLabel(payload.pipeline)} dispatch${payload.pipeline === 'lux-depth' ? ` (${payload.args.workflow})` : ''}\n# The server freezes and verifies an immutable execution plan.\n# Review the request payload and resolved configuration below.`;
     } else {
         els.cliPreview.textContent = cli.join('\n');
     }
@@ -10445,12 +10478,12 @@ function bindInputs() {
         if (!el) return;
         el.addEventListener('change', (e) => {
             const previousPipeline = state.pipeline;
-            if (category) state.config[category][key] = e.target.value;
+            if (category) (typeof category === 'function' ? category() : state.config[category])[key] = e.target.value;
             else if (key in state.config) state.config[key] = e.target.value;
             else state[key] = e.target.value;
             if (!category && key === 'outputBitDepth') delete state.config.emit_master16;
             if (key === 'pipeline') {
-                const defaultOutputs = { 'lux-depth-v3': './output/lux_depth_v3_apex', 'lux-depth-v5': './output/lux_depth_v5', 'lux-depth-v6': './output/lux_depth_v6' };
+                const defaultOutputs = { 'lux-depth-v3': './output/lux_depth_v3_apex', 'lux-depth-v5': './output/lux_depth_v5', 'lux-depth-v6': './output/lux_depth_v6', 'lux-depth': './output/lux_depth' };
                 if (defaultOutputs[previousPipeline] && defaultOutputs[state.pipeline]
                     && state.config.outputDir === defaultOutputs[previousPipeline]) {
                     state.config.outputDir = defaultOutputs[state.pipeline];
@@ -10504,7 +10537,7 @@ function bindInputs() {
     const safeBindCheck = (el, category, key) => {
         if (!el) return;
         el.addEventListener('change', (e) => {
-            state.config[category][key] = e.target.checked;
+            (typeof category === 'function' ? category() : state.config[category])[key] = e.target.checked;
             if (el.hasAttribute('role') && el.getAttribute('role') === 'switch') {
                 el.setAttribute('aria-checked', e.target.checked);
             }
@@ -10545,12 +10578,18 @@ function bindInputs() {
     };
 
     for (const [key, control] of Object.entries(els.photographyV6)) {
-        safeBindText(control, 'photographyV6', key);
+        safeBindText(control, () => _photographyDraft('process'), key);
     }
     for (const [key, control] of Object.entries(els.photography)) {
-        if (key === 'previewMaps') safeBindCheck(control, 'photography', key);
-        else safeBindText(control, 'photography', key);
+        if (key === 'previewMaps') safeBindCheck(control, () => _photographyDraft('infer'), key);
+        else safeBindText(control, () => _photographyDraft('infer'), key);
     }
+    if (els.unifiedWorkflow) els.unifiedWorkflow.addEventListener('change', (event) => {
+        state.config.photographyUnified.workflow = event.target.value;
+        updateUIFromState();
+        _persistTransientPortalDraft();
+        scheduleConfigPreview(true);
+    });
     safeBindText(els.pipelineSelect, null, 'pipeline');
     if (els.presetSelect) {
         els.presetSelect.addEventListener('change', (e) => {
@@ -11847,7 +11886,9 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         if (data.args) {
             _migrateDeprecatedLuxOutputConfig(data.args);
             const c = state.config;
-            if (state.pipeline === 'lux-depth-v6') {
+            if (state.pipeline === 'lux-depth') {
+                c.photographyUnified = portalInternals.unifiedPhotographyConfigFromArgs(data.args, c.photographyUnified);
+            } else if (state.pipeline === 'lux-depth-v6') {
                 c.photographyV6 = portalInternals.photographyV6ConfigFromArgs(data.args, c.photographyV6);
             } else if (state.pipeline === 'lux-depth-v5') {
                 c.photography = portalInternals.photographyConfigFromArgs(data.args, c.photography);
