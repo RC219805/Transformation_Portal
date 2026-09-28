@@ -2212,6 +2212,136 @@ test('@portal-browser V6 pending preview remains gated in Build and Overview', a
   await expect(page.locator('[data-capability-id="lux_depth_v6"]')).toHaveAttribute('data-capability-status', 'enabled');
 });
 
+test('@portal-browser module path guidance follows access loss and upload feature recovery', async ({ page }) => {
+  const options = { stagedUploads: true };
+  await installHydratedPortalRoutes(page, options);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  await expect(page.locator('#inputDirGuidance')).toContainText('Choose files or Choose folder');
+  options.bootstrapFailureCount = Infinity;
+  await page.evaluate(() => window.loadPortalBootstrap());
+  await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'degraded');
+  await expect(page.locator('#stagedUploadShell')).toBeHidden();
+  await expect(page.locator('#inputDirGuidance')).toContainText('Uploads are unavailable');
+  options.bootstrapFailureCount = 0;
+  options.stagedUploads = false;
+  await page.evaluate(() => window.loadPortalBootstrap());
+  await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'ready');
+  await expect(page.locator('#inputDirGuidance')).toContainText('Uploads are unavailable');
+  options.stagedUploads = true;
+  await page.evaluate(() => window.loadPortalBootstrap());
+  await expect(page.locator('#stagedUploadShell')).toBeVisible();
+  await expect(page.locator('#inputDirGuidance')).toContainText('Choose files or Choose folder');
+});
+
+test('@portal-browser module path guidance follows workflow changes and preserves custom paths', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  await page.locator('#inputDir').fill('/tenant/input/custom-source');
+  await page.locator('#outputDir').fill('/tenant/output/custom-run');
+  const cases = [
+    ['lux-depth-v3', null, /source-image folder/, /enhanced images and depth products/],
+    ['lux-depth-v5', null, /original photographs for V5 inference/, /enhanced photographs/],
+    ['lux-depth-v6', null, /original photographs for V6 grading/, /TIFF photographs/],
+    ['lux-depth', 'process', /Unified grading/, /TIFF photographs/],
+    ['lux-depth', 'infer', /Unified inference/, /enhanced photographs/],
+    ['archive-gate-a', null, /archive root.*Archive Index/, /hash manifest.*Merkle roots/],
+    ['archive-gate-b', null, /relative file paths.*Rights Manifest/, /BagIt.*build report/],
+    ['archive-gate-c', null, /dispatch validation.*METS export/, /METS XML/],
+  ];
+  for (const [pipeline, workflow, input, output] of cases) {
+    await page.locator('#pipelineSelect').selectOption(pipeline);
+    if (workflow) {
+      await page.locator('#buildStepTab3').click();
+      await page.locator('#unifiedWorkflow').selectOption(workflow);
+    }
+    await page.locator('#buildStepTab2').click();
+    await expect(page.locator('#inputDirGuidance')).toHaveText(input);
+    await expect(page.locator('#outputDirGuidance')).toHaveText(output);
+    await expect(page.locator('#pathGuidanceSummary')).toContainText('Example defaults do not grant access');
+    await expect(page.locator('#inputDirGuidance')).not.toContainText('Local example');
+    await expect(page.locator('#inputDir')).toHaveValue('/tenant/input/custom-source');
+    await expect(page.locator('#outputDir')).toHaveValue('/tenant/output/custom-run');
+    await expect(page.locator('#inputDir')).toHaveAttribute('aria-describedby', /inputDirGuidance.*inputDirStatus/);
+  }
+  await expect(page.locator('#rightsManifestGuidance')).toBeVisible();
+  await expect(page.locator('#rightsManifestGuidance')).toContainText('approved output location');
+  await page.reload();
+  await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'ready');
+  await page.locator('#buildStepTab2').click();
+  await expect(page.locator('#pipelineSelect')).toHaveValue('archive-gate-c');
+  await expect(page.locator('#inputDirGuidance')).toContainText('METS export');
+  await expect(page.locator('#inputDir')).toHaveValue('/tenant/input/custom-source');
+  await expect(page.locator('#outputDir')).toHaveValue('/tenant/output/custom-run');
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+for (const width of [390, 1440]) {
+  test(`@portal-browser module path guidance survives denied paths and staged-upload recovery at ${width}px`, async ({ page }, testInfo) => {
+    const stagedInput = '/tenant/uploads/batch-photography/input';
+    const approvedOutput = '/tenant/output/new-photo-run';
+    const runtime = await installHydratedPortalRoutes(page, {
+      stagedUploads: true,
+      previewHttpErrorForPayload: ({ args }) => {
+        const field = args.input_dir !== stagedInput ? 'input_dir' : args.output_dir !== approvedOutput ? 'output_dir' : null;
+        return field ? { status: 403, payload: { schema: 'tp.orchestrator.error.v1', success: false, data: null,
+          error: { code: 'FORBIDDEN', message: 'tenant admission failed', details: { field, reason: 'tenant_path_outside_workspace' } }
+        } } : null;
+      },
+    });
+    await page.setViewportSize({ width, height: 1000 });
+    await gotoHydratedPortal(page, '/portal?view=build');
+    await page.locator('#pipelineSelect').selectOption('lux-depth');
+    await page.locator('#buildStepTab2').click();
+    await expect(page.locator('#inputDir')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#inputDirStatus')).toContainText('path authorized for this workspace');
+    await expect(page.locator('#inputDirGuidance')).toContainText('Choose files or Choose folder');
+    await expect(page.locator('#outputDirGuidance')).toContainText('source');
+    const originalOutput = await page.locator('#outputDir').inputValue();
+    await page.locator('#stagedUploadFilesInput').setInputFiles({ name: 'photo.tif', mimeType: 'image/tiff', buffer: Buffer.from('fixture') });
+    await expect(page.locator('#inputDir')).toHaveValue(stagedInput);
+    await expect(page.locator('#outputDir')).toHaveValue(originalOutput);
+    await expect(page.locator('#inputDir')).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#outputDir')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#outputDirGuidance')).toBeVisible();
+    await expect(page.locator('#outputDirStatus')).toContainText('path authorized for this workspace');
+    await expectNoHorizontalOverflow(page);
+    await expectNoWcagViolations(page, `Module path guidance ${width}`);
+    await page.screenshot({ path: testInfo.outputPath(`module-path-guidance-${width}.png`), fullPage: true });
+    await testInfo.attach(`Module path guidance ${width}`, { path: testInfo.outputPath(`module-path-guidance-${width}.png`), contentType: 'image/png' });
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    await page.locator('#buildStepTab2').click();
+    await page.locator('#outputDir').fill(approvedOutput);
+    await page.locator('#outputDir').blur();
+    await expect(page.locator('#outputDir')).not.toHaveAttribute('aria-invalid', 'true');
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeEnabled();
+    expect(runtime.jobSubmissions).toBe(0);
+  });
+}
+
+test('@portal-browser module path guidance maps Gate A archive root rejection to Input Directory', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, {
+    previewHttpErrorForPayload: ({ pipeline, args }) => pipeline === 'archive-gate-a' && args.archive_root !== '/tenant/archive' ? {
+      status: 403, payload: { success: false, data: null, error: { code: 'FORBIDDEN', message: 'tenant admission failed',
+        details: { field: 'archive_root', reason: 'tenant_path_outside_workspace' } } }
+    } : null,
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('archive-gate-a');
+  await page.locator('#buildStepTab2').click();
+  await expect(page.locator('#inputDir')).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#inputDirStatus')).toContainText('path authorized for this workspace');
+  await expect(page.locator('#inputDirGuidance')).toContainText('archive root');
+  await page.locator('#inputDir').fill('/tenant/archive');
+  await page.locator('#inputDir').blur();
+  await expect(page.locator('#inputDir')).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#archiveIndexGuidance')).toContainText('CSV or CSV.gz');
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
 for (const [pipeline, workflow] of [['lux-depth-v5'], ['lux-depth-v6'], ['lux-depth', 'process'], ['lux-depth', 'infer']]) {
   test(`@portal-browser ${pipeline}${workflow ? ` ${workflow}` : ''} stages selected files and folder paths through the existing upload contract`, async ({ page }) => {
     const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });

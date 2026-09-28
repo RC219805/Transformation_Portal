@@ -2735,6 +2735,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "web/secure-landing/portal-src/build-surface-deferred.js",
         "web/secure-landing/portal-src/profile-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",

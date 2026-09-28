@@ -19,6 +19,40 @@
 //   - _resolveDa3ModelKey, canonicalArchiveCommand (cross-surface
 //     resolvers that this carve does not own)
 
+export function buildPathGuidance({ pipeline, workflow, authMode, uploadsAvailable = false }) {
+    const direct = authMode === 'direct_debug';
+    const photographyOutput = 'Choose an approved writable destination separate from the source folder and any manifest directories. Prefer a fresh folder for each run.';
+    const gradeOutput = `${photographyOutput} The run produces TIFF photographs, draft PNGs, depth products, and execution evidence.`;
+    const inferenceOutput = `${photographyOutput} The run produces enhanced photographs, depth products, and execution evidence.`;
+    const copies = {
+        'lux-depth-v3': ['Choose the source-image folder for Lux V3.', 'Choose a writable destination for enhanced images and depth products. Prefer a separate folder for each run.', 'lux_depth_v3_apex'],
+        'lux-depth-v5': ['Choose the original photographs for V5 inference and enhancement.', inferenceOutput, 'lux_depth_v5'],
+        'lux-depth-v6': ['Choose the original photographs for V6 grading and depth reconstruction.', gradeOutput, 'lux_depth_v6'],
+        'lux-depth': workflow === 'infer'
+            ? ['Choose the original photographs for Unified inference and enhancement.', inferenceOutput, 'lux_depth']
+            : ['Choose the original photographs for Unified grading and depth reconstruction.', gradeOutput, 'lux_depth'],
+        'archive-gate-a': ['Choose the existing archive root whose files match the Archive Index.', 'Choose a destination for the fixity hash manifest, hash summary, and Merkle roots. Prefer a fresh folder to retain earlier results.', 'archive_gate_a'],
+        'archive-gate-b': ['Choose the existing archive source folder containing the relative file paths recorded in the Rights Manifest JSONL.', 'Choose a destination for the BagIt package and its build report. Prefer a fresh folder for each run.', 'archive_gate_b'],
+        'archive-gate-c': ['Provide an existing workspace folder for dispatch validation. METS export reads its records from the Rights Manifest JSONL.', 'Choose a destination for METS XML and its summary. Prefer a fresh folder to retain earlier results.', 'archive_gate_c']
+    };
+    const copy = copies[pipeline] || ['Choose the source folder required by the selected pipeline.', 'Choose the destination required by the selected pipeline.', 'run'];
+    const uploadSupported = ['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'lux-depth', 'archive-gate-a'].includes(pipeline);
+    const inputExample = pipeline === 'archive-gate-a' || pipeline === 'archive-gate-b'
+        ? './tests/fixtures/archive_small/archive_root' : pipeline === 'archive-gate-c' ? './output' : './input_images';
+    const uploadHint = !uploadSupported ? '' : uploadsAvailable
+        ? ' Choose files or Choose folder stages local files and fills this input path. Uploads leave the output path unchanged.'
+        : ' Uploads are unavailable here; enter an existing folder the processing server can read.';
+    return {
+        summary: direct
+            ? 'Relative examples resolve from the repository root on the processing server and remain subject to server path checks.'
+            : 'Use server-side paths approved for this workspace. Example defaults do not grant access. Ask your workspace operator for approved input and output locations; the current preview validates access.',
+        input: `${copy[0]}${uploadHint}${direct ? ` Local example only: ${inputExample}.` : ''}`,
+        output: `${copy[1]}${direct ? ` Local example only: ./output/${copy[2]}.` : ' Use an output location approved for this workspace.'}`,
+        archiveIndex: `Supply an existing CSV or CSV.gz archive index matching the archive root, in an approved input location.${direct ? ' Local example only: ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.' : ''}`,
+        rightsManifest: `Supply an existing rights-manifest JSONL from a prior archive stage, in an approved output location. Keep it separate from the source folder and this run's output folder.${direct ? ' Local example only: ./output/archive_manifest_v2.rights.jsonl.' : ''}`
+    };
+}
+
 export function createDeferredBuildSurfaceApi(host) {
     const {
         state,
@@ -30,6 +64,7 @@ export function createDeferredBuildSurfaceApi(host) {
         _resolveDa3ModelKey,
         canonicalArchiveCommand,
         generatePayload,
+        _stagedUploadsEnabledForState,
     } = host;
 
     function _setSelectOptions(selectEl, options, selectedValue) {
@@ -73,7 +108,7 @@ export function createDeferredBuildSurfaceApi(host) {
                 : 'Choose the governed destination for stage outputs.';
         }
         if (fieldName === 'archive_index') {
-            return 'Required for fixity-scan. Supply an existing normalized archive index that is safe to read from the local allowlist.';
+            return 'Required for fixity-scan. The server preview checks the index and archive root together.';
         }
         if (fieldName === 'manifest_jsonl') {
             return 'Required for bag-build and mets-export. Point to a rights-manifest artifact produced by an earlier archive stage.';
@@ -152,6 +187,16 @@ export function createDeferredBuildSurfaceApi(host) {
 
     function renderFieldPreviewStatuses(payload = null) {
         const currentPayload = payload || generatePayload();
+        const guidance = buildPathGuidance({
+            pipeline: currentPayload.pipeline,
+            workflow: currentPayload.args?.workflow,
+            authMode: state.auth?.mode,
+            uploadsAvailable: Boolean(_stagedUploadsEnabledForState?.())
+        });
+        for (const [key, text] of Object.entries(guidance)) {
+            const el = els.pathGuidance?.[key];
+            if (el && el.textContent !== text) el.textContent = text;
+        }
         _renderIssueStatus(
             els.inputDirStatus,
             _buildFieldStatusCopy('input_dir', currentPayload),
@@ -209,9 +254,7 @@ export function createDeferredBuildSurfaceApi(host) {
         const canonicalCommand = canonicalArchiveCommand(pipelineName);
         if (els.archiveCanonicalCommand) els.archiveCanonicalCommand.textContent = canonicalCommand || 'archive';
         if (els.archiveCanonicalCommandHint) {
-            els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
-                ? 'The portal build flow uses fixity-scan for archive-gate-a. For a safe local smoke run, pair ./tests/fixtures/archive_small/archive_root with /tmp/gate-a-smoke-portal and ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.'
-                : 'The portal build flow uses a prior rights-manifest artifact for downstream archive stages.';
+            els.archiveCanonicalCommandHint.textContent = 'Use the stage-specific path guidance below. The server preview checks this request before dispatch.';
         }
         if (els.archiveIndexField) {
             els.archiveIndexField.classList.toggle('hidden', pipelineName !== 'archive-gate-a');
