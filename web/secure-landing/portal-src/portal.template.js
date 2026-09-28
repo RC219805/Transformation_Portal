@@ -4393,7 +4393,10 @@ function _dispatchChecklistItems(payload) {
         && parseBoolLike(args.strict_segmentation, false);
     const items = [];
 
-    if (preview?.status === 'error' || previewErrors.length > 0) {
+    if (preview?.status === 'error' && preview.error_reason === 'backend_update_required') {
+        const failure = _previewFailureDetails(preview);
+        items.push({ tone: 'block', label: failure.summaryLabel, detail: failure.toastMessage });
+    } else if (preview?.status === 'error' || previewErrors.length > 0) {
         items.push({
             tone: 'block',
             label: 'Preview normalization',
@@ -7987,6 +7990,18 @@ function _previewFailureDetails(preview = null) {
     const matchedPreview = preview && typeof preview === 'object' ? preview : _currentPreviewForPayload();
     const reason = String(matchedPreview?.error_reason || matchedPreview?.error || '').trim().toLowerCase();
 
+    if (reason === 'backend_update_required') {
+        const recovery = 'The running backend does not support this pipeline. Update and restart the backend API and workers to match this portal, then refresh the preview. Your draft is preserved.';
+        return {
+            reason,
+            summaryLabel: 'Backend update required',
+            healthLabel: 'backend update required',
+            luxBlockedMessage: `BLOCKED: ${recovery}`,
+            archiveWarningMessage: `WARNING: ${recovery}`,
+            toastMessage: recovery,
+            telemetryReason: 'preview_backend_update_required'
+        };
+    }
     if (reason === 'auth_failure' || reason === 'preview_auth_failed') {
         const recovery = state.auth?.mode === 'managed'
             ? 'Ask the operator to check the frontdoor and backend authentication configuration; no browser API key is needed.'
@@ -8107,7 +8122,8 @@ function _buildLocalNextBestAction(payload = null, preview = null) {
         return {
             action: 'resolve_preview_error',
             field: 'config_preview',
-            label: isLuxPipeline(currentPayload.pipeline) ? 'Resolve preview validation' : 'Review preview status',
+            label: previewFailure.reason === 'backend_update_required' ? previewFailure.summaryLabel
+                : isLuxPipeline(currentPayload.pipeline) ? 'Resolve preview validation' : 'Review preview status',
             detail: detail || 'Preview-backed validation needs attention before dispatch.',
             tone: isLuxPipeline(currentPayload.pipeline) ? 'blocked' : 'warning'
         };
@@ -8602,6 +8618,8 @@ async function _fetchConfigPreview(payload, request) {
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
             const errorDetails = errorPayload.details && typeof errorPayload.details === 'object' ? errorPayload.details : {};
+            const backendUpdateRequired = res.status === 400 && errorPayload.code === 'INVALID_ARGUMENT'
+                && errorDetails.reason === 'unsupported_pipeline';
             const tenantPathDenied = res.status === 403 && errorPayload.code === 'FORBIDDEN'
                 && errorDetails.reason === 'tenant_path_outside_workspace'
                 && /^[a-z][a-z0-9_]{0,63}$/.test(String(errorDetails.field || ''));
@@ -8619,7 +8637,8 @@ async function _fetchConfigPreview(payload, request) {
                 ? portalInternals.parseRateLimitRetryHint(res)
                 : null;
             const classifiedFailure = _previewFailureDetails({
-                error_reason: tenantPathDenied ? 'validation_error'
+                error_reason: backendUpdateRequired ? 'backend_update_required'
+                    : tenantPathDenied ? 'validation_error'
                     : res.status === 401 || res.status === 403 || errorPayload.code === 'AUTH_CONFIGURATION_ERROR'
                     ? 'auth_failure'
                     : isRateLimited
@@ -8644,7 +8663,7 @@ async function _fetchConfigPreview(payload, request) {
             } else {
                 _clearConfigPreviewServiceRetry();
             }
-            if (classifiedFailure.reason === 'validation_error') {
+            if (classifiedFailure.reason === 'validation_error' || classifiedFailure.reason === 'backend_update_required') {
                 void emitPortalEvent('preview_error_seen', {
                     surface: 'reconstruction_runtime',
                     reasons: [

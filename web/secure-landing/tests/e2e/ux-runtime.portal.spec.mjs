@@ -371,6 +371,11 @@ async function installHydratedPortalRoutes(page, options = {}) {
       if (requestPayload?.pipeline === "lux-depth" && requestPayload?.args?.workflow === "infer" && options.inferPreviewGate) await options.inferPreviewGate;
       if (options.previewDelayMs) await new Promise((resolve) => setTimeout(resolve, options.previewDelayMs));
       const args = requestPayload?.args || {};
+      const previewHttpError = options.previewHttpErrorForPayload?.(requestPayload);
+      if (previewHttpError) {
+        await fulfillJson(route, previewHttpError.payload, previewHttpError.status);
+        return;
+      }
       const responsePreview = options.previewForPayload?.(requestPayload) || preview;
       if (options.previewTenantDenied && args.input_dir !== '/tenant/input') {
         await fulfillJson(route, { schema: 'tp.orchestrator.error.v1', success: false, data: null,
@@ -2411,6 +2416,59 @@ test('@portal-browser Unified changed workflow cannot reuse the previous success
   expect(runtime.jobSubmissions).toBe(0);
   releasePreview();
   await expect(page.locator('[data-capability-id="lux_depth_unified"]')).toHaveAttribute('data-capability-status', 'enabled');
+});
+
+test('@portal-browser Unified unsupported backend preserves the draft and recovers only after a fresh preview', async ({ page }, testInfo) => {
+  let backendUpdated = false;
+  const runtime = await installHydratedPortalRoutes(page, {
+    keepEventStreamOpen: true,
+    previewHttpErrorForPayload: (payload) => payload.pipeline === 'lux-depth' && !backendUpdated ? {
+      status: 400,
+      payload: { schema: 'tp.orchestrator.error.v1', success: false, data: null,
+        error: { code: 'INVALID_ARGUMENT', message: 'Traceback with private-server-token',
+          details: { field: 'payload', reason: 'unsupported_pipeline' } } }
+    } : null
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await page.locator('#v6ExposureStops').fill('1.5');
+  await page.locator('#v6ExposureStops').blur();
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#buildPreviewStatus')).toHaveText('Backend update required');
+  await expect(page.locator('#nextBestActionLabel')).toHaveText('Backend update required');
+  await expect(page.locator('#nextBestActionDetail')).toContainText('Update and restart the backend API and workers');
+  await expect(page.locator('#nextBestActionDetail')).toContainText('then refresh the preview. Your draft is preserved.');
+  await expect(page.locator('#preRunWarnings [data-tone="block"]')).toContainText('Backend update required');
+  await expect(page.locator('#preRunWarnings')).not.toContainText('invalid_argument');
+  await expect(page.locator('body')).not.toContainText('private-server-token');
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  expect(runtime.jobSubmissions).toBe(0);
+  const rejectedPayload = runtime.previewPayloads.filter((payload) => payload.pipeline === 'lux-depth').at(-1);
+  expect(rejectedPayload.args).toMatchObject({ workflow: 'process', exposure_stops: 1.5 });
+  await expectNoHorizontalOverflow(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath('unified-backend-update-required.png'), fullPage: true });
+  await testInfo.attach('Unified backend update required', { path: testInfo.outputPath('unified-backend-update-required.png'), contentType: 'image/png' });
+
+  backendUpdated = true;
+  const priorPreviewCount = runtime.previewPayloads.length;
+  await page.reload();
+  await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth');
+  await page.locator('#buildStepTab3').click();
+  await expect(page.locator('#unifiedWorkflow')).toHaveValue('process');
+  await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#buildPreviewStatus')).not.toHaveText('Backend update required');
+  expect(runtime.previewPayloads.length).toBeGreaterThan(priorPreviewCount);
+  expect(runtime.previewPayloads.at(-1)).toEqual(rejectedPayload);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath('unified-backend-preview-recovered.png'), fullPage: true });
+  await testInfo.attach('Unified current preview recovered', { path: testInfo.outputPath('unified-backend-preview-recovered.png'), contentType: 'image/png' });
+  await page.locator('#runJobBtn').click();
+  await expect.poll(() => runtime.jobSubmissions).toBe(1);
+  expect(runtime.submittedPayloads[0]).toEqual(rejectedPayload);
 });
 
 for (const workflow of ['process', 'infer']) {

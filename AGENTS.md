@@ -118,8 +118,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
 - Depth-cache authority contracts:
   `./.venv/bin/pytest tests/lux_depth_v3/test_depth_cache_identity_v3.py tests/lux_depth_v3/test_depth_cache_runtime.py tests/lux_depth_v3/test_depth_cache_concurrency.py -q`.
 - Unified and opt-in successor contracts:
-  `make test-lux-depth-contract`, `make test-materials-v4-contract`,
-  `make test-lux-depth-v5-contract`, and `make test-lux-depth-v5-managed-contract`.
+  `make test-lux-depth-contract`, `make test-lux-depth-managed-contract`,
+  `make test-materials-v4-contract`, `make test-lux-depth-v5-contract`, and
+  `make test-lux-depth-v5-managed-contract`.
   These prove local contracts only. LuxDepthV3 remains the production baseline
   and rollback path until representative photographic, native runtime,
   cache/optional-input, and performance acceptance pass independently.
@@ -185,8 +186,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-worker-redis-contract`,
   `make test-frontdoor-redis-contract`,
   `make test-artifact-s3-contract`, and
-  `make test-paid-pilot-services-contract`. Managed V5 additionally uses
-  `make test-lux-depth-v5-managed-services` with
+  `make test-paid-pilot-services-contract`. Managed Unified and V5 additionally
+  use `make test-lux-depth-managed-services` and
+  `make test-lux-depth-v5-managed-services`, respectively, with
   `TP_DISPATCH_TEST_DATABASE_URL` naming a dedicated migrated `*_test` database
   and `TP_DISPATCH_TEST_REDIS_URL` set. Start only the services required by the
   lane and report missing services as environment blockers. Managed-provider
@@ -317,6 +319,13 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `TP_PILOT_CONTROL_PLANE_ENABLED=1` on backend and frontdoor together with the
   same dedicated `TP_FRONTDOOR_IDENTITY_SECRET` (never the API key). Clients
   must use the authenticated frontdoor; unsigned tenant selectors fail closed.
+- Managed Unified Lux: deploy matching API/worker code, apply `make db-upgrade`
+  through `0007_photography_bindings`, and enable
+  `TP_LUX_DEPTH_MANAGED_ENABLED=1` on API and workers. Use Postgres/Redis, the
+  protected shared execution root, server-owned runtimes/cache, current
+  preview/readiness, and a separate `lux-depth` pilot grant. Managed access
+  accepts only `process` and `infer`; V3 remains the portal default. See
+  [the unified guide](docs/reference/LUX_DEPTH.md#http-portal-and-managed-access).
 - Managed V6: deploy matching API/worker code and packaged plan V5 schema,
   apply `make db-upgrade` through `0007_photography_bindings`, and enable
   `TP_LUX_V6_MANAGED_ENABLED=1` independently of V5. Use Postgres/Redis, a
