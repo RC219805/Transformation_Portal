@@ -106,7 +106,7 @@ test("only an exact unsupported-pipeline response requires a backend update with
     [500, 'INVALID_ARGUMENT', 'unsupported_pipeline', 'service_failure', 1],
   ]) {
     const h = harness(async () => new Response(JSON.stringify({ error: {
-      code, message: 'UNTRUSTED secret traceback <script>bad()</script>',
+      code, message: 'UNTRUSTED secret traceback <script>bad()</script> <SCRIPT>bad()</SCRIPT> <ScRiPt data-origin="backend">bad()</ScRiPt>',
       details: { field: 'payload', reason, traceback: 'UNTRUSTED secret path' }
     } }), { status }));
     const draft = h.context.generatePayload();
@@ -118,7 +118,7 @@ test("only an exact unsupported-pipeline response requires a backend update with
     assert.equal(h.retries(), retryCount);
     assert.deepEqual(h.context.generatePayload(), draft);
     const details = h.context._previewFailureDetails(h.state.preview);
-    assert.doesNotMatch(JSON.stringify([h.state.preview, details]), /UNTRUSTED|<script>/);
+    assert.doesNotMatch(JSON.stringify([h.state.preview, details]), /UNTRUSTED|<script\b/i);
     if (expected === 'backend_update_required') {
       assert.equal(details.summaryLabel, 'Backend update required');
       assert.match(details.luxBlockedMessage, /Update and restart the backend API and workers/);
