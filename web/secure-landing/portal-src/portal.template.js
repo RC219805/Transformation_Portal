@@ -280,6 +280,13 @@ const els = {
 
     inputDir: _domId('inputDir'),
     outputDir: _domId('outputDir'),
+    pathGuidance: {
+        summary: _domId('pathGuidanceSummary'),
+        input: _domId('inputDirGuidance'),
+        output: _domId('outputDirGuidance'),
+        archiveIndex: _domId('archiveIndexGuidance'),
+        rightsManifest: _domId('rightsManifestGuidance'),
+    },
     inputDirStatus: _domId('inputDirStatus'),
     stagedUploadShell: _domId('stagedUploadShell'),
     stagedUploadStatus: _domId('stagedUploadStatus'),
@@ -5461,6 +5468,7 @@ function _syncBootstrapUi() {
     renderReviewStatusActions(selectedJob);
     renderArtifactViewer();
     _syncStagedUploadUi();
+    _deferredBuildSurfaceApi()?.renderFieldPreviewStatuses?.();
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -6733,6 +6741,7 @@ function _createDeferredBuildSurfaceHost() {
         _resolveDa3ModelKey,
         canonicalArchiveCommand,
         generatePayload,
+        _stagedUploadsEnabledForState,
     };
 }
 
@@ -8352,9 +8361,11 @@ function _previewIssueForField(fieldName, payload = null) {
     if (!preview || !['ready', 'error'].includes(preview.status)) return null;
     const errors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
     const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
-    const error = errors.find((item) => String(item?.field || '') === fieldName);
+    const matchesField = (item) => String(item?.field || '') === fieldName
+        || ((payload?.pipeline || state.pipeline) === 'archive-gate-a' && fieldName === 'input_dir' && item?.field === 'archive_root');
+    const error = errors.find(matchesField);
     if (error) return { tone: 'error', detail: error };
-    const warning = warnings.find((item) => String(item?.field || '') === fieldName);
+    const warning = warnings.find(matchesField);
     if (warning) return { tone: 'warning', detail: warning };
     return null;
 }
@@ -9648,6 +9659,7 @@ function _firstInvalidBuildInput() {
 }
 
 function _buildControlForPreviewField(fieldName) {
+    if (state.pipeline === 'archive-gate-a' && fieldName === 'archive_root') return els.inputDir;
     const photographyControls = _isCompositePhotography() ? els.photographyV6 : els.photography;
     const controls = {
         input_dir: els.inputDir,

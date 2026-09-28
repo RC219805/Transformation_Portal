@@ -337,6 +337,16 @@ and `tenant_path_outside_workspace`; the preview identifies the field to correct
 in Build. This is a path validation failure, not a request to sign in again or
 enter a browser API key. Authentication failures continue to fail closed.
 
+The Paths step keeps module-specific guidance visible beside validation errors.
+Use server folders approved for the workspace; relative example defaults do not
+authorize access. When staged uploads are available, **Choose files** or
+**Choose folder** fills the input path after upload, leaving the output path
+unchanged. Select an approved writable output location separately, preferably
+a fresh folder for each run. V5, V6, and Unified photography require it to be
+separate from sources and manifest directories. Archive prompts distinguish the
+source archive, its index, and rights-manifest evidence. Retrieve verified job
+artifacts in Review. A successful current preview still controls admission.
+
 Build starts with four steps: Configure, Paths, Outputs, and Dispatch. Pipeline
 and saved-profile controls sit beside the active step on wide screens and
 stack above it on smaller screens. Next names the destination step and moves
