@@ -3772,6 +3772,7 @@ def test_job_artifact_endpoint_serves_local_store_after_source_file_is_gone(
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+@pytest.mark.parametrize("delivery", [None, "stream"])
 @pytest.mark.parametrize(
     ("artifact_relative_path", "body", "content_type", "expect_disposition"),
     [
@@ -3784,6 +3785,7 @@ def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     jobs_base: str,
+    delivery: str | None,
     artifact_relative_path: str,
     body: bytes,
     content_type: str,
@@ -3827,12 +3829,20 @@ def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
 
             response = client.get(
                 f"{jobs_base}/{job.id}/artifacts/{artifact_relative_path}",
+                headers={"X-TP-Artifact-Delivery": delivery} if delivery else {},
                 follow_redirects=False,
             )
 
-            assert response.status_code == 307
             assert response.headers["Cache-Control"] == "no-store"
             assert response.headers["X-Content-Type-Options"] == "nosniff"
+            if delivery == "stream":
+                assert response.status_code == 200
+                assert response.content == body
+                assert response.headers["content-type"].split(";", 1)[0] == content_type
+                assert "location" not in response.headers
+                assert ("attachment" in response.headers.get("content-disposition", "")) is expect_disposition
+                return
+            assert response.status_code == 307
             assert response.headers["location"].startswith("https://")
             assert response.content == b""
             presign_query = parse_qs(urlparse(response.headers["location"]).query)
@@ -6141,7 +6151,8 @@ def test_job_events_active_stream_emits_heartbeat_and_cleans_up(
         "state": "running",
         "progress": 0,
     }
-    assert heartbeat == ": heartbeat\n\n"
+    assert heartbeat == ": heartbeat\n\nevent: heartbeat\ndata: {}\n\n"
+    assert "id:" not in heartbeat
     assert job.id in orchestrator_app.EVENT_SUBSCRIBERS
     assert orchestrator_app.EVENT_SUBSCRIBERS[job.id] == {}
 

@@ -175,6 +175,11 @@ bundle. Saved profiles keep V6 controls separate from V3 and V5. Build requires
 a current successful configuration preview and server readiness. Those checks
 are advisory: admission and workers revalidate authorized paths, physical
 runtime bindings, resources, and the immutable plan.
+Preview and admission inspect authorized image headers within bounded read and
+inventory limits, reporting unsupported or ambiguous color before dispatch.
+Execution still performs full decoding and validation. Shared heartbeat and
+same-origin managed artifact delivery behavior is described in the
+[portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
 
 Deploy matching API and worker code and the packaged plan schema together.
 Apply `make db-upgrade` through `0007_photography_bindings`; V6 reuses that
@@ -401,8 +406,9 @@ The working space remains extended linear sRGB. Automatic input-color selection
 fails closed on ambiguous pixels or unsupported ICC profiles. Explicit
 `input_color="srgb"` or `"linear_srgb"` declares an interpretation; it is not an
 ICC conversion. Convert Adobe RGB or another unsupported profile with a
-color-managed tool before submitting sRGB pixels. RAW uses the governed decoder's
-linear-sRGB output; do not assign encoded sRGB to RAW. Unsupported input profiles
+color-managed tool before submitting sRGB pixels. If `auto` rejects the exported
+sRGB profile, select `srgb` only for those converted copies. RAW uses the governed
+decoder's linear-sRGB output; do not assign encoded sRGB to RAW. Unsupported input profiles
 and RAW highlight clipping in the original V5 ingest cannot be repaired by
 labeling pixels differently or by increasing output bit depth. V6 does not add a
 wide-gamut ingest transform or recover missing sensor or native-depth detail.

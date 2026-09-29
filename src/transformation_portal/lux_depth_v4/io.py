@@ -19,6 +19,8 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
     _validate_pinned_root_namespace,
 )
 
+PHOTOGRAPHIC_INPUT_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw"})
+
 
 def directory_path(path: Path, *, allow_missing: bool = False) -> Path:
     """Normalize standard macOS aliases only, then reject linked existing ancestors.

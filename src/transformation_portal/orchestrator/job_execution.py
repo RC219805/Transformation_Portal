@@ -22,6 +22,7 @@ from transformation_portal.orchestrator.artifact_store.base import ArtifactStore
 from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
 from transformation_portal.orchestrator.artifact_store.generation_cleanup import cleanup_terminal_generation
 from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator, current_dispatch_fence
+from transformation_portal.orchestrator.execution_diagnostics import annotate_job_failure
 from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
 from transformation_portal.orchestrator.storage.base import JobRecord, JobRepository, RepositoryError
 from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
@@ -460,6 +461,7 @@ class JobExecutionService(Generic[_JobT]):
                         {"exit_code": int(rc)},
                         retriable=False,
                     )
+                    annotate_job_failure(job)
             await self.runtime.persist_fields(
                 job, "runner_terminal", state=job.state, exit_code=job.exit_code, error=job.error
             )

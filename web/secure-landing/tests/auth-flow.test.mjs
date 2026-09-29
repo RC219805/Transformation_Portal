@@ -225,6 +225,7 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
       Forwarded: 'for="198.51.100.9"',
       "x-api-key": "browser-token",
       "x-csrf-token": "csrf-token",
+      "X-TP-Artifact-Delivery": "stream",
       "x-forwarded-for": "198.51.100.9",
       Accept: "application/json"
     }),
@@ -248,6 +249,7 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
   assert.equal(headers.get("Forwarded"), 'for="203.0.113.5";host="portal.example.com";proto="https"');
   assert.equal(headers.get("x-api-key"), "backend-secret");
   assert.equal(headers.has("x-csrf-token"), false);
+  assert.equal(headers.has("x-tp-artifact-delivery"), false);
   assert.equal(headers.get("x-forwarded-for"), "203.0.113.5");
   assert.equal(headers.get("x-forwarded-host"), "portal.example.com");
   assert.equal(headers.get("x-forwarded-proto"), "https");

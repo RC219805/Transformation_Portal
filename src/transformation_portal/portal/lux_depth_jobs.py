@@ -19,6 +19,7 @@ from transformation_portal.portal.photography_jobs import (
 from transformation_portal.portal.photography_v6_jobs import PhotographyV6JobArgs, v6_config_preview, v6_request
 
 if TYPE_CHECKING:
+    from transformation_portal.core.security.tenant import TenantContext
     from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request
     from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request
 
@@ -76,7 +77,9 @@ def managed_lux_depth_readiness(workflow: Any = "process") -> dict[str, Any]:
     }
 
 
-def lux_depth_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy) -> dict[str, Any]:
+def lux_depth_config_preview(
+    args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None = None
+) -> dict[str, Any]:
     """Validate workflow-specific options and retain the established path guards."""
     try:
         values = _parse_args(args).model_dump()
@@ -99,7 +102,9 @@ def lux_depth_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy) -
             "next_best_action": None,
         }
     workflow = values.pop("workflow")
-    preview = (v6_config_preview if workflow == "process" else photography_config_preview)(values, policy=policy)
+    preview = (v6_config_preview if workflow == "process" else photography_config_preview)(
+        values, policy=policy, tenant=tenant
+    )
     preview["pipeline"] = "lux-depth"
     preview["normalized_args"]["workflow"] = workflow
     preview["execution_args"]["workflow"] = workflow

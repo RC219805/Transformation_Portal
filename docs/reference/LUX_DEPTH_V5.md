@@ -98,6 +98,10 @@ Dispatch requires a current successful configuration preview and server
 readiness. Disabled or unavailable V5 servers remain blocked with their
 prerequisite reasons. Preview checks are advisory; admission and the worker
 revalidate paths, runtime authority, resources, and the exact frozen plan.
+Preview and admission also inspect authorized image headers within bounded read
+and inventory limits. Unsupported profiles require conversion to sRGB with a
+profile-aware editor. If `auto` rejects the exported sRGB profile, select `srgb`
+only for those converted copies; an input-color assertion does not convert pixels.
 The [September 21 HTTP/portal audit evidence](../analysis/HTTP_PORTAL_LUX_SUCCESSOR_2026-09-21.md)
 records the integration decision and validation boundaries.
 
@@ -105,7 +109,10 @@ records the integration decision and validation boundaries.
 `JobExecutionService` coordinates HTTP-admitted jobs and standalone workers:
 subprocess lifetime, cancellation, lease-bound execution, and verified generation
 publication use the same service. Existing routes, response envelopes, SSE event
-names, and artifact retrieval remain unchanged. V3 remains the default pipeline.
+names, and artifact URLs remain supported. Shared heartbeat and same-origin
+managed artifact delivery behavior is described in the
+[portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
+V3 remains the default pipeline.
 
 Enable managed V5 only after applying `make db-upgrade` through
 `0007_photography_bindings` and deploying matching API and worker code. Configure

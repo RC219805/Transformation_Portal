@@ -19,6 +19,7 @@ from transformation_portal.portal.photography_jobs import (
 )
 
 if TYPE_CHECKING:
+    from transformation_portal.core.security.tenant import TenantContext
     from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request
 
 
@@ -70,7 +71,7 @@ def managed_v6_readiness() -> dict[str, Any]:
     }
 
 
-def v6_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy) -> dict[str, Any]:
+def v6_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None = None) -> dict[str, Any]:
     """Validate the complete V6 request before reusing common photography path guards."""
     try:
         values = PhotographyV6JobArgs.model_validate(args).model_dump()
@@ -93,7 +94,7 @@ def v6_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy) -> dict[
             "next_best_action": None,
         }
     common = {name: values[name] for name in PhotographyJobArgs.model_fields}
-    preview = photography_config_preview(common, policy=policy)
+    preview = photography_config_preview(common, policy=policy, tenant=tenant)
     finishing = {name: value for name, value in values.items() if name not in PhotographyJobArgs.model_fields}
     preview["normalized_args"].update(finishing)
     preview["execution_args"].update(finishing)

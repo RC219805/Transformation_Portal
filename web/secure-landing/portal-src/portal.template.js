@@ -6187,6 +6187,16 @@ function getReadableError(errorObj) {
     return message || code || '';
 }
 
+function _mergeJobStreamError(current, incoming) {
+    // A historical done event may predate the diagnostic projected by GET.
+    // Keep that diagnostic when replay only supplies the original generic exit.
+    if (current?.details?.reason
+        && incoming?.code === current.code
+        && !incoming.details?.reason && !incoming.details?.stage
+        && incoming.details?.exit_code === current.details?.exit_code) return current;
+    return incoming;
+}
+
 const CAPTIONING_RUN_STATUS_VALUES = new Set([
     'off',
     'requested',
@@ -6884,6 +6894,9 @@ function selectJob(jobId) {
     state.selectedJobId = jobId;
     _rememberSelectedJob(jobId);
     const job = state.jobs.find((item) => item.id === jobId);
+    if (job && !_isJobStreamRecoverable(job) && job.logsLoadStatus !== 'ready') {
+        void refreshJobStatus(job);
+    }
     if (job && els.logPane) {
         els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
         els.logPane.scrollTop = els.logPane.scrollHeight;
@@ -7019,17 +7032,18 @@ function _markJobEventActivity(job) {
     _ensureJobStreamState(job);
     job.lastEventAt = Date.now();
     job.updatedAt = job.lastEventAt;
-    if (job.sseRetry && job.sseRetry.attempt > 0) {
-        job.sseRetry.attempt = 0;
-    }
+    job.sseRetry.attempt = 0;
 }
 
 function _syncHydratedJob(existing, hydrated, rawJob = null) {
-    if (!existing || !hydrated) return;
+    if (!existing || !hydrated) return false;
+    // A delayed running snapshot cannot reverse a terminal SSE or GET result.
+    if (['succeeded', 'partial', 'failed', 'canceled'].includes(existing.state) && _isJobStreamRecoverable(hydrated)) return false;
+    if (_isJobStreamRecoverable(existing) && !_isJobStreamRecoverable(hydrated)) existing.logsLoadStatus = 'pending';
     existing.pipeline = hydrated.pipeline;
     existing.state = hydrated.state;
     existing.progress = hydrated.progress;
-    existing.logs = hydrated.logs;
+    if (!rawJob || Array.isArray(rawJob.logs_tail)) existing.logs = hydrated.logs;
     existing.error = hydrated.error;
     existing.artifacts = hydrated.artifacts;
     existing.run_summary = hydrated.run_summary;
@@ -7037,7 +7051,7 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
     existing.finishedAt = hydrated.finishedAt || existing.finishedAt || 0;
     existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
     existing.updatedAt = hydrated.updatedAt || existing.updatedAt || existing.createdAt;
-    existing.lastEventAt = hydrated.lastEventAt || existing.lastEventAt || 0;
+    existing.lastEventAt = Math.max(hydrated.lastEventAt || 0, existing.lastEventAt || 0);
     if (existing.state !== 'running' && existing.state !== 'queued') {
         existing.cancelPending = false;
         existing.cancelError = '';
@@ -7057,11 +7071,23 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
         _clearSseRetry(existing, true);
         _teardownJobEventStream(existing);
     }
+    return true;
 }
 
-async function refreshJobStatus(job) {
-    if (!job || !job.id) return;
-    if (_isProtectedFamilySuppressed('jobs_detail')) return;
+function refreshJobStatus(job) {
+    if (!job?.id || _isProtectedFamilySuppressed('jobs_detail')) return;
+    if (!job.detailRequest) {
+        const wasActive = _isJobStreamRecoverable(job);
+        job.detailRequest = _fetchJobStatus(job).finally(() => {
+            job.detailRequest = null;
+            if (wasActive && !_isJobStreamRecoverable(job) && job.logsLoadStatus !== 'ready') return refreshJobStatus(job);
+        });
+    }
+    return job.detailRequest;
+}
+
+async function _fetchJobStatus(job) {
+    job.logsLoadStatus = 'loading';
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const encodedId = encodeURIComponent(String(job.id));
@@ -7080,8 +7106,8 @@ async function refreshJobStatus(job) {
         const rawJob = payload?.data;
         if (!rawJob || String(rawJob.id || '') !== String(job.id)) return;
         const hydrated = hydrateJobFromServer(rawJob);
-        if (!hydrated) return;
-        _syncHydratedJob(job, hydrated, rawJob);
+        if (!_syncHydratedJob(job, hydrated, rawJob)) return;
+        job.logsLoadStatus = 'ready';
         if (state.selectedJobId === job.id && els.logPane) {
             els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
             els.logPane.scrollTop = els.logPane.scrollHeight;
@@ -7089,9 +7115,11 @@ async function refreshJobStatus(job) {
                 els.logStatusIndicator.classList.add('hidden');
             }
         }
-        scheduleRenderJobQueue();
     } catch {
         // best-effort refresh for reconnect convergence
+    } finally {
+        if (job.logsLoadStatus === 'loading') job.logsLoadStatus = 'error';
+        scheduleRenderJobQueue();
     }
 }
 
@@ -10987,8 +11015,8 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         job.finishedAt = Date.now();
         _recordProgressTimeline(job, job.progress, job.finishedAt);
         if (parsed.error) {
-            job.error = parsed.error;
-            const readable = getReadableError(parsed.error);
+            job.error = _mergeJobStreamError(job.error, parsed.error);
+            const readable = getReadableError(job.error);
             if (readable) {
                 const line = `[ERROR] ${readable}`;
                 appendJobLog(job, line);
@@ -11007,6 +11035,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         appendJobLog(job, endLine);
         logToPane(job.id, endLine);
         stopJobActivity(job);
+        if (state.selectedJobId === job.id) void refreshJobStatus(job);
         scheduleRenderJobQueue();
         createToast(
             job.state === 'partial' ? 'Job partially completed. Reviewable outputs are available.' : `Job ${job.state}.`,
@@ -11239,6 +11268,7 @@ function startJobEventStream(job, eventsUrl) {
         scheduleRenderJobQueue();
     };
     const safeParseSseEvent = (eventName, e) => {
+        if (job.eventSource !== es) return;
         try {
             const parsed = JSON.parse(e.data);
             _applyJobStreamEvent(job, eventName, parsed);
@@ -11246,11 +11276,9 @@ function startJobEventStream(job, eventsUrl) {
             // Ignore malformed SSE data payloads; continue streaming.
         }
     };
-    es.addEventListener('log', (e) => safeParseSseEvent('log', e));
-    es.addEventListener('progress', (e) => safeParseSseEvent('progress', e));
-    es.addEventListener('state', (e) => safeParseSseEvent('state', e));
-    es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));
-    es.addEventListener('done', (e) => safeParseSseEvent('done', e));
+    for (const eventName of ['log', 'progress', 'state', 'artifact', 'done', 'heartbeat']) {
+        es.addEventListener(eventName, (e) => safeParseSseEvent(eventName, e));
+    }
     es.onerror = () => {
         if (job.eventSource !== es) return;
         const readyState = _nativeEventSourceReadyState(es);

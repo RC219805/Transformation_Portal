@@ -10,8 +10,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import struct
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, BinaryIO, Callable, Mapping
 
 import numpy as np
 from PIL import Image, ImageCms
@@ -21,6 +22,14 @@ from transformation_portal.core.image_artifact import ImageMaster, ImageProxy, P
 
 RAW_SUFFIXES = frozenset({".arw", ".cr2", ".cr3", ".dng", ".nef", ".nrw", ".orf", ".raf", ".raw", ".rw2"})
 RawDecoder = Callable[[bytes, str], tuple[np.ndarray, Mapping[str, Any]]]
+
+
+class InputColorError(ValueError):
+    """A deterministic color-policy rejection safe to surface before execution."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
 
 
 def srgb_to_linear(values: np.ndarray) -> np.ndarray:
@@ -80,23 +89,128 @@ def _resolve_color(
         return input_color, "explicit_input_color"
     if profile is not None:
         if _normalize_icc(profile) != output_srgb_icc():
-            raise ValueError("Unsupported ICC profile; provide an explicit input_color correction")
+            raise InputColorError(
+                "input_color_unsupported_icc",
+                "Unsupported ICC profile. Convert the photographs to sRGB with a profile-aware editor and upload the converted "
+                "copies. If Auto still rejects the exported sRGB profile, select sRGB only for those converted copies. "
+                "An input color override does not convert pixels.",
+            )
         if declared_color not in {None, "srgb"}:
-            raise ValueError("ICC and declared input color disagree")
+            raise InputColorError("input_color_conflict", "ICC and declared input color disagree")
         return "srgb", "recognized_srgb_icc"
     if exif_color not in {None, 1, 65535}:
-        raise ValueError("Unsupported EXIF color space; provide an explicit input_color correction")
+        raise InputColorError(
+            "input_color_unsupported_metadata", "Unsupported EXIF color space; provide an explicit input_color correction"
+        )
     if declared_color is not None:
         if declared_color not in {"srgb", "linear_srgb"}:
-            raise ValueError("Unsupported declared color space; provide an explicit input_color correction")
+            raise InputColorError(
+                "input_color_unsupported_metadata",
+                "Unsupported declared color space; provide an explicit input_color correction",
+            )
         if declared_color == "linear_srgb" and exif_color == 1:
-            raise ValueError("EXIF sRGB and declared linear input color disagree")
+            raise InputColorError("input_color_conflict", "EXIF sRGB and declared linear input color disagree")
         return declared_color, "declared_input_color"
     if exif_color == 1:
         return "srgb", "exif_srgb"
     if image_format == "JPEG" and exif_color is None:
         return "srgb", "untagged_jpeg_srgb_assumption"
-    raise ValueError("Ambiguous input color; provide input_color='srgb' or 'linear_srgb'")
+    raise InputColorError(
+        "input_color_ambiguous", "Ambiguous input color; provide input_color='srgb' or 'linear_srgb' only when known."
+    )
+
+
+def _tiff_color_metadata(page: Any) -> tuple[bytes | None, str | None, Any]:
+    icc_tag = page.tags.get(34675)
+    profile = bytes(icc_tag.value) if icc_tag is not None else None
+    try:
+        description = json.loads(page.description) if page.description else {}
+    except (ValueError, TypeError):
+        description = {}
+    declared_color = description.get("color_space") if isinstance(description, dict) else None
+    return profile, declared_color, None
+
+
+def _standard_color_metadata(image: Image.Image, *, exif: Image.Exif | None = None) -> tuple[bytes | None, str | None, Any]:
+    if exif is None:
+        exif = image.getexif()
+    exif_color = exif.get(40961)
+    if 34665 in exif:
+        exif_color = exif.get_ifd(34665).get(40961, exif_color)
+    declared_color = "srgb" if image.format == "PNG" and "srgb" in image.info else None
+    return image.info.get("icc_profile"), declared_color, exif_color
+
+
+def _png_metadata_exif(source: BinaryIO, image: Image.Image) -> Image.Exif:
+    """Read late PNG EXIF without Pillow's implicit full-image load.
+
+    PNG permits eXIf after IDAT. Skip compressed raster chunks with seeks and
+    bound the chunk inventory; the caller also bounds all metadata reads.
+    """
+    if "exif" not in image.info:
+        source.seek(8)
+        for _ in range(8192):
+            header = source.read(8)
+            if len(header) != 8:
+                raise ValueError("Incomplete PNG metadata")
+            size, kind = struct.unpack(">I4s", header)
+            if kind == b"IEND":
+                break
+            if kind == b"eXIf":
+                data = source.read(size)
+                if len(data) != size:
+                    raise ValueError("Incomplete PNG EXIF metadata")
+                image.info["exif"] = b"Exif\x00\x00" + data
+            else:
+                source.seek(size, io.SEEK_CUR)
+            source.seek(4, io.SEEK_CUR)
+        else:
+            raise ValueError("PNG metadata exceeds the preflight chunk budget")
+    return Image.Image.getexif(image)
+
+
+def validate_input_color_metadata(
+    source: BinaryIO, *, source_name: str, input_color: str = "auto", max_pixels: int = 100_000_000
+) -> None:
+    """Apply ingest's color policy to headers without decoding photographic pixels.
+
+    The caller supplies a confined, byte-bounded stream. RAW color remains the
+    governed decoder's responsibility; its existing explicit-color rule still
+    applies. Execution revalidates the immutable source snapshot independently.
+    """
+    if Path(source_name).suffix.lower() in RAW_SUFFIXES:
+        if input_color not in {"auto", "linear_srgb"}:
+            raise InputColorError("input_color_conflict", "RAW decoder output is linear_srgb; encoded input_color is invalid")
+        return
+    signature = source.read(4)
+    source.seek(0)
+    if signature in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}:
+        import tifffile
+
+        with tifffile.TiffFile(source) as tif:
+            page = tif.pages[0]
+            if not isinstance(page, tifffile.TiffPage):
+                raise ValueError("V4 photographic TIFF requires a complete image page")
+            height, width = int(page.imagelength), int(page.imagewidth)
+            profile, declared_color, exif_color = _tiff_color_metadata(page)
+            image_format = "TIFF"
+    else:
+        with Image.open(source) as image:
+            height, width = image.height, image.width
+            image_format = str(image.format)
+            if image_format not in {"JPEG", "PNG"}:
+                raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF")
+            exif = _png_metadata_exif(source, image) if image_format == "PNG" else image.getexif()
+            profile, declared_color, exif_color = _standard_color_metadata(image, exif=exif)
+    if height <= 0 or width <= 0 or height * width > max_pixels:
+        raise ValueError("Decoded image dimensions exceed max_pixels")
+    _resolve_color(
+        input_color=input_color,
+        image_format=image_format,
+        profile=profile,
+        declared_color=declared_color,
+        exif_color=exif_color,
+    )
 
 
 def decode_master(
@@ -174,14 +288,7 @@ def decode_master(
                 raise ValueError("Only unassociated (straight) TIFF alpha is supported")
             orientation_tag = page.tags.get(274)
             orientation = int(orientation_tag.value) if orientation_tag else 1
-            icc_tag = page.tags.get(34675)
-            profile = bytes(icc_tag.value) if icc_tag is not None else None
-            try:
-                description = json.loads(page.description) if page.description else {}
-            except (ValueError, TypeError):
-                description = {}
-            if isinstance(description, dict):
-                declared_color = description.get("color_space")
+            profile, declared_color, exif_color = _tiff_color_metadata(page)
             image_format = "TIFF"
     else:
         with Image.open(io.BytesIO(source_bytes)) as image:
@@ -193,12 +300,7 @@ def decode_master(
                 raise ValueError("16-bit PNG requires lossless conversion to TIFF before V4 ingest")
             exif = image.getexif()
             orientation = int(exif.get(274, 1))
-            exif_color = exif.get(40961)
-            if 34665 in exif:
-                exif_color = exif.get_ifd(34665).get(40961, exif_color)
-            profile = image.info.get("icc_profile")
-            if image_format == "PNG" and "srgb" in image.info:
-                declared_color = "srgb"
+            profile, declared_color, exif_color = _standard_color_metadata(image)
             # RGB/gray PNG color-key transparency lives in tRNS metadata rather
             # than an alpha channel. Materialize it before normalizing geometry.
             if image_format == "PNG" and "transparency" in image.info:

@@ -1318,11 +1318,9 @@ def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
     assert "JSON.parse(e.data)" in body
     assert "catch {" in body
     # Verify all event types use the safe wrapper
-    assert "es.addEventListener('log', (e) => safeParseSseEvent('log', e));" in body
-    assert "es.addEventListener('progress', (e) => safeParseSseEvent('progress', e));" in body
-    assert "es.addEventListener('state', (e) => safeParseSseEvent('state', e));" in body
-    assert "es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));" in body
-    assert "es.addEventListener('done', (e) => safeParseSseEvent('done', e));" in body
+    assert "for (const eventName of ['log', 'progress', 'state', 'artifact', 'done', 'heartbeat']) {" in body
+    assert "es.addEventListener(eventName, (e) => safeParseSseEvent(eventName, e));" in body
+    assert "if (job.eventSource !== es) return;" in body
 
 
 def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:

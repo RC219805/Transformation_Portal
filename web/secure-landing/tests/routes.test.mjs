@@ -2421,6 +2421,46 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
   }
 });
 
+test("portal treats upstream throttling as retryable recovery and preserves Retry-After", async () => {
+  const env = withTempEnvironment();
+  let restoreFetch = () => {};
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    restoreFetch = withMockedAccessCerts(async (url) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/");
+      return new Response("upstream private detail", { status: 429, headers: { "Retry-After": "12" } });
+    });
+    await withCapturedAuditEvents(async (events) => {
+      const response = await GET(buildRequest("https://portal.example.com/portal?view=review", {
+        headers: {
+          cookie: `__Host-tp_session=${session.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        }
+      }));
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("retry-after"), "12");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+      const html = await response.text();
+      assert.match(html, /data-reason="upstream_unavailable"/);
+      assert.match(html, /Portal handoff is waiting on backend recovery/);
+      assert.doesNotMatch(html, /blocked by configuration|upstream private detail/);
+      assert.match(html, /returnTo=%2Fportal%3Fview%3Dreview/);
+      assert.equal(events.length, 1);
+      assert.equal(events[0].reason, "upstream_unavailable");
+      assert.equal(events[0].upstreamStatus, 429);
+      assert.equal(events[0].retryable, true);
+    });
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
 test("portal renders waiting recovery posture for Access outages", async () => {
   const outageTeamDomain = "https://tp-frontdoor-outage.cloudflareaccess.com";
   const env = withTempEnvironment({
@@ -3950,6 +3990,8 @@ test("v1 artifact proxy passes binary previews through the managed front door wi
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
       assert.equal(init.headers.has("cookie"), false);
+      assert.equal(init.headers.get("x-tp-artifact-delivery"), "stream");
+      assert.equal(init.redirect, "manual");
       return new Response(previewBytes, {
         status: 200,
         headers: {
@@ -3981,6 +4023,56 @@ test("v1 artifact proxy passes binary previews through the managed front door wi
       restoreFetch();
     }
   } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 owns artifact stream delivery only for authenticated GET artifact paths", async () => {
+  const env = withTempEnvironment();
+  let restoreFetch = () => {};
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    const observed = [];
+    restoreFetch = withMockedAccessCerts(async (url, init) => {
+      observed.push({ url: String(url), method: init.method, delivery: init.headers.get("x-tp-artifact-delivery") });
+      assert.equal(init.redirect, "manual");
+      return new Response(null, { status: 200 });
+    });
+    const cases = [
+      ["GET", ["jobs", "job-123", "artifacts", "hero.png"], "stream"],
+      ["GET", ["jobs", "job-123", "artifacts", "nested", "hero.png"], "stream"],
+      ["GET", ["jobs", "job-123", "artifacts"], null],
+      ["GET", ["jobs", "job-123"], null],
+      ["GET", ["other", "jobs", "job-123", "artifacts", "hero.png"], null],
+      ["POST", ["jobs", "job-123", "artifacts", "hero.png"], null],
+      ["HEAD", ["jobs", "job-123", "artifacts", "hero.png"], null]
+    ];
+    for (const [method, segments, expected] of cases) {
+      const pathname = `/v1/${segments.join("/")}`;
+      const response = await route[method === "POST" ? "POST" : "GET"](buildRequest(`https://portal.example.com${pathname}`, {
+        method,
+        headers: {
+          cookie: `__Host-tp_session=${session.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "X-TP-Artifact-Delivery": expected ? "redirect" : "stream",
+          origin: "https://portal.example.com",
+          "x-csrf-token": session.csrfToken
+        }
+      }), { params: { path: segments } });
+      assert.equal(response.status, 200, `${method} ${pathname}`);
+      assert.equal(observed.at(-1).delivery, expected, `${method} ${pathname}`);
+    }
+    const unauthenticated = await route.GET(buildRequest("https://portal.example.com/v1/jobs/job-123/artifacts/hero.png", {
+      headers: { "Cf-Access-Jwt-Assertion": createAccessJwt(), "X-TP-Artifact-Delivery": "stream" }
+    }), { params: { path: ["jobs", "job-123", "artifacts", "hero.png"] } });
+    assert.equal(unauthenticated.status, 401);
+    assert.equal(observed.length, cases.length);
+  } finally {
+    restoreFetch();
     env.cleanup();
   }
 });

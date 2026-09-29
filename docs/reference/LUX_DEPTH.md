@@ -57,6 +57,9 @@ quality-accepted default. `--runtime-python`, `--raw-python`, `--cache-dir`,
 and `--companions-manifest` use the V5 admission rules. `auto` color requires
 recognized source color metadata; use an explicit color assertion only when
 it describes the actual input. RAW needs its separately governed decoder.
+Convert unsupported profiles to sRGB with a profile-aware editor before upload.
+If `auto` still rejects the exported sRGB profile, select `srgb` only for those
+converted copies; the input-color option does not convert pixels.
 
 `process` produces `source-v5/`, `v6/`, `execution-plan.json`, and
 `execution-evidence.json`. It retains both complete stage inventories. Final
@@ -185,6 +188,10 @@ upload contract. Build requires a successful preview of the current workflow
 and controls plus current readiness. Review uses verified PNG derivatives for
 display; TIFF/float artifacts retain precision authority.
 
+Preview and admission inspect authorized image headers within bounded read and
+inventory limits, reporting unsupported or ambiguous color before dispatch.
+This metadata check does not replace execution-time decoding and validation.
+
 Managed `finish`, `depth-pro`, `verify`, and `legacy` workflow values are not
 accepted. Retained-generation finishing needs a distinct source-authority
 contract, and research execution needs its separate license/runtime boundary;
@@ -240,8 +247,11 @@ schemas for both supported workflows. Post the same payload to
 Omitted `workflow` normalizes to `process`. For `infer`, select that workflow
 and omit finishing-only controls such as `exposure_stops`; unsupported fields
 are rejected rather than ignored. The preview reports readiness and plan schema
-for the selected workflow. Existing response envelopes, job routes, SSE,
+for the selected workflow. Existing response envelopes, job routes,
 cancellation, and artifact URLs remain unchanged, including `/v2/jobs`.
+Existing SSE events remain supported alongside the ephemeral `heartbeat` event.
+See the [portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints)
+for heartbeat and same-origin managed artifact delivery behavior.
 
 The immutable `tp.job.lux_depth.bindings.v1` envelope binds `pipeline`,
 `workflow`, and the native photography bindings to the existing admitted

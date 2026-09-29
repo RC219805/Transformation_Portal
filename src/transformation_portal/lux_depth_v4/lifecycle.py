@@ -21,14 +21,12 @@ from transformation_portal.core.execution_plan_v3 import (
     parse_photography_plan,
 )
 from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
-from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
+from transformation_portal.lux_depth_v4.io import PHOTOGRAPHIC_INPUT_SUFFIXES, directory_path, pinned_directory, snapshot
 
 if TYPE_CHECKING:
     from transformation_portal.lux_depth_v4.backend import CarriedDepthPlan
     from transformation_portal.materials_v4.engine import ResponsePolicy
     from transformation_portal.orchestrator.artifact_store.generation import GenerationPublicationLimits, GenerationPublisher
-
-_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw"})
 
 
 @dataclass(frozen=True)
@@ -136,7 +134,7 @@ def _discover_inputs(root: Path) -> list[Path]:
             raise ValueError("Input tree must not contain linked directories")
         for name in names:
             path = directory / name
-            if path.suffix.lower() not in _SUFFIXES:
+            if path.suffix.lower() not in PHOTOGRAPHIC_INPUT_SUFFIXES:
                 continue
             selected.append(path)
             if len(selected) > 1024:

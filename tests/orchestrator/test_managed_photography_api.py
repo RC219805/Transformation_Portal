@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 import app
 from tests.orchestrator.test_photography_adapter import admitted, request_case  # noqa: F401
@@ -79,6 +80,99 @@ def test_preview_keeps_response_shape_and_opt_in_defaults(configured):
     assert preview["normalized_args"]["target_size"] == 518
     assert preview["normalized_args"]["precision"] == "fp32"
     assert preview["argv_preview"] == ""
+
+
+@pytest.mark.parametrize(
+    "pipeline,workflow", [("lux-depth-v5", None), ("lux-depth-v6", None), ("lux-depth", "process"), ("lux-depth", "infer")]
+)
+@pytest.mark.asyncio
+async def test_color_preflight_blocks_preview_and_admission_with_actionable_guidance(
+    configured, monkeypatch, pipeline, workflow
+):
+    configured["pipeline"] = pipeline
+    if workflow:
+        configured["args"]["workflow"] = workflow
+    Image.new("RGB", (14, 14)).save(Path(configured["args"]["input_dir"]) / "photo.jpg", icc_profile=b"unsupported-profile")
+    admission = AsyncMock(side_effect=AssertionError("Invalid color reached dispatch"))
+    monkeypatch.setattr(app, "_create_distributed_job", admission)
+    preview = app._build_config_preview(configured)
+    assert preview["field_errors"] == [
+        {
+            "field": "input_color",
+            "code": "input_color_unsupported_icc",
+            "message": "Unsupported ICC profile. Convert the photographs to sRGB with a profile-aware editor and upload the converted "
+            "copies. If Auto still rejects the exported sRGB profile, select sRGB only for those converted copies. "
+            "An input color override does not convert pixels.",
+        }
+    ]
+    assert preview["normalized_args"]["input_color"] == "auto"
+    result = await app._create_job(configured)
+    assert result.status_code == 400
+    error = json.loads(result.body)["error"]
+    assert error["code"] == "INVALID_ARGUMENT"
+    assert error["details"] == {"field": "input_color", "reason": "input_color_unsupported_icc"}
+    assert "Convert the photographs to sRGB" in error["message"]
+    admission.assert_not_called()
+    assert not Path(configured["args"]["output_dir"]).exists()
+
+
+def test_malformed_photographic_header_returns_safe_preview_error(configured):
+    (Path(configured["args"]["input_dir"]) / "private-name.jpg").write_bytes(b"not-a-jpeg")
+    preview = app._build_config_preview(configured)
+    assert preview["field_errors"][0]["code"] == "input_metadata_invalid"
+    assert "private-name" not in preview["field_errors"][0]["message"]
+
+
+@pytest.mark.parametrize("input_color", ["auto", "srgb"])
+@pytest.mark.asyncio
+async def test_deeply_nested_tiff_metadata_is_rejected_without_http_error_or_dispatch(configured, monkeypatch, input_color):
+    import numpy as np
+    import tifffile
+
+    configured["args"]["input_color"] = input_color
+    description = '{"color_space":' + "[" * 100_000 + "0" + "]" * 100_000 + "}"
+    tifffile.imwrite(
+        Path(configured["args"]["input_dir"]) / "photo.tif",
+        np.zeros((1, 1, 3), np.uint8),
+        photometric="rgb",
+        description=description,
+        metadata=None,
+    )
+    admission = AsyncMock(side_effect=AssertionError("Malformed metadata reached dispatch"))
+    monkeypatch.setattr(app, "_create_distributed_job", admission)
+    preview = app._build_config_preview(configured)
+    assert preview["field_errors"][0]["code"] == "input_metadata_invalid"
+    response = await app._create_job(configured)
+    assert response.status_code == 400
+    assert json.loads(response.body)["error"]["details"] == {"field": "input_dir", "reason": "input_metadata_invalid"}
+    admission.assert_not_called()
+    assert not Path(configured["args"]["output_dir"]).exists()
+
+
+def test_managed_color_preflight_requires_current_tenant_scope(configured, tmp_path, monkeypatch):
+    from transformation_portal.lux_depth_v4 import input_preflight
+    from transformation_portal.portal.photography_jobs import photography_config_preview
+
+    monkeypatch.setattr(app, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(app, "PILOT_TENANT_WORKSPACE_ROOT", tmp_path / "tenants")
+    monkeypatch.setattr(app, "PILOT_TENANT_CAS_ROOT", tmp_path / "cas")
+    monkeypatch.setattr(app, "_PILOT_TENANT_MANAGER", None)
+    tenant = app._pilot_tenant_manager().create_tenant("tenant_a")
+    own_input = tenant.tenant_workspace / "input"
+    own_input.mkdir(parents=True)
+    configured["args"].update(input_dir=str(own_input), output_dir=str(tenant.tenant_workspace / "output"))
+    Image.new("RGB", (14, 14)).save(own_input / "photo.jpg", icc_profile=b"unsupported-profile")
+    policy = app._execution_policy()
+    assert photography_config_preview(configured["args"], policy=policy)["field_errors"] == []
+    checked = photography_config_preview(configured["args"], policy=policy, tenant=tenant)
+    assert checked["field_errors"][0]["code"] == "input_color_unsupported_icc"
+    foreign = tmp_path / "tenants" / "tenant_b" / "input"
+    configured["args"]["input_dir"] = str(foreign)
+    monkeypatch.setattr(
+        input_preflight, "validate_input_directory_colors", lambda *_args, **_kwargs: pytest.fail("Read foreign input")
+    )
+    rejected = photography_config_preview(configured["args"], policy=policy, tenant=tenant)
+    assert rejected["field_errors"][0]["code"] == "invalid_path"
 
 
 @pytest.mark.parametrize("field", ["input_dir", "companions_manifest", "materials_manifest"])

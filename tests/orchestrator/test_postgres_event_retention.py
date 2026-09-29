@@ -292,6 +292,51 @@ async def test_postgres_sse_closes_after_retention_removes_job(postgres_events, 
     assert await asyncio.wait_for(drain(), 1.5) == []
 
 
+async def test_committed_sse_heartbeats_are_observable_without_advancing_or_persisting_cursor(monkeypatch):
+    from types import SimpleNamespace
+
+    import app as orchestrator_app
+    from transformation_portal.orchestrator.storage.base import JobEvent
+
+    job_id = "job-quiet-inference"
+    record = JobRecord(id=job_id, created_at=1, state="running", last_event_at=2)
+
+    class QuietStore:
+        cursors = []
+
+        async def replay_batch(self, _job_id, *, after_seq):
+            self.cursors.append(after_seq)
+            if len(self.cursors) <= 2:
+                return []
+            return [JobEvent(job_id=job_id, seq=43, event_type="done", payload={"state": "succeeded"}, created_at=200)]
+
+        async def get(self, _job_id):
+            return record
+
+        async def append(self, *_args, **_kwargs):
+            pytest.fail("Transport heartbeats must not be persisted")
+
+    async def connected():
+        return False
+
+    times = iter((100.0, 100.0 + orchestrator_app.HEARTBEAT_SECONDS + 1, 100.0 + 2 * orchestrator_app.HEARTBEAT_SECONDS + 2))
+    store = QuietStore()
+    monkeypatch.setattr(orchestrator_app, "_now", lambda: next(times))
+    monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: store)
+    stream = orchestrator_app._committed_job_event_stream(
+        SimpleNamespace(is_disconnected=connected), orchestrator_app.Job(id=job_id, created_at=1, state="running"), store, 42
+    )
+    for _ in range(2):
+        heartbeat = await asyncio.wait_for(anext(stream), 2)
+        assert heartbeat == ": heartbeat\n\nevent: heartbeat\ndata: {}\n\n"
+        assert "id:" not in heartbeat
+    terminal = await asyncio.wait_for(anext(stream), 2)
+    assert terminal.startswith("id: 43\nevent: done\n")
+    assert store.cursors == [42, 42, 42]
+    assert record.last_event_at == 2
+    await stream.aclose()
+
+
 async def test_committed_sse_drains_done_committed_during_terminal_refresh(monkeypatch):
     from types import SimpleNamespace
 
