@@ -17,6 +17,7 @@ from transformation_portal.orchestrator.execution_policy import (
 from transformation_portal.orchestrator.photography_adapter import server_runtime_bindings
 
 if TYPE_CHECKING:
+    from transformation_portal.core.security.tenant import TenantContext
     from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request
 
 
@@ -117,7 +118,59 @@ def _photography_path_errors(paths: dict[str, Path], *, inspect_files: bool) -> 
     return errors
 
 
-def photography_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy) -> dict[str, Any]:
+def _photography_input_color_errors(
+    args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None
+) -> list[dict[str, str]]:
+    """Inspect authorized input headers, preserving tenant and ingest color policy."""
+    from PIL.Image import DecompressionBombError
+
+    from transformation_portal.core.security.tenant import TenantError
+    from transformation_portal.lux_depth_v3.execution_evidence import ArtifactEvidenceError
+    from transformation_portal.lux_depth_v4.input_preflight import validate_input_directory_colors
+    from transformation_portal.lux_depth_v4.photography import InputColorError
+    from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
+
+    root = Path(args["input_dir"])
+    if policy.pilot_enabled:
+        # Internal callers without a verified tenant may normalize arguments,
+        # but cannot authorize a new content probe.
+        if tenant is None:
+            return []
+        roots = tuple(
+            base / tenant.tenant_id
+            for configured in (tenant.workspace_root, tenant.cas_root)
+            for base in (configured.absolute(), configured.resolve())
+        )
+        if ".." in root.parts or not any(root.absolute().is_relative_to(base) for base in roots):
+            return [{"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}]
+        try:
+            policy.tenant_guard(tenant).enforce_path(root)
+        except (TenantError, DispatchAuthorityLost, OSError, ValueError):
+            return [{"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}]
+    try:
+        validate_input_directory_colors(
+            root,
+            input_color=args["input_color"],
+            max_input_bytes=args["max_input_bytes"],
+            max_pixels=args["max_pixels"],
+        )
+    except InputColorError as exc:
+        return [{"field": "input_color", "code": exc.code, "message": str(exc)}]
+    except (OSError, ValueError, TypeError, IndexError, RecursionError, ArtifactEvidenceError, DecompressionBombError):
+        return [
+            {
+                "field": "input_dir",
+                "code": "input_metadata_invalid",
+                "message": "Input metadata could not be validated within the configured limits. "
+                "Check the image files and size limits, or re-export a smaller batch of photographs.",
+            }
+        ]
+    return []
+
+
+def photography_config_preview(
+    args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None = None
+) -> dict[str, Any]:
     errors: list[dict[str, str]] = []
     normalized: dict[str, Any] = dict(args)
     try:
@@ -155,6 +208,8 @@ def photography_config_preview(args: dict[str, Any], *, policy: ExecutionPolicy)
                 ResponsePolicy.from_payload(normalized["materials_policy"])
         except (TypeError, ValueError):
             errors.append({"field": "materials_policy", "code": "invalid_argument", "message": "Invalid materials policy."})
+        if not errors:
+            errors.extend(_photography_input_color_errors(normalized, policy=policy, tenant=tenant))
     if errors:
         normalized = {name: _json_safe_rejected_value(value) for name, value in normalized.items()}
     return {

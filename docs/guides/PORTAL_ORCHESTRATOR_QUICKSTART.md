@@ -60,6 +60,14 @@ uploads, current-preview dispatch checks, and verified artifact review. See
 [Unified HTTP and managed access](../reference/LUX_DEPTH.md#http-portal-and-managed-access)
 for the complete deployment, request, permission, and rollback contract.
 
+Managed Unified, V5, and V6 previews inspect authorized image headers before
+dispatch. Unsupported profiles require a color-managed conversion to sRGB;
+an input-color override only reinterprets pixels. If Auto rejects the exported
+sRGB profile, select sRGB only for the converted copies. Ambiguous TIFF inputs
+require a known source encoding. Failed runs retain their logs in Operate, and
+recognized color failures include recovery guidance without changing the
+`RUNNER_EXIT_NONZERO` error code.
+
 As of PR #1562, the health/readiness routes are backed by typed OpenAPI
 response models. That change documents the contract shape for generated clients;
 it does not change the existing response bodies for `/healthz`, `/ready`, or
@@ -104,6 +112,18 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `GET /v1/jobs/{id}` detailed job status (`logs_tail`, `error`, `artifacts`).
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
+- `GET /v1/jobs/{id}/artifacts/{path}` retrieves an authorized indexed artifact.
+
+Quiet SSE streams also emit an ephemeral `heartbeat` event every 15 seconds
+alongside the heartbeat comment. Heartbeats do not persist or advance replay
+IDs, and indicate transport activity rather than processing progress.
+
+The managed front door requests artifact bytes with
+`X-TP-Artifact-Delivery: stream` to keep previews and downloads on the browser's
+origin. The backend applies the same authentication, tenant, path, and artifact
+inventory checks before streaming. Direct S3 API requests without this header
+retain their signed redirect behavior. CSP and storage access controls remain
+unchanged.
 
 Broker cancellation terminates the worker's subprocess even when it stops
 writing logs. On POSIX, cancellation targets the isolated process group created

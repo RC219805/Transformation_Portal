@@ -84,7 +84,7 @@ export function classifyUpstreamFailureStatus(status, { clientErrorIsConfig = fa
   if (normalizedStatus === 401 || normalizedStatus === 403) {
     return MANAGED_FAILURE_REASON.CONFIG_FAILURE;
   }
-  if (normalizedStatus >= 500) {
+  if (normalizedStatus >= 500 || (clientErrorIsConfig && normalizedStatus === 429)) {
     return MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE;
   }
   if (clientErrorIsConfig && normalizedStatus >= 400) {

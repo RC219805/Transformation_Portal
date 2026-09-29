@@ -975,6 +975,13 @@ export function createDeferredReviewSurfaceApi(host) {
     }
   }
 
+  function _clearInlinePreviews() {
+    for (const image of [els.artifactPreviewSoloImage, els.artifactPreviewImage, els.artifactCompareImage]) {
+      image?.classList.add("hidden");
+      image?.removeAttribute("src");
+    }
+  }
+
   function renderArtifactPanel() {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
@@ -1008,18 +1015,7 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareBtn.setAttribute("aria-pressed", "false");
         els.artifactCompareBtn.removeAttribute("aria-controls");
       }
-      if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.classList.add("hidden");
-        els.artifactPreviewSoloImage.removeAttribute("src");
-      }
-      if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.classList.add("hidden");
-        els.artifactPreviewImage.removeAttribute("src");
-      }
-      if (els.artifactCompareImage) {
-        els.artifactCompareImage.classList.add("hidden");
-        els.artifactCompareImage.removeAttribute("src");
-      }
+      _clearInlinePreviews();
       if (els.artifactCompareStage) {
         els.artifactCompareStage.classList.add("hidden");
         els.artifactCompareStage.setAttribute("aria-hidden", "true");
@@ -1051,18 +1047,7 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareBtn.setAttribute("aria-pressed", "false");
         els.artifactCompareBtn.removeAttribute("aria-controls");
       }
-      if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.classList.add("hidden");
-        els.artifactPreviewSoloImage.removeAttribute("src");
-      }
-      if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.classList.add("hidden");
-        els.artifactPreviewImage.removeAttribute("src");
-      }
-      if (els.artifactCompareImage) {
-        els.artifactCompareImage.classList.add("hidden");
-        els.artifactCompareImage.removeAttribute("src");
-      }
+      _clearInlinePreviews();
       if (els.artifactCompareStage) {
         els.artifactCompareStage.classList.add("hidden");
         els.artifactCompareStage.setAttribute("aria-hidden", "true");
@@ -1177,64 +1162,56 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareImage.removeAttribute("src");
       }
     } else {
-      if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.classList.add("hidden");
-        els.artifactPreviewSoloImage.removeAttribute("src");
-      }
-      if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.classList.add("hidden");
-        els.artifactPreviewImage.removeAttribute("src");
-      }
-      if (els.artifactCompareImage) {
-        els.artifactCompareImage.classList.add("hidden");
-        els.artifactCompareImage.removeAttribute("src");
-      }
+      _clearInlinePreviews();
       _renderArtifactMetadataCard(selected, selectedArtifact);
     }
 
-    const fragment = document.createDocumentFragment();
-    artifacts.forEach((artifact) => {
-      const button = document.createElement("button");
+    artifacts.forEach((artifact, index) => {
+      // Keep loaded and failed image nodes across health/selection renders.
+      // Any changed artifact metadata or job identity gets a fresh button.
+      const key = JSON.stringify([selected.id, artifact]);
+      const current = els.artifactThumbnailRail.children[index];
+      const button = current?._artifactRenderKey === key ? current : document.createElement("button");
       const active = selectedArtifact && artifact.path === selectedArtifact.path;
       button.type = "button";
       button.dataset.artifactPath = _artifactRouteKey(artifact);
       button.setAttribute("aria-pressed", active ? "true" : "false");
       button.setAttribute("aria-label", `${active ? "Selected" : "Select"} ${artifactDisplayLabel(artifact)}: ${artifactLabel(artifact)}`);
       button.tabIndex = active ? 0 : -1;
-      button.className = active
-        ? "rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors"
-        : "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors";
+      button.className = "rounded-2xl border p-3 text-left transition-colors " + (active
+        ? "border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 shadow-sm"
+        : "border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 hover:bg-white/90 dark:hover:bg-slate-800/80");
 
-      const thumbPreviewSrc = artifactIsBrowserPreviewable(artifact)
-        ? artifactPreviewSrc(selected, artifact)
-        : "";
-      if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
-        const thumb = document.createElement("img");
-        thumb.alt = "";
-        thumb.src = thumbPreviewSrc;
-        thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
-        button.appendChild(thumb);
-      } else {
-        const placeholder = document.createElement("div");
-        placeholder.className = "flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400";
-        placeholder.textContent = artifactDisplayLabel(artifact);
-        button.appendChild(placeholder);
+      if (current !== button) {
+        button._artifactRenderKey = key;
+        const thumbPreviewSrc = artifactPreviewSrc(selected, artifact);
+        if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
+          const thumb = document.createElement("img");
+          thumb.alt = "";
+          thumb.src = thumbPreviewSrc;
+          thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
+          button.appendChild(thumb);
+        } else {
+          const placeholder = document.createElement("div");
+          placeholder.className = "flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400";
+          placeholder.textContent = artifactDisplayLabel(artifact);
+          button.appendChild(placeholder);
+        }
+
+        const title = document.createElement("p");
+        title.className = "mt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate";
+        title.textContent = artifactNameParts(artifact).fileName;
+        button.appendChild(title);
+
+        const meta = document.createElement("p");
+        meta.className = "mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate";
+        meta.textContent = `${artifactDisplayLabel(artifact)} • ${formatBytes(artifact.size_bytes)}`;
+        button.appendChild(meta);
+        els.artifactThumbnailRail.insertBefore(button, current || null);
+        current?.remove();
       }
-
-      const title = document.createElement("p");
-      title.className = "mt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate";
-      title.textContent = artifactNameParts(artifact).fileName;
-      button.appendChild(title);
-
-      const meta = document.createElement("p");
-      meta.className = "mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate";
-      meta.textContent = `${artifactDisplayLabel(artifact)} • ${formatBytes(artifact.size_bytes)}`;
-      button.appendChild(meta);
-
-      fragment.appendChild(button);
     });
-    els.artifactThumbnailRail.innerHTML = "";
-    els.artifactThumbnailRail.appendChild(fragment);
+    while (els.artifactThumbnailRail.children.length > artifacts.length) els.artifactThumbnailRail.lastElementChild.remove();
     updateRunCardActions(selected);
     renderConsoleContextRibbon();
     _syncConsoleRoute(true);

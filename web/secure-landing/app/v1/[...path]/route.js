@@ -328,6 +328,11 @@ async function handleProxy(request, { params }) {
       proto: request.nextUrl.protocol.replace(":", "")
     }
   });
+  if (request.method === "GET" && /^\/v1\/jobs\/[^/]+\/artifacts\/.+$/.test(pathname)) {
+    // Keep authenticated artifact bytes on the managed browser origin. The
+    // client cannot select this backend delivery mode through request headers.
+    upstreamHeaders.set("X-TP-Artifact-Delivery", "stream");
+  }
 
   const fetchOptions = {
     method: request.method,

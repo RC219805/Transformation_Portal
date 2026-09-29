@@ -195,6 +195,46 @@ async def test_managed_service_runs_graph_and_publishes_independently_verified_v
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        ("Unsupported ICC profile; provide an explicit input_color correction", "unsupported_icc_profile"),
+        ("Ambiguous input color; provide input_color='srgb' or 'linear_srgb'", "ambiguous_input_color"),
+    ],
+)
+async def test_managed_runner_persists_actionable_known_preprocess_failure(managed, monkeypatch, failure, reason):
+    service, job, repository, _events, _artifacts, records, fence, _prepared = managed
+    await repository.create(job)
+    original_spawn = asyncio.create_subprocess_exec
+
+    async def failed_child(*_argv, **kwargs):
+        return await original_spawn(
+            sys.executable,
+            "-c",
+            "import sys; print(sys.argv[1], file=sys.stderr); sys.exit(1)",
+            "Stage preprocess failed: " + failure,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", failed_child)
+    token = _dispatch_fence.set(fence)
+    try:
+        assert await service.execute(fence.locator, asyncio.Event()) == 1
+    finally:
+        _dispatch_fence.reset(token)
+
+    assert not records.commits
+    assert len(records.finishes) == 1
+    committed = await repository.get(job.id)
+    assert committed.state == "failed"
+    assert committed.error == records.finishes[0]["error"]
+    assert committed.error["code"] == "RUNNER_EXIT_NONZERO"
+    assert committed.error["details"] == {"exit_code": 1, "stage": "preprocess", "reason": reason}
+    assert committed.error["retriable"] is False
+    assert "create a new job" in committed.error["message"]
+
+
+@pytest.mark.asyncio
 async def test_silent_managed_subprocess_is_reaped_on_cancellation(managed, monkeypatch):
     service, job, repository, _events, _artifacts, records, fence, _prepared = managed
     await repository.create(job)

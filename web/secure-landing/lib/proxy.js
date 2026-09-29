@@ -18,6 +18,7 @@ const STRIP_REQUEST_HEADERS = new Set([
   "x-tp-actor",
   "x-tp-actor-email",
   "x-tp-actor-role",
+  "x-tp-artifact-delivery",
   ACTOR_ASSERTION_HEADER
 ]);
 

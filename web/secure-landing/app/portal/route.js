@@ -219,6 +219,9 @@ export async function GET(request) {
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
       headers.set("Content-Type", "text/html; charset=utf-8");
+      if (upstream.status === 429 && upstream.headers.has("retry-after")) {
+        headers.set("Retry-After", upstream.headers.get("retry-after"));
+      }
       return applySecurityHeaders(
         new Response(renderManagedPortalRecoveryPage({
           reason,

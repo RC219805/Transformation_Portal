@@ -2256,6 +2256,12 @@ def _sse(event: str, data: Dict[str, Any], *, event_id: Optional[int | str] = No
     return f"{event_id_line}event: {event}\ndata: {payload}\n\n"
 
 
+def _sse_heartbeat() -> str:
+    # Native EventSource hides comments; the unpersisted event makes transport
+    # liveness observable without allocating or advancing a replay cursor.
+    return ": heartbeat\n\n" + _sse("heartbeat", {})
+
+
 def _error_obj(
     code: str,
     message: str,
@@ -6415,6 +6421,7 @@ def _build_config_preview(
     readiness_snapshot: Optional[Dict[str, Any]] = None,
     archive_index_scan_mode: str = "preview",
     portal_actor: Optional[Mapping[str, Any]] = None,
+    tenant: Optional[TenantContext] = None,
 ) -> Dict[str, Any]:
     pipeline = str(payload.get("pipeline") or "").strip()
     args = payload.get("args")
@@ -6424,15 +6431,15 @@ def _build_config_preview(
         if pipeline == "lux-depth":
             from transformation_portal.portal.lux_depth_jobs import lux_depth_config_preview
 
-            preview = lux_depth_config_preview(args, policy=_execution_policy())
+            preview = lux_depth_config_preview(args, policy=_execution_policy(), tenant=tenant)
         elif pipeline == "lux-depth-v6":
             from transformation_portal.portal.photography_v6_jobs import v6_config_preview
 
-            preview = v6_config_preview(args, policy=_execution_policy())
+            preview = v6_config_preview(args, policy=_execution_policy(), tenant=tenant)
         else:
             from transformation_portal.portal.photography_jobs import photography_config_preview
 
-            preview = photography_config_preview(args, policy=_execution_policy())
+            preview = photography_config_preview(args, policy=_execution_policy(), tenant=tenant)
         preview["next_best_action"] = _preview_next_best_action(
             pipeline=pipeline, errors=preview["field_errors"], warnings=[], readiness_snapshot=preview["readiness"]
         )
@@ -6459,13 +6466,16 @@ async def _build_config_preview_threaded(
     readiness_snapshot: Optional[Dict[str, Any]] = None,
     archive_index_scan_mode: str = "preview",
     portal_actor: Optional[Mapping[str, Any]] = None,
+    tenant: Optional[TenantContext] = None,
 ) -> Dict[str, Any]:
+    tenant_kwargs: Dict[str, Any] = {"tenant": tenant} if tenant is not None else {}
     return await asyncio.to_thread(
         _build_config_preview,
         payload,
         readiness_snapshot=readiness_snapshot,
         archive_index_scan_mode=archive_index_scan_mode,
         portal_actor=portal_actor,
+        **tenant_kwargs,
     )
 
 
@@ -7439,6 +7449,11 @@ def _artifact_known_relative_paths(job: Job) -> set[str]:
 
 def _artifact_response_headers_for_relative_path(relative_path: str) -> Dict[str, str]:
     return _artifact_response_headers(Path(relative_path))
+
+
+def _artifact_stream_requested(request: Optional[Request]) -> bool:
+    """Select delivery transport only; artifact authorization remains unchanged."""
+    return request is not None and request.headers.get("x-tp-artifact-delivery", "").strip().lower() == "stream"
 
 
 def _artifact_mirror_failed_for_path(job: Job, relative_path: str) -> bool:
@@ -9612,6 +9627,7 @@ async def config_preview(request: Request, payload: Dict[str, Any]) -> JSONRespo
         preview = await _build_config_preview_threaded(
             payload,
             portal_actor=_portal_actor_from_request(request),
+            tenant=tenant,
         )
     except ValueError:
         audit_response = await _record_pilot_audit(
@@ -9857,6 +9873,8 @@ async def _create_job(
         preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
         if portal_actor is not None:
             preview_kwargs["portal_actor"] = portal_actor
+        if pilot_tenant is not None:
+            preview_kwargs["tenant"] = pilot_tenant
         preview = await _build_config_preview_threaded(payload, **preview_kwargs)
     except ValueError:
         return _error_response(
@@ -10415,6 +10433,9 @@ async def _get_job_artifact(
         try:
             metadata = await store.head(storage_job_id, requested_relative_path)
             response_headers = _artifact_response_headers_for_relative_path(requested_relative_path)
+            if _artifact_stream_requested(request):
+                stream = await store.open_bytes(storage_job_id, requested_relative_path)
+                return StreamingResponse(stream, media_type=metadata.content_type, headers=response_headers)
             presigned_url = await store.presign_get(
                 storage_job_id,
                 requested_relative_path,
@@ -10446,7 +10467,7 @@ async def _get_job_artifact(
                 details={"job_id": job_id, "reason": "invalid_artifact_path"},
             )
         except ArtifactStoreError as exc:
-            LOGGER.exception("artifact store failed while presigning job %s artifact %s", job_id, requested_relative_path)
+            LOGGER.exception("artifact store failed while serving job %s artifact %s", job_id, requested_relative_path)
             return _error_response(
                 503,
                 code="ARTIFACT_STORE_UNAVAILABLE",
@@ -10743,7 +10764,7 @@ async def _committed_job_event_stream(
             LOGGER.debug("committed job event poll failed for %s", job.id, exc_info=True)
         now = _now()
         if now - last_beat > HEARTBEAT_SECONDS:
-            yield ": heartbeat\n\n"
+            yield _sse_heartbeat()
             last_beat = now
         await asyncio.sleep(1.0)
 
@@ -10858,10 +10879,10 @@ async def _job_events(
                 if await request.is_disconnected():
                     break
 
-                # Heartbeat comment line keeps intermediaries alive.
+                # Keep intermediaries and native EventSource watchdogs alive.
                 now = _now()
                 if now - last_beat > HEARTBEAT_SECONDS:
-                    yield ": heartbeat\n\n"
+                    yield _sse_heartbeat()
                     last_beat = now
 
                 try:
@@ -11423,7 +11444,7 @@ async def _get_committed_artifact(job: Job, relative_path: str, *, tenant: Any, 
             return audit_response
         store = _artifact_store()
         headers = _artifact_response_headers_for_relative_path(relative_path)
-        if store.backend == "s3":
+        if store.backend == "s3" and not _artifact_stream_requested(request):
             url = await store.presign_get(
                 job.id,
                 item["storage_path"],

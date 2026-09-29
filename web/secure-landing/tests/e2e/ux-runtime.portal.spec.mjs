@@ -73,6 +73,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
     bootstrapRequests: 0,
     cancelRequests: 0,
     eventStreamRequests: 0,
+    artifactRequests: [],
+    jobDetailRequests: [],
     jobSubmissions: 0,
     submittedPayloads: [],
     previewPayloads: [],
@@ -257,6 +259,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     }
 
     if (method === "GET" && /^\/v1\/jobs\/[^/]+\/artifacts\//.test(pathname)) {
+      runtime.artifactRequests.push(pathname);
       if (options.previewImageFails) {
         await route.fulfill({ status: 503, body: "Preview temporarily unavailable" });
         return;
@@ -275,6 +278,11 @@ async function installHydratedPortalRoutes(page, options = {}) {
 
     const jobDetailMatch = pathname.match(/^\/v1\/jobs\/([^/]+)$/);
     if (method === "GET" && jobDetailMatch) {
+      runtime.jobDetailRequests.push(decodeURIComponent(jobDetailMatch[1]));
+      if (runtime.jobDetailRequests.length <= Number(options.jobDetailFailureCount || 0)) {
+        await fulfillJson(route, { error: { code: 'unavailable', message: 'Saved job details unavailable.' } }, 503);
+        return;
+      }
       if (options.jobDetailDelayMs) {
         await new Promise((resolve) => setTimeout(resolve, options.jobDetailDelayMs));
       }
@@ -333,7 +341,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
     }
 
     if (pathname === "/v1/jobs" && method === "GET") {
-      await fulfillJson(route, { success: true, data: { jobs } });
+      const listedJobs = options.omitListLogs ? jobs.map(({ logs_tail: _logs, ...job }) => job) : jobs;
+      await fulfillJson(route, { success: true, data: { jobs: listedJobs } });
       return;
     }
 
@@ -653,6 +662,66 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await expect(page.locator('#reviewStatusPrimaryBtn')).toHaveText('Return to Build');
     await expect(page.locator('#reviewStatusSecondaryBtn')).toBeHidden();
     await page.screenshot({ path: test.info().outputPath('failed-job-recovery.png') });
+  });
+
+  for (const [reason, title, message] of [
+    ['unsupported_icc_profile', 'Convert to sRGB before rerun',
+      'Input uses an unsupported ICC profile. Convert the image to sRGB with a profile-aware editor and upload the converted file. If Auto rejects its sRGB profile, select sRGB only for that converted file, then create a new job. Do not relabel Adobe RGB as sRGB.'],
+    ['ambiguous_input_color', 'Confirm input color before rerun',
+      'Input color could not be determined. Select sRGB or linear sRGB only when it matches the source encoding, or convert the image to sRGB with an embedded profile, then create a new job.'],
+  ]) {
+    test(`failed ${reason} jobs show recovery guidance and retrieve saved logs once`, async ({ page }) => {
+      const savedLog = `Stage preprocess failed: ${reason}`;
+      const runtime = await installHydratedPortalRoutes(page, {
+        omitListLogs: true,
+        jobDetailDelayMs: 200,
+        jobs: [{
+          id: 'job-color', pipeline: 'lux-depth', state: 'failed', progress: 0,
+          logs_tail: [savedLog], artifacts: { items: [] },
+          error: { code: 'RUNNER_EXIT_NONZERO', message, details: { exit_code: 1, stage: 'preprocess', reason } },
+          created_at: '2026-08-09T20:00:00Z',
+        }, {
+          id: 'job-unselected', pipeline: 'lux-depth', state: 'failed', progress: 0,
+          logs_tail: ['Other saved logs'], artifacts: { items: [] },
+          created_at: '2026-08-09T19:00:00Z',
+        }],
+      });
+      await gotoHydratedPortal(page, '/portal?view=operate&job=job-color');
+      await expect(page.locator('#selectedJobSummary')).toContainText(message);
+      await expect(page.locator('#selectedJobRecoveryTitle')).toHaveText(title);
+      await expect(page.locator('#selectedJobRecoveryDetail')).toHaveText(message);
+      await page.locator('#inspectorLogsTab').click();
+      await expect(page.locator('#selectedJobLogPreview')).toContainText(savedLog);
+      expect(runtime.jobDetailRequests).toEqual(['job-color']);
+      await page.locator('#inspectorOverviewTab').click();
+      await page.locator('[data-job-id="job-color"][data-action="inspect-job"]').click();
+      await page.locator('#inspectorLogsTab').click();
+      await expect(page.locator('#selectedJobLogPreview')).toContainText(savedLog);
+      expect(runtime.jobDetailRequests).toEqual(['job-color']);
+      for (const width of [390, 1280]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await expectNoHorizontalOverflow(page);
+      }
+    });
+  }
+
+  test("failed saved-log hydration remains explicit and retries on reselection", async ({ page }) => {
+    const runtime = await installHydratedPortalRoutes(page, {
+      omitListLogs: true, jobDetailFailureCount: 1,
+      jobs: [{
+        id: 'job-saved-logs', pipeline: 'lux-depth', state: 'failed', progress: 0,
+        logs_tail: ['Saved preprocess diagnostic'], artifacts: { items: [] },
+        created_at: '2026-08-09T20:00:00Z',
+      }],
+    });
+    await gotoHydratedPortal(page, '/portal?view=operate');
+    await page.locator('#inspectorLogsTab').click();
+    await expect(page.locator('#selectedJobLogPreview')).toContainText('Logs unavailable. Select this run again to retry.');
+    expect(runtime.jobDetailRequests).toHaveLength(1);
+    await page.locator('[data-job-id="job-saved-logs"][data-action="inspect-job"]').click();
+    await page.locator('#inspectorLogsTab').click();
+    await expect(page.locator('#selectedJobLogPreview')).toContainText('Saved preprocess diagnostic');
+    expect(runtime.jobDetailRequests).toHaveLength(2);
   });
 
   test("Build navigation preserves focus, exposes preview details, and never implies approval from the step number", async ({ page }) => {
@@ -1104,8 +1173,16 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
         finished_at: "2026-08-09T20:00:05Z",
         updated_at: "2026-08-09T20:00:05Z",
       };
-      await installHydratedPortalRoutes(page, { jobs: [completedJob], previewImageFails });
+      completedJob.artifacts.items.push({
+        ...completedJob.artifacts.items[0],
+        path: "outputs/secondary.png",
+        relative_path: "outputs/secondary.png",
+        preview_url: "/v1/jobs/job-reviewable/artifacts/outputs%2Fsecondary.png",
+        display_hint: { role: "secondary", label: "Secondary depth", priority: 0 },
+      });
+      const runtime = await installHydratedPortalRoutes(page, { jobs: [completedJob], previewImageFails });
       await gotoHydratedPortal(page, "/portal?view=review");
+      await page.locator('#artifactThumbnailRail [data-artifact-path="outputs/depth-primary.png"]').click();
 
       const preview = page.locator("#artifactPreviewSoloImage");
       if (previewImageFails) {
@@ -1126,8 +1203,57 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
       await expect(page.locator("#artifactThumbnailRail")).toHaveAttribute("role", "group");
       await expect(page.locator("#reviewStatusBanner")).toContainText(/Review|artifact/i);
       await expectNoWcagViolations(page, "Portal Review surface");
+
+      const thumbnails = page.locator("#artifactThumbnailRail img");
+      await expect(thumbnails).toHaveCount(2);
+      await expect.poll(() => thumbnails.evaluateAll((images) => images.every((image) => image.complete))).toBe(true);
+      const thumbnailNodes = await thumbnails.elementHandles();
+      const initialRequests = runtime.artifactRequests.length;
+      for (let index = 0; index < 3; index += 1) {
+        await page.locator('[data-view-link="operate"]').click();
+        await page.locator('[data-view-link="review"]').click();
+      }
+      expect(runtime.artifactRequests).toHaveLength(initialRequests);
+      for (const node of thumbnailNodes) expect(await node.evaluate((image) => image.isConnected)).toBe(true);
+
+      const secondary = page.locator('#artifactThumbnailRail [data-artifact-path="outputs/secondary.png"]');
+      await secondary.click();
+      await expect(secondary).toHaveAttribute("aria-pressed", "true");
+      await expect(preview).toHaveAttribute("alt", "Secondary depth preview: outputs/secondary.png");
+      for (const node of thumbnailNodes) expect(await node.evaluate((image) => image.isConnected)).toBe(true);
     });
   }
+
+  test("Review updates changed artifact metadata and removes stale thumbnails after detail hydration", async ({ page }) => {
+    const artifact = (path, label) => ({
+      path, relative_path: path, artifact_type: "image", media_kind: "image",
+      previewable: true, browser_previewable: true, content_type: "image/png",
+      preview_url: `/v1/jobs/job-changing-artifacts/artifacts/${encodeURIComponent(path)}`,
+      display_hint: { role: "primary", label, priority: 1 },
+    });
+    const job = {
+      id: "job-changing-artifacts", pipeline: "lux-depth-v3", state: "succeeded", progress: 100,
+      artifacts: { items: [artifact("outputs/first.png", "Initial preview"), artifact("outputs/old.png", "Old preview")] },
+      created_at: "2026-08-09T20:00:00Z", finished_at: "2026-08-09T20:00:05Z", logs_tail: [],
+    };
+    await installHydratedPortalRoutes(page, { jobs: [job] });
+    let releaseDetail;
+    const detailGate = new Promise((resolve) => { releaseDetail = resolve; });
+    await page.route("**/v1/jobs/job-changing-artifacts", async (route) => {
+      await detailGate;
+      await fulfillJson(route, { success: true, data: job });
+    });
+    await gotoHydratedPortal(page, "/portal?view=review");
+    const rail = page.locator("#artifactThumbnailRail");
+    await expect(rail.locator("button")).toHaveCount(2);
+    const original = await rail.locator("img").first().elementHandle();
+    job.artifacts.items = [artifact("outputs/first.png", "Updated preview")];
+    releaseDetail();
+    await expect(rail.locator("button")).toHaveCount(1);
+    await expect(rail).toContainText("Updated preview");
+    expect(await original.evaluate((image) => image.isConnected)).toBe(false);
+    await expect(page.locator("#artifactPreviewSoloImage")).toHaveAttribute("alt", "Updated preview preview: outputs/first.png");
+  });
 
   test("Build and profile management execute with valid semantics and protected names", async ({ page }) => {
     const runtime = await installHydratedPortalRoutes(page);

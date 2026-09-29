@@ -38,6 +38,10 @@ legacy plans retain their original output inventory.
 Managed artifact URLs preserve reserved characters in filenames by encoding
 each path segment. Literal filename characters must not be interpreted as URL
 fragments or queries; existing artifact links remain the retrieval authority.
+For authenticated artifact GETs, the front door selects backend streaming so
+previews and downloads stay on the browser's origin. Browser-supplied delivery
+headers are stripped. Backend authorization and verified inventory checks still
+apply; see the [artifact delivery contract](PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
 
 ## Required Environment
 
@@ -310,6 +314,11 @@ disconnects. SSE forwarding preserves event bytes and backpressure, cancels the
 backend stream when its reader disconnects, and propagates backend stream errors
 instead of turning a truncated response into a clean end of stream. Upstream
 error bodies replaced by managed error envelopes are closed before returning.
+
+If the FastAPI shell returns `429` during `/portal` entry, the front door shows
+retryable backend recovery with HTTP `503` and preserves `Retry-After` when
+provided. Managed `/v1/*` responses retain the upstream `429` status, error
+envelope, and retry headers so the portal can apply its existing retry behavior.
 
 ## Portal Workspace
 

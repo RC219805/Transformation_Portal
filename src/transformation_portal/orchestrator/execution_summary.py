@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from transformation_portal.orchestrator.execution_diagnostics import annotate_job_failure
 from transformation_portal.orchestrator.job_execution import ExecutionJob, execution_error
 from transformation_portal.portal import job_artifacts as _artifacts
 from transformation_portal.vlm_captioning.fastvlm_runtime import FASTVLM_CHECKPOINT_DIRS
@@ -211,6 +212,7 @@ def refresh_job_run_summary(job: ExecutionJob, output_dir: Path | None) -> Dict[
     if not job:
         return {}
 
+    annotate_job_failure(job)
     existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
     metadata = _artifacts._resolve_job_run_metadata(output_dir, max_bytes=1024 * 1024)
     summary: Dict[str, Any] = {}

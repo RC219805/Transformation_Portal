@@ -119,6 +119,17 @@ export function createDeferredOperateSurfaceApi(host) {
         };
     }
 
+    function _inputColorFailureRecovery(errorObj) {
+        if (errorObj?.code !== 'RUNNER_EXIT_NONZERO' || errorObj.details?.stage !== 'preprocess') return null;
+        const titles = {
+            unsupported_icc_profile: 'Convert to sRGB before rerun',
+            ambiguous_input_color: 'Confirm input color before rerun'
+        };
+        const title = Object.hasOwn(titles, errorObj.details.reason) ? titles[errorObj.details.reason] : '';
+        const detail = typeof errorObj.message === 'string' ? errorObj.message.trim() : '';
+        return title && detail ? { title, detail } : null;
+    }
+
     function _selectedJobRecoverySnapshot(job) {
         if (!job) {
             return {
@@ -152,6 +163,8 @@ export function createDeferredOperateSurfaceApi(host) {
         }
 
         if (job.state === 'failed' || job.state === 'canceled') {
+            const inputRecovery = job.state === 'failed' ? _inputColorFailureRecovery(job.error) : null;
+            if (artifactCount === 0 && inputRecovery) return inputRecovery;
             return artifactCount > 0
                 ? {
                     title: 'Open review for retained outputs',
@@ -428,7 +441,14 @@ export function createDeferredOperateSurfaceApi(host) {
         if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = false;
         if (els.selectedJobLogPreview) {
             const previewLines = Array.isArray(selected.logs) ? selected.logs.slice(-12) : [];
-            els.selectedJobLogPreview.textContent = previewLines.length > 0 ? previewLines.join('\n') : 'No live logs yet.';
+            const emptyLogs = selected.logsLoadStatus === 'loading'
+                ? 'Loading saved logs…'
+                : selected.logsLoadStatus === 'error'
+                    ? 'Logs unavailable. Select this run again to retry.'
+                    : selected.state === 'running' || selected.state === 'queued'
+                        ? 'No live logs yet.'
+                        : 'No saved logs are available.';
+            els.selectedJobLogPreview.textContent = previewLines.length > 0 ? previewLines.join('\n') : emptyLogs;
         }
 
         renderSelectedJobTimeline(selected);
