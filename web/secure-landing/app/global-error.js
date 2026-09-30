@@ -1,6 +1,6 @@
 "use client";
 
-import { FrontdoorErrorShell } from "../components/frontdoor-error-shell.js";
+import { FrontdoorErrorShell, FRONTDOOR_ERROR_ACTION_STYLE } from "../components/frontdoor-error-shell.js";
 
 export const dynamic = "force-dynamic";
 
@@ -9,20 +9,17 @@ export default function GlobalError({ error, reset }) {
     <html lang="en">
       <body>
         <FrontdoorErrorShell
-          title="The managed front door hit an unexpected failure."
-          message="Retry the request. If the problem persists, inspect the runtime logs for the active front door instance."
+          title="We couldn't load this page."
+          message="Try again, or return to the overview to reopen your workspace. If the problem continues, contact your workspace administrator."
           primaryAction={
             <button
               type="button"
               onClick={() => reset()}
               style={{
-                minHeight: "44px",
-                border: "1px solid #7dd3fc",
-                borderRadius: "8px",
-                padding: "0.8rem 1rem",
-                background: "transparent",
-                color: "#f8fafc",
-                cursor: "pointer"
+                ...FRONTDOOR_ERROR_ACTION_STYLE,
+                borderColor: "#2458d3",
+                background: "#2458d3",
+                color: "#ffffff"
               }}
             >
               Retry

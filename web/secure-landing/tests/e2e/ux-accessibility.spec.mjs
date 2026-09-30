@@ -28,7 +28,7 @@ test.describe(
         await page.goto("/", { waitUntil: "domcontentloaded" });
         await expect(page.locator("body.frontdoor-homepage")).toHaveCSS(
           "background-color",
-          "rgb(2, 6, 23)"
+          "rgb(17, 19, 24)"
         );
         await expectNoHorizontalOverflow(page, `homepage at ${width}px`);
 
@@ -62,6 +62,8 @@ test.describe(
     test("the credential form starts above the fold on desktop and phone", async ({ page }) => {
       for (const viewport of [
         { width: 1280, height: 720 },
+        { width: 320, height: 640 },
+        { width: 375, height: 812 },
         { width: 390, height: 844 },
       ]) {
         await page.setViewportSize(viewport);
@@ -78,6 +80,37 @@ test.describe(
           `username field begins below the ${viewport.height}px viewport`
         ).toBeLessThan(viewport.height - 44);
       }
+    });
+
+    test("workspace preview is labelled and public entry does not download decorative video", async ({ page }) => {
+      const videoRequests = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/video/dna-loop.mp4")) videoRequests.push(request.url());
+      });
+      await page.goto("/", { waitUntil: "networkidle" });
+      await expect(page.locator('[data-ui="homepage-workspace-preview"]')).toContainText("Illustrative workspace");
+      await page.goto("/login", { waitUntil: "networkidle" });
+      expect(videoRequests).toEqual([]);
+    });
+
+    test("recovery and missing-page surfaces reflow with clear next actions", async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 740 });
+      await page.goto("/login?error=csrf", { waitUntil: "domcontentloaded" });
+      await expect(page.locator('[data-ui="login-error-banner"]')).toBeVisible();
+      await expect(page.locator('[data-ui="login-retry-link"]')).toBeVisible();
+      await expectNoHorizontalOverflow(page, "login recovery at 320px");
+      await expectNoWcagViolations(page, "login recovery");
+
+      const response = await page.goto("/missing-workspace-page", { waitUntil: "domcontentloaded" });
+      expect(response?.status()).toBe(404);
+      await expect(page.locator('[data-ui="frontdoor-error-shell"]')).toBeVisible();
+      const recoveryShellFits = await page.locator('[data-ui="frontdoor-error-shell"]').evaluate(
+        (shell) => shell.scrollWidth <= shell.clientWidth
+      );
+      expect(recoveryShellFits, "the fixed recovery surface should not scroll horizontally").toBe(true);
+      await expect(page.getByRole("link", { name: "Return home" })).toHaveAttribute("href", "/");
+      await expectNoHorizontalOverflow(page, "missing page at 320px");
+      await expectNoWcagViolations(page, "missing page");
     });
 
     test("reduced motion and forced-colors modes preserve the public entry path", async ({ page }) => {

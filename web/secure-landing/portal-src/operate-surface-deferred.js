@@ -38,6 +38,8 @@ export function createDeferredOperateSurfaceApi(host) {
         formatTransportLabel,
         getReadableError,
         jobOutcomeSummary,
+        jobProgressSnapshot,
+        renderJobProgress,
         normalizeRunSummary,
         renderConsoleContextRibbon,
         renderReviewSurfaces,
@@ -48,12 +50,6 @@ export function createDeferredOperateSurfaceApi(host) {
     let queueRenderScheduled = false;
     let queuedReviewSurfaceRefresh = false;
     let lastQueueDeltaSnapshot = null;
-
-    function _jobProgressPercent(job) {
-        // A terminal success can arrive before the final progress event.
-        if (job.state === 'succeeded') return 100;
-        return Math.max(0, Math.min(100, Number(job.progress) || 0));
-    }
 
     function _announceQueueDelta() {
         if (!els.queueDeltaStatus) return;
@@ -99,23 +95,23 @@ export function createDeferredOperateSurfaceApi(host) {
             return {
                 tone: 'warning',
                 title: 'Queue unavailable',
-                detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.',
-                action: 'Next action: restore backend connectivity so recent runs and live transport can recover.'
+                detail: 'The backend is offline. Recent runs cannot be recovered.',
+                action: 'Next action: restore backend connectivity.'
             };
         }
         if (state.jobsLoadStatus === 'error') {
             return {
                 tone: 'error',
                 title: 'Queue recovery needs attention',
-                detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.',
-                action: 'Next action: confirm backend health, then refresh the workspace to rehydrate recent runs.'
+                detail: 'Recent runs could not be recovered.',
+                action: 'Next action: check backend health, then refresh the workspace.'
             };
         }
         return {
             tone: 'neutral',
             title: 'No runs yet',
-            detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.',
-            action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'
+            detail: 'Dispatch a run from Build to begin.',
+            action: 'Next action: open Build to prepare a run.'
         };
     }
 
@@ -134,14 +130,14 @@ export function createDeferredOperateSurfaceApi(host) {
         if (!job) {
             return {
                 title: 'Select or dispatch a run',
-                detail: 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.'
+                detail: 'Select a run in Queue or prepare one in Build.'
             };
         }
 
         if (job.cancelPending) {
             return {
                 title: 'Cancel request pending',
-                detail: 'The Portal is waiting for the backend to confirm cancellation. The run remains active until that response succeeds.'
+                detail: 'The run remains active until the backend confirms cancellation.'
             };
         }
 
@@ -151,7 +147,7 @@ export function createDeferredOperateSurfaceApi(host) {
         if (job.reconnectBlocked) {
             return {
                 title: 'Restore authentication',
-                detail: 'Authentication must be restored before live transport can reconnect and freshness can recover.'
+                detail: 'Restore access to reconnect live updates.'
             };
         }
 
@@ -171,8 +167,10 @@ export function createDeferredOperateSurfaceApi(host) {
                     detail: 'Review the indexed outputs before deciding whether this run needs a retry.'
                 }
                 : {
-                    title: 'Inspect failure before rerun',
-                    detail: 'No reviewable outputs were indexed. Use the run state and warning context above before retrying.'
+                    title: job.state === 'canceled' ? 'Run canceled' : 'Inspect failure before rerun',
+                    detail: job.state === 'canceled'
+                        ? 'No outputs were indexed before cancellation. Prepare another run in Build.'
+                        : 'No outputs were indexed. Inspect the failure in Logs before returning to Build.'
                 };
         }
 
@@ -188,22 +186,31 @@ export function createDeferredOperateSurfaceApi(host) {
                 };
         }
 
-        if (job.state === 'running' || job.state === 'queued') {
+        if (job.state === 'queued') {
+            return {
+                title: 'Waiting for a worker',
+                detail: 'The run is queued. Follow its status here; avoid dispatching duplicate work.'
+            };
+        }
+
+        if (job.state === 'running') {
             return artifactCount > 0
                 ? {
                     title: 'Stay with the live run',
                     detail: 'Fresh artifacts are already indexing. Keep Operate open until review context stabilizes.'
                 }
                 : {
-                    title: 'Wait for indexed outputs',
-                    detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+                    title: 'Processing your run',
+                    detail: 'Outputs may arrive after the whole batch completes. Open Logs for activity. A live stream proves connectivity, not processing progress.'
                 };
         }
 
         if (job.state === 'partial') {
             return {
-                title: 'Open review for partial outputs',
-                detail: 'Review the indexed artifacts and warning context before deciding whether to rerun the failed inputs.'
+                title: artifactCount > 0 ? 'Open review for partial outputs' : 'Inspect the partial run',
+                detail: artifactCount > 0
+                    ? 'Review the indexed artifacts and warning context before deciding whether to rerun the failed inputs.'
+                    : 'No outputs are indexed. Check completed inputs in Logs before rerunning.'
             };
         }
 
@@ -213,8 +220,8 @@ export function createDeferredOperateSurfaceApi(host) {
                 detail: 'Outputs and provenance are ready. Move to Review when you want compare and artifact actions.'
             }
             : {
-                title: 'Wait for indexed outputs',
-                detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+                title: 'Inspect the completed run',
+                detail: 'The run finished without indexed outputs. Check Logs and Run Details before rerunning.'
             };
     }
 
@@ -328,7 +335,7 @@ export function createDeferredOperateSurfaceApi(host) {
             }
             if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Recovering selected run context';
             if (els.selectedJobRecoveryDetail) {
-                els.selectedJobRecoveryDetail.textContent = 'The latest warning, artifact freshness, and recovery action will repopulate here when queue hydration finishes.';
+                els.selectedJobRecoveryDetail.textContent = 'Run status and recovery actions will appear when recent runs load.';
             }
             renderSelectedJobRecoveryActions(null);
             if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
@@ -343,8 +350,8 @@ export function createDeferredOperateSurfaceApi(host) {
             if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = 'Awaiting dispatch';
             if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = '0 indexed';
             if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = 'Inactive';
-            if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = '0%';
-            if (els.selectedJobProgressBar) els.selectedJobProgressBar.value = 0;
+            if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = 'No run selected';
+            renderJobProgress(els.selectedJobProgressBar, jobProgressSnapshot(null));
             if (els.selectedJobMetaLine) els.selectedJobMetaLine.textContent = 'Queue idle. Select a run to inspect transport, recency, and output state.';
             if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
             if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
@@ -402,11 +409,9 @@ export function createDeferredOperateSurfaceApi(host) {
         if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = String(selected.pipeline || 'unknown');
         if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = `${artifactCount} indexed`;
         if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = `${streamStatus} • ${elapsedLabel}`;
-        if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${_jobProgressPercent(selected)}%`;
-        if (els.selectedJobProgressBar) {
-            els.selectedJobProgressBar.max = 100;
-            els.selectedJobProgressBar.value = _jobProgressPercent(selected);
-        }
+        const progress = jobProgressSnapshot(selected);
+        if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = progress.label;
+        renderJobProgress(els.selectedJobProgressBar, progress);
         if (els.selectedJobMetaLine) {
             els.selectedJobMetaLine.textContent = `${titleCaseToken(displayState, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
         }
@@ -423,7 +428,7 @@ export function createDeferredOperateSurfaceApi(host) {
                     ? readableError
                     : outcomeSummary
                         ? `${outcomeSummary}.`
-                        : `Operators can now read ${titleCaseToken(displayState, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
+                        : `${titleCaseToken(displayState, 'job')}: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
         }
         const recovery = _selectedJobRecoverySnapshot(selected);
         if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
@@ -530,7 +535,7 @@ export function createDeferredOperateSurfaceApi(host) {
 
             const safePipeline = String(job.pipeline || 'unknown');
             const safeId = String(job.id || 'job_unknown');
-            const safeProgress = _jobProgressPercent(job);
+            const progress = jobProgressSnapshot(job);
             const cancelableState = job.state === 'running' || job.state === 'queued';
             const showCancel = _portalPrivilegesReady() && cancelableState;
             const canCancel = showCancel && !job.cancelPending;
@@ -642,16 +647,14 @@ export function createDeferredOperateSurfaceApi(host) {
             progressRow.className = 'flex items-center gap-2 mt-1';
 
             const progressEl = document.createElement('progress');
-            progressEl.max = 100;
-            progressEl.value = safeProgress;
+            renderJobProgress(progressEl, progress);
             progressEl.className = 'flex-1';
             progressEl.setAttribute('aria-label', `${safePipeline} job ${safeId} progress`);
-            progressEl.setAttribute('aria-valuetext', `${safeProgress}%`);
             progressRow.appendChild(progressEl);
 
             const progressText = document.createElement('span');
-            progressText.className = 'text-[10px] font-medium text-slate-500 dark:text-slate-400 w-8 text-right';
-            progressText.textContent = `${safeProgress}%`;
+            progressText.className = 'text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate shrink-0 text-right';
+            progressText.textContent = progress.label;
             progressRow.appendChild(progressText);
             li.appendChild(progressRow);
 
@@ -670,7 +673,8 @@ export function createDeferredOperateSurfaceApi(host) {
                 safePipeline,
                 safeId,
                 displayState,
-                safeProgress,
+                progress.value,
+                progress.waiting,
                 artifactCount,
                 errorLine,
                 outcomeSummary,

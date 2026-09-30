@@ -169,11 +169,10 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
     <main class="shell">
       <video
         class="hero-video"
-        autoplay
         muted
         loop
         playsinline
-        preload="metadata"
+        preload="none"
         disablePictureInPicture
         disableRemotePlayback
         poster=""
@@ -201,13 +200,23 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
                 className: "brand-asset"
               })}
             </span>
-            <span class="brand-subtitle">Transformation Portal operator console</span>
+            <span class="brand-subtitle">Transformation Portal</span>
           </a>
+          <aside class="login-introduction" aria-labelledby="login-introduction-title">
+            <p class="eyebrow">A space for considered work</p>
+            <h2 id="login-introduction-title">Every frame.<br />Every decision.<br /><span>In one place.</span></h2>
+            <p>Prepare your inputs, follow each run, and review the result with its evidence close at hand.</p>
+            <ol class="login-workflow" aria-label="Your workspace workflow">
+              <li><span>01</span> Build</li>
+              <li><span>02</span> Operate</li>
+              <li><span>03</span> Review</li>
+            </ol>
+          </aside>
           <div class="card card--login" data-ui="login-card">
             <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
-            <h1 data-ui="login-title">Continue to the operator console.</h1>
+            <h1 data-ui="login-title">Welcome to your workspace.</h1>
             <p class="lede" data-ui="login-lede">
-              Sign in after managed access is verified. The operator console remains closed whenever that boundary is unavailable.
+              Sign in after managed access is verified to continue to Transformation Portal.
             </p>
             ${errorMessage ? `<div class="login-status-stack" data-ui="login-status-stack">
               <div class="banner" data-ui="login-error-banner" role="alert">
@@ -235,13 +244,13 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
               </label>
               <p id="login-form-status" class="login-helper" data-ui="login-helper">
                 ${entryState.formEnabled
-                  ? "Use your operator credentials. Successful sign-in rotates the session before portal handoff."
+                  ? "Use the operator credentials provided for your workspace."
                   : escapeHtml(nextStepDetail)}
               </p>
               <div class="login-actions" data-ui="login-actions">
                 <button type="submit" data-ui="login-submit"${disabledControlAttributes}>Sign in</button>
                 ${canStartFreshSignIn ? `<a class="login-secondary-link" href="${escapeHtml(cleanLoginHref)}" data-ui="login-retry-link">${normalizedErrorCode === "access" || normalizedErrorCode === "access_unavailable" ? "Retry managed access" : normalizedErrorCode === "csrf" ? "Start a fresh sign-in" : "Retry sign-in"}</a>` : ""}
-                <a class="login-secondary-link" href="/" data-ui="login-secondary-link">Review public proof surface</a>
+                <a class="login-secondary-link" href="/" data-ui="login-secondary-link">← Back to the overview</a>
               </div>
             </form>
             <details class="login-secondary-details" data-ui="login-sequence">

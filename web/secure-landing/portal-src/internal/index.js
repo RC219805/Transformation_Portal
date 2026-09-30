@@ -12,3 +12,4 @@ export * from "./photography.js";
 export * from "./photography-v6.js";
 export * from "./photography-unified.js";
 export * from "./latest-request.js";
+export * from "./job-progress.js";

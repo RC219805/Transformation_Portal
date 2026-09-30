@@ -4,58 +4,67 @@ const SHELL_STYLE = {
   overflow: "auto",
   display: "grid",
   placeItems: "center",
-  padding: "2rem",
-  background: "linear-gradient(180deg, #06111d 0%, #081523 48%, #06111d 100%)",
-  color: "#f8fafc",
-  fontFamily: "system-ui, sans-serif",
+  padding: "1.25rem",
+  background: "#111318",
+  color: "#f5f6f8",
+  fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   boxSizing: "border-box",
 };
 
 const PANEL_STYLE = {
-  width: "min(100%, 32rem)",
-  border: "1px solid rgba(148, 163, 184, 0.24)",
-  borderRadius: "8px",
-  background: "rgba(8, 15, 29, 0.94)",
-  boxShadow: "0 20px 44px rgba(2, 6, 23, 0.38)",
-  padding: "1.5rem",
+  boxSizing: "border-box",
+  width: "min(100%, 34rem)",
+  border: "1px solid #343942",
+  borderRadius: "12px",
+  background: "#191c22",
+  padding: "clamp(1.5rem, 5vw, 3rem)",
 };
 
 const META_STYLE = {
   margin: 0,
-  fontSize: "0.75rem",
-  letterSpacing: "0.12em",
+  fontSize: "0.6875rem",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
-  color: "#93c5fd",
+  color: "#94b6ff",
 };
 
 const TITLE_STYLE = {
-  margin: "0.75rem 0 0",
-  fontSize: "2rem",
-  lineHeight: 1.1,
+  margin: "1rem 0 0",
+  fontSize: "clamp(1.8rem, 4vw, 2.5rem)",
+  fontWeight: 500,
+  letterSpacing: "-0.04em",
+  lineHeight: 1.15,
 };
 
 const COPY_STYLE = {
-  margin: "0.9rem 0 0",
-  color: "#cbd5e1",
-  lineHeight: 1.6,
+  margin: "1rem 0 0",
+  color: "#b6bbc5",
+  fontSize: "0.9375rem",
+  lineHeight: 1.75,
 };
 
 const ACTION_ROW_STYLE = {
   display: "flex",
   flexWrap: "wrap",
   gap: "0.75rem",
-  marginTop: "1.5rem",
+  marginTop: "2rem",
 };
 
-const SECONDARY_ACTION_STYLE = {
-  minHeight: "44px",
+export const FRONTDOOR_ERROR_ACTION_STYLE = {
+  boxSizing: "border-box",
+  minHeight: "46px",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "1px solid rgba(148, 163, 184, 0.24)",
+  border: "1px solid #343942",
   borderRadius: "8px",
   padding: "0.8rem 1rem",
-  color: "#cbd5e1",
+  color: "#f5f6f8",
+  background: "transparent",
+  font: "inherit",
+  fontSize: "0.875rem",
+  fontWeight: 500,
+  cursor: "pointer",
   textDecoration: "none",
 };
 
@@ -64,21 +73,23 @@ export function FrontdoorErrorShell({
   message,
   primaryAction = null,
   reference = "",
+  status = "Recovery",
 }) {
   return (
-    <main style={SHELL_STYLE}>
-      <section style={PANEL_STYLE}>
+    <main style={SHELL_STYLE} data-ui="frontdoor-error-shell">
+      <section style={PANEL_STYLE} aria-labelledby="frontdoor-error-title">
         <p style={META_STYLE}>Dynamic Neural Access</p>
-        <h1 style={TITLE_STYLE}>{title}</h1>
+        <p style={{ ...META_STYLE, marginTop: "2.5rem", color: "#b6bbc5" }}>{status}</p>
+        <h1 id="frontdoor-error-title" style={TITLE_STYLE}>{title}</h1>
         <p style={COPY_STYLE}>{message}</p>
         <div style={ACTION_ROW_STYLE}>
           {primaryAction}
-          <a href="/" style={SECONDARY_ACTION_STYLE}>
+          <a href="/" style={FRONTDOOR_ERROR_ACTION_STYLE}>
             Return home
           </a>
         </div>
         {reference ? (
-          <p style={{ ...COPY_STYLE, fontSize: "0.9rem", color: "#94a3b8" }}>
+          <p style={{ ...COPY_STYLE, fontSize: "0.75rem", overflowWrap: "anywhere" }}>
             Reference: {reference}
           </p>
         ) : null}

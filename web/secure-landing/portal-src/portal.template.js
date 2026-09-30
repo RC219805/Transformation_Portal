@@ -1550,17 +1550,17 @@ function _compareSurfaceCopy(selectedArtifact, compareArtifact, compareEnabled) 
     if (compareEnabled) {
         return {
             ribbonValue: 'Compare on',
-            ribbonMeta: 'Paired comparison is pinned in the URL-backed review context.',
-            summaryTitle: 'Comparing paired outputs',
-            summaryDetail: `${primaryLabel} is pinned against ${compareLabel} in this review context.`,
+            ribbonMeta: 'Selected and comparison artifacts are shown side by side.',
+            summaryTitle: 'Side-by-side comparison',
+            summaryDetail: `Selected: ${primaryLabel}. Comparison: ${compareLabel}.`,
         };
     }
 
     return {
         ribbonValue: 'Pair available',
-        ribbonMeta: 'Paired comparison is available for the current artifact selection.',
+        ribbonMeta: 'Compare this artifact with another available output.',
         summaryTitle: 'Paired comparison available',
-        summaryDetail: `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`,
+        summaryDetail: `Compare ${primaryLabel} with ${compareLabel} side by side.`,
     };
 }
 
@@ -1682,7 +1682,7 @@ function _operatorRecoveryActionSnapshot(context) {
                 _operatorAction('retry_status_check', 'Retry Status Check', {
                     jobId: context.jobId,
                     tone: 'info',
-                    detail: 'Retry bootstrap and backend status checks without expanding the route contract.'
+                    detail: 'Check access and backend status again.'
                 })
             ])
         };
@@ -1707,7 +1707,7 @@ function _operatorRecoveryActionSnapshot(context) {
                 })
                 : _operatorAction('return_to_build', 'Return to Build', {
                     tone: 'info',
-                    detail: 'Return to the build surface while access recovery completes.'
+                    detail: 'Return to Build while access recovers.'
                 })
         ])
     };
@@ -1723,22 +1723,22 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
         return {
             title: state.backendOk ? 'Prepare the next governed dispatch' : 'Restore backend connectivity',
             detail: state.backendOk
-                ? 'Open Build to continue the active draft. The last selected run will stay actionable when one exists.'
-                : 'Connectivity must recover before preview-backed dispatch and live review can continue.',
+                ? 'Open Build to continue your draft.'
+                : 'Restore connectivity to preview, dispatch, and review runs.',
             tone: state.backendOk ? 'info' : 'warning',
             primary: _operatorAction('open_build', 'Open Build', {
                 tone: 'info',
-                detail: 'Open Build without changing any route or API contract.'
+                detail: 'Continue your draft in Build.'
             }),
             secondary: _compactOperatorActions([
                 _operatorAction('resume_draft', 'Resume Draft', {
                     tone: 'info',
-                    detail: 'Resume the current draft and keep the active step focused.'
+                    detail: 'Resume your current step.'
                 }),
                 !state.backendOk
                     ? _operatorAction('retry_status_check', 'Retry Status Check', {
                         tone: 'warning',
-                        detail: 'Retry bootstrap and backend checks while the portal is offline.'
+                        detail: 'Check access and backend status again.'
                     })
                     : null
             ])
@@ -1749,8 +1749,8 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
         return {
             title: context.artifactCount > 0 ? 'Live run already has early outputs' : 'Stay with the live run',
             detail: context.artifactCount > 0
-                ? 'Operate stays primary while early artifacts index. Review remains one click away when you need the retained outputs.'
-                : 'Use Operate to watch progress, warnings, and transport freshness until the first artifacts arrive.',
+                ? 'Follow the run in Operate or inspect early outputs in Review.'
+                : 'Follow progress, warnings, and connection status in Operate.',
             tone: _jobSurfaceTone(job),
             primary: _operatorAction('stay_in_operate', 'Stay in Operate', {
                 jobId: context.jobId,
@@ -1762,7 +1762,7 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
                     ? _operatorAction('open_early_artifacts', 'Open Early Artifacts', {
                         jobId: context.jobId,
                         tone: 'warning',
-                        detail: 'Open Review using the current selected run and artifact route state.'
+                        detail: 'Review this run’s early outputs.'
                     })
                     : null,
                 context.heroArtifact
@@ -1770,7 +1770,7 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
                         jobId: context.jobId,
                         artifactPath: _artifactRouteKey(context.heroArtifact),
                         tone: 'info',
-                        detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                        detail: 'Inspect this run’s primary artifact.'
                     })
                     : null
             ])
@@ -1781,30 +1781,30 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
         return {
             title: context.reviewableOutputs ? 'Retained outputs are ready for triage' : 'Return to Build after triage',
             detail: context.reviewableOutputs
-                ? 'Open the retained outputs before rerunning failed inputs or rebuilding the next dispatch.'
-                : 'No reviewable outputs were retained. Return to Build after confirming the latest run context.',
+                ? 'Review retained outputs before preparing another run.'
+                : 'No outputs were retained. Check the result, then return to Build.',
             tone: context.reviewableOutputs ? 'warning' : 'blocked',
             primary: context.reviewableOutputs
                 ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
                     jobId: context.jobId,
                     tone: 'warning',
-                    detail: 'Open Review for the retained outputs of the selected run.'
+                    detail: 'Review this run’s retained outputs.'
                 })
                 : _operatorAction('return_to_build', 'Return to Build', {
                     tone: 'info',
-                    detail: 'Return to the build surface to prepare the next dispatch.'
+                    detail: 'Prepare another run in Build.'
                 }),
             secondary: _compactOperatorActions([
                 context.reviewableOutputs ? _operatorAction('return_to_build', 'Return to Build', {
                     tone: 'info',
-                    detail: 'Return to the build surface to prepare the next dispatch.'
+                    detail: 'Prepare another run in Build.'
                 }) : null,
                 context.reviewableOutputs && context.heroArtifact
                     ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
                         jobId: context.jobId,
                         artifactPath: _artifactRouteKey(context.heroArtifact),
                         tone: 'warning',
-                        detail: 'Open the highest-ranked retained artifact without changing the current route.'
+                        detail: 'Inspect this run’s primary artifact.'
                     })
                     : null
             ])
@@ -1815,8 +1815,8 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
         return {
             title: context.reviewableOutputs ? 'Cached outputs remain reviewable' : 'Restore backend connectivity',
             detail: context.reviewableOutputs
-                ? 'Live status is stale until connectivity returns, but retained artifacts stay available for operator review.'
-                : 'Live status is stale until connectivity returns. Retry the portal status check before trusting this run state.',
+                ? 'Retained outputs remain available while live status is offline.'
+                : 'Live status is offline. Retry the status check before relying on this result.',
             tone: 'warning',
             primary: context.reviewableOutputs
                 ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
@@ -1827,38 +1827,38 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
                 : _operatorAction('retry_status_check', 'Retry Status Check', {
                     jobId: context.jobId,
                     tone: 'warning',
-                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                    detail: 'Check access and backend status again.'
                 }),
             secondary: _compactOperatorActions([
                 _operatorAction('retry_status_check', 'Retry Status Check', {
                     jobId: context.jobId,
                     tone: 'warning',
-                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                    detail: 'Check access and backend status again.'
                 }),
                 _operatorAction('return_to_build', 'Return to Build', {
                     tone: 'info',
-                    detail: 'Return to the build surface while connectivity recovers.'
+                    detail: 'Return to Build while connectivity recovers.'
                 })
             ])
         };
     }
 
     return {
-        title: context.reviewableOutputs ? 'Review context is ready' : 'Awaiting indexed outputs',
+        title: context.reviewableOutputs ? 'Review context is ready' : 'Inspect the completed run',
         detail: context.reviewableOutputs
-            ? 'Open Review, pop the latest indexed artifact, or toggle compare without expanding the current route contract.'
-            : 'This run is selected, but no indexed outputs are available yet. Stay with the selected job context until they arrive.',
+            ? 'Inspect outputs in Review or compare available artifacts.'
+            : 'This run finished without indexed outputs. Check Logs and Run Details in Operate before rerunning.',
         tone: context.reviewableOutputs ? 'ready' : 'info',
         primary: context.reviewableOutputs
             ? _operatorAction('open_review', 'Open Review', {
                 jobId: context.jobId,
                 tone: 'ready',
-                detail: 'Open Review using the selected run and current route-backed compare preference.'
+                detail: 'Review this run’s outputs.'
             })
             : _operatorAction('stay_in_operate', 'Stay in Operate', {
                 jobId: context.jobId,
                 tone: 'info',
-                detail: 'Keep the selected run pinned in Operate until outputs arrive.'
+                detail: 'Inspect Logs and Run Details for the completed run.'
             }),
         secondary: _compactOperatorActions([
             context.heroArtifact
@@ -1866,14 +1866,14 @@ function _operatorActionRailSnapshot(jobOverride = undefined) {
                     jobId: context.jobId,
                     artifactPath: _artifactRouteKey(context.heroArtifact),
                     tone: 'ready',
-                    detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                    detail: 'Inspect this run’s primary artifact.'
                 })
                 : null,
             context.compareCandidate
                 ? _operatorAction('toggle_compare', 'Toggle Compare', {
                     jobId: context.jobId,
                     tone: context.compareEnabled ? 'ready' : 'info',
-                    detail: 'Toggle compare using the current artifact route and compare=1 contract.'
+                    detail: 'Switch between single and comparison views.'
                 })
                 : null
         ])
@@ -2803,7 +2803,7 @@ function renderBuildStepPulse(payload = null) {
     _setSummaryCard(els.buildPulsePreviewCard, null, els.buildPulsePreview, els.buildPulsePreviewMeta, previewSummary);
     _setSummaryCard(els.buildPulseDispatchCard, null, els.buildPulseDispatch, els.buildPulseDispatchMeta, {
         value: String(nextAction?.label || 'Review dispatch posture'),
-        meta: String(nextAction?.detail || 'The next operator action stays pinned here while the draft changes.'),
+        meta: String(nextAction?.detail || 'Preview this draft to see the next step.'),
         tone: String(nextAction?.tone || 'info')
     });
 }
@@ -2834,7 +2834,7 @@ function renderConsoleContextRibbon() {
             value: selected ? String(selected.id || 'unknown') : 'No job selected',
             meta: selected
                 ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
-                : 'Choose a run in operate or review to pin context here.',
+                : 'Select a run in Operate or Review.',
             tone: selected ? _jobSurfaceTone(selected) : 'info'
         });
         _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
@@ -2848,13 +2848,13 @@ function renderConsoleContextRibbon() {
             value: selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection',
             meta: selectedArtifact
                 ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • paired comparison available' : ' • single artifact context'}`
-                : 'Review context will show the active artifact path here.',
+                : 'Select an artifact to see its path.',
             tone: selectedArtifact ? 'ready' : 'info'
         });
         _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
             label: 'Compare',
             value: selected ? compareCopy.ribbonValue : 'No compare pair',
-            meta: selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.',
+            meta: selected ? compareCopy.ribbonMeta : 'Select an artifact to compare.',
             tone: selected && compareEnabled ? 'ready' : 'info'
         });
         renderOperatorActionRail();
@@ -2863,6 +2863,7 @@ function renderConsoleContextRibbon() {
 
     const currentPayload = generatePayload();
     const activeJob = _latestActiveJob();
+    const activeJobProgress = portalInternals.jobProgressSnapshot(activeJob);
     const reviewJob = _latestReviewableJob();
     const activeJobTone = activeJob ? _jobSurfaceTone(activeJob) : (state.backendOk ? 'info' : 'blocked');
     const reviewJobTone = reviewJob ? _jobSurfaceTone(reviewJob) : 'info';
@@ -2877,7 +2878,7 @@ function renderConsoleContextRibbon() {
     _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
         label: 'Live lane',
         value: activeJob
-            ? `${titleCaseToken(activeJob.state, 'Unknown')} • ${Math.max(0, Math.min(100, Number(activeJob.progress) || 0))}%`
+            ? activeJobProgress.waiting ? activeJobProgress.label : `${titleCaseToken(activeJob.state, 'Unknown')} • ${activeJobProgress.label}`
             : state.backendOk
                 ? 'No live run'
                 : 'Backend offline',
@@ -2885,7 +2886,7 @@ function renderConsoleContextRibbon() {
             ? `${String(activeJob.pipeline || 'unknown')} • ${_jobFreshnessLabel(activeJob)}`
             : state.backendOk
                 ? 'Dispatch from Build to watch live progress here.'
-                : 'Restore the orchestrator connection to unlock preview-backed dispatch.',
+                : 'Restore connectivity before dispatch.',
         tone: activeJobTone
     });
     _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
@@ -2901,7 +2902,7 @@ function renderConsoleContextRibbon() {
     _setSummaryCard(els.contextRibbonCard3, els.contextRibbonCard3Label, els.contextRibbonArtifact, els.contextRibbonArtifactMeta, {
         label: 'Dispatch lane',
         value: String(nextAction?.label || 'Review dispatch posture'),
-        meta: String(nextAction?.detail || 'Preview guidance will summarize the clearest next step for this draft.'),
+        meta: String(nextAction?.detail || 'Preview this draft to see the next step.'),
         tone: String(nextAction?.tone || 'info')
     });
     _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
@@ -4626,7 +4627,7 @@ function renderPresetIntelligence(payload) {
         els.presetDescription.textContent = String(
             preset.description ||
             (state.pipeline === 'lux-depth-v3'
-                ? 'Preset metadata unavailable while offline.'
+                ? 'Preset details are unavailable.'
                 : 'Archive governance preset.')
         );
     }
@@ -5825,7 +5826,7 @@ function _appendStagedUploadFact(container, label, value, tone = 'neutral') {
     )}`;
 
     const heading = document.createElement('p');
-    heading.className = 'text-[10px] font-bold uppercase tracking-[0.18em] opacity-75';
+    heading.className = 'text-[10px] font-bold uppercase tracking-[0.18em]';
     heading.textContent = label;
     card.appendChild(heading);
 
@@ -6456,6 +6457,7 @@ function _resetArtifactActionButtons() {
     }
     if (els.downloadArtifactBtn) {
         els.downloadArtifactBtn.disabled = true;
+        els.downloadArtifactBtn.removeAttribute('aria-label');
         delete els.downloadArtifactBtn.dataset.url;
         delete els.downloadArtifactBtn.dataset.filename;
     }
@@ -6696,6 +6698,8 @@ function _createDeferredOperateSurfaceHost() {
         formatTransportLabel,
         getReadableError,
         jobOutcomeSummary,
+        jobProgressSnapshot: portalInternals.jobProgressSnapshot,
+        renderJobProgress: portalInternals.renderJobProgress,
         normalizeRunSummary,
         renderConsoleContextRibbon,
         renderReviewSurfaces,
@@ -8105,7 +8109,7 @@ function _normalizeNextBestAction(rawAction) {
         action,
         field,
         label: label || 'Review dispatch posture',
-        detail: detail || 'Preview guidance will summarize the clearest next step for this draft.',
+        detail: detail || 'Preview this draft to see the next step.',
         tone: ['blocked', 'warning', 'ready', 'info'].includes(tone) ? tone : 'info'
     };
 }
@@ -8222,7 +8226,7 @@ function renderNextBestAction(payload = null, preview = null) {
     const action = _effectiveNextBestAction(payload, preview);
     els.nextBestActionLabel.textContent = String(action?.label || 'Review dispatch posture');
     els.nextBestActionDetail.textContent = String(
-        action?.detail || 'Preview guidance will summarize the clearest next step for this draft.'
+        action?.detail || 'Preview this draft to see the next step.'
     );
     const tone = String(action?.tone || 'info').trim().toLowerCase();
     els.nextBestActionTone.dataset.tone = tone || 'info';

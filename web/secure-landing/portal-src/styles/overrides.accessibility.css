@@ -92,3 +92,10 @@ body[data-console-view="operate"] .portal-context-head {
     box-shadow: none;
   }
 }
+
+/* portal-override-owner: mobile-form-readability */
+@media (max-width: 767px) {
+  #build-shell :is(input, select, textarea) {
+    font-size: 16px;
+  }
+}

@@ -296,14 +296,13 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "bg-slate-900/60": {
-      "owner": "static",
+      "owner": "review-only",
       "sources": [
-        "portal.html",
         "public/portal-assets/portal-review.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
+      "reason": "observed in deferred review surface JavaScript"
     },
     "bg-slate-950/72": {
       "owner": "static",
@@ -1066,14 +1065,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "dark:hover:text-white": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "dark:shadow-soft-dark": {
       "owner": "static",
       "sources": [
         "portal.html"
@@ -1889,14 +1880,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "lg:col-span-12": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "lg:col-span-5": {
       "owner": "static",
       "sources": [
@@ -1995,14 +1978,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "max-h-[320px]": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "max-h-[92vh]": {
       "owner": "static",
       "sources": [
@@ -2046,14 +2021,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "max-w-6xl": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "max-w-7xl": {
       "owner": "static",
       "sources": [
         "portal.html"
@@ -2321,14 +2288,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "object-contain": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "object-cover": {
       "owner": "review-only",
       "sources": [
@@ -2367,15 +2326,6 @@
       "reason": "observed in deferred review surface JavaScript"
     },
     "opacity-60": {
-      "owner": "static",
-      "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "opacity-75": {
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
@@ -2757,14 +2707,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "rounded-[1.75rem]": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "rounded-2xl": {
       "owner": "static",
       "sources": [
@@ -2912,7 +2854,8 @@
     "shrink-0": {
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
@@ -3125,14 +3068,6 @@
       "sources": [
         "portal.html",
         "web/secure-landing/portal-src/profile-surface-deferred.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "text-3xl": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
@@ -3389,14 +3324,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "text-slate-950": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "text-sm": {
       "owner": "static",
       "sources": [
@@ -3646,14 +3573,6 @@
       "owner": "static",
       "sources": [
         "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "w-8": {
-      "owner": "static",
-      "sources": [
-        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"

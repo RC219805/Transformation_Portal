@@ -229,7 +229,9 @@ const internalBuild = await bundleText(PORTAL_INTERNAL_ENTRY, {
 });
 const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY, {
   format: "esm",
+  keepNames: true,
   metafile: emitMetafile,
+  minifyIdentifiers: true,
   minifySyntax: true,
   minifyWhitespace: true
 });
