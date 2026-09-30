@@ -674,7 +674,7 @@ export function createDeferredReviewSurfaceApi(host) {
     title.className = "text-[12px] font-semibold text-slate-800 dark:text-slate-100";
     title.textContent = artifact
       ? artifactLabel(artifact)
-      : "Select a completed run to bring the primary review artifact into focus here.";
+      : _artifactEmptyStateCopy(job).title;
     els.artifactMetadataCard.appendChild(title);
 
     const detail = document.createElement("p");
@@ -682,7 +682,7 @@ export function createDeferredReviewSurfaceApi(host) {
     if (!job) {
       detail.textContent = "Preview, provenance, and next review actions will appear here after you choose a reviewable job.";
     } else if (!artifact) {
-      detail.textContent = "This run has not indexed a reviewable artifact yet. Stay with the inspector for progress, transport, and freshness context.";
+      detail.textContent = _artifactEmptyStateCopy(job).detail;
     } else {
       detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || "binary"} • ${formatBytes(artifact.size_bytes)}.`;
     }
@@ -699,12 +699,16 @@ export function createDeferredReviewSurfaceApi(host) {
       detail: "Select a job to review related warnings, completion state, and output readiness.",
       action: "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
     }),
-    partial_reviewable: ({ outcomeSummary, freshnessLabel }) => ({
+    partial_reviewable: ({ outcomeSummary, freshnessLabel, artifactCount }) => ({
       visible: true,
       tone: "warning",
       title: "Run partially completed",
-      detail: outcomeSummary ? `${outcomeSummary}. Updated ${freshnessLabel}.` : "Some inputs failed, but outputs remain reviewable.",
-      action: "Next action: open review for the retained outputs before rerunning failed inputs."
+      detail: outcomeSummary ? `${outcomeSummary}. Updated ${freshnessLabel}.` : artifactCount > 0
+        ? "Some inputs failed, but outputs remain reviewable."
+        : "This partial run has no indexed outputs.",
+      action: artifactCount > 0
+        ? "Next action: review the retained outputs before rerunning failed inputs."
+        : "Next action: open Logs in Operate to inspect the partial result before preparing a rerun."
     }),
     failed_reviewable: ({ readableError, artifactCount, freshnessLabel }) => ({
       visible: true,
@@ -775,12 +779,16 @@ export function createDeferredReviewSurfaceApi(host) {
     }),
     ready: ({ artifact, artifactCount, outcomeSummary, freshnessLabel }) => ({
       visible: true,
-      tone: "ready",
-      title: artifact ? "Outputs ready for review" : "Run ready for review",
+      tone: artifactCount > 0 ? "ready" : "info",
+      title: artifactCount > 0 ? (artifact ? "Outputs ready for review" : "Run ready for review") : "Run completed without indexed outputs",
       detail: outcomeSummary
         ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-        : `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} indexed and ready for operator review.`,
-      action: "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
+        : artifactCount > 0
+          ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} indexed and ready for operator review.`
+          : "The run has finished, but no outputs are available to review.",
+      action: artifactCount > 0
+        ? "Next action: select an artifact to inspect its preview and provenance."
+        : "Next action: open Logs and Run Details in Operate to check the result and requested outputs."
     })
   });
 
@@ -919,24 +927,34 @@ export function createDeferredReviewSurfaceApi(host) {
     if (job.state === "running" || job.state === "queued") {
       return {
         tone: "info",
-        title: "Outputs are still arriving",
-        detail: "This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.",
+        title: job.state === "queued" ? "Run is waiting to start" : "Processing your run",
+        detail: job.state === "queued"
+          ? "The run is queued. Outputs become available after a worker begins processing."
+          : "No outputs are indexed yet. Some runs publish them after the whole batch completes. Open Logs in Operate for reported activity.",
         action: "Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives."
       };
     }
-    if (job.state === "failed" || job.state === "canceled") {
+    if (job.state === "failed" || job.state === "canceled" || job.state === "partial") {
       return {
         tone: "warning",
         title: "No reviewable outputs indexed",
         detail: "This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.",
-        action: "Next action: inspect the selected run in Operate or decide whether the failed run should be retried."
+        action: "Next action: open Logs in Operate to inspect the result before preparing another run."
+      };
+    }
+    if (job.state === "offline") {
+      return {
+        tone: "warning",
+        title: "Reconnect to check outputs",
+        detail: "No outputs are cached for this run. Its current result is unavailable while the backend is offline.",
+        action: "Next action: restore backend connectivity, then check this run in Operate."
       };
     }
     return {
       tone: "neutral",
-      title: "No indexed artifacts yet",
-      detail: "Artifacts will appear here when the selected run finishes indexing its review outputs.",
-      action: "Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review."
+      title: "Run completed without indexed outputs",
+      detail: "The run has finished, but no outputs are available to review.",
+      action: "Next action: open Logs and Run Details in Operate to check the result and requested outputs."
     };
   }
 
@@ -1041,7 +1059,7 @@ export function createDeferredReviewSurfaceApi(host) {
       setTextContentIfChanged(els.emptyArtifactAction, emptyCopy.action);
       els.artifactThumbnailRail.innerHTML = "";
       if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = "No artifact selected";
-      if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = "Review surfaces will populate here when the selected run indexes outputs.";
+      if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = emptyCopy.detail;
       if (els.artifactCompareBtn) {
         els.artifactCompareBtn.classList.add("hidden");
         els.artifactCompareBtn.setAttribute("aria-pressed", "false");
@@ -1118,6 +1136,9 @@ export function createDeferredReviewSurfaceApi(host) {
       els.downloadArtifactBtn.disabled = !downloadUrl;
       els.downloadArtifactBtn.dataset.url = downloadUrl;
       els.downloadArtifactBtn.dataset.filename = selectedArtifact ? artifactNameParts(selectedArtifact).fileName : "";
+      els.downloadArtifactBtn.setAttribute("aria-label", selectedArtifact
+        ? `Download full file: ${els.downloadArtifactBtn.dataset.filename} (${formatBytes(selectedArtifact.size_bytes)})`
+        : "Download");
     }
     if (els.copyArtifactPathBtn) {
       els.copyArtifactPathBtn.disabled = !selectedArtifact;
@@ -1144,11 +1165,11 @@ export function createDeferredReviewSurfaceApi(host) {
       _renderInlinePreview(els.artifactPreviewImage, selectedPreviewSrc, selected, selectedArtifact,
         `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`
       );
-      if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
+      if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = `Selected · ${artifactLabel(selectedArtifact)}`;
       _renderInlinePreview(els.artifactCompareImage, comparePreviewSrc, selected, selectedArtifact,
         `${artifactDisplayLabel(compareCandidate)} comparison preview: ${artifactLabel(compareCandidate)}`
       );
-      if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
+      if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = `Comparison · ${artifactLabel(compareCandidate)}`;
     } else if (selectedPreviewAvailable) {
       _renderInlinePreview(els.artifactPreviewSoloImage, selectedPreviewSrc, selected, selectedArtifact,
         `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`

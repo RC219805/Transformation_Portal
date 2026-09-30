@@ -569,10 +569,19 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
               queue: rect("#queue-shell"),
               inspector: rect("#selected-job-shell"),
               artifacts: rect("#artifacts-shell"),
+              overview: rect("#mission-shell"),
+              draft: rect("#intelligence-shell"),
+              overviewStats: rect("#overviewStatsRow"),
             };
           });
           expect(geometry.bodyMargin).toBe("0px");
           expect(geometry.panelBox).toBe("border-box");
+          if (view === "overview") {
+            for (const panel of [geometry.overview, geometry.draft]) {
+              expect(Math.abs(panel.x - geometry.overviewStats.x)).toBeLessThan(2);
+              expect(Math.abs(panel.width - geometry.overviewStats.width)).toBeLessThan(2);
+            }
+          }
           if (width >= 1280) {
             expect(geometry.topbar.height).toBeLessThan(120);
             if (view === "build") expect(geometry.preset.bottom).toBeLessThan(720);
@@ -591,6 +600,13 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
             await expect(page.locator('#buildStepNextBtn')).toHaveCSS('background-image', /linear-gradient/);
           }
           if (width === 390 || width === 1280) {
+            if (view === "operate" || view === "review") {
+              // The shared deferred inspector inherits theme color after its first
+              // paint. Sample contrast only once its idle badge has settled.
+              await expect(page.locator("#selectedJobStateBadge")).toHaveCSS(
+                "color", theme === "dark" ? "rgb(241, 245, 249)" : "rgb(15, 23, 42)"
+              );
+            }
             await expectNoWcagViolations(page, `${view}, ${width}px, ${theme}`);
             await page.screenshot({ path: test.info().outputPath(`${view}-${theme}-${width}.png`) });
           }
@@ -634,6 +650,58 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     }
   }
 
+  for (const width of [640, 1920]) {
+    test(`workspace navigation reflows and keeps keyboard focus visible at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await installHydratedPortalRoutes(page);
+      await gotoHydratedPortal(page);
+
+      for (const [view, headingSelector] of [
+        ["build", "#buildStepTitle"],
+        ["operate", "#operateViewTitle"],
+        ["review", "#reviewViewTitle"],
+        ["overview", "#overviewViewTitle"],
+      ]) {
+        const link = page.locator(`[data-view-link="${view}"]`);
+        await link.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.locator("body")).toHaveAttribute("data-console-view", view);
+        await expect(link).toHaveAttribute("aria-current", "page");
+        const heading = page.locator(headingSelector);
+        await expect(heading).toBeFocused();
+        await expectNoHorizontalOverflow(page, `${view} at ${width}px`);
+        const geometry = await heading.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const header = document.querySelector('[data-ui="portal-topbar"]').getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom, headerBottom: header.bottom, height: window.innerHeight };
+        });
+        expect(geometry.top, `${view} heading should clear the fixed header`).toBeGreaterThanOrEqual(geometry.headerBottom - 1);
+        expect(geometry.bottom, `${view} heading should remain in view`).toBeLessThanOrEqual(geometry.height + 1);
+        await page.screenshot({ path: test.info().outputPath(`${view}-keyboard-${width}.png`) });
+      }
+    });
+  }
+
+  test("phone Build fields remain readable through each configuration step", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installHydratedPortalRoutes(page);
+    await gotoHydratedPortal(page, "/portal?view=build");
+
+    for (const step of [1, 2, 3]) {
+      await page.locator(`#buildStepTab${step}`).click();
+      const fields = await page.locator('#build-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), #build-shell select, #build-shell textarea').evaluateAll((elements) =>
+        elements.filter((element) => element.checkVisibility()).map((element) => ({
+          id: element.id,
+          fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+        }))
+      );
+      expect(fields.length, `Build step ${step} should expose editable fields`).toBeGreaterThan(0);
+      expect(fields.filter((field) => field.fontSize < 16), "Phone fields should avoid small text and focus zoom").toEqual([]);
+      await expectNoHorizontalOverflow(page, `phone Build step ${step}`);
+    }
+  });
+
   for (const [state, progress, displayedProgress] of [["succeeded", 0, 100], ["running", 37, 37], ["failed", 42, 42]]) {
     test(`Operate shows consistent progress for ${state} jobs`, async ({ page }) => {
       await installHydratedPortalRoutes(page, { jobs: [{
@@ -647,6 +715,75 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
       await expect(page.locator('#queue-shell progress')).toHaveAttribute('aria-valuetext', `${displayedProgress}%`);
     });
   }
+
+  test("Operate distinguishes waiting progress and restores measured progress when selection changes", async ({ page }) => {
+    const cases = [
+      { id: "job-queued", state: "queued", progress: 0, label: "Queued", waiting: true },
+      { id: "job-running", state: "running", progress: 0, label: "In progress", waiting: true },
+      { id: "job-measured", state: "running", progress: 37, label: "37%", waiting: false },
+      { id: "job-complete", state: "succeeded", progress: 0, label: "100%", waiting: false },
+      { id: "job-failed-zero", state: "failed", progress: 0, label: "Failed", waiting: false, progressState: "unavailable" },
+      { id: "job-canceled-zero", state: "canceled", progress: 0, label: "Canceled", waiting: false, progressState: "unavailable" },
+    ];
+    await installHydratedPortalRoutes(page, {
+      keepEventStreamOpen: true,
+      jobs: cases.map(({ id, state, progress }) => ({
+        id, state, progress, pipeline: "lux-depth-v3", logs_tail: [],
+        artifacts: { items: [] }, created_at: "2026-08-09T20:00:00Z",
+      })),
+    });
+    await gotoHydratedPortal(page, "/portal?view=operate&job=job-queued");
+
+    for (const job of [...cases, cases[1], cases[2]]) {
+      const row = page.locator(`[data-ui="queue-row"][data-job-id="${job.id}"]`);
+      await row.locator('[data-action="inspect-job"]').click();
+      await expect(page.locator("#selectedJobProgressText")).toHaveText(job.label);
+      for (const progress of [page.locator("#selectedJobProgressBar"), row.locator("progress")]) {
+        await expect(progress).toHaveAttribute("aria-valuetext", job.label);
+        await expect(progress).toHaveAttribute("data-progress-state", job.progressState || (job.waiting ? "waiting" : "measured"));
+        if (job.waiting) {
+          await expect(progress).not.toHaveAttribute("value", /.+/);
+          await expect(progress).toHaveJSProperty("position", -1);
+        } else {
+          await expect(progress).toHaveAttribute("value", String(job.state === "succeeded" ? 100 : job.progress));
+          await expect(progress).toHaveJSProperty("position", job.state === "succeeded" ? 1 : job.progress / 100);
+        }
+      }
+    }
+  });
+
+  test("completed jobs without outputs explain the result and retain access to logs", async ({ page }) => {
+    await installHydratedPortalRoutes(page, { jobs: [{
+      id: "job-no-outputs", pipeline: "lux-depth-v3", state: "succeeded", progress: 0,
+      logs_tail: ["[INFO] Run finished; no output files requested."], artifacts: { items: [] },
+      created_at: "2026-08-09T20:00:00Z", finished_at: "2026-08-09T20:00:06Z",
+    }] });
+    await gotoHydratedPortal(page, "/portal?view=operate");
+    await expect(page.locator("#selectedJobRecoveryTitle")).toHaveText("Inspect the completed run");
+    await expect(page.locator("#selectedJobRecoveryDetail")).toContainText("finished without indexed outputs");
+    await expect(page.locator("#selectedJobRecoveryDetail")).toContainText("Logs and Run Details");
+    await page.locator("#inspectorLogsTab").click();
+    await expect(page.locator("#selectedJobLogPreview")).toContainText("no output files requested");
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator("#reviewStatusTitle")).toHaveText("Run completed without indexed outputs");
+    await expect(page.locator("#emptyArtifactTitle")).toHaveText("Run completed without indexed outputs");
+    await expect(page.locator("#reviewStatusAction")).toContainText("Logs and Run Details");
+    await expect(page.locator("#emptyArtifactDetail")).toContainText("The run has finished");
+  });
+
+  test("canceled jobs without outputs show cancellation recovery instead of failure", async ({ page }) => {
+    await installHydratedPortalRoutes(page, { jobs: [{
+      id: "job-canceled-empty", pipeline: "lux-depth-v3", state: "canceled", progress: 0,
+      logs_tail: [], artifacts: { items: [] }, created_at: "2026-08-09T20:00:00Z",
+    }] });
+    await gotoHydratedPortal(page, "/portal?view=operate");
+    await expect(page.locator("#selectedJobRecoveryTitle")).toHaveText("Run canceled");
+    await expect(page.locator("#selectedJobRecoveryDetail")).toContainText("before cancellation");
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator("#reviewStatusTitle")).toHaveText("Run canceled before review outputs were ready");
+    await expect(page.locator("#emptyArtifactTitle")).toHaveText("No reviewable outputs indexed");
+    await expect(page.locator("#emptyArtifactDetail")).not.toContainText("failure");
+  });
 
   test("failed jobs without outputs expose one recovery action per surface", async ({ page }) => {
     await installHydratedPortalRoutes(page, { jobs: [{
@@ -1215,6 +1352,41 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
       }
       expect(runtime.artifactRequests).toHaveLength(initialRequests);
       for (const node of thumbnailNodes) expect(await node.evaluate((image) => image.isConnected)).toBe(true);
+
+      if (!previewImageFails) {
+        const compare = page.locator("#artifactCompareBtn");
+        await compare.focus();
+        await page.keyboard.press("Enter");
+        await expect(compare).toHaveAttribute("aria-pressed", "true");
+        await expect(page.locator("#artifactPreviewPrimaryCaption")).toHaveText("Selected · outputs/depth-primary.png");
+        await expect(page.locator("#artifactCompareCaption")).toHaveText("Comparison · outputs/secondary.png");
+        await expect(page.locator("#reviewCompareTitle")).toHaveText("Side-by-side comparison");
+        for (const theme of ["light", "dark"]) {
+          await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+          for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            await expect(page.locator("#artifactPreviewImage")).toBeVisible();
+            await expect(page.locator("#artifactCompareImage")).toBeVisible();
+            const artboard = await page.locator("#artifactPreviewStage").evaluate((element) => ({
+              background: getComputedStyle(element).backgroundColor.match(/\d+/g).slice(0, 3).map(Number),
+              height: element.getBoundingClientRect().height,
+            }));
+            expect(Math.max(...artboard.background) - Math.min(...artboard.background), "Review surrounds photographs with neutral gray").toBeLessThanOrEqual(1);
+            expect(artboard.height, "Review provides a substantial image area").toBeGreaterThanOrEqual(280);
+            await expectNoHorizontalOverflow(page, `populated comparison ${theme} at ${width}px`);
+            await expectNoWcagViolations(page, `populated comparison ${theme} at ${width}px`);
+            await page.locator("#artifactPreviewStage").scrollIntoViewIfNeeded();
+            await expect.poll(() => page.locator("#artifactPreviewImage").evaluate((image) =>
+              image.checkVisibility({ contentVisibilityAuto: true })
+            ), { message: "Scrolled Review preview has left content-visibility deferral" }).toBe(true);
+            await page.screenshot({ path: test.info().outputPath(`review-comparison-${theme}-${width}.png`) });
+          }
+        }
+        await compare.focus();
+        await page.keyboard.press("Enter");
+        await expect(compare).toHaveAttribute("aria-pressed", "false");
+        await expect(page.locator("#artifactPreviewSoloImage")).toBeVisible();
+      }
 
       const secondary = page.locator('#artifactThumbnailRail [data-artifact-path="outputs/secondary.png"]');
       await secondary.click();
@@ -1908,6 +2080,97 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
 });
 
 
+for (const width of [390, 1280]) {
+  test(`@portal-browser photography journey uploads, configures, processes, reviews, and downloads at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const jobs = [];
+    const runtime = await installHydratedPortalRoutes(page, { jobs, stagedUploads: true });
+    const jobId = "job-dispatched";
+    const previewUrl = `/v1/jobs/${jobId}/artifacts/photography/preview.png`;
+    const downloadUrl = `/v1/jobs/${jobId}/artifacts/photography/delivery.tif`;
+    const downloadBytes = await readFile(path.resolve(SPEC_DIR, "../../../../tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_Pool_UltraQuality.tif"));
+    const artifact = {
+      name: "delivery.tif", path: "photography/delivery.tif", relative_path: "photography/delivery.tif",
+      artifact_type: "image", media_kind: "image", previewable: true, browser_previewable: false,
+      content_type: "image/tiff", mime_type: "image/tiff", size_bytes: downloadBytes.length,
+      url: downloadUrl, download_url: downloadUrl, preview_url: previewUrl, preview_mime_type: "image/png",
+      display_hint: { priority: 1200, label: "Photographic delivery", role: "primary_preview" },
+    };
+    let finishProcessing;
+    const processingGate = new Promise((resolve) => { finishProcessing = resolve; });
+    await page.route(`**/v1/jobs/${jobId}/events`, async (route) => {
+      await processingGate;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream; charset=utf-8",
+        headers: { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" },
+        body: [
+          `event: state\ndata: ${JSON.stringify({ state: "running" })}\n\n`,
+          `event: log\ndata: ${JSON.stringify({ line: "[INFO] Photographic outputs published." })}\n\n`,
+          `event: done\ndata: ${JSON.stringify({ state: "succeeded", exit_code: 0, artifacts: { items: [artifact] } })}\n\n`,
+        ].join(""),
+      });
+    });
+    await page.route(`**${downloadUrl}`, (route) => route.continue());
+
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await page.locator("#pipelineSelect").selectOption("lux-depth");
+    await page.locator("#buildStepTab2").click();
+    const chooserPromise = page.waitForEvent("filechooser");
+    await page.locator('[data-ui="staged-upload-pick-files"]').click();
+    await (await chooserPromise).setFiles({
+      name: "photograph.png", mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+    });
+    await expect(page.locator("#stagedUploadSummary")).toContainText("Staged 1 file");
+    await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/batch-photography/input");
+    await page.locator("#outputDir").fill("/tenant/output/photography-journey");
+    await page.locator("#buildStepTab3").click();
+    await page.locator("#v6InputColor").selectOption("srgb");
+    await page.locator("#v6ExposureStops").fill("0.25");
+    await page.locator("#v6ExposureStops").blur();
+    await page.locator("#buildStepTab4").click();
+    await expect(page.locator("#runJobBtn")).toBeEnabled();
+    await expectNoHorizontalOverflow(page, `dispatch at ${width}px`);
+    await page.locator("#runJobBtn").click();
+    await expect(page.locator("#runJobBtn")).toHaveText("Open Live Job");
+    expect(runtime.stagedUploadRequests).toHaveLength(1);
+    expect(runtime.jobSubmissions).toBe(1);
+    const submitted = runtime.submittedPayloads[0];
+    expect(submitted.pipeline).toBe("lux-depth");
+    expect(submitted.args).toMatchObject({
+      workflow: "process", input_dir: "/tenant/uploads/batch-photography/input",
+      output_dir: "/tenant/output/photography-journey", input_color: "srgb", exposure_stops: 0.25,
+    });
+    expect(runtime.previewPayloads.filter((payload) => payload.pipeline === "lux-depth").at(-1)).toEqual(submitted);
+    await page.locator("#runJobBtn").click();
+    await expect(page.locator("body")).toHaveAttribute("data-console-view", "operate");
+    await expect(page.locator("#selectedJobProgressBar")).toHaveAttribute("data-progress-state", "waiting");
+
+    jobs.push({
+      id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+      logs_tail: ["[INFO] Photographic outputs published."], artifacts: { items: [artifact] },
+      created_at: "2026-08-09T20:00:00Z", finished_at: "2026-08-09T20:00:06Z",
+    });
+    finishProcessing();
+    await expect(page.locator("#selectedJobProgressText")).toHaveText("100%");
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator("#artifactSelectionTitle")).toContainText("delivery.tif");
+    await expect(page.locator("#artifactPreviewSoloImage")).toHaveAttribute("src", previewUrl);
+    await expect.poll(() => page.locator("#artifactPreviewSoloImage").evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(page.locator("#downloadArtifactBtn")).toHaveAttribute("data-url", downloadUrl);
+    await expectNoHorizontalOverflow(page, `review at ${width}px`);
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#downloadArtifactBtn").click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("delivery.tif");
+    expect(new URL(download.url()).pathname).toBe(downloadUrl);
+    expect(await readFile(await download.path())).toEqual(downloadBytes);
+    await page.screenshot({ path: test.info().outputPath(`photography-journey-${width}.png`) });
+  });
+}
+
 for (const selection of ["files", "folder"]) {
   test(`@portal-browser V5 staged uploads accept Choose ${selection} and refresh the draft`, async ({ page }, testInfo) => {
     const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true, stagedUploadBatchId: "upload-v5-fixture" });
@@ -2126,6 +2389,7 @@ test("@portal-browser V5 Review displays the verified PNG proxy and retains the 
   await expect(downloadButton).toBeEnabled();
   await expect(downloadButton).toHaveAttribute("data-url", deliveryUrl);
   await expect(downloadButton).toHaveAttribute("data-filename", "delivery.tif");
+  await expect(downloadButton).toHaveAttribute("aria-label", "Download full file: delivery.tif (4.0 KB)");
   // Exercise the actual button -> download-anchor binding. Artifact byte serving
   // is independently covered by managed service tests; avoid a browser download
   // transport dependency on this intercepted, synthetic response fixture.

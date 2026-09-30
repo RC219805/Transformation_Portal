@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 export default function NotFound() {
   return (
     <FrontdoorErrorShell
-      title="The requested front door route was not found."
-      message="Check the managed entry path and retry from the secure landing surface."
+      status="404 · Page not found"
+      title="This page couldn't be found."
+      message="The requested front door route was not found. Check the address, or return to the overview to continue."
     />
   );
 }

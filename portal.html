@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)" />
     <title>Transformation Portal — Orchestrator</title>
     <link rel="preload" as="font" type="font/woff2" crossorigin href="__PORTAL_FONT_SANS_URL__" />
     <link rel="stylesheet" href="__PORTAL_CSS_URL__" />
@@ -55,7 +55,7 @@ Contract notes:
     <!-- 1. HEADER                                   -->
     <!-- ============================================ -->
     <header class="portal-topbar sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar" data-modal-inert-target>
-        <div class="portal-topbar__inner mx-auto max-w-7xl">
+        <div class="portal-topbar__inner mx-auto">
             <div class="portal-topbar__brand">
                 <div class="portal-brand-mark h-12 w-12 rounded-2xl text-sm font-black tracking-[0.24em] shadow-soft">
                     <img
@@ -79,7 +79,7 @@ Contract notes:
                     />
                 </div>
                 <div class="flex min-w-0 flex-col">
-                    <p class="section-kicker">Operator Console</p>
+                    <p class="section-kicker">Photography workspace</p>
                     <h1 class="mt-0.5 text-lg font-extrabold tracking-tight" aria-label="Transformation Portal">
                         <span class="topbar-title-full" aria-hidden="true">Transformation Portal</span>
                         <span class="topbar-title-short" aria-hidden="true">Portal</span>
@@ -106,13 +106,13 @@ Contract notes:
         </div>
     </header>
 
-    <main id="main-content" tabindex="-1" class="portal-main mx-auto max-w-7xl outline-none" data-modal-inert-target>
+    <main id="main-content" tabindex="-1" class="portal-main mx-auto outline-none" data-modal-inert-target>
         <div class="portal-shell-grid">
         <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 lg:mb-0 rounded-2xl px-3 py-3" data-ui="view-switcher">
             <div class="workspace-rail-copy">
                 <p class="section-kicker">Workspace</p>
                 <p class="workspace-rail-text">
-                    Overview, build, live operation, and review in one quiet shell.
+                    From source to finished image.
                 </p>
                 <p class="workspace-shortcut-hint" data-ui="workspace-shortcut-hint">
                     Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
@@ -121,31 +121,31 @@ Contract notes:
             <div class="workspace-rail-links" aria-label="Console views">
                 <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" aria-current="page" aria-keyshortcuts="1">
                     <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Overview</span>
+                        <svg class="workspace-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="workspace-link-label">Overview</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">1</span>
                     </span>
-                    <span class="workspace-link-meta">Status, active jobs, and next action.</span>
+                    <span class="workspace-link-meta">Your workspace at a glance.</span>
                 </a>
                 <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" aria-keyshortcuts="2">
                     <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Build</span>
+                        <svg class="workspace-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span class="workspace-link-label">Build</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">2</span>
                     </span>
-                    <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
+                    <span class="workspace-link-meta">Configure and preview a run.</span>
                 </a>
                 <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" aria-keyshortcuts="3">
                     <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Operate</span>
+                        <svg class="workspace-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="workspace-link-label">Operate</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">3</span>
                     </span>
-                    <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
+                    <span class="workspace-link-meta">Follow runs and recover issues.</span>
                 </a>
                 <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" aria-keyshortcuts="4">
                     <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Review</span>
+                        <svg class="workspace-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span class="workspace-link-label">Review</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">4</span>
                     </span>
-                    <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
+                    <span class="workspace-link-meta">Inspect and compare outputs.</span>
                 </a>
             </div>
         </nav>
@@ -153,8 +153,8 @@ Contract notes:
         <!-- ============================================ -->
         <!-- 2. OVERVIEW VIEW                            -->
         <!-- ============================================ -->
-        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 lg:mb-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:items-start">
-            <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
+        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell studio-overview mb-6 lg:mb-0">
+            <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary shell-panel-strong p-6" data-ui="overview-summary">
                 <div id="missionShellSkeletonState" class="hidden space-y-5" aria-hidden="true" data-ui="overview-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -195,9 +195,9 @@ Contract notes:
                 <div class="overview-intro">
                     <div class="max-w-2xl">
                         <p class="section-kicker">Overview</p>
-                        <h2 id="overviewViewTitle" class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Your workspace</h2>
+                        <h2 id="overviewViewTitle" class="studio-view-title">Your workspace</h2>
                         <p class="mt-3 text-base leading-7 text-slate-600 dark:text-slate-300">
-                            Start a run, pick up your draft, or review the latest outputs.
+                            A clear path from source images to finished outputs. Start a run or pick up where you left off.
                         </p>
                     </div>
                     <div class="overview-actions" data-ui="overview-actions-cluster">
@@ -219,7 +219,7 @@ Contract notes:
                 </div>
             </div>
 
-            <div id="intelligence-shell" class="workspace-shell workspace-shell--overview overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
+            <div id="intelligence-shell" class="workspace-shell workspace-shell--overview overview-secondary shell-panel p-6" data-ui="overview-side">
                 <div id="intelligenceShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="overview-draft-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -254,11 +254,11 @@ Contract notes:
                         </div>
                     </div>
                 </div>
-                <div id="intelligenceShellContent">
+                <div id="intelligenceShellContent" class="overview-draft-content">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <p class="section-kicker">Current Draft</p>
-                        <h3 id="presetHeadline" class="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">premium</h3>
+                        <p class="section-kicker">Current draft</p>
+                        <h3 id="presetHeadline" class="studio-draft-title">premium</h3>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2">
                         <span id="presetStabilityBadge" class="signal-badge">Stable</span>
@@ -269,20 +269,20 @@ Contract notes:
                     Balanced production quality preset.
                 </p>
 
-                <div class="overview-meta-grid mt-6">
-                    <div class="panel-subtle rounded-2xl p-4">
-                        <p class="stat-label">Input Root</p>
+                <div class="overview-meta-grid">
+                    <div class="panel-subtle p-4">
+                        <p class="stat-label">Input folder</p>
                         <p id="heroInputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./input_images</p>
                     </div>
-                    <div class="panel-subtle rounded-2xl p-4">
-                        <p class="stat-label">Output Root</p>
+                    <div class="panel-subtle p-4">
+                        <p class="stat-label">Output folder</p>
                         <p id="heroOutputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./output/lux_depth_v3_apex</p>
                     </div>
-                    <div class="panel-subtle rounded-2xl p-4">
+                    <div class="panel-subtle p-4">
                         <p class="stat-label">Readiness</p>
                         <p id="heroReadinessLabel" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">No warnings</p>
                     </div>
-                    <div class="panel-subtle rounded-2xl p-4">
+                    <div class="panel-subtle p-4">
                         <p class="stat-label">Checks to review</p>
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
@@ -292,7 +292,7 @@ Contract notes:
                     <summary class="quiet-disclosure__summary">
                         <div>
                             <p class="section-kicker">Runtime summary</p>
-                            <p class="quiet-disclosure__title">Open runtime posture and checkpoint detail</p>
+                            <p class="quiet-disclosure__title">Runtime and checkpoint details</p>
                         </div>
                         <span class="micro-status">Backend-owned policy</span>
                     </summary>
@@ -306,7 +306,7 @@ Contract notes:
                 </div>
             </div>
 
-            <div id="overviewStatsSkeletonState" class="hidden portal-overview-stats-skeleton lg:col-span-12 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true" data-ui="overview-stats-skeleton">
+            <div id="overviewStatsSkeletonState" class="hidden portal-overview-stats-skeleton  grid grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true" data-ui="overview-stats-skeleton">
                 <div class="surface-skeleton-card surface-skeleton-card-compact">
                     <span class="skeleton-line skeleton-line-tiny"></span>
                     <span class="skeleton-line skeleton-line-short"></span>
@@ -325,7 +325,7 @@ Contract notes:
                 </div>
             </div>
 
-            <div id="overviewStatsRow" class="portal-overview-stats lg:col-span-12 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div id="overviewStatsRow" class="portal-overview-stats  grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div class="stat-tile" data-ui="overview-card">
                     <p class="stat-label">Pipeline</p>
                     <p id="heroPipelineValue" class="stat-value">lux-depth-v3</p>
@@ -344,7 +344,7 @@ Contract notes:
                 </div>
             </div>
 
-            <div id="overviewCapabilitySkeletonState" class="hidden portal-overview-capability-skeleton lg:col-span-12" aria-hidden="true" data-ui="overview-capability-skeleton">
+            <div id="overviewCapabilitySkeletonState" class="hidden portal-overview-capability-skeleton " aria-hidden="true" data-ui="overview-capability-skeleton">
                 <span class="skeleton-line skeleton-line-tiny"></span>
                 <div class="mt-3 flex flex-wrap gap-2">
                     <span class="skeleton-pill skeleton-pill-short"></span>
@@ -355,7 +355,7 @@ Contract notes:
                 </div>
             </div>
 
-            <details id="overviewCapabilityRow" class="portal-overview-capability capability-disclosure lg:col-span-12">
+            <details id="overviewCapabilityRow" class="portal-overview-capability capability-disclosure ">
                 <summary class="capability-stack-header capability-disclosure__summary">
                     <span class="capability-disclosure__copy">
                         <span class="stat-label">Capabilities</span>
@@ -372,7 +372,7 @@ Contract notes:
                     <div id="capabilityMatrix" class="capability-matrix" data-ui="capability-matrix" role="list" aria-label="Portal capability status matrix"></div>
                 </div>
             </details>
-            <details class="quiet-disclosure lg:col-span-12" data-ui="other-workflow-capabilities">
+            <details class="quiet-disclosure " data-ui="other-workflow-capabilities">
                 <summary class="quiet-disclosure__summary"><span id="capabilityOtherSummary">Other workflows and tools</span></summary>
                 <div class="quiet-disclosure__body">
                     <p class="text-sm leading-7 text-slate-600 dark:text-slate-300">These options belong to another workflow or run outside the portal. They are not missing requirements for this draft.</p>
@@ -439,7 +439,7 @@ Contract notes:
             <!-- Left Column: Configuration -->
             <section id="build-shell" class="portal-shell-card portal-shell-card--build lg:col-span-7">
 
-                <section id="buildStepperShell" class="rounded-2xl shell-panel p-5 shadow-soft dark:shadow-soft-dark" data-ui="build-stepper">
+                <section id="buildStepperShell" class="shell-panel p-5" data-ui="build-stepper">
                     <div id="buildStepperSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-stepper-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -474,7 +474,7 @@ Contract notes:
                     <div id="buildStepperShellContent">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
-                            <p class="section-kicker">Build Flow</p>
+                            <p class="section-kicker">Build a run</p>
                             <h2 id="buildStepTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">1. Configure the draft</h2>
                             <p id="buildStepSummary" class="mt-2 text-[14px] leading-7 text-slate-600 dark:text-slate-300">Start with the pipeline and preset, then move through paths, contextual options, and dispatch review.</p>
                         </div>
@@ -549,7 +549,7 @@ Contract notes:
                 </section>
 
                 <!-- Orchestration Profile -->
-                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
+                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell shell-panel p-6 transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
                     <div id="profileShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -657,7 +657,7 @@ Contract notes:
                 </div>
 
                 <!-- Parameters -->
-                <div id="parameters-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
+                <div id="parameters-shell" class="workspace-shell deferred-shell shell-panel p-6 transition-colors duration-300" data-shell-size="tall">
                     <div id="parametersShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-parameters-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -721,7 +721,7 @@ Contract notes:
                                     <option value="mps">mps (macOS)</option>
                                 </select>
                             </div>
-                            <div class="panel-subtle rounded-2xl p-4">
+                            <div class="panel-subtle p-4">
                                 <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preset effect</p>
                                 <p id="presetBuilderHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Recommended defaults and advanced sections will adapt when the preset changes.</p>
                             </div>
@@ -1010,7 +1010,7 @@ Contract notes:
 
                 <!-- Pipeline Flags -->
                 <div id="flagsShellPanel" data-build-step-panel="3" class="build-step-panel" data-ui="build-step-panel">
-                <fieldset id="flags-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
+                <fieldset id="flags-shell" class="workspace-shell deferred-shell shell-panel p-6 transition-colors duration-300" data-shell-size="tall">
                     <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Primary Output Posture</legend>
                     <p class="step-primary-note">Shape the deliverables first. Diagnostics, acknowledgments, and runtime detail stay below as secondary controls unless the preview or contract pulls them forward.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1128,41 +1128,41 @@ Contract notes:
                                 </button>
                             </div>
                             <div class="mt-4 build-option-grid gap-3">
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Reconstruction</p>
                                     <p id="summaryReconstructionState" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Off</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Workers</p>
                                     <p id="summaryRuntimeWorkers" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Auto</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">RAW Ingest</p>
                                     <p id="summaryRawIngest" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Auto</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Debug Bundle</p>
                                     <p id="summaryDebugBundle" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Off</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preview Status</p>
                                     <p id="summaryPreviewState" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Local fallback</p>
                                 </div>
                             </div>
                             <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Posture</p>
                                     <p id="estimateRuntimeBand" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Low</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">GPU Pressure</p>
                                     <p id="estimateGpuBand" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Low</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Research Risk</p>
                                     <p id="estimateResearchRisk" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">None</p>
                                 </div>
-                                <div class="panel-subtle rounded-2xl p-3">
+                                <div class="panel-subtle p-3">
                                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estimate Summary</p>
                                     <p id="estimateSummaryLabel" class="mt-2 text-[12px] font-semibold leading-6 text-slate-900 dark:text-white">Low runtime · Low GPU pressure · None posture</p>
                                 </div>
@@ -1474,7 +1474,7 @@ Contract notes:
                 </fieldset>
                 </div>
 
-                <section id="governance-shell" data-build-step-panel="3" class="workspace-shell deferred-shell governance-banner rounded-2xl p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
+                <section id="governance-shell" data-build-step-panel="3" class="workspace-shell deferred-shell governance-banner p-6 build-step-panel" data-shell-size="compact" data-ui="build-governance">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div class="max-w-2xl">
                             <p class="section-kicker">Governance Brief</p>
@@ -1492,7 +1492,7 @@ Contract notes:
                 </section>
 
                 <!-- CLI Preview & Actions -->
-                <div id="cli-shell" data-build-step-panel="4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
+                <div id="cli-shell" data-build-step-panel="4" class="workspace-shell deferred-shell shell-panel p-6 transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="section-kicker">Step 4</p>
@@ -1575,7 +1575,7 @@ Contract notes:
             <aside id="jobs-shell" class="lg:col-span-5" data-ui="operate-grid">
 
                 <!-- Selected Job Inspector -->
-                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="portal-shell-card portal-shell-card--inspector workspace-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="portal-shell-card portal-shell-card--inspector workspace-shell shell-panel transition-colors duration-300" data-ui="inspector-panel">
                     <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <p class="section-kicker">Selected Job</p>
@@ -1629,19 +1629,19 @@ Contract notes:
 
                     <div id="selectedJobShellContent">
                     <div class="mt-5 grid grid-cols-2 gap-3">
-                        <div class="panel-subtle rounded-2xl p-4">
+                        <div class="panel-subtle p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Job ID</p>
                             <p id="selectedJobIdLabel" class="mt-2 text-[12px] font-mono text-slate-700 dark:text-slate-200 break-all">No job selected</p>
                         </div>
-                        <div class="panel-subtle rounded-2xl p-4">
+                        <div class="panel-subtle p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pipeline</p>
                             <p id="selectedJobPipelineLabel" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">Awaiting dispatch</p>
                         </div>
-                        <div class="panel-subtle rounded-2xl p-4">
+                        <div class="panel-subtle p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Artifacts</p>
                             <p id="selectedJobArtifactCount" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">0 indexed</p>
                         </div>
-                        <div class="panel-subtle rounded-2xl p-4">
+                        <div class="panel-subtle p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Stream</p>
                             <p id="selectedJobStreamStatus" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">Inactive</p>
                         </div>
@@ -1663,13 +1663,13 @@ Contract notes:
 
                     <div class="mt-5 space-y-3">
                         <div id="selectedJobTransportAlert" class="hidden rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 px-4 py-3 text-[12px] leading-6 text-amber-800 dark:text-amber-300"></div>
-                        <div class="panel-subtle rounded-2xl p-4">
+                        <div class="panel-subtle p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Run Context</p>
                             <p id="selectedJobSummary" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
                                 Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
                             </p>
                         </div>
-                        <div class="panel-subtle rounded-2xl p-4" data-ui="selected-job-recovery">
+                        <div class="panel-subtle p-4" data-ui="selected-job-recovery">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Recovery Action</p>
                             <p id="selectedJobRecoveryTitle" class="mt-2 text-[12px] font-semibold text-slate-800 dark:text-slate-100">Select a run or dispatch one</p>
                             <p id="selectedJobRecoveryDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
@@ -1709,7 +1709,7 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 4. OPERATE VIEW (Job Queue)                 -->
                 <!-- ============================================ -->
-                <div id="queue-shell" class="portal-shell-card portal-shell-card--queue workspace-shell deferred-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col" data-shell-size="compact" data-ui="queue-panel">
+                <div id="queue-shell" class="portal-shell-card portal-shell-card--queue workspace-shell deferred-shell shell-panel transition-colors duration-300 flex flex-col" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <h2 id="operateViewTitle" class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
@@ -1759,9 +1759,9 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 5. REVIEW VIEW (Artifacts)                  -->
                 <!-- ============================================ -->
-                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="portal-shell-card portal-shell-card--artifacts workspace-shell deferred-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
+                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="portal-shell-card portal-shell-card--artifacts workspace-shell deferred-shell shell-panel transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
-                        <h2 id="reviewViewTitle" class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
+                        <h2 id="reviewViewTitle" class="studio-section-title">Artifacts</h2>
                         <div class="flex items-center gap-2">
                             <button id="artifactCompareBtn" type="button" class="portal-action-control portal-action-control--compare hidden border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Compare</button>
                             <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
@@ -1792,18 +1792,18 @@ Contract notes:
                         </div>
                     </div>
                     <div id="artifactShellContent">
-                    <div id="artifactPreviewStage" class="artifact-review-stage rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50">
+                    <div id="artifactPreviewStage" class="artifact-review-stage studio-artboard">
                         <div id="artifactCompareStage" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
                             <figure class="space-y-3">
-                                <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
+                                <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden studio-preview-image" loading="lazy" decoding="async" />
                                 <figcaption id="artifactPreviewPrimaryCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
                             </figure>
                             <figure class="space-y-3">
-                                <img id="artifactCompareImage" alt="Comparison artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
+                                <img id="artifactCompareImage" alt="Comparison artifact preview" class="hidden studio-preview-image" loading="lazy" decoding="async" />
                                 <figcaption id="artifactCompareCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
                             </figure>
                         </div>
-                        <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
+                        <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden studio-preview-image" loading="lazy" decoding="async" />
                         <div id="artifactMetadataCard" class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 p-5 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
                             Select a completed run to bring the primary review artifact, provenance context, and next actions into focus here.
                         </div>
@@ -1812,6 +1812,12 @@ Contract notes:
                         <div class="flex flex-col gap-1">
                             <p id="artifactSelectionTitle" class="text-[12px] font-semibold text-slate-800 dark:text-slate-100">No artifact selected</p>
                             <p id="artifactSelectionMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">Preview, metadata, and actions will appear here when outputs are indexed.</p>
+                        </div>
+                        <div class="studio-review-actions">
+                            <button id="downloadArtifactBtn" type="button" class="operator-action-btn operator-action-btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled>Download</button>
+                            <button id="openArtifactBtn" type="button" class="operator-action-btn operator-action-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
+                            <button id="copyArtifactPathBtn" type="button" class="operator-action-btn operator-action-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy Relative Path</button>
+                            <button id="copyArtifactFingerprintBtn" type="button" class="operator-action-btn operator-action-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy SHA-256</button>
                         </div>
                         <div id="reviewStatusBanner" class="review-status-banner hidden" data-tone="info" data-ui="review-status-banner">
                             <div class="review-status-text" aria-live="polite" role="status">
@@ -1863,12 +1869,7 @@ Contract notes:
                             <p id="reviewCompareTitle" class="review-compare-title">No compare pair</p>
                             <p id="reviewCompareDetail" class="review-compare-detail">No paired comparison is available for the current artifact.</p>
                         </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
-                            <button id="downloadArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Download</button>
-                            <button id="copyArtifactPathBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy Relative Path</button>
-                            <button id="copyArtifactFingerprintBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy SHA-256</button>
-                        </div>
+
                     </div>
                     <div id="runCardActions" class="hidden mb-3 items-center gap-2">
                         <button id="viewRunCardBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
@@ -1894,7 +1895,7 @@ Contract notes:
                 </div>
 
                 <!-- Live Logs -->
-                <div id="logs-shell" class="portal-shell-card portal-shell-card--logs workspace-shell deferred-shell hidden shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
+                <div id="logs-shell" class="portal-shell-card portal-shell-card--logs workspace-shell deferred-shell hidden shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300" data-shell-size="tall" data-ui="logs-panel">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -1965,29 +1966,29 @@ Contract notes:
                 </button>
             </div>
             <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Requested Args</p>
                     <pre id="requestedConfigJson" class="mt-3 command-frame min-h-[160px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Effective Args</p>
                     <pre id="effectiveConfigJson" class="mt-3 command-frame min-h-[160px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Inactive Preserved Fields</p>
                     <pre id="inactiveConfigJson" class="mt-3 command-frame min-h-[160px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
             </div>
             <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estimate</p>
                     <p id="effectiveEstimateLabel" class="mt-3 text-[12px] leading-6 text-slate-700 dark:text-slate-200">No preview estimate yet.</p>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Readiness</p>
                     <p id="effectiveReadinessSummary" class="mt-3 text-[12px] leading-6 text-slate-700 dark:text-slate-200">Readiness details load with the backend preview.</p>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Backend Argv Preview</p>
                     <pre id="effectiveArgvPreview" class="mt-3 command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
@@ -2022,11 +2023,11 @@ Contract notes:
                 </div>
             </div>
             <div class="artifact-viewer-meta-grid mt-5">
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Relative Path</p>
                     <p id="artifactViewerPath" class="mt-3 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">Not reported</p>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">SHA-256</p>
@@ -2035,7 +2036,7 @@ Contract notes:
                         <button id="artifactViewerCopyFingerprintBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Copy</button>
                     </div>
                 </div>
-                <div class="panel-subtle rounded-2xl p-4">
+                <div class="panel-subtle p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Viewer State</p>

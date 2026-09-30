@@ -50,13 +50,13 @@
 .shell-panel {
     border: 1px solid var(--shell-border);
     background: var(--shell-panel);
-    backdrop-filter: blur(18px);
+    backdrop-filter: none;
 }
 
 .shell-panel-strong {
     border: 1px solid var(--shell-border);
     background: var(--shell-panel-strong);
-    backdrop-filter: blur(22px);
+    backdrop-filter: none;
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -79,10 +79,10 @@
 
 .section-kicker {
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: 0.28em;
     text-transform: uppercase;
-    color: var(--shell-accent);
+    color: var(--shell-muted);
 }
 
 #overviewViewTitle,
@@ -127,7 +127,7 @@
     border-color: rgba(45, 212, 191, 0.24);
 }
 .hero-action:hover {
-    transform: translateY(-1px);
+    transform: none;
 }
 
 .hero-action-primary {
@@ -645,6 +645,7 @@
    on #main-content plus the Phase 6 mobile override that tightened the inset
    at <=960px. Component layer is the sole source of these declarations. */
 .portal-main {
+    max-width: 1600px;
     padding: 1.5rem;
 }
 @media (max-width: 960px) {

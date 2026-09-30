@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 403,
+    "utilityCount": 393,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -433,9 +433,8 @@
     },
     {
       "className": "bg-slate-900/60",
-      "owner": "static",
+      "owner": "review-only",
       "sources": [
-        "portal.html",
         "public/portal-assets/portal-review.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1527,18 +1526,6 @@
     },
     {
       "className": "dark:hover:text-white",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "dark:shadow-soft-dark",
       "owner": "static",
       "sources": [
         "portal.html"
@@ -2692,18 +2679,6 @@
       "status": "covered"
     },
     {
-      "className": "lg:col-span-12",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "lg:col-span-5",
       "owner": "static",
       "sources": [
@@ -2850,18 +2825,6 @@
       "status": "covered"
     },
     {
-      "className": "max-h-[320px]",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "max-h-[92vh]",
       "owner": "static",
       "sources": [
@@ -2925,18 +2888,6 @@
     },
     {
       "className": "max-w-6xl",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "max-w-7xl",
       "owner": "static",
       "sources": [
         "portal.html"
@@ -3325,18 +3276,6 @@
       "status": "covered"
     },
     {
-      "className": "object-contain",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "object-cover",
       "owner": "review-only",
       "sources": [
@@ -3391,19 +3330,6 @@
     },
     {
       "className": "opacity-60",
-      "owner": "static",
-      "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "opacity-75",
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
@@ -3953,18 +3879,6 @@
       "status": "covered"
     },
     {
-      "className": "rounded-[1.75rem]",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "rounded-2xl",
       "owner": "static",
       "sources": [
@@ -4172,7 +4086,8 @@
       "className": "shrink-0",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4478,18 +4393,6 @@
       "sources": [
         "portal.html",
         "web/secure-landing/portal-src/profile-surface-deferred.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "text-3xl",
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4846,18 +4749,6 @@
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/profile-surface-deferred.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "text-slate-950",
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -5227,18 +5118,6 @@
       "owner": "static",
       "sources": [
         "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "w-8",
-      "owner": "static",
-      "sources": [
-        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [

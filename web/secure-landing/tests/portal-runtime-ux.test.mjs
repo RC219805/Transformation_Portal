@@ -21,6 +21,23 @@ function between(text, startNeedle, endNeedle) {
   return text.slice(start, end);
 }
 
+test("missing preset details do not contradict backend health", () => {
+  const renderSource = between(portal, "function renderPresetIntelligence", "function renderMissionControl");
+  const render = new Function("state", "els", "preset", `
+    const currentPresetDescriptor = () => preset;
+    const _overviewDispatchSummary = () => ({});
+    ${renderSource}; renderPresetIntelligence({});
+  `);
+  for (const backendOk of [true, false]) {
+    const els = { presetDescription: {}, backendModeBadge: {} };
+    render({ pipeline: "lux-depth-v3", backendOk }, els, {});
+    assert.equal(els.presetDescription.textContent, "Preset details are unavailable.");
+    assert.equal(els.backendModeBadge.textContent, backendOk ? "Backend connected" : "Backend offline");
+    render({ pipeline: "lux-depth-v3", backendOk }, els, { description: "A supported preset." });
+    assert.equal(els.presetDescription.textContent, "A supported preset.");
+  }
+});
+
 test("required degraded prerequisites count as blocking checks, not advisories", () => {
   const checklist = between(portal, 'function _dispatchChecklistItems', 'function renderGovernanceBanner');
   const build = new Function('state', 'isPhotographyPipeline', 'photographyVersion', `
@@ -251,12 +268,15 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
 test("bundle compaction preserves diagnostic names and property keys", () => {
   const compact = between(buildScript, "const compactPortalBundle", "const portalChanged");
   const operateBuild = between(buildScript, "const deferredOperateSurfaceBuild", "const deferredBuildSurfaceBuild");
+  const reviewBuild = between(buildScript, "const deferredReviewSurfaceBuild", "const deferredOperateSurfaceBuild");
 
   assert.match(compact, /keepNames: true/);
   assert.match(compact, /minifyIdentifiers: true/);
   assert.doesNotMatch(compact, /mangleProps|mangleQuoted/);
   assert.match(operateBuild, /keepNames: true/);
   assert.match(operateBuild, /minifyIdentifiers: true/);
+  assert.match(reviewBuild, /keepNames: true/);
+  assert.match(reviewBuild, /minifyIdentifiers: true/);
   assert.match(buildScript, /PORTAL_PROFILE_SURFACE_ENTRY/);
   assert.match(buildScript, /PORTAL_PROFILE_SURFACE_ASSET_PATH/);
 });

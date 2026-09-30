@@ -405,6 +405,33 @@ function renderReleaseBundlePreview() {
   </section>`;
 }
 
+function renderWorkspacePreview() {
+  return `<aside class="workspace-preview" aria-labelledby="workspace-preview-title" data-ui="homepage-workspace-preview">
+    <div class="workspace-preview__header">
+      <span class="workspace-preview__brand">Transformation Portal</span>
+      <span class="workspace-preview__example">Illustrative workspace</span>
+    </div>
+    <div class="workspace-preview__body">
+      <div class="hero-lockup" data-ui="homepage-hero-lockup">
+        ${renderBrandAsset({
+          kind: "lockup",
+          variant: "dark",
+          alt: "Dynamic Neural Access",
+          className: "hero-lockup__asset"
+        })}
+      </div>
+      <p class="section-kicker">One considered workflow</p>
+      <h2 id="workspace-preview-title">From first frame<br />to final handoff.</h2>
+      <ol class="workspace-preview__steps" role="list">
+        <li><span class="workspace-preview__number">01</span><span><strong>Build</strong><span>Prepare inputs and preview your plan.</span></span></li>
+        <li><span class="workspace-preview__number">02</span><span><strong>Operate</strong><span>Follow each run and resolve the next step.</span></span></li>
+        <li><span class="workspace-preview__number">03</span><span><strong>Review</strong><span>Inspect outputs with their evidence.</span></span></li>
+      </ol>
+    </div>
+    <div class="workspace-preview__footer"><span class="workspace-preview__dot" aria-hidden="true"></span>Creative control. A traceable handoff.</div>
+  </aside>`;
+}
+
 export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
   const rumScriptTag = rumScript && scriptNonce
     ? `<script nonce="${escapeHtml(scriptNonce)}">${rumScript}</script>`
@@ -415,6 +442,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <meta name="description" content="A considered workspace for premium media. Prepare, process, and review your work with provenance and release evidence in one place." />
     <title>Dynamic Neural Access</title>
     <link rel="stylesheet" href="/frontdoor-homepage.css" />
   </head>
@@ -423,11 +451,10 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
     <div class="homepage-backdrop" aria-hidden="true">
       <video
         class="homepage-video"
-        autoplay
         muted
         loop
         playsinline
-        preload="metadata"
+        preload="none"
         disablePictureInPicture
         disableRemotePlayback
       >
@@ -452,7 +479,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
           </span>
           <span class="brand-lockup__copy">
             <span class="brand-lockup__kicker">Dynamic Neural Access</span>
-            <span class="brand-lockup__title">Verifier-backed release proof for premium media.</span>
+            <span class="brand-lockup__title">Transformation Portal</span>
           </span>
         </a>
 
@@ -461,7 +488,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
         </nav>
 
         <div class="site-actions">
-          <a class="site-link" href="/login" data-ui="homepage-operator-link">Operator Login</a>
+          <a class="site-link" href="/login" data-ui="homepage-operator-link">Open workspace <span aria-hidden="true">↗</span></a>
           <a class="site-cta site-cta--ghost" href="#proof" data-ui="homepage-utility-cta">View Proof</a>
         </div>
 
@@ -472,7 +499,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
               ${renderList(NAV_LINKS, (item) => renderAnchor(`#${item.id}`, item.label, "homepage-mobile-link"))}
             </nav>
             <div class="site-mobile-menu__actions">
-              <a class="site-link site-link--mobile" href="/login" data-ui="homepage-mobile-operator-link">Operator Login</a>
+              <a class="site-link site-link--mobile" href="/login" data-ui="homepage-mobile-operator-link">Open workspace <span aria-hidden="true">↗</span></a>
               <a class="site-cta site-cta--ghost site-cta--mobile" href="#proof" data-ui="homepage-mobile-utility-cta">View Proof</a>
             </div>
           </div>
@@ -483,55 +510,48 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
     <main id="main-content" class="homepage-main" tabindex="-1" data-ui="homepage-main">
       <section class="hero-section" aria-labelledby="hero-title" data-ui="homepage-hero">
         <div class="hero-copy">
-          <div class="hero-lockup" data-ui="homepage-hero-lockup">
-            ${renderBrandAsset({
-              kind: "lockup",
-              variant: "dark",
-              alt: "Dynamic Neural Access",
-              className: "hero-lockup__asset"
-            })}
-          </div>
-          <p class="section-kicker">Dynamic Neural Access</p>
-          <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
+          <p class="section-kicker">The considered media workspace</p>
+          <h1 id="hero-title" data-ui="homepage-hero-title">Exceptional media.<br /><span>Every detail accounted for.</span></h1>
           <p class="hero-lede" data-ui="homepage-hero-lede">
-            Inspect release proof publicly, or enter managed operator access to build, operate, review, and archive-gate governed work.
+            Prepare, process, and review your work in one place. Keep provenance and release evidence close to every creative decision.
           </p>
           <div class="hero-actions" data-ui="homepage-hero-actions">
-            <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Operator Access</a>
-            <a class="site-cta site-cta--secondary" href="#proof" data-ui="homepage-secondary-cta">Review Proof Overview</a>
+            <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Open workspace <span aria-hidden="true">↗</span></a>
+            <a class="site-cta site-cta--secondary" href="#proof" data-ui="homepage-secondary-cta">Explore the evidence</a>
             <a class="hero-inline-link" href="#workflow" data-ui="homepage-learn-link">Explore workflow</a>
           </div>
           <p class="hero-access-note" data-ui="homepage-hero-note">
-            Optional runtimes appear only when enabled and remain disabled until rollout, license, and runtime prerequisites are satisfied.
+            Inspect release proof publicly, or enter managed operator access when you are ready to work.
           </p>
           <div class="entry-rail" data-ui="homepage-entry-rail">
             <article class="entry-card entry-card--proofband" data-state="public-proof">
               <div class="entry-card__summary">
-                <p class="entry-card__kicker">Proof snapshot</p>
-                <p class="entry-card__title">Proof before access.</p>
-                <p class="entry-card__detail">Review the verification bundle publicly; sign in only when you are ready to run governed operator work.</p>
+                <p class="entry-card__kicker">A clearer handoff</p>
+                <p class="entry-card__title">Your work. Its context. Together.</p>
+                <p class="entry-card__detail">Source, review, and release evidence stay connected.</p>
               </div>
               <div class="entry-card__meta">
                 <div class="entry-card__meta-item">
                   <p class="entry-card__meta-label">Verification</p>
-                  <p class="entry-card__meta-value">Report, provenance, rights posture, and review history stay in one handoff.</p>
+                  <p class="entry-card__meta-value">Inspectable reports and provenance</p>
                 </div>
                 <div class="entry-card__meta-item">
                   <p class="entry-card__meta-label">Managed work</p>
-                  <p class="entry-card__meta-value">Verified access stays separate from operator credentials and gated capabilities.</p>
+                  <p class="entry-card__meta-value">Verified access and operator credentials</p>
                 </div>
               </div>
             </article>
           </div>
         </div>
+        ${renderWorkspacePreview()}
       </section>
 
       <section id="platform" class="homepage-section" aria-labelledby="platform-title">
         <div class="section-head">
           <p class="section-kicker">Why teams adopt DNA</p>
-          <h2 id="platform-title">Certification with operational leverage.</h2>
+          <h2 id="platform-title">Less time reconstructing context.<br />More time making the work.</h2>
           <p>
-            The value is not abstract trust rhetoric. It is faster approval, cleaner licensing posture, and release bundles partners can inspect without chasing context across email, chat, and ad hoc notes.
+            Bring approvals, licensing context, and release evidence into a handoff your team can inspect without retracing every decision.
           </p>
         </div>
         <div class="feature-grid">
@@ -590,9 +610,9 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
       <section id="teams" class="homepage-section" aria-labelledby="teams-title">
         <div class="section-head">
           <p class="section-kicker">Teams</p>
-          <h2 id="teams-title">Built for organizations that cannot afford ambiguity.</h2>
+          <h2 id="teams-title">Made for everyone behind the image.</h2>
           <p>
-            From single creators to multi-party distribution environments, DNA is framed around the places where provenance, rights, and release risk collide.
+            Keep the same clear context as work moves from a creator to a studio, an archive, or a distribution partner.
           </p>
         </div>
         <div class="audience-grid">
@@ -616,9 +636,9 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
       <section id="faq" class="homepage-section" aria-labelledby="faq-title">
         <div class="section-head">
           <p class="section-kicker">FAQ</p>
-          <h2 id="faq-title">The sharp questions, answered early.</h2>
+          <h2 id="faq-title">A little clarity before you begin.</h2>
           <p>
-            These are the questions serious buyers ask before they trust a release-control layer with high-value media.
+            Understand what the evidence shows, what is optional, and where platform limits apply.
           </p>
         </div>
         <div class="faq-grid">
@@ -629,16 +649,17 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
       <section class="homepage-section homepage-section--cta" aria-labelledby="cta-title" data-ui="homepage-final-cta">
         <div class="cta-panel">
           <div class="section-head">
-            <p class="section-kicker">Next move</p>
-            <h2 id="cta-title">Bring certification to every asset that leaves your pipeline.</h2>
+            <p class="section-kicker">Your next frame</p>
+            <h2 id="cta-title">Make the work.<br />Keep the whole story.</h2>
             <p>
-              Inspect public proof first, then continue into managed access when you are ready to run governed work.
+              Explore the evidence, then enter your workspace to prepare, operate, and review.
             </p>
           </div>
           <div class="hero-actions" data-ui="homepage-final-actions">
-            <a class="site-cta" href="/login" data-ui="homepage-final-primary-cta">Open Operator Access</a>
+            <a class="site-cta" href="/login" data-ui="homepage-final-primary-cta">Open workspace <span aria-hidden="true">↗</span></a>
             <a class="site-cta site-cta--secondary" href="#workflow" data-ui="homepage-final-secondary-cta">Explore Workflow</a>
           </div>
+          <p class="cta-capability-note">Optional runtimes appear only when enabled and remain disabled until rollout, license, and runtime prerequisites are satisfied.</p>
         </div>
       </section>
     </main>

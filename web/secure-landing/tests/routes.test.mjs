@@ -760,14 +760,15 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
     assert.match(html, /class="hero-video"/);
-    assert.match(html, /preload="metadata"/);
+    assert.match(html, /preload="none"/);
+    assert.doesNotMatch(html, /\bautoplay\b/i);
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
     assert.match(html, /<html lang="en" class="dark" data-theme="dark">/);
     assert.match(html, /<meta name="color-scheme" content="dark" \/>/);
     assert.match(html, /href="#main-content">Skip to sign-in</);
     assert.match(html, /id="main-content"/);
-    assert.match(html, /Transformation Portal operator console/);
+    assert.match(html, /Transformation Portal/);
     assert.match(html, /data-ui="login-title"/);
     assert.match(html, /data-ui="login-entry-state"/);
     assert.match(html, /data-ui="login-access-status"/);
@@ -1223,7 +1224,7 @@ test("homepage GET is stateless and ignores authenticated session hints", async 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
     assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="#proof"|href="#proof"[^>]*data-ui="homepage-utility-cta")/);
-    assert.match(html, />Operator Access</);
+    assert.match(html, /data-ui="homepage-primary-cta">Open workspace /);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.equal(after.last_seen_at, before.last_seen_at);
     assert.equal(after.idle_expires_at, before.idle_expires_at);
@@ -1283,7 +1284,7 @@ test("homepage GET does not touch session state even when a stale cookie is pres
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
     assert.equal(persisted.id, expiredSession.id);
-    assert.match(html, />Operator Access</);
+    assert.match(html, /data-ui="homepage-primary-cta">Open workspace /);
   } finally {
     env.cleanup();
   }

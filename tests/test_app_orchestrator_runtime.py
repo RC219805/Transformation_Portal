@@ -897,36 +897,30 @@ def test_portal_routed_shell_hidden_rules_preserve_responsive_display_utilities(
     assert "!important" not in route_shell_rule.group("body")
 
 
-def test_portal_shell_veil_tokens_use_shell_namespace_and_ordered_opacity() -> None:
+def test_portal_shell_veil_tokens_use_shared_opaque_surfaces() -> None:
     css_content = _portal_css_content()
 
     assert "--s-veil" not in css_content
     assert "--s-tint-faint" not in css_content
     assert "--shell-tint-faint:" in css_content
 
-    def token_alpha(selector: str, token: str) -> float:
+    def token_value(selector: str, token: str) -> str:
         block_body = None
         for block_match in re.finditer(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]*)\}}", css_content):
             if token in block_match.group("body"):
                 block_body = block_match.group("body")
                 break
         assert block_body is not None, f"{selector} token block missing"
-        value_match = re.search(
-            rf"{re.escape(token)}:\s*rgba\(\s*\d+,\s*\d+,\s*\d+,\s*(?P<alpha>(?:0?\.)?\d+)\s*\)",
-            block_body,
-        )
+        value_match = re.search(rf"{re.escape(token)}:\s*(?P<value>[^;}}]+)", block_body)
         assert value_match is not None, f"{token} missing from {selector}"
-        return float(value_match.group("alpha"))
+        return value_match.group("value").strip()
 
     for selector in (":root", ".dark:root"):
-        assert token_alpha(selector, "--shell-veil-soft") < token_alpha(
-            selector,
-            "--shell-veil",
-        )
-        assert token_alpha(selector, "--shell-veil") < token_alpha(
-            selector,
-            "--shell-veil-strong",
-        )
+        assert token_value(selector, "--shell-veil-soft") == "var(--ux-surface-muted)"
+        assert token_value(selector, "--shell-veil") == "var(--ux-surface-elevated)"
+        assert token_value(selector, "--shell-veil-strong") == "var(--ux-surface-elevated)"
+        for token in ("--ux-surface-muted", "--ux-surface-elevated"):
+            assert re.fullmatch(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?", token_value(selector, token))
 
 
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
@@ -945,8 +939,8 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'data-profile-surface-js-url="{bundle.urls["portal-profile.js"]}"' in html_content
     assert "@import" not in css_content
     assert "--ux-target-min-size:" in css_content
-    assert '<meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />' in html_content
-    assert '<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />' in html_content
+    assert '<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />' in html_content
+    assert '<meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)" />' in html_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
     assert "https://cdn.tailwindcss.com" not in html_content
@@ -1011,11 +1005,17 @@ def test_advisory_caption_panel_uses_bounded_payload_cache() -> None:
     served_review_js = _portal_review_bundle_content()
     loader_body = _extract_js_function_body(content, "_loadAdvisoryCaptionPayload")
     panel_body = _extract_js_function_body(content, "_renderAdvisoryCaptionPanel")
+    cache_body = _extract_js_function_body(content, "_rememberAdvisoryCaptionCacheEntry")
 
     assert "const advisoryCaptionPayloadCache = new Map();" in content
     assert 'let advisoryCaptionCacheScope = "";' in content
-    assert "advisoryCaptionPayloadCache" in served_review_js
+    # Local identifiers are minified; preserved function names verify shipping
+    # the cache while its bounded eviction contract is checked in source.
+    assert '"_rememberAdvisoryCaptionCacheEntry"' in served_review_js
     assert "const ADVISORY_CAPTION_CACHE_MAX_ENTRIES = 24;" in content
+    assert "while (advisoryCaptionPayloadCache.size > ADVISORY_CAPTION_CACHE_MAX_ENTRIES)" in cache_body
+    assert "const oldestKey = advisoryCaptionPayloadCache.keys().next().value;" in cache_body
+    assert "advisoryCaptionPayloadCache.delete(oldestKey);" in cache_body
     assert "function _resetAdvisoryCaptionCacheForAuth(" in content
     assert "_advisoryCaptionCredentialSignature" in content
     assert "const requestHeaders = _buildAuthHeaders();" in loader_body
@@ -2278,7 +2278,7 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
     assert "No compare pair" in compare_copy_body
     assert "No paired comparison is available for the current artifact." in compare_copy_body
-    assert "Comparing paired outputs" in compare_copy_body
+    assert "Side-by-side comparison" in compare_copy_body
     assert "Paired comparison available" in compare_copy_body
     assert "button[data-artifact-path]" in focus_body
     assert "_focusArtifactRailButton(path);" in content
@@ -2401,7 +2401,10 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     assert "Queue unavailable" in queue_empty_body
     assert "Queue recovery needs attention" in queue_empty_body
     assert "Select a completed run" in artifact_empty_body
-    assert "Outputs are still arriving" in artifact_empty_body
+    assert 'job.state === "running" || job.state === "queued"' in artifact_empty_body
+    assert "Processing your run" in artifact_empty_body
+    assert "Run completed without indexed outputs" in artifact_empty_body
+    assert "Logs and Run Details" in artifact_empty_body
     assert "skeleton.setAttribute('aria-hidden', 'true');" in toggle_body
     assert "const queueLoading = _isJobsHydrationPending();" in queue_body
     assert "els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');" in queue_body
@@ -2865,9 +2868,9 @@ def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules()
 def test_portal_workspace_grid_uses_disjoint_desktop_and_mobile_breakpoints() -> None:
     css = _portal_css_content()
     desktop_rail = css.rfind("@media(min-width:768px){.workspace-rail{grid-template-columns:minmax(0,240px) minmax(0,1fr)")
-    mobile_media = css.rfind("@media(max-width:767px)")
-    mobile_media_end = css.find("@media(", mobile_media + 1)
-    mobile_rail = css.find(".workspace-rail{grid-template-columns:minmax(0,1fr)", mobile_media)
+    mobile_rail = css.rfind(".workspace-rail{grid-template-columns:minmax(0,1fr)")
+    mobile_media = css.rfind("@media(max-width:767px)", 0, mobile_rail)
+    mobile_media_end = css.find("@media(", mobile_rail)
     mobile_links = css.find(
         ".workspace-rail-links{grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}",
         mobile_media,
@@ -3055,7 +3058,8 @@ def test_portal_queue_rows_support_keyboard_selection_navigation() -> None:
     assert "inspectButton.setAttribute('aria-pressed', isSelected ? 'true' : 'false');" in queue_body
     assert "cancelButton.dataset.action = 'cancel-job';" in queue_body
     assert "progressEl.setAttribute('aria-label', `${safePipeline} job ${safeId} progress`);" in queue_body
-    assert "progressEl.setAttribute('aria-valuetext', `${safeProgress}%`);" in queue_body
+    assert "const progress = jobProgressSnapshot(job);" in queue_body
+    assert "renderJobProgress(progressEl, progress);" in queue_body
     assert "li.setAttribute('role', 'option');" not in queue_body
     assert "li.setAttribute('aria-selected'" not in queue_body
     assert "const inspectButton = event.target.closest('[data-action=\"inspect-job\"][data-job-id]');" in keydown_body
@@ -3264,10 +3268,9 @@ def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selecto
     assert 'id="selectedJobRecoveryTitle"' in content
     assert 'id="selectedJobRecoveryDetail"' in content
     assert "renderRuntimeBriefing(currentPayload);" in mission_body
-    assert (
-        "action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'"
-        in queue_empty_body
-    )
+    assert "action: 'Next action: restore backend connectivity.'" in queue_empty_body
+    assert "action: 'Next action: check backend health, then refresh the workspace.'" in queue_empty_body
+    assert "action: 'Next action: open Build to prepare a run.'" in queue_empty_body
     assert re.search(
         r"action:\s*[\"\']Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review\.[\"\']",
         artifact_empty_body,

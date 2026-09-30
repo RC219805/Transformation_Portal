@@ -5,8 +5,7 @@ html {
 .shell-bg {
     min-height: 100vh;
     background:
-        radial-gradient(circle at 18% 16%, rgba(15, 118, 110, 0.06), transparent 24%),
-        linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 1) 100%);
+        var(--ux-surface-canvas);
     animation: none;
 }
 
@@ -15,13 +14,12 @@ html {
     gap: 1rem;
     align-items: start;
     border: 1px solid var(--shell-border);
-    border-color: rgba(100, 116, 139, 0.22);
+    border-color: transparent;
     border-radius: var(--ux-radius-lg);
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.76)),
-        rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(16px);
-    box-shadow: var(--ux-shadow-surface);
+        transparent;
+    backdrop-filter: none;
+    box-shadow: none;
 }
 
 @media (min-width: 768px) {
@@ -35,29 +33,27 @@ html {
     min-height: var(--ux-target-min-size);
     flex-direction: column;
     justify-content: flex-start;
-    gap: 0.55rem;
+    gap: 0.35rem;
     border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: var(--ux-radius-md);
-    background: var(--ux-surface-elevated);
-    padding: 0.85rem 0.95rem;
+    background: transparent;
+    padding: 0.75rem;
     text-decoration: none;
     color: var(--shell-ink);
     box-shadow: none;
     transition:
-        transform 0.2s ease,
-        border-color 0.2s ease,
-        background-color 0.2s ease,
-        box-shadow 0.2s ease;
+        background-color var(--ux-motion-fast), border-color var(--ux-motion-fast), color var(--ux-motion-fast);
+    border-color: transparent;
 }
 
 .hero-action {
     min-height: var(--ux-target-min-size);
     border: 1px solid transparent;
     border-radius: var(--ux-radius-md);
-    padding: 0.9rem 1rem;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
+    padding: 0.75rem 1rem;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
     box-shadow: none;
     transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
 }
@@ -71,10 +67,10 @@ html {
     border: 1px solid var(--shell-border);
     border-radius: var(--ux-radius-md);
     padding: 0.72rem 0.95rem;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
     box-shadow: none;
     transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
@@ -104,10 +100,10 @@ html {
     background: var(--ux-surface-elevated);
     padding: 0.7rem 1rem;
     color: var(--shell-muted);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0;
+    text-transform: none;
     box-shadow: none;
     transition:
         border-color 0.2s ease,
@@ -130,23 +126,23 @@ html {
     margin-left: 1rem;
     border: 1px solid var(--shell-border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.75);
-    padding: 0.55rem 0.85rem;
+    background: var(--ux-surface-muted);
+    padding: 0.35rem 0.65rem;
     font-size: 13px;
     line-height: 1.45;
-    backdrop-filter: blur(16px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    backdrop-filter: none;
+    box-shadow: none;
+    border-color: transparent;
 }
 
 .dark .shell-bg {
     background:
-        radial-gradient(circle at 18% 16%, rgba(34, 211, 238, 0.08), transparent 24%),
-        linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(2, 6, 23, 1) 100%);
+        var(--ux-surface-canvas);
 }
 
 .portal-topbar,
 .portal-context-shell {
-    border-radius: var(--ux-radius-lg);
+    border-radius: 0;
 }
 
 .shell-panel,
@@ -239,7 +235,7 @@ html {
 
 .portal-context-shell {
     position: relative;
-    backdrop-filter: blur(12px);
+    backdrop-filter: none;
 }
 
 .console-context-strip {
@@ -302,7 +298,7 @@ html {
 }
 
 .dark .workspace-link {
-    background: var(--ux-surface-muted);
+    background: transparent;
 }
 
 .workspace-link-heading {
@@ -310,8 +306,8 @@ html {
 }
 
 .workspace-link-shortcut {
-    min-width: 1.8rem;
-    min-height: 1.8rem;
+    min-width: 1.5rem;
+    min-height: 1.5rem;
     border-radius: var(--ux-radius-md);
 }
 
@@ -321,7 +317,7 @@ html {
 .dark .stepper-nav-btn-primary {
     background: linear-gradient(135deg, var(--shell-accent-fill-strong), var(--shell-accent-fill));
     color: var(--shell-on-accent);
-    border-color: rgba(8, 145, 178, 0.2);
+    border-color: transparent;
 }
 
 .hero-action-secondary {
@@ -368,7 +364,7 @@ html {
     border: 1px solid var(--ux-border-subtle);
     border-radius: var(--ux-radius-lg);
     background: var(--ux-surface-elevated);
-    box-shadow: var(--ux-shadow-surface);
+    box-shadow: none;
 }
 
 .dark .quiet-disclosure {
@@ -381,7 +377,7 @@ html {
     justify-content: space-between;
     gap: 0.75rem;
     min-height: var(--ux-target-min-size);
-    padding: 0.95rem 1rem;
+    padding: 0.75rem 1rem;
     cursor: pointer;
     list-style: none;
 }
@@ -400,4 +396,169 @@ html {
 
 .quiet-disclosure__body {
     padding: 0 1rem 1rem;
+}
+
+/* Studio hierarchy: one primary action region, then status and saved context. */
+.studio-overview {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#mission-shell {
+    grid-column: 1 / -1;
+    order: 0;
+}
+
+#overviewStatsRow,
+#overviewStatsSkeletonState {
+    order: 1;
+}
+
+#intelligence-shell {
+    grid-column: 1 / -1;
+    order: 2;
+}
+
+#overviewCapabilityRow,
+#overviewCapabilitySkeletonState,
+[data-ui="other-workflow-capabilities"] {
+    order: 3;
+}
+
+.studio-view-title {
+    margin-top: 0.75rem;
+    font-size: clamp(1.75rem, 2.6vw, 2.5rem);
+    font-weight: 650;
+    line-height: 1.15;
+    letter-spacing: -0.04em;
+    color: var(--ux-text-strong);
+}
+
+.studio-draft-title {
+    margin-top: 0.5rem;
+    font-size: 1.4rem;
+    line-height: 1.3;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    color: var(--ux-text-strong);
+}
+
+.overview-draft-content {
+    display: grid;
+    gap: 1rem;
+}
+
+.overview-draft-content > p,
+.overview-draft-content > details {
+    margin-top: 0;
+}
+
+.workspace-link-icon {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.workspace-link-heading > .workspace-link-label {
+    flex: 1;
+    text-align: left;
+}
+
+@media (min-width: 768px) {
+    .overview-intro {
+        grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.85fr);
+        align-items: center;
+        gap: 2rem;
+    }
+
+    .overview-draft-content {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .overview-draft-content > .overview-meta-grid {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .overview-draft-content > #presetDescription {
+        text-align: right;
+        max-width: 30rem;
+        justify-self: end;
+    }
+}
+
+@media (max-width: 767px) {
+    .workspace-link-icon {
+        flex-basis: 16px;
+        width: 16px;
+        height: 16px;
+    }
+
+    .workspace-link-heading > .workspace-link-label {
+        text-align: center;
+    }
+
+    .portal-workspace-rail .workspace-link-heading {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .portal-workspace-rail .workspace-link {
+        padding: 0.5rem 0.25rem;
+    }
+
+    #buildStepSummary {
+        line-height: 1.5;
+        font-size: 13px;
+    }
+}
+
+@media (forced-colors: active) {
+    .workspace-link[aria-current="page"] {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+}
+
+.studio-section-title {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    color: var(--ux-text-strong);
+}
+
+/* A neutral artboard avoids surrounding color casts and preserves image edges. */
+#artifactPreviewStage.studio-artboard {
+    border: 1px solid var(--ux-border-subtle);
+    border-radius: var(--ux-radius-md);
+    background: #e4e4e4;
+}
+
+.dark #artifactPreviewStage.studio-artboard {
+    background: #262626;
+}
+
+.studio-preview-image {
+    display: block;
+    width: 100%;
+    height: clamp(18rem, 50vh, 38rem);
+    object-fit: contain;
+    border-radius: 0;
+}
+
+.studio-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+}
+
+@media (max-width: 767px) {
+    .studio-preview-image {
+        height: clamp(14rem, 40vh, 24rem);
+    }
 }

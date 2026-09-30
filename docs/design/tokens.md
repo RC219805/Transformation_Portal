@@ -33,7 +33,7 @@ Source: `web/shared/shared-ui-tokens.css`
 | `--ux-body-size` | `1rem` | — | Body text size |
 | `--ux-label-size` | `0.75rem` | — | Label text size |
 | `--ux-meta-size` | `0.8125rem` | — | Meta text size |
-| `--ux-meta-tracking` | `0.12em` | — | Meta text letter-spacing |
+| `--ux-meta-tracking` | `0.06em` | — | Meta text letter-spacing |
 
 ### Spacing
 
@@ -53,49 +53,49 @@ Source: `web/shared/shared-ui-tokens.css`
 |---|---|---|---|
 | `--ux-radius-sm` | `6px` | — | Small radius |
 | `--ux-radius-md` | `8px` | — | Medium radius |
-| `--ux-radius-lg` | `8px` | — | Large radius |
+| `--ux-radius-lg` | `12px` | — | Large radius |
 | `--ux-radius-pill` | `999px` | — | Pill radius |
 
 ### Focus & shadow
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-focus-ring` | `rgba(8, 145, 178, 0.92)` | `rgba(103, 232, 249, 0.96)` | Focus ring color |
-| `--ux-focus-shadow` | `rgba(8, 145, 178, 0.18)` | `rgba(34, 211, 238, 0.18)` | Focus glow shadow |
-| `--ux-shadow-surface` | `0 10px 24px rgba(15, 23, 42, 0.06)` | `0 12px 28px rgba(2, 6, 23, 0.22)` | Surface shadow |
+| `--ux-focus-ring` | `#2458d3` | `#94b6ff` | Focus ring color |
+| `--ux-focus-shadow` | `rgba(36, 88, 211, 0.14)` | `rgba(148, 182, 255, 0.18)` | Focus glow shadow |
+| `--ux-shadow-surface` | `0 1px 3px rgba(20, 24, 32, 0.04)` | `0 1px 3px rgba(0, 0, 0, 0.16)` | Surface shadow |
 | `--ux-shadow-overlay` | `0 20px 44px rgba(15, 23, 42, 0.16)` | `0 22px 48px rgba(2, 6, 23, 0.38)` | Overlay shadow |
 
 ### Borders
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-border-subtle` | `rgba(100, 116, 139, 0.18)` | `rgba(100, 116, 139, 0.34)` | Subtle border color |
-| `--ux-border-strong` | `rgba(8, 145, 178, 0.24)` | `rgba(103, 232, 249, 0.22)` | Strong border color |
+| `--ux-border-subtle` | `#dce0e7` | `#343b48` | Subtle border color |
+| `--ux-border-strong` | `#aebacb` | `#637086` | Strong border color |
 
 ### Text colors
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-text-strong` | `#0f172a` | `#f8fafc` | Strong text color |
-| `--ux-text-primary` | `#1e293b` | `#e2e8f0` | Primary text color |
-| `--ux-text-muted` | `#475569` | `#b8c4d4` | Muted text color |
-| `--ux-text-soft` | `#64748b` | `#94a3b8` | Soft text color |
+| `--ux-text-strong` | `#171b24` | `#f4f6fa` | Strong text color |
+| `--ux-text-primary` | `#303744` | `#e0e5ee` | Primary text color |
+| `--ux-text-muted` | `#535e70` | `#b6bfce` | Muted text color |
+| `--ux-text-soft` | `#616d80` | `#9ca8ba` | Soft text color |
 
 ### Surface colors
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-surface-canvas` | `#f4f7fb` | `#020617` | Canvas surface color |
-| `--ux-surface-elevated` | `rgba(255, 255, 255, 0.92)` | `rgba(12, 18, 34, 0.9)` | Elevated surface color |
-| `--ux-surface-muted` | `rgba(248, 250, 252, 0.9)` | `rgba(15, 23, 42, 0.86)` | Muted surface color |
-| `--ux-surface-overlay` | `rgba(255, 255, 255, 0.97)` | `rgba(8, 15, 29, 0.96)` | Overlay surface color |
+| `--ux-surface-canvas` | `#f6f7f9` | `#111318` | Canvas surface color |
+| `--ux-surface-elevated` | `#ffffff` | `#191c22` | Elevated surface color |
+| `--ux-surface-muted` | `#f0f2f6` | `#22262f` | Muted surface color |
+| `--ux-surface-overlay` | `#ffffff` | `#242933` | Overlay surface color |
 
 ### Accents
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-accent-primary` | `#0f766e` | `#67e8f9` | Primary accent color |
-| `--ux-accent-secondary` | `#0f766e` | `#99f6e4` | Secondary accent color |
+| `--ux-accent-primary` | `#2458d3` | `#94b6ff` | Primary accent color |
+| `--ux-accent-secondary` | `#2458d3` | `#94b6ff` | Secondary accent color |
 
 ### Status
 
@@ -118,8 +118,8 @@ Source: `web/secure-landing/portal-src/styles/tokens.css`
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--ux-panel-border` | `rgba(148, 163, 184, 0.22)` | `rgba(100, 116, 139, 0.5)` | Panel border color |
-| `--ux-panel-border-strong` | `rgba(8, 145, 178, 0.3)` | `rgba(103, 232, 249, 0.34)` | Strong panel border color |
+| `--ux-panel-border` | `var(--ux-border-subtle)` | `var(--ux-border-subtle)` | Panel border color |
+| `--ux-panel-border-strong` | `var(--ux-border-strong)` | `var(--ux-border-strong)` | Strong panel border color |
 
 ## Shell tokens (`--shell-*`)
 
@@ -129,27 +129,27 @@ Source: `web/secure-landing/portal-src/styles/tokens.css`
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--shell-ink` | `#0f172a` | `#e5eef6` | Ink (foreground text) |
-| `--shell-muted` | `#475569` | `#a8b6c8` | Muted text |
+| `--shell-ink` | `var(--ux-text-strong)` | `var(--ux-text-strong)` | Ink (foreground text) |
+| `--shell-muted` | `var(--ux-text-muted)` | `var(--ux-text-muted)` | Muted text |
 
 ### Borders & surfaces
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
 | `--shell-border` | `var(--ux-panel-border)` | `var(--ux-panel-border)` | Border color |
-| `--shell-panel` | `rgba(255, 255, 255, 0.86)` | `var(--shell-veil-strong)` | Panel background |
-| `--shell-panel-strong` | `rgba(255, 255, 255, 0.94)` | `rgba(15, 23, 42, 0.9)` | Strong panel background |
+| `--shell-panel` | `var(--ux-surface-elevated)` | `var(--shell-veil-strong)` | Panel background |
+| `--shell-panel-strong` | `var(--ux-surface-elevated)` | `var(--ux-surface-elevated)` | Strong panel background |
 
 ### Accents
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--shell-accent-text` | `#0f766e` | `#99f6e4` | Accent text color |
-| `--shell-accent-fill` | `#0e7490` | `#2dd4bf` | Accent fill color |
-| `--shell-accent-fill-strong` | `#155e75` | `#0f766e` | Strong accent fill color |
-| `--shell-on-accent` | `#ffffff` | `#020617` | Text color on accent surfaces |
+| `--shell-accent-text` | `#2458d3` | `#94b6ff` | Accent text color |
+| `--shell-accent-fill` | `#2458d3` | `#a4bfff` | Accent fill color |
+| `--shell-accent-fill-strong` | `#204db8` | `#94b6ff` | Strong accent fill color |
+| `--shell-on-accent` | `#ffffff` | `#111318` | Text color on accent surfaces |
 | `--shell-accent` | `var(--shell-accent-text)` | `var(--shell-accent-text)` | Accent color |
-| `--shell-accent-soft` | `rgba(8, 145, 178, 0.1)` | `rgba(45, 212, 191, 0.14)` | Soft accent tint |
+| `--shell-accent-soft` | `#edf2ff` | `#243454` | Soft accent tint |
 
 ### Signals
 
@@ -162,9 +162,9 @@ Source: `web/secure-landing/portal-src/styles/tokens.css`
 
 | Token | Light | Dark | Description |
 |---|---|---|---|
-| `--shell-veil-soft` | `rgba(255, 255, 255, 0.72)` | `rgba(15, 23, 42, 0.72)` | Soft veil overlay |
-| `--shell-veil` | `rgba(255, 255, 255, 0.74)` | `rgba(15, 23, 42, 0.74)` | Veil overlay |
-| `--shell-veil-strong` | `rgba(255, 255, 255, 0.78)` | `rgba(15, 23, 42, 0.76)` | Strong veil overlay |
+| `--shell-veil-soft` | `var(--ux-surface-muted)` | `var(--ux-surface-muted)` | Soft veil overlay |
+| `--shell-veil` | `var(--ux-surface-elevated)` | `var(--ux-surface-elevated)` | Veil overlay |
+| `--shell-veil-strong` | `var(--ux-surface-elevated)` | `var(--ux-surface-elevated)` | Strong veil overlay |
 | `--shell-tint-faint` | `rgba(148, 163, 184, 0.06)` | — | Faint tint |
 
 ## Ambient tokens (`--ambient-*`)

@@ -51,3 +51,35 @@ test("explicit comparison groups prevent fallback from photographs to depth or v
     assert.equal(context.findCompareArtifact(primary, artifacts), null);
   }
 });
+
+test("comparison copy identifies the selected artifacts without inferring before and after roles", () => {
+  vm.runInContext(source.slice(source.indexOf("function _compareSurfaceCopy("), source.indexOf("function _findJobById(")), context);
+  const selected = artifact("input-0000/final.png", { display_hint: { role: "primary_preview", compare_group: "photograph" } });
+  const comparison = artifact("input-0000/source.png", { display_hint: { role: "supporting_preview", compare_group: "photograph" } });
+  const copy = context._compareSurfaceCopy(selected, comparison, true);
+  assert.equal(copy.summaryTitle, "Side-by-side comparison");
+  assert.equal(copy.summaryDetail, "Selected: input-0000/final.png. Comparison: input-0000/source.png.");
+  assert.doesNotMatch(copy.summaryDetail, /Before|After/);
+});
+
+test("download accessibility describes the full selected file while retaining its original target", () => {
+  const review = readFileSync(new URL("../portal-src/review-surface-deferred.js", import.meta.url), "utf8");
+  const downloadBlock = review.slice(review.indexOf("if (els.downloadArtifactBtn) {"), review.indexOf("if (els.copyArtifactPathBtn) {"));
+  const renderDownload = new Function("els", "selectedArtifact", "selected", "buildArtifactUrl", "artifactNameParts", "formatBytes", downloadBlock);
+  const button = {
+    dataset: {}, attributes: new Map(), disabled: true,
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    removeAttribute(name) { this.attributes.delete(name); },
+  };
+  const els = { downloadArtifactBtn: button };
+  renderDownload(els, { ...delivery, size_bytes: 4096 }, { id: "job-v5" }, context.buildArtifactUrl, context.artifactNameParts, (bytes) => `${bytes} bytes`);
+  assert.equal(button.disabled, false);
+  assert.equal(button.dataset.url, delivery.url, "TIFF download must not switch to its PNG display derivative");
+  assert.equal(button.attributes.get("aria-label"), "Download full file: delivery.tif (4096 bytes)");
+
+  const resetSource = source.slice(source.indexOf("function _resetArtifactActionButtons("), source.indexOf("function _reviewSurfaceDeferredEnabled("));
+  new Function("els", `${resetSource}; _resetArtifactActionButtons();`)(els);
+  assert.equal(button.disabled, true);
+  assert.equal(button.dataset.url, undefined);
+  assert.equal(button.attributes.has("aria-label"), false, "a previous artifact filename must not survive clearing selection");
+});

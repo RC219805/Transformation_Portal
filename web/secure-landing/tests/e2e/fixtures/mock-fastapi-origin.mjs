@@ -132,6 +132,20 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Downloads leave Chromium's intercepted navigation after the attachment
+  // response. Serve a real repository fixture through the authenticated
+  // frontdoor proxy so the journey test can verify the downloaded bytes.
+  if (req.method === "GET" && pathname === "/v1/jobs/job-dispatched/artifacts/photography/delivery.tif") {
+    const body = readFileSync(path.join(REPO_ROOT, "tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_Pool_UltraQuality.tif"));
+    res.writeHead(200, {
+      "Content-Type": "image/tiff",
+      "Content-Disposition": 'attachment; filename="delivery.tif"',
+      "Content-Length": body.length,
+    });
+    res.end(body);
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/__mock-portal/portal.css") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });

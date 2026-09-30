@@ -58,6 +58,20 @@ test("frontdoor pages explicitly activate the accessible dark token set", () => 
   assert.ok(contrastRatio(mutedText, canvas) >= 4.5);
   assert.ok(contrastRatio("#f8fafc", "#0f766e") >= 4.5);
   assert.ok(contrastRatio("#f8fafc", "#0e7490") >= 4.5);
+  assert.ok(contrastRatio("#ffffff", "#2458d3") >= 4.5);
+});
+
+test("public entry stays static by default and labels the workspace illustration", () => {
+  const html = renderHomepage();
+  const loginSource = readFrontdoorFile("app/login/route.js");
+
+  assert.match(html, /data-ui="homepage-workspace-preview"/);
+  assert.match(html, /Illustrative workspace/);
+  assert.match(html, /aria-labelledby="workspace-preview-title"/);
+  for (const source of [html, loginSource]) {
+    assert.doesNotMatch(source, /\bautoplay\b/i);
+    assert.match(source, /preload="none"/);
+  }
 });
 
 test("homepage keeps one managed-entry destination per navigation cluster", () => {
