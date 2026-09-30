@@ -11,11 +11,13 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from PIL import Image
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v4 import evidence as ev
+from transformation_portal.lux_depth_v4.color_preparation import output_srgb_icc, prepare_input_color
 from transformation_portal.lux_depth_v4.lifecycle import LuxDepthV4Request, prepare
 from transformation_portal.lux_depth_v4.pipeline import LuxDepthV4Result
 from transformation_portal.lux_depth_v4.publication import publish_result
@@ -149,6 +151,105 @@ def completed(tmp_path, monkeypatch, request):
 
 def _rewrite(result, payload):
     result.evidence_path.write_bytes(canonicalize_json(payload))
+
+
+def _rewrite_photograph(result, payload, descriptor):
+    row = next(item for item in payload["artifacts"] if item["kind"] == "descriptor")
+    raw = canonicalize_json(descriptor)
+    (result.output_root / row["path"]).write_bytes(raw)
+    row.update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+    _rewrite(result, payload)
+
+
+def _color_completion(completed, *, receipt=True, carrier=True):
+    result, _, payload = completed
+    descriptor = json.loads((result.output_root / "input-0000/photograph.json").read_bytes())
+    profile = output_srgb_icc()
+    descriptor["source"]["source_icc_sha256"] = hashlib.sha256(profile).hexdigest()
+    if receipt:
+        prepared = prepare_input_color(
+            input_color="srgb", image_format="PNG", profile=profile, declared_color=None, exif_color=None
+        )
+        descriptor["source"]["metadata"] = {
+            "source_format": "PNG",
+            "input_color": prepared.source_color,
+            "color_resolution": prepared.resolution,
+            "color_preparation": prepared.evidence,
+        }
+    if carrier:
+        relative = "input-0000/source-icc.npy"
+        np.save(result.output_root / relative, np.frombuffer(profile, np.uint8), allow_pickle=False)
+        raw = (result.output_root / relative).read_bytes()
+        payload["artifacts"].append(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size_bytes": len(raw),
+                "kind": "array",
+                "input_id": "input-0000",
+            }
+        )
+    _rewrite_photograph(result, payload, descriptor)
+    return result, payload, descriptor
+
+
+@pytest.mark.parametrize("receipt", [False, True])
+def test_retained_source_icc_is_verified_with_or_without_receipt(completed, receipt):
+    result, _, _ = _color_completion(completed, receipt=receipt)
+    verified = ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+    assert "input-0000/source-icc.npy" in {item.path for item in verified.artifacts}
+
+
+@pytest.mark.parametrize("receipt", [False, True])
+@pytest.mark.parametrize("digest", ["missing", None])
+def test_orphan_source_icc_is_rejected(completed, receipt, digest):
+    result, payload, descriptor = _color_completion(completed, receipt=receipt)
+    if digest == "missing":
+        del descriptor["source"]["source_icc_sha256"]
+    else:
+        descriptor["source"]["source_icc_sha256"] = digest
+    _rewrite_photograph(result, payload, descriptor)
+    with pytest.raises(ValueError, match="Retained source ICC requires its photographic descriptor digest"):
+        ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+
+def test_receipt_requires_retained_source_icc_but_historical_descriptor_does_not(completed):
+    result, payload, descriptor = _color_completion(completed, receipt=False, carrier=False)
+    ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+    descriptor["source"]["metadata"] = {"color_preparation": {}}
+    _rewrite_photograph(result, payload, descriptor)
+    with pytest.raises(ValueError, match="bounded retained source ICC array"):
+        ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+
+@pytest.mark.parametrize("receipt", [False, True])
+def test_retained_source_icc_digest_must_match_descriptor(completed, receipt):
+    result, payload, descriptor = _color_completion(completed, receipt=receipt)
+    descriptor["source"]["source_icc_sha256"] = "a" * 64
+    _rewrite_photograph(result, payload, descriptor)
+    with pytest.raises(ValueError, match="Source ICC differs from the photographic descriptor"):
+        ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+
+@pytest.mark.parametrize("receipt", [False, True])
+def test_rehashed_invalid_icc_carrier_is_rejected(completed, receipt):
+    result, payload, _ = _color_completion(completed, receipt=receipt)
+    row = next(item for item in payload["artifacts"] if item["path"].endswith("/source-icc.npy"))
+    raw = b"not a retained NPY byte array"
+    (result.output_root / row["path"]).write_bytes(raw)
+    row.update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+    _rewrite(result, payload)
+    with pytest.raises(ValueError):
+        ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
+
+
+@pytest.mark.parametrize("metadata", [None, [], "invalid"])
+def test_invalid_source_metadata_is_a_validation_error(completed, metadata):
+    result, payload, descriptor = _color_completion(completed)
+    descriptor["source"]["metadata"] = metadata
+    _rewrite_photograph(result, payload, descriptor)
+    with pytest.raises(ValueError, match="requires master metadata"):
+        ev.verify_execution_evidence_v2(result.output_root, expected_plan_sha256=result.plan_fingerprint_sha256)
 
 
 def test_complete_evidence_binds_every_artifact_and_plan(completed):

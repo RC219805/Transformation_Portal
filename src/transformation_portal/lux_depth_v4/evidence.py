@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
@@ -21,6 +22,10 @@ from transformation_portal.core.execution_plan_v3 import parse_photography_plan
 from transformation_portal.core.image_artifact import artifact_content_hash
 from transformation_portal.depth.backends.da3_runtime_identity import DA3RuntimeIdentityEvidence
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.lux_depth_v4.color_preparation_evidence import (
+    retained_source_icc,
+    validate_color_preparation_evidence,
+)
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
@@ -206,6 +211,21 @@ def _verify_execution_evidence(
             for field in ("source", "master", "depth"):
                 if not isinstance(descriptor.get(field), dict) or descriptor[field].get("source_sha256") != source["sha256"]:
                     raise ValueError("Photograph descriptor refers to another source")
+            metadata = descriptor["source"].get("metadata", {})
+            if not isinstance(metadata, dict):
+                raise ValueError("Color preparation requires master metadata")
+            icc_relative = f"{input_id}/source-icc.npy"
+            icc_digest = descriptor["source"].get("source_icc_sha256")
+            icc = None
+            if icc_relative in declared:
+                if icc_digest is None:
+                    raise ValueError("Retained source ICC requires its photographic descriptor digest")
+                icc = retained_source_icc(root, icc_relative, declared)
+                if require_digest(icc_digest) != hashlib.sha256(icc).hexdigest():
+                    raise ValueError("Source ICC differs from the photographic descriptor")
+            elif "color_preparation" in metadata and icc_digest is not None:
+                raise ValueError("Color preparation requires a bounded retained source ICC array")
+            validate_color_preparation_evidence(metadata, input_color=payload["configuration"]["input_color"], source_icc=icc)
             calibration = source.get("companions", {}).get("calibration")
             depth = descriptor["depth"]
             master_shape = descriptor["master"].get("shape")

@@ -26,6 +26,12 @@ replace the V3 carrier. A prepared request holds physical input, output, runtime
 cache, companion, and material roots separately from the canonical logical plan.
 Execution reconstructs and validates the exact core-owned carrier.
 
+V2/V3 `configuration.input_color` accepts `auto`, `auto_assume_srgb`, `srgb`, and
+`linear_srgb`. The additive assumption mode retains automatic metadata validation
+and records fallback only for untagged sources. New photographic evidence binds
+the color preparation recipe and retains an embedded source ICC as
+`source-icc.npy`; managed reservation includes that optional artifact.
+
 ## Additive fields
 
 The closed JSON schema is

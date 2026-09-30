@@ -42,8 +42,23 @@ The external model policy remains required; missing policy fails closed.
 
 The CLI retains V4's color, target-size, strength, clarity, raw-runtime, resource,
 preview, calibration-companion, and MaterialsV4 options. Target size defaults to
-518. Choose source color interpretation explicitly for untagged imagery;
-`--input-color srgb` is an example, not a universal interpretation of TIFF/RAW.
+518. Color modes are `auto` (unchanged default), `auto_assume_srgb`, `srgb`, and
+`linear_srgb`. Auto modes convert supported RGB/gray ICC and recognized PNG/EXIF
+color metadata to extended linear sRGB. The assumption mode first detects color,
+then records an sRGB assumption only for untagged ordinary images; it never
+overrides malformed, conflicting, or explicitly unknown metadata. The existing
+untagged-JPEG assumption remains recorded under `auto`. Explicit color modes
+assert an encoding; `--input-color srgb` must not label unconverted Adobe RGB or
+RAW samples. See the [four-mode color contract](LUX_DEPTH.md#plan-and-run-original-photographs).
+
+Color preparation preserves a float32 master, separate alpha, and extended
+values, using the wheel-owned LittleCMS engine for supported ICC conversions.
+New `source.metadata.color_preparation` receipts in `photograph.json` bind the
+requested mode, detected metadata, profile hashes, conversion/assumption,
+precision, and engine. Verification checks the recipe against the frozen request
+and retained `source-icc.npy`; master/proxy identity also includes the receipt.
+This verifies retained evidence consistency without independently re-decoding
+the original photographic source bytes.
 
 For a higher-resolution comparison, add `--target-size 1008` to the execution
 command and use a fresh output directory. The retained 29.998 MP photograph
@@ -99,9 +114,10 @@ readiness. Disabled or unavailable V5 servers remain blocked with their
 prerequisite reasons. Preview checks are advisory; admission and the worker
 revalidate paths, runtime authority, resources, and the exact frozen plan.
 Preview and admission also inspect authorized image headers within bounded read
-and inventory limits. Unsupported profiles require conversion to sRGB with a
-profile-aware editor. If `auto` rejects the exported sRGB profile, select `srgb`
-only for those converted copies; an input-color assertion does not convert pixels.
+and inventory limits. Supported ICC profiles are converted during preprocessing;
+preview reports the planned conversion or recorded assumption. Unsupported or
+conflicting metadata remains blocked. Use a profile-aware export for unsupported
+profiles and assert `srgb` only when it describes the exported samples.
 The [September 21 HTTP/portal audit evidence](../analysis/HTTP_PORTAL_LUX_SUCCESSOR_2026-09-21.md)
 records the integration decision and validation boundaries.
 

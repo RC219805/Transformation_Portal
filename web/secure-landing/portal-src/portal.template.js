@@ -8146,7 +8146,7 @@ function _buildLocalNextBestAction(payload = null, preview = null) {
             action: 'restore_backend_connection',
             field: 'backend_connection',
             label: 'Restore backend connection',
-            detail: 'Preview-backed validation and dispatch resume when the orchestrator backend is reachable again.',
+            detail: 'Reconnect the backend to validate and dispatch.',
             tone: 'blocked'
         };
     }
@@ -8177,25 +8177,15 @@ function _buildLocalNextBestAction(payload = null, preview = null) {
         };
     }
 
-    if (previewWarnings.length > 0) {
-        const issue = previewWarnings[0];
-        const field = String(issue?.field || '').trim();
+    const warning = previewWarnings[0] || readinessWarning;
+    if (warning) {
+        const field = String(warning?.field || '').trim();
+        const isReadinessWarning = !previewWarnings.length;
         return {
-            action: 'review_warning',
+            action: isReadinessWarning ? 'review_readiness_warning' : 'review_warning',
             field,
-            label: _nextBestActionLabel(field, 'Review warning before dispatch'),
-            detail: _nextBestActionDetail(issue, 'Review the current warning before dispatch.'),
-            tone: 'warning'
-        };
-    }
-
-    if (readinessWarning) {
-        const field = String(readinessWarning?.field || '').trim();
-        return {
-            action: 'review_readiness_warning',
-            field,
-            label: _nextBestActionLabel(field, 'Review readiness warning'),
-            detail: _nextBestActionDetail(readinessWarning, 'Review the current readiness warning before dispatch.'),
+            label: _nextBestActionLabel(field, isReadinessWarning ? 'Review readiness warning' : 'Review warning before dispatch'),
+            detail: _nextBestActionDetail(warning, 'Review the current warning before dispatch.'),
             tone: 'warning'
         };
     }
@@ -8207,7 +8197,8 @@ function _buildLocalNextBestAction(payload = null, preview = null) {
             action: 'dispatch_ready',
             field: 'run_job',
             label: 'Execute the Lux run',
-            detail: 'Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.',
+            detail: (isPhotographyPipeline(currentPayload.pipeline) && matchedPreview?.estimate_summary?.summary_label)
+                || 'Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.',
             tone: 'ready'
         };
     }
@@ -8215,9 +8206,7 @@ function _buildLocalNextBestAction(payload = null, preview = null) {
         action: 'dispatch_ready',
         field: 'run_job',
         label: 'Dispatch the archive stage',
-        detail: canonicalCommand
-            ? `Canonical command ${canonicalCommand} is ready. Review the expected outputs and dispatch when satisfied.`
-            : 'Archive readiness is clear. Review the expected outputs and dispatch when satisfied.',
+        detail: `${canonicalCommand ? `Canonical command ${canonicalCommand} is ready.` : 'Archive readiness is clear.'} Review the expected outputs and dispatch when satisfied.`,
         tone: 'ready'
     };
 }

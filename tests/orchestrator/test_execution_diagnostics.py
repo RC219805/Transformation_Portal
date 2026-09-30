@@ -75,6 +75,22 @@ def test_unknown_or_embedded_log_messages_do_not_change_failure(line):
     assert job.error == before
 
 
+def test_preparation_failure_describes_explicit_recorded_assumption():
+    job = _failed_job(
+        line=(
+            "Stage preprocess failed: Ambiguous input color. Auto found no usable color-space metadata. "
+            "Choose Auto with sRGB assumption only if that assumption is acceptable, select a known source color, "
+            "or re-export from the original with an embedded profile. "
+            "Assumptions are recorded and do not recover the original profile."
+        )
+    )
+    annotate_job_failure(job)
+    assert job.error["details"]["reason"] == "ambiguous_input_color"
+    assert "records the assumption without recovering" in job.error["message"]
+    assert job.error["code"] == "RUNNER_EXIT_NONZERO"
+    assert job.state == "failed"
+
+
 def test_guidance_does_not_copy_tracebacks_or_other_log_content():
     job = _failed_job()
     job.logs_tail += ['File "/private/customer/input.tif", token=secret', "<script>alert(1)</script>", "x" * 1000000]

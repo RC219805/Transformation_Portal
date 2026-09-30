@@ -63,16 +63,18 @@ def test_canonical_srgb_and_untagged_jpeg_remain_accepted(tmp_path):
     _inspect(tmp_path)
 
 
-def test_unrecognized_srgb_profile_requires_explicit_selection_after_conversion(tmp_path):
-    # Creator metadata changes neither the sRGB primaries nor transfer curve,
-    # but Auto deliberately recognizes only the canonical governed profile.
+def test_valid_noncanonical_srgb_profile_is_color_managed(tmp_path):
+    # Creator metadata changes neither primaries nor curves. Native profile
+    # interpretation replaces the historical exact-byte rejection.
     profile = bytearray(output_srgb_icc())
     profile[80:84] = b"TEST"
     assert ImageCms.getProfileName(ImageCms.ImageCmsProfile(io.BytesIO(profile))).strip() == "sRGB built-in"
     Image.new("RGB", (14, 14)).save(tmp_path / "converted.jpg", icc_profile=bytes(profile))
-    with pytest.raises(InputColorError, match="select sRGB only for those converted copies"):
-        _inspect(tmp_path)
-    _inspect(tmp_path, input_color="srgb")
+    _inspect(tmp_path)
+    with (tmp_path / "converted.jpg").open("rb") as source:
+        evidence = validate_input_color_metadata(source, source_name="converted.jpg")
+    assert evidence["engine"] == "imagecodecs_lcms"
+    assert evidence["action"] == "convert"
 
 
 @pytest.mark.parametrize("metadata", ["canonical_icc", "late_exif", "untagged"])

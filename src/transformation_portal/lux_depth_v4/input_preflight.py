@@ -6,7 +6,7 @@ import io
 import os
 import stat
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import Any, BinaryIO, cast
 
 from transformation_portal.lux_depth_v3.execution_evidence import (
     _open_confined_artifact,
@@ -47,7 +47,9 @@ class _MetadataReader:
         return self._stream.tell()
 
 
-def validate_input_directory_colors(root: Path, *, input_color: str, max_input_bytes: int, max_pixels: int) -> None:
+def validate_input_directory_colors(
+    root: Path, *, input_color: str, max_input_bytes: int, max_pixels: int
+) -> list[dict[str, Any]]:
     """Reject unsupported input colors without model loads, pixel decode, or writes.
 
     Paths must already be authorized for the caller. Pinning and confined opens
@@ -57,6 +59,7 @@ def validate_input_directory_colors(root: Path, *, input_color: str, max_input_b
     selected: list[Path] = []
     entries = 0
     remaining = [_MAX_BATCH_METADATA_BYTES]
+    preparations: list[dict[str, Any]] = []
 
     with _pin_output_root(root) as pinned:
         pending = [root]
@@ -89,13 +92,16 @@ def validate_input_directory_colors(root: Path, *, input_color: str, max_input_b
                 if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= max_input_bytes:
                     raise ValueError("Input must be a bounded regular file without link aliases")
                 with os.fdopen(os.dup(descriptor), "rb") as stream:
-                    validate_input_color_metadata(
+                    preparation = validate_input_color_metadata(
                         cast(BinaryIO, _MetadataReader(stream, remaining)),
                         source_name=relative,
                         input_color=input_color,
                         max_pixels=max_pixels,
                     )
+                    if preparation is not None:
+                        preparations.append(preparation)
                 _validate_confined_entry_identity(pinned, relative, before, context="photographic input header")
             finally:
                 os.close(descriptor)
         _validate_pinned_root_namespace(pinned)
+    return preparations

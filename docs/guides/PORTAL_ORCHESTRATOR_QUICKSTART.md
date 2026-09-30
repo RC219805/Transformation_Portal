@@ -61,10 +61,21 @@ uploads, current-preview dispatch checks, and verified artifact review. See
 for the complete deployment, request, permission, and rollback contract.
 
 Managed Unified, V5, and V6 previews inspect authorized image headers before
-dispatch. Unsupported profiles require a color-managed conversion to sRGB;
-an input-color override only reinterprets pixels. If Auto rejects the exported
-sRGB profile, select sRGB only for the converted copies. Ambiguous TIFF inputs
-require a known source encoding. Failed runs retain their logs in Operate, and
+dispatch and report planned color conversions or assumptions. `auto` remains the
+default and converts supported ICC/EXIF/PNG color metadata to extended linear
+sRGB. `auto_assume_srgb` detects and converts first, then records an sRGB
+assumption only for genuinely untagged ordinary images. Invalid, conflicting, or
+explicitly unknown metadata stays blocked. The existing untagged-JPEG assumption
+remains recorded under `auto`; ambiguous untagged PNG/TIFF requires the new
+assumption mode or a known explicit encoding.
+
+The `srgb` and `linear_srgb` choices assert the current samples' encoding; they
+must not relabel unconverted Adobe RGB. Supported RGB/gray ICC profiles use a
+float32 LittleCMS transform, while unsupported profiles require a profile-aware
+export. RAW retains its governed decoder's linear output. New photographic
+source metadata records a `tp.color.preparation.v1` receipt bound to the request,
+source/profile hashes, operation, and engine; verification checks that recipe.
+Failed runs retain their logs in Operate, and
 recognized color failures include recovery guidance without changing the
 `RUNNER_EXIT_NONZERO` error code.
 

@@ -28,6 +28,11 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
     _validate_pinned_root_namespace,
 )
 from transformation_portal.lux_depth_v4.backend import require_process_supervisor
+from transformation_portal.lux_depth_v4.color_runtime import (
+    COLOR_PROCESSING_MODULES,
+    color_runtime_identity,
+    validate_color_runtime_identity,
+)
 from transformation_portal.lux_depth_v4.evidence import _inventory
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 from transformation_portal.lux_depth_v4.photography import decode_master
@@ -52,6 +57,9 @@ _MODULES = (
     "transformation_portal.lux_depth_v6.products",
     "transformation_portal.core.image_artifact",
     "transformation_portal.lux_depth_v4.photography",
+    "transformation_portal.lux_depth_v4.color_preparation",
+    "transformation_portal.lux_depth_v4.color_preparation_evidence",
+    "transformation_portal.lux_depth_v4.color_runtime",
     "transformation_portal.lux_depth_v4.io",
     "transformation_portal.lux_depth_v5.preview",
 )
@@ -63,6 +71,7 @@ def processing_identity() -> dict[str, Any]:
     return {
         "modules": {name: digest(Path(importlib.import_module(name).__file__).read_bytes()) for name in _MODULES},
         "dependencies": {name: version(name) for name in _DEPENDENCIES},
+        "color_preparation": color_runtime_identity(),
     }
 
 
@@ -114,7 +123,7 @@ class NativeDepthProPlan:
             or canonicalize_json(payload) != self.canonical_bytes
         ):
             raise ValueError("Invalid closed canonical native V6 Depth Pro plan")
-        if payload["input_color"] not in {"auto", "srgb", "linear_srgb"}:
+        if payload["input_color"] not in {"auto", "auto_assume_srgb", "srgb", "linear_srgb"}:
             raise ValueError("Invalid Depth Pro input color")
         GradeRecipe.from_payload(payload["grade"])
         RenderRecipe.from_payload(payload["render"])
@@ -167,15 +176,28 @@ class NativeDepthProPlan:
         processing = payload["processing"]
         if (
             not isinstance(processing, dict)
-            or set(processing) != {"modules", "dependencies"}
-            or set(processing["modules"]) != set(_MODULES)
+            or set(processing) not in ({"modules", "dependencies"}, {"modules", "dependencies", "color_preparation"})
+            or not isinstance(processing["modules"], dict)
+            or not isinstance(processing["dependencies"], dict)
             or set(processing["dependencies"]) != set(_DEPENDENCIES)
         ):
             raise ValueError("Invalid Depth Pro processing identity")
+        expected_modules = set(_MODULES)
+        if "color_preparation" in processing:
+            validate_color_runtime_identity(processing["color_preparation"])
+        else:
+            expected_modules -= COLOR_PROCESSING_MODULES
+        if set(processing["modules"]) != expected_modules:
+            raise ValueError("Depth Pro processing source inventory differs")
         for value in processing["modules"].values():
             require_digest(value)
         if any(type(value) is not str or not value for value in processing["dependencies"].values()):
             raise ValueError("Invalid Depth Pro processing dependency")
+        if (
+            "color_preparation" in processing
+            and processing["color_preparation"]["imagecodecs_version"] != processing["dependencies"]["imagecodecs"]
+        ):
+            raise ValueError("Depth Pro CMS differs from the processing dependency")
         runtime = payload["runtime"]
         backend.validate_runtime_identity(runtime)
         config = backend.runtime_config_from_execution_plan(authority)

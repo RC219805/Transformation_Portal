@@ -60,8 +60,11 @@ def _args(supplied):
     ]
 
 
-def test_import_supplied_produces_admissible_v3_plan(supplied, capsys):
-    assert main(_args(supplied)) == 0
+@pytest.mark.parametrize("input_color", ["srgb", "auto_assume_srgb"])
+def test_import_supplied_produces_admissible_v3_plan(supplied, capsys, input_color):
+    arguments = _args(supplied)
+    arguments[arguments.index("--input-color") + 1] = input_color
+    assert main(arguments) == 0
     result = json.loads(capsys.readouterr().out)
     source, _, output = supplied
     request = LuxDepthV4Request(source.parent, output.parent / "lux-output", materials_manifest=output / "lux-materials.json")
@@ -140,3 +143,20 @@ def test_mask_resource_rejection_precedes_immutable_copy(supplied, monkeypatch, 
     monkeypatch.setattr(cli, "RegionEvidence", forbidden_copy)
     assert main(_args(supplied)) == 1
     assert not output.exists()
+
+
+@pytest.mark.parametrize("command", ["import-supplied", "inspect", "infer"])
+def test_materials_cli_rejects_unknown_color_before_source_read(command, tmp_path, capsys):
+    args = [command, "--source", str(tmp_path / "missing.png"), "--input-color", "assume_any_profile"]
+    if command == "inspect":
+        args += ["--evidence", str(tmp_path / "evidence.json")]
+    else:
+        args += ["--output-dir", str(tmp_path / "output")]
+        if command == "import-supplied":
+            args += ["--regions", str(tmp_path / "regions.json")]
+        else:
+            args += ["--sam2-checkpoint", str(tmp_path / "sam2.pt"), "--clip-checkpoint", str(tmp_path / "clip.pt")]
+    with pytest.raises(SystemExit) as failure:
+        main(args)
+    assert failure.value.code == 2
+    assert "argument --input-color: invalid choice" in capsys.readouterr().err

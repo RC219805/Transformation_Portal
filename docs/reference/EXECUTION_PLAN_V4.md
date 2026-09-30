@@ -13,6 +13,13 @@ MaterialsV4 evidence. CPU planning neither loads a model nor creates outputs;
 `auto`/`mps` planning may probe device availability in a subprocess. Physical
 input/output/cache roots remain separate from portable canonical plan bytes.
 
+`configuration.input_color` accepts `auto`, `auto_assume_srgb`, `srgb`, and
+`linear_srgb`. The additive assumption mode first validates and converts supported
+metadata, and records sRGB only as a fallback for untagged sources. New source
+masters carry `tp.color.preparation.v1` metadata; verification re-resolves the
+recipe against the frozen mode and retained original ICC bytes. This checks
+recipe consistency, not independent decoding of the original source file.
+
 The closed JSON schema is packaged at
 `transformation_portal/schemas/execution/plan.v4.schema.json`. Validation also
 reconstructs and compares the exact node graph and verifies the fingerprint.

@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--verify", action="store_true", help="Verify existing V6 output against its retained V5 parent")
     parser.add_argument("--expected-plan-sha256", help="Expected V6 canonical-byte digest, for --verify")
     parser.add_argument("--depth-backend", choices=("retained-v5", "depth-pro"), default="retained-v5")
-    parser.add_argument("--input-color", choices=("auto", "srgb", "linear_srgb"))
+    parser.add_argument("--input-color", choices=("auto", "auto_assume_srgb", "srgb", "linear_srgb"))
     parser.add_argument("--depth-pro-python", type=Path)
     parser.add_argument("--depth-pro-checkpoint", type=Path)
     parser.add_argument("--device", choices=("cpu", "mps", "cuda"))
