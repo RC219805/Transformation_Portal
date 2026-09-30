@@ -158,6 +158,22 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   Never persist API keys in browser storage: `direct_debug` keys are page-local,
   while managed mode keeps the backend key out of the browser and fails closed
   when bootstrap or session authentication is unavailable.
+  Portal paths are server-side authority: relative UI examples grant no access.
+  In tenant mode, photographic data stays within that tenant's workspace or CAS;
+  shared runtime paths are server-owned exceptions. Staged uploads replace only
+  the input path; choose a separately authorized writable output, preferably a
+  fresh directory. Unified, V5, and V6 photography outputs must remain separate
+  from sources and manifest directories. Preview gates dispatch, but admission
+  and workers revalidate.
+  Managed Unified, V5, and V6 preview/admission inspect authorized image headers.
+  Automatic color modes detect supported metadata and convert to extended linear
+  sRGB. `auto` retains the recorded untagged-JPEG sRGB assumption but blocks
+  ambiguous untagged PNG/TIFF. `auto_assume_srgb` additionally permits a recorded
+  sRGB assumption for otherwise untagged ordinary images; invalid, conflicting,
+  or explicitly unknown metadata still fails. Explicit `srgb`/`linear_srgb`
+  assert the existing encoding; they do not convert an arbitrary source profile.
+  Unsupported profiles need a profile-aware export, never a relabeled encoding.
+  Failed runs retain logs in Operate for recovery.
   Managed V5 dispatch requires a current successful configuration preview and
   readiness; Review may show its verified bounded sRGB PNG derivative, while
   TIFF/float outputs remain the precision authority.
@@ -198,7 +214,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `Last-Event-ID`; `0` replays all retained events. Keep the positive
   `TP_ORCHESTRATOR_EVENT_RETENTION_PER_JOB` value aligned on API and worker
   hosts. Treat replay as best-effort recovery rather than complete audit
-  evidence, and monitor orphan namespaces plus total replay storage.
+  evidence, and monitor orphan namespaces plus total replay storage. Quiet
+  streams emit ephemeral `heartbeat` events without persisting or advancing
+  replay IDs; they prove transport activity, not processing progress. Managed
+  artifact retrieval streams through the frontdoor origin while preserving
+  backend authentication, tenant, path, and verified-inventory checks.
 - Governance/docs gates:
   `make validate-ci`,
   `make check-stale-docs`, `make check-doc-heading-links`,
@@ -403,7 +423,7 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/pipelines/run_800_picacho_efficientsam_validation.sh`, and
   `./scripts/pipelines/hdr_production_pipeline.sh`.
 - Unified Lux workflow:
-  `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth process --input-dir <originals> --output-dir <new-path> --input-color <srgb|linear_srgb|auto> --device <cpu|mps|auto> --precision fp32 [--plan]`
+  `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth process --input-dir <originals> --output-dir <new-path> --input-color <srgb|linear_srgb|auto|auto_assume_srgb> --device <cpu|mps|auto> --precision fp32 [--plan]`
   composes DA3/V5 inference with V6 finishing while preserving the native
   request, plan, evidence, and managed pipeline contracts. The explicit sibling
   operations are `infer`, `finish`, `depth-pro`, `verify`, and `legacy`; use
@@ -423,8 +443,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `--output-bit-depth 16`; `--emit-master16` and `--emit-upscaled16` are
   deprecated warning aliases and do not create separate artifacts.
 - Opt-in successor planning:
-  use `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v4 --input-dir <path> --output-dir <new-path> --input-color <srgb|linear_srgb|auto> --device cpu --plan`
-  or `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v5 --input-dir <path> --output-dir <new-path> --input-color <srgb|linear_srgb|auto> --device cpu --precision fp32 --plan`.
+  use `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v4 --input-dir <path> --output-dir <new-path> --input-color <srgb|linear_srgb|auto|auto_assume_srgb> --device cpu --plan`
+  or `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v5 --input-dir <path> --output-dir <new-path> --input-color <srgb|linear_srgb|auto|auto_assume_srgb> --device cpu --precision fp32 --plan`.
   MaterialsV4 evidence uses
   `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.materials_v4`
   and is selected by V4/V5 only through `--materials-manifest`; follow
