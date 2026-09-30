@@ -406,7 +406,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
           readiness: isPhotography && options.photographyBlocked
             ? { status: "blocked", missing_prerequisites: [{ severity: "blocked", reason: "photography_disabled", field: "pipeline", message: `Managed ${requestPayload.pipeline === "lux-depth" ? "Lux Depth Unified" : requestPayload.pipeline === "lux-depth-v6" ? "LuxDepthV6" : "LuxDepthV5"} is not enabled on this server.` }] }
             : { status: "ready", missing_prerequisites: [] },
-          estimate_summary: { runtime_band: "low", gpu_pressure: "low", research_risk: "none" },
+          estimate_summary: { runtime_band: "low", gpu_pressure: "low", research_risk: "none", ...responsePreview.estimate_summary },
           argv_preview: isPhotography ? "" : "lux-depth-v3 --input-dir ./input_images --output-dir ./output/lux_depth_v3_apex",
         },
       });
@@ -2312,7 +2312,7 @@ for (const scenario of [
   { name: 'resource validation', options: { preview: { field_errors: [{ field: 'memory_mib', code: 'invalid_argument', message: 'Memory budget exceeds the server limit.' }] } }, message: 'Memory budget exceeds the server limit.' }
 ]) {
   test(`@portal-browser V6 ${scenario.name} fails closed before dispatch`, async ({ page }) => {
-    const runtime = await installHydratedPortalRoutes(page, scenario.options);
+    const runtime = await installHydratedPortalRoutes(page, { ...scenario.options, preview: { ...EMPTY_PREVIEW, ...scenario.options.preview, estimate_summary: { summary_label: 'Color preparation is ready.' } } });
     await gotoHydratedPortal(page, '/portal?view=build');
     await page.locator('#pipelineSelect').selectOption('lux-depth-v6');
     await page.locator('#buildStepTab4').click();
@@ -2617,6 +2617,73 @@ test('@portal-browser Unified infer dispatches its current closed request and ke
   expect(runtime.previewPayloads.filter((payload) => payload.pipeline === 'lux-depth').at(-1)).toEqual(runtime.submittedPayloads[0]);
 });
 
+for (const [pipeline, workflow] of [['lux-depth-v5'], ['lux-depth-v6'], ['lux-depth', 'process'], ['lux-depth', 'infer']]) {
+test(`@portal-browser ${pipeline} ${workflow || ''} color preparation requires an explicit untagged assumption and still blocks invalid profiles`, async ({ page }) => {
+  const missingMetadata = 'This image has no color metadata. Choose Auto; assume sRGB when untagged only if that assumption is appropriate.';
+  const assumptionWarning = '1 image lacks color metadata; sRGB was explicitly assumed during preparation.';
+  const invalidProfile = 'The embedded ICC profile is invalid. Re-export this image with a valid color profile.';
+  const taggedSummary = 'Color preparation: 1 image, 1 profile conversion, 0 sRGB assumptions.';
+  const runtime = await installHydratedPortalRoutes(page, {
+    keepEventStreamOpen: true,
+    previewForPayload: ({ pipeline: selectedPipeline, args }) => {
+      if (selectedPipeline === 'lux-depth-v3') return EMPTY_PREVIEW;
+      if (args.input_dir === '/inputs/invalid-profile') return { ...EMPTY_PREVIEW, estimate_summary: { summary_label: taggedSummary }, field_errors: [{ field: 'input_color', code: 'input_color_unsupported_icc', message: invalidProfile }] };
+      if (args.input_dir === '/inputs/tagged') return { ...EMPTY_PREVIEW, estimate_summary: { summary_label: taggedSummary } };
+      return args.input_color === 'auto_assume_srgb'
+        ? { ...EMPTY_PREVIEW, estimate_summary: { summary_label: taggedSummary }, field_warnings: [{ field: 'input_color', code: 'input_color_assumed_srgb', message: assumptionWarning }] }
+        : { ...EMPTY_PREVIEW, field_errors: [{ field: 'input_color', code: 'input_color_ambiguous', message: missingMetadata }] };
+    },
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption(pipeline);
+  await page.locator('#buildStepTab3').click();
+  if (workflow) await page.locator('#unifiedWorkflow').selectOption(workflow);
+  const prefix = pipeline === 'lux-depth-v5' || workflow === 'infer' ? 'v5' : 'v6';
+  const inputColor = page.locator(`#${prefix}InputColor`);
+  await expect(inputColor).toHaveValue('auto');
+  await expect(inputColor).toHaveAttribute('aria-describedby', `${prefix}InputColorGuidance`);
+  await expect(page.locator(`#${prefix}InputColorGuidance`)).toContainText('convert supported tagged images to the linear sRGB working space');
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  await expect(page.locator('#nextBestActionDetail')).toHaveText(missingMetadata);
+  await page.locator('#buildStepTab3').click();
+  await inputColor.selectOption('auto_assume_srgb');
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#buildPreviewStatus')).toHaveText('Preview ready with warnings');
+  await expect(page.locator('#nextBestActionDetail')).toHaveText(assumptionWarning);
+  await page.reload();
+  await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'ready');
+  await expect(page.locator('#pipelineSelect')).toHaveValue(pipeline);
+  await page.locator('#buildStepTab3').click();
+  if (workflow) await expect(page.locator('#unifiedWorkflow')).toHaveValue(workflow);
+  await expect(inputColor).toHaveValue('auto_assume_srgb');
+  await page.locator('#buildStepTab2').click();
+  await page.locator('#inputDir').fill('/inputs/invalid-profile');
+  await page.locator('#inputDir').blur();
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  await expect(page.locator('#nextBestActionDetail')).toHaveText(invalidProfile);
+  expect(runtime.jobSubmissions).toBe(0);
+  await page.locator('#buildStepTab2').click();
+  await page.locator('#inputDir').fill('/inputs/tagged');
+  await page.locator('#inputDir').blur();
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#nextBestActionDetail')).toHaveText(taggedSummary);
+  await page.locator('#buildStepTab2').click();
+  await page.locator('#inputDir').fill('./input_images');
+  await page.locator('#inputDir').blur();
+  await page.locator('#buildStepTab4').click();
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#nextBestActionDetail')).toHaveText(assumptionWarning);
+  await page.locator('#runJobBtn').click();
+  await expect.poll(() => runtime.jobSubmissions).toBe(1);
+  expect(runtime.submittedPayloads[0]).toMatchObject({ pipeline, args: { input_color: 'auto_assume_srgb', ...(workflow ? { workflow } : {}) } });
+  expect(runtime.previewPayloads.at(-1)).toEqual(runtime.submittedPayloads[0]);
+});
+}
+
 test('@portal-browser Unified workflow drafts and profiles remain isolated from V5 and V6', async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page);
   await gotoHydratedPortal(page, '/portal?view=build');
@@ -2624,25 +2691,30 @@ test('@portal-browser Unified workflow drafts and profiles remain isolated from 
   await page.locator('#buildStepTab3').click();
   await page.locator('#v6ExposureStops').fill('1.5');
   await page.locator('#v6ExposureStops').blur();
+  await page.locator('#v6InputColor').selectOption('auto_assume_srgb');
   await page.locator('#unifiedWorkflow').selectOption('infer');
+  await expect(page.locator('#v5InputColor')).toHaveValue('auto');
   await page.locator('#v5Strength').fill('0.7');
   await page.locator('#v5Strength').blur();
   await page.locator('#pipelineSelect').selectOption('lux-depth-v5');
   await expect(page.locator('#v5Strength')).toHaveValue('0.25');
+  await expect(page.locator('#v5InputColor')).toHaveValue('auto');
   await expect(page.locator('#unifiedWorkflow')).toBeHidden();
   await page.locator('#pipelineSelect').selectOption('lux-depth-v6');
   await expect(page.locator('#v6ExposureStops')).toHaveValue('0');
+  await expect(page.locator('#v6InputColor')).toHaveValue('auto');
   await page.locator('#pipelineSelect').selectOption('lux-depth');
   await expect(page.locator('#unifiedWorkflow')).toHaveValue('infer');
   await expect(page.locator('#v5Strength')).toHaveValue('0.7');
   await page.locator('#unifiedWorkflow').selectOption('process');
   await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await expect(page.locator('#v6InputColor')).toHaveValue('auto_assume_srgb');
   await page.locator('#saveProfileBtn').click();
   await page.locator('#profileManagerName').fill('Unified workflows');
   await page.locator('[data-profile-action="save"]').click();
   await expect(page.locator('#profileSelect')).toHaveValue('Unified workflows');
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key))['Unified workflows'], managedProfileStorageKey(runtime.actor));
-  expect(saved.config.photographyUnified).toMatchObject({ workflow: 'process', process: { exposureStops: '1.5' }, infer: { strength: '0.7' } });
+  expect(saved.config.photographyUnified).toMatchObject({ workflow: 'process', process: { exposureStops: '1.5', inputColor: 'auto_assume_srgb' }, infer: { strength: '0.7', inputColor: 'auto' } });
   expect(saved.config.photographyV6.exposureStops).toBe(0);
   expect(saved.config.photography.strength).toBe(0.25);
   await page.locator('[data-profile-action="close"]').click();
@@ -2651,8 +2723,10 @@ test('@portal-browser Unified workflow drafts and profiles remain isolated from 
   await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth');
   await page.locator('#buildStepTab3').click();
   await expect(page.locator('#v6ExposureStops')).toHaveValue('1.5');
+  await expect(page.locator('#v6InputColor')).toHaveValue('auto_assume_srgb');
   await page.locator('#unifiedWorkflow').selectOption('infer');
   await expect(page.locator('#v5Strength')).toHaveValue('0.7');
+  await expect(page.locator('#v5InputColor')).toHaveValue('auto');
 });
 
 test('@portal-browser Unified changed workflow cannot reuse the previous successful preview', async ({ page }) => {

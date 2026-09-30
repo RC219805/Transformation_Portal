@@ -411,6 +411,22 @@ def test_rehashed_semantic_descriptor_forgery_is_rejected(completed, field):
         verify(completed)
 
 
+@pytest.mark.parametrize("mutation", ["mode", "assumption", "unknown_field"])
+def test_rehashed_color_preparation_forgery_is_rejected(completed, mutation):
+    receipt = completed.descriptor["source"]["metadata"]["color_preparation"]
+    if mutation == "mode":
+        receipt["requested_input_color"] = "srgb"
+    elif mutation == "assumption":
+        receipt["assumed_srgb"] = True
+    else:
+        receipt["unrecognized"] = True
+    relative = "input-0000/photograph.json"
+    (completed.result.output_root / relative).write_bytes(canonicalize_json(completed.descriptor))
+    rehash(completed, relative)
+    with pytest.raises(ValueError, match="Color preparation"):
+        verify(completed)
+
+
 def test_rehashed_delivery_pixels_are_bound_to_final_master(completed):
     relative = "input-0000/delivery.tif"
     image = tifffile.imread(completed.result.output_root / relative)

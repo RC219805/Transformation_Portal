@@ -40,8 +40,11 @@ export INPUT_COLOR=srgb
 mkdir -p "$MATERIALS_WORK_ROOT"
 ```
 
-Choose `INPUT_COLOR` from source provenance. `auto` requires supported,
-unambiguous color metadata; use `srgb` or `linear_srgb` only when justified.
+Choose `INPUT_COLOR` from source provenance. `auto` detects and converts supported
+profiles; `auto_assume_srgb` additionally records an sRGB assumption for untagged
+raster inputs. Invalid or conflicting metadata remains blocked in both modes.
+Use `srgb` or `linear_srgb` only when justified by the existing sample encoding.
+See the [color preparation contract](../reference/LUX_DEPTH.md#plan-and-run-original-photographs).
 Masks use the full-resolution, orientation-normalized master frame, with shape
 `[height, width]`. The evidence CLI uses the photographic raster decoder; it does
 not invoke the isolated RAW decoder.

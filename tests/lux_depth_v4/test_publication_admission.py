@@ -64,11 +64,11 @@ def _request(tmp_path, count, *, calibrated=0, previews=False):
 @pytest.mark.parametrize(
     "count,calibrated,previews,reserved",
     [
-        (19, 0, False, 192),
-        (16, 16, False, 194),
-        (15, 0, True, 197),
-        (13, 13, True, 197),
-        (18, 9, False, 200),
+        (18, 0, False, 200),
+        (15, 15, False, 197),
+        (14, 0, True, 198),
+        (12, 12, True, 194),
+        (16, 11, False, 200),
     ],
 )
 def test_managed_boundaries_bind_exact_budget_without_outputs(tmp_path, publisher, count, calibrated, previews, reserved):
@@ -85,12 +85,12 @@ def test_managed_boundaries_bind_exact_budget_without_outputs(tmp_path, publishe
 @pytest.mark.parametrize(
     "count,calibrated,previews",
     [
-        (20, 0, False),
+        (19, 0, False),
         (25, 0, False),
-        (17, 17, False),
-        (16, 0, True),
-        (14, 14, True),
-        (18, 10, False),
+        (16, 16, False),
+        (15, 0, True),
+        (13, 13, True),
+        (16, 12, False),
     ],
 )
 def test_oversized_managed_batches_fail_before_device_probe(tmp_path, publisher, monkeypatch, count, calibrated, previews):
@@ -120,7 +120,7 @@ def test_managed_total_ceiling_is_canonical_and_preserves_lower_requested_budget
 def test_custom_file_count_limit_is_used_before_probe(tmp_path, publisher, monkeypatch):
     monkeypatch.setattr(generation, "MAX_GENERATION_FILES", 11)
     monkeypatch.setattr(backend, "probe_device", lambda *_args: pytest.fail("Invalid count reached device probe"))
-    with pytest.raises(ValueError, match="12 artifacts, exceeding publisher limit 11"):
+    with pytest.raises(ValueError, match="13 artifacts, exceeding publisher limit 11"):
         prepare(replace(_request(tmp_path, 1), device="mps"), publisher=publisher)
 
 

@@ -48,6 +48,19 @@ test("Unified forwards invalid workflow values and invalid numeric controls to r
   assert.ok(Number.isNaN(buildUnifiedPhotographyArgs({ workflow: "infer" }, { infer: { strength: { value: "bad" } } }).strength));
 });
 
+test("Unified color preparation is explicit and isolated between workflow drafts", () => {
+  let config = createUnifiedPhotographyConfig();
+  config.process.inputColor = "auto_assume_srgb";
+  assert.equal(buildUnifiedPhotographyArgs(config).input_color, "auto_assume_srgb");
+  config.workflow = "infer";
+  assert.equal(buildUnifiedPhotographyArgs(config).input_color, "auto");
+  const args = buildUnifiedPhotographyArgs(config, { infer: { inputColor: { value: "auto_assume_srgb" } } });
+  config = unifiedPhotographyConfigFromArgs(args, config);
+  assert.equal(buildUnifiedPhotographyArgs(config).input_color, "auto_assume_srgb");
+  assert.equal(config.process.inputColor, "auto_assume_srgb");
+  assert.equal(createUnifiedPhotographyConfig().infer.inputColor, "auto");
+});
+
 test("Unified capability status requires the selected workflow preview and scopes materials to infer", () => {
   for (const workflow of ["process", "infer"]) {
     for (const [previewWorkflow, readinessStatus, expected] of [[workflow, "ready", "enabled"], [workflow, "blocked", "blocked"], [workflow === "infer" ? "process" : "infer", "ready", "gated"]]) {

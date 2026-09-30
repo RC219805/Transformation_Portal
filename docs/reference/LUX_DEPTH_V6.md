@@ -138,9 +138,12 @@ PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
   --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" --verify
 ```
 
-Use `--device cpu` when an accelerator is unavailable. `--input-color srgb`
-declares the original pixels' encoding; it does not convert an unsupported ICC
-profile. The same explicit V6 grade and SDR-render controls apply. Depth Pro
+Use `--device cpu` when an accelerator is unavailable. The input-color modes are
+`auto` (default), `auto_assume_srgb`, `srgb`, and `linear_srgb`. Auto modes convert
+supported embedded profiles; the assumption mode only falls back for genuinely
+untagged originals and records that choice. `srgb` asserts the original samples'
+encoding and must not be used to relabel Adobe RGB. The same explicit V6 grade
+and SDR-render controls apply. Depth Pro
 supplies neither a sky mask nor contracted accuracy confidence. Consequently,
 this route records sky evidence as unavailable and abstains from photographic
 depth edits. Numeric-valid meter samples and normalized previews do not
@@ -402,16 +405,29 @@ unchanged. `soft_srgb` provides the earlier linear-luminance shoulder with chrom
 contraction toward neutral; it does not promise perceptual hue constancy.
 `clip_srgb` provides an explicit independent-channel clipping comparison.
 
-The working space remains extended linear sRGB. Automatic input-color selection
-fails closed on ambiguous pixels or unsupported ICC profiles. Explicit
-`input_color="srgb"` or `"linear_srgb"` declares an interpretation; it is not an
-ICC conversion. Convert Adobe RGB or another unsupported profile with a
-color-managed tool before submitting sRGB pixels. If `auto` rejects the exported
-sRGB profile, select `srgb` only for those converted copies. RAW uses the governed
-decoder's linear-sRGB output; do not assign encoded sRGB to RAW. Unsupported input profiles
-and RAW highlight clipping in the original V5 ingest cannot be repaired by
-labeling pixels differently or by increasing output bit depth. V6 does not add a
-wide-gamut ingest transform or recover missing sensor or native-depth detail.
+The working space remains extended linear sRGB. Before inference, `auto` and
+`auto_assume_srgb` convert supported RGB/gray ICC profiles, including Adobe RGB
+and Display P3, and recognized PNG color metadata with a float32 LittleCMS
+transform. Alpha stays separate and the preparation step retains extended
+values. `auto` remains the default, with the established recorded untagged-JPEG
+assumption. Ambiguous untagged PNG/TIFF fails unless `auto_assume_srgb` is chosen
+or a known explicit encoding is supplied. The assumption mode never overrides
+malformed, conflicting, or explicitly unknown color metadata.
+
+Explicit `srgb` and `linear_srgb` declare the existing samples' encoding; they
+do not apply a wide-gamut ICC transform. Unsupported profiles still require a
+profile-aware export. RAW uses the governed decoder's linear-sRGB output under
+either Auto mode or `linear_srgb`; do not assign encoded sRGB to RAW. Color
+conversion cannot recover sensor clipping or missing native-depth detail.
+
+The `tp.color.preparation.v1` receipt lives in photographic source metadata and
+binds the request, detected metadata, profile digests, operation, precision, and
+engine. Retained V5 verification reconstructs the recipe and checks its source
+bindings; Depth Pro independently re-decodes retained originals. Current V6 and
+Depth Pro processing identities bind the conversion source code, actual
+imagecodecs wheel, CMS extension, bundled LCMS library bytes, and engine version.
+Historical plan shapes still parse; processing changes require a matching
+historical environment for replay or a newly prepared generation.
 
 ## Outputs and replay
 

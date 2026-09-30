@@ -62,6 +62,13 @@ test("V6 draft mutations remain isolated from V5 and newly created defaults", ()
   assert.deepEqual(buildPhotographyV6Args(createPortalConfigState().photographyV6), DEFAULT_ARGS);
 });
 
+test("V6 preserves explicit untagged sRGB preparation without changing strict Auto defaults", () => {
+  const args = buildPhotographyV6Args(createPhotographyV6Config(), { inputColor: { value: "auto_assume_srgb" } });
+  assert.equal(args.input_color, "auto_assume_srgb");
+  assert.equal(buildPhotographyV6Args(photographyV6ConfigFromArgs(args)).input_color, "auto_assume_srgb");
+  assert.equal(buildPhotographyV6Args().input_color, "auto");
+});
+
 test("V6 capability status requires the matching preview and readiness, and excludes V3 and MaterialsV4", () => {
   const base = { pipeline: "lux-depth-v6", backendOk: true, bootstrapReady: true, authMode: "managed", stagedUploadSupported: true, features: { stagedUploads: true } };
   for (const [preview, readiness, status] of [
