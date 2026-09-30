@@ -145,6 +145,60 @@
         "dependencies"
       ],
       "properties": {
+        "color_preparation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "imagecodecs_version",
+            "lcms_version",
+            "wheel_record_sha256",
+            "wheel_files_sha256",
+            "cms_extension_sha256",
+            "bundled_lcms"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tp.color.runtime.v1"
+            },
+            "imagecodecs_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "lcms_version": {
+              "type": "string",
+              "pattern": "^lcms2 .+$",
+              "maxLength": 128
+            },
+            "wheel_record_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "wheel_files_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "cms_extension_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bundled_lcms": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 8,
+              "propertyNames": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+lcms2[^/]*$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
         "modules": {
           "type": "object",
           "minProperties": 1,

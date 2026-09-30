@@ -30,7 +30,7 @@ def _main(argv: list[str] | None = None, *, profile: Any = None) -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--model-key", default="da3-metric")
     parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="cpu")
-    parser.add_argument("--input-color", choices=("auto", "srgb", "linear_srgb"), default="auto")
+    parser.add_argument("--input-color", choices=("auto", "auto_assume_srgb", "srgb", "linear_srgb"), default="auto")
     parser.add_argument("--target-size", type=int, default=518)
     parser.add_argument("--strength", type=float, default=0.25)
     parser.add_argument("--clarity", type=float, default=0.0)

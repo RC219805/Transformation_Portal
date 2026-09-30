@@ -15,6 +15,11 @@ from typing import Any, Callable
 
 from transformation_portal.core.execution_plan import decode_bounded_json_object
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.lux_depth_v4.color_runtime import (
+    COLOR_PROCESSING_MODULES,
+    color_runtime_identity,
+    validate_color_runtime_identity,
+)
 from transformation_portal.lux_depth_v4.io import directory_path
 from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
 
@@ -36,6 +41,9 @@ _MODULES = (
     "transformation_portal.core.image_artifact",
     "transformation_portal.core.depth_evidence",
     "transformation_portal.lux_depth_v4.photography",
+    "transformation_portal.lux_depth_v4.color_preparation",
+    "transformation_portal.lux_depth_v4.color_preparation_evidence",
+    "transformation_portal.lux_depth_v4.color_runtime",
     "transformation_portal.lux_depth_v5.photography",
     "transformation_portal.lux_depth_v5.preview",
 )
@@ -57,6 +65,7 @@ def processing_identity(*, depth_maps: bool = False) -> dict[str, Any]:
     return {
         "modules": modules,
         "dependencies": {name: version(name) for name in ("numpy", "Pillow", "scipy", "tifffile", "imagecodecs")},
+        "color_preparation": color_runtime_identity(),
     }
 
 
@@ -159,9 +168,17 @@ class GradePlan:
         if identifiers != sorted(set(identifiers)):
             raise ValueError("V6 image inventory must be sorted and unique")
         processing = payload["processing"]
-        if not isinstance(processing, dict) or set(processing) != {"modules", "dependencies"}:
+        if not isinstance(processing, dict) or set(processing) not in (
+            {"modules", "dependencies"},
+            {"modules", "dependencies", "color_preparation"},
+        ):
             raise ValueError("Invalid V6 processing identity")
-        if not isinstance(processing["modules"], dict) or set(processing["modules"]) != set(_processing_modules(has_depth)):
+        expected_modules = set(_processing_modules(has_depth))
+        if "color_preparation" in processing:
+            validate_color_runtime_identity(processing["color_preparation"])
+        else:
+            expected_modules -= COLOR_PROCESSING_MODULES
+        if not isinstance(processing["modules"], dict) or set(processing["modules"]) != expected_modules:
             raise ValueError("V6 processing source inventory differs")
         for value in processing["modules"].values():
             _require_digest(value)
@@ -170,6 +187,11 @@ class GradePlan:
             raise ValueError("V6 processing dependencies differ")
         if any(type(value) is not str or not value or len(value) > 128 for value in dependencies.values()):
             raise ValueError("V6 dependency versions must be bounded strings")
+        if (
+            "color_preparation" in processing
+            and processing["color_preparation"]["imagecodecs_version"] != dependencies["imagecodecs"]
+        ):
+            raise ValueError("V6 CMS differs from the processing dependency")
         validate_resources(payload)
 
     @property

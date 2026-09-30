@@ -28,6 +28,7 @@ def publication_paths(payload: Mapping[str, Any]) -> tuple[str, ...]:
     for item in payload["inputs"]:
         names = [
             "source-master.npy",
+            "source-icc.npy",
             "master.npy",
             "native-depth.npy",
             "depth-valid.npy",

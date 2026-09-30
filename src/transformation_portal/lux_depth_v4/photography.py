@@ -1,8 +1,8 @@
 """Fidelity-preserving ingest, model proxies, finishing and delivery for V4.
 
-Color support is intentionally bounded: encoded sRGB and linear sRGB. An
-explicit input-color correction is required for unknown TIFFs or unsupported
-profiles; profile descriptions are never trusted as color-transform authority.
+Color preparation preserves source precision and converts supported RGB/gray
+ICC encodings into extended linear sRGB. Profile descriptions never authorize
+color transforms; untagged assumptions require an explicit input policy.
 """
 
 from __future__ import annotations
@@ -11,53 +11,28 @@ import hashlib
 import io
 import json
 import struct
+import zlib
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Mapping
 
 import numpy as np
-from PIL import Image, ImageCms
+from PIL import Image
 
 from transformation_portal.core.depth_artifact import DepthArtifact
 from transformation_portal.core.image_artifact import ImageMaster, ImageProxy, ProxyTransform, metadata_payload
+from transformation_portal.lux_depth_v4.color_preparation import (
+    MAX_ICC_BYTES,
+    InputColorError,
+    PreparedColor,
+    apply_input_color,
+    linear_to_srgb,
+    output_srgb_icc,
+    prepare_input_color,
+    srgb_to_linear,
+)
 
 RAW_SUFFIXES = frozenset({".arw", ".cr2", ".cr3", ".dng", ".nef", ".nrw", ".orf", ".raf", ".raw", ".rw2"})
 RawDecoder = Callable[[bytes, str], tuple[np.ndarray, Mapping[str, Any]]]
-
-
-class InputColorError(ValueError):
-    """A deterministic color-policy rejection safe to surface before execution."""
-
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
-        super().__init__(message)
-
-
-def srgb_to_linear(values: np.ndarray) -> np.ndarray:
-    """Exact sRGB inverse transfer; preserve finite negative/over-range values."""
-    values = np.asarray(values, dtype=np.float32)
-    return np.where(values <= 0.04045, values / 12.92, ((np.maximum(values, 0) + 0.055) / 1.055) ** 2.4).astype(np.float32)
-
-
-def linear_to_srgb(values: np.ndarray) -> np.ndarray:
-    """sRGB display transfer without clipping or integer quantization."""
-    values = np.asarray(values, dtype=np.float32)
-    return np.where(values <= 0.0031308, values * 12.92, 1.055 * np.maximum(values, 0) ** (1 / 2.4) - 0.055).astype(np.float32)
-
-
-def _normalize_icc(profile: bytes) -> bytes:
-    if len(profile) < 128:
-        return profile
-    normalized = bytearray(profile)
-    # LittleCMS embeds creation time. Fix it for deterministic delivery; the
-    # optional profile ID is cleared because the header bytes have changed.
-    normalized[24:36] = bytes.fromhex("07d000010001000000000000")
-    normalized[84:100] = bytes(16)
-    return bytes(normalized)
-
-
-def output_srgb_icc() -> bytes:
-    """Return the deterministic built-in sRGB profile for delivery pixels."""
-    return _normalize_icc(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
 
 
 def _orient(array: np.ndarray, orientation: int) -> np.ndarray:
@@ -83,107 +58,200 @@ def _orient(array: np.ndarray, orientation: int) -> np.ndarray:
 def _resolve_color(
     *, input_color: str, image_format: str, profile: bytes | None, declared_color: str | None, exif_color: Any
 ) -> tuple[str, str]:
-    if input_color not in {"auto", "srgb", "linear_srgb"}:
-        raise ValueError("input_color must be auto, srgb, or linear_srgb")
-    if input_color != "auto":
-        return input_color, "explicit_input_color"
-    if profile is not None:
-        if _normalize_icc(profile) != output_srgb_icc():
-            raise InputColorError(
-                "input_color_unsupported_icc",
-                "Unsupported ICC profile. Convert the photographs to sRGB with a profile-aware editor and upload the converted "
-                "copies. If Auto still rejects the exported sRGB profile, select sRGB only for those converted copies. "
-                "An input color override does not convert pixels.",
-            )
-        if declared_color not in {None, "srgb"}:
-            raise InputColorError("input_color_conflict", "ICC and declared input color disagree")
-        return "srgb", "recognized_srgb_icc"
-    if exif_color not in {None, 1, 65535}:
-        raise InputColorError(
-            "input_color_unsupported_metadata", "Unsupported EXIF color space; provide an explicit input_color correction"
-        )
-    if declared_color is not None:
-        if declared_color not in {"srgb", "linear_srgb"}:
-            raise InputColorError(
-                "input_color_unsupported_metadata",
-                "Unsupported declared color space; provide an explicit input_color correction",
-            )
-        if declared_color == "linear_srgb" and exif_color == 1:
-            raise InputColorError("input_color_conflict", "EXIF sRGB and declared linear input color disagree")
-        return declared_color, "declared_input_color"
-    if exif_color == 1:
-        return "srgb", "exif_srgb"
-    if image_format == "JPEG" and exif_color is None:
-        return "srgb", "untagged_jpeg_srgb_assumption"
-    raise InputColorError(
-        "input_color_ambiguous", "Ambiguous input color; provide input_color='srgb' or 'linear_srgb' only when known."
+    prepared = prepare_input_color(
+        input_color=input_color,
+        image_format=image_format,
+        profile=profile,
+        declared_color=declared_color,
+        exif_color=exif_color,
     )
+    return prepared.source_color, prepared.resolution
 
 
-def _tiff_color_metadata(page: Any) -> tuple[bytes | None, str | None, Any]:
+def _tiff_color_metadata(page: Any, *, input_color: str) -> tuple[bytes | None, str | None, Any]:
     icc_tag = page.tags.get(34675)
+    # These TIFF fields carry source calibration, even without an ICC. Until
+    # that representation has a supported transform, it is not an untagged
+    # image eligible for an sRGB assumption. Explicit corrections stay explicit.
+    if (
+        icc_tag is None
+        and input_color in {"auto", "auto_assume_srgb"}
+        and any(tag in page.tags for tag in (301, 318, 319, 532))
+    ):
+        raise InputColorError(
+            "input_color_unsupported_metadata",
+            "Unsupported TIFF calibration metadata without an ICC profile. Export a color-managed copy with an embedded "
+            "RGB or grayscale ICC profile, or select a known source color explicitly.",
+        )
+    if icc_tag is not None and icc_tag.valuebytecount > MAX_ICC_BYTES:
+        raise InputColorError("input_color_unsupported_icc", "ICC profile exceeds the supported 4 MiB limit.")
     profile = bytes(icc_tag.value) if icc_tag is not None else None
     try:
         description = json.loads(page.description) if page.description else {}
     except (ValueError, TypeError):
         description = {}
     declared_color = description.get("color_space") if isinstance(description, dict) else None
-    return profile, declared_color, None
+    exif_tag = page.tags.get(34665)
+    exif = exif_tag.value if exif_tag is not None else {}
+    if not isinstance(exif, Mapping):
+        raise InputColorError("input_color_unsupported_metadata", "Invalid TIFF EXIF color metadata.")
+    exif_color = exif.get("ColorSpace", exif.get(40961))
+    return profile, declared_color, exif_color
 
 
-def _standard_color_metadata(image: Image.Image, *, exif: Image.Exif | None = None) -> tuple[bytes | None, str | None, Any]:
+def _jpeg_icc_profile(image: Image.Image, *, input_color: str) -> bytes | None:
+    """Assemble bounded APP2 ICC fragments without Pillow's untagged fallback.
+
+    Pillow discards an incomplete fragment set and only assembles profiles seen
+    before SOF. Inspect all APP markers exposed by header parsing so malformed
+    ICCs never authorize an assumption, and valid profiles before SOS survive.
+    """
+    fragments: list[bytes] = []
+    total_bytes = 0
+    for marker, payload in getattr(image, "applist", ()):
+        if marker != "APP2" or not payload.startswith(b"ICC_PROFILE"):
+            continue
+        total_bytes += max(0, len(payload) - 14)
+        if total_bytes > MAX_ICC_BYTES or len(fragments) >= 255:
+            raise InputColorError("input_color_unsupported_icc", "JPEG ICC profile exceeds supported fragment bounds.")
+        fragments.append(payload)
+    if not fragments:
+        return image.info.get("icc_profile")
+    valid = all(len(fragment) >= 14 and fragment.startswith(b"ICC_PROFILE\0") for fragment in fragments)
+    if valid:
+        count = fragments[0][13]
+        valid = (
+            count == len(fragments)
+            and all(fragment[13] == count for fragment in fragments)
+            and {fragment[12] for fragment in fragments} == set(range(1, count + 1))
+        )
+    if not valid:
+        if input_color in {"srgb", "linear_srgb"}:
+            # Preserve the existing deliberate correction and retained profile
+            # bytes, if Pillow could assemble any, without inventing a profile.
+            return image.info.get("icc_profile")
+        raise InputColorError(
+            "input_color_unsupported_icc",
+            "Invalid JPEG ICC fragments. Re-export the original with a complete embedded profile, "
+            "or select a known source color explicitly.",
+        )
+    return b"".join(fragment[14:] for fragment in sorted(fragments, key=lambda fragment: fragment[12]))
+
+
+def _standard_color_metadata(
+    image: Image.Image, *, input_color: str, exif: Image.Exif | None = None
+) -> tuple[bytes | None, str | None, Any]:
     if exif is None:
         exif = image.getexif()
     exif_color = exif.get(40961)
     if 34665 in exif:
         exif_color = exif.get_ifd(34665).get(40961, exif_color)
     declared_color = "srgb" if image.format == "PNG" and "srgb" in image.info else None
-    return image.info.get("icc_profile"), declared_color, exif_color
+    profile = _jpeg_icc_profile(image, input_color=input_color) if image.format == "JPEG" else image.info.get("icc_profile")
+    return profile, declared_color, exif_color
 
 
-def _png_metadata_exif(source: BinaryIO, image: Image.Image) -> Image.Exif:
-    """Read late PNG EXIF without Pillow's implicit full-image load.
+def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: str) -> tuple[Image.Exif, dict[str, Any]]:
+    """Inspect bounded color chunks, including late EXIF, without raster reads.
 
-    PNG permits eXIf after IDAT. Skip compressed raster chunks with seeks and
-    bound the chunk inventory; the caller also bounds all metadata reads.
+    Compressed IDAT payloads are skipped. Color chunks have independent CRC,
+    length, duplication and placement checks so malformed metadata cannot be
+    mistaken for an untagged image by either preview or execution.
     """
-    if "exif" not in image.info:
-        source.seek(8)
-        for _ in range(8192):
-            header = source.read(8)
-            if len(header) != 8:
+    source.seek(8)
+    seen: set[bytes] = set()
+    metadata: dict[str, Any] = {}
+    total = 0
+    seen_pixels = False
+    color_chunks = {b"IHDR", b"iCCP", b"sRGB", b"gAMA", b"cHRM", b"cICP", b"eXIf", b"tRNS", b"mDCV", b"cLLI"}
+    lengths = {b"IHDR": 13, b"sRGB": 1, b"gAMA": 4, b"cHRM": 32, b"cICP": 4, b"mDCV": 24, b"cLLI": 8}
+    for _ in range(8192):
+        header = source.read(8)
+        if len(header) != 8:
+            raise ValueError("Incomplete PNG metadata")
+        size, kind = struct.unpack(">I4s", header)
+        if size > 0x7FFFFFFF:
+            raise ValueError("Invalid PNG chunk length")
+        if kind == b"IEND":
+            if size != 0 or len(source.read(4)) != 4 or not seen_pixels:
                 raise ValueError("Incomplete PNG metadata")
-            size, kind = struct.unpack(">I4s", header)
-            if kind == b"IEND":
-                break
-            if kind == b"eXIf":
-                data = source.read(size)
-                if len(data) != size:
-                    raise ValueError("Incomplete PNG EXIF metadata")
+            break
+        if kind == b"IDAT":
+            seen_pixels = True
+        if kind in color_chunks:
+            if kind in seen or (seen_pixels and kind != b"eXIf"):
+                raise InputColorError("input_color_unsupported_metadata", "Duplicate or misplaced PNG color metadata.")
+            if size > MAX_ICC_BYTES or total + size > MAX_ICC_BYTES or (kind in lengths and size != lengths[kind]):
+                raise InputColorError("input_color_unsupported_metadata", "PNG color metadata exceeds supported bounds.")
+            seen.add(kind)
+            total += size
+            data, checksum = source.read(size), source.read(4)
+            if len(data) != size or len(checksum) != 4 or zlib.crc32(kind + data) != struct.unpack(">I", checksum)[0]:
+                raise InputColorError("input_color_unsupported_metadata", "Invalid PNG color metadata checksum.")
+            if kind == b"IHDR":
+                metadata["bit_depth"] = data[8]
+                metadata["color_type"] = data[9]
+            elif kind == b"sRGB":
+                metadata["srgb"] = data[0]
+            elif kind == b"gAMA":
+                metadata["gamma"] = struct.unpack(">I", data)[0] / 100000.0
+            elif kind == b"cHRM":
+                metadata["chromaticity"] = tuple(value / 100000.0 for value in struct.unpack(">8I", data))
+            elif kind == b"cICP":
+                metadata["cicp"] = data
+            elif kind == b"eXIf":
                 image.info["exif"] = b"Exif\x00\x00" + data
-            else:
-                source.seek(size, io.SEEK_CUR)
-            source.seek(4, io.SEEK_CUR)
+            elif kind == b"iCCP" and not image.info.get("icc_profile"):
+                raise InputColorError("input_color_unsupported_icc", "Invalid PNG ICC profile metadata.")
+            elif kind in {b"mDCV", b"cLLI"} and input_color in {"auto", "auto_assume_srgb"}:
+                raise InputColorError("input_color_unsupported_metadata", "Unsupported PNG HDR color metadata.")
         else:
-            raise ValueError("PNG metadata exceeds the preflight chunk budget")
-    return Image.Image.getexif(image)
+            source.seek(size, io.SEEK_CUR)
+            if len(source.read(4)) != 4:
+                raise ValueError("Incomplete PNG metadata")
+    else:
+        raise ValueError("PNG metadata exceeds the preflight chunk budget")
+    if metadata.get("color_type") not in {0, 2, 4, 6} or metadata.get("bit_depth") not in {8, 16}:
+        raise ValueError("V4 PNG ingest requires 8-bit or 16-bit RGB/gray samples")
+    if metadata["bit_depth"] == 16:
+        _png_precision_runtime()
+    return Image.Image.getexif(image), metadata
+
+
+def _png_precision_runtime() -> Any:
+    try:
+        import imagecodecs
+    except ImportError as exc:
+        raise ValueError("16-bit PNG ingest requires the governed imagecodecs PNG runtime") from exc
+    if not imagecodecs.PNG.available:
+        raise ValueError("16-bit PNG ingest requires the governed imagecodecs PNG runtime")
+    return imagecodecs
+
+
+def _validate_color_channels(prepared: PreparedColor, *, grayscale: bool) -> None:
+    """Reject profile/sample channel mismatches using headers alone."""
+    if prepared.action == "explicit" or prepared.source_profile is None:
+        return
+    profile_gray = prepared.source_profile[16:20] == b"GRAY"
+    if profile_gray != grayscale:
+        raise InputColorError("input_color_conflict", "ICC channel layout does not match the photographic samples")
 
 
 def validate_input_color_metadata(
     source: BinaryIO, *, source_name: str, input_color: str = "auto", max_pixels: int = 100_000_000
-) -> None:
-    """Apply ingest's color policy to headers without decoding photographic pixels.
-
-    The caller supplies a confined, byte-bounded stream. RAW color remains the
-    governed decoder's responsibility; its existing explicit-color rule still
-    applies. Execution revalidates the immutable source snapshot independently.
-    """
+) -> dict[str, Any]:
+    """Resolve ingest color from confined, bounded headers without pixel decode."""
     if Path(source_name).suffix.lower() in RAW_SUFFIXES:
-        if input_color not in {"auto", "linear_srgb"}:
-            raise InputColorError("input_color_conflict", "RAW decoder output is linear_srgb; encoded input_color is invalid")
-        return
+        return prepare_input_color(
+            input_color=input_color,
+            image_format="RAW",
+            profile=None,
+            declared_color=None,
+            exif_color=None,
+        ).evidence
     signature = source.read(4)
     source.seek(0)
+    png_metadata = None
     if signature in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}:
         import tifffile
 
@@ -191,8 +259,10 @@ def validate_input_color_metadata(
             page = tif.pages[0]
             if not isinstance(page, tifffile.TiffPage):
                 raise ValueError("V4 photographic TIFF requires a complete image page")
+            _validate_tiff_page(tif, page)
             height, width = int(page.imagelength), int(page.imagewidth)
-            profile, declared_color, exif_color = _tiff_color_metadata(page)
+            profile, declared_color, exif_color = _tiff_color_metadata(page, input_color=input_color)
+            grayscale = page.photometric == tifffile.PHOTOMETRIC.MINISBLACK
             image_format = "TIFF"
     else:
         with Image.open(source) as image:
@@ -200,17 +270,53 @@ def validate_input_color_metadata(
             image_format = str(image.format)
             if image_format not in {"JPEG", "PNG"}:
                 raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF")
-            exif = _png_metadata_exif(source, image) if image_format == "PNG" else image.getexif()
-            profile, declared_color, exif_color = _standard_color_metadata(image, exif=exif)
+            if image_format == "PNG":
+                exif, png_metadata = _png_color_metadata(source, image, input_color=input_color)
+                grayscale = png_metadata["color_type"] in {0, 4}
+            else:
+                if image.mode not in {"RGB", "L"}:
+                    raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF")
+                exif, grayscale = image.getexif(), image.mode == "L"
+            profile, declared_color, exif_color = _standard_color_metadata(image, input_color=input_color, exif=exif)
     if height <= 0 or width <= 0 or height * width > max_pixels:
         raise ValueError("Decoded image dimensions exceed max_pixels")
-    _resolve_color(
+    prepared = prepare_input_color(
         input_color=input_color,
         image_format=image_format,
         profile=profile,
         declared_color=declared_color,
         exif_color=exif_color,
+        png_metadata=png_metadata,
     )
+    _validate_color_channels(prepared, grayscale=grayscale)
+    return prepared.evidence
+
+
+def _validate_tiff_page(tif: Any, page: Any) -> None:
+    """Share TIFF header geometry/precision policy between preview and decode."""
+    import tifffile
+
+    if len(tif.pages) != 1 or len(tif.series) != 1:
+        raise ValueError("V4 photographic TIFF ingest requires one image page")
+    if page.samplesperpixel not in {1, 2, 3, 4}:
+        raise ValueError("Unsupported TIFF channel count")
+    if page.photometric not in {tifffile.PHOTOMETRIC.RGB, tifffile.PHOTOMETRIC.MINISBLACK}:
+        raise ValueError("Unsupported TIFF photometric interpretation")
+    if (page.photometric == tifffile.PHOTOMETRIC.RGB) != (page.samplesperpixel in {3, 4}):
+        raise ValueError("TIFF sample layout does not match its photometric interpretation")
+    if page.planarconfig not in {None, 1}:
+        raise ValueError("Planar TIFF input requires an explicit external conversion")
+    expected_shape: tuple[int, ...] = (int(page.imagelength), int(page.imagewidth))
+    if page.samplesperpixel != 1:
+        expected_shape += (int(page.samplesperpixel),)
+    if tuple(page.shape) != expected_shape:
+        raise ValueError("Volumetric or non-photographic TIFF sample geometry is unsupported")
+    if page.dtype not in {np.dtype("uint8"), np.dtype("uint16"), np.dtype("float32")}:
+        raise ValueError("Photographic samples must be uint8, uint16 or float32")
+    if page.bitspersample != page.dtype.itemsize * 8:
+        raise ValueError("TIFF BitsPerSample must match supported 8, 16 or 32-bit sample precision")
+    if page.extrasamples and any(int(sample) != 2 for sample in page.extrasamples):
+        raise ValueError("Only unassociated (straight) TIFF alpha is supported")
 
 
 def decode_master(
@@ -228,8 +334,8 @@ def decode_master(
     """
     if not isinstance(source_bytes, bytes) or not source_bytes:
         raise ValueError("Source snapshot must be non-empty immutable bytes")
-    if input_color not in {"auto", "srgb", "linear_srgb"}:
-        raise ValueError("input_color must be auto, srgb, or linear_srgb")
+    if input_color not in {"auto", "auto_assume_srgb", "srgb", "linear_srgb"}:
+        raise ValueError("input_color must be auto, auto_assume_srgb, srgb, or linear_srgb")
     if isinstance(max_pixels, bool) or not isinstance(max_pixels, int) or max_pixels <= 0:
         raise ValueError("max_pixels must be a positive integer")
 
@@ -241,8 +347,13 @@ def decode_master(
     if Path(source_name).suffix.lower() in RAW_SUFFIXES:
         if raw_decoder is None:
             raise ValueError("RAW input requires a governed decoder")
-        if input_color not in {"auto", "linear_srgb"}:
-            raise ValueError("RAW decoder output is linear_srgb; encoded input_color is invalid")
+        prepared = prepare_input_color(
+            input_color=input_color,
+            image_format="RAW",
+            profile=None,
+            declared_color=None,
+            exif_color=None,
+        )
         pixels, raw_metadata = raw_decoder(source_bytes, source_name)
         if pixels.ndim != 3:
             raise ValueError("Governed RAW decoder must return HxWx3 pixels")
@@ -250,61 +361,80 @@ def decode_master(
         if str(raw_metadata.get("color_space", "")).lower() != "linear_srgb":
             raise ValueError("Governed RAW decoder must declare linear_srgb")
         metadata = dict(raw_metadata)
-        metadata.update({"source_format": "RAW", "input_color": "linear_srgb", "color_resolution": "governed_raw_decoder"})
+        metadata.update(
+            {
+                "source_format": "RAW",
+                "input_color": "linear_srgb",
+                "color_resolution": "governed_raw_decoder",
+                "color_preparation": prepared.evidence,
+            }
+        )
         return ImageMaster(pixels, source_sha256, int(raw_metadata.get("source_bit_depth", 16)), metadata=metadata)
 
     profile = None
     declared_color = None
     exif_color = None
     orientation = 1
+    png_metadata = None
     is_tiff = source_bytes[:4] in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}
     if is_tiff:
         import tifffile
 
         with tifffile.TiffFile(io.BytesIO(source_bytes)) as tif:
-            if len(tif.pages) != 1 or len(tif.series) != 1:
-                raise ValueError("V4 photographic TIFF ingest requires one image page")
             page = tif.pages[0]
             if not isinstance(page, tifffile.TiffPage):
                 raise ValueError("V4 photographic TIFF requires a complete image page")
             check_dimensions(int(page.imagelength), int(page.imagewidth))
-            if page.samplesperpixel not in {1, 2, 3, 4}:
-                raise ValueError("Unsupported TIFF channel count")
-            if page.photometric not in {tifffile.PHOTOMETRIC.RGB, tifffile.PHOTOMETRIC.MINISBLACK}:
-                raise ValueError("Unsupported TIFF photometric interpretation")
-            if page.planarconfig not in {None, 1}:
-                raise ValueError("Planar TIFF input requires an explicit external conversion")
-            expected_shape: tuple[int, ...] = (int(page.imagelength), int(page.imagewidth))
-            if page.samplesperpixel != 1:
-                expected_shape += (int(page.samplesperpixel),)
-            if tuple(page.shape) != expected_shape:
-                raise ValueError("Volumetric or non-photographic TIFF sample geometry is unsupported")
-            if page.dtype not in {np.dtype("uint8"), np.dtype("uint16"), np.dtype("float32")}:
-                raise ValueError("Photographic samples must be uint8, uint16 or float32")
-            if page.bitspersample != page.dtype.itemsize * 8:
-                raise ValueError("TIFF BitsPerSample must match supported 8, 16 or 32-bit sample precision")
-            pixels = page.asarray()
-            if page.extrasamples and any(int(sample) != 2 for sample in page.extrasamples):
-                raise ValueError("Only unassociated (straight) TIFF alpha is supported")
+            _validate_tiff_page(tif, page)
             orientation_tag = page.tags.get(274)
             orientation = int(orientation_tag.value) if orientation_tag else 1
-            profile, declared_color, exif_color = _tiff_color_metadata(page)
+            profile, declared_color, exif_color = _tiff_color_metadata(page, input_color=input_color)
             image_format = "TIFF"
+            prepared = prepare_input_color(
+                input_color=input_color,
+                image_format=image_format,
+                profile=profile,
+                declared_color=declared_color,
+                exif_color=exif_color,
+            )
+            _validate_color_channels(prepared, grayscale=page.photometric == tifffile.PHOTOMETRIC.MINISBLACK)
+            pixels = page.asarray()
     else:
-        with Image.open(io.BytesIO(source_bytes)) as image:
+        source = io.BytesIO(source_bytes)
+        with Image.open(source) as image:
             check_dimensions(image.height, image.width)
             image_format = str(image.format)
-            if image_format not in {"JPEG", "PNG"} or image.mode not in {"RGB", "RGBA", "L", "LA"}:
+            if image_format not in {"JPEG", "PNG"}:
                 raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF")
-            if image_format == "PNG" and source_bytes[24] == 16:
-                raise ValueError("16-bit PNG requires lossless conversion to TIFF before V4 ingest")
-            exif = image.getexif()
+            if image_format == "PNG":
+                exif, png_metadata = _png_color_metadata(source, image, input_color=input_color)
+                grayscale = png_metadata["color_type"] in {0, 4}
+            else:
+                if image.mode not in {"RGB", "L"}:
+                    raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF")
+                exif, grayscale = image.getexif(), image.mode == "L"
             orientation = int(exif.get(274, 1))
-            profile, declared_color, exif_color = _standard_color_metadata(image)
-            # RGB/gray PNG color-key transparency lives in tRNS metadata rather
-            # than an alpha channel. Materialize it before normalizing geometry.
-            if image_format == "PNG" and "transparency" in image.info:
-                pixels = np.asarray(image.convert("RGBA"))
+            profile, declared_color, exif_color = _standard_color_metadata(image, input_color=input_color, exif=exif)
+            prepared = prepare_input_color(
+                input_color=input_color,
+                image_format=image_format,
+                profile=profile,
+                declared_color=declared_color,
+                exif_color=exif_color,
+                png_metadata=png_metadata,
+            )
+            _validate_color_channels(prepared, grayscale=grayscale)
+            if png_metadata is not None and png_metadata["bit_depth"] == 16:
+                pixels = _png_precision_runtime().png_decode(source_bytes)
+                if pixels.dtype != np.uint16 or pixels.shape[:2] != (image.height, image.width):
+                    raise ValueError("PNG decoder did not preserve 16-bit sample precision and geometry")
+            elif image_format == "PNG" and "transparency" in image.info:
+                if grayscale:
+                    gray = np.asarray(image)
+                    transparency_alpha = np.where(gray == image.info["transparency"], 0, 255).astype(np.uint8)
+                    pixels = np.stack((gray, transparency_alpha), axis=-1)
+                else:
+                    pixels = np.asarray(image.convert("RGBA"))
             else:
                 pixels = np.asarray(image)
 
@@ -315,19 +445,13 @@ def decode_master(
     divisor = float(np.iinfo(pixels.dtype).max) if np.issubdtype(pixels.dtype, np.integer) else 1.0
     values = pixels.astype(np.float32) / divisor
     if values.ndim == 2:
-        values = np.repeat(values[..., None], 3, axis=2)
-    if values.ndim != 3 or values.shape[2] not in {2, 3, 4}:
+        samples, alpha = values, None
+    elif values.ndim == 3 and values.shape[2] in {2, 3, 4}:
+        alpha = values[..., -1] if values.shape[2] in {2, 4} else None
+        samples = values[..., 0] if values.shape[2] == 2 else values[..., :3]
+    else:
         raise ValueError("Unsupported photographic sample shape")
-    alpha = values[..., -1] if values.shape[2] in {2, 4} else None
-    rgb = np.repeat(values[..., :1], 3, axis=2) if values.shape[2] == 2 else values[..., :3]
-    color, resolution = _resolve_color(
-        input_color=input_color,
-        image_format=image_format,
-        profile=profile,
-        declared_color=declared_color,
-        exif_color=exif_color,
-    )
-    linear = srgb_to_linear(rgb) if color == "srgb" else rgb
+    linear = apply_input_color(samples, prepared)
     return ImageMaster(
         linear,
         source_sha256,
@@ -336,8 +460,9 @@ def decode_master(
         source_icc=profile,
         metadata={
             "source_format": image_format,
-            "input_color": color,
-            "color_resolution": resolution,
+            "input_color": prepared.source_color,
+            "color_resolution": prepared.resolution,
+            "color_preparation": prepared.evidence,
             "source_orientation": orientation,
             "orientation_normalized": True,
         },

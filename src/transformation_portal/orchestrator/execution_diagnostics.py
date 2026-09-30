@@ -32,6 +32,16 @@ _FAILURE_GUIDANCE = {
     ): _ICC_GUIDANCE,
     "Ambiguous input color; provide input_color='srgb' or 'linear_srgb'": _AMBIGUOUS_GUIDANCE,
     "Ambiguous input color; provide input_color='srgb' or 'linear_srgb' only when known.": _AMBIGUOUS_GUIDANCE,
+    (
+        "Ambiguous input color. Auto found no usable color-space metadata. Choose Auto with sRGB assumption only if that "
+        "assumption is acceptable, select a known source color, or re-export from the original with an embedded profile. "
+        "Assumptions are recorded and do not recover the original profile."
+    ): (
+        "ambiguous_input_color",
+        "Input color could not be determined. Auto with sRGB assumption can process untagged photographs if that assumption "
+        "is acceptable; it records the assumption without recovering the source profile. Otherwise select the known source "
+        "encoding or re-export with an embedded profile, then create a new job.",
+    ),
 }
 _LOG_PREFIXES = ("Stage preprocess failed: ", "RuntimeError: Stage preprocess failed: ")
 _MAX_DIAGNOSTIC_LINES = 200

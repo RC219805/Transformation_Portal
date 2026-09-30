@@ -39,9 +39,10 @@ The initial profile uses governed `da3_metric` without synthetic fallback.
 Photographic ingest distinguishes the linear-sRGB floating-point master from the
 encoded model proxy. Proxy resize/padding geometry and depth units are explicit;
 DA3 metric output remains uncalibrated model inference, not measured scene truth.
-Final delivery is 16-bit encoded sRGB TIFF with a corresponding profile. Unknown
-input color/profile interpretation requires an explicit `srgb` or `linear_srgb`
-correction. RAW input requires the governed isolated decoder. Preview maps, when
+Final delivery is 16-bit encoded sRGB TIFF with a corresponding profile. Auto
+color preparation converts supported RGB/gray ICC profiles to extended linear
+sRGB through a float32 LittleCMS transform. RAW input requires the governed
+isolated decoder. Preview maps, when
 requested, are visualization artifacts rather than physically measured materials.
 TIFF samples must declare the supported full 8-bit or 16-bit integer precision,
 or 32-bit floating-point precision. Packed sample widths such as 12-bit require
@@ -74,7 +75,22 @@ PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v4 \
 
 Set those variables to distinct absolute directories. Choose the input color
 from actual source provenance; the example is not permission to label every
-TIFF sRGB. Use `auto` when the source has supported unambiguous color metadata.
+TIFF sRGB. `auto` remains the default and resolves supported ICC, EXIF, and PNG
+metadata. `auto_assume_srgb` uses the same detection and conversion, then records
+an sRGB assumption only for genuinely untagged ordinary images. Neither Auto
+mode ignores invalid, conflicting, or explicitly unknown metadata. The existing
+untagged-JPEG assumption remains recorded under `auto`; ambiguous untagged
+PNG/TIFF requires the new assumption mode or a known explicit encoding.
+`srgb` and `linear_srgb` assert the existing samples' encoding, so do not label
+unconverted Adobe RGB pixels `srgb`. RAW accepts `auto`, `auto_assume_srgb`, or
+`linear_srgb` and preserves the governed decoder's linear output.
+
+New `photograph.json` source metadata contains a `tp.color.preparation.v1`
+receipt with the requested mode, detected metadata, conversion/assumption,
+profile digests, precision, and engine. Retained source ICC bytes and source
+hashes let verification reconstruct the color recipe; they do not constitute
+independent replay of the original source pixels. The receipt also binds the
+master/proxy identity and invalidates incompatible cached preprocessing.
 Apple Silicon is the first evaluation target. Unsupported device/runtime or
 input-color states must be reported as unavailable, not silently substituted.
 The output directory must be new and its parent must already exist. Existing

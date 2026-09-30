@@ -18,6 +18,7 @@ from transformation_portal.core.depth_evidence import build_depth_evidence
 from transformation_portal.core.execution_plan import decode_bounded_json_object
 from transformation_portal.core.execution_plan_v4 import parse_plan_v4
 from transformation_portal.core.image_artifact import ImageMaster
+from transformation_portal.lux_depth_v4.color_preparation_evidence import validate_color_preparation_evidence
 from transformation_portal.lux_depth_v4.evidence import (
     MAX_EVIDENCE_BYTES,
     VerifiedExecutionEvidenceV2,
@@ -226,6 +227,7 @@ def _verify_photograph(root: Path, input_id: str, source: dict, payload: dict, d
         expected_files.add(f"{input_id}/source-icc.npy")
         icc = _array(root, f"{input_id}/source-icc.npy", None, np.dtype("uint8"), declared).tobytes()
     original = _image(descriptor["source"], load("source-master.npy", (*shape, 3)), source, alpha, icc)
+    validate_color_preparation_evidence(original.metadata, input_color=payload["configuration"]["input_color"], source_icc=icc)
     proxy = create_proxy(original, target)
     native_shape = proxy.transform.padded_shape
     native = load("native-depth.npy", native_shape, nonfinite=True)

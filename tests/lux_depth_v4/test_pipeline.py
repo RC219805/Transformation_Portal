@@ -90,6 +90,26 @@ def test_complete_graph_preserves_precision_and_native_depth(prepared):
     assert descriptor["materials"]["status"] == "abstained"
 
 
+def test_icc_preparation_retains_source_profile_and_extended_float_master(prepared):
+    import imagecodecs
+
+    from transformation_portal.lux_depth_v4.color_preparation_evidence import validate_color_preparation_evidence
+
+    profile = imagecodecs.cms_profile("adobergb")
+    source = prepared.input_root / "ramp.tif"
+    pixels = np.zeros((28, 42, 3), np.uint16)
+    pixels[..., 1] = 65535
+    tifffile.imwrite(source, pixels, photometric="rgb", iccprofile=profile)
+    updated = prepare(LuxDepthV4Request(prepared.input_root, prepared.output_root, input_color="auto", target_size=56))
+    result = pipeline.run(updated)
+    retained = np.load(result.output_root / "input-0000/source-icc.npy", allow_pickle=False)
+    assert retained.dtype == np.uint8 and retained.tobytes() == profile
+    master = np.load(result.output_root / "input-0000/source-master.npy", allow_pickle=False)
+    assert master.dtype == np.float32 and master.min() < 0
+    descriptor = json.loads((result.output_root / "input-0000/photograph.json").read_bytes())
+    validate_color_preparation_evidence(descriptor["source"]["metadata"], input_color="auto", source_icc=profile)
+
+
 def test_managed_graph_keeps_optional_outputs_within_admitted_reservation(prepared, tmp_path):
     from transformation_portal.lux_depth_v4.publication import publication_paths
     from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher

@@ -30,7 +30,7 @@ class PhotographyJobArgs(BaseModel):
     output_dir: str = Field(min_length=1, max_length=4096)
     model_key: Literal["da3-metric", "da3_metric"] = "da3-metric"
     device: Literal["cpu", "mps", "auto"] = "cpu"
-    input_color: Literal["auto", "srgb", "linear_srgb"] = "auto"
+    input_color: Literal["auto", "auto_assume_srgb", "srgb", "linear_srgb"] = "auto"
     target_size: int = Field(default=518, ge=14, le=2044, multiple_of=14)
     strength: float = Field(default=0.25, ge=0, le=1)
     clarity: float = Field(default=0.0, ge=0, le=1)
@@ -118,9 +118,9 @@ def _photography_path_errors(paths: dict[str, Path], *, inspect_files: bool) -> 
     return errors
 
 
-def _photography_input_color_errors(
+def _photography_input_color_preflight(
     args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     """Inspect authorized input headers, preserving tenant and ingest color policy."""
     from PIL.Image import DecompressionBombError
 
@@ -135,27 +135,31 @@ def _photography_input_color_errors(
         # Internal callers without a verified tenant may normalize arguments,
         # but cannot authorize a new content probe.
         if tenant is None:
-            return []
+            return [], []
         roots = tuple(
             base / tenant.tenant_id
             for configured in (tenant.workspace_root, tenant.cas_root)
             for base in (configured.absolute(), configured.resolve())
         )
         if ".." in root.parts or not any(root.absolute().is_relative_to(base) for base in roots):
-            return [{"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}]
+            return [
+                {"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}
+            ], []
         try:
             policy.tenant_guard(tenant).enforce_path(root)
         except (TenantError, DispatchAuthorityLost, OSError, ValueError):
-            return [{"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}]
+            return [
+                {"field": "input_dir", "code": "invalid_path", "message": "Input is outside the authorized workspace."}
+            ], []
     try:
-        validate_input_directory_colors(
+        preparations = validate_input_directory_colors(
             root,
             input_color=args["input_color"],
             max_input_bytes=args["max_input_bytes"],
             max_pixels=args["max_pixels"],
         )
     except InputColorError as exc:
-        return [{"field": "input_color", "code": exc.code, "message": str(exc)}]
+        return [{"field": "input_color", "code": exc.code, "message": str(exc)}], []
     except (OSError, ValueError, TypeError, IndexError, RecursionError, ArtifactEvidenceError, DecompressionBombError):
         return [
             {
@@ -164,14 +168,55 @@ def _photography_input_color_errors(
                 "message": "Input metadata could not be validated within the configured limits. "
                 "Check the image files and size limits, or re-export a smaller batch of photographs.",
             }
-        ]
-    return []
+        ], []
+    return [], preparations
+
+
+def _color_preparation_summary(
+    preparations: list[dict[str, Any]],
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Describe planned color handling without claiming pixels were processed."""
+    if not preparations:
+        return [], {}
+    converted = sum(item["engine"] == "imagecodecs_lcms" for item in preparations)
+    assumed = sum(item["assumed_srgb"] is True for item in preparations)
+    overrides = sum(item["action"] == "explicit" and item["source_icc_sha256"] is not None for item in preparations)
+    warnings = []
+    if assumed:
+        warnings.append(
+            {
+                "field": "input_color",
+                "code": "input_color_assumed_srgb",
+                "message": f"{assumed} image(s) have no usable color metadata. Preparation will assume sRGB; "
+                "this is an assumption, not a detected profile. The choice will be recorded in the photographic evidence.",
+            }
+        )
+    if overrides:
+        warnings.append(
+            {
+                "field": "input_color",
+                "code": "input_color_profile_override",
+                "message": f"Explicit Input color overrides {overrides} embedded profile(s) without converting their pixels. "
+                "Choose Auto to convert supported profiles into the working color space.",
+            }
+        )
+    return warnings, {
+        "summary_label": f"Color preparation: {len(preparations)} image(s), {converted} to convert, {assumed} sRGB assumption(s).",
+        "color_preparation": {
+            "scope": "metadata_preflight",
+            "inspected_images": len(preparations),
+            "planned_profile_conversions": converted,
+            "assumed_srgb_images": assumed,
+            "explicit_profile_overrides": overrides,
+        },
+    }
 
 
 def photography_config_preview(
     args: dict[str, Any], *, policy: ExecutionPolicy, tenant: TenantContext | None = None
 ) -> dict[str, Any]:
     errors: list[dict[str, str]] = []
+    preparations: list[dict[str, Any]] = []
     normalized: dict[str, Any] = dict(args)
     try:
         parsed = PhotographyJobArgs.model_validate(args)
@@ -209,19 +254,21 @@ def photography_config_preview(
         except (TypeError, ValueError):
             errors.append({"field": "materials_policy", "code": "invalid_argument", "message": "Invalid materials policy."})
         if not errors:
-            errors.extend(_photography_input_color_errors(normalized, policy=policy, tenant=tenant))
+            color_errors, preparations = _photography_input_color_preflight(normalized, policy=policy, tenant=tenant)
+            errors.extend(color_errors)
     if errors:
         normalized = {name: _json_safe_rejected_value(value) for name, value in normalized.items()}
+    warnings, summary = _color_preparation_summary(preparations) if not errors else ([], {})
     return {
         "pipeline": "lux-depth-v5",
         "normalized_args": normalized,
         "execution_args": dict(normalized),
         "argv_preview": "",
         "field_errors": errors,
-        "field_warnings": [],
+        "field_warnings": warnings,
         "inactive_fields": [],
         "readiness": managed_photography_readiness(),
-        "estimate_summary": {},
+        "estimate_summary": summary,
         "debug_bundle_summary": {},
         "next_best_action": None,
     }

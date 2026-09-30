@@ -54,12 +54,33 @@ PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth verify \
 Defaults are CPU, FP32, target size 518, and V6 `guided_bilinear_v4`
 reconstruction. `--target-size 1008` is an explicit experiment; it is not a
 quality-accepted default. `--runtime-python`, `--raw-python`, `--cache-dir`,
-and `--companions-manifest` use the V5 admission rules. `auto` color requires
-recognized source color metadata; use an explicit color assertion only when
-it describes the actual input. RAW needs its separately governed decoder.
-Convert unsupported profiles to sRGB with a profile-aware editor before upload.
-If `auto` still rejects the exported sRGB profile, select `srgb` only for those
-converted copies; the input-color option does not convert pixels.
+and `--companions-manifest` use the V5 admission rules. RAW needs its separately
+governed decoder. Color preparation accepts these four `--input-color` modes:
+
+| Mode | Source interpretation |
+| --- | --- |
+| `auto` (default) | Detect supported ICC, EXIF, and PNG color metadata and convert to extended linear sRGB. Ambiguous untagged PNG/TIFF fails closed; the established untagged-JPEG sRGB assumption remains recorded. |
+| `auto_assume_srgb` | Apply the same detection and conversion first; assume sRGB only for otherwise untagged ordinary images, recording the assumption. Invalid, conflicting, or explicitly unknown metadata still fails. |
+| `srgb` | Assert that the existing samples are encoded sRGB; this does not apply an embedded wide-gamut profile. |
+| `linear_srgb` | Assert that the existing samples are already linear sRGB. |
+
+Supported RGB/gray ICC profiles, including Adobe RGB and Display P3, use the
+wheel-owned LittleCMS float32 transform. The master remains extended linear
+sRGB, with alpha handled separately; color preparation does not quantize to an
+8-bit intermediate or clip to the display gamut. Unsupported profiles require a
+profile-aware export before submission. Never label unconverted Adobe RGB
+samples `srgb`. RAW uses the governed decoder's linear-sRGB output with `auto`,
+`auto_assume_srgb`, or `linear_srgb`; encoded `srgb` is invalid for RAW.
+
+New photographs carry a `tp.color.preparation.v1` receipt in
+`source.metadata.color_preparation`, binding the requested mode, detected
+metadata, profile digests, conversion or assumption, precision, and engine.
+The receipt participates in master/proxy identity and evidence verification.
+Retained V4/V5 evidence verifies the recipe and source/profile bindings; it does
+not independently re-decode original source pixels. Depth Pro retains originals
+and replays decoding. Current V6/Depth Pro processing identities also bind the
+installed CMS extension and bundled LCMS bytes. Historical plans remain readable,
+but execution/replay still requires the matching processing environment.
 
 `process` produces `source-v5/`, `v6/`, `execution-plan.json`, and
 `execution-evidence.json`. It retains both complete stage inventories. Final

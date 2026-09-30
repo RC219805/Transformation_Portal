@@ -139,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("import-supplied", "inspect", "infer"):
         command = commands.add_parser(name)
         command.add_argument("--source", type=Path, required=True)
-        command.add_argument("--input-color", choices=("auto", "srgb", "linear_srgb"), default="auto")
+        command.add_argument("--input-color", choices=("auto", "auto_assume_srgb", "srgb", "linear_srgb"), default="auto")
         command.add_argument("--max-pixels", type=int, default=100_000_000)
         command.add_argument("--max-input-bytes", type=int, default=1024**3)
         if name == "inspect":

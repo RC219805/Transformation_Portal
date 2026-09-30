@@ -399,6 +399,8 @@ def _run(
                         }
                         profile_descriptor = {}
                         if profile is None:
+                            if original.source_icc is not None:
+                                arrays["source-icc.npy"] = np.frombuffer(original.source_icc, dtype=np.uint8)
                             aligned, aligned_valid = restore_depth_with_validity(
                                 artifact.relative_depth(), artifact.valid_mask, transform
                             )

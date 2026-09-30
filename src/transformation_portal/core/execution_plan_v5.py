@@ -52,6 +52,12 @@ class ExecutionPlanV5:
                 for name, value in payload[section].items():
                     if type(value) is not int:
                         raise ValueError(f"V6 {section} field {name!r} must be an exact integer")
+            processing = payload["processing"]
+            if (
+                "color_preparation" in processing
+                and processing["color_preparation"]["imagecodecs_version"] != processing["dependencies"]["imagecodecs"]
+            ):
+                raise ValueError("V6 CMS differs from its processing dependency")
             upstream = ExecutionPlanV4.from_payload(payload["inference"]).to_payload()
             if "materials_manifest" in upstream or "materials_v4" in upstream["configuration"]:
                 raise ValueError("V6 cannot replay applied Materials responses; omit materials inputs")

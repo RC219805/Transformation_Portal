@@ -41,6 +41,13 @@ test("photography validation preserves invalid input for server rejection instea
   assert.equal(buildPhotographyArgs({ materialsManifest: "   " }).materials_manifest, undefined);
 });
 
+test("V5 preserves explicit untagged sRGB preparation without changing strict Auto defaults", () => {
+  const args = buildPhotographyArgs(createPhotographyConfig(), { inputColor: { value: "auto_assume_srgb" } });
+  assert.equal(args.input_color, "auto_assume_srgb");
+  assert.equal(buildPhotographyArgs(photographyConfigFromArgs(args)).input_color, "auto_assume_srgb");
+  assert.equal(buildPhotographyArgs().input_color, "auto");
+});
+
 test("V5 capability rows expose readiness and do not advertise V3-only output controls", () => {
   for (const status of ["ready", "blocked"]) {
     const catalog = buildPortalCapabilityCatalog({ pipeline: "lux-depth-v5", backendOk: true, bootstrapReady: true, readiness: { status }, preview: { pipeline: "lux-depth-v5", status: "ready", field_errors: [] }, args: { materials_manifest: "/inputs/materials.json" } });

@@ -144,6 +144,7 @@
         "input_color": {
           "enum": [
             "auto",
+            "auto_assume_srgb",
             "srgb",
             "linear_srgb"
           ]
