@@ -6,6 +6,7 @@ import builtins
 import importlib
 from pathlib import Path
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -82,10 +83,12 @@ def test_unavailable_command_exits_without_work(app_name, command, input_kind, e
 @pytest.mark.parametrize("app_name,command,input_kind,extra_args", COMMANDS)
 def test_unavailable_command_help_remains_available(app_name, command, input_kind, extra_args) -> None:
     result = CliRunner().invoke(getattr(cli, app_name), [command, "--help"], color=False)
+    # Rich can force terminal styling from GITHUB_ACTIONS despite color=False.
+    help_text = click.unstyle(result.output)
 
     assert result.exit_code == 0, result.output
-    assert "Unavailable compatibility command" in result.output
-    assert ("--path" if input_kind == "analysis" else "--input") in result.output
+    assert "Unavailable compatibility command" in help_text
+    assert ("--path" if input_kind == "analysis" else "--input") in help_text
     for option in extra_args:
         if option.startswith("--"):
-            assert option in result.output
+            assert option in help_text

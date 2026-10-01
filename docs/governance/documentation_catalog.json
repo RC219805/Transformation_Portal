@@ -6320,7 +6320,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a6d9e3aafd344ddcb09d3275b12c318138e56d60",
+      "source_commit": "75674ebf79077a7791dd4f37ef08f63eeed5c7bc",
       "content_sha256": "298d899bc749d05d1d82608cb035929b7de905baec3177ba1f9c35429b78ab4a",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -6337,7 +6337,7 @@
         "pyproject.toml": "a962e6221093a0c252d8dcdc11f5ca843aec968ece1d18fe6a183a9df027986d",
         "src/transformation_portal/cli/__init__.py": "9be10a4ec203f2ce341a8f72eb5e5cf37c17702646d75887f19e2c79034cb627",
         "src/transformation_portal/__main__.py": "af0b4ef53c5bbc73e07ab69cd078dee813369f14cab83150c456964c25f5de01",
-        "tests/test_cli_unavailable_commands.py": "701d74a8ec0ff1dee1170a4fac3fb2120c5858c3ecba94956cf945f4d85693d4",
+        "tests/test_cli_unavailable_commands.py": "52fb78239c0bdfb8dc88efeebc092628a3c1a5a738792b921020c1ed0c1a9bb6",
         "tests/test_cli_batch_failures.py": "bea449e179d7589a4467ae5589d4883f09739e49525b97e9fd571a66613292e1"
       },
       "validation_commands": [
