@@ -179,7 +179,9 @@ class DepthAwareDenoise(DepthProcessorMixin):
         else:
             # Fallback: use Gaussian filter (less sophisticated but works)
             logger.warning("cv2 not available, using Gaussian filter instead of bilateral")
-            filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=self.sigma_spatial).astype(np.uint8)
+            # Smooth spatial dimensions without mixing color channels.
+            sigma = (self.sigma_spatial, self.sigma_spatial) + (0.0,) * (image_8bit.ndim - 2)
+            filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=sigma).astype(np.uint8)
 
         # Convert back to float
         if image.max() <= 1.0:
@@ -286,7 +288,7 @@ class FastDepthDenoise:
         else:
             # Fallback: use Gaussian filter
             logger.warning("cv2 not available, using Gaussian filter instead of non-local means")
-            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(np.uint8)
+            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=(3.0, 3.0, 0.0)).astype(np.uint8)
 
         # Convert back
         if image.max() <= 1.0:

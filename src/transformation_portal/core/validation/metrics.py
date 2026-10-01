@@ -44,6 +44,9 @@ class MetricsComputer:
             # For strict metrics, shapes must match. returning zeros.
             return QualityMetrics(0.0, 0.0, 0.0)
 
+        # Cast before arithmetic so uint8 differences and squares cannot wrap.
+        mse = float(np.mean((target.astype(float) - prediction.astype(float)) ** 2))
+
         # Use skimage if available (Robust)
         if SKIMAGE_AVAIL:
             # Handle data range
@@ -54,12 +57,9 @@ class MetricsComputer:
 
             p_val = psnr(target, prediction, data_range=data_range)
             s_val = ssim(target, prediction, data_range=data_range, channel_axis=channel_axis)
-            mse_val = np.mean((target - prediction) ** 2)
-
-            return QualityMetrics(p_val, s_val, mse_val)
+            return QualityMetrics(p_val, s_val, mse)
 
         # Fallback (Manual Calculation)
-        mse = np.mean((target.astype(float) - prediction.astype(float)) ** 2)
         if mse == 0:
             return QualityMetrics(100.0, 1.0, 0.0)
 

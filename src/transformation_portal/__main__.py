@@ -114,7 +114,11 @@ def process(
             if result.failed_count > 0:
                 typer.echo(f"⚠️  {result.failed_count} images failed", err=True)
             typer.echo(f"📊 Total time: {result.total_time:.2f}s")
+            if result.failed_count > 0:
+                raise typer.Exit(code=1)
 
+    except typer.Exit:
+        raise
     except ImportError as e:
         typer.echo(f"❌ Error loading pipeline: {e}", err=True)
         raise typer.Exit(code=1)

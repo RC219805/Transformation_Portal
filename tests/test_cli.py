@@ -116,6 +116,17 @@ class TestCheckModuleAvailability:
 
         assert exc_info.value.exit_code == 1
 
+    def test_unavailable_child_of_existing_package(self):
+        """Importing the parent must not count as loading a missing child."""
+        import typer
+
+        from transformation_portal.cli import check_module_availability
+
+        with pytest.raises(typer.Exit) as exc_info:
+            check_module_availability("transformation_portal.missing_audit_module", "Missing child")
+
+        assert exc_info.value.exit_code == 1
+
 
 class TestVersionCommand:
     """Tests for version command."""

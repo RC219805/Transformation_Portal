@@ -30,6 +30,16 @@ class TileConfig:
     # 'gaussian' is smoother, 'linear' is faster
     blend_mode: str = "gaussian"
 
+    def __post_init__(self) -> None:
+        if type(self.tile_size) is not int or self.tile_size <= 0:
+            raise ValueError("tile_size must be a positive integer")
+        if type(self.tile_overlap) is not int or not 0 <= self.tile_overlap < self.tile_size:
+            raise ValueError("tile_overlap must be an integer in [0, tile_size)")
+        if type(self.batch_size) is not int or self.batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if self.blend_mode not in {"linear", "gaussian"}:
+            raise ValueError("blend_mode must be 'linear' or 'gaussian'")
+
 
 class TiledProcessor:
     """
@@ -65,12 +75,16 @@ class TiledProcessor:
         # Normalize to (B, C, H, W) tensor
         if isinstance(image, np.ndarray):
             is_numpy = True
+            if image.ndim != 3 or any(dimension == 0 for dimension in image.shape):
+                raise ValueError("numpy image must have non-empty (H, W, C) dimensions")
             # (H, W, C) -> (1, C, H, W)
             img_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).float() / 255.0
         else:
             is_numpy = False
             img_tensor = image
 
+        if img_tensor.ndim != 4 or any(dimension == 0 for dimension in img_tensor.shape):
+            raise ValueError("tensor image must have non-empty (B, C, H, W) dimensions")
         img_tensor = img_tensor.to(device)
         b, c, h, w = img_tensor.shape
 
@@ -79,14 +93,16 @@ class TiledProcessor:
         # Stride = size - overlap
         stride = self.config.tile_size - self.config.tile_overlap
 
-        h_tiles = math.ceil((h - self.config.tile_overlap) / stride)
-        w_tiles = math.ceil((w - self.config.tile_overlap) / stride)
+        h_tiles = max(1, math.ceil((h - self.config.tile_overlap) / stride))
+        w_tiles = max(1, math.ceil((w - self.config.tile_overlap) / stride))
 
         pad_h = (h_tiles * stride + self.config.tile_overlap) - h
         pad_w = (w_tiles * stride + self.config.tile_overlap) - w
 
-        # Reflect pad to avoid border artifacts
-        padded_img = F.pad(img_tensor, (0, pad_w, 0, pad_h), mode="reflect")
+        # Reflection requires each pad to be smaller than its input dimension.
+        # Tiny images still need a full tile; replicate their edges instead.
+        pad_mode = "reflect" if pad_w < w and pad_h < h else "replicate"
+        padded_img = F.pad(img_tensor, (0, pad_w, 0, pad_h), mode=pad_mode)
 
         # 2. Extract Tiles
         tiles: List[torch.Tensor] = []
@@ -110,8 +126,20 @@ class TiledProcessor:
             with torch.no_grad():
                 processed_batch = processor_func(batch)
 
-            # Split back into list
-            processed_tiles.extend(processed_batch.chunk(processed_batch.shape[0], dim=0))
+            if (
+                not isinstance(processed_batch, torch.Tensor)
+                or processed_batch.ndim != 4
+                or processed_batch.shape[0] != batch.shape[0]
+                or processed_batch.shape[1] == 0
+                or processed_batch.shape[-2:] != batch.shape[-2:]
+            ):
+                raise ValueError("processor_func must preserve tile batch and spatial dimensions")
+            if processed_tiles and processed_batch.shape[1] != processed_tiles[0].shape[1]:
+                raise ValueError("processor_func must return a consistent number of channels")
+
+            # Each spatial tile contains all b input images. Keep that group
+            # together so every coordinate receives the corresponding batch.
+            processed_tiles.extend(processed_batch.split(b, dim=0))
 
         # 4. Merge Tiles (Weighted Blending)
         # Create output buffer
@@ -129,7 +157,7 @@ class TiledProcessor:
             weights[:, :, y : y + self.config.tile_size, x : x + self.config.tile_size] += tile_weight
 
         # Normalize by weights to average overlaps
-        output /= weights + 1e-8
+        output /= weights.clamp_min(torch.finfo(weights.dtype).tiny)
 
         # 5. Crop to original size
         output_tensor = output[:, :, :h, :w]

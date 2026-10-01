@@ -181,9 +181,17 @@ class BatchProcessor:
 
         # Identify work
         pending_items = [item for item in job.items if item.status in (JobStatus.PENDING, JobStatus.FAILED)]
+        running_count = sum(item.status == JobStatus.RUNNING for item in job.items)
+        if running_count:
+            logger.warning(
+                "Batch '%s' is incomplete: %d existing RUNNING item(s) are not replayed; recovery remains unresolved.",
+                job.name,
+                running_count,
+            )
 
         if not pending_items:
-            logger.info("No pending items found. Job complete.")
+            if not running_count:
+                logger.info("No pending items found. Job complete.")
             return job
 
         logger.info(f"Resuming with {len(pending_items)} pending items...")
