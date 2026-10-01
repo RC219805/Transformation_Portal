@@ -18,7 +18,8 @@ def test_batch_failures_exit_unsuccessfully(entrypoint, successful_count, tmp_pa
     from transformation_portal.__main__ import app
     from transformation_portal.cli import pipeline_app
 
-    module = types.ModuleType("transformation_portal.pipeline_unified")
+    module_name = "transformation_portal.pipeline_unified"
+    module = types.ModuleType(module_name)
 
     class FailingPipeline:
         @classmethod
@@ -29,7 +30,7 @@ def test_batch_failures_exit_unsuccessfully(entrypoint, successful_count, tmp_pa
             return types.SimpleNamespace(successful_count=successful_count, failed_count=1, total_time=0.01)
 
     module.UnifiedPipeline = FailingPipeline
-    monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setitem(sys.modules, module_name, module)
     recipe = tmp_path / "recipe.yaml"
     recipe.write_text("name: batch\nstages: [color_grading]\n", encoding="utf-8")
     result = CliRunner().invoke(

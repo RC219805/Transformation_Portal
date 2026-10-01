@@ -16,7 +16,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts/utilities/resolve_750_pi
 
 
 def _run_cli(base_dir, *args):
-    return subprocess.run([sys.executable, str(SCRIPT), str(base_dir), *args], capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(SCRIPT), str(base_dir), *args], capture_output=True, text=True, check=False)
 
 
 def test_missing_base_directory_exits_without_traceback(tmp_path):
