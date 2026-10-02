@@ -51,7 +51,7 @@ psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 
 # RAG / embedding support
-sentence-transformers>=3.1.0,<6
+sentence-transformers>=5.6.0,<6
 
 # 3D support (cross-platform, commercial-safe)
 plyfile>=1.1.5,<2
