@@ -6214,8 +6214,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "0efb8d688ed1dea7c92c9733946b52d0e96a65e4",
-      "content_sha256": "d0922ecd787f92be51bea5bb16725ababb7672fb91dd520db20e522849c0acd9",
+      "source_commit": "4c42e61110da37f4397d413fe7cf46df28671b05",
+      "content_sha256": "a87d424192d2f3b746cf02d35199b80aa42cd544c79631800683a94124122af5",
       "source_references": [
         ".github/workflows/build.yml",
         ".github/workflows/security-unified.yml",
