@@ -39,15 +39,36 @@ def test_unsafe_checkpoint_api_references_fail(source: str) -> None:
     assert check_source(source)
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from accelerate.utils import load_and_quantize_model as load\nload(model, weights_location=path)",
+        "from accelerate.utils.bnb import load_and_quantize_model",
+        "import accelerate.utils as u\nu.load_and_quantize_model(model, weights_location=path)",
+        "import accelerate.utils.bnb as b\nb.load_and_quantize_model(model, weights_location=path)",
+        "from accelerate import utils as u\nload = u.load_and_quantize_model\nload(model, weights_location=path)",
+        "from accelerate.utils import bnb as b\nload = b.load_and_quantize_model\nload(model, weights_location=path)",
+        'import accelerate.utils as u\ngetattr(u, "load_and_quantize_model")(model, weights_location=path)',
+        'import importlib as i\nb = i.import_module("accelerate.utils.bnb")\n'
+        "b.load_and_quantize_model(model, weights_location=path)",
+        "import accelerate.utils as u\nu.load_and_quantize_model(model, weights_location=path)\nimport math as u",
+    ],
+)
+def test_quantization_wrapper_references_fail(source: str) -> None:
+    assert any("load_and_quantize_model" in reason for _, reason in check_source(source))
+
+
 def test_dispatch_offload_and_examples_remain_supported() -> None:
     source = """
 from accelerate import dispatch_model, cpu_offload, init_empty_weights
-from accelerate.utils import load_offloaded_weights
+from accelerate.utils import BnbQuantizationConfig, load_offloaded_weights
 dispatch_model(model, device_map="auto")
 cpu_offload(model)
 # accelerate.load_checkpoint_and_dispatch is prohibited.
 example = "from accelerate import load_checkpoint_in_model"
+quantization_example = "from accelerate.utils import load_and_quantize_model"
 other.load_checkpoint_in_model(model, path)
+other.load_and_quantize_model(model, weights_location=path)
 """
     assert check_source(source) == []
 

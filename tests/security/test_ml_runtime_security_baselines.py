@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
@@ -19,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
                 "pillow==12.3.0",
                 "torch==2.13.0",
                 "torchvision==0.28.0",
-                "transformers==5.10.1",
+                "transformers==5.10.4",
                 "datasets==5.0.1",
                 "gradio==6.22.0",
                 "gradio_client==2.6.0",
@@ -30,7 +32,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
         ),
         (
             "requirements/da3-runtime-darwin-arm64.txt",
-            ("pillow==12.3.0", "torch==2.13.0", "torchvision==0.28.0", "transformers==5.10.1"),
+            (
+                "pillow==12.3.0",
+                "torch==2.13.0",
+                "torchvision==0.28.0",
+                "transformers==5.10.4",
+                "pre-commit==4.6.2",
+                "virtualenv==21.7.13",
+            ),
         ),
         (
             "requirements/ml-core-darwin-arm64.txt",
@@ -60,6 +69,17 @@ def test_fastvlm_runtime_does_not_keep_stale_datasets_pin() -> None:
     content = (REPO_ROOT / "config/fastvlm_runtime_requirements.txt").read_text(encoding="utf-8").lower()
 
     assert "datasets==4.8.5" not in content
+
+
+def test_sentence_transformers_local_loading_security_floor() -> None:
+    for relative_path in ("requirements/ml-core.in", "requirements/ml-core-darwin-arm64.in"):
+        content = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "sentence-transformers>=5.6.0,<6" in content
+
+    content = (REPO_ROOT / "requirements/ml-core-darwin-arm64.txt").read_text(encoding="utf-8")
+    pins = [Requirement(line) for line in content.splitlines() if line.startswith("sentence-transformers==")]
+    assert len(pins) == 1
+    assert Version(next(iter(pins[0].specifier)).version) >= Version("5.6.0")
 
 
 def test_supported_ml_metadata_rejects_vulnerable_transformers_series() -> None:

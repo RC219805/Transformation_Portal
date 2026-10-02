@@ -5,7 +5,7 @@
   "source_revision": "95a2adea1a8180104bf51937409034bdec70a244",
   "dependency_closure_complete": true,
   "dependency_lock_path": "requirements/da3-runtime-darwin-arm64.txt",
-  "dependency_lock_sha256": "4f96fca41e507860035e73dc7599ce55e424438cb0b4d182f5c6b28595c14302",
+  "dependency_lock_sha256": "5b4806c25ce520afa1e0634e53dfb451c68b341a98a6128759d8235165ac2341",
   "governed_additional_distributions": {
     "depth-anything-3": "0.0.0",
     "pip": "26.2.1",

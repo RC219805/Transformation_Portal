@@ -728,10 +728,11 @@ Certain packages require minimum versions due to CVEs:
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
 | `cryptography`          | >=50.0.0        | Governed lock baseline includes the CVE-2026-69247 security fix |
-| `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
+| `sentence-transformers` | >=5.6.0         | GHSA-jhr6-gm9c-rqjv (local trust_remote_code bypass) |
 | `msgpack`               | >=1.2.1         | GHSA-6v7p-g79w-8964 |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
-| `pypdf`                 | >=6.15.0        | GHSA-fwg2-594c-jp42 and GHSA-fp3f-mc75-235c |
+| `pypdf`                 | >=6.19.0        | GHSA-fwg2-594c-jp42 and GHSA-fp3f-mc75-235c; includes embedded-file, appearance-stream and page-label resource fixes |
+| `virtualenv`            | >=21.7.13       | GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes |
 | `starlette`             | >=1.3.1         | CVE-2026-48710 / PYSEC-2026-161 plus 2026 web-stack advisories |
 
 ### Approved Exceptions

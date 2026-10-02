@@ -7,7 +7,7 @@
 
 torch==2.13.0  # Governed DA3 baseline
 torchvision==0.28.0  # Governed DA3 baseline
-transformers==5.10.1  # Governed DA3 security baseline (CVE-2026-9856)
+transformers==5.10.4  # Governed DA3 security baseline (CVE-2026-9856)
 cryptography==50.0.0  # Governed DA3 baseline
 moviepy==1.0.3  # Governed DA3 baseline
 einops==0.8.2  # Governed DA3 baseline
@@ -30,4 +30,5 @@ pillow-heif==1.7.0  # Governed DA3 baseline
 safetensors==0.7.0  # Governed DA3 baseline
 trimesh==4.11.5  # Governed DA3 baseline
 addict==2.4.0  # Governed DA3 baseline
-pre-commit==4.5.1  # Governed DA3 baseline
+pre-commit==4.6.2  # Governed DA3 baseline
+virtualenv==21.7.13  # GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes
