@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Reject repository use of Accelerate's unpatched checkpoint-index loaders.
 
-GHSA-4j2p-28q2-5m79 affects checkpoint loading, not dispatch_model, device maps,
-or CPU/disk offload. This source gate preserves those supported features. It
-checks statically resolvable imports, attribute aliases and literal getattr;
+GHSA-4j2p-28q2-5m79 affects checkpoint loading, including the quantization
+wrapper that delegates to load_checkpoint_in_model. It does not affect
+dispatch_model, device maps, or CPU/disk offload. This source gate preserves
+those supported features. It checks statically resolvable imports, attribute
+aliases and literal getattr;
 it is not a Python sandbox or an audit of installed third-party packages.
 """
 
@@ -15,7 +17,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UNSAFE_APIS = frozenset({"load_checkpoint_and_dispatch", "load_checkpoint_in_model"})
+UNSAFE_APIS = frozenset({"load_checkpoint_and_dispatch", "load_checkpoint_in_model", "load_and_quantize_model"})
 MAX_ALIAS_PASSES = 16
 MAX_IDENTITIES_PER_ALIAS = 128
 MAX_TOTAL_ALIAS_IDENTITIES = 4096
