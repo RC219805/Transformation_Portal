@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -215,8 +216,16 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
 
 
 def test_virtualenv_activation_and_seed_wheel_security_floor() -> None:
-    for relative_path in ("requirements/dev.in", "requirements-dev.txt", "pyproject.toml"):
+    for relative_path in ("requirements/dev.in", "requirements-dev.txt", "requirements/ci.in"):
         assert "virtualenv>=21.7.13,<22" in (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    for extra in ("dev", "ci"):
+        requirements = [Requirement(line) for line in pyproject["project"]["optional-dependencies"][extra]]
+        virtualenv_requirements = [requirement for requirement in requirements if requirement.name == "virtualenv"]
+        assert len(virtualenv_requirements) == 1
+        assert Version("21.7.12") not in virtualenv_requirements[0].specifier
+        assert Version("21.7.13") in virtualenv_requirements[0].specifier
 
     for relative_path in ("requirements/all.txt", "requirements/dev.txt", "requirements/ci.txt"):
         pins = [

@@ -206,6 +206,7 @@ urllib3==2.8.0
 virtualenv==21.14.3
     # via
     #   -c all.txt
+    #   -r ci.in
     #   tox
 zipp==4.1.0
     # via

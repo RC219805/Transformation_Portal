@@ -17,6 +17,7 @@ bandit>=1.7,<2         # static security analyzer
 build>=1.0,<2          # build wheels/distributions
 twine>=4.0,<8          # upload distributions to PyPI
 tox>=4.5,<5            # test runner for multiple envs (future compatibility)
+virtualenv>=21.7.13,<22 # GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes
 
 # Additional CI utilities
 pypdf>=6.19.0          # PDF reports; includes embedded-file, appearance-stream and page-label resource fixes

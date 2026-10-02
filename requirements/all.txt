@@ -403,6 +403,7 @@ uvicorn==0.52.1
     # via -r base.in
 virtualenv==21.14.3
     # via
+    #   -r ci.in
     #   -r dev.in
     #   pre-commit
     #   tox
