@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import subprocess
 from pathlib import Path
@@ -10,10 +11,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.ci import dependency_snapshot as collector
-
 pytestmark = pytest.mark.unit
 SCANNED = "2026-10-02T12:00:00Z"
+COLLECTOR_PATH = Path(__file__).resolve().parents[1] / "scripts/ci/dependency_snapshot.py"
+COLLECTOR_SPEC = importlib.util.spec_from_file_location("dependency_snapshot_under_test", COLLECTOR_PATH)
+assert COLLECTOR_SPEC is not None and COLLECTOR_SPEC.loader is not None
+collector = importlib.util.module_from_spec(COLLECTOR_SPEC)
+COLLECTOR_SPEC.loader.exec_module(collector)
 
 
 @pytest.fixture
