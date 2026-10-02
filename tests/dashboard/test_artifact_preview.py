@@ -102,8 +102,23 @@ def test_detect_by_magic_bytes(data: bytes, expected: str) -> None:
     assert detect_content_type(Path("blob.dat"), data) == expected
 
 
-def test_detect_json_leading_but_undecodable_falls_back(tmp_path) -> None:
-    assert detect_content_type(Path("blob.dat"), b"{\xff\xfe") == "application/octet-stream"
+@pytest.mark.parametrize("data", [b"{\xff\xfe", b"[\xff\xfe"])
+def test_detect_json_leading_but_undecodable_falls_back(data: bytes) -> None:
+    assert detect_content_type(Path("blob.dat"), data) == "application/octet-stream"
+
+
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit, GeneratorExit])
+def test_detect_json_does_not_swallow_process_control_exceptions(exception_type: type[BaseException]) -> None:
+    class InterruptingHeader(bytes):
+        def __getitem__(self, index):
+            value = super().__getitem__(index)
+            return type(self)(value) if isinstance(value, bytes) else value
+
+        def decode(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+            raise exception_type("interrupted header decode")
+
+    with pytest.raises(exception_type, match="interrupted header decode"):
+        detect_content_type(Path("blob.dat"), InterruptingHeader(b'{"k":1}'))
 
 
 # --------------------------------------------------------------------------- #
