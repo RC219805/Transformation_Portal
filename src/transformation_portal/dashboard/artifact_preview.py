@@ -115,7 +115,7 @@ def detect_content_type(path: Path, data: Optional[bytes] = None) -> str:
             try:
                 data[:100].decode("utf-8")
                 return "application/json"
-            except:
+            except UnicodeDecodeError:
                 pass
 
     return "application/octet-stream"
