@@ -7919,8 +7919,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "cae2c264d69325e51a63d86488923a581f9e4e22",
-      "content_sha256": "ded5718f4184786729c6eaaa21c0922c7f3b3401591f25c30989a5be257bf14d",
+      "source_commit": "96c2002bb57f979428345280f2204ef0c80a11f2",
+      "content_sha256": "675b04f044efa18c744f7569234b69b233b4851d41770531c7738ebc5b6c3f8f",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
@@ -14564,6 +14564,40 @@
       "validation_commands": [],
       "prior_classification": "canonical",
       "prior_review_status": "navigation-only review"
+    },
+    {
+      "path": "docs/reference/BATCH_RECOVERY.md",
+      "classification": "current-support",
+      "maintenance_area": "core/batch",
+      "scope": "Source-reviewed guarded local POSIX batch ownership and explicit conditional replay, including the legacy execution restriction. Implementation and focused contracts reviewed on the recorded baseline; no production caller, distributed recovery, or exactly-once acceptance.",
+      "successors": [],
+      "review_status": "source-reviewed",
+      "evidence_tier": "source-contract",
+      "source_commit": "96c2002bb57f979428345280f2204ef0c80a11f2",
+      "content_sha256": "1c2af51481e44d1be42fe26a99469aa35a0c91113f68d2a118c47b96f38cb3fb",
+      "source_references": [
+        "src/transformation_portal/core/batch/__init__.py",
+        "src/transformation_portal/core/batch/job.py",
+        "src/transformation_portal/core/batch/recovery.py",
+        "tests/core/test_batch_guarded_recovery.py",
+        "tests/core/test_batch_recovery_reporting.py",
+        "tests/core/test_low_traffic_core_packages.py"
+      ],
+      "source_sha256": {
+        "src/transformation_portal/core/batch/__init__.py": "7cc9cff0f7e695d9e83f0392dbc7746edf3181fb3ca380090db23d95f7f502b2",
+        "src/transformation_portal/core/batch/job.py": "efb60670b855b06dd914b69133682d23b79d6772b389d7c3313ab53d75bb6dc8",
+        "src/transformation_portal/core/batch/recovery.py": "4ba1d144343d6c8f46ea4374e3493d5c58046cda704eae3e4eb694ad24c7916f",
+        "tests/core/test_batch_guarded_recovery.py": "59088349d75a5261260ea8e4cc77451037871b7d67737ba38d180447ddd5f492",
+        "tests/core/test_batch_recovery_reporting.py": "a57a8816ca16c22a7fe90ae8875465b2ed6eb89450b67ef93c764f922583d235",
+        "tests/core/test_low_traffic_core_packages.py": "96ae6e946cd14715a1cefe444e27944ca4a4b5d96515ad117fc9a20a06baf4dd"
+      },
+      "validation_commands": [
+        "PYTHONPATH=src ./.venv/bin/pytest tests/core/test_batch_guarded_recovery.py tests/core/test_batch_recovery_reporting.py tests/core/test_low_traffic_core_packages.py -q -rs",
+        "make check-documentation-catalog",
+        "make test-documentation-contract"
+      ],
+      "prior_classification": null,
+      "prior_review_status": null
     },
     {
       "path": "docs/reference/CHANGES_QUICK_REF.md",

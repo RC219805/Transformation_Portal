@@ -1,27 +1,19 @@
-"""
-Batch Processing Engine with Checkpoint/Resume capabilities.
+"""Batch data structures and opt-in guarded local checkpoint recovery.
 
-This module provides a robust framework for executing long-running
-batch operations. It handles state persistence, error trapping,
-and parallel execution.
-
-Key Capabilities:
-- Automatic crash recovery (resume from last checkpoint)
-- Thread-safe state management
-- Atomic checkpoint writing
-- Detailed failure reporting
+Plain checkpoints remain readable snapshots. They do not prove ownership or
+whether a callback already performed side effects and cannot authorize replay.
 """
 
 import json
 import logging
-import shutil
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+
+if TYPE_CHECKING:
+    from .recovery import AttemptContext, IdempotencyContract, RecoveryIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +44,7 @@ class JobItem:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "JobItem":
         """Reconstruct from dictionary (JSON deserialization)."""
-        data["status"] = JobStatus(data["status"])
-        return cls(**data)
+        return cls(**{**data, "status": JobStatus(data["status"])})
 
 
 @dataclass
@@ -69,6 +60,7 @@ class BatchJob:
 
     # Internal map for O(1) lookups
     _item_map: Dict[str, JobItem] = field(default=None, init=False, repr=False)
+    _restored_from_checkpoint: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self):
         self._rebuild_map()
@@ -111,26 +103,18 @@ class BatchJob:
         return stats
 
     def save(self, path: Union[str, Path]) -> None:
-        """Atomically save job state to JSON."""
-        path = Path(path)
-        temp_path = path.with_suffix(".tmp")
+        """Durably save a plain checkpoint; persistence/ownership errors propagate.
 
-        data = asdict(self)
-        # Remove internal fields
-        del data["_item_map"]
+        A plain snapshot cannot overwrite a guarded execution checkpoint.
+        """
+        from .recovery import BatchRecoveryRequiredError, _persist, checkpoint_ownership, read_checkpoint
 
-        try:
-            with open(temp_path, "w") as f:
-                json.dump(data, f, indent=2)
-
-            # Atomic move
-            shutil.move(str(temp_path), str(path))
-            self.last_updated = datetime.now().isoformat()
-
-        except Exception as e:
-            logger.error(f"Failed to save checkpoint: {e}")
-            if temp_path.exists():
-                temp_path.unlink()
+        with checkpoint_ownership(Path(path)) as owned_path:
+            if owned_path.exists():
+                existing = read_checkpoint(owned_path)
+                if isinstance(existing, dict) and "schema" in existing:
+                    raise BatchRecoveryRequiredError("plain snapshots cannot overwrite guarded checkpoints")
+            _persist(owned_path, self, None)
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "BatchJob":
@@ -148,6 +132,7 @@ class BatchJob:
         # Reconstruct items
         job.items = [JobItem.from_dict(item) for item in items_data]
         job._rebuild_map()
+        job._restored_from_checkpoint = True
 
         return job
 
@@ -159,9 +144,13 @@ class BatchProcessor:
         """
         Args:
             max_workers: Number of parallel threads.
-            checkpoint_interval: Save state every N completions.
+            checkpoint_interval: Retained compatibility setting; safety transitions always persist.
             stop_on_errors: If True, aborts batch on first failure.
         """
+        if type(max_workers) is not int or max_workers < 1:
+            raise ValueError("max_workers must be a positive integer")
+        if type(checkpoint_interval) is not int or checkpoint_interval < 1:
+            raise ValueError("checkpoint_interval must be a positive integer")
         self.max_workers = max_workers
         self.checkpoint_interval = checkpoint_interval
         self.stop_on_errors = stop_on_errors
@@ -169,95 +158,67 @@ class BatchProcessor:
     def process(
         self, job: BatchJob, processor_func: Callable[[JobItem], Dict[str, Any]], checkpoint_path: Union[str, Path]
     ) -> BatchJob:
+        """Run fresh work only; existing checkpoints cannot authorize legacy replay.
+
+        The path must not exist and executable items must be PENDING. Terminal-only
+        jobs return unchanged. Use start_guarded/resume_guarded for explicit replay
+        contracts; plain checkpoints require caller reconciliation before new work.
         """
-        Execute the batch job.
+        from .recovery import run_fresh
 
-        Args:
-            job: The BatchJob object.
-            processor_func: Function taking a JobItem and returning results (or raising Exception).
-            checkpoint_path: Where to save the `job.json`.
+        return run_fresh(
+            job, processor_func, Path(checkpoint_path), max_workers=self.max_workers, stop_on_errors=self.stop_on_errors
+        )
+
+    def start_guarded(
+        self,
+        job: BatchJob,
+        processor_func: Callable[[JobItem, "AttemptContext"], Any],
+        checkpoint_path: Union[str, Path],
+        *,
+        identity: "RecoveryIdentity",
+        idempotency: Optional["IdempotencyContract"] = None,
+    ) -> BatchJob:
+        """Create an owned checkpoint and durably claim each item before execution.
+
+        Identity is caller-asserted. Replay additionally requires the same explicit
+        idempotency contract recorded here before any side effects. Callbacks receive
+        detached items; only metadata and execution outcomes merge back into the job.
         """
-        logger.info(f"Starting batch '{job.name}' ({len(job.items)} items)")
+        from .recovery import run_guarded
 
-        # Identify work
-        pending_items = [item for item in job.items if item.status in (JobStatus.PENDING, JobStatus.FAILED)]
-        running_count = sum(item.status == JobStatus.RUNNING for item in job.items)
-        if running_count:
-            logger.warning(
-                "Batch '%s' is incomplete: %d existing RUNNING item(s) are not replayed; recovery remains unresolved.",
-                job.name,
-                running_count,
-            )
+        return run_guarded(
+            job,
+            processor_func,
+            Path(checkpoint_path),
+            identity=identity,
+            idempotency=idempotency,
+            max_workers=self.max_workers,
+            stop_on_errors=self.stop_on_errors,
+        )
 
-        if not pending_items:
-            if not running_count:
-                logger.info("No pending items found. Job complete.")
-            return job
+    def resume_guarded(
+        self,
+        checkpoint_path: Union[str, Path],
+        processor_func: Callable[[JobItem, "AttemptContext"], Any],
+        *,
+        identity: "RecoveryIdentity",
+        idempotency: Optional["IdempotencyContract"] = None,
+    ) -> BatchJob:
+        """Recover after exclusive local ownership, never from age or PID heuristics.
 
-        logger.info(f"Resuming with {len(pending_items)} pending items...")
+        Previously attempted work requires its original idempotency contract.
+        Ownership does not prove external/detached side effects have stopped;
+        callbacks and downstream systems must honor the stable idempotency key.
+        """
+        from .recovery import run_guarded
 
-        completed_since_save = 0
-        checkpoint_path = Path(checkpoint_path)
-
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Map futures to items
-            future_to_item = {executor.submit(self._safe_execute, processor_func, item): item for item in pending_items}
-
-            try:
-                for future in as_completed(future_to_item):
-                    item = future_to_item[future]
-                    result_item = future.result()
-
-                    # Update job state in memory
-                    # (JobItem is mutable, so the list in BatchJob is updated)
-                    completed_since_save += 1
-
-                    # Logging
-                    if result_item.status == JobStatus.COMPLETED:
-                        logger.info(f"[{job.progress:.1%}] Completed: {item.id}")
-                    else:
-                        logger.error(f"[{job.progress:.1%}] Failed: {item.id} - {item.error}")
-                        if self.stop_on_errors:
-                            logger.critical("Aborting batch due to error (stop_on_errors=True)")
-                            executor.shutdown(wait=False, cancel_futures=True)
-                            break
-
-                    # Checkpoint
-                    if completed_since_save >= self.checkpoint_interval:
-                        logger.debug("Saving checkpoint...")
-                        job.save(checkpoint_path)
-                        completed_since_save = 0
-
-            except KeyboardInterrupt:
-                logger.warning("Batch interrupted by user. Saving state...")
-                executor.shutdown(wait=False)
-                job.save(checkpoint_path)
-                raise
-            finally:
-                # Final save
-                job.save(checkpoint_path)
-
-        logger.info(f"Batch execution finished. Stats: {job.stats}")
-        return job
-
-    def _safe_execute(self, func: Callable[[JobItem], Any], item: JobItem) -> JobItem:
-        """Wrapper to trap errors for a single item."""
-        item.status = JobStatus.RUNNING
-        start = time.time()
-
-        try:
-            # Execute the user function
-            # User function can modify item.metadata if desired
-            func(item)
-            item.status = JobStatus.COMPLETED
-            item.error = None
-
-        except Exception as e:
-            item.status = JobStatus.FAILED
-            item.error = str(e)
-            logger.exception(f"Error processing item {item.id}")
-
-        finally:
-            item.execution_time = time.time() - start
-
-        return item
+        return run_guarded(
+            None,
+            processor_func,
+            Path(checkpoint_path),
+            identity=identity,
+            idempotency=idempotency,
+            max_workers=self.max_workers,
+            stop_on_errors=self.stop_on_errors,
+        )
