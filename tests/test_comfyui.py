@@ -375,9 +375,9 @@ class TestSkyGANNode:
         assert str(expected_choices) in str(exc_info.value)
 
     def test_execute_preserves_subclass_time_mapping(self, monkeypatch):
-        from transformation_portal.comfyui import custom_nodes
+        from transformation_portal.comfyui import custom_nodes as comfyui_nodes
 
-        class CustomSkyGANNode(custom_nodes.SkyGANNode):
+        class CustomSkyGANNode(comfyui_nodes.SkyGANNode):
             _TIME_OF_DAY_HOURS = {"late_night": 22.0, "early_morning": 5.0}
 
         class PresetCaptured(Exception):
@@ -393,7 +393,7 @@ class TestSkyGANNode:
                 observed.append((location, season, time_of_day))
                 raise PresetCaptured()
 
-        monkeypatch.setattr(custom_nodes, "LocationPresets", CapturePresets)
+        monkeypatch.setattr(comfyui_nodes, "LocationPresets", CapturePresets)
 
         with pytest.raises(PresetCaptured):
             CustomSkyGANNode().execute(
@@ -409,15 +409,15 @@ class TestSkyGANNode:
         assert observed == [("montecito", "summer", 22.0)]
 
     def test_invalid_time_preserves_subclass_error_order_before_presets(self, monkeypatch):
-        from transformation_portal.comfyui import custom_nodes
+        from transformation_portal.comfyui import custom_nodes as comfyui_nodes
 
-        class CustomSkyGANNode(custom_nodes.SkyGANNode):
+        class CustomSkyGANNode(comfyui_nodes.SkyGANNode):
             _TIME_OF_DAY_HOURS = {"late_night": 22.0, "early_morning": 5.0}
 
         def forbidden_presets():
             pytest.fail("invalid subclass time reached presets")
 
-        monkeypatch.setattr(custom_nodes, "LocationPresets", forbidden_presets)
+        monkeypatch.setattr(comfyui_nodes, "LocationPresets", forbidden_presets)
 
         with pytest.raises(ValueError, match="Unknown time_of_day") as error:
             CustomSkyGANNode().execute(
