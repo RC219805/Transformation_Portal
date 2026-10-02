@@ -108,6 +108,7 @@ operator guidance unless they are linked here as canonical documents.
 | Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
 | Execution & artifact authority designation | [ADR-051](../architecture/ADR-051-execution-artifact-authority-designation.md) | Accepted; authoritative repository designation. Implementation activation remains subject to the ADR's vertical-slice gates |
 | Canonical execution plan v1 | [Execution Plan V1 Contract](../reference/EXECUTION_PLAN_V1.md) | Maintained core-owned plan contract, native Lux preparation and execution consumption; StageGraph/CASDAGExecutor activation remains gated |
+| Guarded local batch recovery | [Batch Recovery](../reference/BATCH_RECOVERY.md) | Internal/shared helper contract; local POSIX ownership and explicitly authorized replay only, with no production or distributed integration |
 | MaterialsV4 photographic plan | [Execution Plan V3 Contract](../reference/EXECUTION_PLAN_V3.md) | Additive opt-in plan and verified material baseline; V1/V2 defaults remain intact |
 | LuxDepthV5 photographic plan | [Execution Plan V4 Contract](../reference/EXECUTION_PLAN_V4.md) | Closed V5 graph, factored native cache, and evidence V3; earlier plan versions remain independent |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
