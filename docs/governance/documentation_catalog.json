@@ -9286,7 +9286,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7540e345d2092ecf0f921faf118d475d5a8f1e4d",
+      "source_commit": "42852183e1e1bbb7ec77133bdddd5fcc8c4eab05",
       "content_sha256": "a150c68032340581124a9c8cf66394e150044d75b304b83a22e48154f390c123",
       "source_references": [
         "Makefile",
@@ -9295,8 +9295,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
-        "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
+        "requirements/base.txt": "553ff2b20b91afcf8493a3b1a686b74bc628c353a69ed7f3536b6faaa13c5ff3",
+        "requirements/dev.txt": "b1232f4d0742b95b7fcf1a631dd490598f904fd1c98bb90b0fcf9ded34a2ae9c"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -9721,8 +9721,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7540e345d2092ecf0f921faf118d475d5a8f1e4d",
-      "content_sha256": "2de8e158e1b725ea8eab26ed779d410e3257d86fa22501ad8bf8e9ba3ff7f787",
+      "source_commit": "42852183e1e1bbb7ec77133bdddd5fcc8c4eab05",
+      "content_sha256": "399b693a6f4568cee639dc806d8100b58dd42cec615fb1657e498f1e9aac040a",
       "source_references": [
         "Makefile",
         "requirements/base.txt",
@@ -9730,8 +9730,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "bb8fb6f4b223724ec807e5575afc22fd702f20457632f0a7800e3189a29a0575",
-        "requirements/dev.txt": "1aec0d8e9dc78ac6d2e394f86587c8b5e21fd87c712ecdd2d0efa5dc66bdd0b6"
+        "requirements/base.txt": "553ff2b20b91afcf8493a3b1a686b74bc628c353a69ed7f3536b6faaa13c5ff3",
+        "requirements/dev.txt": "b1232f4d0742b95b7fcf1a631dd490598f904fd1c98bb90b0fcf9ded34a2ae9c"
       },
       "validation_commands": [
         "make check-documentation-catalog"

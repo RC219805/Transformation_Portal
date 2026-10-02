@@ -74,8 +74,10 @@ tomli-w==1.2.0
     # via pip-audit
 typing-extensions==4.16.0
     # via cyclonedx-python-lib
-urllib3==2.7.0
-    # via requests
+urllib3==2.8.0
+    # via
+    #   -r security.in
+    #   requests
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

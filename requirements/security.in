@@ -20,6 +20,9 @@ pip-audit>=2.10,<3
 # Transitive cachecontrol[filecache] dependency; floor kept explicit for GHSA-6v7p-g79w-8964.
 msgpack>=1.2.1,<2
 
+# Independent scanner closure must not downgrade the patched runtime HTTP client.
+urllib3>=2.8.0,<3  # CVE-2026-97687/97688/97689
+
 # Safety was removed from the security toolchain (March 2026):
 # - Safety pulls nltk as a transitive dependency, triggering security alerts
 # - pip-audit provides equivalent CVE/advisory scanning via PyPI database
