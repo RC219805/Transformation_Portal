@@ -2,6 +2,10 @@
 
 This module provides API endpoints for running RL-based pipeline
 optimization from the dashboard UI.
+
+Optimization jobs use ``MockPipelineEnv`` and a fresh model. Loading a
+pre-trained model is unsupported; the deprecated ``model_path`` request field
+remains accepted and ignored for backward compatibility.
 """
 
 from __future__ import annotations
@@ -42,19 +46,21 @@ def create_rl_api_router():
 
     @router.post("/optimize")
     async def optimize_rl_api(payload: dict, background_tasks: BackgroundTasks):
-        """Start RL optimization job.
+        """Start a mock RL optimization job with a fresh model.
+
+        Each job uses MockPipelineEnv; pre-trained model loading is unsupported.
 
         Request body:
             pipeline: Pipeline configuration
             max_iterations: Maximum training iterations (default: 50)
-            model_path: Optional path to pre-trained model
+            model_path: Deprecated, unsupported field; accepted and ignored
+                for backward compatibility
         """
         import uuid
 
         job_id = str(uuid.uuid4())[:8]
         pipeline = payload.get("pipeline", {})
         max_iters = payload.get("max_iterations", 50)
-        model_path = payload.get("model_path")
 
         _running_jobs[job_id] = {
             "status": "starting",
