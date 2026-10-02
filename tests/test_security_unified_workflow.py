@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
@@ -205,6 +207,60 @@ def test_security_tool_install_pins_a_non_vulnerable_setuptools() -> None:
 
     assert '"pip==26.2.1"' in install_run
     assert '"setuptools==83.0.0"' in install_run
+
+
+def _urllib3_requirement(relative_path: str) -> Requirement:
+    lines = (REPO_ROOT / relative_path).read_text(encoding="utf-8").splitlines()
+    requirements = [Requirement(line.split("#", 1)[0].strip()) for line in lines if line.strip().lower().startswith("urllib3")]
+    assert len(requirements) == 1, f"{relative_path} must declare urllib3 exactly once"
+    requirement = requirements[0]
+    assert requirement.name.lower() == "urllib3"
+    assert requirement.marker is None, f"{relative_path} must protect every supported target"
+    assert requirement.url is None
+    return requirement
+
+
+def _urllib3_lock_version(relative_path: str) -> Version:
+    specifiers = list(_urllib3_requirement(relative_path).specifier)
+    assert len(specifiers) == 1 and specifiers[0].operator == "==", f"{relative_path} must pin urllib3 exactly"
+    return Version(specifiers[0].version)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["requirements/base.in", "requirements/security.in", "requirements/da3-runtime-darwin-arm64.in"],
+)
+def test_dependency_inputs_exclude_vulnerable_urllib3(relative_path: str) -> None:
+    # All three September 2026 urllib3 advisories are fixed starting with 2.8.0.
+    requirement = _urllib3_requirement(relative_path)
+    assert any(
+        specifier.operator in {">=", ">"} and Version(specifier.version) >= Version("2.8.0")
+        for specifier in requirement.specifier
+    ), f"{relative_path} must retain an explicit patched urllib3 lower bound"
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "requirements/all.txt",
+        "requirements/base.txt",
+        "requirements/dev.txt",
+        "requirements/ci.txt",
+        "requirements/security.txt",
+        "requirements/ml-core-darwin-arm64.txt",
+        "requirements/da3-runtime-darwin-arm64.txt",
+        "config/fastvlm_runtime_requirements.txt",
+    ],
+)
+def test_supported_dependency_closures_pin_patched_urllib3(relative_path: str) -> None:
+    assert _urllib3_lock_version(relative_path) >= Version("2.8.0"), f"{relative_path} pins vulnerable urllib3"
+
+
+def test_security_tools_cannot_downgrade_the_ci_urllib3_pin() -> None:
+    # The workflow installs this independently compiled toolchain after base/CI.
+    security_version = _urllib3_lock_version("requirements/security.txt")
+    for relative_path in ("requirements/base.txt", "requirements/ci.txt"):
+        assert security_version >= _urllib3_lock_version(relative_path), f"Security tools downgrade {relative_path} urllib3"
 
 
 @pytest.mark.parametrize("filename", ["zz_last.py", "with spaces.sh", "with\nnewline.yaml", "deprecated/example.md"])

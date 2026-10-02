@@ -1,38 +1,22 @@
-"""Command-line interface entry points for Transformation Portal.
+"""Compatibility CLI entry points and recipe-based pipeline commands.
 
-This module provides a unified CLI for accessing transformation portal
-functionalities including rendering, processing, and analysis tools.
+The ``transform-render``, ``transform-process``, and ``transform-analyze``
+entry points retain their command names, flags, and help. Their legacy rendering,
+material/video/TIFF processing, and analysis handlers have no execution adapters;
+invoking those handlers exits unsuccessfully without importing implementations or
+performing work. Installing optional dependencies does not enable these handlers.
 
-The CLI is structured with three main subcommands:
-- render: AI-powered rendering and enhancement pipelines
-- process: Image and video processing operations
-- analyze: Codebase and workflow analysis tools
-
-Entry Points:
-    transform-render: Main rendering CLI (calls render_cli)
-    transform-process: Main processing CLI (calls process_cli)
-    transform-analyze: Main analysis CLI (calls analyze_cli)
-
-Example Usage:
-    # Render with Lux Render Pipeline
-    transform-render lux --input image.jpg --output enhanced/
-
-    # Process with Material Response
-    transform-process material --input image.tiff --strength 0.7
-
-    # Analyze codebase philosophy
-    transform-analyze philosophy --path ./src/
-
-Note:
-    This CLI is under active development. Additional subcommands and options
-    will be added as the transformation portal evolves.
+The ``pipeline`` command group provides implemented recipe processing, listing,
+and validation operations. Supported dedicated processing CLIs are registered in
+``pyproject.toml``.
 """
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import NoReturn, Optional
 
 try:
     import typer
@@ -66,17 +50,19 @@ def check_module_availability(module_path: str, module_name: str) -> bool:
         typer.Exit: If module cannot be imported
     """
     try:
-        # Attempt to import the module
-        parts = module_path.rsplit(".", 1)
-        if len(parts) == 2:
-            from_module, import_name = parts
-            __import__(from_module, fromlist=[import_name])
-        else:
-            __import__(module_path)
+        importlib.import_module(module_path)
         return True
     except ImportError as e:
         typer.echo(f"❌ Error loading {module_name}: {e}", err=True)
         raise typer.Exit(code=1)
+
+
+def _unavailable_compatibility_command(command: str, replacement: Optional[str] = None) -> NoReturn:
+    """Reject a compatibility handler whose execution adapter is not implemented."""
+    typer.echo(f"Error: Compatibility command '{command}' is not implemented; no work was performed.", err=True)
+    if replacement is not None:
+        typer.echo(f"For supported processing options, see: {replacement} --help", err=True)
+    raise typer.Exit(code=1)
 
 
 # Main application instances
@@ -118,25 +104,13 @@ def render_lux(
     strength: float = typer.Option(0.7, "--strength", "-s", help="Enhancement strength (0.0-1.0)"),
     upscale: bool = typer.Option(False, "--upscale", "-u", help="Apply 4x upscaling"),
 ):
-    """Run Lux Render Pipeline for AI-powered enhancement.
-
-    The Lux Render Pipeline uses Stable Diffusion XL, ControlNet, and Real-ESRGAN
-    for intelligent enhancement of architectural and real estate imagery.
-    """
-    typer.echo("🎨 Running Lux Render Pipeline...")
-    typer.echo(f"   Input: {input_path}")
-    typer.echo(f"   Output: {output_dir}")
-    typer.echo(f"   Strength: {strength}")
+    """Unavailable compatibility command for Lux rendering; no processing occurs."""
 
     if not input_path.exists():
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify pipeline module is available
-    check_module_availability("transformation_portal.pipelines.lux_render_pipeline", "Lux Render Pipeline")
-    typer.echo("✅ Pipeline module loaded successfully")
-    typer.echo("⚠️  Note: Full pipeline execution requires ML dependencies")
-    typer.echo("   Install with: pip install -e '.[ml]'")
+    _unavailable_compatibility_command("transform-render lux")
 
 
 @render_app.command("depth")
@@ -145,23 +119,13 @@ def render_depth(
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     preset: str = typer.Option("interior", "--preset", "-p", help="Processing preset"),
 ):
-    """Run Depth Pipeline for depth-aware processing.
-
-    The Depth Pipeline uses Depth Anything V2 for monocular depth estimation
-    and applies depth-aware enhancements for architectural rendering.
-    """
-    typer.echo("🌊 Running Depth Pipeline...")
-    typer.echo(f"   Input: {input_path}")
-    typer.echo(f"   Output: {output_dir}")
-    typer.echo(f"   Preset: {preset}")
+    """Unavailable compatibility command for depth processing; see lux-depth-v3."""
 
     if not input_path.exists():
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify depth tools module is available
-    check_module_availability("transformation_portal.pipelines.depth_tools", "Depth Tools")
-    typer.echo("✅ Depth tools module loaded successfully")
+    _unavailable_compatibility_command("transform-render depth", "lux-depth-v3")
 
 
 # ============================================================================
@@ -180,23 +144,13 @@ def process_material(
         help="Comma-separated surface types (wood,metal,glass,fabric,stone)",
     ),
 ):
-    """Apply Material Response Technology for surface enhancement.
-
-    Material Response analyzes and enhances material surfaces with physics-based
-    rendering techniques for wood, metal, glass, fabric, and stone.
-    """
-    typer.echo("💎 Running Material Response...")
-    typer.echo(f"   Input: {input_path}")
-    typer.echo(f"   Output: {output_path}")
-    typer.echo(f"   Strength: {strength}")
+    """Unavailable compatibility command for Material Response; no processing occurs."""
 
     if not input_path.exists():
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify Material Response module is available
-    check_module_availability("transformation_portal.processors.material_response.core", "Material Response")
-    typer.echo("✅ Material Response module loaded successfully")
+    _unavailable_compatibility_command("transform-process material")
 
 
 @process_app.command("video")
@@ -206,27 +160,13 @@ def process_video(
     preset: str = typer.Option("signature_estate", "--preset", "-p", help="Grading preset"),
     lut_strength: float = typer.Option(0.7, "--lut-strength", help="LUT strength (0.0-1.0)"),
 ):
-    """Process video with Luxury Video Master Grader.
-
-    Apply professional color grading, LUTs, and HDR tone mapping to video content
-    using FFmpeg-based processing pipelines.
-    """
-    typer.echo("🎬 Running Video Master Grader...")
-    typer.echo(f"   Input: {input_path}")
-    typer.echo(f"   Output: {output_path}")
-    typer.echo(f"   Preset: {preset}")
+    """Unavailable compatibility command for video processing; see luxury_video_grader."""
 
     if not input_path.exists():
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify Video Master Grader module is available
-    check_module_availability(
-        "transformation_portal.processors.luxury_video_master_grader",
-        "Video Master Grader",
-    )
-    typer.echo("✅ Video Master Grader module loaded successfully")
-    typer.echo("⚠️  Note: FFmpeg is required for video processing")
+    _unavailable_compatibility_command("transform-process video", "luxury_video_grader")
 
 
 @process_app.command("tif")
@@ -236,23 +176,13 @@ def process_tiff(
     preset: str = typer.Option("signature", "--preset", "-p", help="Processing preset"),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Process subdirectories"),
 ):
-    """Process TIFF images with Luxury TIFF Batch Processor.
-
-    Batch process 16-bit TIFF images with professional color grading, LUTs,
-    and metadata preservation for luxury real estate workflows.
-    """
-    typer.echo("📸 Running TIFF Batch Processor...")
-    typer.echo(f"   Input: {input_dir}")
-    typer.echo(f"   Output: {output_dir}")
-    typer.echo(f"   Preset: {preset}")
-    typer.echo(f"   Recursive: {recursive}")
+    """Unavailable compatibility command for TIFF processing; see luxury-tiff-batch."""
 
     if not input_dir.exists():
         typer.echo(f"❌ Error: Input directory not found: {input_dir}", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo("⚠️  Note: Full TIFF support requires tifffile")
-    typer.echo("   Install with: pip install -e '.[tiff]'")
+    _unavailable_compatibility_command("transform-process tif", "luxury-tiff-batch")
 
 
 # ============================================================================
@@ -265,24 +195,13 @@ def analyze_philosophy(
     path: Path = typer.Option(".", "--path", "-p", help="Path to analyze"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output report path"),
 ):
-    """Run codebase philosophy auditor.
-
-    Analyze codebase for adherence to architectural principles, design patterns,
-    and coding standards specific to the Transformation Portal.
-    """
-    typer.echo("🔍 Running Codebase Philosophy Auditor...")
-    typer.echo(f"   Path: {path}")
+    """Unavailable compatibility command for philosophy analysis; no analysis occurs."""
 
     if not path.exists():
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify auditor module is available
-    check_module_availability(
-        "transformation_portal.analyzers.codebase_philosophy_auditor",
-        "Codebase Philosophy Auditor",
-    )
-    typer.echo("✅ Auditor module loaded successfully")
+    _unavailable_compatibility_command("transform-analyze philosophy")
 
 
 @analyze_app.command("decay")
@@ -290,46 +209,26 @@ def analyze_decay(
     path: Path = typer.Option(".", "--path", "-p", help="Path to analyze"),
     threshold_days: int = typer.Option(90, "--threshold", "-t", help="Decay threshold in days"),
 ):
-    """Run decision decay dashboard.
-
-    Analyze temporal contracts and decision age to identify technical debt
-    and outdated architectural decisions.
-    """
-    typer.echo("⏰ Running Decision Decay Dashboard...")
-    typer.echo(f"   Path: {path}")
-    typer.echo(f"   Threshold: {threshold_days} days")
+    """Unavailable compatibility command for decision decay; no analysis occurs."""
 
     if not path.exists():
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify dashboard module is available
-    check_module_availability(
-        "transformation_portal.analyzers.decision_decay_dashboard",
-        "Decision Decay Dashboard",
-    )
-    typer.echo("✅ Dashboard module loaded successfully")
+    _unavailable_compatibility_command("transform-analyze decay")
 
 
 @analyze_app.command("workflow")
 def analyze_workflow(
     path: Path = typer.Option(".github/workflows", "--path", "-p", help="Workflows directory"),
 ):
-    """Parse and analyze GitHub Actions workflows.
-
-    Analyze GitHub Actions workflow files for optimization opportunities,
-    security issues, and best practices.
-    """
-    typer.echo("⚙️  Running Workflow Analyzer...")
-    typer.echo(f"   Path: {path}")
+    """Unavailable compatibility command for workflow analysis; no analysis occurs."""
 
     if not path.exists():
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    # Verify workflow parser module is available
-    check_module_availability("transformation_portal.analyzers.parse_workflows", "Workflow Parser")
-    typer.echo("✅ Workflow parser module loaded successfully")
+    _unavailable_compatibility_command("transform-analyze workflow")
 
 
 # ============================================================================
@@ -405,7 +304,10 @@ def process_command(
             typer.echo(f"\n✅ Processed {result.successful_count} images successfully")
             if result.failed_count > 0:
                 typer.echo(f"⚠️  {result.failed_count} images failed", err=True)
+                raise typer.Exit(code=1)
 
+    except typer.Exit:
+        raise
     except ImportError as e:
         typer.echo(f"❌ Error loading pipeline: {e}", err=True)
         raise typer.Exit(code=1)

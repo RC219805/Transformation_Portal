@@ -229,9 +229,10 @@ typing-inspection==0.4.4
     #   -c all.txt
     #   fastapi
     #   pydantic
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   -c all.txt
+    #   -r base.in
     #   botocore
 uvicorn==0.52.1
     # via

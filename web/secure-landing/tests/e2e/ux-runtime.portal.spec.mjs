@@ -2171,6 +2171,40 @@ for (const width of [390, 1280]) {
   });
 }
 
+test("@portal-browser staged uploads recover from an invalid success receipt without losing draft paths", async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });
+  let malformedReceipt = true;
+  await page.route("**/v1/uploads/staging", async (route) => {
+    if (malformedReceipt) {
+      malformedReceipt = false;
+      await fulfillJson(route, { success: true, data: {} });
+    } else {
+      await route.fallback();
+    }
+  });
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await gotoHydratedPortal(page, "/portal?view=build");
+  await page.locator("#pipelineSelect").selectOption("lux-depth-v5");
+  await page.locator("#buildStepTab2").click();
+  const originalInput = await page.locator("#inputDir").inputValue();
+  const originalOutput = await page.locator("#outputDir").inputValue();
+  const file = { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("fixture") };
+  await page.locator("#stagedUploadFilesInput").setInputFiles(file);
+  await expect(page.locator("#stagedUploadError")).toContainText("invalid response");
+  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-busy", "false");
+  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeEnabled();
+  await expect(page.locator("#inputDir")).toHaveValue(originalInput);
+  await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
+
+  await page.locator("#stagedUploadFilesInput").setInputFiles(file);
+  await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/batch-photography/input");
+  await expect(page.locator("#stagedUploadError")).toBeEmpty();
+  await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
+  expect(runtime.stagedUploadRequests).toHaveLength(1);
+  expect(pageErrors).toEqual([]);
+});
+
 for (const selection of ["files", "folder"]) {
   test(`@portal-browser V5 staged uploads accept Choose ${selection} and refresh the draft`, async ({ page }, testInfo) => {
     const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true, stagedUploadBatchId: "upload-v5-fixture" });

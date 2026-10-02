@@ -49,3 +49,6 @@ redis>=5.0,<7                   # asyncio Redis client for RedisQueueBroker
 # boto3 is still imported lazily inside S3ArtifactStore so the local lane
 # pays no import cost at orchestrator start-up.
 boto3>=1.34,<2                  # S3 client for S3ArtifactStore (lazy-loaded)
+
+# Security: patched HTTP streaming and proxy TLS handling (CVE-2026-97687/97688/97689).
+urllib3>=2.8.0,<3

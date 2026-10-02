@@ -106,6 +106,11 @@ Import-root identity uses canonical filesystem paths, so a library changing
 the same root from `str` to `pathlib.Path` does not invalidate it. A different
 root or changed bytes still fails verification.
 
+When the governed dependency lock changes, reinstall with
+`./scripts/setup/install_da3_runtime.sh --profile baseline` before using the
+updated cache authority. An existing runtime and its old marker do not attest
+the new dependency closure; never edit the marker to bypass reinstallation.
+
 Worker preparation retains per-file and per-directory observations so later
 cache access can detect runtime changes. The bounded response permits up to
 32 MiB for this verification token plus 4 MiB for evidence and other metadata;

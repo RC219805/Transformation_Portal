@@ -161,3 +161,23 @@ def test_validation_helpers_smoke(tmp_path) -> None:
     payload = json.loads(report_path.read_text())
     assert payload["job_id"] == "job-1"
     assert payload["metrics"]["psnr"] == float(metrics.psnr)
+
+
+@pytest.mark.parametrize("use_skimage", [False, True])
+def test_validation_uint8_mse_does_not_overflow(monkeypatch, use_skimage) -> None:
+    from transformation_portal.core.validation import metrics as metrics_module
+
+    monkeypatch.setattr(metrics_module, "SKIMAGE_AVAIL", use_skimage)
+    if use_skimage:
+        # Exercise our arithmetic without requiring the optional backend in
+        # core CI. Distinct sentinels also verify its metrics pass through.
+        monkeypatch.setattr(metrics_module, "psnr", lambda *args, **kwargs: 12.5, raising=False)
+        monkeypatch.setattr(metrics_module, "ssim", lambda *args, **kwargs: 0.25, raising=False)
+    black = np.zeros((8, 8, 3), dtype=np.uint8)
+    white = np.full_like(black, 255)
+
+    metrics = MetricsComputer.compute(black, white)
+
+    assert metrics.mse == pytest.approx(65025.0)
+    assert metrics.psnr == pytest.approx(12.5 if use_skimage else 0.0)
+    assert metrics.ssim == pytest.approx(0.25 if use_skimage else 0.0)

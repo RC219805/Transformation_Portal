@@ -49,7 +49,7 @@ environment signals, not as proof that the core CLI is broken.
 | Depth-aware DOF | Apply depth-aware focus rendering from an image and `.npy` depth | `.venv/bin/depth-aware-dof ...` |
 | Presence Security | Sessionized Presence Compiler parameters, manifest anchor payloads, and watermark helpers | `.venv/bin/presence-security ...` |
 | TIFF batch processor | Batch 16-bit TIFF finishing | `.venv/bin/luxury-tiff-batch ...` |
-| Compatibility Typer CLIs | Legacy direct command groups for render/process/analyze helpers | `.venv/bin/transform-render`, `.venv/bin/transform-process`, `.venv/bin/transform-analyze` |
+| Compatibility Typer CLIs | Legacy command names and help; unimplemented handlers exit with an error | `.venv/bin/transform-render`, `.venv/bin/transform-process`, `.venv/bin/transform-analyze` |
 
 ## Opt-In Successor Entrypoints
 
@@ -310,19 +310,28 @@ Current presets are `architectural`, `golden_hour_courtyard`, `signature`, and
 
 ## Compatibility Typer CLIs
 
-These entrypoints remain available for targeted helper flows:
+These entrypoints retain their command names, flags, and help. The legacy
+`render lux/depth`, `process material/video/tif`, and
+`analyze philosophy/decay/workflow` handlers have no execution adapters. Invoking
+them exits with status 1 and explicitly reports that no work was performed;
+installing optional dependencies does not enable them.
 
 ```bash
-.venv/bin/transform-render lux --input input.jpg --output output/lux --prompt "luxury interior" --upscale
-.venv/bin/transform-render depth --input input.jpg --output output/depth --preset interior
-.venv/bin/transform-process material --input input.jpg --output output/material.jpg --strength 0.7
-.venv/bin/transform-process video --input input.mp4 --output output/graded.mp4 --preset signature_estate
-.venv/bin/transform-process tif --input input/source_tiffs --output output/tiff_finished --preset signature --recursive
-.venv/bin/transform-analyze workflow
+.venv/bin/transform-render --help
+.venv/bin/transform-process --help
+.venv/bin/transform-analyze --help
 ```
 
-Keep these compatibility commands narrow. The canonical production operator path
-for current depth/material deliverables is `lux-depth-v3`.
+Use the dedicated `lux-depth-v3`, `luxury_video_grader`, and
+`luxury-tiff-batch` commands for their supported processing operations. Consult
+each command's `--help`; their argument contracts differ from the unavailable
+compatibility handlers. `lux-depth-v3` remains the canonical production operator
+path for current depth/material deliverables.
+
+The `transform-process pipeline` commands remain implemented for recipe-based
+processing, recipe discovery, and validation. Both that recipe-processing CLI
+and `python -m transformation_portal process` return status 1 when a batch reports
+any failed images, including partially successful batches.
 
 ## Validation
 

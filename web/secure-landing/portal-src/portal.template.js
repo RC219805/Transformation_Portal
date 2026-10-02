@@ -5965,7 +5965,7 @@ function _renderStagedUploadSummary(container, uploadState) {
 }
 
 function _applyStagedUploadResult(result) {
-    const inputDir = String(result?.input_dir || '').trim();
+    const inputDir = typeof result?.input_dir === 'string' ? result.input_dir.trim() : '';
     const summary = result?.summary && typeof result.summary === 'object' ? result.summary : {};
     const fileCount = Math.max(0, Number(summary.file_count) || 0);
     const totalBytes = Math.max(0, Number(summary.total_bytes) || 0);
@@ -6105,16 +6105,23 @@ function _submitStagedUploadSelection(fileList) {
                     return {};
                 }
             })();
+        let invalidResponse = false;
         if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
-            _applyStagedUploadResult(payload.data);
-            return;
+            try {
+                _applyStagedUploadResult(payload.data);
+                return;
+            } catch (_err) {
+                invalidResponse = true;
+            }
         }
 
         const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
         if (nonRetryableDetails) {
             _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
         }
-        const errorMessage = _stagedUploadErrorMessage(payload);
+        const errorMessage = invalidResponse
+            ? 'Staged upload returned an invalid response. Try staging the files again.'
+            : _stagedUploadErrorMessage(payload);
         _setStagedUploadState({
             busy: false,
             progressPercent: 0,
@@ -6155,19 +6162,17 @@ async function copyToClipboard(text) {
             ta.style.position = "absolute";
             ta.style.left = "-9999px";
             document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
+            try {
+                ta.select();
+                if (!document.execCommand("copy")) throw new Error('clipboard_copy_rejected');
+            } finally {
+                document.body.removeChild(ta);
+            }
         }
         createToast('Copied to clipboard.', 'success');
     } catch (err) {
         createToast('Failed to copy text.', 'error');
     }
-}
-
-function shellQuote(str) {
-    const v = String(str).replace(/[\r\n]+/g, " ").trim().replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    return `"${v}"`;
 }
 
 function appendJobLog(job, line) {

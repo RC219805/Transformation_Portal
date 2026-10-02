@@ -14,6 +14,7 @@ Date: 2025-11-08
 """
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -130,7 +131,7 @@ class DuplicateResolver:
                 # Look for exact match and versioned variants
                 patterns = [scene, f"2-{scene}", f"{scene}-2", f"2-{scene}-2"]
                 for pattern in patterns:
-                    for ext in [".exr", ".ti", ".tiff"]:
+                    for ext in [".exr", ".ti", ".tif", ".tiff"]:
                         candidate = source_dir / f"{pattern}{ext}"
                         if candidate.exists():
                             versions.append(candidate)
@@ -173,6 +174,9 @@ class DuplicateResolver:
         cleanup_summary = {"files_to_archive": [], "files_to_keep": [], "actions_taken": []}
 
         duplicates = manifest.get("duplicates_found", {})
+        canonical_stems = {Path(info["path"]).stem for info in manifest.get("canonical_sources", {}).values()}
+        canonical_stems.update(Path(info["canonical"]).stem for info in duplicates.values())
+        canonical_prefixes = tuple(sorted(canonical_stems))
 
         for scene, dup_info in duplicates.items():
             # Find output files from non-canonical sources
@@ -186,6 +190,14 @@ class DuplicateResolver:
                     alt_stem = Path(alt_source).stem
                     # Find all outputs derived from this non-canonical source
                     for output_file in output_path.glob(f"{alt_stem}*"):
+                        # Alternate stems can prefix canonical outputs from
+                        # this or another scene, or share a stem across formats.
+                        # Retain every potentially canonical output because
+                        # filename matching cannot prove its source ownership.
+                        if output_file.name.startswith(canonical_prefixes):
+                            if str(output_file) not in cleanup_summary["files_to_keep"]:
+                                cleanup_summary["files_to_keep"].append(str(output_file))
+                            continue
                         if dry_run:
                             cleanup_summary["files_to_archive"].append(str(output_file))
                         else:

@@ -338,7 +338,7 @@ typing-extensions==4.16.0
     #   mypy
     #   pytest-asyncio
     #   referencing
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   -c all.txt
     #   botocore
