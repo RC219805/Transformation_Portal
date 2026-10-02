@@ -209,14 +209,18 @@ def submit_payload(data: bytes, context: dict[str, str]) -> None:
         check=True,
     )
     receipt = json.loads(result.stdout)
+    receipt_result = receipt.get("result") if isinstance(receipt, dict) else None
+    receipt_id = receipt.get("id") if isinstance(receipt, dict) else None
     if (
         not isinstance(receipt, dict)
-        or receipt.get("result") != "SUCCESS"
-        or type(receipt.get("id")) is not int
-        or receipt["id"] <= 0
+        or not isinstance(receipt_result, str)
+        or receipt_result not in {"SUCCESS", "ACCEPTED"}
+        or type(receipt_id) is not int
+        or receipt_id <= 0
     ):
-        raise EvidenceError("GitHub did not return an accepted snapshot receipt")
-    print(f"GitHub accepted dependency snapshot {receipt['id']}")
+        result_diagnostic = repr(receipt_result[:32]) if isinstance(receipt_result, str) else type(receipt_result).__name__
+        raise EvidenceError(f"GitHub receipt rejected: result={result_diagnostic}; id_type={type(receipt_id).__name__}")
+    print(f"GitHub accepted dependency snapshot {receipt_id}; result={receipt_result} (graph indexing is asynchronous)")
 
 
 def main(argv: list[str] | None = None) -> int:

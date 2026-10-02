@@ -249,15 +249,22 @@ def test_submit_posts_the_same_validated_bytes_and_exports_evidence_before_netwo
     "receipt",
     [
         {"id": 7, "result": "SUCCESS"},
+        {"id": 7, "result": "ACCEPTED"},
         {"id": 7, "result": "FAILED"},
+        {"id": 7, "result": "UNKNOWN"},
+        {"id": 7, "result": []},
         {"result": "SUCCESS"},
         {"id": True, "result": "SUCCESS"},
+        {"id": True, "result": "ACCEPTED"},
         {"id": 0, "result": "SUCCESS"},
+        {"id": 0, "result": "ACCEPTED"},
         {"id": -1, "result": "SUCCESS"},
+        {"id": -1, "result": "ACCEPTED"},
+        {"id": "7", "result": "ACCEPTED"},
         [],
     ],
 )
-def test_network_success_requires_an_accepted_api_receipt(monkeypatch, receipt) -> None:
+def test_network_success_requires_an_accepted_api_receipt(monkeypatch, capsys, receipt) -> None:
     data = b"exact validated payload"
 
     def run(command, **kwargs):
@@ -267,8 +274,22 @@ def test_network_success_requires_an_accepted_api_receipt(monkeypatch, receipt) 
         return SimpleNamespace(stdout=json.dumps(receipt).encode())
 
     monkeypatch.setattr(collector.subprocess, "run", run)
-    if receipt == {"id": 7, "result": "SUCCESS"}:
+    if receipt in ({"id": 7, "result": "SUCCESS"}, {"id": 7, "result": "ACCEPTED"}):
         collector.submit_payload(data, {"repository": "example/repository"})
+        output = capsys.readouterr().out
+        assert f"snapshot 7; result={receipt['result']}" in output
+        assert "graph indexing is asynchronous" in output
     else:
         with pytest.raises(collector.EvidenceError):
             collector.submit_payload(data, {"repository": "example/repository"})
+
+
+def test_rejected_receipt_diagnostic_is_bounded_and_reports_id_type(monkeypatch) -> None:
+    receipt = {"id": True, "result": "UNKNOWN" + "x" * 1000}
+    monkeypatch.setattr(
+        collector.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(stdout=json.dumps(receipt).encode())
+    )
+    with pytest.raises(collector.EvidenceError) as error:
+        collector.submit_payload(b"validated payload", {"repository": "example/repository"})
+    assert "id_type=bool" in str(error.value)
+    assert len(str(error.value)) < 100
