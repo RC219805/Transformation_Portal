@@ -22,6 +22,7 @@ import torch
 
 # Import the Paradigm Shift components
 from transformation_portal.atmosphere import AtmosphericParameters, LocationPresets, SkyBlender, SkyGANGenerator, SkyParameters
+from transformation_portal.comfyui.skygan_time import SKYGAN_TIME_OF_DAY_HOURS, resolve_skygan_time_of_day
 
 logger = logging.getLogger(__name__)
 
@@ -191,14 +192,8 @@ class SkyGANNode(BaseNode):
     # ComfyUI dropdown selection into the float hour expected by
     # LocationPresets.get_sky_parameters(). Users can still override the
     # derived sun_azimuth/sun_elevation via the optional inputs below.
-    _TIME_OF_DAY_HOURS: Dict[str, float] = {
-        "sunrise": 6.5,
-        "morning": 9.0,
-        "midday": 12.0,
-        "golden_hour": 17.0,
-        "sunset": 18.5,
-        "twilight": 19.5,
-    }
+    # Keep a class dictionary so existing subclass overrides remain supported.
+    _TIME_OF_DAY_HOURS: Dict[str, float] = dict(SKYGAN_TIME_OF_DAY_HOURS)
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -207,7 +202,7 @@ class SkyGANNode(BaseNode):
                 "image": ("IMAGE",),
                 "location": (["montecito", "santa_barbara", "hope_ranch", "riviera"],),
                 "season": (["spring", "summer", "fall", "winter"],),
-                "time_of_day": (["sunrise", "morning", "midday", "golden_hour", "sunset", "twilight"],),
+                "time_of_day": (list(SKYGAN_TIME_OF_DAY_HOURS),),
                 "cloud_coverage": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0}),
                 # THE BRAIN: New Controls for Physics Engine
                 "auto_correct": ("BOOLEAN", {"default": True, "label": "Auto-Fix Shadows"}),
@@ -245,10 +240,7 @@ class SkyGANNode(BaseNode):
         # malformed values fail fast instead of being masked by unrelated
         # preset/atmosphere errors. Use the mapping's insertion order in the
         # error message so it matches the ComfyUI dropdown order.
-        try:
-            hour_of_day = self._TIME_OF_DAY_HOURS[time_of_day]
-        except KeyError:
-            raise ValueError(f"Unknown time_of_day {time_of_day!r}; expected one of {list(self._TIME_OF_DAY_HOURS)}") from None
+        hour_of_day = resolve_skygan_time_of_day(time_of_day, hours=self._TIME_OF_DAY_HOURS)
 
         # 1. Prepare Data
         img_np = self._to_numpy(image)

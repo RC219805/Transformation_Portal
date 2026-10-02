@@ -374,6 +374,64 @@ class TestSkyGANNode:
         expected_choices = list(SkyGANNode._TIME_OF_DAY_HOURS)
         assert str(expected_choices) in str(exc_info.value)
 
+    def test_execute_preserves_subclass_time_mapping(self, monkeypatch):
+        from transformation_portal.comfyui import custom_nodes
+
+        class CustomSkyGANNode(custom_nodes.SkyGANNode):
+            _TIME_OF_DAY_HOURS = {"late_night": 22.0, "early_morning": 5.0}
+
+        class PresetCaptured(Exception):
+            pass
+
+        observed = []
+
+        class CapturePresets:
+            def get_atmospheric_parameters(self, location, season):
+                return object()
+
+            def get_sky_parameters(self, *, location, season, time_of_day):
+                observed.append((location, season, time_of_day))
+                raise PresetCaptured()
+
+        monkeypatch.setattr(custom_nodes, "LocationPresets", CapturePresets)
+
+        with pytest.raises(PresetCaptured):
+            CustomSkyGANNode().execute(
+                image=np.zeros((2, 2, 3), dtype=np.float32),
+                location="montecito",
+                season="summer",
+                time_of_day="late_night",
+                cloud_coverage=0.3,
+                auto_correct=True,
+                strict_physics=False,
+            )
+
+        assert observed == [("montecito", "summer", 22.0)]
+
+    def test_invalid_time_preserves_subclass_error_order_before_presets(self, monkeypatch):
+        from transformation_portal.comfyui import custom_nodes
+
+        class CustomSkyGANNode(custom_nodes.SkyGANNode):
+            _TIME_OF_DAY_HOURS = {"late_night": 22.0, "early_morning": 5.0}
+
+        def forbidden_presets():
+            pytest.fail("invalid subclass time reached presets")
+
+        monkeypatch.setattr(custom_nodes, "LocationPresets", forbidden_presets)
+
+        with pytest.raises(ValueError, match="Unknown time_of_day") as error:
+            CustomSkyGANNode().execute(
+                image=np.zeros((2, 2, 3), dtype=np.float32),
+                location="montecito",
+                season="summer",
+                time_of_day="unknown",
+                cloud_coverage=0.3,
+                auto_correct=True,
+                strict_physics=False,
+            )
+
+        assert "['late_night', 'early_morning']" in str(error.value)
+
 
 class TestSceneAnalysisNode:
     """Tests for SceneAnalysisNode."""
