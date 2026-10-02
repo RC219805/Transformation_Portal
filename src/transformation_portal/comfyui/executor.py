@@ -19,6 +19,7 @@ from PIL import Image
 
 # Import the World-Class components
 from transformation_portal.atmosphere import AtmosphericParameters, LocationPresets, SkyBlender, SkyGANGenerator, SkyParameters
+from transformation_portal.comfyui.skygan_time import resolve_skygan_time_of_day
 from transformation_portal.comfyui.workflow_builder import Node, NodeType, Workflow
 
 logger = logging.getLogger(__name__)
@@ -166,15 +167,15 @@ class WorkflowExecutor:
         if image is None:
             raise ValueError("SkyGAN missing image")
 
+        hour_of_day = resolve_skygan_time_of_day(inputs.get("time_of_day", "golden_hour"))
+
         # 1. Map Inputs to Parameters
         presets = LocationPresets()
         location = inputs.get("location", "montecito")
         season = inputs.get("season", "summer")
-        time_str = inputs.get("time_of_day", "golden_hour")
-
         # Get base physics data
         atmo_params = presets.get_atmospheric_parameters(location, season)
-        sky_params = presets.get_sky_parameters(location, season=season)  # Defaults
+        sky_params = presets.get_sky_parameters(location, season=season, time_of_day=hour_of_day)
 
         # Apply user overrides
         if "cloud_coverage" in inputs:

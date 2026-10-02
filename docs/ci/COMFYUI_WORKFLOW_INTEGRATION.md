@@ -98,6 +98,12 @@ The current template factories are expected to build and serialize:
 Use `WorkflowExecutor` only for node types with explicit executor support. It
 does not provide a pass-through fallback for unknown or planned node types:
 
+Supported SkyGAN execution honors the same named time slots as `SkyGANNode`:
+`sunrise`, `morning`, `midday`, `golden_hour`, `sunset`, and `twilight`. The
+default is `golden_hour` (17:00). Unknown slots fail after the missing-image
+check and before preset or render work. Parameter-capture tests establish this
+input plumbing and validation, not native photographic acceptance.
+
 ```python
 from transformation_portal.comfyui import WorkflowExecutor, WorkflowTemplates
 
