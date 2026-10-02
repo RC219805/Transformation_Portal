@@ -155,7 +155,7 @@ Certain packages require minimum versions due to CVEs or security patches:
 
 | Package                 | Minimum Version | Reason                                  |
 |-------------------------|-----------------|-----------------------------------------|
-| `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution)    |
+| `sentence-transformers` | >=5.6.0         | GHSA-jhr6-gm9c-rqjv (local trust_remote_code bypass) |
 | `Pillow`                | >=10.0.0        | Multiple CVEs in 9.x series             |
 
 **Update Cadence:**
@@ -209,7 +209,7 @@ Exceptions to pinning rules require explicit approval via one of:
 | `psutil`      | ml.in   | `>=5.9.0`       | System utilities: OS compatibility layer   |
 | `memory-profiler` | ml.in | `>=0.61.0`  | Dev/profiling tool in optional deps        |
 | `types-PyYAML` | dev.in | `>=6.0.12`     | Type stubs: must track PyYAML version      |
-| `pypdf`       | ci.in   | `>=6.15.0`      | PDF utilities: backward-compatible 6.x security floor |
+| `pypdf`       | ci.in   | `>=6.19.0`      | PDF utilities: backward-compatible 6.x security floor |
 
 ---
 

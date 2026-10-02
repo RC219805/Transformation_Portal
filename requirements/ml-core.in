@@ -50,7 +50,7 @@ psutil>=5.9.0,<7             # System utilities: OS compatibility layer
 memory-profiler>=0.61.0,<1   # Dev/profiling tool
 
 # RAG / embedding support
-sentence-transformers>=3.1.0,<6
+sentence-transformers>=5.6.0,<6  # GHSA-jhr6-gm9c-rqjv: preserve trust_remote_code on local loads
 
 # 3D support (cross-platform, commercial-safe)
 plyfile>=1.1.5,<2

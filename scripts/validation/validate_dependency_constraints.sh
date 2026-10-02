@@ -113,7 +113,7 @@ get_security_minimum() {
     local package="$1"
     case "$package" in
         "sentence-transformers")
-            echo "3.1.0|CVE-73169 (arbitrary code execution)"
+            echo "5.6.0|GHSA-jhr6-gm9c-rqjv (local model loading bypasses trust_remote_code)"
             return 0
             ;;
         "Pillow")

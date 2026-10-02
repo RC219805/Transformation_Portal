@@ -212,6 +212,7 @@ packaging==26.3
     #   pytest-rerunfailures
     #   tox
     #   twine
+    #   virtualenv
 pathspec==1.1.1
     # via
     #   black
@@ -256,7 +257,7 @@ pygments==2.21.0
     #   rich
 pylint==4.0.8
     # via -r dev.in
-pypdf==6.18.1
+pypdf==6.19.0
     # via -r ci.in
 pyproject-api==1.11.0
     # via tox
@@ -400,8 +401,9 @@ urllib3==2.8.0
     #   twine
 uvicorn==0.52.1
     # via -r base.in
-virtualenv==21.7.9
+virtualenv==21.14.3
     # via
+    #   -r dev.in
     #   pre-commit
     #   tox
 websockets==17.0.1

@@ -19,4 +19,4 @@ twine>=4.0,<8          # upload distributions to PyPI
 tox>=4.5,<5            # test runner for multiple envs (future compatibility)
 
 # Additional CI utilities
-pypdf>=6.15.0          # PDF reports; security floor for GHSA-fwg2-594c-jp42 and GHSA-fp3f-mc75-235c
+pypdf>=6.19.0          # PDF reports; includes embedded-file, appearance-stream and page-label resource fixes
