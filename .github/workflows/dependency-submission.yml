@@ -1,8 +1,7 @@
 name: Dependency Submission
 
-# This workflow submits dependencies to GitHub's dependency graph.
-# It includes aggressive disk space management to handle large ML dependencies
-# and overrides GitHub's automatic dependency submission.
+# Submit committed governed Python lock inventories without platform resolution.
+# Invalid local evidence blocks submission; API failures remain advisory.
 
 on:
   push:
@@ -131,52 +130,38 @@ jobs:
             echo "✓ pyproject.toml exists"
           fi
 
+      - name: Build and validate committed dependency snapshot
+        id: dependency_snapshot
+        run: python scripts/ci/dependency_snapshot.py build --snapshot "$RUNNER_TEMP/dependency-snapshot.json"
+
       - name: Submit dependencies to GitHub (attempt 1)
         id: dependency_submission_attempt_1
-        uses: advanced-security/component-detection-dependency-submission-action@b282c67b1008fde9b60da4bdfcd8849613e293b2 # v0.1.6
         env:
-          # Critical: Disable pip caching to save disk space
-          PIP_NO_CACHE_DIR: '1'
-          # Skip downloading full packages when possible
-          GH_DEPENDENCY_SUBMISSION_SKIP_CACHE: 'true'
-          # Set temporary directory with more space
-          TMPDIR: '/tmp'
-          # Limit pip's download retries to fail faster
-          PIP_RETRIES: '2'
-          # Don't build wheels from source (saves space)
-          PIP_NO_BUILD_ISOLATION: '1'
-        with:
-          # Process from repository root
-          filePath: '.'
-          # Scan for Python dependencies
-          detectorsCategories: 'Pip'
-          # Exclude directories that don't contain dependencies
-          directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT_SHA256: ${{ steps.dependency_snapshot.outputs.snapshot_sha256 }}
+        run: python scripts/ci/dependency_snapshot.py submit --snapshot "$RUNNER_TEMP/dependency-snapshot.json" --digest "$SNAPSHOT_SHA256"
         continue-on-error: true
 
       - name: Submit dependencies to GitHub (attempt 2)
         id: dependency_submission_attempt_2
         if: steps.dependency_submission_attempt_1.outcome == 'failure'
-        uses: advanced-security/component-detection-dependency-submission-action@b282c67b1008fde9b60da4bdfcd8849613e293b2 # v0.1.6
         env:
-          # Critical: Disable pip caching to save disk space
-          PIP_NO_CACHE_DIR: '1'
-          # Skip downloading full packages when possible
-          GH_DEPENDENCY_SUBMISSION_SKIP_CACHE: 'true'
-          # Set temporary directory with more space
-          TMPDIR: '/tmp'
-          # Limit pip's download retries to fail faster
-          PIP_RETRIES: '2'
-          # Don't build wheels from source (saves space)
-          PIP_NO_BUILD_ISOLATION: '1'
-        with:
-          # Process from repository root
-          filePath: '.'
-          # Scan for Python dependencies
-          detectorsCategories: 'Pip'
-          # Exclude directories that don't contain dependencies
-          directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT_SHA256: ${{ steps.dependency_snapshot.outputs.snapshot_sha256 }}
+        run: python scripts/ci/dependency_snapshot.py submit --snapshot "$RUNNER_TEMP/dependency-snapshot.json" --digest "$SNAPSHOT_SHA256"
         continue-on-error: true
+
+      - name: Enforce validated submission evidence
+        id: dependency_evidence_guard
+        if: always() && steps.dependency_snapshot.outcome == 'success'
+        env:
+          SNAPSHOT_SHA256: ${{ steps.dependency_snapshot.outputs.snapshot_sha256 }}
+          ATTEMPT_1: ${{ steps.dependency_submission_attempt_1.outcome }}:${{ steps.dependency_submission_attempt_1.outputs.evidence_valid }}
+          ATTEMPT_2: ${{ steps.dependency_submission_attempt_2.outcome }}:${{ steps.dependency_submission_attempt_2.outputs.evidence_valid }}
+        run: >-
+          python scripts/ci/dependency_snapshot.py validate
+          --snapshot "$RUNNER_TEMP/dependency-snapshot.json" --digest "$SNAPSHOT_SHA256"
+          --attempt "$ATTEMPT_1" --attempt "$ATTEMPT_2"
 
       - name: Handle dependency submission result
         if: steps.dependency_submission_attempt_1.outcome == 'failure' && steps.dependency_submission_attempt_2.outcome == 'failure'
@@ -224,8 +209,11 @@ jobs:
         run: |
           attempt1="${{ steps.dependency_submission_attempt_1.outcome }}"
           attempt2="${{ steps.dependency_submission_attempt_2.outcome }}"
+          evidence="${{ steps.dependency_evidence_guard.outcome }}"
 
-          if [ "$attempt1" = "success" ] || [ "$attempt2" = "success" ]; then
+          if [ "$evidence" != "success" ]; then
+            echo "::error::Dependency snapshot evidence was not validated; no successful graph update is established."
+          elif [ "$attempt1" = "success" ] || [ "$attempt2" = "success" ]; then
             echo "✅ Dependency submission completed successfully."
           else
             echo "::warning::⚠️ Dependency submission encountered issues (non-blocking)"
