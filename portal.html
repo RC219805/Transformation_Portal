@@ -287,7 +287,16 @@ Contract notes:
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
-                <p id="overviewNextAction" class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">Confirm the current draft in Build before dispatch.</p>
+                <section id="overviewGuide" class="workspace-guide console-action-rail review-status-banner mt-4" data-ui="overview-guide" data-tone="info" aria-label="Draft guidance">
+                    <div class="workspace-guide__copy console-action-rail-copy">
+                        <p class="workspace-guide__eyebrow console-action-rail-kicker">Next for your draft</p>
+                        <p id="overviewGuideTitle" class="workspace-guide__title console-action-rail-title">Confirming workspace access</p>
+                        <p id="overviewNextAction" class="workspace-guide__detail console-action-rail-detail">Confirm the current draft in Build before dispatch.</p>
+                    </div>
+                    <div class="workspace-guide__actions console-action-rail-actions">
+                        <button id="overviewGuideActionBtn" type="button" class="workspace-guide__action operator-action-btn operator-action-btn-primary" data-ui="overview-guide-action" aria-describedby="overviewNextAction" disabled>Open Build</button>
+                    </div>
+                </section>
                 <details id="overviewRuntimeClarityShell" class="quiet-disclosure mt-6">
                     <summary class="quiet-disclosure__summary">
                         <div>
@@ -608,6 +617,20 @@ Contract notes:
                             </div>
                         </div>
                     </div>
+                    <section id="buildGuide" class="workspace-guide console-action-rail review-status-banner mt-4" data-ui="build-guide" data-tone="info" aria-label="Build guidance">
+                        <div class="workspace-guide__copy console-action-rail-copy" role="status" aria-live="polite" aria-atomic="true">
+                            <p class="workspace-guide__eyebrow console-action-rail-kicker">A little guidance</p>
+                            <p id="buildGuideTitle" class="workspace-guide__title console-action-rail-title">Confirming workspace access</p>
+                            <p id="buildGuideDetail" class="workspace-guide__detail console-action-rail-detail">Your draft will stay here while the portal verifies access.</p>
+                        </div>
+                        <div class="workspace-guide__actions console-action-rail-actions">
+                            <button id="buildGuideActionBtn" type="button" class="workspace-guide__action operator-action-btn operator-action-btn-primary" data-ui="build-guide-action" aria-describedby="buildGuideDetail" disabled>Open Build</button>
+                        </div>
+                        <details id="buildGuideHelp" class="workspace-guide__help build-validation-details" data-ui="build-guide-help">
+                            <summary id="buildGuideQuestion">Which workflow should I choose?</summary>
+                            <p id="buildGuideAnswer" class="workspace-guide__answer console-action-rail-detail">V3 is the production default. Review the workflow and settings before dispatch.</p>
+                        </details>
+                    </section>
                     <details id="connectionDetails" class="quiet-disclosure mt-4" data-ui="connection-details">
                         <summary class="quiet-disclosure__summary">
                             <div>
@@ -1518,7 +1541,7 @@ Contract notes:
                                 <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch</h4>
                                 <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true" role="status">Preview-backed validation will explain when dispatch is ready.</p>
                             </div>
-                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 btn-busy" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason" aria-busy="false">
+                            <button id="runJobBtn" type="button" class="dispatch-primary-action hero-action hero-action-primary mt-4 w-full disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason" aria-busy="false">
                                 Execute Job
                             </button>
                             <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">

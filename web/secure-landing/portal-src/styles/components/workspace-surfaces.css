@@ -261,6 +261,25 @@
 .artifact-review-meta {
     padding: 1rem;
 }
+
+/* Guidance reuses the console rail and disclosure component primitives. */
+.workspace-guide {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-guide[hidden] {
+    display: none;
+}
+
+.workspace-guide[data-tone="success"] {
+    border-color: var(--ux-status-ready);
+}
+
+.workspace-guide__help {
+    grid-column: 1 / -1;
+    margin-top: 0;
+}
+
 @media (max-width: 767px) {
     .artifact-review-stage,
     .artifact-review-meta {

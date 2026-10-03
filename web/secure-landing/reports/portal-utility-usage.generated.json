@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 393,
+    "utilityCount": 383,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -13,18 +13,6 @@
         "portal.html",
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/portal.template.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "active:scale-[0.98]",
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -202,18 +190,6 @@
     },
     {
       "className": "bg-emerald-500",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "bg-gradient-to-r",
       "owner": "static",
       "sources": [
         "portal.html"
@@ -2043,18 +2019,6 @@
       "status": "covered"
     },
     {
-      "className": "from-teal-700",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "gap-1",
       "owner": "static",
       "sources": [
@@ -2377,18 +2341,6 @@
       "status": "covered"
     },
     {
-      "className": "hover:from-teal-600",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "hover:text-cyan-700",
       "owner": "static",
       "sources": [
@@ -2414,30 +2366,6 @@
     },
     {
       "className": "hover:text-slate-900",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "hover:to-sky-500",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "hover:via-cyan-500",
       "owner": "static",
       "sources": [
         "portal.html"
@@ -4019,18 +3947,6 @@
       "status": "covered"
     },
     {
-      "className": "shadow-glow",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "shadow-lg",
       "owner": "static",
       "sources": [
@@ -4806,18 +4722,6 @@
       "status": "covered"
     },
     {
-      "className": "to-sky-600",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
       "className": "top-[2px]",
       "owner": "static",
       "sources": [
@@ -4831,18 +4735,6 @@
     },
     {
       "className": "top-0",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "tracking-[0.14em]",
       "owner": "static",
       "sources": [
         "portal.html"
@@ -5046,18 +4938,6 @@
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "via-cyan-600",
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [

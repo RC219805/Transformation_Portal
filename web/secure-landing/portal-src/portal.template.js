@@ -193,6 +193,15 @@ const els = {
     consoleActionPrimaryBtn: _domId('consoleActionPrimaryBtn'),
     consoleActionSecondaryBtn1: _domId('consoleActionSecondaryBtn1'),
     consoleActionSecondaryBtn2: _domId('consoleActionSecondaryBtn2'),
+    overviewGuide: _domId('overviewGuide'),
+    overviewGuideTitle: _domId('overviewGuideTitle'),
+    overviewGuideActionBtn: _domId('overviewGuideActionBtn'),
+    buildGuide: _domId('buildGuide'),
+    buildGuideTitle: _domId('buildGuideTitle'),
+    buildGuideDetail: _domId('buildGuideDetail'),
+    buildGuideActionBtn: _domId('buildGuideActionBtn'),
+    buildGuideQuestion: _domId('buildGuideQuestion'),
+    buildGuideAnswer: _domId('buildGuideAnswer'),
     contextRibbonCard1: _domId('contextRibbonCard1'),
     contextRibbonCard1Label: _domId('contextRibbonCard1Label'),
     contextRibbonJob: _domId('contextRibbonJob'),
@@ -3219,6 +3228,7 @@ function syncBuildStepUi() {
     if (els.parametersShell) els.parametersShell.classList.toggle('hidden', activeStep === 4);
 
     renderBuildStepPulse(generatePayload());
+    renderWorkspaceGuidance();
 }
 
 function setBuildStep(nextStep, options) {
@@ -3238,6 +3248,8 @@ function setBuildStep(nextStep, options) {
 }
 
 function setupBuildStepper() {
+    els.buildGuideActionBtn?.addEventListener('click', () => activateWorkspaceGuidance());
+    els.overviewGuideActionBtn?.addEventListener('click', () => activateWorkspaceGuidance(true));
     _buildStepButtons().forEach((button) => {
         button.addEventListener('click', () => {
             setBuildStep(button.dataset.buildStepTarget);
@@ -4652,7 +4664,6 @@ function renderPresetIntelligence(payload) {
     if (els.heroWarningCount) {
         els.heroWarningCount.textContent = `${dispatch.blockingCount} blocking · ${dispatch.warningCount} advisory`;
     }
-    if (els.overviewNextAction) els.overviewNextAction.textContent = dispatch.detail;
     if (els.presetBuilderHint) {
         const sectionLabel = advancedSections.length > 0
             ? `Advanced focus: ${advancedSections.join(', ')}.`
@@ -4705,6 +4716,7 @@ function renderMissionControl(payload = null) {
     renderRuntimeBriefing(currentPayload);
     renderConsoleContextRibbon();
     _syncOverviewBuildLoadingState(currentPayload);
+    renderWorkspaceGuidance(currentPayload);
 }
 
 function _isJobsHydrationPending() {
@@ -5255,6 +5267,7 @@ function _flushBootstrapOnlineFollowup(force = false) {
 }
 
 function _syncBootstrapGuardedControls() {
+    renderWorkspaceGuidance();
     const readiness = _dispatchReadinessSnapshot();
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
         els.runJobBtn.disabled = !readiness.canRun;
@@ -8227,6 +8240,7 @@ function _effectiveNextBestAction(payload = null, preview = null) {
 }
 
 function renderNextBestAction(payload = null, preview = null) {
+    renderWorkspaceGuidance(payload, preview);
     if (!els.nextBestActionLabel || !els.nextBestActionDetail || !els.nextBestActionTone) return;
     const action = _effectiveNextBestAction(payload, preview);
     els.nextBestActionLabel.textContent = String(action?.label || 'Review dispatch posture');
@@ -8236,6 +8250,57 @@ function renderNextBestAction(payload = null, preview = null) {
     const tone = String(action?.tone || 'info').trim().toLowerCase();
     els.nextBestActionTone.dataset.tone = tone || 'info';
     els.nextBestActionTone.textContent = titleCaseToken(tone || 'info', 'Info');
+}
+
+function _workspaceGuidance(payload = null, preview = null, overview = false) {
+    const currentPayload = payload || generatePayload();
+    const readiness = _dispatchReadinessSnapshot(currentPayload);
+    const accessReady = _portalPrivilegesReady();
+    return portalInternals.buildWorkspaceGuidance({
+        step: resolveBuildStep(state.portalUi.buildStep),
+        pipeline: state.pipeline,
+        nextAction: _effectiveNextBestAction(currentPayload, preview),
+        readiness,
+        accessReady,
+        accessSummary: _isBootstrapReady() && !accessReady
+            ? { tone: 'blocked', badge: 'Recovery required', detail: readiness.detail }
+            : _bootstrapSurfaceSummary(),
+        dispatchPending: state.portalUi.dispatchPending,
+        handoffJobId: state.portalUi.dispatchHandoffJobId,
+        overview
+    });
+}
+
+function renderWorkspaceGuidance(payload = null, preview = null) {
+    const guide = _workspaceGuidance(payload, preview);
+    const overview = _workspaceGuidance(payload, preview, true);
+    for (const [container, title, detail, button, copy] of [
+        [els.buildGuide, els.buildGuideTitle, els.buildGuideDetail, els.buildGuideActionBtn, guide],
+        [els.overviewGuide, els.overviewGuideTitle, els.overviewNextAction, els.overviewGuideActionBtn, overview]
+    ]) {
+        if (container && container.dataset.tone !== copy.tone) container.dataset.tone = copy.tone;
+        _setTextContentIfChanged(title, copy.title);
+        _setTextContentIfChanged(detail, copy.detail);
+        _setTextContentIfChanged(button, copy.label);
+        if (button) button.disabled = Boolean(copy.disabled);
+    }
+    _setTextContentIfChanged(els.buildGuideQuestion, guide.question);
+    _setTextContentIfChanged(els.buildGuideAnswer, guide.answer);
+}
+
+function activateWorkspaceGuidance(overview = false) {
+    // Recompute on activation so a newer preview cannot leave a stale target.
+    const guide = _workspaceGuidance(null, null, overview);
+    if (guide.disabled) return;
+    if (guide.jobId) {
+        navigateConsoleView('operate', { jobId: guide.jobId });
+        return;
+    }
+    navigateConsoleView('build', { focus: false });
+    const control = guide.field === 'run_job' ? els.runJobBtn : _buildControlForPreviewField(guide.field);
+    if (control && !control.disabled && _focusInvalidBuildControl(control)) return;
+    setBuildStep(guide.step, { silent: true });
+    _focusConsoleViewHeading('build');
 }
 
 function _setBuildSurfacePathFieldValue(fieldName, nextValue) {
@@ -11619,6 +11684,7 @@ async function submitJob() {
         _setButtonBusy(els.runJobBtn, true);
     }
     state.portalUi.dispatchPending = true;
+    renderWorkspaceGuidance();
 
     const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
     const localId = `job_${randomId}`;

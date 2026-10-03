@@ -2834,7 +2834,8 @@ test("portal CSS Phase 13 consolidation preserves interaction outline boundaries
       "utf8"
     );
     const root = postcss.parse(source);
-    const hoverRule = findRuleBySelectors(root, [`${selector}:hover`]);
+    const hoverSelector = selector === ".build-step-tab" ? `${selector}:hover:not(:disabled)` : `${selector}:hover`;
+    const hoverRule = findRuleBySelectors(root, [hoverSelector]);
     const focusVisibleRule = findRuleBySelectors(root, [`${selector}:focus-visible`]);
     assert.ok(hoverRule, `${selector}:hover singleton rule must exist`);
     assert.ok(focusVisibleRule, `${selector}:focus-visible singleton rule must exist`);
@@ -2847,7 +2848,10 @@ test("portal CSS Phase 13 consolidation preserves interaction outline boundaries
       assert.equal(hoverDeclarations.get(property), value);
       assert.equal(focusVisibleDeclarations.get(property), value);
     }
-    if (selector === ".build-step-tab" || selector === ".workspace-link") {
+    if (selector === ".build-step-tab") {
+      assert.equal(hoverDeclarations.get("border-color"), "var(--ux-border-strong)");
+      assert.equal(focusVisibleDeclarations.get("border-color"), "var(--ux-border-strong)");
+    } else if (selector === ".workspace-link") {
       assert.equal(focusVisibleDeclarations.get("border-color"), hoverDeclarations.get("border-color"));
     }
     assert.equal(hoverDeclarations.has("outline"), false);
@@ -3298,21 +3302,21 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedRawBytes, 0);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedGzipBytes, 0);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesBefore, 80925);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesAfter, 92986);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawByteDelta, 12061);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesAfter, 93462);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawByteDelta, 12537);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesBefore, 15752);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesAfter, 17876);
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipByteDelta, 2124);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesAfter, 17985);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipByteDelta, 2233);
   assert.equal(
     ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashBefore,
     "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f"
   );
   assert.equal(
     ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashAfter,
-    "30135d0f2c88ba354fad7261a0e5d7f9a31cc4c300ead1e3ab22ebe95d7959e3"
+    "7fcd967558daa3076ccc7037d3a50de3b304ad015295062ab13972da9c161a90"
   );
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintBefore, "08a5cefdcc6a");
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "8a7d4de32483");
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "16df0fbdc89d");
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.parityBaselineChanged, false);
   assert.match(
