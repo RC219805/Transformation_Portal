@@ -102,6 +102,10 @@
     color: #8be9f9;
 }
 
+.dispatch-primary-action:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
 .surface-skeleton-row {
     display: flex;
     align-items: center;

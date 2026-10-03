@@ -12,14 +12,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "active:scale-[0.98]": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "animate-pulse": {
       "owner": "static",
       "sources": [
@@ -137,14 +129,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "bg-emerald-500": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "bg-gradient-to-r": {
       "owner": "static",
       "sources": [
         "portal.html"
@@ -1434,14 +1418,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "from-teal-700": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "gap-1": {
       "owner": "static",
       "sources": [
@@ -1666,14 +1642,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "hover:from-teal-600": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "hover:text-cyan-700": {
       "owner": "static",
       "sources": [
@@ -1691,22 +1659,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "hover:text-slate-900": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "hover:to-sky-500": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "hover:via-cyan-500": {
       "owner": "static",
       "sources": [
         "portal.html"
@@ -2807,14 +2759,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "shadow-glow": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "shadow-lg": {
       "owner": "static",
       "sources": [
@@ -3357,14 +3301,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "to-sky-600": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "top-[2px]": {
       "owner": "static",
       "sources": [
@@ -3374,14 +3310,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "top-0": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "tracking-[0.14em]": {
       "owner": "static",
       "sources": [
         "portal.html"
@@ -3525,14 +3453,6 @@
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "via-cyan-600": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
