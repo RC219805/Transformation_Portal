@@ -3148,3 +3148,248 @@ test('@portal-browser Unified request imports select their workflow and reject u
   }
   expect(runtime.jobSubmissions).toBe(0);
 });
+
+test('@portal-browser guided path recovery focuses the latest blocked field and preserves the draft', async ({ page }) => {
+  let blockedField = 'output_dir';
+  const messages = {
+    output_dir: 'Choose an authorized output directory for this run.',
+    input_dir: 'Choose an authorized source directory for this run.',
+  };
+  const runtime = await installHydratedPortalRoutes(page, {
+    previewForPayload: () => ({
+      ...EMPTY_PREVIEW,
+      field_errors: [{ field: blockedField, code: 'invalid_argument', message: messages[blockedField] }],
+    }),
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  const inputDir = '/tenant/input/guided-draft';
+  const outputDir = '/tenant/output/guided-draft';
+  await page.locator('#inputDir').fill(inputDir);
+  await page.locator('#outputDir').fill(outputDir);
+  await page.locator('#outputDir').blur();
+  await expect(page.locator('#buildGuideDetail')).toContainText(messages.output_dir);
+  await page.locator('#buildStepTab1').click();
+  await expect(page.locator('[data-ui="build-guide"]')).toBeVisible();
+  await page.locator('#buildGuideActionBtn').click();
+  await expect(page.locator('#buildStepTab2')).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('#outputDir')).toBeFocused();
+  await expect(page.locator('#inputDir')).toHaveValue(inputDir);
+  await expect(page.locator('#outputDir')).toHaveValue(outputDir);
+  expect(runtime.jobSubmissions).toBe(0);
+
+  blockedField = 'input_dir';
+  const updatedOutputDir = `${outputDir}-updated`;
+  await page.locator('#outputDir').fill(updatedOutputDir);
+  await page.locator('#outputDir').blur();
+  await expect(page.locator('#buildGuideDetail')).toContainText(messages.input_dir);
+  await page.locator('#buildStepTab1').click();
+  await page.locator('#buildGuideActionBtn').click();
+  await expect(page.locator('#inputDir')).toBeFocused();
+  await expect(page.locator('#inputDir')).toHaveValue(inputDir);
+  await expect(page.locator('#outputDir')).toHaveValue(updatedOutputDir);
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+test('@portal-browser guided unknown prerequisites open dispatch review without submitting', async ({ page }) => {
+  const message = 'The configured runtime requires an operator review.';
+  const runtime = await installHydratedPortalRoutes(page, {
+    preview: {
+      field_errors: [{ field: 'runtime', code: 'runtime_unavailable', message }],
+    },
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await expect(page.locator('#buildGuideDetail')).toContainText(message);
+  await page.locator('#buildGuideActionBtn').click();
+  await expect(page.locator('#buildStepTab4')).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('#buildStepTitle')).toBeFocused();
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+test('@portal-browser Overview guidance opens a ready draft for review without launching it', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const runtime = await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page);
+  await expect(page.locator('#heroReadinessLabel')).toContainText('Ready');
+  await expect(page.locator('[data-ui="overview-guide"]')).toBeVisible();
+  await page.locator('#overviewGuideActionBtn').click();
+  await expect(page.locator('body')).toHaveAttribute('data-console-view', 'build');
+  await expect(page.locator('#buildStepTab4')).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('#runJobBtn')).toBeEnabled();
+  await expect(page.locator('#runJobBtn')).toBeFocused();
+  expect(runtime.jobSubmissions).toBe(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.locator('#buildGuide .workspace-guide__copy').evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(140);
+  await page.screenshot({ path: testInfo.outputPath('guided-workspace-desktop.png'), fullPage: false });
+});
+
+test('@portal-browser guided access distinguishes terminal recovery from pending authentication', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  let releaseBootstrap;
+  const bootstrapGate = new Promise((resolve) => { releaseBootstrap = resolve; });
+  let bootstrapRequests = 0;
+  await page.route('**/portal/bootstrap', async (route) => {
+    bootstrapRequests += 1;
+    await bootstrapGate;
+    await fulfillJson(route, { reason: 'config_failure' }, 503);
+  });
+  try {
+    const response = await page.goto('/portal?view=build');
+    expect(response?.status()).toBe(200);
+    await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'pending');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Confirming access');
+    await expect(page.locator('[data-ui="build-guide"]')).toHaveAttribute('data-tone', 'info');
+    await expect(page.locator('#buildGuideActionBtn')).toBeDisabled();
+    releaseBootstrap();
+    await expect(page.locator('body')).toHaveAttribute('data-bootstrap-status', 'unavailable');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Recovery required');
+    await expect(page.locator('#buildGuideDetail')).toContainText(/resolve.*configuration/i);
+    await expect(page.locator('[data-ui="build-guide"]')).toHaveAttribute('data-tone', 'error');
+    await expect(page.locator('#buildGuideActionBtn')).toBeDisabled();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    expect(bootstrapRequests).toBe(1);
+    expect(runtime.jobSubmissions).toBe(0);
+  } finally {
+    releaseBootstrap();
+  }
+});
+
+for (const guidanceView of ['build', 'overview']) {
+test(`@portal-browser ${guidanceView} guided submission follows its live job and allows an unchanged draft to run again`, async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  let releaseSubmission;
+  const submissionGate = new Promise((resolve) => { releaseSubmission = resolve; });
+  let submissionRequests = 0;
+  await page.route('**/v1/jobs', async (route) => {
+    if (route.request().method() === 'POST') {
+      submissionRequests += 1;
+      await submissionGate;
+    }
+    await route.fallback();
+  });
+  try {
+    await gotoHydratedPortal(page, '/portal?view=build');
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeEnabled();
+    await page.locator('#runJobBtn').click();
+    await expect.poll(() => submissionRequests).toBe(1);
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Submitting your run');
+    await expect(page.locator('#buildGuideActionBtn')).toBeDisabled();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    expect(runtime.jobSubmissions).toBe(0);
+    releaseSubmission();
+    await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Your run has been submitted');
+    await expect(page.locator('#buildGuideActionBtn')).toHaveText('Follow this run');
+    await expect(page.locator('#buildGuideActionBtn')).toBeEnabled();
+    expect(runtime.jobSubmissions).toBe(1);
+    const submittedPayload = runtime.submittedPayloads[0];
+    if (guidanceView === 'overview') await page.locator('[data-view-link="overview"]').click();
+    await page.locator(`#${guidanceView}GuideActionBtn`).click();
+    await expect(page).toHaveURL(/view=operate.*job=job-dispatched|job=job-dispatched.*view=operate/);
+    await expect(page.locator('#operateViewTitle')).toBeFocused();
+    await expect(page.locator('[data-ui="queue-row"][data-job-id="job-dispatched"]')).toBeVisible();
+    expect(submissionRequests).toBe(1);
+    expect(runtime.jobSubmissions).toBe(1);
+
+    await page.locator('[data-view-link="build"]').click();
+    await expect(page.locator('#buildStepTab4')).toHaveAttribute('aria-current', 'step');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Your draft is ready to review');
+    await expect(page.locator('#runJobBtn')).toHaveText('Dispatch Job');
+    await expect(page.locator('#runJobBtn')).toBeEnabled();
+    await page.locator('#runJobBtn').click();
+    await expect.poll(() => submissionRequests).toBe(2);
+    await expect.poll(() => runtime.jobSubmissions).toBe(2);
+    expect(runtime.submittedPayloads[1]).toEqual(submittedPayload);
+    await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
+  } finally {
+    releaseSubmission();
+  }
+});
+}
+
+test('@portal-browser guided photography help follows Paths and Outputs using a native disclosure', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#pipelineSelect').selectOption('lux-depth');
+  await page.locator('#buildStepTab2').click();
+  const help = page.locator('details#buildGuideHelp');
+  const question = help.locator('summary#buildGuideQuestion');
+  await expect(question).not.toHaveText('');
+  const pathsQuestion = await question.textContent();
+  await question.focus();
+  await page.keyboard.press('Enter');
+  await expect(help).toHaveJSProperty('open', true);
+  await expect(page.locator('#buildGuideAnswer')).toBeVisible();
+  await expect(page.locator('#buildGuideAnswer')).toContainText(/source|input|output|workspace/i);
+
+  await page.locator('#buildStepTab3').click();
+  await expect(question).not.toHaveText(pathsQuestion);
+  if (!await help.evaluate((element) => element.open)) await question.click();
+  await expect(page.locator('#buildGuideAnswer')).toContainText(/color|metadata|profile/i);
+  await question.focus();
+  await page.keyboard.press('Enter');
+  await expect(help).toHaveJSProperty('open', false);
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+test('@portal-browser guided prompts keep pending photography validation gated', async ({ page }) => {
+  let releasePreview;
+  const photographyPreviewGate = new Promise((resolve) => { releasePreview = resolve; });
+  const runtime = await installHydratedPortalRoutes(page, { photographyPreviewGate });
+  try {
+    await gotoHydratedPortal(page, '/portal?view=build');
+    await page.locator('#pipelineSelect').selectOption('lux-depth');
+    await page.locator('#buildStepTab4').click();
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    await expect(page.locator('[data-ui="build-guide"]')).not.toHaveAttribute('data-tone', 'success');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Checking this draft');
+    await page.locator('[data-view-link="overview"]').click();
+    await expect(page.locator('#heroReadinessLabel')).toContainText('pending');
+    await expect(page.locator('[data-ui="overview-guide"]')).not.toHaveAttribute('data-tone', 'success');
+    await page.locator('#overviewGuideActionBtn').click();
+    await expect(page.locator('body')).toHaveAttribute('data-console-view', 'build');
+    await expect(page.locator('#runJobBtn')).toBeDisabled();
+    expect(runtime.jobSubmissions).toBe(0);
+  } finally {
+    releasePreview();
+  }
+});
+
+for (const theme of ['light', 'dark']) {
+  test(`@portal-browser guided prompts remain accessible on a phone in ${theme} reduced-motion mode`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const runtime = await installHydratedPortalRoutes(page, {
+      preview: {
+        field_errors: [{ field: 'output_dir', code: 'invalid_argument', message: 'Choose an authorized output directory.' }],
+      },
+    });
+    await gotoHydratedPortal(page, '/portal?view=build');
+    if (await page.locator('html').evaluate((element) => element.classList.contains('dark')) !== (theme === 'dark')) {
+      await page.locator('#themeBtn').click();
+    }
+    await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
+    await expect(page.locator('body')).toHaveCSS('color', theme === 'dark' ? 'rgb(241, 245, 249)' : 'rgb(15, 23, 42)');
+    const action = page.locator('[data-ui="build-guide-action"]');
+    await expect(action).toBeVisible();
+    await action.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#outputDir')).toBeFocused();
+    await page.locator('#buildGuideQuestion').click();
+    await expect(page.locator('#buildGuideAnswer')).toBeVisible();
+    await expectNoHorizontalOverflow(page, `guided phone Build ${theme}`);
+    await expectNoWcagViolations(page, `guided phone Build ${theme}`);
+    if (theme === 'light') {
+      await page.locator('[data-ui="build-guide"]').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath('guided-workspace-phone.png'), fullPage: false });
+    }
+    await page.locator('[data-view-link="overview"]').click();
+    await expect(page.locator('[data-ui="overview-guide"]')).toBeVisible();
+    await expectNoHorizontalOverflow(page, `guided phone Overview ${theme}`);
+    await expectNoWcagViolations(page, `guided phone Overview ${theme}`);
+    expect(runtime.jobSubmissions).toBe(0);
+  });
+}
