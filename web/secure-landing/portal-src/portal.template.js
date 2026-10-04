@@ -8293,6 +8293,7 @@ function activateWorkspaceGuidance(overview = false) {
     const guide = _workspaceGuidance(null, null, overview);
     if (guide.disabled) return;
     if (guide.jobId) {
+        _resetDispatchHandoff();
         navigateConsoleView('operate', { jobId: guide.jobId });
         return;
     }

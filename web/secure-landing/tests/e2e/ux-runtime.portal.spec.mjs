@@ -3256,7 +3256,8 @@ test('@portal-browser guided access distinguishes terminal recovery from pending
   }
 });
 
-test('@portal-browser guided submission waits for confirmation and follows its live job without resubmitting', async ({ page }) => {
+for (const guidanceView of ['build', 'overview']) {
+test(`@portal-browser ${guidanceView} guided submission follows its live job and allows an unchanged draft to run again`, async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page);
   let releaseSubmission;
   const submissionGate = new Promise((resolve) => { releaseSubmission = resolve; });
@@ -3284,16 +3285,30 @@ test('@portal-browser guided submission waits for confirmation and follows its l
     await expect(page.locator('#buildGuideActionBtn')).toHaveText('Follow this run');
     await expect(page.locator('#buildGuideActionBtn')).toBeEnabled();
     expect(runtime.jobSubmissions).toBe(1);
-    await page.locator('#buildGuideActionBtn').click();
+    const submittedPayload = runtime.submittedPayloads[0];
+    if (guidanceView === 'overview') await page.locator('[data-view-link="overview"]').click();
+    await page.locator(`#${guidanceView}GuideActionBtn`).click();
     await expect(page).toHaveURL(/view=operate.*job=job-dispatched|job=job-dispatched.*view=operate/);
     await expect(page.locator('#operateViewTitle')).toBeFocused();
     await expect(page.locator('[data-ui="queue-row"][data-job-id="job-dispatched"]')).toBeVisible();
     expect(submissionRequests).toBe(1);
     expect(runtime.jobSubmissions).toBe(1);
+
+    await page.locator('[data-view-link="build"]').click();
+    await expect(page.locator('#buildStepTab4')).toHaveAttribute('aria-current', 'step');
+    await expect(page.locator('#buildGuideTitle')).toHaveText('Your draft is ready to review');
+    await expect(page.locator('#runJobBtn')).toHaveText('Dispatch Job');
+    await expect(page.locator('#runJobBtn')).toBeEnabled();
+    await page.locator('#runJobBtn').click();
+    await expect.poll(() => submissionRequests).toBe(2);
+    await expect.poll(() => runtime.jobSubmissions).toBe(2);
+    expect(runtime.submittedPayloads[1]).toEqual(submittedPayload);
+    await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
   } finally {
     releaseSubmission();
   }
 });
+}
 
 test('@portal-browser guided photography help follows Paths and Outputs using a native disclosure', async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page);
