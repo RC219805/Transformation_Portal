@@ -5,7 +5,7 @@
 #    pip-compile --output-file=security.txt security.in
 #
 bandit[toml]==1.9.4
-    # via -r security.in
+    # via -r requirements/security.in
 boolean-py==5.0
     # via license-expression
 cachecontrol[filecache]==0.14.4
@@ -32,7 +32,7 @@ mdurl==0.1.2
     # via markdown-it-py
 msgpack==1.2.2
     # via
-    #   -r security.in
+    #   -r requirements/security.in
     #   cachecontrol
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
@@ -43,7 +43,7 @@ packaging==26.3
 pip-api==0.0.35
     # via pip-audit
 pip-audit==2.10.1
-    # via -r security.in
+    # via -r requirements/security.in
 pip-requirements-parser==32.0.1
     # via pip-audit
 platformdirs==4.11.8
@@ -76,7 +76,7 @@ typing-extensions==4.16.0
     # via cyclonedx-python-lib
 urllib3==2.8.0
     # via
-    #   -r security.in
+    #   -r requirements/security.in
     #   requests
 
 # The following packages are considered to be unsafe in a requirements file:
