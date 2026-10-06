@@ -66,7 +66,7 @@ semantic-version==2.10.0
 setuptools==84.0.0
 shellingham==1.5.4
 six==1.17.0
-starlette==1.6.0
+starlette==1.7.0
 sympy==1.14.0
 timm==1.0.26
 tokenizers==0.22.2
