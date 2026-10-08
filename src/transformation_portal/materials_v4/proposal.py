@@ -154,7 +154,23 @@ def generate_proposals(
         or len(records) * math.prod(master_shape) * 4 > config.max_mask_bytes
         or len(records) * math.prod(image.shape[:2]) > config.max_proxy_mask_bytes
     ):
-        raise MaterialsError("SAM2 proposal count or decoded/lifted mask bytes exceed budget")
+        final_count = len(records)
+        master_float_mask_bytes = final_count * math.prod(master_shape) * 4
+        proxy_mask_bytes = final_count * math.prod(image.shape[:2])
+        exceeded_limits = []
+        if final_count > config.max_proposals:
+            exceeded_limits.append("max_proposals")
+        if master_float_mask_bytes > config.max_mask_bytes:
+            exceeded_limits.append("max_mask_bytes")
+        if proxy_mask_bytes > config.max_proxy_mask_bytes:
+            exceeded_limits.append("max_proxy_mask_bytes")
+        raise MaterialsError(
+            "SAM2 proposal count or decoded/lifted mask bytes exceed budget "
+            f"(observed_final_proposals={final_count}, max_proposals={config.max_proposals}, "
+            f"required_master_float_mask_bytes={master_float_mask_bytes}, max_mask_bytes={config.max_mask_bytes}, "
+            f"required_proxy_mask_bytes={proxy_mask_bytes}, max_proxy_mask_bytes={config.max_proxy_mask_bytes}, "
+            f"exceeded_limits={','.join(exceeded_limits)})"
+        )
     proposals = []
     for record in records:
         check_cancelled(cancelled)

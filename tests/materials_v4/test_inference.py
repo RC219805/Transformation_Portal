@@ -1,8 +1,10 @@
 """Experimental inference is bounded, source-bound, explicit and nonauthorizing."""
 
 import hashlib
+import sys
+from contextlib import nullcontext
 from dataclasses import replace
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
@@ -236,6 +238,100 @@ def test_sam_pre_nms_limit_is_checked_before_upstream_accumulation(tmp_path, mon
         proposal.generate_proposals(np.ones((14, 14, 3), np.uint8), config, master_shape=(14, 14))
     assert batches == [1, 1]
     assert len(accumulated) == 1
+
+
+@pytest.mark.parametrize(
+    "final_count,master_shape,max_proposals,max_mask_bytes,max_proxy_mask_bytes,expected_exceeded",
+    [
+        (4, (4472, 6708), 256, 512_000_000, 64_000_000, ()),
+        (5, (4472, 6708), 256, 512_000_000, 64_000_000, ("max_mask_bytes",)),
+        (4, (4472, 6708), 256, 479_970_816, 64_000_000, ()),
+        (4, (1, 1), 4, 512_000_000, 64_000_000, ()),
+        (5, (1, 1), 4, 512_000_000, 64_000_000, ("max_proposals",)),
+        (4, (1, 1), 256, 512_000_000, 784, ()),
+        (5, (1, 1), 256, 512_000_000, 784, ("max_proxy_mask_bytes",)),
+        (5, (4472, 6708), 4, 512_000_000, 784, ("max_proposals", "max_mask_bytes", "max_proxy_mask_bytes")),
+    ],
+    ids=[
+        "four-master-masks-fit",
+        "five-master-masks-refuse",
+        "master-byte-equality-fits",
+        "proposal-count-equality-fits",
+        "proposal-count-refuses",
+        "proxy-byte-equality-fits",
+        "proxy-byte-refuses",
+        "all-limits-reported",
+    ],
+)
+def test_sam_final_budget_diagnostic_preserves_admission_before_decode(
+    tmp_path, monkeypatch, final_count, master_shape, max_proposals, max_mask_bytes, max_proxy_mask_bytes, expected_exceeded
+):
+    torch = ModuleType("torch")
+    torch.inference_mode = nullcontext
+    sam = ModuleType("sam2")
+    sam.__path__ = []
+    sam_generator = ModuleType("sam2.automatic_mask_generator")
+    sam_builder = ModuleType("sam2.build_sam")
+    for name, module in [
+        ("torch", torch),
+        ("sam2", sam),
+        (sam_generator.__name__, sam_generator),
+        (sam_builder.__name__, sam_builder),
+    ]:
+        monkeypatch.setitem(sys.modules, name, module)
+    image = np.ones((14, 14, 3), np.uint8)
+    rle = {"size": [14, 14], "counts": [196]}
+
+    class FakeGenerator:
+        def __init__(self, **kwargs):
+            assert kwargs["output_mode"] == "uncompressed_rle"
+
+        def generate(self, image):
+            # Stub the final upstream return to isolate each independent guard.
+            # Existing tests separately cover pre-NMS accumulation admission.
+            return [{"segmentation": rle, "predicted_iou": 0.9, "stability_score": 0.98} for _ in range(final_count)]
+
+    monkeypatch.setattr(sam_generator, "SAM2AutomaticMaskGenerator", FakeGenerator, raising=False)
+    monkeypatch.setattr(
+        sam_builder,
+        "build_sam2",
+        lambda *args, **kwargs: SimpleNamespace(image_size=1024, parameters=lambda: iter([SimpleNamespace(device="cpu")])),
+        raising=False,
+    )
+    config = InferenceConfig(
+        tmp_path / "sam.pt",
+        tmp_path / "clip.safetensors",
+        max_proposals=max_proposals,
+        max_mask_bytes=max_mask_bytes,
+        max_proxy_mask_bytes=max_proxy_mask_bytes,
+    )
+    original_decode = proposal._decode_rle
+    decoded = []
+
+    def guarded_decode(record, shape):
+        if expected_exceeded:
+            pytest.fail("Rejected final records reached RLE decoding")
+        decoded.append(record)
+        return original_decode(record, shape)
+
+    monkeypatch.setattr(proposal, "_decode_rle", guarded_decode)
+    if not expected_exceeded:
+        observed = proposal.generate_proposals(image, config, master_shape=master_shape)
+        assert len(observed) == final_count
+        assert len(decoded) == final_count
+        return
+    with pytest.raises(MaterialsError, match="SAM2 proposal count or decoded/lifted mask bytes exceed budget") as error:
+        proposal.generate_proposals(image, config, master_shape=master_shape)
+    assert decoded == []
+    expected_master_bytes = final_count * master_shape[0] * master_shape[1] * 4
+    expected_proxy_bytes = final_count * 196
+    assert str(error.value) == (
+        "SAM2 proposal count or decoded/lifted mask bytes exceed budget "
+        f"(observed_final_proposals={final_count}, max_proposals={max_proposals}, "
+        f"required_master_float_mask_bytes={expected_master_bytes}, max_mask_bytes={max_mask_bytes}, "
+        f"required_proxy_mask_bytes={expected_proxy_bytes}, max_proxy_mask_bytes={max_proxy_mask_bytes}, "
+        f"exceeded_limits={','.join(expected_exceeded)})"
+    )
 
 
 def test_classifier_runs_bounded_microbatches_without_remote_weights(tmp_path, monkeypatch):
