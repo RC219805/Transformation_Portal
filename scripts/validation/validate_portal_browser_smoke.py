@@ -1376,6 +1376,7 @@ def _set_lux_optional_controls_expression(
     enable_v2: bool,
     emit_scene_debug_bundle: bool = False,
     enable_captioning: bool = False,
+    save_float_depth: bool = False,
 ) -> str:
     payload = json.dumps(
         {
@@ -1386,6 +1387,7 @@ def _set_lux_optional_controls_expression(
             "enable_v2": enable_v2,
             "emit_scene_debug_bundle": emit_scene_debug_bundle,
             "enable_captioning": enable_captioning,
+            "save_float_depth": save_float_depth,
         }
     )
     return f"""
@@ -1411,6 +1413,7 @@ def _set_lux_optional_controls_expression(
   setChecked('enableReconstruction', cfg.enable_reconstruction);
   setChecked('flagEnableV2', cfg.enable_v2);
   setChecked('emitSceneDebugBundle', cfg.emit_scene_debug_bundle);
+  setChecked('saveFloatDepth', cfg.save_float_depth);
   const captioningDetails = document.getElementById('captioningDetails');
   if (cfg.enable_captioning && captioningDetails && !captioningDetails.classList.contains('hidden')) {{
     captioningDetails.open = true;
@@ -2091,6 +2094,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 enable_v2=True,
                 emit_scene_debug_bundle=True,
                 enable_captioning=True,
+                save_float_depth=True,
             ),
             predicate=lambda value: (
                 isinstance(value, dict)

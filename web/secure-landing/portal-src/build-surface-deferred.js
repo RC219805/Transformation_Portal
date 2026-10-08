@@ -70,11 +70,11 @@ export function createDeferredBuildSurfaceApi(host) {
     function _setSelectOptions(selectEl, options, selectedValue) {
         if (!selectEl || !Array.isArray(options) || options.length === 0) return;
         const normalizedOptions = options
+            .filter((option) => option?.value !== undefined && option?.value !== null)
             .map((option) => ({
                 value: String(option?.value ?? '').trim(),
                 label: String(option?.label ?? option?.value ?? '').trim()
-            }))
-            .filter((option) => option.value);
+            }));
         if (normalizedOptions.length === 0) return;
         const preferred = String(selectedValue ?? selectEl.value ?? '').trim();
         selectEl.innerHTML = '';
@@ -160,7 +160,7 @@ export function createDeferredBuildSurfaceApi(host) {
         }
         if (els.runtime.logLevel && logLevelField?.options) {
             _setSelectOptions(els.runtime.logLevel, logLevelField.options, state.config.runtime?.logLevel);
-            state.config.runtime.logLevel = String(els.runtime.logLevel.value || state.config.runtime?.logLevel || '');
+            state.config.runtime.logLevel = String(els.runtime.logLevel.value);
         }
         if (els.raw.wbModeBadge && rawWbField) {
             els.raw.wbModeBadge.textContent = String(rawWbField.display_value || rawWbField.default || 'camera');

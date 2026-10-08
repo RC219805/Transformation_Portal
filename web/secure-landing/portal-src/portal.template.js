@@ -6792,10 +6792,12 @@ function _shouldLoadDeferredBuildSurface() {
 
 function _reconcileDeferredBuildSurface(api = _deferredBuildSurfaceApi()) {
     if (!api) return;
+    const requestKey = _configPreviewRequestKey(generatePayload());
     if (api.applyLuxMetadataToControls) api.applyLuxMetadataToControls();
     if (api.renderFieldPreviewStatuses) api.renderFieldPreviewStatuses();
     if (api.syncRuntimeWorkerModeControls) api.syncRuntimeWorkerModeControls();
     if (api.refreshArchiveFieldVisibility) api.refreshArchiveFieldVisibility();
+    if (_configPreviewRequestKey(generatePayload()) !== requestKey) scheduleConfigPreview(true);
 }
 
 function _primeDeferredBuildSurface() {
@@ -8444,7 +8446,7 @@ function applyLuxMetadataToControls() {
     }
     if (!_shouldLoadDeferredBuildSurface()) return;
     void _loadDeferredBuildSurface().then((loaded) => {
-        if (loaded?.applyLuxMetadataToControls) loaded.applyLuxMetadataToControls();
+        _reconcileDeferredBuildSurface(loaded);
     });
 }
 
