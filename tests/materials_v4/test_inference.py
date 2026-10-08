@@ -275,8 +275,8 @@ def test_sam_final_budget_diagnostic_preserves_admission_before_decode(
     for name, module in [
         ("torch", torch),
         ("sam2", sam),
-        (sam_generator.__name__, sam_generator),
-        (sam_builder.__name__, sam_builder),
+        ("sam2.automatic_mask_generator", sam_generator),
+        ("sam2.build_sam", sam_builder),
     ]:
         monkeypatch.setitem(sys.modules, name, module)
     image = np.ones((14, 14, 3), np.uint8)
