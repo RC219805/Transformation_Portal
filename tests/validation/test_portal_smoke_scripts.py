@@ -1393,6 +1393,7 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "dispatchToolsOpen" in content
     assert "v2PresetVisible" in content
     assert "_set_lux_optional_controls_expression" in content
+    assert "save_float_depth=True" in content
     assert "_restore_archive_gate_form_without_events_expression" in content
     assert "heroReadinessLabel" in content
     assert "locationSearch" in content
@@ -1417,6 +1418,28 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "view=operate&job=" in content
     assert "artifact=" in content
     assert "compare=1" in content
+
+
+def test_portal_browser_optional_context_sets_an_explicit_advanced_control():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_advanced_context")
+    controls = {
+        "depth_backend": "depth_pro",
+        "enable_segmentation": True,
+        "segmentation_backend": "sam2",
+        "enable_reconstruction": True,
+        "enable_v2": True,
+    }
+    default_expression = module._set_lux_optional_controls_expression(**controls)
+    advanced_expression = module._set_lux_optional_controls_expression(**controls, save_float_depth=True)
+
+    for expression, expected in ((default_expression, False), (advanced_expression, True)):
+        payload = json.loads(expression.split("const cfg = ", 1)[1].split(";\n", 1)[0])
+        assert payload["save_float_depth"] is expected
+        assert "setChecked('saveFloatDepth', cfg.save_float_depth);" in expression
+        assert "el.checked = !!checked;" in expression
+        assert "dispatch(el, 'change');" in expression
+        assert "setChecked('licenseApple" not in expression
+        assert "setChecked('licenseResearchTools" not in expression
 
 
 def test_portal_browser_smoke_restores_transient_build_draft_after_reload():

@@ -49,12 +49,13 @@ class CameraParams:
              [0, fy, cy],
              [0,  0,  1]]
             where fx/fy are focal lengths and cx/cy are principal points.
-        extrinsics: Camera extrinsic matrix (4x4) in format:
+        extrinsics: World-to-camera matrix (4x4) in format:
             [[r11, r12, r13, tx],
              [r21, r22, r23, ty],
              [r31, r32, r33, tz],
              [0,   0,   0,   1]]
             where R (3x3) is rotation and t (3x1) is translation.
+            Camera coordinates are R @ world_coordinates + t.
         width: Image width in pixels.
         height: Image height in pixels.
         distortion: Optional distortion coefficients [k1, k2, p1, p2, k3].
