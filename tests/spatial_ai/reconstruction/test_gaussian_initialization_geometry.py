@@ -5,8 +5,9 @@ import pytest
 
 pytest.importorskip("torch", reason="torch is required to import the Gaussian backend")
 
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, ReconstructionInput
+from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, ReconstructionInput, Scene3D
 from transformation_portal.spatial_ai.reconstruction.gaussian_backend import GaussianBackend
+from transformation_portal.spatial_ai.reconstruction.geometric_validator import GeometricValidator
 
 pytestmark = [pytest.mark.ml, pytest.mark.unit]
 
@@ -63,6 +64,16 @@ def test_initialize_gaussians_camera_roundtrip(use_depth_prior: bool) -> None:
                 camera_homogeneous[:3], expected_camera[i], rtol=1e-6, atol=1e-6, err_msg=f"{pose_name}: view {i}"
             )
             assert camera_homogeneous[3] == pytest.approx(1.0), pose_name
+        # Compose the actual initializer with the public validator. The original
+        # pixel is independently known, and the camera-coordinate oracle above
+        # prevents two inverse-direction errors from canceling each other.
+        scene = Scene3D(splats=splats, cameras=cameras, rmse=1.0, iteration=0, convergence="max_iterations")
+        validator = GeometricValidator()
+        source_pixels = np.zeros((2, 2), dtype=np.float32)
+        for view_idx in range(len(cameras)):
+            assert validator.compute_reprojection_error(scene, view_idx, points_2d=source_pixels) == pytest.approx(
+                0.0, abs=1e-6
+            ), f"{pose_name}: view {view_idx}"
         np.testing.assert_array_equal(splats.colors, pixel_colors, err_msg=pose_name)
         assert splats.metadata["initialization"] == ("depth" if use_depth_prior else "sfm"), pose_name
         assert backend._model_loaded is False, pose_name
