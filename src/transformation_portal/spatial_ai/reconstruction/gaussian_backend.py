@@ -446,8 +446,9 @@ class GaussianBackend:
             ones = np.ones((len(points_cam), 1), dtype=np.float32)
             points_hom = np.concatenate([points_cam, ones], axis=1)  # (N, 4)
 
-            # Apply extrinsic transformation
-            points_world = (cam.extrinsics @ points_hom.T).T[:, :3]
+            # Invert the world-to-camera transform for unprojected points.
+            camera_to_world = np.linalg.inv(cam.extrinsics)
+            points_world = (camera_to_world @ points_hom.T).T[:, :3]
 
             # Extract colors
             v_idx = v.astype(int)
@@ -516,7 +517,8 @@ class GaussianBackend:
             ones = np.ones((len(points_cam), 1), dtype=np.float32)
             points_hom = np.concatenate([points_cam, ones], axis=1)
 
-            points_world = (cam.extrinsics @ points_hom.T).T[:, :3]
+            camera_to_world = np.linalg.inv(cam.extrinsics)
+            points_world = (camera_to_world @ points_hom.T).T[:, :3]
 
             # Extract colors
             v_idx = v.astype(int)
