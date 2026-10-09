@@ -70,6 +70,7 @@ def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) ->
 
     _write(repo_root / "package.json", '{"private": true}\n')
     _write(repo_root / "package-lock.json", '{"lockfileVersion": 3}\n')
+    _write(repo_root / ".nvmrc", "22\n")
     _write(repo_root / "wrangler.jsonc", '{"name": "transformationportal"}\n')
     add_result = _run(
         [
@@ -77,6 +78,7 @@ def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) ->
             "add",
             "package.json",
             "package-lock.json",
+            ".nvmrc",
             "wrangler.jsonc",
             "scripts/setup/pre-commit-check.sh",
         ],

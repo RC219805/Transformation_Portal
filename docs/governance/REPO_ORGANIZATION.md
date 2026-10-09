@@ -147,7 +147,7 @@ The `.auto-organize.sh` script is the canonical entry point for repository organ
 Only these files should remain in the repository root:
 
 - **Core documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
-- **Build configuration**: `Makefile`, `pyproject.toml`, root Cloudflare Workers Builds shim files (`package.json`, `package-lock.json`, `wrangler.jsonc`)
+- **Build configuration**: `Makefile`, `pyproject.toml`, root Cloudflare Workers Builds shim files (`package.json`, `package-lock.json`, `.nvmrc`, `wrangler.jsonc`)
 - **Dependency management**: `requirements.txt`, `requirements-dev.txt`, `requirements-ci.txt`, `requirements-lint.txt`
 - **Testing and linting configuration**: `pyproject.toml`, `.pylintrc`, `mypy.ini`
 - **Docker and local environment templates**: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`
@@ -158,7 +158,7 @@ Only these files should remain in the repository root:
 
 Current allowed root files are:
 `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`,
-`AGENTS.md`, `CLAUDE.md`, `Makefile`, `package.json`, `package-lock.json`,
+`AGENTS.md`, `CLAUDE.md`, `Makefile`, `package.json`, `package-lock.json`, `.nvmrc`,
 `pyproject.toml`, `requirements.txt`, `requirements-dev.txt`,
 `requirements-ci.txt`, `requirements-lint.txt`, `.pylintrc`, `mypy.ini`,
 `Dockerfile`, `docker-compose.yml`, `.gitignore`, `.gitleaks.toml`,
@@ -171,7 +171,8 @@ The root Cloudflare Workers files are not a general JavaScript application
 root. They are a minimal Workers Builds deploy shim for
 `cloudflare/transformationportal-worker`; keep scripts, Node engine metadata,
 Wrangler version, and the delegated entrypoint aligned with that governed
-worker package. Production deploy scripts must preserve dashboard-managed
+worker package. Root `.nvmrc` pins Node 22, matching the frontdoor selector
+and both package engine ranges. Production deploy scripts must preserve dashboard-managed
 provider vars such as `FRONTDOOR_ORIGIN` with `--keep-vars`. The contract is
 enforced by
 `tests/validation/test_cloudflare_worker_root_shim_contract.py` and
