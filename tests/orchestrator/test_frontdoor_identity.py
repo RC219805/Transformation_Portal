@@ -54,7 +54,15 @@ def test_assertion_rejects_different_request_time_or_signer(changes):
 
 
 @pytest.mark.parametrize(
-    "assertion", ["", "raw@example.com", "x" * 8193, FIXTURE["assertion"] + "x", FIXTURE["assertion"].replace(".", ".00.")]
+    "assertion",
+    ["", "raw@example.com", "x" * 8193, FIXTURE["assertion"] + "x", FIXTURE["assertion"].replace(".", ".00.")],
+    ids=[
+        "missing-assertion",
+        "unencoded-email",
+        "oversized-assertion",
+        "invalid-signature",
+        "extra-signature-segment",
+    ],
 )
 def test_malformed_assertion_fails_closed(assertion):
     with pytest.raises(IdentityAssertionError):
@@ -92,6 +100,18 @@ def test_signed_but_invalid_claims_fail_closed(claims):
         '{"a":false}',
         " " * 65537,
         "[" * 2000 + "0" + "]" * 2000,
+    ],
+    ids=[
+        "empty-object",
+        "array",
+        "null",
+        "invalid-json",
+        "unsafe-tenant",
+        "case-fold-duplicate-actor",
+        "duplicate-json-key",
+        "non-string-tenant",
+        "oversized-bytes",
+        "excessive-json-depth",
     ],
 )
 def test_membership_config_rejects_invalid_ambiguous_or_oversized_mapping(mapping):
