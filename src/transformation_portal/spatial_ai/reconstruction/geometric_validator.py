@@ -323,24 +323,7 @@ class GeometricValidator:
         Returns:
             2D points (N, 2) in pixel coordinates [u, v].
         """
-        # Transform to camera coordinates
-        ones = np.ones((len(points_3d), 1), dtype=np.float32)
-        points_hom = np.concatenate([points_3d, ones], axis=1)  # (N, 4)
-
-        # Apply extrinsic (world -> camera)
-        extrinsic_inv = np.linalg.inv(camera.extrinsics)
-        points_cam_hom = (extrinsic_inv @ points_hom.T).T  # (N, 4)
-        points_cam = points_cam_hom[:, :3]  # (N, 3)
-
-        # Project to image plane
-        K = camera.intrinsics
-        points_2d_hom = (K @ points_cam.T).T  # (N, 3)
-
-        # Normalize by depth
-        u = points_2d_hom[:, 0] / (points_2d_hom[:, 2] + 1e-8)
-        v = points_2d_hom[:, 1] / (points_2d_hom[:, 2] + 1e-8)
-
-        return np.stack([u, v], axis=1)
+        return self._project_depths(points_3d, camera)[:, :2]
 
     def _project_depths(self, points_3d: np.ndarray, camera: CameraParams) -> np.ndarray:
         """Project 3D points to 2D with depth values.
@@ -356,8 +339,8 @@ class GeometricValidator:
         ones = np.ones((len(points_3d), 1), dtype=np.float32)
         points_hom = np.concatenate([points_3d, ones], axis=1)
 
-        extrinsic_inv = np.linalg.inv(camera.extrinsics)
-        points_cam_hom = (extrinsic_inv @ points_hom.T).T
+        # CameraParams stores the world-to-camera transform.
+        points_cam_hom = (camera.extrinsics @ points_hom.T).T
         points_cam = points_cam_hom[:, :3]
 
         # Project to image plane

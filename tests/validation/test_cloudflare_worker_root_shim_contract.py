@@ -379,6 +379,17 @@ def test_root_worker_build_package_is_minimal_deploy_shim() -> None:
     assert "dependencies" not in root_package
 
 
+def test_root_worker_runtime_selection_matches_node22_contract() -> None:
+    """Workers Builds and the frontdoor select the governed Node major."""
+    root_node_pin = (PROJECT_ROOT / ".nvmrc").read_text(encoding="utf-8").strip()
+    frontdoor_node_pin = (PROJECT_ROOT / "web" / "secure-landing" / ".nvmrc").read_text(encoding="utf-8").strip()
+    root_package = _load_json(PROJECT_ROOT / "package.json")
+    worker_package = _load_json(WORKER_ROOT / "package.json")
+
+    assert root_node_pin == frontdoor_node_pin == "22"
+    assert root_package["engines"] == worker_package["engines"] == {"node": ">=22 <23"}
+
+
 def test_root_worker_build_lock_matches_package_contract() -> None:
     """The root lockfile must stay in sync with the minimal build package."""
     root_package = _load_json(PROJECT_ROOT / "package.json")
