@@ -78,6 +78,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     jobSubmissions: 0,
     submittedPayloads: [],
     previewPayloads: [],
+    metadataRequests: 0,
     uploadBodies: [],
     presetRequests: 0,
     stagedUploadRequests: [],
@@ -357,11 +358,12 @@ async function installHydratedPortalRoutes(page, options = {}) {
     }
 
     if (pathname === "/v1/config-metadata") {
+      runtime.metadataRequests += 1;
       await fulfillJson(route, {
         success: true,
         data: {
           pipeline: url.searchParams.get("pipeline") || "lux-depth-v3",
-          fields: {},
+          fields: options.metadataFields || {},
           estimate_bands: {},
           debug_bundle_policy: {},
           advanced_sections: [],
@@ -505,6 +507,87 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await expect(page.locator('[data-capability-id="lux_depth_v5"]')).toHaveAttribute("data-capability-status", "enabled");
     await expect(page.locator("#capabilityMatrix")).toContainText("LuxDepthV5");
     expect(overviewRequests).toBe(1);
+  });
+
+  test("metadata Default log level remains omitted from hydrated preview requests", async ({ page }) => {
+    const runtime = await installHydratedPortalRoutes(page, {
+      metadataFields: { log_level: {
+        kind: "enum", default: "", options: [
+          { value: "", label: "Default" }, { value: "DEBUG", label: "DEBUG" },
+          { value: "INFO", label: "INFO" }, { value: "WARNING", label: "WARNING" },
+          { value: "ERROR", label: "ERROR" },
+        ],
+      } },
+    });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await expect.poll(() => runtime.metadataRequests).toBeGreaterThan(0);
+    await expect(page.locator('#logLevel option[value=""]')).toHaveText("Default");
+    await expect(page.locator("#logLevel")).toHaveValue("");
+    await expect(page.locator("#logLevel option:checked")).toHaveText("Default");
+    await expect(page.locator("#buildPreviewStatus")).toHaveText("Preview ready");
+    await expect.poll(() => runtime.previewPayloads.length).toBeGreaterThan(0);
+    expect(runtime.previewPayloads.every((payload) => !Object.hasOwn(payload.args, "log_level"))).toBe(true);
+    await page.locator("#buildStepTab4").click();
+    await expect(page.locator("#runJobBtn")).toBeEnabled();
+    await expect(page.locator("#apiKeyInput")).toBeHidden();
+    expect(runtime.jobSubmissions).toBe(0);
+  });
+
+  test("delayed Build metadata reconciliation restores the current blocking preview after navigation", async ({ page }) => {
+    // Restrict this engineering metadata fixture to an already-supported RAW
+    // choice so reconciliation changes a real generated argument, not auth or
+    // license policy. No photographs are processed or jobs dispatched.
+    const runtime = await installHydratedPortalRoutes(page, {
+      previewTenantDenied: true,
+      metadataFields: { raw_ingest_mode: {
+        kind: "enum", default: "force_preview",
+        options: [{ value: "force_preview", label: "Force preview" }],
+      } },
+    });
+    let buildRequests = 0;
+    let releaseBuild;
+    const buildGate = new Promise((resolve) => { releaseBuild = resolve; });
+    await page.route("**/__mock-portal/portal-build.js", async (route) => {
+      buildRequests += 1;
+      await buildGate;
+      await route.fallback();
+    });
+    const metadataResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === "/v1/config-metadata" && response.ok());
+    try {
+      await gotoHydratedPortal(page, "/portal?view=overview");
+      await (await metadataResponse).finished();
+      await expect(page.locator("#heroReadinessLabel")).toHaveText("Dispatch blocked");
+      await expect.poll(() => runtime.previewPayloads.length).toBeGreaterThan(0);
+      const previous = runtime.previewPayloads.at(-1);
+      expect(previous.args.raw_ingest_mode).toBe("auto");
+      await page.locator('[data-view-link="build"]').click();
+      await expect.poll(() => buildRequests).toBe(1);
+      await expect(page.locator("#rawIngestMode")).toHaveValue("auto");
+      await page.locator('[data-view-link="overview"]').click();
+      await expect(page.locator("body")).toHaveAttribute("data-console-view", "overview");
+      const reconciledRequest = page.waitForRequest((request) =>
+        new URL(request.url()).pathname === "/v1/config-preview"
+        && request.method() === "POST"
+        && request.postDataJSON()?.args?.raw_ingest_mode === "force_preview");
+      releaseBuild();
+      expect((await reconciledRequest).postDataJSON()).toEqual({
+        ...previous, args: { ...previous.args, raw_ingest_mode: "force_preview" },
+      });
+      await expect(page.locator("#rawIngestMode")).toHaveValue("force_preview");
+      await expect(page.locator("#heroReadinessLabel")).toHaveText("Dispatch blocked");
+      await expect(page.locator("#overviewNextAction")).toContainText("path authorized for this workspace");
+      await expect(page.locator("body")).toHaveAttribute("data-build-preview-loading", "false");
+      await page.locator('[data-view-link="build"]').click();
+      await page.locator("#buildStepTab4").click();
+      await expect(page.locator("#buildPreviewStatus")).toHaveText("Preview invalid");
+      await expect(page.locator("#dispatchReadinessReason")).toContainText("path authorized for this workspace");
+      await expect(page.locator("#runJobBtn")).toBeDisabled();
+      expect(runtime.jobSubmissions).toBe(0);
+      expect(buildRequests).toBe(1);
+    } finally {
+      releaseBuild();
+    }
   });
 
   test("direct-debug credentials remain page-only and are never restored after reload", async ({ page }, testInfo) => {
