@@ -27,6 +27,7 @@ ALLOWED_ROOT_FILES=(
     "Makefile"
     "package.json"
     "package-lock.json"
+    ".nvmrc"
     "pyproject.toml"
     "requirements.txt"
     "requirements-dev.txt"
