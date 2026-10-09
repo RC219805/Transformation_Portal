@@ -18,7 +18,7 @@ opencv-python==4.11.0.86  # Governed DA3 baseline
 open3d==0.19.0  # Governed DA3 baseline
 fastapi==0.135.3  # Governed DA3 baseline
 uvicorn==0.43.0  # Governed DA3 baseline
-requests==2.33.1  # Governed DA3 baseline
+requests==2.34.2  # Governed DA3 baseline
 urllib3>=2.8.0,<3  # Security: CVE-2026-97687/97688/97689
 typer==0.27.2  # Governed DA3 baseline
 pillow==12.3.0  # Governed DA3 baseline
