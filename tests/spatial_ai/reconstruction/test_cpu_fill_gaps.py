@@ -153,6 +153,91 @@ def test_geometric_validator_reprojection_and_coverage_edge_cases() -> None:
         validator.compute_reprojection_error(scene, view_idx=0, points_2d=np.zeros((1, 2), dtype=np.float32))
 
 
+def _nonidentity_projection_scene() -> Scene3D:
+    # A 90-degree rotation about Y plus translation maps world coordinates to
+    # camera coordinates (z - 1, y - 2, 6 - x).
+    camera = CameraParams(
+        intrinsics=np.array([[4.0, 0.0, 2.0], [0.0, 6.0, 3.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        extrinsics=np.array(
+            [[0.0, 0.0, 1.0, -1.0], [0.0, 1.0, 0.0, -2.0], [-1.0, 0.0, 0.0, 6.0], [0.0, 0.0, 0.0, 1.0]],
+            dtype=np.float32,
+        ),
+        width=8,
+        height=7,
+    )
+    # Known camera coordinates are (0, 0, 2), (1, 1, 3), (-1, -2, 4),
+    # and (12, 0, 5). The last point projects outside the image.
+    positions = np.array([[4.0, 2.0, 1.0], [3.0, 3.0, 2.0], [2.0, 0.0, 0.0], [1.0, 2.0, 13.0]], dtype=np.float32)
+    return Scene3D(
+        splats=_splats(positions=positions, colors=np.full((4, 3), 0.5, dtype=np.float32)),
+        cameras=[
+            camera,
+            CameraParams(
+                intrinsics=camera.intrinsics.copy(),
+                extrinsics=np.eye(4, dtype=np.float32),
+                width=8,
+                height=7,
+            ),
+        ],
+        metadata={},
+        convergence="converged",
+        iteration=1,
+        rmse=0.02,
+    )
+
+
+def test_geometric_validator_nonidentity_projection_uses_world_to_camera() -> None:
+    scene = _nonidentity_projection_scene()
+    # u = 2 + 4*x_camera/z_camera; v = 3 + 6*y_camera/z_camera.
+    expected = [[2.0, 3.0], [10.0 / 3.0, 5.0], [1.0, 0.0], [58.0 / 5.0, 3.0]]
+
+    projected = GeometricValidator()._project_points(scene.splats.positions, scene.cameras[0])
+
+    np.testing.assert_allclose(projected, expected, rtol=1e-6, atol=1e-6)
+
+
+def test_geometric_validator_nonidentity_depths_use_camera_axis() -> None:
+    scene = _nonidentity_projection_scene()
+    positions = np.vstack([scene.splats.positions, np.array([[8.0, 2.0, 1.0]], dtype=np.float32)])
+    # The added point is (0, 0, -2) in camera coordinates. Preserve the
+    # existing signed-depth behavior rather than introducing visibility culling.
+    expected = [[2.0, 3.0, 2.0], [10.0 / 3.0, 5.0, 3.0], [1.0, 0.0, 4.0], [58.0 / 5.0, 3.0, 5.0], [2.0, 3.0, -2.0]]
+
+    projected = GeometricValidator()._project_depths(positions, scene.cameras[0])
+
+    np.testing.assert_allclose(projected, expected, rtol=1e-6, atol=1e-6)
+
+
+def test_geometric_validator_nonidentity_public_reprojection_error() -> None:
+    scene = _nonidentity_projection_scene()
+    reference = np.array([[2.0, 3.0], [10.0 / 3.0, 5.0], [1.0, 0.0], [58.0 / 5.0, 3.0]], dtype=np.float32)
+    validator = GeometricValidator()
+
+    assert validator.compute_reprojection_error(scene, 0, points_2d=reference) == pytest.approx(0.0, abs=1e-6)
+    assert validator.compute_reprojection_error(scene, 0, points_2d=reference + [3.0, 4.0]) == pytest.approx(5.0)
+
+
+def test_geometric_validator_nonidentity_public_depth_consistency() -> None:
+    scene = _nonidentity_projection_scene()
+    depth_map = np.zeros((7, 8), dtype=np.float32)
+    # Independently known pixel/depth pairs; the fourth point is out of bounds.
+    depth_map[3, 2], depth_map[5, 3], depth_map[0, 1] = 2.0, 3.0, 4.0
+    no_reference = np.zeros_like(depth_map)
+    validator = GeometricValidator()
+
+    assert validator.compute_depth_consistency(scene, [depth_map, no_reference]) == pytest.approx(1.0)
+    depth_map[5, 3] = 6.0
+    assert validator.compute_depth_consistency(scene, [depth_map, no_reference]) == pytest.approx(2.0 / 3.0)
+
+
+def test_geometric_validator_nonidentity_public_coverage() -> None:
+    # The rotated camera sees three points; the identity camera sees only the
+    # fourth (the others are outside its image with the same intrinsics).
+    coverage = GeometricValidator().compute_coverage(_nonidentity_projection_scene())
+
+    assert coverage == {"mean_points_per_view": 2.0, "min_points_per_view": 1, "max_points_per_view": 3, "coverage_std": 1.0}
+
+
 @pytest.mark.parametrize(
     ("rmse", "grade"),
     [
