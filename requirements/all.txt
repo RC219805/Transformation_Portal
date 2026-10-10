@@ -158,8 +158,10 @@ libcst==1.9.0
     # via -r dev.in
 librt==0.15.0
     # via mypy
-mako==1.4.1
-    # via alembic
+mako==1.4.3
+    # via
+    #   -r base.in
+    #   alembic
 markdown-it-py==4.2.0
     # via rich
 markupsafe==3.0.3
@@ -409,8 +411,10 @@ virtualenv==21.14.3
     #   tox
 websockets==17.0.1
     # via -r base.in
-werkzeug==3.1.8
-    # via moto
+werkzeug==3.1.9
+    # via
+    #   -r dev.in
+    #   moto
 xmltodict==1.0.4
     # via moto
 zipp==4.1.0

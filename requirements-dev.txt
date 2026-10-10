@@ -21,6 +21,7 @@ cryptography>=50.0.0,<51
 
 # S3 mock for the Phase 4.A ArtifactStore contract tests
 moto[s3]>=5.0,<6
+Werkzeug>=3.1.9,<4  # GHSA-g6x2-hccm-hh4m: patched moto HTTP dependency
 
 # Linters, formatters, type checkers
 mypy>=1.10

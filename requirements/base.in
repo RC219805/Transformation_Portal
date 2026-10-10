@@ -37,6 +37,7 @@ imagecodecs>=2023.9.18,<2027
 SQLAlchemy[asyncio]>=2.0.50,<2.2  # async ORM for PostgresJobRepository / PostgresJobEventStore
 asyncpg>=0.29,<1                # libpq-free async Postgres driver paired with SQLAlchemy[asyncio]
 alembic>=1.13,<2                # schema migration tool for the orchestrator job/event tables
+Mako>=1.4.2,<2                  # GHSA-5639-2j2p-m4mx: patched Alembic template dependency
 
 # Queue broker backend (Phase 2.B). Memory backend remains default; Redis
 # activates when TP_ORCHESTRATOR_QUEUE_BACKEND=redis and TP_REDIS_URL is set.

@@ -166,6 +166,10 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
         ("Pillow>=10.0.0,<13  # stale security floor", "10.3.0", "CVE-2024-28219"),
         ("starlette==1.0.0  # stale Starlette pin", "1.3.1", "CVE-2026-48710"),
         ("sentence-transformers>=3.1.0,<6", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
+        ("Mako>=1.4.1,<2", "1.4.2", "GHSA-5639-2j2p-m4mx"),
+        ("mako==1.4.1", "1.4.2", "GHSA-5639-2j2p-m4mx"),
+        ("Werkzeug>=3.1.8,<4", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
+        ("werkzeug==3.1.8", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
     ),
 )
 def test_security_minimums_reject_stale_constraints(
