@@ -32,6 +32,8 @@ MANIFEST
 !scripts/lib/*.py
 !web/secure-landing/lib/
 !web/secure-landing/lib/**
+!web/secure-landing/vendor/braces/lib/
+!web/secure-landing/vendor/braces/lib/**
 
 # Caches
 .hypothesis/

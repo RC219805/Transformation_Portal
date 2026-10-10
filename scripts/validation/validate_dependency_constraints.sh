@@ -110,18 +110,27 @@ is_banned_package() {
 
 # Function: Get security minimum version
 get_security_minimum() {
-    local package="$1"
+    local package
+    package=$(printf "%s" "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed -E 's/[-_.]+/-/g')
     case "$package" in
         "sentence-transformers")
             echo "5.6.0|GHSA-jhr6-gm9c-rqjv (local model loading bypasses trust_remote_code)"
             return 0
             ;;
-        "Pillow")
+        "pillow")
             echo "10.3.0|CVE-2024-28219 and multiple 9.x CVEs"
             return 0
             ;;
         "starlette")
             echo "1.3.1|CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles/HTTPEndpoint/form parsing fixes"
+            return 0
+            ;;
+        "mako")
+            echo "1.4.2|GHSA-5639-2j2p-m4mx"
+            return 0
+            ;;
+        "werkzeug")
+            echo "3.1.9|GHSA-g6x2-hccm-hh4m"
             return 0
             ;;
     esac
