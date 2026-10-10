@@ -44,3 +44,21 @@ def test_supported_npm_locks_reject_vulnerable_resolutions(
         assert Version(version) >= Version(
             minimum_version
         ), f"{lock_path}: {location} resolves vulnerable {version}; minimum is {minimum_version}"
+
+
+def test_frontdoor_braces_uses_the_reviewed_local_security_fork() -> None:
+    frontdoor = REPO_ROOT / "web/secure-landing"
+    manifest = json.loads((frontdoor / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((frontdoor / "package-lock.json").read_text(encoding="utf-8"))
+    assert manifest["devDependencies"]["braces"] == "file:./vendor/braces"
+    assert manifest["overrides"]["braces"] == "$braces"
+    fork = lock["packages"]["vendor/braces"]
+    assert fork["name"] == "@transformation-portal/braces"
+    assert fork["version"] == "3.0.3-tp.1"
+    resolutions = [
+        package
+        for location, package in lock["packages"].items()
+        if location == "node_modules/braces" or location.endswith("/node_modules/braces")
+    ]
+    assert resolutions, "The Stylelint dependency chain must resolve the bounded fork"
+    assert all(package.get("link") is True and package["resolved"] == "vendor/braces" for package in resolutions)

@@ -14,6 +14,14 @@ const depthError = error => error instanceof SyntaxError && /Nesting depth excee
 const childCycleError = error => error instanceof SyntaxError && /AST child edges contain a cycle/.test(error.message);
 const nestedPattern = (depth, open = "{", close = "}") => open.repeat(depth) + "a,b" + close.repeat(depth);
 
+test("micromatch resolves the reviewed fork through the installed braces dependency", () => {
+  const micromatchRequire = createRequire(require.resolve("micromatch"));
+  assert.equal(micromatchRequire.resolve("braces"), require.resolve(vendorPath));
+  const installed = micromatchRequire("braces");
+  assert.equal(installed, braces);
+  assert.throws(() => installed.compile(nestedPattern(101)), depthError);
+});
+
 function nestedAst(depth) {
   let node = { type: "text", value: "ordinary" };
   for (let i = 0; i < depth; i++) node = { type: "paren", nodes: [node] };

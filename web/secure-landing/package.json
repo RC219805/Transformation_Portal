@@ -34,6 +34,7 @@
     "react-dom": "^19.3.0"
   },
   "overrides": {
+    "braces": "$braces",
     "js-yaml": "4.3.2",
     "postcss": "8.5.28",
     "sharp": "0.35.5",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
+    "braces": "file:./vendor/braces",
     "esbuild": "^0.28.2",
     "postcss": "8.5.28",
     "stylelint": "^17.16.0"
