@@ -168,8 +168,14 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
         ("sentence-transformers>=3.1.0,<6", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
         ("Mako>=1.4.1,<2", "1.4.2", "GHSA-5639-2j2p-m4mx"),
         ("mako==1.4.1", "1.4.2", "GHSA-5639-2j2p-m4mx"),
+        ("MAKO==1.4.1  # case-insensitive security floor", "1.4.2", "GHSA-5639-2j2p-m4mx"),
+        ("MaKo>=1.4.1,<2  # mixed-case security floor", "1.4.2", "GHSA-5639-2j2p-m4mx"),
         ("Werkzeug>=3.1.8,<4", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
         ("werkzeug==3.1.8", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
+        ("WERKZEUG==3.1.8  # case-insensitive security floor", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
+        ("WerkZeug>=3.1.8,<4  # mixed-case security floor", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
+        ("PILLOW>=10.0.0,<13  # case-insensitive existing floor", "10.3.0", "CVE-2024-28219"),
+        ("Sentence-Transformers>=5.4.1,<6  # mixed-case existing floor", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
     ),
 )
 def test_security_minimums_reject_stale_constraints(
