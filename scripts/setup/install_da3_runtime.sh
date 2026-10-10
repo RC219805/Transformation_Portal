@@ -11,7 +11,7 @@ PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
 DA3_LOCK_PATH="${REPO_ROOT}/requirements/da3-runtime-darwin-arm64.txt"
 DA3_LOCK_SHA256="b92695d3c970c2ac7c7620bd6ce032ebe61f51d8eded3a36988294988368c5c5"
 PIP_VERSION="26.2.1"
-SETUPTOOLS_VERSION="82.0.0"
+SETUPTOOLS_VERSION="83.0.0"
 
 CHECKOUT_DIR="${REPO_ROOT}/.runtime/Depth-Anything-3"
 VENV_DIR=""
