@@ -427,6 +427,30 @@ def test_dependency_closure_mismatch_is_non_authorizing(
     assert reason_prefix in evidence.payload["incomplete_reasons"]
 
 
+@pytest.mark.parametrize(("installed_version", "cacheable"), (("82.0.0", False), ("83.0.0", True)))
+def test_patched_bootstrap_setuptools_is_required_for_cache_authority(
+    tmp_path: Path,
+    installed_version: str,
+    cacheable: bool,
+) -> None:
+    snapshot = _write_snapshot(tmp_path)
+    arguments = _inputs(tmp_path)
+    governance_path = arguments["governance_contract_path"]
+    governance = json.loads(governance_path.read_text())
+    governance["governed_additional_distributions"] = {"setuptools": "83.0.0"}
+    governance_path.write_text(json.dumps(governance))
+    arguments["dependency_inventory"] = (
+        *arguments["dependency_inventory"],
+        {**arguments["dependency_inventory"][0], "name": "setuptools", "version": installed_version},
+    )
+
+    evidence = prepare_da3_runtime_identity(snapshot_path=snapshot, **arguments)
+
+    assert evidence.cacheable is cacheable
+    reason = f"dependency_version_mismatch:setuptools:83.0.0:{installed_version}"
+    assert (reason in evidence.payload["incomplete_reasons"]) is not cacheable
+
+
 def test_complete_evidence_adapts_to_exact_core_runtime_contract(tmp_path: Path) -> None:
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
     from transformation_portal.lux_depth_v3.depth_cache_runtime import PreparedDepthCacheRuntimeEvidence
