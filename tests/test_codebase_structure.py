@@ -14,6 +14,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 # Pytest markers
 pytestmark = [
@@ -635,6 +636,21 @@ class TestRootGovernanceMetadata:
         assert "cryptography>=48.0.1,<49" not in tools_archive_in
         assert "cryptography==50.0.0" in tools_archive_lock
 
+    def test_generic_transitive_security_floors_match_install_surfaces(self):
+        """Core Alembic and dev moto installs must exclude the vulnerable closures."""
+        for path in ("requirements/base.in", "pyproject.toml"):
+            assert "Mako>=1.4.2,<2" in (_repo_root / path).read_text()
+        for path in ("requirements/dev.in", "requirements-dev.txt", "pyproject.toml"):
+            assert "Werkzeug>=3.1.9,<4" in (_repo_root / path).read_text()
+        for package, floor, paths in (
+            ("mako", "1.4.2", ("requirements/base.txt", "requirements/all.txt")),
+            ("werkzeug", "3.1.9", ("requirements/dev.txt", "requirements/all.txt")),
+        ):
+            for path in paths:
+                pin = re.search(rf"^{package}==([^\s;]+)", (_repo_root / path).read_text(), re.MULTILINE)
+                assert pin is not None, f"{path} must pin {package}"
+                assert Version(pin.group(1)) >= Version(floor), f"{path} pins a vulnerable {package}"
+
     def test_pyproject_core_dependencies_track_governed_base_requirements(self):
         """Installable package metadata should not trail the governed core dependency surface."""
         pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
@@ -652,6 +668,7 @@ class TestRootGovernanceMetadata:
             "SQLAlchemy[asyncio]>=2.0.50,<2.2",
             "asyncpg>=0.29,<1",
             "alembic>=1.13,<2",
+            "Mako>=1.4.2,<2",
             "redis>=5.0,<7",
         }
         for dependency in required_dependency_ranges:
@@ -698,6 +715,8 @@ class TestRootGovernanceMetadata:
 
         assert governed_dev_packages <= metadata_dev_packages
         assert "black>=26.3.1" in dev_extra
+        assert "Werkzeug>=3.1.9,<4" in dev_extra
+        assert "Werkzeug>=3.1.9,<4" in requirements_dev
         assert "black>=24.8" not in dev_extra
         assert "black>=26.3.1" in requirements_dev
         assert "black>=24.8" not in contributing

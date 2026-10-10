@@ -350,9 +350,10 @@ virtualenv==21.14.3
     #   -c all.txt
     #   -r dev.in
     #   pre-commit
-werkzeug==3.1.8
+werkzeug==3.1.9
     # via
     #   -c all.txt
+    #   -r dev.in
     #   moto
 xmltodict==1.0.4
     # via

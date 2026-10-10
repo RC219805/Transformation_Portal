@@ -124,6 +124,14 @@ get_security_minimum() {
             echo "1.3.1|CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles/HTTPEndpoint/form parsing fixes"
             return 0
             ;;
+        "Mako"|"mako")
+            echo "1.4.2|GHSA-5639-2j2p-m4mx"
+            return 0
+            ;;
+        "Werkzeug"|"werkzeug")
+            echo "3.1.9|GHSA-g6x2-hccm-hh4m"
+            return 0
+            ;;
     esac
     return 1
 }
