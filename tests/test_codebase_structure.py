@@ -14,6 +14,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
 from packaging.version import Version
 
 # Pytest markers
@@ -650,6 +651,19 @@ class TestRootGovernanceMetadata:
                 pin = re.search(rf"^{package}==([^\s;]+)", (_repo_root / path).read_text(), re.MULTILINE)
                 assert pin is not None, f"{path} must pin {package}"
                 assert Version(pin.group(1)) >= Version(floor), f"{path} pins a vulnerable {package}"
+
+    def test_build_backend_excludes_vulnerable_setuptools(self):
+        """Package builds must use the fixed Unicode exclusion implementation."""
+        pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
+        build_requirements = [Requirement(value) for value in pyproject["build-system"]["requires"]]
+        setuptools = next(requirement for requirement in build_requirements if requirement.name == "setuptools")
+
+        assert Version("82.0.1") not in setuptools.specifier
+        assert Version("83.0.0") in setuptools.specifier
+        assert any(
+            specifier.operator == ">=" and Version(specifier.version) >= Version("83.0.0")
+            for specifier in setuptools.specifier
+        )
 
     def test_pyproject_core_dependencies_track_governed_base_requirements(self):
         """Installable package metadata should not trail the governed core dependency surface."""
