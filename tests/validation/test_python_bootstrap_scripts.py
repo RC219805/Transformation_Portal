@@ -647,7 +647,7 @@ def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path
     assert result.returncode == 0, result.stdout + result.stderr
     pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
     assert "pip==26.2.1" in pip_install_lines
-    assert "setuptools==82.0.0" in pip_install_lines
+    assert "setuptools==83.0.0" in pip_install_lines
     assert "--requirement" in pip_install_lines
     assert "da3-runtime-darwin-arm64.txt" in pip_install_lines
     assert "pycolmap==" not in pip_install_lines
