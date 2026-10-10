@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
 DA3_LOCK_PATH="${REPO_ROOT}/requirements/da3-runtime-darwin-arm64.txt"
-DA3_LOCK_SHA256="5b4806c25ce520afa1e0634e53dfb451c68b341a98a6128759d8235165ac2341"
+DA3_LOCK_SHA256="b92695d3c970c2ac7c7620bd6ce032ebe61f51d8eded3a36988294988368c5c5"
 PIP_VERSION="26.2.1"
 SETUPTOOLS_VERSION="82.0.0"
 

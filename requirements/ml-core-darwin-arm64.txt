@@ -56,8 +56,9 @@ filelock==3.28.0
     #   diffusers
     #   huggingface-hub
     #   torch
-fsspec==2026.3.0
+fsspec==2026.9.0
     # via
+    #   -r ml-core-darwin-arm64.in
     #   huggingface-hub
     #   torch
 ftfy==6.3.1
@@ -196,8 +197,10 @@ regex==2026.4.4
     #   diffusers
     #   open-clip-torch
     #   transformers
-requests==2.33.1
-    # via diffusers
+requests==2.34.2
+    # via
+    #   -r ml-core-darwin-arm64.in
+    #   diffusers
 rich==15.0.0
     # via
     #   -c base.txt
