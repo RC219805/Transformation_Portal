@@ -17703,7 +17703,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7c7a8de8cc03d9c58e98f5496891ec02521d0c27",
+      "source_commit": "f02799c94195213168204c8b705cb19a11b9c9f9",
       "content_sha256": "15f01f5f1008133f21ce21a3e54a82e39915017c56dd930f18295ee1f036a034",
       "source_references": [
         "web/secure-landing/vendor/braces/LICENSE",
@@ -17730,7 +17730,7 @@
         "web/secure-landing/vendor/braces/lib/stringify.js": "2eba15f97727830110e51da6c340d452a86fbb3e8132ebed9d0ee053af034b6d",
         "web/secure-landing/vendor/braces/lib/utils.js": "6a26f6effba7dd47564bfe9aa7b3814743207fee50989da44f576406382090d5",
         "web/secure-landing/vendor/braces/package.json": "73a9619e5a8ada0eaa3fd5947618813892250a0255d39f210bd7756fbf2a5da8",
-        "web/secure-landing/tests/braces-security.test.mjs": "97dd087878bd80c6454dd42bff41b1dcb91e23ec1185778700830254f6140f3f",
+        "web/secure-landing/tests/braces-security.test.mjs": "4ba401b514e71cfbd3e9946913c8efc127fc5a56c64e70d48eba67eadcd7c4de",
         "web/secure-landing/tests/fixtures/braces-3.0.3-corpus.json": "2e03d60b3df13c59ba86c471a9f677d1803632ccfd870dde945ef4a1213d3d6f"
       },
       "validation_commands": [
