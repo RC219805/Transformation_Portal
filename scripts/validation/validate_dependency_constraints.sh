@@ -111,7 +111,7 @@ is_banned_package() {
 # Function: Get security minimum version
 get_security_minimum() {
     local package
-    package=$(printf "%s" "$1" | tr '[:upper:]' '[:lower:]')
+    package=$(printf "%s" "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed -E 's/[-_.]+/-/g')
     case "$package" in
         "sentence-transformers")
             echo "5.6.0|GHSA-jhr6-gm9c-rqjv (local model loading bypasses trust_remote_code)"
