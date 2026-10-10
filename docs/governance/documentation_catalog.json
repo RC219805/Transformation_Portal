@@ -17696,6 +17696,50 @@
       "prior_review_status": "inventory-only classification"
     },
     {
+      "path": "web/secure-landing/vendor/braces/README.md",
+      "classification": "current-support",
+      "maintenance_area": "web/secure-landing/vendor/braces",
+      "scope": "Third-party vendor reference for the repository-maintained private braces fork: immutable upstream provenance, retained MIT attribution, mandatory parser/AST nesting and cycle guards, and bounded source compatibility tests. Source-contract review only; this reference does not promote application operator guidance, package-install integration, a general expansion-size or regex-time guarantee, or production acceptance.",
+      "successors": [],
+      "review_status": "source-reviewed",
+      "evidence_tier": "source-contract",
+      "source_commit": "7c7a8de8cc03d9c58e98f5496891ec02521d0c27",
+      "content_sha256": "15f01f5f1008133f21ce21a3e54a82e39915017c56dd930f18295ee1f036a034",
+      "source_references": [
+        "web/secure-landing/vendor/braces/LICENSE",
+        "web/secure-landing/vendor/braces/PROVENANCE.json",
+        "web/secure-landing/vendor/braces/index.js",
+        "web/secure-landing/vendor/braces/lib/compile.js",
+        "web/secure-landing/vendor/braces/lib/constants.js",
+        "web/secure-landing/vendor/braces/lib/expand.js",
+        "web/secure-landing/vendor/braces/lib/parse.js",
+        "web/secure-landing/vendor/braces/lib/stringify.js",
+        "web/secure-landing/vendor/braces/lib/utils.js",
+        "web/secure-landing/vendor/braces/package.json",
+        "web/secure-landing/tests/braces-security.test.mjs",
+        "web/secure-landing/tests/fixtures/braces-3.0.3-corpus.json"
+      ],
+      "source_sha256": {
+        "web/secure-landing/vendor/braces/LICENSE": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2",
+        "web/secure-landing/vendor/braces/PROVENANCE.json": "e735c8dc57bbf510a3e4b9d9e5ff750a5e420e29b643da55159177690d035d73",
+        "web/secure-landing/vendor/braces/index.js": "332ea07c7b006361aad12aa994ca75dc1db8e8382b884909e2f38f10b85c88a4",
+        "web/secure-landing/vendor/braces/lib/compile.js": "e2027173be69967f06b8f5d74d5defbdf3a8202c3e8007d7c705b44442c3aa7b",
+        "web/secure-landing/vendor/braces/lib/constants.js": "c355cf54c07a89fd204eb08b747e27227e9a3522155885b45692455d9ac75f50",
+        "web/secure-landing/vendor/braces/lib/expand.js": "3dea28471b747d6a75b2e60499bf1c440a479e03cdc01fec212119532dd95978",
+        "web/secure-landing/vendor/braces/lib/parse.js": "adf3c108a16afaabe5379298d2227881e88f536cc7345b7df780a80d38dd01f9",
+        "web/secure-landing/vendor/braces/lib/stringify.js": "2eba15f97727830110e51da6c340d452a86fbb3e8132ebed9d0ee053af034b6d",
+        "web/secure-landing/vendor/braces/lib/utils.js": "6a26f6effba7dd47564bfe9aa7b3814743207fee50989da44f576406382090d5",
+        "web/secure-landing/vendor/braces/package.json": "73a9619e5a8ada0eaa3fd5947618813892250a0255d39f210bd7756fbf2a5da8",
+        "web/secure-landing/tests/braces-security.test.mjs": "97dd087878bd80c6454dd42bff41b1dcb91e23ec1185778700830254f6140f3f",
+        "web/secure-landing/tests/fixtures/braces-3.0.3-corpus.json": "2e03d60b3df13c59ba86c471a9f677d1803632ccfd870dde945ef4a1213d3d6f"
+      },
+      "validation_commands": [
+        "cd web/secure-landing && node --test tests/braces-security.test.mjs",
+        "make check-documentation-catalog",
+        "make test-documentation-contract"
+      ]
+    },
+    {
       "path": "workflows/README.md",
       "classification": "current-support",
       "maintenance_area": "workflows",
