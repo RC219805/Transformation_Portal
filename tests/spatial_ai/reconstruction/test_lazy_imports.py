@@ -35,6 +35,33 @@ pytestmark = pytest.mark.ml
 torch = pytest.importorskip("torch", reason="torch required for lazy import tests")
 
 
+@pytest.fixture(autouse=True)
+def restore_reconstruction_module_graph():
+    """Keep cold-import tests from replacing modules used by collected tests."""
+    package_name = "transformation_portal.spatial_ai.reconstruction"
+    original_modules = {
+        name: module for name, module in sys.modules.items() if name == package_name or name.startswith(package_name + ".")
+    }
+    parent_name, attribute_name = package_name.rsplit(".", 1)
+    parent = sys.modules.get(parent_name)
+    missing = object()
+    original_attribute = vars(parent).get(attribute_name, missing) if parent is not None else missing
+
+    try:
+        yield
+    finally:
+        for name in list(sys.modules):
+            if name == package_name or name.startswith(package_name + "."):
+                del sys.modules[name]
+        sys.modules.update(original_modules)
+        parent = sys.modules.get(parent_name)
+        if parent is not None:
+            if original_attribute is missing:
+                vars(parent).pop(attribute_name, None)
+            else:
+                setattr(parent, attribute_name, original_attribute)
+
+
 class TestTorchLazyImportContract:
     """Verify torch is lazy-loaded via PEP 562 __getattr__."""
 
