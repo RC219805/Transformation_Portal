@@ -39,6 +39,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+        entry: python scripts/validation/check_added_large_files_filebacked.py
         args: ['--maxkb=5000']
       - id: check-merge-conflict
       - id: mixed-line-ending
