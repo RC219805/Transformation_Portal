@@ -1,5 +1,8 @@
 """Explicit native reconstruction contracts; these are not scene acceptance."""
 
+# Optional Torch must be guarded before importing the native backend.
+# pylint: disable=wrong-import-position
+
 import hashlib
 import json
 

@@ -15,8 +15,15 @@ Baseline rationale (March 3, 2026):
 - Current baseline: 75 selected tests after adding zero-trust filesystem
   and execution security infrastructure tests in PR #1217
 
+The opt-in native reconstruction implementation adds two explicitly budgeted
+unit suites: 32 native-backend cases and 80 recipe cases. Their tiny synthetic
+fixtures remain in the fast-ML lane; they are not reclassified as integration
+or slow solely to meet a collection count. The prior reconstruction allowance
+remains independent, so adding native coverage cannot hide growth elsewhere.
+
 Contract:
-- fast-ML selected count must remain <= 75
+- existing reconstruction fast-ML selected count must remain <= 80
+- each named native unit suite must stay within its separate case allowance
 - integration-marked Phase 2.3 tests must stay out of fast-ML selection
 
 Design notes:
@@ -45,6 +52,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FAST_ML_MARKEXPR = "ml and not slow and not integration and not benchmark"
 INTEGRATION_MARKEXPR = "ml and integration and not slow and not benchmark"
 FAST_ML_SELECTED_CEILING = 80
+NATIVE_FAST_ML_SELECTED_CEILINGS = {
+    "tests/spatial_ai/reconstruction/test_torch_native.py": 32,
+    "tests/spatial_ai/reconstruction/test_native_recipes.py": 80,
+}
 TORCH_BLOCK_MESSAGE = "Torch import blocked during fast-ML contract collect"
 
 _COLLECT_SUMMARY = re.compile(
@@ -399,7 +410,7 @@ def _assert_no_torch_boundary_violation(result: subprocess.CompletedProcess[str]
 
 
 def test_fast_ml_collection_contract():
-    """Fast-ML lane must remain at or under the strict 75-test ceiling."""
+    """Legacy and native fast-ML allowances must remain independently bounded."""
     result, selected = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
     assert result.returncode == 0, _format_subprocess_failure(
         result=result,
@@ -408,10 +419,26 @@ def test_fast_ml_collection_contract():
         context="Fast-ML collection-count check failed unexpectedly.",
     )
 
-    assert selected <= FAST_ML_SELECTED_CEILING, (
+    native_selected = 0
+    for target, ceiling in NATIVE_FAST_ML_SELECTED_CEILINGS.items():
+        native_result, count = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, target)
+        assert native_result.returncode == 0, _format_subprocess_failure(
+            result=native_result,
+            markexpr=FAST_ML_MARKEXPR,
+            target=target,
+            context="Native fast-ML collection-count check failed unexpectedly.",
+        )
+        assert (
+            0 < count <= ceiling
+        ), f"Native fast-ML allowance violated: target={target!r}, selected={count}, ceiling={ceiling}"
+        native_selected += count
+
+    legacy_selected = selected - native_selected
+    assert 0 <= legacy_selected <= FAST_ML_SELECTED_CEILING, (
         "Fast-ML collection contract violated: selected test count exceeded ceiling.\n"
         f"markexpr={FAST_ML_MARKEXPR!r}\n"
-        f"selected={selected}, ceiling={FAST_ML_SELECTED_CEILING}\n"
+        f"legacy_selected={legacy_selected}, ceiling={FAST_ML_SELECTED_CEILING}\n"
+        f"native_selected={native_selected}, total_selected={selected}\n"
         "Mark integration/slow tests explicitly to keep PR fast-ML lane bounded."
     )
 
@@ -460,3 +487,27 @@ def test_phase23_integration_marker_contract():
         f"selected={fast_selected}\n"
         f"stdout:\n{fast_result.stdout}"
     )
+
+
+@pytest.mark.parametrize("target,expected", NATIVE_FAST_ML_SELECTED_CEILINGS.items())
+def test_native_fast_ml_unit_selection_contract(target, expected):
+    """Every budgeted native case remains in hosted fast ML unit coverage."""
+    all_result, all_selected = _run_collect_with_torch_stub("", target)
+    assert all_result.returncode == 0, _format_subprocess_failure(
+        result=all_result,
+        markexpr="",
+        target=target,
+        context="Unfiltered native collection failed unexpectedly.",
+    )
+    assert (
+        all_selected == expected
+    ), f"Native case allowance changed: target={target!r}, selected={all_selected}, expected={expected}"
+    markexpr = f"{FAST_ML_MARKEXPR} and unit"
+    result, selected = _run_collect_with_torch_stub(markexpr, target)
+    assert result.returncode == 0, _format_subprocess_failure(
+        result=result,
+        markexpr=markexpr,
+        target=target,
+        context="Native fast-ML unit selection failed unexpectedly.",
+    )
+    assert selected == expected, f"Native unit coverage changed: target={target!r}, selected={selected}, expected={expected}"

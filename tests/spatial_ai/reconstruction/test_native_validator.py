@@ -59,9 +59,10 @@ def install_backend_standin(monkeypatch):
         def reconstruct(self, *args, **kwargs):
             pytest.fail("Public validation must not perform fitting")
 
-    module = ModuleType("transformation_portal.spatial_ai.reconstruction.gaussian_backend")
+    module_name = "transformation_portal.spatial_ai.reconstruction.gaussian_backend"
+    module = ModuleType(module_name)
     setattr(module, "GaussianBackend", StandInBackend)
-    monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setitem(sys.modules, module_name, module)
     return events
 
 

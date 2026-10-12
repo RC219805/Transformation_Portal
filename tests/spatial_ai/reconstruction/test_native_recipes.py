@@ -1,5 +1,8 @@
 """Explicit anisotropic native contracts; genuine scene acceptance is separate."""
 
+# Optional Torch must be guarded before importing the native backend.
+# pylint: disable=wrong-import-position
+
 import hashlib
 import json
 
