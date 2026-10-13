@@ -1359,7 +1359,10 @@ def export_assets(
 ) -> None:
     # Print TIFF (16-bit ProPhoto)
     p_img = unsharp_mask(img, amount=float(sharpen_print_amt), radius=1.2, threshold=0.0)
-    save_tiff16_prophoto(p_img, print_path, icc_prophoto)
+    try:
+        save_tiff16_prophoto(p_img, print_path, icc_prophoto)
+    finally:
+        p_img = None
 
     # Resize/sharpen in the linear working space, then convert primaries and transfer.
     w_img = resize_long_edge(img, int(web_long_edge))
@@ -1473,6 +1476,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         except Exception as e:
             LOG.error("RAW decode failed %s: %s", rp, e)
             failures.append(str(e))
+        finally:
+            img = None
 
     # Optional HDR
     hdr_paths: List[Path] = []
@@ -1490,6 +1495,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             except Exception as e:
                 LOG.warning("HDR merge failed for %s: %s", [p.name for p in g], e)
                 failures.append(str(e))
+            finally:
+                hdr = None
 
     # Optional Pano
     pano_paths: List[Path] = []
@@ -1509,6 +1516,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             except Exception as e:
                 LOG.warning("Pano stitch failed for %s: %s", group, e)
                 failures.append(str(e))
+            finally:
+                pano = None
 
     # Collect sources for alignment/variants: base + hdr + pano
     sources = base_outputs + hdr_paths + pano_paths
@@ -1527,6 +1536,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             except Exception as e:
                 LOG.warning("Upright failed %s: %s", p, e)
                 failures.append(str(e))
+            finally:
+                img = None
     else:
         aligned_paths = sources
 
@@ -1547,35 +1558,64 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 out = style_path / p.name
                 save_tiff16_prophoto(graded, out, icc_prophoto)
                 variant_map[style].append(out)
+                graded = None
 
         except Exception as e:
             LOG.warning("Variants failed %s: %s", p, e)
             failures.append(str(e))
+        finally:
+            base = graded = None
 
     # Per-style consistency normalization
     LOG.info("Normalizing per-style exposure to target median")
     target = float(cfg.consistency.get("target_median", 0.42))
 
     for style, paths in variant_map.items():
-        imgs = [load_image_float(pt) for pt in paths]
-        norm = normalize_exposure(imgs, target_median=target)
-        for im, pt in zip(norm, paths):
-            save_tiff16_prophoto(im, pt, icc_prophoto)
+        identities = []
+        identity_counts = {}
+        for pt in paths:
+            info = pt.stat()
+            identity = (info.st_dev, info.st_ino)
+            identities.append(identity)
+            identity_counts[identity] = identity_counts.get(identity, 0) + 1
+
+        # The prior batch read every input before overwriting any destination.
+        # Freeze encoded inputs only for repeated/aliased identities, retaining
+        # each original write in order. TMPDIR and its disk budget belong to the
+        # caller; TemporaryDirectory also removes snapshots on phase failure.
+        with tempfile.TemporaryDirectory(prefix="tp-editorial-normalization-") as scratch:
+            frozen_inputs = {}
+            for pt, identity in zip(paths, identities):
+                if identity_counts[identity] > 1 and identity not in frozen_inputs:
+                    frozen = Path(scratch) / f"source-{len(frozen_inputs)}{pt.suffix}"
+                    shutil.copyfile(pt, frozen)
+                    frozen_inputs[identity] = frozen
+
+            for pt, identity in zip(paths, identities):
+                try:
+                    im = load_image_float(frozen_inputs.get(identity, pt))
+                    normalized = normalize_exposure([im], target_median=target)[0]
+                    save_tiff16_prophoto(normalized, pt, icc_prophoto)
+                finally:
+                    im = normalized = None
 
     # Optional automated retouch
     if cfg.retouch.get("dust_remove", False) or cfg.retouch.get("hotspot_reduce", False):
         LOG.info("Applying lightweight automated retouch")
         for style, paths in variant_map.items():
             for pt in tqdm(paths, desc=f"Retouch {style}"):
-                im = load_image_float(pt)
+                try:
+                    im = load_image_float(pt)
 
-                if cfg.retouch.get("dust_remove", False):
-                    im = remove_dust_spots(im)
+                    if cfg.retouch.get("dust_remove", False):
+                        im = remove_dust_spots(im)
 
-                if cfg.retouch.get("hotspot_reduce", False):
-                    im = reduce_hotspots(im)
+                    if cfg.retouch.get("hotspot_reduce", False):
+                        im = reduce_hotspots(im)
 
-                save_tiff16_prophoto(im, pt, icc_prophoto)
+                    save_tiff16_prophoto(im, pt, icc_prophoto)
+                finally:
+                    im = None
 
     # Export print & web
     icc_srgb = load_icc_bytes(Path(cfg.icc.get("srgb_path", "")).expanduser()) if cfg.icc.get("srgb_path") else None
@@ -1584,22 +1624,25 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
     for style, paths in variant_map.items():
         for pt in tqdm(paths, desc=f"Export {style}"):
-            im = load_image_float(pt)
+            try:
+                im = load_image_float(pt)
 
-            print_out = lay.EXPORT_PRINT[style] / pt.name  # TIFF
-            web_out = lay.EXPORT_WEB[style] / (pt.stem + ".jpg")
+                print_out = lay.EXPORT_PRINT[style] / pt.name  # TIFF
+                web_out = lay.EXPORT_WEB[style] / (pt.stem + ".jpg")
 
-            export_assets(
-                im,
-                print_out,
-                web_out,
-                icc_prophoto,
-                icc_srgb,
-                int(cfg.export.get("web_long_edge_px", 2500)),
-                int(cfg.export.get("jpeg_quality", 96)),
-                float(cfg.export.get("sharpen_web_amount", 0.35)),
-                float(cfg.export.get("sharpen_print_amount", 0.1)),
-            )
+                export_assets(
+                    im,
+                    print_out,
+                    web_out,
+                    icc_prophoto,
+                    icc_srgb,
+                    int(cfg.export.get("web_long_edge_px", 2500)),
+                    int(cfg.export.get("jpeg_quality", 96)),
+                    float(cfg.export.get("sharpen_web_amount", 0.35)),
+                    float(cfg.export.get("sharpen_print_amount", 0.1)),
+                )
+            finally:
+                im = None
 
             manifest["exports"].append(
                 {
