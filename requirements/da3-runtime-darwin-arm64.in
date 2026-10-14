@@ -28,7 +28,7 @@ e3nn==0.6.0  # Governed DA3 baseline
 plyfile==1.1.3  # Governed DA3 baseline
 pillow-heif==1.7.0  # Governed DA3 baseline
 safetensors==0.7.0  # Governed DA3 baseline
-trimesh==4.11.5  # Governed DA3 baseline
+trimesh==5.1.1  # Governed DA3 baseline
 addict==2.4.0  # Governed DA3 baseline
 pre-commit==4.6.2  # Governed DA3 baseline
 virtualenv==21.7.13  # GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes
