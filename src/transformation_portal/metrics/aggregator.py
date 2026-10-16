@@ -299,6 +299,17 @@ def log_aggregated_stats_to_ledger(
     with sqlite3.connect(ledger_db_path) as conn:
         for zone, bucket_stats in per_zone_stats.items():
             for bucket_name, stats in bucket_stats.items():
+                if zone is None:
+                    # SQLite permits duplicate NULL values in this composite key.
+                    # Replace only this global summary within the same transaction.
+                    conn.execute(
+                        """
+                        DELETE FROM apex_runs
+                        WHERE run_id = ? AND workflow_version = ?
+                          AND zone IS NULL AND bucket_name = ?
+                        """,
+                        (run_id, workflow_version, bucket_name),
+                    )
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO apex_runs (

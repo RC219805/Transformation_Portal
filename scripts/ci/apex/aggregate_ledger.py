@@ -2,7 +2,7 @@
 """
 APEX Ledger Aggregator.
 
-Computes per-zone statistics and logs them to apex_runs table.
+Computes per-zone and global statistics and logs them to apex_runs table.
 Replaces inline Python in GitHub Actions workflow.
 """
 
@@ -14,7 +14,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from transformation_portal.metrics.aggregator import compute_per_zone_stats, log_aggregated_stats_to_ledger
+from transformation_portal.metrics.aggregator import (
+    compute_global_stats,
+    compute_per_zone_stats,
+    log_aggregated_stats_to_ledger,
+)
 from transformation_portal.metrics.measurement import validate_measurement_identities
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
@@ -86,6 +90,7 @@ def aggregate_ledger(
                 logger.info(f"Computing stats for {workflow_version} ({len(wf_capsules)} capsules)")
 
                 per_zone_stats = compute_per_zone_stats(wf_capsules)
+                global_stats = compute_global_stats(wf_capsules)
                 timestamp = datetime.now(timezone.utc).isoformat()
 
                 log_aggregated_stats_to_ledger(
@@ -93,11 +98,11 @@ def aggregate_ledger(
                     commit_sha=commit_sha,
                     workflow_version=workflow_version,
                     timestamp=timestamp,
-                    per_zone_stats=per_zone_stats,
+                    per_zone_stats={**per_zone_stats, None: global_stats},
                     ledger_db_path=str(db_path),
                 )
 
-                logger.info(f"✓ Logged stats for {len(per_zone_stats)} zones ({workflow_version})")
+                logger.info(f"✓ Logged stats for {len(per_zone_stats)} zones and global summary ({workflow_version})")
 
         logger.info("✅ Aggregation complete")
         return 0
