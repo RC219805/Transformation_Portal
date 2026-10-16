@@ -37,7 +37,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
+from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.metrics.contracts import BucketStats
+from transformation_portal.metrics.measurement import (
+    assess_measurements,
+    encode_measurement_summary,
+    recompute_bucket_stats,
+    validate_measurement_identities,
+)
 from transformation_portal.metrics.performance_capsule import DEFAULT_BUCKETS, PerformanceBucket, PerformanceCapsule
 
 __version__ = "1.0.0"
@@ -60,14 +67,9 @@ def compute_bucket_stats(
     Returns:
         BucketStats if any capsules match, None otherwise
     """
-    # Filter capsules matching this bucket
-    matching = [c for c in capsules if bucket.matches(c)]
-
-    if not matching:
+    assessment, total_times = assess_measurements(capsules, bucket, min_samples=min_samples)
+    if not total_times:
         return None
-
-    # Extract total times and sort
-    total_times = sorted([c.timings["total"] for c in matching])
     n = len(total_times)
 
     # Compute percentiles (use proper median for p50)
@@ -79,12 +81,10 @@ def compute_bucket_stats(
     p99 = total_times[int(n * 0.99)] if n > 1 else total_times[0]
     mean = sum(total_times) / n
 
-    # BLOCKER FIX #2: Enforce minimum sample size per APEX Contract v1.0.0
-    # Compute stats but mark as insufficient_data (never blocks)
-    if n < min_samples:
+    if assessment["is_insufficient_data"]:
         return BucketStats(
             bucket_name=bucket.name,
-            count=n,
+            count=assessment["independent_count"],
             p50=p50,
             p95=p95,
             p99=p99,
@@ -95,6 +95,7 @@ def compute_bucket_stats(
             threshold_p95=bucket.p95_threshold_sec,
             pass_fail="pass",  # Nominal verdict; flag indicates insufficient data
             is_insufficient_data=True,  # Never blocks per contract
+            measurement_evidence=encode_measurement_summary(capsules, bucket, min_samples=min_samples),
         )
 
     # Determine pass/fail status (only for n >= min_samples)
@@ -107,7 +108,7 @@ def compute_bucket_stats(
 
     return BucketStats(
         bucket_name=bucket.name,
-        count=n,
+        count=assessment["independent_count"],
         p50=p50,
         p95=p95,
         p99=p99,
@@ -118,6 +119,7 @@ def compute_bucket_stats(
         threshold_p95=bucket.p95_threshold_sec,
         pass_fail=pass_fail,
         is_insufficient_data=False,  # Sufficient samples
+        measurement_evidence=encode_measurement_summary(capsules, bucket, min_samples=min_samples),
     )
 
 
@@ -195,6 +197,8 @@ def compute_per_zone_stats(
     if buckets is None:
         buckets = DEFAULT_BUCKETS
 
+    validate_measurement_identities(capsules)
+
     # Validate workflow version consistency (intentionally strict: raises on contamination)
     validate_workflow_version_consistency(capsules)
 
@@ -263,6 +267,8 @@ def compute_worst_zone_p95(per_zone_stats: Dict[str, Dict[str, BucketStats]]) ->
 
     for zone, bucket_stats in per_zone_stats.items():
         for bucket_name, stats in bucket_stats.items():
+            if recompute_bucket_stats(stats)["is_insufficient_data"]:
+                continue
             if worst_p95 is None or stats.p95 > worst_p95:
                 worst_p95 = stats.p95
                 worst_zone = zone
@@ -315,7 +321,11 @@ def log_aggregated_stats_to_ledger(
                         stats.threshold_p50,
                         stats.threshold_p95,
                         stats.pass_fail,
-                        None,  # raw_capsules_json (optional)
+                        (
+                            dumps_json(stats.measurement_evidence, sort_keys=True, allow_nan=False)
+                            if stats.measurement_evidence
+                            else None
+                        ),
                     ),
                 )
         conn.commit()

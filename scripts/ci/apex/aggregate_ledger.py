@@ -5,6 +5,7 @@ APEX Ledger Aggregator.
 Computes per-zone statistics and logs them to apex_runs table.
 Replaces inline Python in GitHub Actions workflow.
 """
+
 import argparse
 import json
 import logging
@@ -14,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from transformation_portal.metrics.aggregator import compute_per_zone_stats, log_aggregated_stats_to_ledger
+from transformation_portal.metrics.measurement import validate_measurement_identities
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +73,7 @@ def aggregate_ledger(
                 capsules.append(capsule)
 
             logger.info(f"Loaded {len(capsules)} capsules (assuming all from run {run_id})")
+            validate_measurement_identities(capsules)
 
             # Aggregate per workflow version
             for workflow_version in ("v1", "v2"):

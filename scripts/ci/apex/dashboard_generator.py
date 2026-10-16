@@ -41,8 +41,11 @@ import argparse
 import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from html import escape
 from pathlib import Path
 from typing import Any, Dict
+
+from transformation_portal.metrics.measurement import decode_aggregate_row
 
 __version__ = "1.0.0"
 
@@ -59,103 +62,89 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
+    group_fields = (
+        "bucket_name",
+        "zone",
+        "workflow_version",
+        "measurement_unit",
+        "workload_id",
+        "context_id",
+        "threshold_p50",
+        "threshold_p95",
+    )
+    trend_groups: Dict[tuple, list] = {}
+    offender_groups: Dict[tuple, list] = {}
+    latest_runs = []
+    regressions = []
+    eligible_count = 0
+    insufficient_count = 0
+
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
+        # The legacy SQL view pools units and trusts historical counts. Decode
+        # each persisted assessment before deciding which series it may enter.
+        cursor = conn.execute("SELECT * FROM apex_runs ORDER BY timestamp DESC")
+        for stored in cursor:
+            row = decode_aggregate_row(dict(stored))
+            row.pop("raw_capsules_json", None)
+            row.pop("measurement_evidence", None)
+            if len(latest_runs) < 100:
+                latest_runs.append(row)
+            if row["is_insufficient_data"]:
+                insufficient_count += 1
+                continue
+            eligible_count += 1
+            identity = tuple(row.get(field) for field in group_fields)
+            timestamp = datetime.fromisoformat(row["timestamp"]).astimezone(timezone.utc)
+            if timestamp.date() >= cutoff.date():
+                trend_groups.setdefault((timestamp.date().isoformat(), *identity), []).append(row)
+            if timestamp >= cutoff and row["pass_fail"] in ("warn", "fail") and len(regressions) < 100:
+                regressions.append(row)
+            if row["threshold_p95"] > 0:
+                offender_groups.setdefault(identity, []).append(row)
 
-        # Query trends using pre-aggregated view (Phase 3 optimization)
-        trends_query = """
-            SELECT
-                date,
-                bucket_name,
-                zone,
-                workflow_version,
-                avg_p50,
-                avg_p95,
-                avg_p99,
-                run_count,
-                fail_count,
-                warn_count
-            FROM apex_trends
-            WHERE date >= DATE(?)
-            ORDER BY date DESC
-        """
+    trends = []
+    for key, rows in sorted(trend_groups.items(), key=lambda item: item[0][0], reverse=True):
+        group = {field: rows[0].get(field) for field in group_fields}
+        p99_values = [row["p99"] for row in rows if row["p99"] is not None]
+        group.update(
+            date=key[0],
+            avg_p50=sum(row["p50"] for row in rows) / len(rows),
+            avg_p95=sum(row["p95"] for row in rows) / len(rows),
+            avg_p99=sum(p99_values) / len(p99_values) if p99_values else None,
+            run_count=len(rows),
+            fail_count=sum(row["pass_fail"] == "fail" for row in rows),
+            warn_count=sum(row["pass_fail"] == "warn" for row in rows),
+            series_id=json.dumps(list(key[1:])),
+            series_label=(
+                f"{group['bucket_name']} [{group['zone'] or 'global'}] {group['workflow_version']} "
+                f"{group['measurement_unit']} / {group['workload_id']} / {group['context_id']}"
+            ),
+        )
+        trends.append(group)
 
-        cursor = conn.execute(trends_query, (cutoff.isoformat(),))
-        trends = [dict(row) for row in cursor.fetchall()]
-
-        # Query regressions (warnings and failures)
-        regressions_query = """
-            SELECT
-                timestamp,
-                commit_sha,
-                bucket_name,
-                zone,
-                workflow_version,
-                p95,
-                threshold_p95,
-                pass_fail
-            FROM apex_runs
-            WHERE pass_fail IN ('warn', 'fail')
-            AND timestamp >= ?
-            ORDER BY timestamp DESC
-            LIMIT 100
-        """
-
-        cursor = conn.execute(regressions_query, (cutoff.isoformat(),))
-        regressions = [dict(row) for row in cursor.fetchall()]
-
-        # Query worst offenders (all time, by max ratio)
-        # Using optimized composite index on bucket_name, zone, timestamp
-        worst_query = """
-            SELECT
-                bucket_name,
-                zone,
-                workflow_version,
-                MAX(p95 / NULLIF(threshold_p95, 0)) as max_ratio,
-                COUNT(*) as total_runs,
-                SUM(CASE WHEN pass_fail = 'fail' THEN 1 ELSE 0 END) as fail_count
-            FROM apex_runs
-            WHERE threshold_p95 > 0
-            GROUP BY bucket_name, zone, workflow_version
-            HAVING max_ratio > 1.0
-            ORDER BY max_ratio DESC
-            LIMIT 20
-        """
-
-        cursor = conn.execute(worst_query)
-        worst_offenders = [dict(row) for row in cursor.fetchall()]
-
-        # Latest run summary (using timestamp DESC index)
-        latest_query = """
-            SELECT
-                run_id,
-                commit_sha,
-                timestamp,
-                workflow_version,
-                zone,
-                bucket_name,
-                p50,
-                p95,
-                p99,
-                count,
-                threshold_p50,
-                threshold_p95,
-                pass_fail
-            FROM apex_runs
-            ORDER BY timestamp DESC
-            LIMIT 100
-        """
-
-        cursor = conn.execute(latest_query)
-        latest_runs = [dict(row) for row in cursor.fetchall()]
+    worst_offenders = []
+    for rows in offender_groups.values():
+        max_ratio = max(row["p95"] / row["threshold_p95"] for row in rows)
+        if max_ratio <= 1.0:
+            continue
+        group = {field: rows[0].get(field) for field in group_fields}
+        group.update(max_ratio=max_ratio, total_runs=len(rows), fail_count=sum(row["pass_fail"] == "fail" for row in rows))
+        worst_offenders.append(group)
+    worst_offenders.sort(key=lambda row: row["max_ratio"], reverse=True)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "days": days,
         "trends": trends,
         "regressions": regressions,
-        "worst_offenders": worst_offenders,
+        "worst_offenders": worst_offenders[:20],
         "latest_runs": latest_runs,
+        "measurement_evidence": {
+            "eligible_rows": eligible_count,
+            "insufficient_rows": insufficient_count,
+            "legacy_or_insufficient_rows_excluded_from_trends": insufficient_count,
+        },
     }
 
 
@@ -171,6 +160,9 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
     total_runs = len(data["latest_runs"])
     total_regressions = len(data["regressions"])
     total_problem_buckets = len(data["worst_offenders"])
+    evidence = data.get("measurement_evidence", {})
+    eligible_rows = evidence.get("eligible_rows", 0)
+    insufficient_rows = evidence.get("insufficient_rows", 0)
 
     # Prepare data for charts
     trends_json = json.dumps(data["trends"])
@@ -297,6 +289,8 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
 
         <div class="chart-section">
             <h2>📈 Performance Trends (p95 Latency)</h2>
+            <p>{eligible_rows} eligible aggregate rows; {insufficient_rows} insufficient rows excluded from assessment.
+               Unit, workload, runtime context and budgets remain separate.</p>
             <canvas id="trendsChart"></canvas>
         </div>
 
@@ -328,12 +322,12 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
         // ========================================
         const trendsCtx = document.getElementById('trendsChart').getContext('2d');
 
-        // Group by bucket and prepare datasets
-        const buckets = [...new Set(trendsData.map(d => d.bucket_name))];
+        // Keep measurement unit, workload, zone and runtime context separate.
+        const series = [...new Set(trendsData.map(d => d.series_id))];
         const dates = [...new Set(trendsData.map(d => d.date))].sort().reverse();
 
-        const datasets = buckets.map((bucket, idx) => {{
-            const bucketData = trendsData.filter(d => d.bucket_name === bucket);
+        const datasets = series.map((seriesId, idx) => {{
+            const bucketData = trendsData.filter(d => d.series_id === seriesId);
             const colors = [
                 'rgb(75, 192, 192)',
                 'rgb(255, 99, 132)',
@@ -343,7 +337,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
             ];
 
             return {{
-                label: bucket,
+                label: bucketData[0].series_label,
                 data: dates.map(date => {{
                     const match = bucketData.find(d => d.date === date);
                     return match ? match.avg_p95 : null;
@@ -404,7 +398,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
             data: {{
                 labels: worstData.map(d => {{
                     const zone_label = d.zone || 'global';
-                    return `${{d.bucket_name}} [${{zone_label}}]`;
+                    return `${{d.bucket_name}} [${{zone_label}}] ${{d.measurement_unit}} / ${{d.workload_id}}`;
                 }}),
                 datasets: [{{
                     label: 'Max p95/threshold ratio',
@@ -427,7 +421,8 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                                 const item = worstData[context.dataIndex];
                                 return [
                                     `Failures: ${{item.fail_count}}/${{item.total_runs}}`,
-                                    `Workflow: ${{item.workflow_version}}`
+                                    `Workflow: ${{item.workflow_version}}`,
+                                    `Context: ${{item.context_id}}`
                                 ];
                             }}
                         }}
@@ -532,16 +527,23 @@ def generate_latest_html(data: Dict[str, Any], output_dir: Path) -> None:
 
     rows_html = ""
     for run in latest_runs:
-        status_emoji = "✅" if run["pass_fail"] == "pass" else ("⚠️" if run["pass_fail"] == "warn" else "❌")
+        if run["is_insufficient_data"]:
+            status_emoji = "📊 Insufficient data"
+        else:
+            status_emoji = "✅" if run["pass_fail"] == "pass" else ("⚠️" if run["pass_fail"] == "warn" else "❌")
         zone_display = run["zone"] or "global"
+        measurement_display = f"{run['independent_count']} independent / {run['capsule_count']} capsules"
+        unit = run["measurement_unit"] or "unattributed"
+        workload = run["workload_id"] or "unattributed"
 
         rows_html += f"""
         <tr>
             <td>{status_emoji}</td>
-            <td><code>{run["commit_sha"][:8]}</code></td>
-            <td>{run["workflow_version"]}</td>
-            <td>{zone_display}</td>
-            <td>{run["bucket_name"]}</td>
+            <td><code>{escape(run["commit_sha"][:8])}</code></td>
+            <td>{escape(run["workflow_version"])}</td>
+            <td>{escape(zone_display)}</td>
+            <td>{escape(run["bucket_name"])}</td>
+            <td>{measurement_display}<br>{escape(unit)}<br><code>{escape(workload)}</code></td>
             <td>{run["p50"]:.2f}s</td>
             <td>{run["p95"]:.2f}s</td>
             <td>{run["threshold_p95"]:.2f}s</td>
@@ -635,6 +637,7 @@ def generate_latest_html(data: Dict[str, Any], output_dir: Path) -> None:
                     <th>Version</th>
                     <th>Zone</th>
                     <th>Bucket</th>
+                    <th>Measurements / unit / workload</th>
                     <th>p50</th>
                     <th>p95</th>
                     <th>Threshold</th>
