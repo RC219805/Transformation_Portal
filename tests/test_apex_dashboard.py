@@ -22,7 +22,207 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
+from transformation_portal.metrics.aggregator import compute_bucket_stats
 from transformation_portal.metrics.ledger import PerformanceLedger
+from transformation_portal.metrics.performance_capsule import PerformanceBucket, PerformanceCapsule
+
+
+def _insert_measured_dashboard_row(
+    connection,
+    *,
+    run_id,
+    timestamp,
+    version="v2",
+    bucket_name="dashboard-fixture",
+    total=1.0,
+    unit="image_wall_seconds",
+    workload="a" * 64,
+    config="fixture-config",
+):
+    capsules = [
+        PerformanceCapsule(
+            image_id=f"image-{index}",
+            image_path=f"/private/fixture/image-{index}.jpg",
+            input_hash=f"input-{index}",
+            original_shape=(16, 16),
+            enforced_shape=(16, 16),
+            pixel_count=256,
+            dimension_adjustment="exact",
+            timings={"total": total},
+            workflow_version=version,
+            zone="local",
+            backend_id="fixture-backend",
+            model_variant="fixture-model",
+            config_hash=config,
+            pipeline_version="fixture-pipeline",
+            schema_version="2.1.0",
+            measurement_id=f"{run_id}:{index}",
+            measurement_unit=unit,
+            workload_id=workload,
+        )
+        for index in range(20)
+    ]
+    bucket = PerformanceBucket(bucket_name, {}, 1.4, 2.0, measurement_unit=unit, workload_id=workload)
+    stats = compute_bucket_stats(capsules, bucket)
+    assert stats is not None
+    connection.execute(
+        "INSERT INTO apex_runs (run_id, commit_sha, timestamp, workflow_version, zone, bucket_name, "
+        "p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail, raw_capsules_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            run_id,
+            "a" * 40,
+            timestamp,
+            version,
+            "local",
+            bucket_name,
+            stats.p50,
+            stats.p95,
+            stats.p99,
+            stats.count,
+            stats.threshold_p50,
+            stats.threshold_p95,
+            stats.pass_fail,
+            json.dumps(stats.measurement_evidence),
+        ),
+    )
+
+
+def test_measurement_reader_dashboard_separates_unit_workload_and_context(tmp_path: Path) -> None:
+    from scripts.apex_dashboard_generator import generate_dashboard_data, generate_index_html
+
+    ledger = tmp_path / "mixed-context.db"
+    PerformanceLedger(ledger)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(ledger) as connection:
+        _insert_measured_dashboard_row(connection, run_id="image", timestamp=timestamp, total=1.0)
+        _insert_measured_dashboard_row(connection, run_id="batch", timestamp=timestamp, unit="batch_wall_seconds", total=2.5)
+        _insert_measured_dashboard_row(connection, run_id="other-workload", timestamp=timestamp, workload="b" * 64, total=1.8)
+        _insert_measured_dashboard_row(
+            connection, run_id="other-context", timestamp=timestamp, config="other-config", total=1.2
+        )
+
+    data = generate_dashboard_data(ledger)
+    assert len(data["trends"]) == 4
+    assert len({row["series_id"] for row in data["trends"]}) == 4
+    assert sorted(row["avg_p95"] for row in data["trends"]) == [1.0, 1.2, 1.8, 2.5]
+    assert {row["measurement_unit"] for row in data["trends"]} == {"image_wall_seconds", "batch_wall_seconds"}
+    assert data["measurement_evidence"]["eligible_rows"] == 4
+    serialized = json.dumps(data)
+    assert "image_path" not in serialized
+    assert "raw_capsules_json" not in serialized
+    assert '"capsules"' not in serialized
+    output = tmp_path / "dashboard"
+    output.mkdir()
+    generate_index_html(data, output)
+    html = (output / "index.html").read_text()
+    assert "d.series_id === seriesId" in html
+    assert "/private/fixture" not in html
+
+
+def test_measurement_reader_dashboard_keeps_legacy_visible_but_out_of_eligible_series(tmp_path: Path) -> None:
+    from scripts.apex_dashboard_generator import generate_dashboard_data
+
+    ledger = tmp_path / "partial-evidence.db"
+    PerformanceLedger(ledger)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(ledger) as connection:
+        _insert_measured_dashboard_row(connection, run_id="eligible", timestamp=timestamp)
+        connection.execute(
+            "INSERT INTO apex_runs (run_id, commit_sha, timestamp, workflow_version, zone, bucket_name, "
+            "p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("legacy", "a" * 40, timestamp, "v2", "local", "dashboard-fixture", 142.0, 142.0, 142.0, 20, 1.4, 2.0, "fail"),
+        )
+
+    data = generate_dashboard_data(ledger)
+    assert len(data["latest_runs"]) == 2
+    assert len(data["trends"]) == 1
+    assert data["trends"][0]["avg_p95"] == 1.0
+    assert data["trends"][0]["run_count"] == 1
+    assert data["regressions"] == []
+    assert data["worst_offenders"] == []
+    assert data["measurement_evidence"] == {
+        "eligible_rows": 1,
+        "insufficient_rows": 1,
+        "legacy_or_insufficient_rows_excluded_from_trends": 1,
+    }
+
+
+def test_measurement_reader_dashboard_excludes_legacy_twenty_capsules(tmp_path: Path) -> None:
+    from scripts.apex_dashboard_generator import generate_dashboard_data, generate_index_html, generate_latest_html
+
+    ledger = tmp_path / "legacy-twenty.db"
+    PerformanceLedger(ledger)
+    with sqlite3.connect(ledger) as connection:
+        connection.execute(
+            "INSERT INTO apex_runs (run_id, commit_sha, timestamp, workflow_version, zone, "
+            "bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "real-run",
+                "a" * 40,
+                datetime.now(timezone.utc).isoformat(),
+                "v2",
+                "local",
+                "unknown",
+                142.0,
+                142.0,
+                142.0,
+                20,
+                60.0,
+                120.0,
+                "fail",
+            ),
+        )
+
+    data = generate_dashboard_data(ledger)
+    assert data["trends"] == []
+    assert data["regressions"] == []
+    assert data["worst_offenders"] == []
+    assert data["latest_runs"][0]["independent_count"] == 0
+    assert data["latest_runs"][0]["capsule_count"] == 20
+    assert data["latest_runs"][0]["is_insufficient_data"] is True
+    assert data["measurement_evidence"]["insufficient_rows"] == 1
+    output = tmp_path / "dashboard"
+    output.mkdir()
+    generate_latest_html(data, output)
+    generate_index_html(data, output)
+    html = (output / "latest.html").read_text()
+    assert "Insufficient data" in html
+    assert "0 independent / 20 capsules" in html
+    assert "✅" not in html
+    assert "0 eligible aggregate rows; 1 insufficient rows excluded" in (output / "index.html").read_text()
+
+
+def test_measurement_reader_dashboard_rejects_unknown_summary(tmp_path: Path) -> None:
+    from scripts.apex_dashboard_generator import generate_dashboard_data
+
+    ledger = tmp_path / "unknown-summary.db"
+    PerformanceLedger(ledger)
+    with sqlite3.connect(ledger) as connection:
+        connection.execute(
+            "INSERT INTO apex_runs (run_id, commit_sha, timestamp, workflow_version, zone, "
+            "bucket_name, p50, p95, count, threshold_p50, threshold_p95, pass_fail, raw_capsules_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "real-run",
+                "a" * 40,
+                datetime.now(timezone.utc).isoformat(),
+                "v2",
+                "local",
+                "unknown",
+                1.0,
+                1.0,
+                20,
+                60.0,
+                120.0,
+                "pass",
+                '{"schema":"untrusted"}',
+            ),
+        )
+
+    with pytest.raises(ValueError):
+        generate_dashboard_data(ledger)
 
 
 @pytest.fixture
@@ -49,38 +249,19 @@ def sample_ledger(tmp_path: Path) -> Path:
                 for bucket in ["small_depth_v1", "medium_depth_v1", "large_depth_v1"]:
                     # Some runs pass, some warn, some fail
                     if i % 7 == 0 and version == "v2":
-                        pass_fail = "fail"
                         p95 = 2.5  # Over threshold
                     elif i % 5 == 0:
-                        pass_fail = "warn"
                         p95 = 1.8
                     else:
-                        pass_fail = "pass"
                         p95 = 1.2
 
-                    conn.execute(
-                        """
-                        INSERT INTO apex_runs (
-                            run_id, commit_sha, timestamp, workflow_version,
-                            zone, bucket_name, p50, p95, p99, count,
-                            threshold_p50, threshold_p95, pass_fail
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            f"run-{i}-{version}-{bucket}",
-                            f"abcd{i:04d}",
-                            timestamp,
-                            version,
-                            "local",
-                            bucket,
-                            p95 * 0.7,  # p50
-                            p95,
-                            p95 * 1.1,  # p99
-                            10,
-                            1.5,  # p50 threshold
-                            2.0,  # p95 threshold
-                            pass_fail,
-                        ),
+                    _insert_measured_dashboard_row(
+                        conn,
+                        run_id=f"run-{i}-{version}-{bucket}",
+                        timestamp=timestamp,
+                        version=version,
+                        bucket_name=bucket,
+                        total=p95,
                     )
         conn.commit()
 

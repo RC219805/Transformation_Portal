@@ -34,8 +34,26 @@ import numpy as np
 import torch
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
-from .gaussian_rasterizer import compute_rgb_loss, render_gaussians, render_gaussians_fast
-from .protocol import validate_backend_rasterizer_payload, validate_rasterizer_output
+from .gaussian_rasterizer import (
+    compute_rgb_loss,
+    render_gaussians,
+    render_gaussians_anisotropic_native,
+    render_gaussians_fast,
+    render_gaussians_native,
+)
+from .protocol import resolve_saved_native_recipe, validate_backend_rasterizer_payload, validate_rasterizer_output
+from .torch_native import (
+    MAX_NATIVE_SHUFFLED_UPDATES,
+    NATIVE_DEFAULT_RECIPE,
+    NATIVE_LOG_SCALE_PRIOR_WEIGHT,
+    NATIVE_POSITION_PRIOR_WEIGHT,
+    NATIVE_RECIPES,
+    initialize_metric_splats,
+    native_provenance,
+    optimize_shuffled_metric_splats,
+    validate_native_camera,
+    validate_native_input,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +148,10 @@ class GaussianBackend:
         cache_dir: Optional[str] = None,
         optimization_seed: Optional[int] = None,
         optimization_max_gaussians: int = DEFAULT_OPTIMIZATION_MAX_GAUSSIANS,
+        implementation: Literal["legacy", "torch_native"] = "legacy",
+        native_recipe: Literal[
+            "isotropic_full_batch_v1", "anisotropic_shuffled_rgb_v1", "anisotropic_shuffled_rgbd_v1"
+        ] = NATIVE_DEFAULT_RECIPE,
     ):
         """Initialize Gaussian Splatting backend.
 
@@ -144,6 +166,15 @@ class GaussianBackend:
                 Defaults to None (production behavior, no forced seeding).
             optimization_max_gaussians: Cap for gaussians rendered per optimization
                 step to reduce runtime/memory pressure.
+            implementation: Explicit ``torch_native`` uses supplied metric depth
+                and local Torch optimization without a pretrained checkpoint.
+                The existing loader remains the default ``legacy`` behavior.
+            native_recipe: The default preserves isotropic full-batch updates.
+                Explicit anisotropic recipes require a seed; each iteration is
+                one shuffled camera update, with full-training checkpoint
+                selection. RGBD adds fixed 0.1-weight metric depth MSE normalized
+                by one metre and a coverage guard, trading RGB fit for expected
+                depth consistency. No recipe establishes photographic acceptance.
 
         Raises:
             LicenseRestrictionError: If tier is not research-only.
@@ -161,7 +192,30 @@ class GaussianBackend:
         self.model_revision = model_revision
         self.cache_dir = cache_dir
         self.optimization_seed = optimization_seed
+        if implementation == "torch_native" and (
+            isinstance(optimization_max_gaussians, bool)
+            or not isinstance(optimization_max_gaussians, int)
+            or optimization_max_gaussians < 1
+        ):
+            raise ValueError("torch_native optimization_max_gaussians must be a positive integer")
         self.optimization_max_gaussians = max(1, int(optimization_max_gaussians))
+        if implementation not in ("legacy", "torch_native"):
+            raise ValueError(f"Unsupported Gaussian implementation: {implementation!r}")
+        if implementation == "torch_native" and (
+            model_repo != "graphdeco-inria/gaussian-splatting" or model_revision != "NEEDS_VERIFICATION_0000000000000000000000"
+        ):
+            raise ValueError(
+                "torch_native cannot load or attest an upstream model_revision or repository; omit checkpoint settings"
+            )
+        self.implementation = implementation
+        if native_recipe not in NATIVE_RECIPES:
+            raise ValueError(f"Unsupported native_recipe: {native_recipe!r}")
+        if native_recipe != NATIVE_DEFAULT_RECIPE:
+            if implementation != "torch_native":
+                raise ValueError("Anisotropic native_recipe requires implementation='torch_native'")
+            if isinstance(optimization_seed, bool) or not isinstance(optimization_seed, int) or optimization_seed < 0:
+                raise ValueError("Shuffled native recipes require an explicit nonnegative integer optimization_seed")
+        self.native_recipe = native_recipe
 
         # Device detection
         if device is None:
@@ -289,7 +343,12 @@ class GaussianBackend:
             ValueError: If input validation fails.
             RuntimeError: If optimization fails.
         """
-        self._load_model()
+        if self.implementation == "torch_native":
+            validate_native_input(reconstruction_input, iterations, use_depth_prior, use_segmentation, use_pbr_textures)
+            if self.native_recipe != NATIVE_DEFAULT_RECIPE and iterations > MAX_NATIVE_SHUFFLED_UPDATES:
+                raise ValueError(f"Shuffled native recipes require 1..{MAX_NATIVE_SHUFFLED_UPDATES} optimizer updates")
+        else:
+            self._load_model()
 
         start_time = time.time()
 
@@ -307,16 +366,42 @@ class GaussianBackend:
         )
 
         # Initialize Gaussian cloud
-        splats = self._initialize_gaussians(reconstruction_input, use_depth_prior, use_segmentation)
+        if self.implementation == "torch_native":
+            splats = initialize_metric_splats(
+                reconstruction_input, use_segmentation, self.optimization_max_gaussians, self.optimization_seed
+            )
+        else:
+            splats = self._initialize_gaussians(reconstruction_input, use_depth_prior, use_segmentation)
 
         # Optimize
+        optimize_options = (
+            {"use_segmentation": use_segmentation}
+            if self.implementation == "torch_native" and self.native_recipe != NATIVE_DEFAULT_RECIPE
+            else {}
+        )
         splats, rmse, convergence, actual_iterations = self._optimize(
             splats,
             reconstruction_input,
             iterations=iterations,
             use_depth_prior=use_depth_prior,
             use_pbr_textures=use_pbr_textures,
+            **optimize_options,
         )
+
+        native_metadata = {}
+        if self.implementation == "torch_native":
+            native_metadata = {
+                "implementation": self.implementation,
+                "optimization_seed": self.optimization_seed,
+                "native_recipe": self.native_recipe,
+                "reconstruction_provenance": native_provenance(
+                    reconstruction_input,
+                    self.device,
+                    self.optimization_seed,
+                    self.native_recipe,
+                    splats.metadata.get("native_optimizer"),
+                ),
+            }
 
         elapsed = time.time() - start_time
 
@@ -339,6 +424,7 @@ class GaussianBackend:
                 "use_depth_prior": use_depth_prior,
                 "use_segmentation": use_segmentation,
                 "use_pbr_textures": use_pbr_textures,
+                **native_metadata,
             },
         )
 
@@ -540,6 +626,7 @@ class GaussianBackend:
         iterations: int,
         use_depth_prior: bool,
         use_pbr_textures: bool,
+        use_segmentation: bool = True,
     ) -> Tuple[GaussianSplat, float, Literal["converged", "max_iterations", "diverged"], int]:
         """Optimize Gaussian splats via gradient descent.
 
@@ -554,16 +641,37 @@ class GaussianBackend:
             Tuple of (optimized_splats, rmse, convergence_status, actual_iterations).
         """
         logger.info(f"Starting optimization ({iterations} iterations)...")
+        if self.implementation == "torch_native" and self.native_recipe != NATIVE_DEFAULT_RECIPE:
+            assert self.optimization_seed is not None
+            return optimize_shuffled_metric_splats(
+                splats,
+                reconstruction_input,
+                iterations,
+                self.device,
+                self.optimization_seed,
+                self.native_recipe,
+                use_segmentation,
+                self.RMSE_THRESHOLD,
+            )
 
-        saved_rng_state = self._setup_deterministic_optimization_seed()
+        # Native initialization uses a local RNG and the optimizer is deterministic
+        # without random sampling; avoid mutating CPU/CUDA/MPS global RNG states.
+        saved_rng_state = self._setup_deterministic_optimization_seed() if self.implementation == "legacy" else None
 
         try:
             device = self.device
 
             # Convert numpy to PyTorch tensors
+            native_mode = self.implementation == "torch_native"
             positions = _numpy_array_to_tensor(splats.positions, device, requires_grad=True)
             colors = _numpy_array_to_tensor(splats.colors, device, requires_grad=True)
-            scales = _numpy_array_to_tensor(splats.scales, device, requires_grad=True)
+            scales = _numpy_array_to_tensor(splats.scales, device, requires_grad=not native_mode)
+            scale_parameter = (
+                _numpy_array_to_tensor(np.log(splats.scales), device, requires_grad=True) if native_mode else scales
+            )
+            initial_positions = positions.detach().clone() if native_mode else None
+            initial_scales = scales.detach().clone() if native_mode else None
+            initial_log_scales = scale_parameter.detach().clone() if native_mode else None
             rotations = _numpy_array_to_tensor(splats.rotations, device, requires_grad=True)
             opacities = _numpy_array_to_tensor(splats.opacities, device, requires_grad=True)
 
@@ -594,7 +702,7 @@ class GaussianBackend:
                 [
                     {"params": [positions], "lr": self.DEFAULT_POSITION_LR},
                     {"params": [colors], "lr": 0.0025},  # Color learning rate
-                    {"params": [scales], "lr": self.DEFAULT_SCALING_LR},
+                    {"params": [scale_parameter], "lr": self.DEFAULT_SCALING_LR},
                     {"params": [rotations], "lr": self.DEFAULT_ROTATION_LR},
                     {"params": [opacities], "lr": 0.05},  # Opacity learning rate
                 ]
@@ -617,44 +725,73 @@ class GaussianBackend:
 
                     # Use capped rendering during optimization to avoid OOM/runtime
                     # blow-ups when depth initialization produces many gaussians.
-                    rendered = render_gaussians_fast(
+                    render = render_gaussians_native if self.implementation == "torch_native" else render_gaussians_fast
+                    render_options = (
+                        {} if self.implementation == "torch_native" else {"max_gaussians": self.optimization_max_gaussians}
+                    )
+                    rendered = render(
                         positions=positions,
                         colors=colors,
-                        scales=scales,
+                        scales=scale_parameter.exp() if native_mode else scales,
                         rotations=rotations,
                         opacities=opacities,
                         intrinsics=intrinsics,
                         extrinsics=extrinsics,
                         image_size=image_size,
-                        max_gaussians=self.optimization_max_gaussians,
                         device=device,
+                        **render_options,
                     )
 
                     # Compute RGB loss
                     loss = compute_rgb_loss(rendered, target_img)
-                    total_loss += loss
+                    if native_mode:
+                        if not torch.isfinite(loss):
+                            raise RuntimeError(
+                                f"torch_native produced nonfinite loss at iteration {iteration}, view {view_idx}"
+                            )
+                        # Preserve the full multiview objective without retaining
+                        # every full-image graph until a single backward pass.
+                        (loss / len(target_images)).backward()
+                        total_loss += loss.detach()
+                    else:
+                        total_loss += loss
 
                 # Average loss across views
                 total_loss = total_loss / len(target_images)
 
+                if self.implementation == "torch_native" and not torch.isfinite(total_loss):
+                    raise RuntimeError(f"torch_native produced nonfinite loss at iteration {iteration}")
+
                 # Backpropagation
-                total_loss.backward()
+                if native_mode:
+                    position_prior = ((positions - initial_positions) / initial_scales).square().mean()
+                    scale_prior = (scale_parameter - initial_log_scales).square().mean()
+                    prior_loss = NATIVE_POSITION_PRIOR_WEIGHT * position_prior + NATIVE_LOG_SCALE_PRIOR_WEIGHT * scale_prior
+                    prior_loss.backward()
+                else:
+                    total_loss.backward()
 
                 # Gradient sanity check (prevent NaN propagation)
                 for param_name, param in [
                     ("positions", positions),
                     ("colors", colors),
-                    ("scales", scales),
+                    ("scales", scale_parameter),
                     ("rotations", rotations),
                     ("opacities", opacities),
                 ]:
+                    if (
+                        self.implementation == "torch_native"
+                        and param.grad is not None
+                        and not torch.isfinite(param.grad).all()
+                    ):
+                        raise RuntimeError(f"torch_native produced nonfinite {param_name} gradients at iteration {iteration}")
                     if param.grad is not None and torch.isnan(param.grad).any():
                         logger.warning(f"NaN gradients detected in {param_name} at iteration {iteration}")
                         # Zero out NaN gradients to prevent explosion
                         param.grad = torch.where(torch.isnan(param.grad), torch.zeros_like(param.grad), param.grad)
 
                 # Gradient clipping (prevent instability)
-                torch.nn.utils.clip_grad_norm_([positions, colors, scales, rotations, opacities], max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_([positions, colors, scale_parameter, rotations, opacities], max_norm=1.0)
 
                 # Optimizer step
                 optimizer.step()
@@ -666,7 +803,10 @@ class GaussianBackend:
 
                     # Clamp values to valid ranges
                     colors.clamp_(0.0, 1.0)
-                    scales.clamp_(1e-6, 10.0)  # Prevent negative/huge scales
+                    if native_mode:
+                        scale_parameter.clamp_(float(np.log(1e-6)), float(np.log(10.0)))
+                    else:
+                        scales.clamp_(1e-6, 10.0)  # Prevent negative/huge scales
                     opacities.clamp_(0.01, 1.0)  # Keep opacity in valid range
 
                 # Log progress
@@ -685,6 +825,29 @@ class GaussianBackend:
 
             # Compute final RMSE
             final_loss = loss_history[-1] if loss_history else 0.0
+            training_final_loss = final_loss
+            if self.implementation == "torch_native":
+                scales = scale_parameter.exp().detach()
+                # Report the saved, post-update scene with every initialized splat,
+                # rather than the previous step's loss or a capped subset.
+                with torch.no_grad():
+                    losses = []
+                    for target, camera in zip(target_images, cameras):
+                        rendered = render_gaussians_native(
+                            positions,
+                            colors,
+                            scales,
+                            rotations,
+                            opacities,
+                            _numpy_array_to_tensor(camera.intrinsics, device),
+                            _numpy_array_to_tensor(camera.extrinsics, device),
+                            (camera.height, camera.width),
+                            device=device,
+                        )
+                        losses.append(compute_rgb_loss(rendered, target))
+                    final_loss = torch.stack(losses).mean().item()
+                if not np.isfinite(final_loss):
+                    raise RuntimeError("torch_native saved scene produced a nonfinite final loss")
             final_rmse = np.sqrt(final_loss)  # RMSE from MSE
 
             # Convergence status must follow Scene3D contract:
@@ -722,6 +885,17 @@ class GaussianBackend:
                     "final_loss": final_loss,
                     "optimization_max_gaussians": self.optimization_max_gaussians,
                     "loss_history": loss_history[:100],  # Store first 100 for analysis
+                    **(
+                        {
+                            "last_pre_update_training_loss": training_final_loss,
+                            "rmse_scope": "all_training_views_post_update",
+                            "gradient_accumulation_views": len(target_images),
+                            "position_prior_weight": NATIVE_POSITION_PRIOR_WEIGHT,
+                            "log_scale_prior_weight": NATIVE_LOG_SCALE_PRIOR_WEIGHT,
+                        }
+                        if self.implementation == "torch_native"
+                        else {}
+                    ),
                 },
             )
 
@@ -745,6 +919,18 @@ class GaussianBackend:
 
         # Extract splats from scene
         splats = scene.splats
+        recorded_implementation = scene.metadata.get("implementation")
+        if recorded_implementation in ("legacy", "torch_native") and recorded_implementation != self.implementation:
+            raise ValueError("Saved reconstruction implementation does not match the selected renderer recipe")
+        saved_recipe = resolve_saved_native_recipe(scene.metadata, splats.metadata)
+        scene_recipe = saved_recipe or NATIVE_DEFAULT_RECIPE
+        if (self.implementation == "torch_native" and self.native_recipe != scene_recipe) or (
+            self.implementation != "torch_native" and saved_recipe is not None
+        ):
+            raise ValueError("Saved native recipe does not match the selected renderer recipe")
+
+        if self.implementation == "torch_native":
+            validate_native_camera(camera, "torch_native novel view")
 
         # Convert to PyTorch tensors
         positions = _numpy_array_to_tensor(splats.positions, device)
@@ -759,7 +945,14 @@ class GaussianBackend:
 
         # Render
         with torch.no_grad():
-            rendered = render_gaussians(
+            anisotropic = self.implementation == "torch_native" and self.native_recipe != NATIVE_DEFAULT_RECIPE
+            render = (
+                render_gaussians_anisotropic_native
+                if anisotropic
+                else render_gaussians_native if self.implementation == "torch_native" else render_gaussians
+            )
+            render_options = {} if self.implementation == "torch_native" else {"use_rotation": False}
+            rendered = render(
                 positions=positions,
                 colors=colors,
                 scales=scales,
@@ -768,9 +961,11 @@ class GaussianBackend:
                 intrinsics=intrinsics,
                 extrinsics=extrinsics,
                 image_size=image_size,
-                use_rotation=False,  # Phase 6A: isotropic Gaussians
                 device=device,
+                **render_options,
             )
+            if anisotropic:
+                rendered = rendered[0]
         validate_rasterizer_output(rendered=rendered, image_size=image_size)
 
         # Convert back to numpy

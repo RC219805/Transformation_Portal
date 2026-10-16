@@ -25,11 +25,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional, Tuple
 
 __version__ = "2.0.0"
+MEASUREMENT_SCHEMA_VERSION = "2.1.0"
+MEASUREMENT_UNITS = ("image_wall_seconds", "batch_wall_seconds")
 
 
 @dataclass
@@ -133,8 +136,25 @@ class PerformanceCapsule:
     captured_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     schema_version: str = __version__
 
+    # Explicit v2.1 opt-in; absent v2.0 metadata never establishes independence.
+    measurement_id: Optional[str] = None
+    measurement_unit: Optional[Literal["image_wall_seconds", "batch_wall_seconds"]] = None
+    workload_id: Optional[str] = None
+
     def __post_init__(self) -> None:
         """Validate required fields and compute derived fields."""
+        if self.schema_version not in (__version__, MEASUREMENT_SCHEMA_VERSION):
+            raise ValueError(f"Unsupported schema_version: {self.schema_version}")
+        measurement = (self.measurement_id, self.measurement_unit, self.workload_id)
+        if self.schema_version == MEASUREMENT_SCHEMA_VERSION:
+            if type(self.is_synthetic) is not bool:
+                raise ValueError("schema_version 2.1.0 requires boolean is_synthetic")
+            if not all(isinstance(value, str) and value.strip() == value and bool(value) for value in measurement):
+                raise ValueError("schema_version 2.1.0 requires complete measurement_id/unit/workload_id")
+            if self.measurement_unit not in MEASUREMENT_UNITS:
+                raise ValueError("Invalid measurement_unit")
+        elif any(value is not None for value in measurement):
+            raise ValueError("Measurement metadata requires schema_version 2.1.0")
         if not self.image_id:
             raise ValueError("image_id is required")
         if not self.timings:
@@ -143,16 +163,22 @@ class PerformanceCapsule:
             raise ValueError("timings must include 'total' key")
         if self.pixel_count <= 0:
             raise ValueError(f"pixel_count must be positive, got {self.pixel_count}")
-        if self.timings["total"] < 0:
-            raise ValueError(f"total timing must be non-negative, got {self.timings['total']}")
+        total = self.timings["total"]
+        if isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total) or total < 0:
+            raise ValueError(f"total timing must be non-negative and finite, got {total}")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for serialization."""
-        return asdict(self)
+        payload = asdict(self)
+        for name in ("measurement_id", "measurement_unit", "workload_id"):
+            if payload[name] is None:
+                del payload[name]
+        return payload
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> PerformanceCapsule:
         """Reconstruct from dict (with schema migration support)."""
+        data = dict(data)
         schema_version = data.get("schema_version", "1.0.0")
 
         # Migration: 1.0.0 -> 2.0.0
@@ -192,6 +218,26 @@ class PerformanceBucket:
     p90_threshold_sec: Optional[float] = None
     p99_threshold_sec: Optional[float] = None
     description: str = ""
+    measurement_unit: Optional[str] = None
+    workload_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Legacy budgets remain descriptive; declared bindings must be complete."""
+        if self.measurement_unit is None and self.workload_id is None:
+            return
+        if (
+            self.measurement_unit not in MEASUREMENT_UNITS
+            or not isinstance(self.workload_id, str)
+            or not self.workload_id
+            or self.workload_id.strip() != self.workload_id
+        ):
+            raise ValueError("Budget requires a supported measurement_unit and non-empty workload_id")
+        for name in ("p50_threshold_sec", "p95_threshold_sec", "p90_threshold_sec", "p99_threshold_sec"):
+            value = getattr(self, name)
+            if value is None and name in ("p90_threshold_sec", "p99_threshold_sec"):
+                continue
+            if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"Bound budget {name} must be finite and non-negative")
 
     def matches(self, capsule: PerformanceCapsule) -> bool:
         """Check if capsule matches this bucket's filters."""
@@ -347,6 +393,8 @@ DEFAULT_BUCKETS = [
         p50_threshold_sec=8.5,
         p95_threshold_sec=12.0,
         description="Large aerial scenes with high-frequency texture on Apple Silicon",
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     ),
     PerformanceBucket(
         name="pool_medium_mps",
@@ -358,6 +406,8 @@ DEFAULT_BUCKETS = [
         p50_threshold_sec=11.0,
         p95_threshold_sec=15.0,
         description="Pool scenes with specular highlights and reflections on Apple Silicon",
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     ),
     PerformanceBucket(
         name="interior_standard_mps",
@@ -369,6 +419,8 @@ DEFAULT_BUCKETS = [
         p50_threshold_sec=7.0,
         p95_threshold_sec=10.0,
         description="Standard interior scenes on Apple Silicon",
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     ),
     PerformanceBucket(
         name="generic_large",
@@ -378,6 +430,8 @@ DEFAULT_BUCKETS = [
         p50_threshold_sec=10.0,
         p95_threshold_sec=15.0,
         description="Fallback bucket for large images (device-agnostic)",
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     ),
     PerformanceBucket(
         name="generic_medium",
@@ -388,6 +442,8 @@ DEFAULT_BUCKETS = [
         p50_threshold_sec=6.0,
         p95_threshold_sec=10.0,
         description="Fallback bucket for medium images (device-agnostic)",
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     ),
     PerformanceBucket(
         name="unknown",

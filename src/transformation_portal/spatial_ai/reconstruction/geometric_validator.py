@@ -18,11 +18,13 @@ Architecture:
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from collections.abc import Mapping
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from .contracts import CameraParams, GaussianSplat, Scene3D
+from .protocol import NATIVE_DEFAULT_RECIPE, resolve_saved_native_recipe
 
 logger = logging.getLogger(__name__)
 
@@ -300,11 +302,44 @@ class GeometricValidator:
         Returns:
             List of rendered images (H, W, 3) float32.
         """
-        # Mock rendering
-        # In production, use actual Gaussian rasterizer
+        # Resolve saved identity before importing the optional Torch backend.
+        recipe = resolve_saved_native_recipe(scene.metadata, scene.splats.metadata)
+        backend_config: Dict[str, Any] = {"tier": "experimental"}
+        if recipe is not None:
+            provenance = scene.metadata.get("reconstruction_provenance", {})
+            runtime = provenance.get("runtime", {})
+            if not isinstance(runtime, Mapping):
+                raise ValueError("Saved native runtime metadata must be a mapping")
+            descriptors = {
+                "device": (scene.metadata, runtime),
+                "optimization_seed": (scene.metadata, provenance),
+                "tier": (scene.metadata, provenance),
+            }
+            saved: Dict[str, Any] = {}
+            for name, containers in descriptors.items():
+                values = [container[name] for container in containers if name in container]
+                if name == "optimization_seed":
+                    if any(
+                        value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0)
+                        for value in values
+                    ):
+                        raise ValueError("Saved native optimization_seed must be a nonnegative integer or None")
+                elif any(not isinstance(value, str) or not value for value in values):
+                    raise ValueError(f"Saved native {name} must be a nonempty string")
+                if values and any(value != values[0] for value in values[1:]):
+                    raise ValueError(f"Saved native {name} descriptors disagree")
+                if values:
+                    saved[name] = values[0]
+            if saved.get("device") not in ("cpu", "mps", "cuda"):
+                raise ValueError("Saved native rendering requires a recorded cpu, mps or cuda device")
+            if recipe != NATIVE_DEFAULT_RECIPE and saved.get("optimization_seed") is None:
+                raise ValueError("Saved shuffled native rendering requires an explicit optimization_seed")
+            backend_config.update(saved)
+            backend_config.update(implementation="torch_native", native_recipe=recipe)
+
         from .gaussian_backend import GaussianBackend
 
-        backend = GaussianBackend(tier="experimental")
+        backend = GaussianBackend(**backend_config)
         rendered_images = []
 
         for camera in scene.cameras:

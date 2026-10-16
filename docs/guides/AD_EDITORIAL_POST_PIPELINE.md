@@ -187,10 +187,13 @@ controls. Contrast uses a monotone luminance curve around 18% linear gray,
 preserving black/white and channel ratios before range clipping. It no longer
 subtracts a contrast offset around linear 0.5, which crushed shadows.
 Luminance-based operations use the ProPhoto luminance coefficients.
-Split-tone hue interpolation follows the shortest circular path. Auto-upright
-performs a small global rotation from detected lines; it is not full perspective
-correction. Dust removal is an optional local inpainting heuristic, not semantic
-retouching.
+Split tone blends saturation-weighted hue vectors, with tint strength multiplied
+by the shadow/highlight luminance mask. It preserves HSV value and passes opposing
+hues continuously through reduced chroma instead of choosing an unstable angular
+branch. Active split-tone pixels change with this correction; use a fresh project
+for separately reviewed photographic comparisons. Auto-upright performs a small
+global rotation from detected lines; it is not full perspective correction. Dust
+removal is an optional local inpainting heuristic, not semantic retouching.
 
 Metadata is read from CSV; an explicitly configured CSV must exist. When no path
 is configured, the default `<project>/DOCS/metadata.csv` is optional. ExifTool supplies the IPTC/XMP path; it operates on a

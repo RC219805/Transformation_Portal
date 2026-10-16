@@ -56,6 +56,34 @@ class TestCoreCameraParams:
         camera = CoreCameraParams(fx=800.0, fy=750.0, cx=512.0, cy=384.0, width=1024, height=768)
         assert camera.to_intrinsics_tuple() == (800.0, 750.0, 512.0, 384.0)
 
+    def test_explicit_pose_is_preserved_immutable_and_comparable(self):
+        pose = np.eye(4, dtype=np.float32)
+        pose[0, 3] = 0.25
+        camera = CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit", extrinsics=pose)
+        expected = tuple(tuple(float(value) for value in row) for row in pose)
+        pose[0, 3] = 7
+        assert camera.extrinsics == expected
+        assert hash(camera)
+        assert camera == CoreCameraParams(
+            fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit", extrinsics=expected
+        )
+
+    @pytest.mark.parametrize("invalid", ["shape", "nan", "scale", "reflection", "bottom_row"])
+    def test_invalid_explicit_pose_fails_closed(self, invalid):
+        pose = np.eye(4)
+        if invalid == "shape":
+            pose = pose[:3]
+        elif invalid == "nan":
+            pose[0, 3] = np.nan
+        elif invalid == "scale":
+            pose[0, 0] = 2
+        elif invalid == "reflection":
+            pose[0, 0] = -1
+        else:
+            pose[3, 0] = 1
+        with pytest.raises(ValueError, match="extrinsics"):
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, extrinsics=pose)
+
 
 class TestMultiViewReconstructionRequestValidation:
     """Tests for request contract validation."""

@@ -173,7 +173,8 @@ def test_real_da3_run_uses_governed_metric_model_key(monkeypatch, tmp_path, back
     assert captured["verify_outputs"] is False
 
 
-def test_real_run_uses_prepared_canonical_paths_after_alias_retarget(monkeypatch, tmp_path):
+@pytest.mark.parametrize("second_status", ["ok", "error"])
+def test_real_run_uses_prepared_canonical_paths_after_alias_retarget(monkeypatch, tmp_path, second_status):
     """Prepared results retain canonical paths and authoritative batch timing."""
 
     import hashlib
@@ -268,7 +269,7 @@ def test_real_run_uses_prepared_canonical_paths_after_alias_retarget(monkeypatch
                     "input_sha256": hashlib.sha256(planned_image.read_bytes()).hexdigest(),
                 },
                 {
-                    "status": "ok",
+                    "status": second_status,
                     "original_shape": (4, 5),
                     "enforced_shape": (4, 5),
                     "runtime_s": 1.25,
@@ -292,15 +293,25 @@ def test_real_run_uses_prepared_canonical_paths_after_alias_retarget(monkeypatch
         timestamp="2026-09-01T00:00:00+00:00",
     )
 
-    observation = apex_matrix_runner.run_apex_for_config(
-        run_spec=run_spec,
-        zone="local",
-        output_dir=tmp_path / "results",
-        dry_run=False,
-        synthetic=False,
-        input_dir=input_dir,
-        sample_size=2,
-    )
+    def execute():
+        return apex_matrix_runner.run_apex_for_config(
+            run_spec=run_spec,
+            zone="local",
+            output_dir=tmp_path / "results",
+            dry_run=False,
+            synthetic=False,
+            input_dir=input_dir,
+            sample_size=2,
+        )
+
+    if second_status != "ok":
+        with pytest.raises(RuntimeError, match="failed inputs; cannot publish complete measurement evidence"):
+            execute()
+        assert captured["batch_input_files"] == (planned_image.resolve(), second_image.resolve())
+        assert lifecycle_events[-1] == "timer:stop"
+        return
+
+    observation = execute()
 
     canonical_path = planned_image.resolve()
     second_canonical_path = second_image.resolve()
@@ -340,6 +351,26 @@ def test_real_run_uses_prepared_canonical_paths_after_alias_retarget(monkeypatch
         "inner_pipeline_total": 1.5,
         "shared_batch_overhead": 11.0,
     }
+    assert first_capsule.schema_version == "2.1.0"
+    assert first_capsule.measurement_unit == "batch_wall_seconds"
+    assert first_capsule.measurement_id == second_capsule.measurement_id
+    assert first_capsule.workload_id == second_capsule.workload_id
+    # A fresh output/run preserves the workload and recipe but is a new call.
+    alias.unlink()
+    alias.symlink_to(planned_image)
+    repeated = apex_matrix_runner.run_apex_for_config(
+        run_spec=run_spec,
+        zone="local",
+        output_dir=tmp_path / "fresh-results",
+        dry_run=False,
+        synthetic=False,
+        input_dir=input_dir,
+        sample_size=2,
+    )
+    assert repeated.capsules[0].measurement_id != first_capsule.measurement_id
+    assert repeated.capsules[0].workload_id == first_capsule.workload_id
+    assert repeated.capsules[0].config_hash == first_capsule.config_hash
+    assert repeated.capsules[0].timings["total"] == first_capsule.timings["total"]
 
 
 def test_real_run_timeout_cannot_be_swallowed_by_per_input_exception_handler(monkeypatch, tmp_path):
