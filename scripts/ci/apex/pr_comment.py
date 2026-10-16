@@ -31,14 +31,15 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from transformation_portal.metrics.comparator import query_baseline_stats
 from transformation_portal.metrics.contracts import BucketStats, Judgement
 from transformation_portal.metrics.gate import evaluate_gate
+from transformation_portal.metrics.measurement import decode_aggregate_row, recompute_bucket_stats, stats_are_comparable
 
 __version__ = "1.0.0"
 
 # GitHub comment size limit (leave buffer for safety)
 MAX_GITHUB_COMMENT_SIZE = 65_000
+MIN_PERFORMANCE_REPORT_SAMPLES = 20
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -136,17 +137,22 @@ def fetch_run_stats(
     Returns:
         List of performance stats dicts
     """
-    query_base = """
-        SELECT bucket_name, zone, p50, p95, p99, count,
-               pass_fail, threshold_p95, workflow_version
-        FROM apex_runs
-        WHERE run_id = ? AND workflow_version = ?
-    """
     params: List[Any] = [run_id, workflow_version]
 
     try:
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
+            # Old ledgers remain readable, but missing provenance never grants
+            # statistical eligibility, regardless of their historical count.
+            optional_columns = []
+            for column in ("threshold_p50", "raw_capsules_json"):
+                optional_columns.append(column if table_has_column(conn, "apex_runs", column) else f"NULL AS {column}")
+            query_base = (
+                "SELECT run_id, bucket_name, zone, p50, p95, p99, count, "
+                "pass_fail, threshold_p95, workflow_version, "
+                + ", ".join(optional_columns)
+                + " FROM apex_runs WHERE run_id = ? AND workflow_version = ?"
+            )
 
             # Only filter by commit_sha if column exists
             if commit_sha and table_has_column(conn, "apex_runs", "commit_sha"):
@@ -155,11 +161,38 @@ def fetch_run_stats(
 
             query = query_base + " ORDER BY bucket_name, zone"
             cursor = conn.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            return [decode_aggregate_row(dict(row)) for row in cursor.fetchall()]
 
     except sqlite3.Error as e:
         logger.error(f"Database error: {e}")
         return []
+
+
+def _global_bucket_stats(rows: List[Dict[str, Any]]) -> Dict[str, BucketStats]:
+    """Use the requested run's explicit global summaries without another query."""
+    result = {}
+    for row in rows:
+        if row["zone"] is not None:
+            continue
+        name = row["bucket_name"]
+        if name in result:
+            raise ValueError(f"Duplicate global bucket in requested run: {name}")
+        result[name] = BucketStats(
+            bucket_name=name,
+            count=row["count"],
+            p50=row["p50"],
+            p95=row["p95"],
+            p99=row["p99"],
+            mean=row.get("mean", row["p50"]),
+            min=row.get("min", row["p50"]),
+            max=row.get("max", row["p95"]),
+            threshold_p50=row["threshold_p50"],
+            threshold_p95=row["threshold_p95"],
+            pass_fail=row["pass_fail"],
+            is_insufficient_data=row["is_insufficient_data"],
+            measurement_evidence=row.get("measurement_evidence"),
+        )
+    return result
 
 
 def generate_bucket_table(
@@ -181,17 +214,19 @@ def generate_bucket_table(
     lines = [
         f"### {title}",
         "",
-        "| Bucket | Count | p50 | p95 | Threshold p95 | Status |",
+        "| Bucket | Independent / capsules | p50 | p95 | Threshold p95 | Status |",
         "|--------|-------|-----|-----|---------------|--------|",
     ]
 
     for bucket_name, stats in sorted(bucket_stats.items()):
-        status = get_status_icon(stats.pass_fail, stats.is_insufficient_data)
+        assessed = recompute_bucket_stats(stats)
+        status = get_status_icon(assessed["pass_fail"], assessed["is_insufficient_data"])
         p50_str = format_time(stats.p50)
         p95_str = format_time(stats.p95)
         threshold_str = format_time(stats.threshold_p95)
 
-        lines.append(f"| {bucket_name} | {stats.count} | {p50_str} | {p95_str} | {threshold_str} | {status} |")
+        counts = f"{assessed['independent_count']} independent / {assessed['capsule_count']} capsules"
+        lines.append(f"| {bucket_name} | {counts} | {p50_str} | {p95_str} | {threshold_str} | {status} |")
 
     return "\n".join(lines)
 
@@ -230,7 +265,8 @@ def generate_zone_heatmap(
             if bucket_name in zone_stats:
                 stats = zone_stats[bucket_name]
                 p95_str = format_time(stats.p95)
-                status = get_status_icon(stats.pass_fail, stats.is_insufficient_data)
+                assessed = recompute_bucket_stats(stats)
+                status = get_status_icon(assessed["pass_fail"], assessed["is_insufficient_data"])
                 cells.append(f"{p95_str} {status}")
             else:
                 cells.append("—")
@@ -333,6 +369,8 @@ def generate_worst_offenders(
 
     rows = []
     for r in stats:
+        if r.get("is_insufficient_data", False):
+            continue
         p95 = r.get("p95")
         limit = r.get("threshold_p95")
 
@@ -442,22 +480,41 @@ def generate_v1_v2_comparison(
         if bucket_name in v1_stats and bucket_name in v2_stats:
             v1_p95 = v1_stats[bucket_name].p95
             v2_p95 = v2_stats[bucket_name].p95
-            delta = ((v2_p95 - v1_p95) / v1_p95) * 100
-
-            if delta < -5:
-                status = "✅ Faster"
-            elif delta < 10:
-                status = "⚠️ Similar"
+            insufficient = not stats_are_comparable(v1_stats[bucket_name], v2_stats[bucket_name]) or any(
+                stats.is_insufficient_data or stats.count < MIN_PERFORMANCE_REPORT_SAMPLES
+                for stats in (v1_stats[bucket_name], v2_stats[bucket_name])
+            )
+            if insufficient or v1_p95 <= 0:
+                status = "📊 Insufficient data"
+                delta_str = "—"
             else:
-                status = "❌ Slower"
+                delta = ((v2_p95 - v1_p95) / v1_p95) * 100
+                delta_str = f"{delta:+.1f}%"
+                if delta < -5:
+                    status = "✅ Faster"
+                elif delta < 10:
+                    status = "⚠️ Similar"
+                else:
+                    status = "❌ Slower"
 
-            lines.append(f"| {bucket_name} | {format_time(v1_p95)} | {format_time(v2_p95)} | " f"{delta:+.1f}% | {status} |")
+            lines.append(f"| {bucket_name} | {format_time(v1_p95)} | {format_time(v2_p95)} | {delta_str} | {status} |")
         elif bucket_name in v1_stats:
             lines.append(f"| {bucket_name} | {format_time(v1_stats[bucket_name].p95)} | — | — | New in V2 |")
         else:
             lines.append(f"| {bucket_name} | — | {format_time(v2_stats[bucket_name].p95)} | — | Only in V2 |")
 
     return "\n".join(lines)
+
+
+def _gate_report_label(gate_result: Dict[str, Any], stats: List[Dict[str, Any]]) -> str:
+    """Keep non-blocking insufficient evidence distinct from a passed gate."""
+    if gate_result["should_block"]:
+        return "BLOCKED ❌"
+    if gate_result.get("verdict") in ("warn", "fail") or gate_result.get("reasons"):
+        return "SHADOW ⚠️ (would block)" if gate_result.get("mode") == "shadow" else "WARN ⚠️ (non-blocking)"
+    if not stats or any(row.get("is_insufficient_data", False) for row in stats):
+        return "INSUFFICIENT DATA 📊 (non-blocking)"
+    return "PASSED ✅"
 
 
 def generate_pr_comment(
@@ -498,19 +555,32 @@ def generate_pr_comment(
         lines.append("# 🎯 APEX Performance Report\n")
 
     # Overall gate verdict at top
-    overall_status = worst_status(v2_stats or v1_stats)
-    overall_icon = get_status_icon(overall_status)
+    verdict_stats = v2_stats or v1_stats
+    assessed_status = worst_status(verdict_stats)
+    insufficient_data = assessed_status == "pass" and (
+        not verdict_stats or any(row.get("is_insufficient_data", False) for row in verdict_stats)
+    )
+    overall_status = "insufficient_data" if insufficient_data else assessed_status
+    overall_icon = get_status_icon(overall_status, insufficient_data)
 
     lines.append(f"## {overall_icon} APEX Performance Verdict: **{overall_status.upper()}**\n")
     lines.append(f"**Run ID:** `{run_id}` | **Commit:** `{commit_sha[:8]}`\n")
+    for row in v1_stats + v2_stats:
+        if "capsule_count" in row:
+            unit = row.get("measurement_unit") or "unattributed"
+            scope = f"{row.get('workflow_version', '?')} / {row['zone'] or 'Global'} / {row['bucket_name']}"
+            lines.append(
+                f"**Measurements ({scope}):** {row['independent_count']} independent / {row['capsule_count']} capsules "
+                f"(unit: `{unit}`; workload: `{row.get('workload_id') or 'unattributed'}`)"
+            )
 
     # Gate verdict details
     if gate_result_v1:
-        v1_verdict = "PASSED ✅" if not gate_result_v1["should_block"] else "BLOCKED ❌"
+        v1_verdict = _gate_report_label(gate_result_v1, v1_stats)
         lines.append(f"**V1 Gate:** {v1_verdict}")
 
     if gate_result_v2:
-        v2_verdict = "PASSED ✅" if not gate_result_v2["should_block"] else "BLOCKED ❌"
+        v2_verdict = _gate_report_label(gate_result_v2, v2_stats)
         lines.append(f"**V2 Gate:** {v2_verdict} (mode: {gate_result_v2['mode']})")
 
     lines.append("")
@@ -625,18 +695,10 @@ def main() -> int:
         # so we rely on caller to pass --synthetic when using --dry-run
         is_synthetic = args.synthetic
 
-        # Also query using existing baseline stats API (for judgements)
-        v1_bucket_stats = query_baseline_stats(
-            ledger_db_path=str(args.ledger_db),
-            workflow_version="v1",
-            commit_sha=args.commit_sha,
-        )
-
-        v2_bucket_stats = query_baseline_stats(
-            ledger_db_path=str(args.ledger_db),
-            workflow_version="v2",
-            commit_sha=args.commit_sha,
-        )
+        # The matrix stores both local and global rows. Bind judgements to the
+        # requested run's explicit global context, never the latest same commit.
+        v1_bucket_stats = _global_bucket_stats(v1_stats)
+        v2_bucket_stats = _global_bucket_stats(v2_stats)
 
         # Create judgements if we have bucket stats
         v1_judgement = None

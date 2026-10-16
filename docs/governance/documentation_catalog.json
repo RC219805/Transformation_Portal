@@ -6243,8 +6243,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "6dbe27a9d6c891fef7b5ca739507b7441050d8f9ff9c040d256b2149ba63fec1",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "6b07d61b82a1e79b4115cef919ebed9a866e95fb67853752439b83ad745107ba",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -8389,8 +8389,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "5ebc51b18260f6be09c20af848dd5600492bd84cf4d3e71e5b753ea89fc1f79d",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "adfb19031f323faa95ae17c0bac50bb3441d56efb810eab7ab8e995342430c8e",
       "source_references": [
         "tools/ad_editorial_post_pipeline.py",
         "tools/sample_config.yml",
@@ -8402,9 +8402,9 @@
         "requirements/locks/editorial-darwin-arm64-py312.json"
       ],
       "source_sha256": {
-        "tools/ad_editorial_post_pipeline.py": "10855d267992d5ea7b544b873e1fc3e39183167c887d204699bc4db179f12acd",
+        "tools/ad_editorial_post_pipeline.py": "bb923786c6a97193612e602e61da1606919862f61195cefbb6a7bfb22e186210",
         "tools/sample_config.yml": "6365e96cdafb36cc6fa0da422a1f94552afda7c718b01aa583fd67668c54fd5c",
-        "tests/test_ad_editorial_post_pipeline_paths.py": "ada1961ceb5583829749406bc864f62a0f7c534866863ab517469c90fcf98a94",
+        "tests/test_ad_editorial_post_pipeline_paths.py": "75bcf7217f7923e3cfb79683122a667fb29377c50896b91f3c33be1b9c409397",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
@@ -8926,8 +8926,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "f17e9fafbd3d8fdb168be788cdb372dc0338a033825a68d766a449266d94e4aa",
+      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "content_sha256": "a26e9b1aa55fd13c8f19abad3aa173cc22f0c124bb81e3f2a4a6e3184b130109",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -9137,15 +9137,21 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "868a8732f67bd9489aafd4ac5d8db5d870a01ead",
-      "content_sha256": "1fe139a54f430ced4b3421dfed40e91df2aa37ef8ae856e68ce567e37601064c",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "aee529453ae98a12d60846f88245ad26781311add9d350a8ca3127f27a1d60de",
       "source_references": [
         "src/transformation_portal/materials_v4/__main__.py",
-        "src/transformation_portal/core/execution_plan_v3.py"
+        "src/transformation_portal/core/execution_plan_v3.py",
+        "src/transformation_portal/materials_v4/calibration.py",
+        "src/transformation_portal/materials_v4/inference.py",
+        "tests/materials_v4/test_calibration.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/materials_v4/__main__.py": "6ecda4224211076562619dda7c12af71fe3ccd7be9775235979843ecd21f8589",
-        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b"
+        "src/transformation_portal/materials_v4/__main__.py": "12cec741fb1cd21985f75ec6d983c5329afd108d0f8cee30081b2db2b69bf93a",
+        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
+        "src/transformation_portal/materials_v4/calibration.py": "16817be12c0510f43ae36229b58cd4c2ad7c6174b5d8d3fbdc60c9ce7d8d6fe4",
+        "src/transformation_portal/materials_v4/inference.py": "e7aa7f646c0f76d78491acccdfa02be502d788f1f70d08eb40593fc5f34448cf",
+        "tests/materials_v4/test_calibration.py": "c64be964aff94f0eda04bc38f433269435387ba8770efa22a3cc60403c552aba"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -14639,15 +14645,21 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "868a8732f67bd9489aafd4ac5d8db5d870a01ead",
-      "content_sha256": "3aff67456dc14af99427cfd499ea368b32e28f4c027b95f69ee855df806e1059",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "24b704bd5a2ed44b5d98e200a172d43b77497040bcdd91878c90f7c1b44a39c7",
       "source_references": [
         "src/transformation_portal/materials_v4/__main__.py",
-        "src/transformation_portal/core/execution_plan_v3.py"
+        "src/transformation_portal/core/execution_plan_v3.py",
+        "src/transformation_portal/materials_v4/calibration.py",
+        "src/transformation_portal/materials_v4/inference.py",
+        "tests/materials_v4/test_calibration.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/materials_v4/__main__.py": "6ecda4224211076562619dda7c12af71fe3ccd7be9775235979843ecd21f8589",
-        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b"
+        "src/transformation_portal/materials_v4/__main__.py": "12cec741fb1cd21985f75ec6d983c5329afd108d0f8cee30081b2db2b69bf93a",
+        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
+        "src/transformation_portal/materials_v4/calibration.py": "16817be12c0510f43ae36229b58cd4c2ad7c6174b5d8d3fbdc60c9ce7d8d6fe4",
+        "src/transformation_portal/materials_v4/inference.py": "e7aa7f646c0f76d78491acccdfa02be502d788f1f70d08eb40593fc5f34448cf",
+        "tests/materials_v4/test_calibration.py": "c64be964aff94f0eda04bc38f433269435387ba8770efa22a3cc60403c552aba"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -16812,15 +16824,17 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1050879d5baf06f8a384b51b1e4a0aa35331ab66",
-      "content_sha256": "3b654bd62c5f6ea29a37752ec14f41462f37738be4ec1fa0e3d9f30ec3a36529",
+      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "content_sha256": "44c64b26e362c6d0ef5b7574720d508d004646db8f8d2fc4bedb10b46c3bac0c",
       "source_references": [
         "pyproject.toml",
-        ".github/workflows/build.yml"
+        ".github/workflows/build.yml",
+        "tests/enforcement/test_ml_fast_collection_contract.py"
       ],
       "source_sha256": {
         "pyproject.toml": "580e704002f68fd9a27469684e16ccf92009a6e834afde961b6f4bd28cbb3345",
-        ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be"
+        ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be",
+        "tests/enforcement/test_ml_fast_collection_contract.py": "866488e6395ea7e4268221abeaa1820ee0a5c81f77edc2a8e78f61d7d8f9ec22"
       },
       "validation_commands": [
         "make check-documentation-catalog"

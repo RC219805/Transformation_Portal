@@ -22,6 +22,29 @@ from transformation_portal.metrics.performance_capsule import (
 pytestmark = pytest.mark.unit
 
 
+def test_explicit_measurement_minor_contract_roundtrip(make_capsule):
+    payload = make_capsule().to_dict()
+    payload.update(
+        schema_version="2.1.0", measurement_id="invocation-1", measurement_unit="batch_wall_seconds", workload_id="workload-1"
+    )
+    capsule = PerformanceCapsule.from_dict(payload)
+    assert capsule.to_dict() == payload
+
+
+def test_unknown_capsule_version_fails_closed(make_capsule):
+    payload = make_capsule().to_dict()
+    payload["schema_version"] = "9.0.0"
+    with pytest.raises(ValueError, match="schema_version"):
+        PerformanceCapsule.from_dict(payload)
+
+
+def test_legacy_capsule_serialization_has_no_invented_measurement_fields(make_capsule):
+    payload = make_capsule().to_dict()
+    assert payload["schema_version"] == "2.0.0"
+    assert not ({"measurement_id", "measurement_unit", "workload_id"} & payload.keys())
+    assert PerformanceCapsule.from_dict(payload).to_dict() == payload
+
+
 @pytest.fixture
 def make_capsule():
     """Factory fixture for creating PerformanceCapsule variants.
@@ -68,7 +91,7 @@ class TestPerformanceCapsuleContract:
         """Test that required fields are enforced."""
         # Missing image_id - TypeError from dataclass
         with pytest.raises(TypeError):
-            PerformanceCapsule(
+            PerformanceCapsule(  # pylint: disable=no-value-for-parameter
                 image_path="test.tiff",
                 input_hash="abc123",
                 original_shape=(6000, 8000),

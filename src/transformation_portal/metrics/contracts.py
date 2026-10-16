@@ -166,10 +166,14 @@ class BucketStats:
     threshold_p95: float
     pass_fail: Literal["pass", "warn", "fail"]
     is_insufficient_data: bool = False
+    measurement_evidence: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for serialization."""
-        return asdict(self)
+        payload = asdict(self)
+        if self.measurement_evidence is None:
+            payload.pop("measurement_evidence")
+        return payload
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> BucketStats:
@@ -202,10 +206,14 @@ class RegressionReport:
     max_regression_bucket: str
     status: Literal["pass", "warn", "fail"]
     explanation: str
+    measurement_evidence: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for serialization."""
-        return asdict(self)
+        payload = asdict(self)
+        if self.measurement_evidence is None:
+            payload.pop("measurement_evidence")
+        return payload
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> RegressionReport:

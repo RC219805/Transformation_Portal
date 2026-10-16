@@ -14,6 +14,74 @@ publication only. Real DA3 execution on hosted Linux remains inference evidence,
 not native Darwin arm64 depth-cache authority. See
 [Performance Gate Policy](../performance/GATE_POLICY.md).
 
+### Independent measurements and timing units
+
+Existing capsule writers keep their default `2.0.0` API and serialized keys.
+Historical `1.0.0` data migrates to `2.0.0` without invented identities. These
+records remain descriptive and cannot establish independent sample counts,
+including old aggregate rows with `count >= 20`. Unknown capsule versions fail
+closed. A writer opts into `2.1.0` only with a complete `measurement_id`,
+`measurement_unit` (`image_wall_seconds` or `batch_wall_seconds`), and
+`workload_id`.
+
+The real matrix measures one complete `enhance_batch` call. It generates one
+fresh UUID per invocation and shares it across that invocation's image capsules.
+Any failed input refuses publication of complete measurement evidence; the
+successful subset cannot replace the frozen workload while retaining its total.
+`timings.total` remains the full batch lifecycle; `pipeline` and
+`batch_shared_overhead` retain their existing meanings. Twenty image capsules
+from one batch count as one measurement. Equal durations from distinct explicit
+identities remain distinct measurements; neither duration equality nor division
+by image count can establish independence.
+
+The `tp.apex.workload.v1` digest binds ordered full source SHA256 values, original
+and effective dimensions, and the `tp.apex.recipe.v1` prepared recipe/model/runtime/cache
+policy projection. That projection excludes the full plan fingerprint, input
+root/alias selection, and warning text; output location is supplied separately
+to the prepared executor. Fresh output directories therefore do not manufacture
+different workloads. Native execution plans and their fingerprints are unchanged
+and remain run authority. Measurement UUIDs are separate from workload digests.
+
+The current named image-cost buckets retain their exact numeric thresholds and
+declare `image_wall_seconds`. Their explicit `*` workload binding permits one
+internally consistent workload and execution context, including model, device,
+recipe, pipeline version, workflow, and zone. It cannot pool different workload
+digests or contexts. The unknown bucket and unbound custom budgets abstain;
+custom budgets require an explicit unit/workload binding. No batch budget is
+declared, so current matrix batch totals cannot borrow per-image scene/pixel
+budgets, even after twenty independent invocations. Conflicting reuse of an ID
+fails before bucket or zone filters; mixed units are rejected. Missing identities,
+incompatible contexts, synthetic execution, and insufficient independent counts
+cannot authorize budget verdicts. Measurement-aware records require a boolean
+execution-mode flag, a recognized workflow, and nonblank execution identifiers;
+declared unknown or unbound model/runtime context cannot establish eligibility.
+
+SQLite columns and ledger migration versions stay unchanged. New aggregates use
+the optional `raw_capsules_json` column for a recomputable
+`tp.apex.measurement.summary.v1` envelope containing the raw capsules, bound
+budget, minimum count, and checked assessment. PR reports, SQL and direct gates,
+baseline comparisons, and dashboard readers recompute it instead of trusting a
+stored count or verdict. Old absent/list evidence remains visible as insufficient
+history; malformed or unknown envelopes fail closed. Optional direct statistics
+and comparison evidence is versioned and omitted entirely from legacy
+serialization. Comparisons require qualifying current and baseline vectors with
+the same unit/workload/execution context; only the intentional V1/V2 workflow
+label may differ. The arms must use distinct observation identities; conflicting
+reuse fails closed and overlapping identities cannot establish an independent
+comparison. Worst-zone and regression rules use qualifying measured
+vectors, not unrelated summary floats. Reports distinguish independent
+measurements from image capsules; dashboards exclude ineligible trends and keep
+compatible units/workloads/contexts separate.
+Shadow violations remain non-blocking and are labeled as would-block warnings,
+not successful performance gates.
+
+These checks establish measurement provenance and budget compatibility, not
+representative production acceptance. `is_synthetic=False` records model
+execution, while the checked-in gradient fixture corpus remains fixture evidence.
+Representative photographs, applicable runtime/recipe authority, and the policy's
+stable historical baseline remain separate requirements. Historical or same-day
+RAW batch measurements do not supply a current full Lux production baseline.
+
 ## Features Delivered
 
 ### ✅ Overall Gate Verdict

@@ -60,7 +60,7 @@ tier = "production"         # NOT ALLOWED
 
 ## Quick Start
 
-### Basic 3-View Reconstruction
+### Basic 3-View Reconstruction (Legacy Default)
 
 ```python
 from transformation_portal.spatial_ai.reconstruction import (
@@ -96,6 +96,65 @@ print(f"RMSE: {scene.rmse:.4f}")
 print(f"Gaussians: {scene.splats.num_gaussians}")
 print(f"Convergence: {scene.convergence}")
 ```
+
+### Explicit Native Recipes (Opt-In)
+
+`GaussianBackend` defaults to `implementation="legacy"`. Select
+`implementation="torch_native"` explicitly for the local Torch compositor and
+metric-depth initialization from scratch. It does not download or attest a
+pretrained checkpoint; leave `model_repo` and `model_revision` at their defaults.
+The existing research-tier restrictions still apply.
+
+```python
+backend = GaussianBackend(
+    tier="experimental",
+    device="cpu",
+    implementation="torch_native",
+    native_recipe="anisotropic_shuffled_rgb_v1",
+    optimization_seed=12345,
+    optimization_max_gaussians=5000,
+)
+input_data = ReconstructionInput(
+    images=linear_rgb_views,       # float32 (H, W, 3), finite values in [0, 1]
+    gamma=1.0,
+    cameras=calibrated_cameras,    # supplied rigid world-to-camera poses
+    depth_maps=metric_depth_views, # float32 (H, W), camera-axis depth in metres
+    tier="experimental",
+)
+scene = backend.reconstruct(input_data, iterations=600, use_depth_prior=True)
+```
+
+All native recipes require supplied depth for every view, at least two views,
+matching training image dimensions, and image/camera/depth alignment. Selected
+depth samples must be finite, positive and nonempty. Cameras must be undistorted
+pinhole cameras with finite positive focal lengths, zero skew and rigid
+world-to-camera `extrinsics`; initialization uses their inverse to obtain world
+positions. Do not substitute camera-to-world poses or relative/normalized depth.
+Optional masks restrict depth support when `use_segmentation=True`. PBR material
+maps and `use_pbr_textures=True` are unsupported.
+
+| `native_recipe` | Iteration meaning | Seed and objective |
+|-----------------|-------------------|--------------------|
+| `isotropic_full_batch_v1` (default) | One optimizer update across all training views | `optimization_seed=None` is allowed; isotropic rendering with RGB loss and metric position/log-scale priors. |
+| `anisotropic_shuffled_rgb_v1` | One shuffled camera update; 1–30,000 updates | Explicit nonnegative integer seed required; quaternion-aware anisotropic rendering, RGB loss and the same metric priors. |
+| `anisotropic_shuffled_rgbd_v1` | One shuffled camera update; 1–30,000 updates | Same seed requirement; adds fixed 0.1-weight expected-depth MSE normalized by one metre. |
+
+Shuffled recipes evaluate the full training objective at step zero, after each
+complete camera cycle and at the final update. They restore the first strictly
+lowest eligible objective checkpoint, which may be step zero; performed updates
+and the selected checkpoint are recorded separately in optimizer provenance.
+RGBD additionally requires each view's supplied-depth alpha coverage at threshold
+0.5 to remain within 0.02 of its initial coverage. Its depth term and coverage
+guard describe a training tradeoff, not independently verified surface accuracy.
+
+Native initialization is bounded to at most 10,000 sampled Gaussians and
+64,000,000 Gaussian × image-pixel pairs per view; `optimization_max_gaussians`
+must be a positive integer and permit at least one point per view. These are
+allocation/work guards, not measured total RSS or elapsed-time guarantees.
+Native output has no spherical harmonics or densification. `scene.rmse` is RGB
+RMSE over all training views at the saved checkpoint; convergence requires
+RMSE < 0.02. Neither native fixture tests nor training convergence establish
+held-out, photographic or production acceptance.
 
 ### Command-Line Usage
 
@@ -251,6 +310,25 @@ exporter.export_ply(
     include_attributes=True,  # scales, rotations, opacities
 )
 ```
+
+For native scenes, use the recipe-aware `PLYExporter` and retain its provenance
+sidecar:
+
+```python
+from pathlib import Path
+from transformation_portal.spatial_ai.reconstruction import PLYExporter
+
+PLYExporter().export(scene, Path("output/native_scene.ply"), write_sidecar=True)
+```
+
+The sidecar records `native_recipe`, implementation, source/runtime/input
+provenance and optimizer details when present. PLY colors are linear RGB
+quantized to uint8, not a photographic delivery transform. Rendering requires a
+backend with the saved native recipe; rendering and PLY export reject conflicting
+recipe/implementation tags before output creation, even with `write_sidecar=False`.
+Historical native scenes without recipe tags resolve to `isotropic_full_batch_v1`;
+unmarked legacy scenes retain their existing behavior. Preserve metadata on reload
+so automatic public RMSE validation can select the recorded recipe, device and seed.
 
 ### OBJ Export
 
@@ -409,9 +487,17 @@ class GaussianBackend:
         tier: str = "apex_research",
         device: Optional[str] = None,
         model_repo: str = "graphdeco-inria/gaussian-splatting",
-        model_revision: str = "<VERIFY_AND_UPDATE>",  # Must be valid 40-char SHA
+        # Legacy checkpoint use requires a verified revision; native keeps defaults.
+        model_revision: str = "NEEDS_VERIFICATION_0000000000000000000000",
+        cache_dir: Optional[str] = None,
         optimization_seed: Optional[int] = None,
         optimization_max_gaussians: int = 5000,
+        implementation: Literal["legacy", "torch_native"] = "legacy",
+        native_recipe: Literal[
+            "isotropic_full_batch_v1",
+            "anisotropic_shuffled_rgb_v1",
+            "anisotropic_shuffled_rgbd_v1",
+        ] = "isotropic_full_batch_v1",
     ) -> None: ...
 
     def reconstruct(

@@ -126,8 +126,11 @@ Inferred edits require an explicitly admitted calibration digest, matching
 region and producer recipe identities, supported calibrated-probability
 semantics, photographic domain, and covered class. A calibration receipt is an
 identity-bearing artifact, not self-authenticating trust. The local experimental
-SAM2.1/OpenCLIP adapter emits uncalibrated rankings and cannot satisfy this
-contract by changing a label or score string.
+SAM2.1/OpenCLIP adapter emits uncalibrated rankings by default. An explicitly
+selected fitting artifact may produce draft probabilities only when its frozen
+recipe matches; uncovered, rejected, and out-of-range regions still abstain.
+Fitting remains unreviewed and never changes the policy allowlist. Renaming a
+label or score string cannot satisfy the inferred-edit contract.
 
 ## Completion evidence and independent verification
 

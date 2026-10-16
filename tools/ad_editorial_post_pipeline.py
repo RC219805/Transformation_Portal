@@ -1055,10 +1055,17 @@ def split_tone(
         (hi_h, hi_s, np.clip(luma * 2 - 1, 0, 1)),
     ):
         if target is not None and strength > 0:
-            # Blend hue along the shortest circular path, preserving float precision.
-            delta = (float(target) - hsv[..., 0] + 180) % 360 - 180
-            hsv[..., 0] = (hsv[..., 0] + delta * mask) % 360
-            hsv[..., 1] = np.clip(hsv[..., 1] + strength * mask, 0, 1)
+            # Blend chroma vectors so opposing hues cannot cross an angular
+            # branch cut. Strength controls the blend; zero chroma also removes
+            # hue ambiguity when opposite colors cancel. Keep value unchanged.
+            alpha = np.clip(strength * mask, 0, 1)
+            angle = np.deg2rad(hsv[..., 0])
+            tint_angle = np.deg2rad(float(target))
+            source_chroma = (1 - alpha) * hsv[..., 1]
+            chroma_x = source_chroma * np.cos(angle) + alpha * np.cos(tint_angle)
+            chroma_y = source_chroma * np.sin(angle) + alpha * np.sin(tint_angle)
+            hsv[..., 0] = np.rad2deg(np.arctan2(chroma_y, chroma_x)) % 360
+            hsv[..., 1] = np.clip(np.hypot(chroma_x, chroma_y), 0, 1)
     return _hsv_to_rgb(hsv)
 
 
