@@ -18,9 +18,9 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-from transformation_portal.metrics.contracts import BucketStats
+from transformation_portal.metrics.aggregator import compute_bucket_stats
 from transformation_portal.metrics.gate import evaluate_gate
-from transformation_portal.metrics.performance_capsule import PerformanceCapsule
+from transformation_portal.metrics.performance_capsule import PerformanceBucket, PerformanceCapsule
 
 APEX_MATRIX_RUNNER = Path("scripts/ci/apex/matrix_runner.py")
 APEX_PR_COMMENT = Path("scripts/ci/apex/pr_comment.py")
@@ -130,24 +130,37 @@ class TestAggregationScoping:
 class TestMinimumSampleSize:
     """Test that minimum sample size protection works."""
 
+    @staticmethod
+    def explicit_stats(count):
+        capsules = [
+            PerformanceCapsule(
+                image_id=f"input-{i}",
+                image_path=f"/input-{i}.jpg",
+                input_hash=f"sha-{i}",
+                original_shape=(100, 100),
+                enforced_shape=(100, 100),
+                pixel_count=10000,
+                dimension_adjustment="exact",
+                timings={"total": 10.0 if i < count - 1 else 15.0},
+                schema_version="2.1.0",
+                measurement_id=f"call-{i}",
+                measurement_unit="image_wall_seconds",
+                workload_id="fixed-workload",
+                backend_id="da3",
+                model_variant="metric",
+                config_hash="recipe",
+                pipeline_version="source",
+                zone="local",
+            )
+            for i in range(count)
+        ]
+        bucket = PerformanceBucket("test_bucket", {}, 12.0, 20.0, measurement_unit="image_wall_seconds", workload_id="*")
+        return compute_bucket_stats(capsules, bucket)
+
     def test_insufficient_data_for_small_n(self):
         """Verify that n < 20 produces insufficient_data verdict."""
         # Create a judgement with only 1 sample
-        bucket_stats = {
-            "test_bucket": BucketStats(
-                bucket_name="test_bucket",
-                count=1,  # Below minimum
-                p50=10.0,
-                p95=15.0,
-                p99=16.0,
-                mean=11.0,
-                min=9.0,
-                max=16.0,
-                threshold_p50=12.0,
-                threshold_p95=20.0,
-                pass_fail="pass",  # Will be overridden
-            )
-        }
+        bucket_stats = {"test_bucket": self.explicit_stats(1)}
 
         # Evaluate gate
         result = evaluate_gate(
@@ -164,21 +177,7 @@ class TestMinimumSampleSize:
 
     def test_sufficient_data_for_large_n(self):
         """Verify that n >= 20 allows normal verdict."""
-        bucket_stats = {
-            "test_bucket": BucketStats(
-                bucket_name="test_bucket",
-                count=25,  # Above minimum
-                p50=10.0,
-                p95=15.0,
-                p99=16.0,
-                mean=11.0,
-                min=9.0,
-                max=16.0,
-                threshold_p50=12.0,
-                threshold_p95=20.0,
-                pass_fail="pass",
-            )
-        }
+        bucket_stats = {"test_bucket": self.explicit_stats(25)}
 
         result = evaluate_gate(
             bucket_stats=bucket_stats,
@@ -189,25 +188,12 @@ class TestMinimumSampleSize:
         # With n=25 and p95 < threshold, should PASS
         assert not result.should_block, f"Should not block when p95 < threshold with sufficient samples"
         assert len(result.reasons) == 0, "Should have no blocking reasons"
+        assert result.explanation == "Gate PASSED"
 
     @pytest.mark.parametrize("n", [1, 5, 10, 15, 19])
     def test_boundary_cases_below_minimum(self, n):
         """Test various sample sizes below the 20 threshold."""
-        bucket_stats = {
-            "test_bucket": BucketStats(
-                bucket_name="test_bucket",
-                count=n,
-                p50=10.0,
-                p95=15.0,
-                p99=16.0,
-                mean=11.0,
-                min=9.0,
-                max=16.0,
-                threshold_p50=12.0,
-                threshold_p95=20.0,
-                pass_fail="pass",
-            )
-        }
+        bucket_stats = {"test_bucket": self.explicit_stats(n)}
 
         result = evaluate_gate(
             bucket_stats=bucket_stats,

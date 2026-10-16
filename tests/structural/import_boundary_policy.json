@@ -23,7 +23,9 @@
       ],
       "allow_import_globs": [
         "scripts.apex_dashboard_generator",
+        "scripts.apex_enforce_gate",
         "scripts.apex_matrix_runner",
+        "scripts.apex_pr_comment",
         "scripts.governance",
         "scripts.lib.repo_root",
         "scripts.pipelines.pro_pipeline",

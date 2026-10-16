@@ -20,6 +20,42 @@ from transformation_portal.metrics.performance_capsule import PerformanceBucket,
 pytestmark = pytest.mark.unit
 
 
+def test_unattributed_copies_of_one_batch_cannot_establish_twenty_measurements():
+    """Historical capsules retain descriptive totals without asserting independence."""
+    capsules = []
+    for i in range(20):
+        payload = TestAggregator().create_capsule(f"image-{i}", 40.0).to_dict()
+        for name in ("measurement_id", "measurement_unit", "workload_id"):
+            payload.pop(name, None)
+        payload["schema_version"] = "2.0.0"
+        capsules.append(PerformanceCapsule.from_dict(payload))
+    bucket = PerformanceBucket("batch-copies", {}, 1.0, 2.0)
+    stats = compute_bucket_stats(capsules, bucket)
+    assert stats is not None
+    assert stats.is_insufficient_data
+    assert stats.count == 0
+    assert stats.p95 == 40.0
+
+
+def test_explicit_batch_identity_counts_once_without_dividing_total():
+    capsules = []
+    for i in range(20):
+        payload = TestAggregator().create_capsule(f"image-{i}", 40.0).to_dict()
+        payload.update(
+            schema_version="2.1.0",
+            measurement_id="actual-invocation",
+            measurement_unit="batch_wall_seconds",
+            workload_id="six-originals",
+        )
+        capsules.append(PerformanceCapsule.from_dict(payload))
+    bucket = PerformanceBucket("batch-copies", {}, 1.0, 2.0)
+    stats = compute_bucket_stats(capsules, bucket)
+    assert stats is not None
+    assert stats.count == 1
+    assert stats.p95 == 40.0
+    assert stats.is_insufficient_data
+
+
 class TestAggregator:
     """Test APEX aggregator functionality."""
 
@@ -48,6 +84,13 @@ class TestAggregator:
             scene_type=scene_type,
             device=device,
             backend_id="da3",
+            model_variant="metric",
+            pipeline_version="source",
+            config_hash="recipe",
+            schema_version="2.1.0",
+            measurement_id=image_id,
+            measurement_unit="image_wall_seconds",
+            workload_id="fixed-image-workload",
         )
 
     def test_compute_bucket_stats(self):
@@ -144,22 +187,24 @@ class TestAggregator:
         global_stats = compute_global_stats(capsules, buckets)
 
         assert "pool_medium_mps" in global_stats
-        assert global_stats["pool_medium_mps"].count == 4
+        assert global_stats["pool_medium_mps"].count == 0
+        assert global_stats["pool_medium_mps"].is_insufficient_data
+        assert global_stats["pool_medium_mps"].measurement_evidence["assessment"]["capsule_count"] == 4
         # Median of [8, 10, 12, 14] is (10+12)/2 = 11.0 (correct median for even-sized sample)
         assert global_stats["pool_medium_mps"].p50 == 11.0
 
     def test_compute_worst_zone_p95(self):
         """Test worst-zone p95 detection."""
+        bucket = PerformanceBucket(
+            "explicit-pool-budget", {}, 11.0, 15.0, measurement_unit="image_wall_seconds", workload_id="*"
+        )
         per_zone_stats = {
-            "us-west-2a": {
-                "pool_medium_mps": type("BucketStats", (), {"p95": 10.0})(),
-            },
-            "us-west-2b": {
-                "pool_medium_mps": type("BucketStats", (), {"p95": 15.0})(),
-            },
-            "us-east-1a": {
-                "pool_medium_mps": type("BucketStats", (), {"p95": 12.0})(),
-            },
+            zone: {
+                bucket.name: compute_bucket_stats(
+                    [self.create_capsule(f"{zone}-{i}", total, zone=zone) for i in range(20)], bucket
+                )
+            }
+            for zone, total in (("us-west-2a", 10.0), ("us-west-2b", 15.0), ("us-east-1a", 12.0))
         }
 
         worst_zone, worst_p95 = compute_worst_zone_p95(per_zone_stats)

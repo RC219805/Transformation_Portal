@@ -40,17 +40,20 @@ Version: 1.0.0
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import importlib.util
 import json
 import logging
 import math
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence
 
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3._backend_contract import normalize_backend_id
 from transformation_portal.metrics.aggregator import (
     compute_global_stats,
@@ -59,6 +62,7 @@ from transformation_portal.metrics.aggregator import (
     log_aggregated_stats_to_ledger,
 )
 from transformation_portal.metrics.contracts import Observation, RunSpec
+from transformation_portal.metrics.measurement import validate_measurement_identities
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 from transformation_portal.metrics.timing import timing_context
 
@@ -486,6 +490,8 @@ def run_apex_for_config(
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(batch_timeout_seconds)
     batch_timings: dict[str, float] = {}
+    # An invocation identity is fresh even when the frozen workload is repeated.
+    measurement_id = str(uuid.uuid4())
     try:
         # The public batch call does not complete until prepared input
         # snapshots are removed and every manifest, run card, and execution
@@ -510,6 +516,28 @@ def run_apex_for_config(
         batch_results,
         batch_total_seconds=batch_total_seconds,
     )
+    # A partial batch still consumed the full frozen workload and wall time.
+    # It cannot become a successful measurement of only the surviving inputs.
+    if len(validated_results) != len(images):
+        raise RuntimeError("APEX authoritative batch has failed inputs; cannot publish complete measurement evidence")
+    # Output roots and input aliases are invocation locations, not workloads.
+    # Bind stable recipe/runtime intent plus ordered full source-byte identities.
+    recipe = prepared.plan.to_payload()
+    for invocation_field in ("plan_fingerprint_sha256", "input_selection", "warnings"):
+        recipe.pop(invocation_field)
+    config_hash = hashlib.sha256(canonicalize_json({"schema": "tp.apex.recipe.v1", "execution": recipe})).hexdigest()
+    workload_id = hashlib.sha256(
+        canonicalize_json(
+            {
+                "schema": "tp.apex.workload.v1",
+                "recipe_sha256": config_hash,
+                "inputs": [
+                    {"sha256": row.input_sha256, "original_shape": row.original_shape, "enforced_shape": row.enforced_shape}
+                    for row in validated_results
+                ],
+            }
+        )
+    ).hexdigest()
 
     for row in validated_results:
         # ``total`` is the contract-stable gate input. Every capsule carries
@@ -540,6 +568,11 @@ def run_apex_for_config(
                 scene_type=run_spec.scene_type,
                 pipeline_version=pipeline_version,
                 is_synthetic=synthetic,
+                schema_version="2.1.0",
+                measurement_id=measurement_id,
+                measurement_unit="batch_wall_seconds",
+                workload_id=workload_id,
+                config_hash=config_hash,
             )
         )
         logger.info("✅ %s: %.2fs", row.image_path.name, timings["total"])
@@ -552,6 +585,12 @@ def run_apex_for_config(
             "authoritative_batch_total": batch_total_seconds,
             "inner_pipeline_total": inner_pipeline_total,
             "shared_batch_overhead": shared_batch_overhead_seconds,
+        },
+        resource_metadata={
+            "plan_fingerprint_sha256": prepared.plan_fingerprint_sha256,
+            "workload_schema": "tp.apex.workload.v1",
+            "recipe_schema": "tp.apex.recipe.v1",
+            "recipe_sha256": config_hash,
         },
     )
 
@@ -697,6 +736,7 @@ def main() -> int:
 
     try:
         # Group observations by workflow version
+        validate_measurement_identities([c for obs in all_observations for c in obs.capsules])
         v1_capsules = []
         v2_capsules = []
 
@@ -716,7 +756,7 @@ def main() -> int:
             v1_global = compute_global_stats(v1_capsules)
             v1_worst_zone, v1_worst_p95 = compute_worst_zone_p95(v1_per_zone)
 
-            logger.info(f"V1 worst-zone p95: {v1_worst_p95:.2f}s (zone: {v1_worst_zone})")
+            logger.info("V1 qualifying worst-zone p95: %s (zone: %s)", v1_worst_p95, v1_worst_zone)
 
             # Write per-zone stats to ledger
             log_aggregated_stats_to_ledger(
@@ -744,7 +784,7 @@ def main() -> int:
             v2_global = compute_global_stats(v2_capsules)
             v2_worst_zone, v2_worst_p95 = compute_worst_zone_p95(v2_per_zone)
 
-            logger.info(f"V2 worst-zone p95: {v2_worst_p95:.2f}s (zone: {v2_worst_zone})")
+            logger.info("V2 qualifying worst-zone p95: %s (zone: %s)", v2_worst_p95, v2_worst_zone)
 
             # Write per-zone stats to ledger
             log_aggregated_stats_to_ledger(
