@@ -314,6 +314,61 @@ def test_float_grading_resize_and_sharpen_retain_sub_8bit_detail(editorial):
     np.testing.assert_allclose(editorial.unsharp_mask(constant), constant, atol=1e-7)
 
 
+@pytest.mark.parametrize("target", [30.0, 210.0, 350.0])
+@pytest.mark.parametrize("band", ["shadows", "highlights"])
+def test_split_tone_is_rgb_continuous_across_opposing_hue(editorial, target, band):
+    import colorsys
+
+    # A tiny input change must not create the old opposing-hue color jump.
+    opposite = (target + 180) % 360
+    value = 0.2 if band == "shadows" else 0.9
+    image = np.array(
+        [[colorsys.hsv_to_rgb((opposite + offset) / 360, 0.3, value) for offset in (-0.001, 0.001)]],
+        dtype=np.float32,
+    )
+    output = (
+        editorial.split_tone(image, target, 0.06, None, 0)
+        if band == "shadows"
+        else editorial.split_tone(image, None, 0, target, 0.06)
+    )
+    assert np.max(np.abs(output[0, 0] - output[0, 1])) < 1e-4
+    assert np.isfinite(output).all()
+
+
+def test_split_tone_strength_tends_to_identity(editorial):
+    image = np.array([[[0.2, 0.16, 0.12]]], dtype=np.float32)
+    assert editorial.split_tone(image, 210, 0, 38, 0) is image
+    output = editorial.split_tone(image, 210, 1e-7, None, 0)
+    np.testing.assert_allclose(output, image, atol=1e-6, rtol=0)
+
+
+@pytest.mark.parametrize("value", [0.0, 0.2, 0.8])
+def test_split_tone_achromatic_input_has_defined_strength(editorial, value):
+    import colorsys
+
+    image = np.full((1, 1, 3), value, dtype=np.float32)
+    alpha = 0.06 * max(1 - value * 2, 0)
+    expected = colorsys.hsv_to_rgb(210 / 360, alpha, value)
+    output = editorial.split_tone(image, 210, 0.06, None, 0)
+    np.testing.assert_allclose(output[0, 0], expected, atol=1e-7, rtol=0)
+
+
+def test_split_tone_opposing_chroma_cancellation_is_continuous(editorial):
+    import colorsys
+
+    image = np.array(
+        [[colorsys.hsv_to_rgb((30 + offset) / 360, 1, 0.2) for offset in (-0.001, 0, 0.001)]],
+        dtype=np.float32,
+    )
+    # At the center, the weighted opposing vectors cancel to gray. Recovering
+    # both angle and magnitude keeps the resulting RGB continuous there.
+    center_luma = np.sum(image[0, 1] * editorial.PROPHOTO_TO_XYZ[1])
+    strength = 0.5 / (1 - 2 * center_luma)
+    output = editorial.split_tone(image, 210, strength, None, 0)
+    np.testing.assert_allclose(output[0, 1], [0.2, 0.2, 0.2], atol=1e-6, rtol=0)
+    assert np.max(np.abs(output[0] - output[0, 1])) < 1e-4
+
+
 def test_float_dust_reconstruction_does_not_ring_across_unit_range(editorial, monkeypatch):
     pytest.importorskip("cv2")
     image = np.full((64, 64, 3), 0.95, dtype=np.float32)
