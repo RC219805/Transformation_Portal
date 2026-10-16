@@ -9137,15 +9137,21 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "868a8732f67bd9489aafd4ac5d8db5d870a01ead",
-      "content_sha256": "1fe139a54f430ced4b3421dfed40e91df2aa37ef8ae856e68ce567e37601064c",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "aee529453ae98a12d60846f88245ad26781311add9d350a8ca3127f27a1d60de",
       "source_references": [
         "src/transformation_portal/materials_v4/__main__.py",
-        "src/transformation_portal/core/execution_plan_v3.py"
+        "src/transformation_portal/core/execution_plan_v3.py",
+        "src/transformation_portal/materials_v4/calibration.py",
+        "src/transformation_portal/materials_v4/inference.py",
+        "tests/materials_v4/test_calibration.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/materials_v4/__main__.py": "6ecda4224211076562619dda7c12af71fe3ccd7be9775235979843ecd21f8589",
-        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b"
+        "src/transformation_portal/materials_v4/__main__.py": "12cec741fb1cd21985f75ec6d983c5329afd108d0f8cee30081b2db2b69bf93a",
+        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
+        "src/transformation_portal/materials_v4/calibration.py": "16817be12c0510f43ae36229b58cd4c2ad7c6174b5d8d3fbdc60c9ce7d8d6fe4",
+        "src/transformation_portal/materials_v4/inference.py": "e7aa7f646c0f76d78491acccdfa02be502d788f1f70d08eb40593fc5f34448cf",
+        "tests/materials_v4/test_calibration.py": "c64be964aff94f0eda04bc38f433269435387ba8770efa22a3cc60403c552aba"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -14639,15 +14645,21 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "868a8732f67bd9489aafd4ac5d8db5d870a01ead",
-      "content_sha256": "3aff67456dc14af99427cfd499ea368b32e28f4c027b95f69ee855df806e1059",
+      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
+      "content_sha256": "24b704bd5a2ed44b5d98e200a172d43b77497040bcdd91878c90f7c1b44a39c7",
       "source_references": [
         "src/transformation_portal/materials_v4/__main__.py",
-        "src/transformation_portal/core/execution_plan_v3.py"
+        "src/transformation_portal/core/execution_plan_v3.py",
+        "src/transformation_portal/materials_v4/calibration.py",
+        "src/transformation_portal/materials_v4/inference.py",
+        "tests/materials_v4/test_calibration.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/materials_v4/__main__.py": "6ecda4224211076562619dda7c12af71fe3ccd7be9775235979843ecd21f8589",
-        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b"
+        "src/transformation_portal/materials_v4/__main__.py": "12cec741fb1cd21985f75ec6d983c5329afd108d0f8cee30081b2db2b69bf93a",
+        "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
+        "src/transformation_portal/materials_v4/calibration.py": "16817be12c0510f43ae36229b58cd4c2ad7c6174b5d8d3fbdc60c9ce7d8d6fe4",
+        "src/transformation_portal/materials_v4/inference.py": "e7aa7f646c0f76d78491acccdfa02be502d788f1f70d08eb40593fc5f34448cf",
+        "tests/materials_v4/test_calibration.py": "c64be964aff94f0eda04bc38f433269435387ba8770efa22a3cc60403c552aba"
       },
       "validation_commands": [
         "make check-documentation-catalog"

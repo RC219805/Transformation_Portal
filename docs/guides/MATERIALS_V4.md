@@ -255,11 +255,11 @@ Classifier crops exclude pixels outside each proposal and execute in bounded
 batches. Rejection considers an unknown prompt, absolute cosine similarity,
 relative top score, and top-two margin. Weak or ambiguous rankings emit unknown.
 
-The emitted score type is `uncalibrated_clip_ranking_v1`. Its softmax is a
+The default emitted score type is `uncalibrated_clip_ranking_v1`. Its softmax is a
 relative ranking over the fixed prompt vocabulary, not calibrated material
 probability. SAM predicted IoU and stability remain geometric evidence. These
 inferred regions do not authorize automatic photographic edits even when a
-ranking is numerically high. The experiment emits no calibration receipt,
+ranking is numerically high. Default inference emits no calibration receipt,
 consults no inference cache, and never reuses a V3 segmentation cache.
 
 Automatic inferred editing requires a separately reviewed calibration receipt,
@@ -269,6 +269,88 @@ covered classes, and matching producer recipe identities. Receipt construction,
 self-declared score strings, or a caller writing a digest do not create trusted
 calibration. The default allowlist is empty; do not relabel prototype rankings
 as supplied or calibrated evidence to bypass abstention.
+
+## Fit a draft calibration artifact
+
+The additive `fit-calibration` command fits classwise isotonic regression to
+top-label correctness on calibration records only. It pools equal scores and
+adjacent monotonicity violations using record counts as weights. Application is
+constant within fitted score blocks, interpolates gaps, and abstains outside
+the observed score range or uncovered classes. This estimates label correctness
+for the frozen recipe; it does not certify segmentation quality or performance
+on unseen properties. Five records, distinct scores, and both correct and
+incorrect examples are the minimum fitting support per class, not an acceptance
+threshold. Independent held-out measurements and photographic review remain
+required.
+
+The strict `tp.materials.calibration_input.v1` object has exactly `schema`,
+`evaluation`, `split_membership`, and `bindings`. `evaluation` uses the existing
+evaluation-input schema below, but every record must belong to `calibration`,
+mask arrays must be null, and `selection_sources` must cover exactly the fitting
+sources. No sealed test labels or scores are accepted. `split_membership` lists
+all original sources as objects with `source_path`, `source_sha256`,
+`property_group`, and `split`. Paths are relative to `--source-root`; source
+bytes are verified and sources and property groups cannot cross splits.
+Folder names alone do not establish independent properties.
+
+Each binding has exactly `record_id`, `evidence_path`, `evidence_sha256`,
+`region_id`, `annotation_path`, and `annotation_sha256`. Evidence and annotation
+paths are relative to `--data-root`. Original uncalibrated inference scores must
+match the record; repeated source/region observations cannot inflate support.
+Every evidence producer must use the same model, runtime, prompt, preprocessing,
+taxonomy, thresholds, and region-construction recipe. These identities are
+derived during preparation; a caller does not supply a trusted recipe.
+
+An annotation file uses `tp.materials.annotation.v1` and exactly these fields:
+`schema`, `source_sha256`, `shape`, `property_group`, `label`, `mask_path`,
+`mask_sha256`, `annotator`, `reviewer`, and `review_status`. Its mask is a nonempty
+binary, C-contiguous float32 NPY in the orientation-normalized source frame,
+relative to the annotation file. It must cover at least half of the predicted
+region, so an unrelated annotation cannot supply its label. The label, source,
+geometry, group, and all file hashes must match. Fitting requires the declaration
+`review_status: reviewed` and distinct, explicit annotator/reviewer identities;
+these are recorded declarations, not authenticated credentials or a trust grant.
+Agent-generated labels/masks must remain draft until an actual human reviewer
+has inspected them. Never invent reviewer identities.
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m transformation_portal.materials_v4 fit-calibration \
+  --input "$MATERIALS_WORK_ROOT/calibration-input.json" \
+  --source-root "$PRIVATE_INPUT_ROOT" --data-root "$MATERIALS_WORK_ROOT" \
+  --output-dir "$MATERIALS_WORK_ROOT/new-calibration-fit"
+
+# Optional: applies fitting parameters only when the frozen recipe matches.
+# Keep all inference options identical to those used to produce fitting scores.
+PYTHONPATH=src "$MATERIALS_EXPERIMENT_PYTHON" \
+  -m transformation_portal.materials_v4 infer \
+  --source "$PRIVATE_INPUT_ROOT/$SOURCE_RELATIVE_PATH" \
+  --source-relative-path "$SOURCE_RELATIVE_PATH" --input-color "$INPUT_COLOR" \
+  --sam2-checkpoint "$SAM2_CHECKPOINT" --clip-checkpoint "$CLIP_CHECKPOINT" \
+  --device cpu --proxy-longest-side 1024 --max-proposals 64 \
+  --classifier-batch-size 8 \
+  --calibration-artifact "$MATERIALS_WORK_ROOT/new-calibration-fit/calibration.json" \
+  --output-dir "$MATERIALS_WORK_ROOT/new-calibrated-experiment"
+```
+
+The fit directory must be new. Its numeric JSON artifact and existing
+`tp.materials.calibration.v1` receipt always remain `unreviewed`, with
+`acceptance: not_assessed`. Loading or fitting never changes the policy allowlist.
+Calibration input and the complete artifact, including its receipt, are each
+limited to 16 MiB and 10,000 fitting records. The calibration-specific parser
+rejects duplicate keys, nonfinite numbers, unsupported values, and excessive
+nesting; the stored fit is deeply immutable and retains every field. These
+limits do not relax the smaller evidence-metadata or execution-plan JSON limits.
+Only separately reviewed admission of the receipt's digest can permit inferred
+edits, through the existing producer/class/domain checks. Parameter, checkpoint,
+runtime, or artifact changes fail closed before or after inference. Uncovered,
+rejected, or out-of-range regions retain their uncalibrated score semantics and
+abstain. Keep the source and evidence roots protected throughout fitting.
+
+For large originals, restored full-frame masks may reach their aggregate budget
+even when the proxy is small. The optional `--points-per-side` controls the SAM
+prompt grid (default 16); use an explicitly smaller grid for bounded experiments
+rather than weakening mask or pre-NMS admission limits. Recipe identities bind
+this setting, so changing it requires new matching fitting observations.
 
 ## Evaluate declared annotations
 
