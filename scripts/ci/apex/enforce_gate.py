@@ -9,11 +9,14 @@ Modes:
   - shadow:  Report failures but always exit zero (informational)
   - disabled: Skip entirely
 """
+
 import argparse
 import logging
 import sqlite3
 import sys
 from pathlib import Path
+
+from transformation_portal.metrics.measurement import decode_aggregate_row
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("apex_gate")
@@ -29,6 +32,9 @@ def enforce_gate(db_path: Path, run_id: str, commit_sha: str, mode: str = "enfor
     if mode == "disabled":
         logger.info("Gate enforcement disabled, skipping")
         return 0
+    if mode not in ("enforce", "shadow"):
+        logger.error(f"Unknown mode: {mode}")
+        return 2
 
     if not db_path.exists():
         logger.error(f"Ledger database not found: {db_path}")
@@ -36,39 +42,58 @@ def enforce_gate(db_path: Path, run_id: str, commit_sha: str, mode: str = "enfor
 
     try:
         with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT bucket_name, zone, p95, threshold_p95, pass_fail
+                SELECT bucket_name, zone, workflow_version, p50, p95, p99,
+                       count, threshold_p50, threshold_p95, pass_fail, raw_capsules_json
                 FROM apex_runs
                 WHERE run_id = ?
                   AND workflow_version = 'v2'
                   AND commit_sha = ?
-                  AND pass_fail = 'fail'
             """,
                 (run_id, commit_sha),
             )
 
-            failures = cursor.fetchall()
+            rows = [decode_aggregate_row(dict(row)) for row in cursor.fetchall()]
+            eligible = [row for row in rows if not row["is_insufficient_data"]]
+            insufficient_count = len(rows) - len(eligible)
+            if insufficient_count:
+                logger.info(
+                    "Insufficient measurement evidence in %d V2 bucket(s); excluded from enforcement", insufficient_count
+                )
+            if not eligible:
+                logger.info("APEX gate has insufficient measurement evidence; no V2 bucket assessed (non-blocking)")
+                return 0
+            failures = [row for row in eligible if row["pass_fail"] == "fail"]
 
             if not failures:
-                logger.info("✅ APEX gate passed (no V2 FAIL buckets)")
+                if insufficient_count:
+                    logger.info("No assessed V2 bucket failed; overall evidence remains insufficient (non-blocking)")
+                else:
+                    logger.info("✅ APEX gate passed (no assessed V2 FAIL buckets)")
                 return 0
 
             # Report failures
             logger.warning(f"⚠️  Found {len(failures)} failing V2 bucket(s):")
-            for bucket, zone, p95, threshold, status in failures:
-                zone_str = zone or "Global"
-                logger.warning(f"  • {bucket} [{zone_str}]: p95={p95:.2f}s (limit={threshold:.2f}s)")
+            for row in failures:
+                zone_str = row["zone"] or "Global"
+                logger.warning(
+                    "  • %s [%s]: p95=%.2fs (limit=%.2fs); %d independent measurements (%s)",
+                    row["bucket_name"],
+                    zone_str,
+                    row["p95"],
+                    row["threshold_p95"],
+                    row["count"],
+                    row["measurement_unit"],
+                )
 
             if mode == "shadow":
                 logger.info("🔍 Shadow mode: reporting only, not blocking (gate would have failed)")
                 return 0
-            elif mode == "enforce":
+            else:
                 logger.error(f"❌ APEX gate failed: {len(failures)} bucket(s) exceeded thresholds")
                 return 1
-            else:
-                logger.error(f"Unknown mode: {mode}")
-                return 2
 
     except Exception as e:
         logger.exception(f"Gate enforcement error: {e}")
@@ -88,6 +113,9 @@ def main():
     )
 
     args = parser.parse_args()
+    # Import-time warnings may already have initialized root logging. Set only
+    # the CLI's logger so insufficient-evidence explanations remain observable.
+    logger.setLevel(logging.INFO)
     sys.exit(enforce_gate(args.ledger_db, args.run_id, args.commit_sha, args.mode))
 
 

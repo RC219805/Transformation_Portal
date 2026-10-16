@@ -43,9 +43,11 @@ Version: 1.0.0
 from __future__ import annotations
 
 import logging
+import math
 from typing import Dict, Literal, Optional
 
 from transformation_portal.metrics.contracts import BucketStats, RegressionReport
+from transformation_portal.metrics.measurement import decode_aggregate_row, stats_are_comparable
 from transformation_portal.metrics.sql_safety import normalize_query_limit
 
 __version__ = "1.0.0"
@@ -102,6 +104,14 @@ def compare_to_baseline(
     Returns:
         RegressionReport with verdict and details
     """
+    if (
+        any(
+            isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0
+            for value in (warn_threshold, fail_threshold)
+        )
+        or warn_threshold > fail_threshold
+    ):
+        raise ValueError("Comparison thresholds must be finite, non-negative and ordered")
     bucket_regressions: Dict[str, float] = {}
     max_regression = 0.0
     max_regression_bucket = ""
@@ -113,6 +123,9 @@ def compare_to_baseline(
             continue
 
         baseline_bucket = baseline_stats[bucket_name]
+
+        if not stats_are_comparable(current_bucket, baseline_bucket):
+            continue
 
         # Compare p95 (primary metric for Quality Firewall)
         regression = compute_regression_delta(
@@ -142,7 +155,11 @@ def compare_to_baseline(
         )
     else:
         status = "pass"
-        explanation = f"No significant regression detected (max: {max_regression * 100:.1f}%)"
+        explanation = (
+            f"No significant regression detected (max: {max_regression * 100:.1f}%)"
+            if bucket_regressions
+            else "Insufficient compatible measurement evidence for regression comparison"
+        )
 
     return RegressionReport(
         baseline_run_id=baseline_run_id,
@@ -154,6 +171,13 @@ def compare_to_baseline(
         max_regression_bucket=max_regression_bucket,
         status=status,
         explanation=explanation,
+        measurement_evidence={
+            "schema": "tp.apex.comparison.summary.v1",
+            "current": {name: stats.to_dict() for name, stats in current_stats.items()},
+            "baseline": {name: stats.to_dict() for name, stats in baseline_stats.items()},
+            "warn_threshold": warn_threshold,
+            "fail_threshold": fail_threshold,
+        },
     )
 
 
@@ -228,6 +252,8 @@ def query_baseline_stats(
     if zone is not None:
         where_clauses.append("zone = ?")
         params.append(zone)
+    else:
+        where_clauses.append("zone IS NULL")
 
     if commit_sha is not None:
         where_clauses.append("commit_sha = ?")
@@ -238,6 +264,7 @@ def query_baseline_stats(
     baseline_stats: Dict[str, BucketStats] = {}
 
     with sqlite3.connect(ledger_db_path) as conn:
+        conn.row_factory = sqlite3.Row
         # Step 1: Find latest run_id
         run_query = f"""
             SELECT run_id, timestamp
@@ -257,7 +284,8 @@ def query_baseline_stats(
 
         # Step 2: Get ALL buckets for that run (no LIMIT)
         bucket_query = """
-            SELECT bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail
+            SELECT bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95,
+                   pass_fail, workflow_version, zone, raw_capsules_json
             FROM apex_runs
             WHERE run_id = ? AND workflow_version = ?
         """
@@ -266,22 +294,30 @@ def query_baseline_stats(
         if zone is not None:
             bucket_query += " AND zone = ?"
             bucket_params.append(zone)
+        else:
+            bucket_query += " AND zone IS NULL"
 
         cursor = conn.execute(bucket_query, bucket_params)
         for row in cursor.fetchall():
-            bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail = row
+            decoded = decode_aggregate_row(dict(row))
+            bucket_name = decoded["bucket_name"]
+            # Never silently replace distinct zones with the last queried row.
+            if bucket_name in baseline_stats:
+                raise ValueError("Baseline query requires an explicit zone for duplicate buckets")
             baseline_stats[bucket_name] = BucketStats(
                 bucket_name=bucket_name,
-                count=count,
-                p50=p50,
-                p95=p95,
-                p99=p99,
-                mean=p50,  # Approximation (not stored in apex_runs)
-                min=p50 * 0.8,  # Approximation
-                max=p95 * 1.2,  # Approximation
-                threshold_p50=threshold_p50,
-                threshold_p95=threshold_p95,
-                pass_fail=pass_fail,
+                count=decoded["count"],
+                p50=decoded["p50"],
+                p95=decoded["p95"],
+                p99=decoded["p99"],
+                mean=decoded.get("mean", decoded["p50"]),
+                min=decoded.get("min", decoded["p50"]),
+                max=decoded.get("max", decoded["p95"]),
+                threshold_p50=decoded["threshold_p50"],
+                threshold_p95=decoded["threshold_p95"],
+                pass_fail=decoded["pass_fail"],
+                is_insufficient_data=decoded["is_insufficient_data"],
+                measurement_evidence=decoded.get("measurement_evidence"),
             )
 
     return baseline_stats
