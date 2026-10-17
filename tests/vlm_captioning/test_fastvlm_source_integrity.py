@@ -511,6 +511,7 @@ def test_source_installer_is_idempotent_and_supports_patched_revision_upgrade(
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("idempotent rerun contacted source")),
     )
     assert module.install_runtime_sources(manifest, root=runtime_root) == "ready"
+    assert module.install_runtime_sources(manifest, root=runtime_root, dry_run=True) == "ready"
     monkeypatch.setattr(module, "_stage_source_set", original_stage)
 
     ignored_artifact = runtime_root / "mlx-vlm/mlx_vlm/__pycache__/runtime.pyc"
@@ -1417,8 +1418,21 @@ def test_public_installer_serializes_the_complete_concurrent_transaction(
     ]
 
 
-def test_skip_verify_dry_run_still_executes_mandatory_source_preflight() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
+def test_skip_verify_dry_run_still_executes_mandatory_source_preflight(tmp_path: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2]
+    repo_root = tmp_path / "repo"
+    for relative_path in (
+        "scripts/setup/install_fastvlm_runtime.sh",
+        "scripts/setup/resolve_python_311.sh",
+        "scripts/setup/run_fastvlm_install_locked.py",
+        "scripts/setup/install_fastvlm_sources.py",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+        "config/fastvlm_runtime_manifest.json",
+    ):
+        target = repo_root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_root / relative_path, target)
+    assert not (repo_root / ".runtime").exists()
     completed = subprocess.run(
         [
             str(repo_root / "scripts/setup/install_fastvlm_runtime.sh"),
@@ -1430,6 +1444,7 @@ def test_skip_verify_dry_run_still_executes_mandatory_source_preflight() -> None
         check=False,
         capture_output=True,
         text=True,
+        timeout=60,
     )
 
     assert completed.returncode == 0, completed.stderr
