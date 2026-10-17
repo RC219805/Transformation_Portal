@@ -517,7 +517,7 @@ fi
 
 cat <<EOF
 [INFO] DA3 runtime ready.
-[INFO] Stable executable: ./.runtime/Depth-Anything-3/.venv-da3/bin/python
+[INFO] Stable executable: ${PYTHON_BIN}
 [INFO] Example:
-lux-depth-v3 --input-dir ./input_images --output-dir ./output --da3-python ./.runtime/Depth-Anything-3/.venv-da3/bin/python
 EOF
+printf 'lux-depth-v3 --input-dir ./input_images --output-dir ./output --da3-python %q\n' "${PYTHON_BIN}"
