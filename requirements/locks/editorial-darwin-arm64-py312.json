@@ -1,8 +1,8 @@
 {
   "artifacts": {
     "charset-normalizer": {
-      "sha256": "5b6d1386bf0096d26d3a863dc0a487a5b4eb9aa93cf5ba69683d29dde6b9d60f",
-      "url": "https://files.pythonhosted.org/packages/30/27/78873dc8b6a56357517b74b6bb9568b80450e7bb4f6ef7e3fa9d22aa0bd7/charset_normalizer-3.5.1-cp312-cp312-macosx_10_13_universal2.whl"
+      "sha256": "ed2a239c0ea213acc1908150a3037257083c7c083128f1a4cec2ec4b97dca491",
+      "url": "https://files.pythonhosted.org/packages/e7/c8/693809898870237d82785a03f3b2b58fe4c9f14669f84a7d4e623c92a59e/charset_normalizer-3.5.2-cp312-cp312-macosx_10_13_universal2.whl"
     },
     "exifread": {
       "sha256": "e5426ce2857423ad401e575ea9d159dc97449dc041fb6e61b35109caea72c311",
@@ -63,7 +63,7 @@
     "pip-tools": "7.6.1"
   },
   "core_pins": {
-    "charset-normalizer": "3.5.1",
+    "charset-normalizer": "3.5.2",
     "imagecodecs": "2026.3.6",
     "numpy": "2.4.6",
     "opencv-python": "4.14.0.94",
@@ -74,7 +74,7 @@
     "tqdm": "4.70.1"
   },
   "input_sha256": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-  "lock_sha256": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",
+  "lock_sha256": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
   "schema": "tp.editorial.runtime.v1",
   "target": "darwin-arm64-py312"
 }

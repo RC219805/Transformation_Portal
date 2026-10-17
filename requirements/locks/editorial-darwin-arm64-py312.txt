@@ -3,7 +3,7 @@
 # Compiler: pip 26.2.1 / pip-tools 7.6.1 / Click 8.4.2.
 # Hashes bind the target-native wheels recorded in the companion JSON.
 
-charset-normalizer==3.5.1 --hash=sha256:5b6d1386bf0096d26d3a863dc0a487a5b4eb9aa93cf5ba69683d29dde6b9d60f
+charset-normalizer==3.5.2 --hash=sha256:ed2a239c0ea213acc1908150a3037257083c7c083128f1a4cec2ec4b97dca491
 exifread==3.5.1 --hash=sha256:e5426ce2857423ad401e575ea9d159dc97449dc041fb6e61b35109caea72c311
 imagecodecs==2026.3.6 --hash=sha256:e64037f22980a211b17bf6bdf03f14ff459a7432eec24f7a58c342f6992132fa
 numpy==2.4.6 --hash=sha256:3213d622a0283a39a93d188f3cf72b26862df52fbb4ca3697f51705016523d41
