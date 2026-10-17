@@ -668,6 +668,18 @@ def test_dependency_update_rejects_unpinned_artifact_action() -> None:
     assert "dependency-update audit upload must use only the pinned action and governed inputs" in errors
 
 
+def test_dependency_update_rejects_previous_upload_release() -> None:
+    broken = valid_workflow_text().replace(
+        workflow_contract.TRUSTED_UPLOAD_ACTION,
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        1,
+    )
+
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+
+    assert "dependency-update audit upload must use only the pinned action and governed inputs" in errors
+
+
 def test_dependency_update_rejects_extra_pull_request_action_input() -> None:
     broken = valid_workflow_text().replace(
         "        add-paths: |\n",

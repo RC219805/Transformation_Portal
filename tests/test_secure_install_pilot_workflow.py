@@ -14,7 +14,7 @@ DEPENDABOT_GOVERNANCE_PATH = REPO_ROOT / "docs" / "governance" / "DEPENDABOT_PR_
 ROADMAP_PATH = REPO_ROOT / "docs" / "architecture" / "transformation_portal_roadmap_rereview_2026-04-07.md"
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
-UPLOAD_ARTIFACT_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+UPLOAD_ARTIFACT_SHA = "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
 
 
 def _load_workflow() -> dict:
