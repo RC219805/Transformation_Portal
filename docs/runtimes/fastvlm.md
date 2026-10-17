@@ -242,7 +242,7 @@ no-follow regular temp file, flushed with `fsync`, and atomically replaced under
 the same transaction lock; an existing symlink or special file is rejected.
 
 The current compatibility closure pins `yarl==1.24.5`, `filelock==3.32.5`, and
-`protobuf==7.36.1` alongside `coremltools==9.0`. Validate this closure in a fresh
+`protobuf==7.36.2` alongside `coremltools==9.0`. Validate this closure in a fresh
 runtime: compare installed versions and freeze evidence with the exact
 requirements, load and round-trip the pinned `fastvithd.mlpackage` CoreML
 specification, then run the import/Metal and real-caption Make targets below.
