@@ -80,14 +80,15 @@ verified output artifacts are separate evidence levels.
 
 The front door is a Node app.
 
-- Required runtime: Node `22.x`
-- Install, dev, test, build, and start now fail fast outside Node 22.x.
+- Required runtime: Node `22.x`, minimum `22.23.2` (the July 2026 security release).
+- Install, dev, test, build, and start fail fast below that security floor or outside Node 22.x. Install the latest patched 22.x release; `.nvmrc` intentionally keeps the rolling `22` selection.
 - Runtime guardrails also verify native addons like `better-sqlite3` and `argon2` before the front door boots.
 
 If you use `nvm`, the app includes `.nvmrc`:
 
 ```bash
 cd web/secure-landing
+nvm install 22
 nvm use 22
 ```
 
@@ -96,12 +97,12 @@ regenerating CSS ownership evidence. Its report records exact gzip sizes;
 Homebrew Node can link a different zlib and produce a different compressed size
 for identical CSS. A gzip-only freshness failure is a toolchain mismatch, not a
 reason to relax the CSS hash, architecture, or asset-budget checks. For example,
-the September 2026 CI run used official Node `22.23.2`:
+the reviewed [Frontdoor contract run for PR #2231](https://github.com/RC219805/Transformation_Portal/actions/runs/38994338160/job/117283441929) used official Node `22.23.3`:
 
 ```bash
 cd web/secure-landing
-nvm install 22.23.2
-nvm use 22.23.2
+nvm install 22.23.3
+nvm use 22.23.3
 npm ci
 npm run build:portal
 node scripts/check-portal-css-architecture.mjs --write-ownership-report
@@ -411,9 +412,9 @@ originRequest:
 
 Validation prerequisites for every local managed frontdoor run:
 
-- Switch the frontdoor shell to Node `22.x` first. `web/secure-landing` ships
-  `.nvmrc` with `22`, and install/test/build/start all fail fast outside that
-  runtime.
+- Switch the frontdoor shell to patched Node `22.x` (minimum `22.23.2`) first.
+  `web/secure-landing` ships `.nvmrc` with rolling `22`, and
+  install/test/build/start fail fast below the security floor or outside that major.
 - If the shell previously used another Node major, rebuild the native modules
   under Node `22.x` before running frontdoor checks:
 

@@ -53,7 +53,7 @@ def _run_preflight(
     fake_bin = env_file.parent / "fake-bin"
     fake_bin.mkdir(exist_ok=True)
     fake_node = fake_bin / "node"
-    fake_node.write_text("#!/bin/sh\nprintf '%s\\n' 'v22.22.2'\n", encoding="utf-8")
+    fake_node.write_text("#!/bin/sh\nprintf '%s\\n' 'v22.23.2'\n", encoding="utf-8")
     fake_node.chmod(0o755)
 
     run_env = dict(os.environ) if env is None else dict(env)
@@ -116,7 +116,7 @@ def _write_fake_gate_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     )
 
     fake_bin = tmp_path / "fake-bin"
-    _write_executable(fake_bin / "node", "#!/bin/sh\nprintf '%s\\n' 'v22.22.2'\n")
+    _write_executable(fake_bin / "node", "#!/bin/sh\nprintf '%s\\n' 'v22.23.2'\n")
     _write_executable(
         fake_bin / "make",
         "\n".join(

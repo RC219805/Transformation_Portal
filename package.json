@@ -6,7 +6,7 @@
     "worker:deploy": "wrangler deploy --keep-vars"
   },
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22.23.2 <23"
   },
   "packageManager": "npm@11.12.1",
   "overrides": {

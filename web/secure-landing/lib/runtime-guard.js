@@ -1,6 +1,6 @@
-const SUPPORTED_NODE_RANGE = "22.x";
+const SUPPORTED_NODE_RANGE = ">=22.23.2 <23";
 const RECOVERY_GUIDANCE =
-  "Switch to Node 22, reinstall or rebuild front-door dependencies under that runtime, then retry.";
+  "Install a patched Node 22 release (>=22.23.2), reinstall or rebuild front-door dependencies under that runtime, then retry.";
 
 const NATIVE_DEPENDENCIES = Object.freeze([
   "better-sqlite3",
@@ -16,8 +16,11 @@ export function recoveryGuidance() {
 }
 
 export function isSupportedNodeVersion(version = process.versions.node) {
-  const [major = "0"] = String(version || "").split(".");
-  return Number.parseInt(major, 10) === 22;
+  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(version || ""));
+  if (!match) return false;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  return [major, minor, patch].every(Number.isSafeInteger) &&
+    major === 22 && (minor > 23 || (minor === 23 && patch >= 2));
 }
 
 export function formatUnsupportedNodeMessage(version = process.versions.node) {

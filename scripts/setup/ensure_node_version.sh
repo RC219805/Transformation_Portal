@@ -13,6 +13,9 @@
 set -euo pipefail
 
 REQUIRED_MAJOR=22
+REQUIRED_MINOR=23
+REQUIRED_PATCH=2
+REQUIRED_VERSION="${REQUIRED_MAJOR}.${REQUIRED_MINOR}.${REQUIRED_PATCH}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FRONTDOOR_ROOT="${REPO_ROOT}/web/secure-landing"
@@ -50,7 +53,7 @@ log_info() {
 if ! command -v node &> /dev/null; then
     log_error "Node.js is not installed or not in PATH"
     echo ""
-    log_info "Install Node.js ${REQUIRED_MAJOR}.x using one of these methods:"
+    log_info "Install Node.js ${REQUIRED_MAJOR}.x (security minimum ${REQUIRED_VERSION}) using one of these methods:"
     echo ""
 
     # Check for version managers
@@ -76,10 +79,15 @@ if ! command -v node &> /dev/null; then
 fi
 
 # Get current Node version
-NODE_VERSION=$(node --version 2>/dev/null || echo "unknown")
-NODE_MAJOR=$(echo "$NODE_VERSION" | sed -E 's/^v?([0-9]+).*/\1/')
-
-if [[ "$NODE_MAJOR" == "unknown" || -z "$NODE_MAJOR" ]]; then
+if ! NODE_VERSION=$(node --version 2>/dev/null); then
+    log_error "Could not determine Node.js version"
+    exit 1
+fi
+if [[ "$NODE_VERSION" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    NODE_MAJOR="${BASH_REMATCH[1]}"
+    NODE_MINOR="${BASH_REMATCH[2]}"
+    NODE_PATCH="${BASH_REMATCH[3]}"
+else
     log_error "Could not determine Node.js version"
     log_info "  node --version returned: $NODE_VERSION"
     exit 1
@@ -92,8 +100,10 @@ if [[ -f "${FRONTDOOR_ROOT}/.nvmrc" ]]; then
 fi
 
 # Validate version
-if [[ "$NODE_MAJOR" -eq "$REQUIRED_MAJOR" ]]; then
-    log_success "Node.js ${NODE_VERSION} meets requirement (${REQUIRED_MAJOR}.x)"
+if [[ "$NODE_MAJOR" -eq "$REQUIRED_MAJOR" ]] &&
+    { [[ "$NODE_MINOR" -gt "$REQUIRED_MINOR" ]] ||
+        [[ "$NODE_MINOR" -eq "$REQUIRED_MINOR" && "$NODE_PATCH" -ge "$REQUIRED_PATCH" ]]; }; then
+    log_success "Node.js ${NODE_VERSION} meets requirement (>=${REQUIRED_VERSION} <23)"
 
     # Show .nvmrc info if present
     if [[ -n "$NVMRC_VERSION" ]]; then
@@ -101,7 +111,7 @@ if [[ "$NODE_MAJOR" -eq "$REQUIRED_MAJOR" ]]; then
     fi
     exit 0
 else
-    log_error "Node.js ${NODE_VERSION} does not match required ${REQUIRED_MAJOR}.x"
+    log_error "Node.js ${NODE_VERSION} does not meet requirement (>=${REQUIRED_VERSION} <23)"
     echo ""
 
     # Provide specific guidance based on version manager
@@ -133,7 +143,7 @@ else
     fi
 
     echo ""
-    log_warning "The secure-landing frontdoor requires Node ${REQUIRED_MAJOR}.x"
+    log_warning "The secure-landing frontdoor requires Node ${REQUIRED_MAJOR}.x, security minimum ${REQUIRED_VERSION}"
     log_info "  Native dependencies (better-sqlite3, argon2) are ABI-sensitive"
     log_info "  See: web/secure-landing/package.json engines constraint"
 
