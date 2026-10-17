@@ -88,13 +88,15 @@ if [[ "${CLEAN_PROCESS}" != "1" ]]; then
     NODE_BIN="$(command -v node 2>/dev/null || true)"
     PYTHON_BIN="$("${REPO_ROOT}/scripts/setup/resolve_python_311.sh" 2>/dev/null || command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
     CLEAN_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
-    if [[ -n "${NODE_BIN}" ]]; then
-        NODE_DIR="$(cd "$(dirname "${NODE_BIN}")" && pwd)"
-        CLEAN_PATH="${NODE_DIR}:${CLEAN_PATH}"
-    fi
     if [[ -n "${PYTHON_BIN}" ]]; then
         PYTHON_DIR="$(cd "$(dirname "${PYTHON_BIN}")" && pwd)"
         CLEAN_PATH="${PYTHON_DIR}:${CLEAN_PATH}"
+    fi
+    # A Python directory may also contain node. Keep the selected Node first;
+    # the clean process resolves and invokes its supported Python by absolute path.
+    if [[ -n "${NODE_BIN}" ]]; then
+        NODE_DIR="$(cd "$(dirname "${NODE_BIN}")" && pwd)"
+        CLEAN_PATH="${NODE_DIR}:${CLEAN_PATH}"
     fi
     REEXEC_ARGS=(--env-file "${ENV_FILE}")
     if [[ -n "${EVIDENCE_OUT}" ]]; then
