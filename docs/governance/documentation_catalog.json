@@ -8389,8 +8389,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "b9b7ad2c9986ba7a1c6ef4a4b1f994c4234a53bd",
-      "content_sha256": "adfb19031f323faa95ae17c0bac50bb3441d56efb810eab7ab8e995342430c8e",
+      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "content_sha256": "68271790c4d6dc3e5e85da932918d991f83fe7024a2946f72b56f0b6c60f7a37",
       "source_references": [
         "tools/ad_editorial_post_pipeline.py",
         "tools/sample_config.yml",
@@ -8402,9 +8402,9 @@
         "requirements/locks/editorial-darwin-arm64-py312.json"
       ],
       "source_sha256": {
-        "tools/ad_editorial_post_pipeline.py": "bb923786c6a97193612e602e61da1606919862f61195cefbb6a7bfb22e186210",
+        "tools/ad_editorial_post_pipeline.py": "a97d12112e0e460cff72623e29f20dcc3a552b876e36cb6f63d322900246e161",
         "tools/sample_config.yml": "6365e96cdafb36cc6fa0da422a1f94552afda7c718b01aa583fd67668c54fd5c",
-        "tests/test_ad_editorial_post_pipeline_paths.py": "75bcf7217f7923e3cfb79683122a667fb29377c50896b91f3c33be1b9c409397",
+        "tests/test_ad_editorial_post_pipeline_paths.py": "700b4ccddc6dc32351d86f451a9d7fdef5d325a08ee5ffc9edeffa1f536d844e",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",

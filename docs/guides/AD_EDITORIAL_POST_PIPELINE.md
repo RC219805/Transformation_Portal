@@ -206,9 +206,14 @@ Verify actual output tags; these paths do not preserve every camera metadata
 field from RAW conversion or certify an editorial delivery schema. Contact sheets
 use exported web JPEGs and fail on an unreadable image, preserving any prior PDF
 through atomic replacement. Serial execution is current behavior: `processing.workers`
-is retained and validated but does not enable parallel processing. HDR, panoramas,
-and per-style consistency hold full image arrays in memory. No universal runtime,
-throughput, or memory guarantee is established.
+is retained and validated but does not enable parallel processing. HDR and panorama
+processing hold multiple full image arrays in memory. Per-style consistency decodes
+and normalizes one variant at a time. Repeated or aliased destinations use encoded
+snapshots in the caller's temporary directory to preserve the original
+read-before-write pixels; provide enough temporary disk space for those snapshots.
+A normalization failure can leave completed intermediate writes, but does not
+publish exports or a successful final manifest. No universal runtime, throughput,
+or memory guarantee is established.
 
 ## Verification
 
