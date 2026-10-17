@@ -104,6 +104,8 @@ def run_spawned(
 
     Uses multiprocessing.spawn context which is safe for CUDA
     (unlike fork, which can corrupt GPU state).
+    The callable and its results must be trusted: process separation is for
+    runtime safety and does not sandbox code or deserialize external inputs.
 
     Args:
         fn: Function to execute
@@ -166,7 +168,11 @@ def run_spawned(
                     proc.close()
 
         with result_path.open("rb") as stream:
-            status, payload = pickle.load(stream)
+            # Trusted same-privilege child, never external serialized input:
+            # parent-owned private directory, exclusive 0600 publication, and
+            # the child is reaped before this read. Preserve multiprocessing
+            # reducers for arbitrary trusted return values.
+            status, payload = pickle.load(stream)  # nosec B301
     if status == "error":
         raise SpawnError(f"Worker process failed: {payload}")
 
