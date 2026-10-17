@@ -14,7 +14,6 @@ GOVERNED_PIP_PIN = "pip==26.2.1"
 GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.19.0"
-PYPDF_LOCK_PIN = "pypdf==6.19.0"
 GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
 GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
 
@@ -203,8 +202,21 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
 
     assert PYPDF_SECURITY_FLOOR in ci_input
     assert f'"{PYPDF_SECURITY_FLOOR}"' in pyproject
-    assert PYPDF_LOCK_PIN in all_lock
-    assert PYPDF_LOCK_PIN in ci_lock
+    locked_versions = []
+    for lock in (all_lock, ci_lock):
+        requirements = [
+            Requirement(line.strip()) for line in lock.splitlines() if line.strip() and not line.lstrip().startswith("#")
+        ]
+        pins = [requirement for requirement in requirements if requirement.name.lower() == "pypdf"]
+        assert len(pins) == 1
+        assert pins[0].url is None and pins[0].marker is None and not pins[0].extras
+        specifiers = list(pins[0].specifier)
+        assert len(specifiers) == 1 and specifiers[0].operator == "=="
+        version = Version(specifiers[0].version)
+        assert not version.is_prerelease and not version.is_devrelease and version.local is None
+        assert version in Requirement(PYPDF_SECURITY_FLOOR).specifier
+        locked_versions.append(version)
+    assert locked_versions[0] == locked_versions[1]
     assert ">=6.19.0" in contributing
     assert "GHSA-fwg2-594c-jp42" in contributing
     assert "GHSA-fp3f-mc75-235c" in contributing

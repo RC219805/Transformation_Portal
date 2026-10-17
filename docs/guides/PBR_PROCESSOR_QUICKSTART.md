@@ -240,8 +240,8 @@ for scene_name, material in scenes.items():
 | Preset | Use Case | Normal Detail | AO Bias | Speed |
 |--------|----------|---------------|---------|-------|
 | `standard` | Batch processing | Balanced | 0.45 | Fast |
-| `premium` | Hero shots | Maximum | 0.35 | Medium |
-| `draft` | Quick preview | Low | 0.55 | Fastest |
+| `premium` | Hero shots | Maximum | 0.40 | Medium |
+| `draft` | Quick preview | Low | 0.50 | Fastest |
 
 ### Material-Optimized
 

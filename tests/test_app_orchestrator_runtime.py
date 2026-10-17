@@ -14,7 +14,6 @@ import io
 import json
 import os
 import re
-import signal
 import subprocess
 import sys
 from functools import lru_cache
@@ -5757,10 +5756,7 @@ else:
             assert not hasattr(job.proc, "_tp_owned_process_group_id")
         finally:
             if job.proc is not None:
-                try:
-                    os.killpg(job.proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                await terminate(job.proc, grace_seconds=0.05)
             await asyncio.gather(runner, return_exceptions=True)
 
     asyncio.run(scenario())
