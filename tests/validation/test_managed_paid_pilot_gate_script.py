@@ -80,6 +80,85 @@ def _write_executable(path: Path, content: str) -> Path:
     return path
 
 
+@pytest.mark.parametrize("resolver_style", ["fixed", "unversioned_fallback"])
+@pytest.mark.parametrize(
+    "selected_version, competing_version, expected_returncode",
+    [("v22.23.2", "v25.9.0", 0), ("v25.9.0", "v22.23.2", 1)],
+)
+def test_clean_preflight_preserves_selected_node_with_competing_python_directory(
+    tmp_path: Path,
+    resolver_style: str,
+    selected_version: str,
+    competing_version: str,
+    expected_returncode: int,
+) -> None:
+    fake_repo = tmp_path / "fake-repo"
+    gate_script = _write_executable(
+        fake_repo / "scripts" / "validation" / SCRIPT_PATH.name,
+        SCRIPT_PATH.read_text(encoding="utf-8"),
+    )
+    setup_dir = fake_repo / "scripts" / "setup"
+    _write_executable(
+        setup_dir / "ensure_node_version.sh",
+        (REPO_ROOT / "scripts" / "setup" / "ensure_node_version.sh").read_text(encoding="utf-8"),
+    )
+    node_dir = tmp_path / "selected node bin"
+    python_dir = tmp_path / "selected python bin"
+    node_log = tmp_path / "node-invocations.log"
+    python_log = tmp_path / "python-invocations.log"
+    python_name = "python3" if resolver_style == "unversioned_fallback" else "python3.12"
+    python_bin = _write_executable(
+        python_dir / python_name,
+        "#!/bin/sh\n"
+        f"printf '%s\\n' selected-python >> {shlex.quote(str(python_log))}\n"
+        f'exec {shlex.quote(sys.executable)} "$@"\n',
+    )
+    if resolver_style == "unversioned_fallback":
+        resolver_source = (REPO_ROOT / "scripts" / "setup" / "resolve_python_311.sh").read_text(encoding="utf-8")
+    else:
+        resolver_source = f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(python_bin))}\n"
+    _write_executable(setup_dir / "resolve_python_311.sh", resolver_source)
+    for directory, label, version in (
+        (node_dir, "selected", selected_version),
+        (python_dir, "competing", competing_version),
+    ):
+        _write_executable(
+            directory / "node",
+            "#!/bin/sh\n"
+            '[ "$1" = "--version" ] || exit 91\n'
+            f"printf '%s\\n' {shlex.quote(label + ':' + version)} >> {shlex.quote(str(node_log))}\n"
+            f"printf '%s\\n' {shlex.quote(version)}\n",
+        )
+    home = tmp_path / "owned-home"
+    home.mkdir()
+    env_file = _write_env_file(tmp_path / "managed.env")
+    assert not (fake_repo / ".venv").exists()
+
+    result = subprocess.run(
+        ["/bin/bash", str(gate_script), "--env-file", str(env_file), "--preflight-only"],
+        cwd=fake_repo,
+        env={
+            "HOME": str(home),
+            "USER": "fixture",
+            "PATH": f"{node_dir}:{python_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=20,
+    )
+
+    assert result.returncode == expected_returncode, result.stderr + result.stdout
+    assert node_log.read_text(encoding="utf-8").splitlines() == [f"selected:{selected_version}"]
+    assert set(python_log.read_text(encoding="utf-8").splitlines()) == {"selected-python"}
+    if expected_returncode == 0:
+        assert "missing: []" in result.stdout
+        assert "Managed paid-pilot clean-env preflight passed." in result.stdout
+    else:
+        assert f"Node.js {selected_version} does not meet requirement" in result.stderr
+        assert "Managed paid-pilot clean-env preflight passed." not in result.stdout
+
+
 def _write_fake_gate_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     fake_repo = tmp_path / "fake-repo"
     gate_script = fake_repo / "scripts" / "validation" / "run_managed_paid_pilot_gate.sh"
