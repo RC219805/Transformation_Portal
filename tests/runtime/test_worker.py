@@ -466,6 +466,46 @@ class TestRunSpawnedProcessBehavior:
                     run_spawned(function, *args, timeout=timeout)
         assert list(tmp_path.iterdir()) == []
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX private result permissions and child reaping")
+    def test_deserialization_reads_private_result_after_child_reaping(self, tmp_path) -> None:
+        """The trusted IPC reader sees only the owned child's private result."""
+        import stat
+
+        from transformation_portal.runtime import worker
+
+        original_temporary_directory = worker.TemporaryDirectory
+        original_load = worker.pickle.load
+        existing_children = {child.pid for child in mp.active_children()}
+        observed = []
+
+        def temporary_directory(**kwargs):
+            return original_temporary_directory(dir=tmp_path, **kwargs)
+
+        def load_owned_result(stream):
+            result = Path(stream.name)
+            directory = result.parent
+            assert directory.parent == tmp_path
+            assert directory.name.startswith("tp-worker-result-")
+            assert result.name == "result.pickle"
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+            assert stat.S_IMODE(result.stat().st_mode) == 0o600
+            assert directory.stat().st_uid == result.stat().st_uid == os.getuid()
+            status, child_pid = original_load(stream)
+            with pytest.raises(ChildProcessError):
+                os.waitpid(child_pid, os.WNOHANG)
+            assert {child.pid for child in mp.active_children()} == existing_children
+            observed.append(result)
+            return status, child_pid
+
+        with (
+            patch.object(worker, "TemporaryDirectory", side_effect=temporary_directory),
+            patch.object(worker.pickle, "load", side_effect=load_owned_result),
+        ):
+            assert run_spawned(get_pid_function, timeout=5) != os.getpid()
+
+        assert len(observed) == 1
+        assert list(tmp_path.iterdir()) == []
+
 
 class TestAtomicResultPublisher:
     """Transport failures must never expose an incomplete result."""
@@ -532,6 +572,27 @@ class TestAtomicResultPublisher:
         finally:
             private_directory.cleanup()
         assert list(tmp_path.iterdir()) == []
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX file and symlink collision protection")
+    @pytest.mark.parametrize("collision", ["file", "symlink"])
+    def test_existing_partial_is_never_overwritten(self, collision, tmp_path) -> None:
+        """Exclusive creation refuses existing entries without following links."""
+        from transformation_portal.runtime import worker
+
+        result = tmp_path / "result.pickle"
+        partial = result.with_suffix(".partial")
+        sentinel = tmp_path / "sentinel"
+        sentinel.write_bytes(b"preserved")
+        if collision == "symlink":
+            partial.symlink_to(sentinel)
+        else:
+            partial.write_bytes(b"preserved")
+
+        worker._ResultFilePublisher(result).put(("ok", "replacement"))
+
+        assert not result.exists()
+        assert partial.read_bytes() == sentinel.read_bytes() == b"preserved"
+        assert partial.is_symlink() == (collision == "symlink")
 
 
 class TestRunWithGPU:
