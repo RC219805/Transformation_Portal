@@ -21,10 +21,12 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
+import os
 import pickle
 import time
-from multiprocessing.connection import Connection
-from threading import Thread
+from multiprocessing.reduction import ForkingPickler
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
 if TYPE_CHECKING:
@@ -38,23 +40,33 @@ class SpawnError(RuntimeError):
 
 
 class _ResultPublisher(Protocol):
-    """The worker supports both test queues and the pipe-backed publisher."""
+    """The worker supports both test queues and its private result publisher."""
 
     def put(self, value: Any) -> None: ...
 
 
-class _ResultSender:
-    """Keep the worker's queue-like publisher over a synchronous pipe."""
+class _ResultFilePublisher:
+    """Publish a complete result privately, without inherited IPC writers."""
 
-    def __init__(self, connection: Connection) -> None:
-        self.connection = connection
+    def __init__(self, result_path: Path) -> None:
+        self.result_path = result_path
 
     def put(self, value: Any) -> None:
-        """Leave an unsendable result absent, as the queue feeder did."""
+        """Leave serialization/disk failures unpublished, as unsendable results."""
+        partial_path = self.result_path.with_suffix(".partial")
+        descriptor = None
         try:
-            self.connection.send(value)
+            descriptor = os.open(partial_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                descriptor = None
+                # Match multiprocessing's registered result reducers/protocol.
+                ForkingPickler(stream).dump(value)
+            os.replace(partial_path, self.result_path)
         except Exception:
             logger.exception("Worker result serialization or transport failed")
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
 
 def _worker_entry(
@@ -80,14 +92,6 @@ def _worker_entry(
         # Serialize exception with full traceback for debugging
         error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
         result_queue.put(("error", error_msg))
-
-
-def _pipe_worker_entry(fn: Callable, args: tuple, kwargs: dict, sender: Connection) -> None:
-    """Close the child's only result writer on every exit path."""
-    try:
-        _worker_entry(fn, args, kwargs, _ResultSender(sender))
-    finally:
-        sender.close()
 
 
 def run_spawned(
@@ -123,75 +127,46 @@ def run_spawned(
         >>> result = run_spawned(load_and_run, device_id=0, data=inputs)
     """
     ctx = mp.get_context("spawn")
-    receiver, sender = ctx.Pipe(duplex=False)
-
-    proc = ctx.Process(
-        target=_pipe_worker_entry,
-        args=(fn, args, kwargs, sender),
-    )
-
-    received = []
-
-    def receive_result() -> None:
+    # The child opens its result only after fn returns. A descendant forked by
+    # fn cannot inherit a writer that blocks result collection after child exit.
+    # At most one serialized result (partial or complete) occupies this private
+    # directory. Context cleanup also removes interrupted/error publications.
+    with TemporaryDirectory(prefix="tp-worker-result-") as result_directory:
+        result_path = Path(result_directory) / "result.pickle"
+        proc = ctx.Process(target=_worker_entry, args=(fn, args, kwargs, _ResultFilePublisher(result_path)))
+        process_started = False
         try:
-            received.append(receiver.recv_bytes())
-        except (EOFError, OSError):
-            # A crashed child may leave no frame or only a partial frame.
-            pass
-        finally:
-            receiver.close()
-
-    reader = Thread(target=receive_result, name="tp-worker-result", daemon=True)
-    process_started = False
-    reader_started = False
-    try:
-        logger.debug("Spawning worker process for %s", fn.__name__)
-        proc.start()
-        process_started = True
-        deadline = None if timeout is None else time.monotonic() + timeout
-        # Only the child may retain a writer: its death must wake the reader.
-        sender.close()
-        reader.start()
-        reader_started = True
-
-        # The reader drains concurrently, including a partially written frame.
-        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-        proc.join(timeout=remaining)
-        if proc.is_alive():
-            logger.warning("Worker process timed out, terminating")
-            raise SpawnError(f"Worker process timed out after {timeout}s")
-        if proc.exitcode != 0:
-            raise SpawnError(f"Worker process exited with code {proc.exitcode}")
-
-        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-        reader.join(timeout=remaining)
-        if reader.is_alive():
-            raise SpawnError(f"Worker process timed out after {timeout}s")
-        if not received:
-            raise SpawnError("Worker process did not return a result")
-    finally:
-        try:
-            sender.close()
-            if process_started and proc.is_alive():
-                proc.terminate()
-                proc.join(timeout=5)
-                if proc.is_alive():
-                    proc.kill()
-                    proc.join(timeout=5)
-                if proc.is_alive():
-                    raise SpawnError("Worker process could not be terminated")
+            logger.debug("Spawning worker process for %s", fn.__name__)
+            proc.start()
+            process_started = True
+            deadline = None if timeout is None else time.monotonic() + timeout
+            # Result serialization/publication happens before the child exits,
+            # so it shares this one execution deadline with function/shutdown.
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            proc.join(timeout=remaining)
+            if proc.is_alive():
+                logger.warning("Worker process timed out, terminating")
+                raise SpawnError(f"Worker process timed out after {timeout}s")
+            if proc.exitcode != 0:
+                raise SpawnError(f"Worker process exited with code {proc.exitcode}")
+            if not result_path.is_file():
+                raise SpawnError("Worker process did not return a result")
         finally:
             try:
-                if reader_started:
-                    reader.join(timeout=5)
-                    if reader.is_alive():
-                        raise SpawnError("Worker result receiver did not stop")
+                if process_started and proc.is_alive():
+                    proc.terminate()
+                    proc.join(timeout=5)
+                    if proc.is_alive():
+                        proc.kill()
+                        proc.join(timeout=5)
+                    if proc.is_alive():
+                        raise SpawnError("Worker process could not be terminated")
             finally:
-                receiver.close()
                 if not process_started or not proc.is_alive():
                     proc.close()
 
-    status, payload = pickle.loads(received[0])
+        with result_path.open("rb") as stream:
+            status, payload = pickle.load(stream)
     if status == "error":
         raise SpawnError(f"Worker process failed: {payload}")
 
