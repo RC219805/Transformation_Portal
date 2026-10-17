@@ -291,7 +291,7 @@ class PerformanceLedger:
         safe_limit = normalize_query_limit(limit)
 
         where_clauses = []
-        params = []
+        params: List[Any] = []
 
         if scene_type is not None:
             where_clauses.append("scene_type = ?")
@@ -435,9 +435,24 @@ def detect_regression(
     if bucket is None:
         bucket = get_bucket_for_capsule(current_capsule)
 
+    from transformation_portal.metrics.measurement import assess_measurements, validate_measurement_identities
+
+    validate_measurement_identities([current_capsule, *historical_capsules])
+    assessment, historical_totals = assess_measurements(historical_capsules, bucket)
+    current_assessment, _ = assess_measurements([current_capsule], bucket)
+    if (
+        assessment["is_insufficient_data"]
+        or current_assessment["reason"] not in ("", "insufficient_independent_measurements")
+        or any(assessment[key] != current_assessment[key] for key in ("measurement_unit", "workload_id", "context_id"))
+        or current_capsule.measurement_id in {c.measurement_id for c in historical_capsules}
+    ):
+        return {
+            "status": "insufficient_data",
+            "message": "Missing independent, compatible unit/workload/budget evidence",
+            "bucket": bucket.name,
+        }
+
     current_total = current_capsule.timings["total"]
-    historical_totals = [c.timings["total"] for c in historical_capsules]
-    historical_totals.sort()
 
     n = len(historical_totals)
     historical_p50 = historical_totals[n // 2]
@@ -492,6 +507,7 @@ def generate_performance_report(
         "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
         f"Total capsules: {len(all_capsules)}",
+        "Scene timings below are descriptive capsule totals, not independent performance evidence.",
         "",
         "## Scene-Dependent Performance",
         "",
@@ -528,13 +544,14 @@ def generate_performance_report(
         if not matching:
             continue
 
-        totals = sorted([c.timings["total"] for c in matching])
-        n = len(totals)
-        p50 = totals[n // 2]
-        p95 = totals[int(n * 0.95)] if n > 1 else totals[0]
+        from transformation_portal.metrics.aggregator import compute_bucket_stats
 
-        p50_status = "✅" if p50 <= bucket.p50_threshold_sec else "⚠️"
-        p95_status = "✅" if p95 <= bucket.p95_threshold_sec else "❌"
+        stats = compute_bucket_stats(all_capsules, bucket)
+        assert stats is not None
+        p50, p95 = stats.p50, stats.p95
+
+        p50_status = "INSUFFICIENT DATA" if stats.is_insufficient_data else ("✅" if p50 <= bucket.p50_threshold_sec else "⚠️")
+        p95_status = "INSUFFICIENT DATA" if stats.is_insufficient_data else ("✅" if p95 <= bucket.p95_threshold_sec else "❌")
 
         lines.extend(
             [
@@ -542,7 +559,7 @@ def generate_performance_report(
                 "",
                 f"**Description:** {bucket.description}",
                 "",
-                f"- Samples: {n}",
+                f"- Independent measurements: {stats.count}; capsules: {len(matching)}",
                 f"- p50: {p50:.2f}s (threshold: {bucket.p50_threshold_sec:.2f}s) {p50_status}",
                 f"- p95: {p95:.2f}s (threshold: {bucket.p95_threshold_sec:.2f}s) {p95_status}",
                 "",

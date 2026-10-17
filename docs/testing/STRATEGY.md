@@ -57,7 +57,7 @@ pytest -v tests/ -ra -m "(unit or security or regression or golden or integratio
 | **CI Selection** | `ml and not slow and not integration and not benchmark` |
 | **Duration** | Workload and runner dependent. |
 | **Dependencies** | torch (CPU), transformers (offline mode) |
-| **Collection Ceiling** | Reconstruction subset: 80 selected tests in `tests/enforcement/test_ml_fast_collection_contract.py`; this is not a ceiling for the entire ML tier. |
+| **Collection Ceiling** | Reconstruction subset: at most 192 selected tests, split into the unchanged 80-case legacy allowance plus 32 cases in `test_torch_native.py` and 80 in `test_native_recipes.py`, enforced independently by `tests/enforcement/test_ml_fast_collection_contract.py`. This is not a ceiling for the entire ML tier. |
 
 **Requirements:**
 - Must operate in offline mode (`TRANSFORMERS_OFFLINE=1`, `HF_HUB_OFFLINE=1`)
@@ -261,7 +261,7 @@ For tests validating deterministic behavior:
 2. [ ] Add required markers (`@pytest.mark.unit`, `@pytest.mark.security`, etc.)
 3. [ ] Use fixtures from `conftest.py` where appropriate
 4. [ ] Ensure offline operation for ML tests
-5. [ ] Check reconstruction collection against `FAST_ML_SELECTED_CEILING`; changes to its budget require scoped review, not an automatic increase
+5. [ ] Check reconstruction collection against the legacy `FAST_ML_SELECTED_CEILING` and each named `NATIVE_FAST_ML_SELECTED_CEILINGS` allowance; keep native cases in the fast-ML unit selection. Changes to any budget require scoped review, not an automatic increase
 6. [ ] Run targeted tests locally before pushing
 
 ### Marker Application

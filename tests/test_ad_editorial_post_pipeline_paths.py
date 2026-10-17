@@ -314,6 +314,61 @@ def test_float_grading_resize_and_sharpen_retain_sub_8bit_detail(editorial):
     np.testing.assert_allclose(editorial.unsharp_mask(constant), constant, atol=1e-7)
 
 
+@pytest.mark.parametrize("target", [30.0, 210.0, 350.0])
+@pytest.mark.parametrize("band", ["shadows", "highlights"])
+def test_split_tone_is_rgb_continuous_across_opposing_hue(editorial, target, band):
+    import colorsys
+
+    # A tiny input change must not create the old opposing-hue color jump.
+    opposite = (target + 180) % 360
+    value = 0.2 if band == "shadows" else 0.9
+    image = np.array(
+        [[colorsys.hsv_to_rgb((opposite + offset) / 360, 0.3, value) for offset in (-0.001, 0.001)]],
+        dtype=np.float32,
+    )
+    output = (
+        editorial.split_tone(image, target, 0.06, None, 0)
+        if band == "shadows"
+        else editorial.split_tone(image, None, 0, target, 0.06)
+    )
+    assert np.max(np.abs(output[0, 0] - output[0, 1])) < 1e-4
+    assert np.isfinite(output).all()
+
+
+def test_split_tone_strength_tends_to_identity(editorial):
+    image = np.array([[[0.2, 0.16, 0.12]]], dtype=np.float32)
+    assert editorial.split_tone(image, 210, 0, 38, 0) is image
+    output = editorial.split_tone(image, 210, 1e-7, None, 0)
+    np.testing.assert_allclose(output, image, atol=1e-6, rtol=0)
+
+
+@pytest.mark.parametrize("value", [0.0, 0.2, 0.8])
+def test_split_tone_achromatic_input_has_defined_strength(editorial, value):
+    import colorsys
+
+    image = np.full((1, 1, 3), value, dtype=np.float32)
+    alpha = 0.06 * max(1 - value * 2, 0)
+    expected = colorsys.hsv_to_rgb(210 / 360, alpha, value)
+    output = editorial.split_tone(image, 210, 0.06, None, 0)
+    np.testing.assert_allclose(output[0, 0], expected, atol=1e-7, rtol=0)
+
+
+def test_split_tone_opposing_chroma_cancellation_is_continuous(editorial):
+    import colorsys
+
+    image = np.array(
+        [[colorsys.hsv_to_rgb((30 + offset) / 360, 1, 0.2) for offset in (-0.001, 0, 0.001)]],
+        dtype=np.float32,
+    )
+    # At the center, the weighted opposing vectors cancel to gray. Recovering
+    # both angle and magnitude keeps the resulting RGB continuous there.
+    center_luma = np.sum(image[0, 1] * editorial.PROPHOTO_TO_XYZ[1])
+    strength = 0.5 / (1 - 2 * center_luma)
+    output = editorial.split_tone(image, 210, strength, None, 0)
+    np.testing.assert_allclose(output[0, 1], [0.2, 0.2, 0.2], atol=1e-6, rtol=0)
+    assert np.max(np.abs(output[0] - output[0, 1])) < 1e-4
+
+
 def test_float_dust_reconstruction_does_not_ring_across_unit_range(editorial, monkeypatch):
     pytest.importorskip("cv2")
     image = np.full((64, 64, 3), 0.95, dtype=np.float32)
@@ -622,3 +677,353 @@ def test_explicit_missing_metadata_csv_fails_configuration(editorial, tmp_path):
     cfg = _cfg(editorial, tmp_path, metadata={"csv_path": "DOCS/metadata.csv"})
     with pytest.raises(ValueError, match="Configured metadata CSV does not exist"):
         cfg.validate()
+
+
+def _stub_image_lifetime_pipeline(editorial, monkeypatch, tmp_path, *, retouch, dtype):
+    """Exercise real stage control flow with tiny arrays, never RAW decoding."""
+    import weakref
+
+    cfg = _cfg(editorial, tmp_path / "project", selects={"use_csv": False})
+    cfg.processing["auto_upright"] = True
+    cfg.styles = {"natural": {}, "minimal": {}}
+    cfg.consistency["wb_neutralize"] = False
+    cfg.retouch = {"dust_remove": retouch, "hotspot_reduce": False}
+    raws = [Path("one.DNG"), Path("two.DNG")]
+    references = {}
+    reloads = {}
+    normalized_writes = {}
+    state = {"phase": None, "export_count": 0}
+
+    def track(kind, image):
+        references.setdefault(kind, []).append(weakref.ref(image))
+        return image
+
+    def released(*kinds):
+        for kind in kinds:
+            assert all(ref() is None for ref in references.get(kind, [])), kind
+
+    def samples(path):
+        return np.full((3, 4, 3), 0.1 if Path(path).stem == "one" else 0.7, dtype=dtype)
+
+    def decode(path):
+        released("decode")
+        return track("decode", samples(path))
+
+    def load(path):
+        path = Path(path)
+        released("decode", "upright_input", "upright_output")
+        if path.parent.name == "BaseTIFF":
+            phase = "upright_input"
+        elif path.parent.name == "Aligned":
+            released("base", "graded")
+            phase = "base"
+        else:
+            reloads[path] = reloads.get(path, 0) + 1
+            if reloads[path] == 1:
+                released("base", "graded", "normalization_input", "normalization_output")
+                phase = "normalization_input"
+            elif retouch and reloads[path] == 2:
+                released("normalization_input", "normalization_output", "retouch_input", "retouch_output")
+                phase = "retouch_input"
+            else:
+                released("normalization_input", "normalization_output", "retouch_input", "retouch_output", "export_input")
+                phase = "export_input"
+        state["phase"] = phase
+        return track(phase, samples(path))
+
+    def upright(image, *_args):
+        return track("upright_output", image.copy())
+
+    def grade(image, *_args):
+        released("graded")
+        state["phase"] = "graded"
+        return track("graded", image.copy())
+
+    original_normalize = editorial.normalize_exposure
+
+    def normalize(images, **kwargs):
+        assert len(images) == 1, "Normalization must decode/process one image at a time"
+        state["phase"] = "normalization_output"
+        result = original_normalize(images, **kwargs)
+        track("normalization_output", result[0])
+        return result
+
+    def save(image, path, _profile):
+        # The real writer creates destinations that the normalization preflight
+        # stats; tiny marker bytes supply only that filesystem identity here.
+        Path(path).write_bytes(b"synthetic encoded TIFF stand-in")
+        if state["phase"] == "normalization_output":
+            normalized_writes[Path(path)] = image.copy()
+
+    def dust(image):
+        state["phase"] = "retouch_output"
+        return track("retouch_output", image.copy())
+
+    def export(_image, *_args):
+        released("decode", "base", "graded", "normalization_input", "normalization_output", "retouch_input", "retouch_output")
+        state["export_count"] += 1
+
+    def contact_sheet(*_args, **_kwargs):
+        released(*references)
+
+    monkeypatch.setattr(editorial.PipelineConfig, "from_yaml", lambda _: cfg)
+    monkeypatch.setattr(editorial, "mirror_offload", lambda *_: raws)
+    monkeypatch.setattr(editorial, "rename_raws", lambda *_: raws)
+    monkeypatch.setattr(editorial, "ensure_selects_csv", lambda *_: tmp_path / "unused-selects.csv")
+    monkeypatch.setattr(editorial, "filter_selects", lambda *_: raws)
+    monkeypatch.setattr(editorial, "tqdm", lambda items, **_kwargs: items)
+    monkeypatch.setattr(editorial, "raw_to_prophoto_tiff", decode)
+    monkeypatch.setattr(editorial, "load_image_float", load)
+    monkeypatch.setattr(editorial, "auto_upright_small", upright)
+    monkeypatch.setattr(editorial, "style_grade", grade)
+    monkeypatch.setattr(editorial, "normalize_exposure", normalize)
+    monkeypatch.setattr(editorial, "save_tiff16_prophoto", save)
+    monkeypatch.setattr(editorial, "remove_dust_spots", dust)
+    monkeypatch.setattr(editorial, "export_assets", export)
+    monkeypatch.setattr(editorial, "build_contact_sheet", contact_sheet)
+    return cfg, raws, normalized_writes, state, original_normalize
+
+
+@pytest.mark.parametrize("retouch", [False, True])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_pipeline_releases_stage_arrays_and_preserves_streamed_normalization(editorial, monkeypatch, tmp_path, retouch, dtype):
+    cfg, raws, actual, state, normalize = _stub_image_lifetime_pipeline(
+        editorial, monkeypatch, tmp_path, retouch=retouch, dtype=dtype
+    )
+    # Original batch formula is independent per image. Preserve exact dtype and
+    # values while eliminating the simultaneously retained image/result lists.
+    expected = normalize(
+        [np.full((3, 4, 3), value, dtype=dtype) for value in (0.1, 0.7)],
+        target_median=cfg.consistency["target_median"],
+    )
+
+    editorial.run_pipeline(tmp_path / "unused-config.yml")
+
+    assert state["export_count"] == 4
+    assert len(actual) == 4
+    for style in cfg.styles:
+        for raw, reference in zip(raws, expected):
+            saved = actual[cfg.project_root / "WORK" / "Variants" / style / raw.with_suffix(".tif").name]
+            assert saved.dtype == reference.dtype
+            np.testing.assert_array_equal(saved, reference)
+
+
+def test_streamed_normalization_failure_does_not_publish_success(editorial, monkeypatch, tmp_path):
+    cfg, _raws, actual, state, _normalize = _stub_image_lifetime_pipeline(
+        editorial, monkeypatch, tmp_path, retouch=False, dtype=np.float32
+    )
+    original_load = editorial.load_image_float
+
+    def fail_later_input(path):
+        path = Path(path)
+        if path.parent.name == "natural" and path.name == "two.tif":
+            raise ValueError("synthetic later normalization input failure")
+        return original_load(path)
+
+    monkeypatch.setattr(editorial, "load_image_float", fail_later_input)
+    with pytest.raises(ValueError, match="later normalization input failure"):
+        editorial.run_pipeline(tmp_path / "unused-config.yml")
+
+    # A streamed phase may retain a completed prefix, but may not present it as
+    # a complete export or successful final manifest.
+    assert len(actual) == 1
+    assert state["export_count"] == 0
+    assert not (cfg.project_root / "DOCS" / "Manifests" / "manifest.json").exists()
+
+
+@pytest.mark.parametrize(
+    "duplicate_source,fail_at",
+    [
+        ("repeated_pano_group", None),
+        ("generated_stem_collision", None),
+        ("hardlink_destinations", None),
+        ("case_alias_destinations", None),
+        ("repeated_pano_group", 2),
+    ],
+)
+def test_streamed_normalization_preserves_duplicate_destination_bytes(
+    editorial, monkeypatch, tmp_path, duplicate_source, fail_at
+):
+    if duplicate_source == "case_alias_destinations":
+        probe = tmp_path / "case-probe"
+        probe.write_bytes(b"case sensitivity fixture")
+        if not (tmp_path / "CASE-PROBE").exists():
+            pytest.skip("This filesystem does not support distinct-case aliases of one destination")
+
+    cfg = _cfg(editorial, tmp_path / "project", selects={"use_csv": False})
+    raws = [Path("one.DNG"), Path("two.DNG")]
+    groups = [["one.DNG", "two.DNG"]]
+    names = ["one.tif", "two.tif", "one_PANO.tif", "one_PANO.tif"]
+    if duplicate_source == "repeated_pano_group":
+        groups.append(groups[0].copy())
+    elif duplicate_source == "generated_stem_collision":
+        # Unique RAW stems may still collide with a generated pano filename.
+        raws.append(Path("one_PANO.DNG"))
+    elif duplicate_source == "case_alias_destinations":
+        raws.append(Path("ONE_pano.DNG"))
+        names = ["one.tif", "two.tif", "ONE_pano.tif", "one_PANO.tif"]
+    else:
+        groups = []
+        names = ["one.tif", "two.tif"]
+    cfg.processing.update({"auto_upright": False, "enable_pano": bool(groups), "pano_groups": groups})
+    cfg.consistency["wb_neutralize"] = False
+    image = np.full((3, 4, 3), 0.1, dtype=np.float32)
+    original_normalize = editorial.normalize_exposure
+    original_save = editorial.save_tiff16_prophoto
+    original_copy = editorial.shutil.copyfile
+    original_temporary_directory = editorial.tempfile.TemporaryDirectory
+    exports = []
+    normalization_calls = []
+    normalization_writes = []
+    snapshots = []
+    scratch_directories = []
+
+    # Reference the previous batch read-before-write behavior, including uint16
+    # TIFF quantization. Every duplicate begins with the same original pixels.
+    reference_input = tmp_path / "reference-input.tif"
+    editorial.save_tiff16_prophoto(image, reference_input, None)
+    source = editorial.load_image_float(reference_input)
+    factor = np.clip(cfg.consistency["target_median"] / (editorial.median_luma(source) + 1e-6), 0.6, 1.6)
+    assert factor == 1.6, "The fixture must expose repeated clamped normalization"
+    reference_dir = tmp_path / "reference"
+    reference_dir.mkdir()
+    batch_outputs = original_normalize([source.copy() for _ in names], target_median=cfg.consistency["target_median"])
+    for name, normalized in zip(names, batch_outputs):
+        editorial.save_tiff16_prophoto(normalized, reference_dir / name, None)
+
+    # A second read/normalize/write is observably different, so a duplicate-path
+    # regression cannot pass by coincidence or only by counting calls.
+    twice = original_normalize(
+        [editorial.load_image_float(reference_dir / names[-1])],
+        target_median=cfg.consistency["target_median"],
+    )[0]
+    twice_path = tmp_path / "twice.tif"
+    editorial.save_tiff16_prophoto(twice, twice_path, None)
+    assert twice_path.read_bytes() != (reference_dir / names[-1]).read_bytes()
+
+    def normalize(images, **kwargs):
+        assert len(images) == 1
+        normalization_calls.append(1)
+        if fail_at == len(normalization_calls):
+            raise ValueError("synthetic failure after shared-identity snapshot")
+        return original_normalize(images, **kwargs)
+
+    def save(samples, path, profile):
+        path = Path(path)
+        original_save(samples, path, profile)
+        if normalization_calls:
+            normalization_writes.append(path.name)
+        elif duplicate_source == "hardlink_destinations" and path.parent.name == "natural" and path.name == "two.tif":
+            path.unlink()
+            path.hardlink_to(path.with_name("one.tif"))
+
+    def snapshot(source_path, frozen_path, *_args, **_kwargs):
+        assert not normalization_calls, "All shared identities must be frozen before the first normalization write"
+        snapshots.append(Path(source_path))
+        return original_copy(source_path, frozen_path)
+
+    def temporary_directory(*args, **kwargs):
+        # Keep the synthetic fixture's scratch under its caller-owned tmp root.
+        directory = original_temporary_directory(*args, dir=tmp_path, **kwargs)
+        scratch_directories.append(Path(directory.name))
+        return directory
+
+    def export(_image, print_path, _web_path, *_args):
+        exports.append(Path(print_path).name)
+
+    monkeypatch.setattr(editorial.PipelineConfig, "from_yaml", lambda _: cfg)
+    monkeypatch.setattr(editorial, "mirror_offload", lambda *_: raws)
+    monkeypatch.setattr(editorial, "rename_raws", lambda *_: raws)
+    monkeypatch.setattr(editorial, "ensure_selects_csv", lambda *_: tmp_path / "unused-selects.csv")
+    monkeypatch.setattr(editorial, "filter_selects", lambda *_: raws)
+    monkeypatch.setattr(editorial, "tqdm", lambda items, **_kwargs: items)
+    monkeypatch.setattr(editorial, "raw_to_prophoto_tiff", lambda _: image.copy())
+    monkeypatch.setattr(editorial, "stitch_pano", lambda _: image.copy())
+    monkeypatch.setattr(editorial, "style_grade", lambda samples, *_: samples.copy())
+    monkeypatch.setattr(editorial, "normalize_exposure", normalize)
+    monkeypatch.setattr(editorial, "save_tiff16_prophoto", save)
+    monkeypatch.setattr(editorial.shutil, "copyfile", snapshot)
+    monkeypatch.setattr(editorial.tempfile, "TemporaryDirectory", temporary_directory)
+    monkeypatch.setattr(editorial, "export_assets", export)
+    monkeypatch.setattr(editorial, "build_contact_sheet", lambda *_args, **_kwargs: None)
+
+    if fail_at:
+        with pytest.raises(ValueError, match="after shared-identity snapshot"):
+            editorial.run_pipeline(tmp_path / "unused-config.yml")
+        assert len(snapshots) == 1
+        assert all(not path.exists() for path in scratch_directories)
+        assert normalization_writes == names[: fail_at - 1]
+        assert exports == []
+        assert not (cfg.project_root / "DOCS" / "Manifests" / "manifest.json").exists()
+        return
+
+    editorial.run_pipeline(tmp_path / "unused-config.yml")
+
+    actual_dir = cfg.project_root / "WORK" / "Variants" / "natural"
+    assert len(snapshots) == 1, "Copy one encoded input only for the shared identity, never every input"
+    assert all(not path.exists() for path in scratch_directories)
+    assert len(normalization_calls) == len(names)
+    assert normalization_writes == names, "Every original destination must still be written in its original order"
+    assert exports == names, "Normalization must not deduplicate or reorder exports"
+    for name in set(names):
+        assert (actual_dir / name).read_bytes() == (reference_dir / name).read_bytes()
+    manifest_path = cfg.project_root / "DOCS" / "Manifests" / "manifest.json"
+    import json
+
+    assert [Path(entry["print_tif"]).name for entry in json.loads(manifest_path.read_text())["exports"]] == names
+
+
+@pytest.mark.parametrize("print_amount", [0, 0.1])
+def test_export_drops_separate_print_buffer_before_web(editorial, monkeypatch, tmp_path, print_amount):
+    import weakref
+
+    image = np.full((3, 4, 3), 0.2, dtype=np.float32)
+    print_reference = weakref.ref(image)
+    calls = []
+
+    def sharpen(samples, *, amount, **_kwargs):
+        nonlocal print_reference
+        calls.append(amount)
+        result = samples if amount == 0 else samples.copy()
+        if len(calls) == 1:
+            print_reference = weakref.ref(result)
+        return result
+
+    def resize(samples, edge):
+        assert samples is image and edge == 2500
+        if print_amount:
+            assert print_reference() is None, "Print-only buffer survives into web construction"
+        else:
+            assert print_reference() is image, "Zero sharpening must preserve the caller-owned alias"
+        return samples.copy()
+
+    monkeypatch.setattr(editorial, "unsharp_mask", sharpen)
+    monkeypatch.setattr(editorial, "save_tiff16_prophoto", lambda *_: None)
+    monkeypatch.setattr(editorial, "resize_long_edge", resize)
+    monkeypatch.setattr(editorial, "save_jpeg_srgb", lambda *_args, **_kwargs: None)
+
+    editorial.export_assets(image, tmp_path / "print.tif", tmp_path / "web.jpg", None, None, 2500, 96, 0.35, print_amount)
+
+    assert calls == [print_amount, 0.35]
+    np.testing.assert_array_equal(image, np.full((3, 4, 3), 0.2, dtype=np.float32))
+
+
+@pytest.mark.parametrize("gamma_profile", [False, True])
+def test_export_lifetime_change_preserves_synthetic_encoded_bytes(editorial, tmp_path, gamma_profile):
+    image = np.random.default_rng(11).random((12, 17, 3)).astype(np.float32)
+    profile = _gamma_prophoto_profile(editorial) if gamma_profile else None
+    reference_print, reference_web = tmp_path / "reference.tif", tmp_path / "reference.jpg"
+    actual_print, actual_web = tmp_path / "actual.tif", tmp_path / "actual.jpg"
+
+    # Previous export sequence, including its longer-lived print-only buffer.
+    # The change may release that buffer, but must preserve all export operations.
+    print_image = editorial.unsharp_mask(image, amount=0.1, radius=1.2, threshold=0.0)
+    editorial.save_tiff16_prophoto(print_image, reference_print, profile)
+    web_image = editorial.resize_long_edge(image, 10)
+    web_image = editorial.unsharp_mask(web_image, amount=0.35, radius=1.2, threshold=0.0)
+    editorial.save_jpeg_srgb(editorial.linear_prophoto_to_srgb(web_image), reference_web, None, quality=96)
+
+    editorial.export_assets(image, actual_print, actual_web, profile, None, 10, 96, 0.35, 0.1)
+
+    assert actual_print.read_bytes() == reference_print.read_bytes()
+    assert actual_web.read_bytes() == reference_web.read_bytes()

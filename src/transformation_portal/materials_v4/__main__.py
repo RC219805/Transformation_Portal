@@ -136,6 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     evaluate = commands.add_parser("evaluate", help="Evaluate declared held-out labels; never asserts acceptance")
     evaluate.add_argument("--input", type=Path, required=True)
     evaluate.add_argument("--output", type=Path)
+    fit = commands.add_parser("fit-calibration", help="Fit an unreviewed, source-bound artifact; grants no edit authority")
+    fit.add_argument("--input", type=Path, required=True)
+    fit.add_argument("--source-root", type=Path, required=True)
+    fit.add_argument("--data-root", type=Path, required=True)
+    fit.add_argument("--output-dir", type=Path, required=True)
     for name in ("import-supplied", "inspect", "infer"):
         command = commands.add_parser(name)
         command.add_argument("--source", type=Path, required=True)
@@ -156,10 +161,31 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--proxy-longest-side", type=int, default=1024)
             command.add_argument("--max-proposals", type=int, default=64)
             command.add_argument("--classifier-batch-size", type=int, default=8)
+            command.add_argument("--points-per-side", type=int, default=16)
+            command.add_argument("--calibration-artifact", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "policy":
             result = ResponsePolicy().to_payload()
+        elif args.command == "fit-calibration":
+            from .calibration import decode_calibration_json_object, fit_calibration
+
+            data, _ = _read(args.input, 16 * 1024 * 1024)
+            fitted = fit_calibration(
+                decode_calibration_json_object(data), source_root=args.source_root, data_root=args.data_root
+            )
+            destination = directory_path(args.output_dir, allow_missing=True)
+            destination.mkdir(mode=0o700, parents=False, exist_ok=False)
+            output = destination / "calibration.json"
+            write_bytes(destination, output.name, canonicalize_json(fitted.to_payload()), maximum_bytes=16 * 1024 * 1024)
+            result = {
+                "schema": "tp.materials.calibration_preparation.v1",
+                "artifact": str(output),
+                "calibration_receipt_sha256": fitted.receipt.content_hash(),
+                "classes": list(fitted.receipt.classes),
+                "review_status": "unreviewed",
+                "acceptance": "not_assessed",
+            }
         elif args.command == "evaluate":
             from .evaluation import evaluate_dataset
 
@@ -197,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
                     proxy_longest_side=args.proxy_longest_side,
                     max_proposals=args.max_proposals,
                     classifier_batch_size=args.classifier_batch_size,
+                    points_per_side=args.points_per_side,
+                    calibration_artifact=args.calibration_artifact,
                 )
                 evidence = infer_materials(master, prepare_inference(master, config))
                 result = _publish(evidence, args)

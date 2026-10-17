@@ -470,12 +470,14 @@ class SpatialAIPipeline:
                 # Build scene via SceneBuilder/GaussianBackend
                 self.progress_tracker.start_stage("reconstruction", "3D Reconstruction")
 
+                backend_config: Dict[str, Any] = {"optimization_seed": request.optimization_seed}
+                for option in ("implementation", "optimization_max_gaussians", "native_recipe"):
+                    if option in self.config.reconstruction:
+                        backend_config[option] = self.config.reconstruction[option]
                 builder = SceneBuilder(
                     tier=request.tier,
                     device=self.resource_manager.select_device(),
-                    backend_config={
-                        "optimization_seed": request.optimization_seed,
-                    },
+                    backend_config=backend_config,
                 )
 
                 # Get iteration count from config or use default
@@ -560,8 +562,9 @@ class SpatialAIPipeline:
     ) -> list:
         """Convert CoreCameraParams to reconstruction CameraParams.
 
-        Creates full reconstruction camera parameters with identity extrinsics
-        from the simpler core camera intrinsics.
+        Carries supplied calibrated poses through to reconstruction. The
+        legacy path retains its identity fallback; native execution requires
+        explicit world-to-camera poses for every view.
         """
         from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
@@ -577,9 +580,12 @@ class SpatialAIPipeline:
                 dtype=np.float32,
             )
 
-            # Default to identity extrinsics (camera at origin)
-            # In production, these would come from camera pose estimation
-            extrinsics = np.eye(4, dtype=np.float32)
+            if core_cam.extrinsics is None:
+                if self.config.reconstruction.get("implementation") == "torch_native":
+                    raise ValueError(f"torch_native requires supplied world-to-camera extrinsics for view {i}")
+                extrinsics = np.eye(4, dtype=np.float32)
+            else:
+                extrinsics = np.asarray(core_cam.extrinsics, dtype=np.float32)
 
             camera = CameraParams(
                 intrinsics=intrinsics,

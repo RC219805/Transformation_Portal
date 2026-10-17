@@ -34,6 +34,7 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
 from transformation_portal.lux_depth_v4.photography import create_proxy
 
+from .calibration import CALIBRATED_SCORE_TYPE, CalibrationModel, load_calibration, taxonomy_digest
 from .contracts import MaterialEvidence, MaterialLimits, MaterialsError, RegionEvidence, _metadata, validate_digest
 from .proposal import SAM2_LARGE_SHA256, SAM2_MODEL_CONFIG, _CandidateBudget, check_cancelled, generate_proposals
 from .semantics import (
@@ -136,7 +137,7 @@ def _runtime_payload(device: str) -> dict[str, Any]:
         origins[name] = str(Path(origin).resolve())
     sam_config = Path(origins["sam2"]).parent / SAM2_MODEL_CONFIG
     sources = {}
-    for name in ("contracts.py", "taxonomy.py", "proposal.py", "semantics.py", "inference.py"):
+    for name in ("contracts.py", "taxonomy.py", "proposal.py", "semantics.py", "inference.py", "calibration.py"):
         source = Path(__file__).parent / name
         sources[name] = _file_identity(source, maximum_bytes=1_000_000)["sha256"]
     photographic_origin = getattr(importlib.import_module("transformation_portal.lux_depth_v4.photography"), "__file__", None)
@@ -182,6 +183,7 @@ class InferenceConfig:
     max_mask_bytes: int = 512_000_000
     max_proxy_mask_bytes: int = 64_000_000
     max_candidate_bytes: int = 536_870_912
+    calibration_artifact: Path | None = None
 
     def __post_init__(self) -> None:
         for name in ("sam2_checkpoint", "clip_checkpoint"):
@@ -189,6 +191,10 @@ class InferenceConfig:
             if not isinstance(value, (str, Path)):
                 raise MaterialsError(f"{name} must be an explicit local path")
             object.__setattr__(self, name, Path(value).expanduser().absolute())
+        if self.calibration_artifact is not None:
+            if not isinstance(self.calibration_artifact, (str, Path)):
+                raise MaterialsError("calibration_artifact must be an explicit local path")
+            object.__setattr__(self, "calibration_artifact", Path(self.calibration_artifact).expanduser().absolute())
         if self.device not in {"cpu", "mps", "cuda"}:
             raise MaterialsError("Inference requires explicit cpu, mps or cuda device")
         bounds = {
@@ -219,7 +225,11 @@ class InferenceConfig:
             object.__setattr__(self, name, float(value))
 
     def to_payload(self) -> dict[str, Any]:
-        return {name: str(value) if isinstance(value, Path) else value for name, value in vars(self).items()}
+        return {
+            name: str(value) if isinstance(value, Path) else value
+            for name, value in vars(self).items()
+            if name != "calibration_artifact" or value is not None
+        }
 
 
 @dataclass(frozen=True)
@@ -237,6 +247,8 @@ class PreparedMaterialInference:
     runtime_sha256: str
     prompt_sha256: str
     preprocessing_sha256: str
+    calibration: CalibrationModel | None = None
+    calibration_file: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -254,9 +266,22 @@ class PreparedMaterialInference:
             object.__setattr__(self, name, _metadata(getattr(self, name)))
         if _digest(self.runtime) != self.runtime_sha256:
             raise MaterialsError("Prepared runtime digest does not bind runtime content")
+        if self.calibration is None:
+            if self.calibration_file is not None or self.config.calibration_artifact is not None:
+                raise MaterialsError("Prepared calibration requires a frozen fitting artifact")
+        else:
+            if (
+                not isinstance(self.calibration, CalibrationModel)
+                or self.calibration_file is None
+                or self.config.calibration_artifact is None
+            ):
+                raise MaterialsError("Prepared calibration requires a local artifact and identity")
+            object.__setattr__(self, "calibration_file", _metadata(self.calibration_file))
+            if self.calibration.fit["recipe"] != inference_recipe(self):
+                raise MaterialsError("Calibration recipe differs from prepared inference")
 
     def to_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema": "tp.materials.inference_plan.v1",
             "source_sha256": self.source_sha256,
             "master_sha256": self.master_sha256,
@@ -270,11 +295,58 @@ class PreparedMaterialInference:
             "prompt_sha256": self.prompt_sha256,
             "preprocessing_sha256": self.preprocessing_sha256,
             "cache_policy": "off",
-            "semantic_authority": "uncalibrated",
+            "semantic_authority": "uncalibrated" if self.calibration is None else "calibrated_draft_unreviewed",
         }
+        if self.calibration is not None:
+            payload["calibration_file"] = metadata_payload(self.calibration_file)
+            payload["calibration_receipt_sha256"] = self.calibration.receipt.content_hash()
+        return payload
 
     def content_hash(self) -> str:
         return _digest(self.to_payload())
+
+
+def inference_recipe(prepared: PreparedMaterialInference) -> dict[str, str]:
+    """Bind model, runtime, thresholds and region construction across sources.
+
+    Excluding photograph identities and local file paths permits one frozen
+    recipe to be evaluated on independent properties. Calibration parameters
+    cannot affect this identity, so uncalibrated evidence can fit that recipe.
+    """
+    options = {
+        key: value
+        for key, value in prepared.config.to_payload().items()
+        if key not in {"sam2_checkpoint", "clip_checkpoint", "calibration_artifact"}
+    }
+    return {
+        "classifier_sha256": _digest(
+            {
+                "weights_sha256": prepared.clip_weights["sha256"],
+                "runtime_sha256": prepared.runtime_sha256,
+                "preprocessing_sha256": prepared.preprocessing_sha256,
+                "prompt_sha256": prepared.prompt_sha256,
+                "options": options,
+            }
+        ),
+        "proposal_sha256": _digest(
+            {
+                "weights_sha256": prepared.sam2_weights["sha256"],
+                "runtime_sha256": prepared.runtime_sha256,
+                "model_config": SAM2_MODEL_CONFIG,
+                "options": options,
+            }
+        ),
+        "prompt_sha256": prepared.prompt_sha256,
+        "preprocessing_sha256": prepared.preprocessing_sha256,
+        "region_construction_sha256": _digest(
+            {
+                "runtime_sha256": prepared.runtime_sha256,
+                "restore": "crop_padding_then_nearest_pixel_centers",
+                "proxy_longest_side": prepared.config.proxy_longest_side,
+            }
+        ),
+        "taxonomy_sha256": taxonomy_digest(),
+    }
 
 
 def prepare_inference(master: ImageMaster, config: InferenceConfig) -> PreparedMaterialInference:
@@ -297,6 +369,14 @@ def prepare_inference(master: ImageMaster, config: InferenceConfig) -> PreparedM
             if not checkpoint.keys() or len(checkpoint.keys()) > 1024:
                 raise MaterialsError("CLIP requires a bounded nonempty local safetensors checkpoint")
         runtime = _runtime_payload(config.device)
+        calibration, calibration_file = None, None
+        if config.calibration_artifact is not None:
+            calibration, calibration_file = load_calibration(config.calibration_artifact)
+            calibration_file = {
+                "path": str(config.calibration_artifact),
+                "sha256": calibration_file["sha256"],
+                "size_bytes": calibration_file["size_bytes"],
+            }
         return PreparedMaterialInference(
             master.source_sha256,
             master.content_hash(),
@@ -309,6 +389,8 @@ def prepare_inference(master: ImageMaster, config: InferenceConfig) -> PreparedM
             _digest(runtime),
             _digest(MATERIAL_PROMPTS),
             _digest(PREPROCESS_CONTRACT),
+            calibration,
+            calibration_file,
         )
     except MaterialsError:
         raise
@@ -329,6 +411,21 @@ def _verify_prepared(master: ImageMaster, prepared: PreparedMaterialInference) -
         raise MaterialsError("Prepared SAM2 checkpoint lacks the pinned model identity")
     if _digest(_runtime_payload(prepared.config.device)) != prepared.runtime_sha256:
         raise MaterialsError("Material inference runtime changed after preparation")
+    if prepared.calibration is not None:
+        if _file_identity(prepared.config.calibration_artifact, maximum_bytes=16 * 1024 * 1024) != dict(
+            prepared.calibration_file
+        ):
+            raise MaterialsError("Calibration artifact changed after inference preparation")
+        loaded, identity = load_calibration(prepared.config.calibration_artifact)
+        if (
+            identity["sha256"] != prepared.calibration_file["sha256"]
+            or identity["size_bytes"] != prepared.calibration_file["size_bytes"]
+        ):
+            raise MaterialsError("Calibration artifact changed after inference preparation")
+        if loaded.to_payload() != prepared.calibration.to_payload():
+            raise MaterialsError("Prepared calibration differs from frozen artifact")
+        if prepared.calibration.fit["recipe"] != inference_recipe(prepared):
+            raise MaterialsError("Calibration recipe differs from prepared inference")
 
 
 def infer_materials(
@@ -337,7 +434,7 @@ def infer_materials(
     *,
     cancelled: Callable[[], bool] | None = None,
 ) -> MaterialEvidence:
-    """Execute the frozen experiment; inferred scores never authorize edits."""
+    """Execute a frozen experiment; a fitted score alone never authorizes edits."""
     if not isinstance(master, ImageMaster) or not isinstance(prepared, PreparedMaterialInference):
         raise MaterialsError("Inference execution requires an ImageMaster and PreparedMaterialInference")
     check_cancelled(cancelled)
@@ -368,15 +465,19 @@ def infer_materials(
                 Image.fromarray(crop).resize((master.shape[1], master.shape[0]), Image.Resampling.NEAREST), dtype=bool
             )
             region_id = f"region-{index:04d}"
+            probability = None
+            if prepared.calibration is not None and observation.rejection is None:
+                probability = prepared.calibration.probability(observation.label, observation.confidence)
             regions.append(
                 RegionEvidence(
                     region_id,
                     observation.label,
                     lifted,
-                    observation.confidence,
+                    observation.confidence if probability is None else probability,
                     proposal.geometric_quality,
                     provenance="inferred",
-                    score_type=SEMANTIC_SCORE_TYPE,
+                    score_type=SEMANTIC_SCORE_TYPE if probability is None else CALIBRATED_SCORE_TYPE,
+                    calibration_sha256=None if probability is None else prepared.calibration.receipt.content_hash(),
                 )
             )
             diagnostics.append(
@@ -386,6 +487,8 @@ def infer_materials(
                     "top2_margin": observation.margin,
                     "rejection": observation.rejection,
                     "geometric_stability": proposal.stability,
+                    "uncalibrated_ranking": observation.confidence,
+                    "calibration_applied": probability is not None,
                 }
             )
         check_cancelled(cancelled)
@@ -395,7 +498,9 @@ def infer_materials(
             master.source_sha256,
             master.shape,
             tuple(regions),
+            calibration=None if prepared.calibration is None else prepared.calibration.receipt,
             producer={
+                **inference_recipe(prepared),
                 "inference_plan_sha256": prepared.content_hash(),
                 "runtime_sha256": prepared.runtime_sha256,
                 "sam2_weights_sha256": prepared.sam2_weights["sha256"],
@@ -405,7 +510,7 @@ def infer_materials(
                 "actual_proposal_device": prepared.config.device,
                 "actual_classifier_device": prepared.config.device,
                 "model_selection": "local_research_prototype_observed_identity",
-                "semantic_authority": "uncalibrated",
+                "semantic_authority": "uncalibrated" if prepared.calibration is None else "calibrated_draft_unreviewed",
                 "cache_policy": "off",
                 "proxy_transform": metadata_payload(prepared.proxy_transform),
                 "mask_restore": "crop_padding_then_nearest_pixel_centers",

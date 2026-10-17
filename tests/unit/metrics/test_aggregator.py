@@ -17,7 +17,9 @@ from transformation_portal.metrics.performance_capsule import PerformanceBucket,
 pytestmark = pytest.mark.unit
 
 
-def _capsule(total_time: float, zone: str = "us-west-2a", scene_type: str = "pool", device: str = "mps") -> PerformanceCapsule:
+def _capsule(
+    total_time: float, zone: str = "us-west-2a", scene_type: str = "pool", device: str = "mps", identity: str | None = None
+) -> PerformanceCapsule:
     return PerformanceCapsule(
         image_id="img001",
         image_path="/tmp/img001.png",
@@ -31,6 +33,14 @@ def _capsule(total_time: float, zone: str = "us-west-2a", scene_type: str = "poo
         scene_type=scene_type,
         device=device,
         workflow_version="v1",
+        schema_version="2.1.0",
+        measurement_id=identity or f"{zone}-{total_time}",
+        measurement_unit="image_wall_seconds",
+        workload_id="fixed-workload",
+        backend_id="da3",
+        model_variant="metric",
+        config_hash="recipe",
+        pipeline_version="source",
     )
 
 
@@ -40,11 +50,13 @@ def _bucket(name: str = "pool_mps", p95_threshold: float = 15.0) -> PerformanceB
         filters={"scene_type": "pool", "device": "mps"},
         p50_threshold_sec=10.0,
         p95_threshold_sec=p95_threshold,
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
     )
 
 
 def _make_capsules(times: list[float], **kwargs) -> list[PerformanceCapsule]:
-    return [_capsule(t, **kwargs) for t in times]
+    return [_capsule(t, identity=f"sample-{i}", **kwargs) for i, t in enumerate(times)]
 
 
 class TestComputeBucketStats:
@@ -190,32 +202,8 @@ class TestComputeGlobalStats:
 class TestComputeWorstZoneP95:
     def test_returns_zone_with_highest_p95(self):
         """Zone with highest p95 across all buckets is returned."""
-        stats_a = BucketStats(
-            bucket_name="b",
-            count=25,
-            p50=5.0,
-            p95=20.0,
-            p99=25.0,
-            mean=10.0,
-            min=1.0,
-            max=30.0,
-            threshold_p50=10.0,
-            threshold_p95=15.0,
-            pass_fail="fail",
-        )
-        stats_b = BucketStats(
-            bucket_name="b",
-            count=25,
-            p50=5.0,
-            p95=10.0,
-            p99=12.0,
-            mean=6.0,
-            min=1.0,
-            max=15.0,
-            threshold_p50=10.0,
-            threshold_p95=15.0,
-            pass_fail="pass",
-        )
+        stats_a = compute_bucket_stats(_make_capsules([20.0] * 25, zone="zone-a"), _bucket(name="b"))
+        stats_b = compute_bucket_stats(_make_capsules([10.0] * 25, zone="zone-b"), _bucket(name="b"))
         per_zone = {"zone-a": {"b": stats_a}, "zone-b": {"b": stats_b}}
         worst_zone, worst_p95 = compute_worst_zone_p95(per_zone)
         assert worst_zone == "zone-a"

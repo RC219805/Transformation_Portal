@@ -67,6 +67,13 @@ def _make_capsule(
         workflow_version=workflow_version,
         zone=zone,
         captured_at=captured_at or _BASE_TS.isoformat(),
+        schema_version="2.1.0",
+        measurement_id=image_id,
+        measurement_unit="image_wall_seconds",
+        workload_id="fixed-workload",
+        config_hash="fixed-recipe",
+        model_variant="metric",
+        pipeline_version="source",
     )
 
 
@@ -256,7 +263,18 @@ def test_prune_old_entries_deletes_only_stale_rows(tmp_path: Path) -> None:
 
 
 def _bucket(p50: float, p95: float, name: str = "test_bucket") -> PerformanceBucket:
-    return PerformanceBucket(name=name, filters={}, p50_threshold_sec=p50, p95_threshold_sec=p95)
+    return PerformanceBucket(
+        name=name,
+        filters={},
+        p50_threshold_sec=p50,
+        p95_threshold_sec=p95,
+        measurement_unit="image_wall_seconds",
+        workload_id="*",
+    )
+
+
+def _independent_history(*, total_sec=9.0, **overrides):
+    return [_make_capsule(f"historical-{i}", total_sec=total_sec, **overrides) for i in range(20)]
 
 
 def test_detect_regression_insufficient_data() -> None:
@@ -268,7 +286,7 @@ def test_detect_regression_pass_within_thresholds() -> None:
     bucket = _bucket(p50=10.0, p95=15.0)
     result = detect_regression(
         _make_capsule("cur", total_sec=8.0),
-        [_make_capsule("h1", total_sec=7.0), _make_capsule("h2", total_sec=9.0)],
+        _independent_history(total_sec=9.0),
         bucket=bucket,
     )
     assert result["status"] == "pass"
@@ -280,7 +298,7 @@ def test_detect_regression_flags_p95_breach() -> None:
     bucket = _bucket(p50=10.0, p95=15.0)
     result = detect_regression(
         _make_capsule("cur", total_sec=20.0),
-        [_make_capsule("h1", total_sec=9.0)],
+        _independent_history(),
         bucket=bucket,
     )
     assert result["status"] == "regression_p95"
@@ -292,18 +310,17 @@ def test_detect_regression_warns_above_p50_margin() -> None:
     bucket = _bucket(p50=10.0, p95=100.0)
     result = detect_regression(
         _make_capsule("cur", total_sec=20.0),  # > 15 (p50*1.5) but < 100 (p95)
-        [_make_capsule("h1", total_sec=9.0)],
+        _independent_history(),
         bucket=bucket,
     )
     assert result["status"] == "warning_p50"
 
 
 def test_detect_regression_infers_bucket_when_omitted() -> None:
-    # scene_type/device/pixel_count chosen so only the lenient catch-all matches.
-    cur = _make_capsule("cur", total_sec=1.0, scene_type="garage", device="cpu", pixel_count=1_000_000)
-    result = detect_regression(cur, [_make_capsule("h1", total_sec=1.0)])
+    cur = _make_capsule("cur", total_sec=1.0)
+    result = detect_regression(cur, _independent_history(total_sec=1.0))
     assert result["status"] == "pass"
-    assert result["bucket"] == "unknown"
+    assert result["bucket"] == "pool_medium_mps"
 
 
 # --------------------------------------------------------------------------- #
@@ -385,7 +402,8 @@ def test_cli_regression_pass_returns_zero(tmp_path: Path, monkeypatch: pytest.Mo
     led = PerformanceLedger(db)
     # Historical row must fall inside the baseline window the CLI queries.
     recent = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    led.log_capsule(_make_capsule("hist", total_sec=9.0, captured_at=recent))
+    for historical in _independent_history(captured_at=recent):
+        led.log_capsule(historical)
     cap = _write_capsule_json(tmp_path / "cur.json", _make_capsule("cur", total_sec=9.5))
 
     rc = _run_cli(monkeypatch, "regression", "--ledger-db", str(db), "--capsule", str(cap), "--baseline-days", "30")
@@ -396,7 +414,8 @@ def test_cli_regression_detected_returns_one(tmp_path: Path, monkeypatch: pytest
     db = tmp_path / "perf.db"
     led = PerformanceLedger(db)
     recent = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    led.log_capsule(_make_capsule("hist", total_sec=9.0, captured_at=recent))
+    for historical in _independent_history(captured_at=recent):
+        led.log_capsule(historical)
     # total well past the pool bucket p95 (15s) → regression → exit 1.
     cap = _write_capsule_json(tmp_path / "cur.json", _make_capsule("cur", total_sec=99.0))
 

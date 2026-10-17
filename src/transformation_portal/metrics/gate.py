@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional, Tuple
 
 from transformation_portal.metrics.contracts import Judgement
+from transformation_portal.metrics.measurement import recompute_bucket_stats, recompute_regression_report
 
 __version__ = "1.0.0"
 
@@ -159,18 +160,21 @@ def evaluate_gate(
 
     # Rule 1: Check minimum sample size for statistical validity
     # Filter out insufficient-data buckets BEFORE gate evaluation
+    if not bucket_stats:
+        return GateResult(False, mode, [], "Insufficient measurement evidence: no qualifying buckets")
     if bucket_stats:
+        evidence = {name: recompute_bucket_stats(stats) for name, stats in bucket_stats.items()}
         # Separate valid buckets from insufficient-data buckets
         valid_buckets = {
             name: stats
             for name, stats in bucket_stats.items()
-            if not getattr(stats, "is_insufficient_data", False) and stats.count >= min_samples
+            if not evidence[name]["is_insufficient_data"] and evidence[name]["count"] >= max(20, min_samples)
         }
 
         insufficient_buckets = {
             name: stats
             for name, stats in bucket_stats.items()
-            if getattr(stats, "is_insufficient_data", False) or stats.count < min_samples
+            if evidence[name]["is_insufficient_data"] or evidence[name]["count"] < max(20, min_samples)
         }
 
         if insufficient_buckets:
@@ -187,12 +191,16 @@ def evaluate_gate(
                 mode=mode,
                 reasons=[],
                 explanation=explanation,
-                worst_zone_p95=worst_zone_p95,
-                worst_zone_name=worst_zone_name,
+                worst_zone_p95=None,
+                worst_zone_name=None,
             )
 
         # Continue with only valid buckets
         bucket_stats = valid_buckets
+        # Only qualifying measured vectors may supply the worst-zone value.
+        worst_bucket = max(valid_buckets, key=lambda name: evidence[name]["p95"])
+        worst_zone_p95 = evidence[worst_bucket]["p95"]
+        worst_zone_name = evidence[worst_bucket]["measurement_zone"]
 
     # Rule 2: Check bucket threshold violations
     failing_buckets = []
@@ -212,7 +220,8 @@ def evaluate_gate(
 
     # Rule 4: Check regression threshold
     if regression_report is not None:
-        if regression_report.max_regression > max_regression_threshold:
+        regression_report = recompute_regression_report(regression_report, bucket_stats)
+        if regression_report is not None and regression_report.max_regression > max_regression_threshold:
             reasons.append(
                 f"Regression threshold exceeded: {regression_report.max_regression * 100:.1f}% > "
                 f"{max_regression_threshold * 100:.1f}% (bucket: {regression_report.max_regression_bucket})"
