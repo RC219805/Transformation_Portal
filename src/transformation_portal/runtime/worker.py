@@ -21,7 +21,11 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
-from typing import TYPE_CHECKING, Any, Callable, Optional
+import pickle
+import time
+from multiprocessing.connection import Connection
+from threading import Thread
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
 if TYPE_CHECKING:
     from transformation_portal.runtime.gpu_semaphore import GPUSemaphore
@@ -33,11 +37,31 @@ class SpawnError(RuntimeError):
     """Raised when spawned process fails."""
 
 
+class _ResultPublisher(Protocol):
+    """The worker supports both test queues and the pipe-backed publisher."""
+
+    def put(self, value: Any) -> None: ...
+
+
+class _ResultSender:
+    """Keep the worker's queue-like publisher over a synchronous pipe."""
+
+    def __init__(self, connection: Connection) -> None:
+        self.connection = connection
+
+    def put(self, value: Any) -> None:
+        """Leave an unsendable result absent, as the queue feeder did."""
+        try:
+            self.connection.send(value)
+        except Exception:
+            logger.exception("Worker result serialization or transport failed")
+
+
 def _worker_entry(
     fn: Callable,
     args: tuple,
     kwargs: dict,
-    result_queue: mp.Queue,
+    result_queue: _ResultPublisher,
 ) -> None:
     """Worker entry point for spawned process.
 
@@ -56,6 +80,14 @@ def _worker_entry(
         # Serialize exception with full traceback for debugging
         error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
         result_queue.put(("error", error_msg))
+
+
+def _pipe_worker_entry(fn: Callable, args: tuple, kwargs: dict, sender: Connection) -> None:
+    """Close the child's only result writer on every exit path."""
+    try:
+        _worker_entry(fn, args, kwargs, _ResultSender(sender))
+    finally:
+        sender.close()
 
 
 def run_spawned(
@@ -91,38 +123,75 @@ def run_spawned(
         >>> result = run_spawned(load_and_run, device_id=0, data=inputs)
     """
     ctx = mp.get_context("spawn")
-    result_queue = ctx.Queue()
+    receiver, sender = ctx.Pipe(duplex=False)
 
     proc = ctx.Process(
-        target=_worker_entry,
-        args=(fn, args, kwargs, result_queue),
+        target=_pipe_worker_entry,
+        args=(fn, args, kwargs, sender),
     )
 
-    logger.debug("Spawning worker process for %s", fn.__name__)
-    proc.start()
+    received = []
 
-    # Wait for process to complete
-    proc.join(timeout=timeout)
+    def receive_result() -> None:
+        try:
+            received.append(receiver.recv_bytes())
+        except (EOFError, OSError):
+            # A crashed child may leave no frame or only a partial frame.
+            pass
+        finally:
+            receiver.close()
 
-    if proc.is_alive():
-        # Timeout - terminate process
-        logger.warning("Worker process timed out, terminating")
-        proc.terminate()
-        proc.join(timeout=5)
+    reader = Thread(target=receive_result, name="tp-worker-result", daemon=True)
+    process_started = False
+    reader_started = False
+    try:
+        logger.debug("Spawning worker process for %s", fn.__name__)
+        proc.start()
+        process_started = True
+        deadline = None if timeout is None else time.monotonic() + timeout
+        # Only the child may retain a writer: its death must wake the reader.
+        sender.close()
+        reader.start()
+        reader_started = True
+
+        # The reader drains concurrently, including a partially written frame.
+        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+        proc.join(timeout=remaining)
         if proc.is_alive():
-            proc.kill()
-        raise SpawnError(f"Worker process timed out after {timeout}s")
+            logger.warning("Worker process timed out, terminating")
+            raise SpawnError(f"Worker process timed out after {timeout}s")
+        if proc.exitcode != 0:
+            raise SpawnError(f"Worker process exited with code {proc.exitcode}")
 
-    # Check exit code
-    if proc.exitcode != 0:
-        raise SpawnError(f"Worker process exited with code {proc.exitcode}")
+        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+        reader.join(timeout=remaining)
+        if reader.is_alive():
+            raise SpawnError(f"Worker process timed out after {timeout}s")
+        if not received:
+            raise SpawnError("Worker process did not return a result")
+    finally:
+        try:
+            sender.close()
+            if process_started and proc.is_alive():
+                proc.terminate()
+                proc.join(timeout=5)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(timeout=5)
+                if proc.is_alive():
+                    raise SpawnError("Worker process could not be terminated")
+        finally:
+            try:
+                if reader_started:
+                    reader.join(timeout=5)
+                    if reader.is_alive():
+                        raise SpawnError("Worker result receiver did not stop")
+            finally:
+                receiver.close()
+                if not process_started or not proc.is_alive():
+                    proc.close()
 
-    # Get result from queue
-    if result_queue.empty():
-        raise SpawnError("Worker process did not return a result")
-
-    status, payload = result_queue.get_nowait()
-
+    status, payload = pickle.loads(received[0])
     if status == "error":
         raise SpawnError(f"Worker process failed: {payload}")
 
