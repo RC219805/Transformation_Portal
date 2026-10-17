@@ -343,7 +343,7 @@ traitlets==5.16.1
     #   nbformat
 transformers==5.10.4
     # via -r da3-runtime-darwin-arm64.in
-trimesh==4.11.5
+trimesh==5.1.1
     # via -r da3-runtime-darwin-arm64.in
 typer==0.27.2
     # via
