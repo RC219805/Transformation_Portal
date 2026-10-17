@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -106,6 +107,14 @@ def test_clean_preflight_preserves_selected_node_with_competing_python_directory
     python_dir = tmp_path / "selected python bin"
     node_log = tmp_path / "node-invocations.log"
     python_log = tmp_path / "python-invocations.log"
+    ambient_python_dir = tmp_path / "ambient python bin"
+    ambient_python_log = tmp_path / "ambient-python-invocations.log"
+    _write_executable(
+        ambient_python_dir / "python3.99",
+        "#!/bin/sh\n"
+        f"printf '%s\\n' ambient-python >> {shlex.quote(str(ambient_python_log))}\n"
+        f'exec {shlex.quote(sys.executable)} "$@"\n',
+    )
     python_name = "python3" if resolver_style == "unversioned_fallback" else "python3.12"
     python_bin = _write_executable(
         python_dir / python_name,
@@ -114,7 +123,21 @@ def test_clean_preflight_preserves_selected_node_with_competing_python_directory
         f'exec {shlex.quote(sys.executable)} "$@"\n',
     )
     if resolver_style == "unversioned_fallback":
-        resolver_source = (REPO_ROOT / "scripts" / "setup" / "resolve_python_311.sh").read_text(encoding="utf-8")
+        resolver_impl = _write_executable(
+            setup_dir / "resolve_python_311.impl.sh",
+            (REPO_ROOT / "scripts" / "setup" / "resolve_python_311.sh").read_text(encoding="utf-8"),
+        )
+        utility_dir = tmp_path / "resolver utility bin"
+        utility_dir.mkdir()
+        for utility in ("dirname", "sort", "awk"):
+            utility_source = shutil.which(utility, path=os.defpath)
+            assert utility_source is not None
+            (utility_dir / utility).symlink_to(utility_source)
+        resolver_source = (
+            "#!/bin/sh\n"
+            f"PATH={shlex.quote(str(python_dir) + os.pathsep + str(utility_dir))} "
+            f'exec /bin/bash {shlex.quote(str(resolver_impl))} "$@"\n'
+        )
     else:
         resolver_source = f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(python_bin))}\n"
     _write_executable(setup_dir / "resolve_python_311.sh", resolver_source)
@@ -140,7 +163,7 @@ def test_clean_preflight_preserves_selected_node_with_competing_python_directory
         env={
             "HOME": str(home),
             "USER": "fixture",
-            "PATH": f"{node_dir}:{python_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PATH": f"{node_dir}:{python_dir}:{ambient_python_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
         },
         text=True,
         capture_output=True,
@@ -150,6 +173,7 @@ def test_clean_preflight_preserves_selected_node_with_competing_python_directory
 
     assert result.returncode == expected_returncode, result.stderr + result.stdout
     assert node_log.read_text(encoding="utf-8").splitlines() == [f"selected:{selected_version}"]
+    assert not ambient_python_log.exists()
     assert set(python_log.read_text(encoding="utf-8").splitlines()) == {"selected-python"}
     if expected_returncode == 0:
         assert "missing: []" in result.stdout
