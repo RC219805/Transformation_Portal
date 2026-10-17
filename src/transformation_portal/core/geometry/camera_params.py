@@ -1,7 +1,7 @@
 """Core camera parameter contract for cross-pipeline use.
 
 Provides a neutral camera representation that is:
-- Simple (pinhole model, intrinsics only)
+- Simple (pinhole intrinsics and optional calibrated pose)
 - Source-aware (tracks explicit/exif/synthetic origin)
 - Frozen (immutable for safety in reconstruction)
 
@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional, get_args
+from typing import Literal, Optional, Tuple, get_args
+
+import numpy as np
 
 CameraSource = Literal["explicit", "exif", "synthetic"]
 
@@ -37,11 +39,11 @@ class CoreCameraParams:
         height: Image height in pixels.
         source: Origin of camera parameters ("explicit", "exif", "synthetic").
         image_path: Optional associated image path (for traceability).
+        extrinsics: Optional rigid world-to-camera 4x4 pose. Normalized to an
+            immutable tuple; omitted poses retain the legacy caller behavior.
 
     Note:
         This is a minimal camera model (pinhole without distortion).
-        For full reconstruction with extrinsics, the spatial_ai.reconstruction
-        module's CameraParams should be used.
     """
 
     fx: float
@@ -52,6 +54,7 @@ class CoreCameraParams:
     height: int
     source: CameraSource = "synthetic"
     image_path: Optional[Path] = None
+    extrinsics: Optional[Tuple[Tuple[float, float, float, float], ...]] = None
 
     def __post_init__(self) -> None:
         """Validate camera parameters."""
@@ -61,6 +64,18 @@ class CoreCameraParams:
             raise ValueError(f"Image dimensions must be positive: {self.width}x{self.height}")
         if self.source not in VALID_CAMERA_SOURCES:
             raise ValueError(f"Camera source must be one of {VALID_CAMERA_SOURCES}, got '{self.source}'")
+        if self.extrinsics is not None:
+            pose = np.asarray(self.extrinsics, dtype=np.float64)
+            if pose.shape != (4, 4) or not np.isfinite(pose).all():
+                raise ValueError("Camera extrinsics must be a finite 4x4 world-to-camera pose")
+            rotation = pose[:3, :3]
+            if (
+                not np.allclose(pose[3], [0, 0, 0, 1], atol=1e-6)
+                or not np.allclose(rotation @ rotation.T, np.eye(3), atol=1e-4)
+                or not np.isclose(np.linalg.det(rotation), 1.0, atol=1e-4)
+            ):
+                raise ValueError("Camera extrinsics must be a rigid world-to-camera pose")
+            object.__setattr__(self, "extrinsics", tuple(tuple(float(value) for value in row) for row in pose))
 
     @property
     def is_verified(self) -> bool:

@@ -28,6 +28,8 @@ import numpy as np
 
 from transformation_portal.ingest.canonical_json import dump_json
 
+from .protocol import resolve_saved_native_recipe
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +92,9 @@ class PLYExporter:
             IOError: If file write fails.
         """
         splats = scene.splats
+        # Validate saved native identity before creating directories or files,
+        # even when a caller intentionally omits the provenance sidecar.
+        resolve_saved_native_recipe(getattr(scene, "metadata", {}), getattr(splats, "metadata", {}))
         num_points = splats.num_gaussians
 
         logger.info(f"Exporting {num_points} Gaussians to {output_path}")
@@ -363,6 +368,16 @@ class PLYExporter:
                 "include_sh": self.config.include_sh,
             },
         }
+
+        native_recipe = resolve_saved_native_recipe(scene.metadata, scene.splats.metadata)
+        if native_recipe is not None:
+            provenance["implementation"] = "torch_native"
+            if "reconstruction_provenance" in scene.metadata:
+                provenance["reconstruction_provenance"] = scene.metadata["reconstruction_provenance"]
+            if "native_optimizer" in scene.splats.metadata:
+                provenance["native_optimizer"] = scene.splats.metadata["native_optimizer"]
+            provenance["native_recipe"] = native_recipe
+            provenance["color_encoding"] = "linear_rgb_quantized_uint8"
 
         if additional_metadata:
             provenance["request_metadata"] = additional_metadata

@@ -8926,8 +8926,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "f17e9fafbd3d8fdb168be788cdb372dc0338a033825a68d766a449266d94e4aa",
+      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "content_sha256": "a26e9b1aa55fd13c8f19abad3aa173cc22f0c124bb81e3f2a4a6e3184b130109",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -16824,15 +16824,17 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1050879d5baf06f8a384b51b1e4a0aa35331ab66",
-      "content_sha256": "3b654bd62c5f6ea29a37752ec14f41462f37738be4ec1fa0e3d9f30ec3a36529",
+      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "content_sha256": "44c64b26e362c6d0ef5b7574720d508d004646db8f8d2fc4bedb10b46c3bac0c",
       "source_references": [
         "pyproject.toml",
-        ".github/workflows/build.yml"
+        ".github/workflows/build.yml",
+        "tests/enforcement/test_ml_fast_collection_contract.py"
       ],
       "source_sha256": {
         "pyproject.toml": "580e704002f68fd9a27469684e16ccf92009a6e834afde961b6f4bd28cbb3345",
-        ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be"
+        ".github/workflows/build.yml": "21486207b36768795dec178dfccb723cfb3324b0540dcbe1bcf8df6d303505be",
+        "tests/enforcement/test_ml_fast_collection_contract.py": "866488e6395ea7e4268221abeaa1820ee0a5c81f77edc2a8e78f61d7d8f9ec22"
       },
       "validation_commands": [
         "make check-documentation-catalog"

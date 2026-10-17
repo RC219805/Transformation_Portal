@@ -436,6 +436,145 @@ def render_gaussians_fast(
     )
 
 
+def render_gaussians_native(
+    positions: torch.Tensor,
+    colors: torch.Tensor,
+    scales: torch.Tensor,
+    rotations: torch.Tensor,
+    opacities: torch.Tensor,
+    intrinsics: torch.Tensor,
+    extrinsics: torch.Tensor,
+    image_size: Tuple[int, int],
+    device: Optional[str] = None,
+    chunk_size: int = 128,
+) -> torch.Tensor:
+    """Render isotropic splats with bounded, front-to-back Torch compositing.
+
+    This explicit native path has no CUDA extension or pretrained model. Each
+    chunk evaluates at most ``chunk_size`` full-image footprints; all visible
+    splats contribute, without nearest-point truncation. It is a reference
+    implementation, not the tiled anisotropic GraphDeco/gsplat rasterizer.
+    """
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    device = positions.device if device is None else device
+    height, width = image_size
+    mean, covariance, depths, visible = project_gaussians_2d(
+        positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=False
+    )
+    indices = torch.where(visible)[0]
+    # Keep an autograd connection even if a camera sees no splats.
+    rendered = torch.zeros(height, width, 3, device=device, dtype=positions.dtype)
+    rendered = rendered + 0.0 * (positions.sum() + colors.sum() + scales.sum() + opacities.sum())
+    if indices.numel() == 0:
+        return rendered
+
+    indices = indices[torch.argsort(depths[indices], stable=True)]
+    v, u = torch.meshgrid(
+        torch.arange(height, device=device, dtype=positions.dtype),
+        torch.arange(width, device=device, dtype=positions.dtype),
+        indexing="ij",
+    )
+    transmittance = torch.ones(height, width, device=device, dtype=positions.dtype)
+    for start in range(0, len(indices), chunk_size):
+        selected = indices[start : start + chunk_size]
+        delta_u = u.unsqueeze(0) - mean[selected, 0, None, None]
+        delta_v = v.unsqueeze(0) - mean[selected, 1, None, None]
+        mahalanobis = (
+            delta_u.square() / covariance[selected, 0, 0, None, None]
+            + delta_v.square() / covariance[selected, 1, 1, None, None]
+        )
+        alpha = torch.exp(-0.5 * mahalanobis) * opacities[selected, 0, None, None]
+        remaining = 1.0 - alpha.clamp(0.0, 1.0)
+        prefix = torch.cumprod(torch.cat([torch.ones_like(remaining[:1]), remaining[:-1]], dim=0), dim=0)
+        contribution = alpha * prefix * transmittance.unsqueeze(0)
+        rendered = rendered + torch.einsum("nhw,nc->hwc", contribution, colors[selected])
+        transmittance = transmittance * remaining.prod(dim=0)
+
+    return rendered.clamp(0.0, 1.0)
+
+
+def render_gaussians_anisotropic_native(
+    positions: torch.Tensor,
+    colors: torch.Tensor,
+    scales: torch.Tensor,
+    rotations: torch.Tensor,
+    opacities: torch.Tensor,
+    intrinsics: torch.Tensor,
+    extrinsics: torch.Tensor,
+    image_size: Tuple[int, int],
+    device: Optional[str] = None,
+    chunk_size: int = 128,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return native full-covariance RGB, expected camera-axis depth, and alpha.
+
+    Depth is ``sum(T * alpha * z) / max(sum(T * alpha), 1e-6)`` in metres;
+    unsupported pixels have depth zero. This alpha-weighted expectation is not
+    an independent physical surface measurement. Center visibility, chunked
+    front-to-back compositing, and the black background match the native path.
+    This remains a bounded reference renderer without tiles, SH, or density
+    control, and is selected only by an explicit anisotropic native recipe.
+    """
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, int) or chunk_size < 1:
+        raise ValueError("chunk_size must be a positive integer")
+    if not all(
+        torch.isfinite(value).all() for value in (positions, colors, scales, rotations, opacities, intrinsics, extrinsics)
+    ):
+        raise RuntimeError("Native anisotropic renderer requires finite input tensors")
+    if not (scales > 0).all() or not ((opacities >= 0) & (opacities <= 1)).all():
+        raise RuntimeError("Native anisotropic renderer requires positive scales and bounded opacities")
+    device = positions.device if device is None else device
+    height, width = image_size
+    mean, covariance, depths, visible = project_gaussians_2d(
+        positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=True
+    )
+    connection = 0.0 * (positions.sum() + colors.sum() + scales.sum() + rotations.sum() + opacities.sum())
+    rendered = torch.zeros(height, width, 3, device=device, dtype=positions.dtype) + connection
+    weighted_depth = torch.zeros(height, width, device=device, dtype=positions.dtype) + connection
+    accumulated_alpha = torch.zeros_like(weighted_depth) + connection
+    indices = torch.where(visible)[0]
+    if indices.numel() == 0:
+        return rendered, weighted_depth, accumulated_alpha
+    indices = indices[torch.argsort(depths[indices], stable=True)]
+    selected_covariance = covariance[indices]
+    determinant = selected_covariance[:, 0, 0] * selected_covariance[:, 1, 1] - selected_covariance[:, 0, 1].square()
+    if not torch.isfinite(selected_covariance).all() or not torch.isfinite(determinant).all() or not (determinant > 0).all():
+        raise RuntimeError("Native anisotropic projected covariance must be finite and positive definite")
+    v, u = torch.meshgrid(
+        torch.arange(height, device=device, dtype=positions.dtype),
+        torch.arange(width, device=device, dtype=positions.dtype),
+        indexing="ij",
+    )
+    transmittance = torch.ones_like(weighted_depth)
+    for start in range(0, len(indices), chunk_size):
+        selected = indices[start : start + chunk_size]
+        cov = covariance[selected]
+        det = determinant[start : start + chunk_size]
+        delta_u = u.unsqueeze(0) - mean[selected, 0, None, None]
+        delta_v = v.unsqueeze(0) - mean[selected, 1, None, None]
+        mahalanobis = (
+            cov[:, 1, 1, None, None] * delta_u.square()
+            - 2 * cov[:, 0, 1, None, None] * delta_u * delta_v
+            + cov[:, 0, 0, None, None] * delta_v.square()
+        ) / det[:, None, None]
+        alpha = torch.exp(-0.5 * mahalanobis.clamp_min(0)) * opacities[selected, 0, None, None]
+        remaining = 1.0 - alpha.clamp(0.0, 1.0)
+        prefix = torch.cumprod(torch.cat([torch.ones_like(remaining[:1]), remaining[:-1]], dim=0), dim=0)
+        contribution = alpha * prefix * transmittance.unsqueeze(0)
+        rendered = rendered + torch.einsum("nhw,nc->hwc", contribution, colors[selected])
+        weighted_depth = weighted_depth + torch.einsum("nhw,n->hw", contribution, depths[selected])
+        accumulated_alpha = accumulated_alpha + contribution.sum(dim=0)
+        transmittance = transmittance * remaining.prod(dim=0)
+    expected_depth = weighted_depth / accumulated_alpha.clamp_min(1e-6)
+    if (
+        not torch.isfinite(rendered).all()
+        or not torch.isfinite(expected_depth).all()
+        or not torch.isfinite(accumulated_alpha).all()
+    ):
+        raise RuntimeError("Native anisotropic RGB, expected depth and alpha must be finite")
+    return rendered.clamp(0.0, 1.0), expected_depth, accumulated_alpha
+
+
 def compute_rgb_loss(
     rendered: torch.Tensor,
     target: torch.Tensor,

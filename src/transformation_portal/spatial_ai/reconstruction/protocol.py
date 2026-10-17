@@ -11,9 +11,47 @@ Goals:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Sequence
 
 CONTRACT_VERSION = "1.0"
+NATIVE_DEFAULT_RECIPE = "isotropic_full_batch_v1"
+NATIVE_RECIPES = (NATIVE_DEFAULT_RECIPE, "anisotropic_shuffled_rgb_v1", "anisotropic_shuffled_rgbd_v1")
+
+
+def resolve_saved_native_recipe(scene_metadata: Mapping[str, Any], splat_metadata: Mapping[str, Any]) -> str | None:
+    """Resolve explicit native identity before rendering or export side effects.
+
+    Unmarked legacy scenes keep their historical behavior. Historical native
+    scenes lacking recipe tags use the original isotropic recipe. Every present
+    recipe tag, including saved optimizer tags, must agree; this pure helper
+    must not import Torch so ordinary PLY export remains dependency-light.
+    """
+    provenance = scene_metadata.get("reconstruction_provenance", {})
+    splat_optimizer = splat_metadata.get("native_optimizer", {})
+    containers = [scene_metadata, splat_metadata]
+    for value in (provenance, splat_optimizer):
+        if isinstance(value, Mapping):
+            containers.append(value)
+    provenance_optimizer = provenance.get("optimizer", {}) if isinstance(provenance, Mapping) else {}
+    if isinstance(provenance_optimizer, Mapping):
+        containers.append(provenance_optimizer)
+    recipes = [container["native_recipe"] for container in containers if "native_recipe" in container]
+    implementations = [scene_metadata.get("implementation")]
+    if isinstance(provenance, Mapping):
+        implementations.append(provenance.get("implementation"))
+    if not recipes and "torch_native" not in implementations:
+        return None
+    if not all(isinstance(value, Mapping) for value in (provenance, splat_optimizer, provenance_optimizer)):
+        raise ValueError("Saved native recipe metadata containers must be mappings")
+    if any(value is not None and value != "torch_native" for value in implementations):
+        raise ValueError("Saved native recipe has a conflicting implementation descriptor")
+    if any(not isinstance(recipe, str) or recipe not in NATIVE_RECIPES for recipe in recipes):
+        raise ValueError("Saved native recipe descriptors are unsupported")
+    recipe = recipes[0] if recipes else NATIVE_DEFAULT_RECIPE
+    if any(value != recipe for value in recipes):
+        raise ValueError("Saved native recipe descriptors disagree")
+    return recipe
 
 
 def _require_torch():
