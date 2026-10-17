@@ -380,14 +380,23 @@ def test_root_worker_build_package_is_minimal_deploy_shim() -> None:
 
 
 def test_root_worker_runtime_selection_matches_node22_contract() -> None:
-    """Workers Builds and the frontdoor select the governed Node major."""
+    """Workers Builds and the frontdoor retain rolling22 above the security floor."""
     root_node_pin = (PROJECT_ROOT / ".nvmrc").read_text(encoding="utf-8").strip()
     frontdoor_node_pin = (PROJECT_ROOT / "web" / "secure-landing" / ".nvmrc").read_text(encoding="utf-8").strip()
     root_package = _load_json(PROJECT_ROOT / "package.json")
     worker_package = _load_json(WORKER_ROOT / "package.json")
+    frontdoor_root = PROJECT_ROOT / "web" / "secure-landing"
+    frontdoor_package = _load_json(frontdoor_root / "package.json")
 
     assert root_node_pin == frontdoor_node_pin == "22"
-    assert root_package["engines"] == worker_package["engines"] == {"node": ">=22 <23"}
+    assert root_package["engines"] == worker_package["engines"] == frontdoor_package["engines"] == {"node": ">=22.23.2 <23"}
+    for directory, manifest in (
+        (PROJECT_ROOT, root_package),
+        (WORKER_ROOT, worker_package),
+        (frontdoor_root, frontdoor_package),
+    ):
+        lock = _load_json(directory / "package-lock.json")
+        assert lock["packages"][""]["engines"] == manifest["engines"]
 
 
 def test_root_worker_build_lock_matches_package_contract() -> None:

@@ -12,12 +12,12 @@ Exit codes:
 
 Usage:
     make check-environment
-    make check-environment CHECK_ENV_ARGS="--strict"
-    make check-environment CHECK_ENV_ARGS="--check python"
-    make check-environment CHECK_ENV_ARGS="--check node"
-    make check-environment CHECK_ENV_ARGS="--check chrome"
-    make check-environment CHECK_ENV_ARGS="--check ports"
-    make check-environment CHECK_ENV_ARGS="--check dependency-health"
+    .venv/bin/python scripts/validation/check_local_environment.py --strict
+    .venv/bin/python scripts/validation/check_local_environment.py --check python
+    .venv/bin/python scripts/validation/check_local_environment.py --check node
+    .venv/bin/python scripts/validation/check_local_environment.py --check chrome
+    .venv/bin/python scripts/validation/check_local_environment.py --check ports
+    .venv/bin/python scripts/validation/check_local_environment.py --check dependency-health
 """
 
 from __future__ import annotations
@@ -72,8 +72,9 @@ else:
 # Required Python version
 MIN_PYTHON_VERSION = (3, 11)
 
-# Required Node version (major only for frontdoor)
+# Required Node major and released security floor for the frontdoor.
 REQUIRED_NODE_MAJOR = 22
+MIN_NODE_VERSION = (22, 23, 2)
 
 # Ports used by validation targets
 VALIDATION_PORTS = {
@@ -126,7 +127,7 @@ def check_node_version() -> CheckResult:
             name="Node.js version",
             passed=False,
             message="Node.js is not installed or not in PATH",
-            guidance="Install Node.js 22.x via nvm, fnm, volta, or nodejs.org",
+            guidance="Install patched Node.js 22.x (>=22.23.2) via nvm, fnm, volta, or nodejs.org",
         )
 
     try:
@@ -136,9 +137,16 @@ def check_node_version() -> CheckResult:
             text=True,
             timeout=5,
         )
+        if result.returncode != 0:
+            return CheckResult(
+                name="Node.js version",
+                passed=False,
+                message="Node.js version command failed",
+                guidance="Ensure 'node --version' exits successfully",
+            )
         version_str = result.stdout.strip()
-        # Parse version like "v22.5.0"
-        match = re.match(r"v?(\d+)\.(\d+)\.(\d+)", version_str)
+        # Accept stable release versions only, including the normal leading v.
+        match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", version_str)
         if not match:
             return CheckResult(
                 name="Node.js version",
@@ -147,20 +155,19 @@ def check_node_version() -> CheckResult:
                 guidance="Ensure 'node --version' returns a valid version string",
             )
 
-        major = int(match.group(1))
-        if major == REQUIRED_NODE_MAJOR:
+        version = tuple(int(part) for part in match.groups())
+        if version[0] == REQUIRED_NODE_MAJOR and version >= MIN_NODE_VERSION:
             return CheckResult(
                 name="Node.js version",
                 passed=True,
-                message=f"Node.js {version_str} meets requirement ({REQUIRED_NODE_MAJOR}.x)",
+                message=f"Node.js {version_str} meets requirement (>=22.23.2 <23)",
             )
         else:
             return CheckResult(
                 name="Node.js version",
                 passed=False,
-                message=f"Node.js {version_str} does not match required {REQUIRED_NODE_MAJOR}.x",
-                guidance=f"Switch to Node {REQUIRED_NODE_MAJOR}.x: nvm use {REQUIRED_NODE_MAJOR} / fnm use "
-                f"{REQUIRED_NODE_MAJOR}",
+                message=f"Node.js {version_str} does not meet requirement (>=22.23.2 <23)",
+                guidance="Install patched Node 22.x: nvm install 22 / fnm install 22, then select it",
             )
     except subprocess.TimeoutExpired:
         return CheckResult(
@@ -474,7 +481,8 @@ def check_validation_smoke() -> CheckResult:
             name="Validation smoke",
             passed=False,
             message=str(exc),
-            guidance='Repair local git/tooling availability, then rerun `make check-environment CHECK_ENV_ARGS="--check validation-smoke --json"`.',
+            guidance="Repair local git/tooling availability, then rerun "
+            "`.venv/bin/python scripts/validation/check_local_environment.py --check validation-smoke --json`.",
             classification="environment_failure",
         )
     except Exception as exc:

@@ -1004,8 +1004,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "41a626ccf991e06a1218b08670f6f137c616b6fb",
-      "content_sha256": "7794d9ce8d04403559e61b1a921b41eeef387bb89a657a2c562b22759ad73ae7",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "content_sha256": "3f7aa32c4122cfb071662d8d43a43999d940ba6633f5de6dd5cfb65d3809c17b",
       "source_references": [
         "scripts/governance/check_documentation_catalog.py",
         "tests/test_documentation_catalog.py"
@@ -9073,8 +9073,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "fa3409b99c692f5bf833a45db3513d8cf8391e40ee8c12f11f4e3570663667f4",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "content_sha256": "14c36e4a581e326213f7c0137f404d98576609352e003e7634a7cca7ead16ec5",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -9382,8 +9382,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "dd0a5c07da9830b74cf9e61fc979ba54258093eb",
-      "content_sha256": "2f864803e0d343e3e279569c036b375ed01a98d82666a5c9bd174eba1674a678",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "content_sha256": "2858942564c53025d264fbf1e950ae8472f2fee0064bab7c2911277f2dd28747",
       "source_references": [
         "web/secure-landing/app/v1/[...path]/route.js",
         "portal.html",

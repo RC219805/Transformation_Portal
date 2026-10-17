@@ -92,7 +92,7 @@ Portal surfaces:
 - `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix, including separately gated V5 and V6 photography. The backend health/readiness routes now have typed OpenAPI response models while preserving their existing wire shapes.
 - Shared public branding assets now live at `web/secure-landing/public/brand/dna-symbol-*.svg`, `web/secure-landing/public/brand/dna-lockup-*.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
-- The front door is a Node app. `web/secure-landing` now documents and enforces **Node 22.x only** for install, dev, test, build, and start flows.
+- The front door is a Node app. `web/secure-landing` enforces **Node 22.x, minimum 22.23.2** for install, dev, test, build, and start flows. Keep the rolling `.nvmrc` selection on `22` and install the latest patched release in that line.
 - Docker Compose reads root `.env` values using the checked-in `.env.example` template and allows missing env files for local defaults; set `TP_API_KEY` for any non-throwaway orchestrator run.
 
 ---

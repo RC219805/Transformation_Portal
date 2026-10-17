@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,18 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CHECK_LOCAL_ENVIRONMENT_PATH = PROJECT_ROOT / "scripts" / "validation" / "check_local_environment.py"
+NODE_SECURITY_CASES = (
+    ("v22.22.2", False),
+    ("v22.23.1", False),
+    ("v22.23.2", True),
+    ("v22.23.3", True),
+    ("v22.24.0", True),
+    ("v22.100.0", True),
+    ("v23.0.0", False),
+    ("v20.19.0", False),
+    ("v22.23.2-rc.1", False),
+    ("not-a-version", False),
+)
 
 
 def _load_module(module_path: Path, module_name: str):
@@ -51,6 +64,26 @@ class TestCheckLocalEnvironment:
         assert hasattr(result, "message")
         assert hasattr(result, "name")
         # Result depends on whether Node is installed
+
+    @pytest.mark.parametrize(("version", "expected"), NODE_SECURITY_CASES)
+    def test_node_security_floor(self, env_module, monkeypatch, version, expected):
+        """The preflight must reject the release before the published security fixes."""
+        monkeypatch.setattr(env_module.shutil, "which", lambda command: "/fixture/node")
+        monkeypatch.setattr(
+            env_module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout=version, returncode=0)
+        )
+
+        result = env_module.check_node_version()
+
+        assert result.passed is expected, version
+
+    def test_node_version_command_failure_is_not_accepted(self, env_module, monkeypatch):
+        """Version-shaped stdout from a failed executable is not runtime evidence."""
+        monkeypatch.setattr(env_module.shutil, "which", lambda command: "/fixture/node")
+        monkeypatch.setattr(
+            env_module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="v22.23.3", returncode=1)
+        )
+        assert env_module.check_node_version().passed is False
 
     def test_check_chrome_returns_result(self, env_module):
         """Chrome check should return a CheckResult."""
@@ -378,6 +411,20 @@ class TestEnsureNodeVersionScript:
             timeout=10,
         )
         assert result.returncode == 0, f"Syntax error: {result.stderr}"
+
+    @pytest.mark.parametrize(("version", "expected"), NODE_SECURITY_CASES)
+    def test_shell_enforces_node_security_floor(self, tmp_path, version, expected):
+        """Invoke the actual wrapper with only a synthetic version-printing node."""
+        fake_node = tmp_path / "node"
+        fake_node.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8")
+        fake_node.chmod(0o755)
+        home = tmp_path / "home"
+        home.mkdir()
+        env = {"PATH": f"{tmp_path}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(home)}
+        result = subprocess.run(
+            ["/bin/bash", str(self.ENSURE_NODE_VERSION_PATH)], capture_output=True, text=True, timeout=10, env=env
+        )
+        assert (result.returncode == 0) is expected, f"{version}: {result.stdout}\n{result.stderr}"
 
 
 class TestRunFullValidationSuite:
