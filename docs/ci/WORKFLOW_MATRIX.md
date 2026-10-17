@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-09-21 UTC
+**Last Updated**: 2026-10-17 UTC
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,298 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,286 lines total
 - **Required PR check snapshot (2026-09-18 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
