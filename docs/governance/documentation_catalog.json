@@ -8389,7 +8389,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "958b580845fa3816fdfff2abdab18ce2f7f02316",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
       "content_sha256": "68271790c4d6dc3e5e85da932918d991f83fe7024a2946f72b56f0b6c60f7a37",
       "source_references": [
         "tools/ad_editorial_post_pipeline.py",
@@ -8408,8 +8408,8 @@
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "47ffa27a0fe6f92b8fd976baff19f4205c2f10aabec7c56818ba2a3098841152"
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9292,8 +9292,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a441311df16c89ef17b14835c077a53024053371",
-      "content_sha256": "a150c68032340581124a9c8cf66394e150044d75b304b83a22e48154f390c123",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "content_sha256": "2a6f2bea011393d405ada181fd9b4274ddb807d8b73a8fcd72330c596c982490",
       "source_references": [
         "Makefile",
         "requirements/base.txt",
@@ -9301,8 +9301,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "6662eb675543b1e318f35cb8200518448158c10c8d93f6e0b1bab2d49a22e543",
-        "requirements/dev.txt": "f6f2361b4b8c5d5340d0a90ac6f8b75f394cce0b03c1a5bebb36fc2eeebc7d25"
+        "requirements/base.txt": "a39f71c41d32b9733e0afa02f34462dba87417686cba88ea2ba12eee8d36fa11",
+        "requirements/dev.txt": "ee1faa136cd95effc9b9341b56c955cff2fe768d4267c5536effc01ebb09c58b"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -9727,7 +9727,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a441311df16c89ef17b14835c077a53024053371",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
       "content_sha256": "399b693a6f4568cee639dc806d8100b58dd42cec615fb1657e498f1e9aac040a",
       "source_references": [
         "Makefile",
@@ -9736,8 +9736,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "6662eb675543b1e318f35cb8200518448158c10c8d93f6e0b1bab2d49a22e543",
-        "requirements/dev.txt": "f6f2361b4b8c5d5340d0a90ac6f8b75f394cce0b03c1a5bebb36fc2eeebc7d25"
+        "requirements/base.txt": "a39f71c41d32b9733e0afa02f34462dba87417686cba88ea2ba12eee8d36fa11",
+        "requirements/dev.txt": "ee1faa136cd95effc9b9341b56c955cff2fe768d4267c5536effc01ebb09c58b"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -17330,7 +17330,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7540e345d2092ecf0f921faf118d475d5a8f1e4d",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
       "content_sha256": "4e75a5e1dd14d71121d2f79abcc22d70b2753b8e90ea46babdb5a39fba324e3e",
       "source_references": [
         "requirements/Makefile",
@@ -17345,8 +17345,8 @@
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "47ffa27a0fe6f92b8fd976baff19f4205c2f10aabec7c56818ba2a3098841152"
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -17362,7 +17362,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
+      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
       "content_sha256": "2c2d26bb14c0d9c4e89b219228aef09b1b97c0134f03e64d6b51b820e2ed68db",
       "source_references": [
         "scripts/setup/editorial_runtime.py",
@@ -17377,8 +17377,8 @@
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
         "tests/test_editorial_runtime.py": "bc8b9dc2a46ce0ff291b7e3fd88cd9f519b4b13659dda525c5725f94c1649a38",
         "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "2aeb1ce2abcb1b857cfb5cfdc6b73234c4ad017998b9953b1cdfa3f92b094602",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "47ffa27a0fe6f92b8fd976baff19f4205c2f10aabec7c56818ba2a3098841152"
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
       },
       "validation_commands": [
         "make check-documentation-catalog",
