@@ -10,6 +10,9 @@ This module tests:
 from __future__ import annotations
 
 import multiprocessing as mp
+import os
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,8 +41,6 @@ def failing_function() -> None:
 
 def slow_function(delay: float = 0.0) -> str:
     """Function that sleeps then returns."""
-    import time
-
     time.sleep(delay)
     return "completed"
 
@@ -61,8 +62,6 @@ def void_function() -> None:
 
 def get_pid_function() -> int:
     """Get current process ID."""
-    import os
-
     return os.getpid()
 
 
@@ -81,6 +80,57 @@ def no_args_function() -> str:
 def large_return_function() -> list:
     """Function returning large data."""
     return list(range(10000))
+
+
+def large_binary_function() -> bytes:
+    """Return enough data to require the parent to drain the result pipe."""
+    return b"0123456789abcdef" * 131072
+
+
+def large_error_function() -> None:
+    """Raise an error whose traceback cannot fit in a result pipe buffer."""
+    raise ValueError("large-error:" + "x" * 1048576 + ":end")
+
+
+def exit_without_result_function(code: int) -> None:
+    """Exit without running the worker's result publisher."""
+    os._exit(code)
+
+
+def unpicklable_result_function():
+    """Return an object that cannot be transported to the parent."""
+    return threading.Lock()
+
+
+def partial_frame_function(fault: str, marker_path: str) -> bytes:
+    """Interrupt a real large result after its header and first body bytes."""
+    from multiprocessing.connection import Connection
+    from pathlib import Path
+
+    original_send = Connection._send
+
+    def interrupted_send(connection, payload):
+        if len(payload) > 65536:
+            original_send(connection, payload[:65536])
+            Path(marker_path).write_text("65536", encoding="utf-8")
+            if fault == "exit":
+                os._exit(17)
+            time.sleep(60)
+        return original_send(connection, payload)
+
+    Connection._send = interrupted_send
+    return b"x" * 2097152
+
+
+def ignore_termination_function(pid_path: str) -> None:
+    """Require the timeout cleanup to escalate beyond SIGTERM on POSIX."""
+    import signal
+    from pathlib import Path
+
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    Path(pid_path).write_text(str(os.getpid()), encoding="utf-8")
+    while True:
+        time.sleep(1)
 
 
 def binary_return_function() -> bytes:
@@ -203,8 +253,6 @@ class TestRunSpawnedProcessBehavior:
         """run_spawned uses spawn multiprocessing context."""
         # This test verifies spawn context is used by checking
         # that the function runs in a separate process
-        import os
-
         child_pid = run_spawned(get_pid_function)
         parent_pid = os.getpid()
 
@@ -212,17 +260,105 @@ class TestRunSpawnedProcessBehavior:
 
     def test_process_terminated_after_timeout(self) -> None:
         """Process is terminated after timeout."""
-        # We can't easily test this directly, but we can verify
-        # the timeout mechanism works
+        existing_children = {child.pid for child in mp.active_children()}
         with pytest.raises(SpawnError):
             run_spawned(slow_function, 60.0, timeout=0.1)
 
+        assert {child.pid for child in mp.active_children()} == existing_children
+
     def test_no_result_from_process(self) -> None:
         """SpawnError raised when process completes without result."""
-        # This is hard to test directly as we need to simulate
-        # a process that exits cleanly but doesn't put result in queue
-        # We'll test the exception type exists
-        assert issubclass(SpawnError, RuntimeError)
+        with pytest.raises(SpawnError, match="Worker process did not return a result"):
+            run_spawned(exit_without_result_function, 0, timeout=5)
+
+    def test_abnormal_exit_without_result(self) -> None:
+        """A dead child reports its exit code instead of waiting for a result."""
+        with pytest.raises(SpawnError, match="Worker process exited with code 17"):
+            run_spawned(exit_without_result_function, 17, timeout=5)
+
+    def test_result_wait_and_exit_share_timeout(self) -> None:
+        """A 1.5s receive plus 1s shutdown cannot fit in a 2s budget."""
+        import pickle
+        from types import SimpleNamespace
+
+        from transformation_portal.runtime import worker
+
+        clock = [0.0]
+        context = MagicMock()
+        receiver, sender = MagicMock(), MagicMock()
+        context.Pipe.return_value = (receiver, sender)
+        process = context.Process.return_value
+        process.exitcode = None
+        process.is_alive.side_effect = lambda: process.exitcode is None
+
+        def receive_bytes():
+            clock[0] += 1.5
+            return pickle.dumps(("ok", "published before exit"))
+
+        def join_process(timeout=None):
+            if process.exitcode is not None:
+                return
+            if timeout is None or timeout >= 1.0:
+                clock[0] += 1.0
+                process.exitcode = 0
+            else:
+                clock[0] += timeout
+
+        def terminate_process():
+            process.exitcode = -15
+
+        def make_reader(**kwargs):
+            reader = MagicMock()
+            reader.start.side_effect = kwargs["target"]
+            reader.is_alive.return_value = False
+            return reader
+
+        receiver.recv_bytes.side_effect = receive_bytes
+        process.join.side_effect = join_process
+        process.terminate.side_effect = terminate_process
+        with (
+            patch.object(worker, "mp", SimpleNamespace(get_context=lambda _: context)),
+            patch.object(worker, "time", SimpleNamespace(monotonic=lambda: clock[0])),
+            patch.object(worker, "Thread", side_effect=make_reader),
+            pytest.raises(SpawnError, match="timed out after 2.0s"),
+        ):
+            run_spawned(no_args_function, timeout=2.0)
+
+        assert not process.is_alive()
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX SIGTERM escalation and waitpid reaping")
+    def test_timeout_reaps_child_that_ignores_termination(self, tmp_path) -> None:
+        """Timeout cleanup also reaps a child that needs the kill fallback."""
+        pid_path = tmp_path / "worker.pid"
+        existing_children = {child.pid for child in mp.active_children()}
+
+        with pytest.raises(SpawnError, match="timed out after 2.0s"):
+            run_spawned(ignore_termination_function, str(pid_path), timeout=2.0)
+
+        child_pid = int(pid_path.read_text(encoding="utf-8"))
+        assert {child.pid for child in mp.active_children()} == existing_children
+        with pytest.raises(ChildProcessError):
+            os.waitpid(child_pid, os.WNOHANG)
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX Connection._send frame fault injection")
+    @pytest.mark.parametrize("fault, message", [("exit", "exited with code 17"), ("hang", "timed out after 5s")])
+    def test_partial_result_frame_is_bounded(self, fault, message, tmp_path) -> None:
+        """An interrupted frame cannot trap the caller inside a receive."""
+        marker_path = tmp_path / "partial-frame.marker"
+        existing_children = {child.pid for child in mp.active_children()}
+        with pytest.raises(SpawnError, match=message):
+            run_spawned(partial_frame_function, fault, str(marker_path), timeout=5)
+
+        assert marker_path.read_text(encoding="utf-8") == "65536"
+        assert {child.pid for child in mp.active_children()} == existing_children
+        assert not any(thread.name == "tp-worker-result" for thread in threading.enumerate())
+
+    def test_unpicklable_result_is_refused_and_receiver_closes(self) -> None:
+        """Serialization failure retains the existing no-result error."""
+        with pytest.raises(SpawnError, match="Worker process did not return a result"):
+            run_spawned(unpicklable_result_function, timeout=5)
+
+        assert not any(thread.name == "tp-worker-result" for thread in threading.enumerate())
 
 
 class TestRunWithGPU:
@@ -380,6 +516,19 @@ class TestRunSpawnedEdgeCases:
         assert len(result) == 10000
         assert result[0] == 0
         assert result[-1] == 9999
+
+    def test_large_binary_result_does_not_wait_for_child_exit(self) -> None:
+        """The parent drains a real result larger than an OS pipe buffer."""
+        result = run_spawned(large_binary_function, timeout=5)
+
+        assert result == b"0123456789abcdef" * 131072
+
+    def test_large_error_preserves_payload_without_deadlock(self) -> None:
+        """Error propagation drains the complete traceback before joining."""
+        with pytest.raises(SpawnError, match="Worker process failed: ValueError") as exc_info:
+            run_spawned(large_error_function, timeout=5)
+
+        assert "large-error:" + "x" * 1048576 + ":end" in str(exc_info.value)
 
     def test_binary_return_value(self) -> None:
         """run_spawned handles binary return values."""
