@@ -3552,13 +3552,26 @@ async def _cleanup_expired_jobs(
 
 
 def _job_has_undeleted_artifacts(job: "Job") -> bool:
-    return bool(_artifact_known_relative_paths(job)) and not _artifacts_deleted(job)
+    return _artifact_deletion_unconfirmed(job) or (bool(_artifact_known_relative_paths(job)) and not _artifacts_deleted(job))
+
+
+def _artifact_deletion_unconfirmed(job: "Job") -> bool:
+    lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY) if isinstance(job.artifacts, dict) else None
+    if not isinstance(lifecycle, dict):
+        return False
+    status = lifecycle.get("deletion_status")
+    # deleted_at revokes reader visibility before physical deletion. Retain the
+    # durable projection needed to record/retry deletion, even without items.
+    return status in ("pending", "failed") or (_uses_dispatch_authority() and _artifacts_deleted(job) and status != "deleted")
 
 
 def _artifact_retention_due(job: Job, now: float) -> bool:
-    if job.state not in _TERMINAL_JOB_STATES or _artifacts_deleted(job):
+    if job.state not in _TERMINAL_JOB_STATES:
         return False
-    if not _artifact_known_relative_paths(job):
+    unconfirmed = _artifact_deletion_unconfirmed(job)
+    if _artifacts_deleted(job) and not unconfirmed:
+        return False
+    if not unconfirmed and not _artifact_known_relative_paths(job):
         return False
     lifecycle = _ensure_artifact_lifecycle(job, backend=job.artifact_store_backend)
     expires_at = lifecycle.get("expires_at")
@@ -3724,10 +3737,14 @@ async def _cleanup_expired_job_artifacts(
         return
 
     for record in records:
-        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
-        if not _artifact_retention_due(job, now):
+        try:
+            job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
+            if not _artifact_retention_due(job, now):
+                continue
+            deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
+        except Exception:  # noqa: BLE001 - one authority/store failure must not starve later jobs
+            LOGGER.exception("artifact retention cleanup failed for job %s", record.id)
             continue
-        deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
         if deleted is None:
             LOGGER.warning("retention cleanup could not delete artifacts for job %s", job.id)
 
@@ -3812,11 +3829,14 @@ async def _cleanup_expired_upload_batches(now: float) -> None:
 async def _cleanup_loop() -> None:
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
-        now = _now()
-        await _cleanup_expired_job_artifacts(now, scan_limit=None)
-        await _cleanup_expired_jobs(now, scan_limit=None)
-        await _cleanup_expired_upload_batches(now)
-        _cleanup_rate_limit_buckets(now)
+        try:
+            now = _now()
+            await _cleanup_expired_job_artifacts(now, scan_limit=None)
+            await _cleanup_expired_jobs(now, scan_limit=None)
+            await _cleanup_expired_upload_batches(now)
+            _cleanup_rate_limit_buckets(now)
+        except Exception:  # noqa: BLE001 - keep future cleanup intervals alive; cancellation propagates
+            LOGGER.exception("periodic cleanup iteration failed")
 
 
 def _pick(args: Mapping[str, Any], *keys: str, default: Any = None) -> Any:

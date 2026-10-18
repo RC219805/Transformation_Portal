@@ -6012,6 +6012,37 @@ def test_cleanup_expired_jobs_prunes_old_finished_entries() -> None:
     assert running_job.id in orchestrator_app.JOBS
 
 
+def test_cleanup_loop_survives_iteration_failure_and_preserves_cancellation(monkeypatch, caplog) -> None:
+    iterations = 0
+    job_sweeps = []
+
+    async def sleep(_delay):
+        nonlocal iterations
+        iterations += 1
+        if iterations == 3:
+            raise asyncio.CancelledError()
+
+    async def artifact_cleanup(_now, **_kwargs):
+        if iterations == 1:
+            raise orchestrator_app._JobRepositoryUnavailable("one transient cleanup failure")
+
+    async def jobs_cleanup(_now, **_kwargs):
+        job_sweeps.append(iterations)
+
+    async def uploads_cleanup(_now):
+        return None
+
+    monkeypatch.setattr(orchestrator_app.asyncio, "sleep", sleep)
+    monkeypatch.setattr(orchestrator_app, "_cleanup_expired_job_artifacts", artifact_cleanup)
+    monkeypatch.setattr(orchestrator_app, "_cleanup_expired_jobs", jobs_cleanup)
+    monkeypatch.setattr(orchestrator_app, "_cleanup_expired_upload_batches", uploads_cleanup)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(orchestrator_app._cleanup_loop())
+    assert iterations == 3
+    assert job_sweeps == [2]
+    assert "cleanup" in caplog.text
+
+
 def test_overlay_runtime_state_preserves_live_cached_job() -> None:
     cached_job = orchestrator_app.Job(
         id="job_live_overlay",
