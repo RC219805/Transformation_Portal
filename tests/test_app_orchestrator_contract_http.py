@@ -4417,6 +4417,211 @@ def test_artifact_retention_cleanup_keeps_job_when_delete_fails_then_retries(
     assert asyncio.run(orchestrator_app._job_repository().get(job.id)) is None
 
 
+def test_artifact_retention_authority_failure_does_not_starve_later_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    now = orchestrator_app._now()
+    jobs = []
+    for suffix in ("legacy", "durable"):
+        job = orchestrator_app.Job(
+            id=f"job_retention_{suffix}",
+            created_at=now - 100,
+            finished_at=now - 10,
+            state="succeeded",
+            artifacts={"items": [{"path": "result.txt"}], "lifecycle": {"expires_at": now - 1}},
+        )
+        _seed_job(job)
+        jobs.append(job)
+    repository = orchestrator_app._job_repository()
+    physical_deletions = []
+
+    async def locator(job_id):
+        return SimpleNamespace(tenant_id="tenant_a") if job_id == jobs[1].id else None
+
+    async def revoke(*_args, **_kwargs):
+        return None
+
+    async def deletion(job_id, _tenant, **_kwargs):
+        record = await repository.get(job_id)
+        artifacts = record.artifacts
+        artifacts["lifecycle"].update(deleted_at=now, deletion_status="deleted")
+        await repository.set_artifacts(job_id, artifacts, {})
+        return artifacts
+
+    async def no_cleanup_state(_job_id):
+        return None
+
+    class Store:
+        backend = "local"
+
+        async def delete(self, job_id):
+            physical_deletions.append(job_id)
+            return 1
+
+    monkeypatch.setattr(orchestrator_app, "_uses_dispatch_authority", lambda: True)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", Store)
+    monkeypatch.setattr(orchestrator_app, "_flush_operational_outbox_best_effort", revoke)
+    monkeypatch.setattr(
+        orchestrator_app,
+        "get_operational_record_store",
+        lambda: SimpleNamespace(
+            get_locator=locator,
+            revoke_generation=revoke,
+            record_generation_deletion=deletion,
+            generation_cleanup_state=no_cleanup_state,
+        ),
+    )
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+
+    assert physical_deletions == [jobs[1].id], "missing authority must never fall back to physical deletion"
+    assert "job_retention_legacy" in caplog.text
+    assert asyncio.run(repository.get(jobs[1].id)).artifacts["lifecycle"]["deletion_status"] == "deleted"
+    assert asyncio.run(repository.get(jobs[0].id)) is not None
+
+
+@pytest.mark.parametrize("deletion_status", ["pending", "failed"])
+@pytest.mark.parametrize("with_items", [True, False])
+def test_durable_revoked_artifacts_stay_hidden_and_retain_projection_until_physical_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    deletion_status: str,
+    with_items: bool,
+) -> None:
+    now = orchestrator_app._now()
+    old = now - orchestrator_app.JOB_RETENTION_SECONDS - 10
+    job = orchestrator_app.Job(
+        id="job_revoked_retry",
+        created_at=old,
+        finished_at=old,
+        state="succeeded",
+        artifacts={
+            "items": [{"path": "result.txt"}] if with_items else [],
+            "lifecycle": {"created_at": old, "expires_at": now - 1, "deletion_status": "available"},
+        },
+    )
+    _seed_job(job)
+    repository = orchestrator_app._job_repository()
+    store = LocalArtifactStore(root_dir=tmp_path / "artifacts")
+    asyncio.run(store.write_bytes(job.id, "result.txt", b"retained until successful deletion"))
+    fail_record = deletion_status == "pending"
+
+    async def locator(_job_id):
+        return SimpleNamespace(tenant_id="tenant_a")
+
+    async def revoke(job_id, _tenant, **_kwargs):
+        record = await repository.get(job_id)
+        artifacts = record.artifacts
+        artifacts["lifecycle"].update(deleted_at=now, deletion_status="pending")
+        await repository.set_artifacts(job_id, artifacts, {})
+
+    async def deletion(job_id, _tenant, *, count, **_kwargs):
+        if fail_record:
+            raise RuntimeError("deletion acknowledgement unavailable")
+        record = await repository.get(job_id)
+        assert record is not None, "physical deletion recording still needs the retained projection"
+        artifacts = record.artifacts
+        artifacts["lifecycle"].update(deleted_at=now, deletion_status="deleted" if count is not None else "failed")
+        await repository.set_artifacts(job_id, artifacts, {})
+        return artifacts
+
+    async def no_cleanup_state(_job_id):
+        return None
+
+    async def no_outbox():
+        return None
+
+    class FailingDeleteStore:
+        backend = "local"
+
+        async def delete(self, _job_id):
+            raise orchestrator_app.ArtifactStoreError("physical store temporarily unavailable")
+
+    monkeypatch.setattr(orchestrator_app, "_uses_dispatch_authority", lambda: True)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingDeleteStore)
+    monkeypatch.setattr(orchestrator_app, "_flush_operational_outbox_best_effort", no_outbox)
+    monkeypatch.setattr(
+        orchestrator_app,
+        "get_operational_record_store",
+        lambda: SimpleNamespace(
+            get_locator=locator,
+            revoke_generation=revoke,
+            record_generation_deletion=deletion,
+            generation_cleanup_state=no_cleanup_state,
+        ),
+    )
+    if fail_record:
+        with pytest.raises(orchestrator_app._JobRepositoryUnavailable):
+            asyncio.run(orchestrator_app._delete_job_artifacts_for_job(job, reason="retention_expired"))
+    else:
+        assert asyncio.run(orchestrator_app._delete_job_artifacts_for_job(job, reason="retention_expired")) is None
+    revoked = orchestrator_app._job_from_record(asyncio.run(repository.get(job.id)))
+    assert revoked.artifacts["lifecycle"]["deletion_status"] == deletion_status
+    assert orchestrator_app._artifacts_deleted(revoked), "visibility revocation remains immediate"
+    assert orchestrator_app._artifact_retention_due(revoked, now), "revocation does not confirm physical deletion"
+
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
+    assert asyncio.run(repository.get(job.id)) is not None
+    # No lifespan/worker is started for this in-process HTTP contract check.
+    response = TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}).get(
+        f"/v1/jobs/{job.id}/artifacts/result.txt"
+    )
+    assert response.status_code == 410
+    assert response.json()["error"]["code"] == "ARTIFACT_DELETED"
+
+    fail_record = False
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+    confirmed = asyncio.run(repository.get(job.id))
+    assert confirmed.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
+    assert asyncio.run(repository.get(job.id)) is None
+    assert asyncio.run(store.delete(job.id)) == 0
+
+
+@pytest.mark.parametrize("status", [None, "deleted"])
+def test_legacy_deleted_timestamp_remains_completed_for_retention(monkeypatch, status) -> None:
+    monkeypatch.setattr(orchestrator_app, "_uses_dispatch_authority", lambda: False)
+    lifecycle = {"deleted_at": 1.0, "expires_at": 2.0}
+    if status is not None:
+        lifecycle["deletion_status"] = status
+    job = orchestrator_app.Job(
+        id="job_legacy_confirmed",
+        created_at=0.0,
+        finished_at=1.0,
+        state="succeeded",
+        artifacts={"items": [{"path": "result.txt"}], "lifecycle": lifecycle},
+    )
+    assert not orchestrator_app._artifact_retention_due(job, 100.0)
+    assert not orchestrator_app._job_has_undeleted_artifacts(job)
+
+
+@pytest.mark.parametrize("status", [["pending"], {"status": "failed"}])
+def test_revoked_durable_malformed_deletion_status_retains_projection(monkeypatch, status) -> None:
+    now = orchestrator_app._now()
+    old = now - orchestrator_app.JOB_RETENTION_SECONDS - 10
+    job = orchestrator_app.Job(
+        id="job_revoked_malformed_status",
+        created_at=old,
+        finished_at=old,
+        state="succeeded",
+        artifacts={"items": [], "lifecycle": {"deleted_at": old, "deletion_status": status, "expires_at": old}},
+    )
+    _seed_job(job)
+    repository = orchestrator_app._job_repository()
+    monkeypatch.setattr(orchestrator_app, "_uses_dispatch_authority", lambda: True)
+    # Persisted lifecycle dictionaries do not validate deletion_status as an
+    # enum on load. Unknown revoked metadata must retain authority, not raise
+    # during pruning or be mistaken for confirmed physical deletion.
+    loaded = orchestrator_app._job_from_record(asyncio.run(repository.get(job.id)))
+    assert orchestrator_app._artifact_retention_due(loaded, now)
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
+    assert asyncio.run(repository.get(job.id)) is not None
+    assert orchestrator_app._artifacts_deleted(loaded)
+
+
 def test_ready_reports_artifact_store_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
     monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
