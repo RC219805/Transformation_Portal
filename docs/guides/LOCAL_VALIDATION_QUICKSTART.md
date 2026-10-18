@@ -259,20 +259,44 @@ Chrome or Chromium not found
 export TP_PORTAL_BROWSER_BINARY="/path/to/chrome"
 ```
 
-For `make validate-portal-css-layer-parity`, install the repo-pinned Playwright
-browser and point the variable at its managed executable. Its product must match
-`captureContract.browser.product` in
-`tests/fixtures/portal-css/layer-parity-contract.json`:
+Playwright accessibility tests use the browser managed by the installed
+Playwright package. Install it with:
 
 ```bash
 cd web/secure-landing
 npm run test:browser:install
-export TP_PORTAL_BROWSER_BINARY="$(node --input-type=module -e \
-  'import { chromium } from "playwright"; process.stdout.write(chromium.executablePath())')"
-"$TP_PORTAL_BROWSER_BINARY" --version
 cd ../..
+```
+
+`make validate-portal-css-layer-parity` separately requires the exact product in
+`captureContract.browser.product` in
+`tests/fixtures/portal-css/layer-parity-contract.json`. The Playwright-managed
+browser can differ from that capture product. The current contract requires
+Chrome for Testing `151.0.7922.34`; keep that contract and its baseline unchanged
+when installing a local test browser.
+
+From the repository root on native macOS arm64, install the exact
+[official Chrome for Testing release](https://googlechromelabs.github.io/chrome-for-testing/151.0.7922.34.json)
+in a disposable directory. This verifies the reviewed archive SHA-256 before
+native extraction and leaves the system Chrome installation unchanged:
+
+```bash
+parity_cache="$(mktemp -d "${TMPDIR:-/tmp}/tp-portal-css-chrome.XXXXXX")" &&
+curl --fail --location --output "${parity_cache}/chrome-mac-arm64.zip" \
+  https://storage.googleapis.com/chrome-for-testing-public/151.0.7922.34/mac-arm64/chrome-mac-arm64.zip &&
+printf '%s  %s\n' \
+  '01a23ef9501b2745e0c2944c2e583207e6f6132d8d91c3a87ff65b5079e438ef' \
+  "${parity_cache}/chrome-mac-arm64.zip" | shasum -a 256 -c - &&
+ditto -x -k "${parity_cache}/chrome-mac-arm64.zip" "${parity_cache}/extracted" &&
+export TP_PORTAL_BROWSER_BINARY="${parity_cache}/extracted/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" &&
+"$TP_PORTAL_BROWSER_BINARY" --version &&
 make validate-portal-css-layer-parity
 ```
+
+The parity validator independently rejects a different runtime product. If macOS
+blocks this official test browser, stop and resolve the local approval through
+normal OS controls; do not re-sign the app, remove quarantine attributes, or
+relax the parity contract.
 
 ### Python Snippet Pasted Into zsh
 
