@@ -568,6 +568,61 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     assert f"+ git -C {repo_root / '.runtime' / 'Depth-Anything-3'} clean -fd -e .venv-da3" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("checkout_name", "venv_name"),
+    [
+        pytest.param(None, None, id="default"),
+        pytest.param("custom checkout $()';&[]", None, id="custom-checkout"),
+        pytest.param("alternate checkout", "selected venv $()';&[]", id="custom-venv"),
+    ],
+)
+def test_install_da3_runtime_guidance_uses_selected_venv(
+    tmp_path: Path, checkout_name: str | None, venv_name: str | None
+) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    _prepare_da3_installer_fixture(repo_root, fakebin)
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+
+    arguments = ["bash", str(script_path), "--dry-run", "--skip-verify"]
+    checkout = repo_root / ".runtime" / "Depth-Anything-3"
+    if checkout_name is not None:
+        checkout = tmp_path / checkout_name
+        arguments.extend(["--checkout-dir", str(checkout)])
+    venv = checkout / ".venv-da3"
+    if venv_name is not None:
+        venv = tmp_path / venv_name
+        arguments.extend(["--venv-dir", str(venv)])
+
+    result = subprocess.run(
+        arguments,
+        cwd=repo_root,
+        env={"PATH": f"{fakebin}:/usr/bin:/bin", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    selected_python = str(venv / "bin" / "python")
+    guidance = result.stdout.split("[INFO] DA3 runtime ready.\n", maxsplit=1)[1]
+    assert guidance.splitlines()[0] == f"[INFO] Stable executable: {selected_python}"
+    example = guidance.split("[INFO] Example:\n", maxsplit=1)[1].strip()
+    assert shlex.split(example) == [
+        "lux-depth-v3",
+        "--input-dir",
+        "./input_images",
+        "--output-dir",
+        "./output",
+        "--da3-python",
+        selected_python,
+    ]
+    if checkout_name is not None or venv_name is not None:
+        assert ".runtime/Depth-Anything-3/.venv-da3/bin/python" not in guidance
+
+
 def test_install_da3_runtime_prefers_exact_python311_over_newer_repo_venv(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
