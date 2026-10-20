@@ -481,7 +481,7 @@ def test_oversized_import_roots_refuse_before_copy_iteration_or_parent_traversal
         def __len__(self):
             return runtime.identity._MAX_IMPORT_SEARCH_PATHS + 1
 
-        def __iter__(self):
+        def __iter__(self):  # pylint: disable=non-iterator-returned
             pytest.fail("Oversized import roots must be rejected before iterator or tuple copy")
 
     def forbidden_parent(*_args):
