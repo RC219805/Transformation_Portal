@@ -149,8 +149,12 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
   `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
   for Vercel checks.
-  Keep selectors and managed-auth observability stable. Build profiles are
-  browser-local and actor-scoped: keep unsaved-draft discard explicit; migrate
+  Keep selectors and managed-auth observability stable. Build guidance is
+  navigation-only: recompute its target from current preview/readiness state,
+  never let it authorize dispatch, and clear a confirmed dispatch handoff
+  before guided Operate navigation so an unchanged draft can run again.
+  Build profiles are browser-local and actor-scoped: keep unsaved-draft discard
+  explicit; migrate
   legacy profiles automatically only in standalone `direct_debug`, while
   managed actors must use the two-step legacy import. For pre-composite managed
   drafts, keep Build blocked and persistence paused until explicit claim or
@@ -173,7 +177,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   or explicitly unknown metadata still fails. Explicit `srgb`/`linear_srgb`
   assert the existing encoding; they do not convert an arbitrary source profile.
   Unsupported profiles need a profile-aware export, never a relabeled encoding.
-  Failed runs retain logs in Operate for recovery.
+  Failed runs retain logs in Operate for recovery. Job progress is
+  backend-authored: queued/running jobs without a measured value stay
+  indeterminate, heartbeats and artifact presence do not invent percentages,
+  and completed runs without indexed outputs direct operators to Logs and Run
+  Details rather than promise future Review artifacts.
   Managed V5 dispatch requires a current successful configuration preview and
   readiness; Review may show its verified bounded sRGB PNG derivative, while
   TIFF/float outputs remain the precision authority.
@@ -182,12 +190,17 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make validate-portal-lux-materials-live`, and
   `make validate-portal-fastvlm-captioning-live`.
 - Hosted APEX performance contracts:
-  `./.venv/bin/pytest tests/test_apex_performance_workflow.py tests/test_apex_backend_deps.py -q`.
+  `./.venv/bin/pytest tests/test_apex_performance_workflow.py tests/test_apex_backend_deps.py tests/test_apex_measurement_evidence.py -q`.
   PR and push lanes stay synthetic. For scheduled or manual `mode=real` DA3
   runs, use `./scripts/setup/install_da3_runtime.sh --profile baseline`, export
-  `TRANSFORMATION_PORTAL_DA3_PYTHON="$PWD/.runtime/Depth-Anything-3/.venv-da3/bin/python"`,
-  and set `TP_STRICT_MODEL_LOCK=1`. Trust dashboard and ledger publication only
+  `TRANSFORMATION_PORTAL_DA3_PYTHON` to the installer's reported
+  `[INFO] Stable executable` path (by default,
+  `$PWD/.runtime/Depth-Anything-3/.venv-da3/bin/python`), and set
+  `TP_STRICT_MODEL_LOCK=1`. Trust dashboard and ledger publication only
   when the current run completed the matrix and produced both V1/V2 results.
+  Count independent measurement identities, not image capsules; reject mixed
+  units, workloads, or execution contexts. Measurement provenance and fixture
+  evidence do not establish representative production acceptance.
 - Scheduled Lux performance evidence:
   run `BENCHMARK_ARTIFACTS_DIR=<fresh-dir> ./.venv/bin/pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py -m benchmark --json-report --json-report-file=<report.json>`,
   then validate with
@@ -299,6 +312,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
 - Legacy segmentation adapter contracts:
   `./.venv/bin/pytest tests/segmentation/test_legacy_segmentation_contracts.py -v`.
   Requires `torch`; report missing optional ML deps as environment blockers.
+- Native reconstruction recipes:
+  `./.venv/bin/pytest tests/spatial_ai/reconstruction/test_native_recipes.py -q`.
+  Keep `native_recipe` explicit and provenance-bound for `torch_native` paths;
+  rendering and export reject recipe or implementation mismatches, and novel
+  cameras are revalidated before tensor conversion.
 - SAM2 CPU fallback benchmark:
   `TP_RUN_BENCHMARKS=1 TP_SAM2_BENCHMARK_DEVICE=cpu ./.venv/bin/pytest tests/spatial_ai/segmentation/test_sam2_backend_performance.py::TestSAM2AutoModePerformance::test_auto_mode_latency_512x512 -v -s`.
   Requires `checkpoints/sam2.1_hiera_large.pt`.
@@ -449,9 +467,13 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.materials_v4`
   and is selected by V4/V5 only through `--materials-manifest`; follow
   [docs/guides/MATERIALS_V4.md](docs/guides/MATERIALS_V4.md) rather than inventing
-  manifests or partial policies. V5 defaults to target size 518; 1008 remains an
-  explicit comparison setting and one-scene evidence does not justify a default
-  change. Managed V5 requires `make db-upgrade` through
+  manifests or partial policies. Fit a source-bound draft calibration with
+  `PYTHONPATH=src ./.venv/bin/python -m transformation_portal.materials_v4 fit-calibration --input <calibration-input.json> --source-root <source-root> --data-root <data-root> --output-dir <new-path>`.
+  Its artifact remains `unreviewed` with `acceptance: not_assessed`; fitting does
+  not change the policy allowlist or replace held-out photographic review. V5
+  defaults to target size 518; 1008 remains an explicit comparison setting and
+  one-scene evidence does not justify a default change. Managed V5 requires
+  `make db-upgrade` through
   `0007_photography_bindings`, matching API/worker code,
   `TP_LUX_V5_MANAGED_ENABLED=1`, and server-owned governed runtime/cache paths;
   V3 remains the portal default.
@@ -490,12 +512,21 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/validate_dependency_constraints.sh`,
   `./scripts/setup/ensure_node_version.sh`, and
   `./scripts/setup/run_repo_python.sh scripts/validation/check_unsafe_torch_load.py --fix-suggestions`.
+  Root, Worker, and frontdoor npm workflows require stable
+  `Node >=22.23.2 <23`; use the latest patched Node 22 release.
   The blocking Accelerate checkpoint loading gate is
   `python scripts/validation/check_accelerate_loading.py`.
   Unicode-control scans use
   `./scripts/setup/run_repo_python.sh scripts/validation/check_unicode_controls.py <paths>`;
   omit paths to scan staged Python, shell, YAML, and Markdown files, or pass
   `--all` to scan every tracked file with those suffixes.
+- Dependency security closures:
+  keep generic, native, FastVLM, and all three npm lock roots aligned; validate
+  their floors with
+  `./.venv/bin/pytest tests/security/test_fastvlm_dependency_security.py tests/security/test_native_dependency_security_baselines.py tests/validation/test_npm_security_baselines.py -q`.
+  The frontdoor `braces` override is a provenance-recorded local fork. After
+  changing it, run `npm ci` and
+  `node --test tests/braces-security.test.mjs` from `web/secure-landing`.
 - Script topology:
   canonical implementations live under governed `scripts/analysis`,
   `scripts/ci`, `scripts/maintenance`, `scripts/setup`, `scripts/pipelines`,

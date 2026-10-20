@@ -35,8 +35,15 @@ def _record_entries(paths):
     return tuple(entries.values())
 
 
+@pytest.fixture(params=["default", "prefixed"])
+def cache_layout(request, tmp_path, monkeypatch):
+    prefix = None if request.param == "default" else tmp_path / "bytecode-prefix"
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", None if prefix is None else str(prefix))
+    return prefix
+
+
 @pytest.fixture
-def closure(tmp_path, monkeypatch):
+def closure(tmp_path, monkeypatch, cache_layout):
     source = tmp_path / "source"
     source.mkdir()
     code = source / "processing.py"
@@ -252,3 +259,244 @@ def test_oversized_bytecode_source_is_rejected_before_compilation(closure, monke
     monkeypatch.setattr(runtime, "_MAX_BYTECODE_SOURCE_BYTES", 1)
     with pytest.raises(RuntimeError, match="regular-file bound"):
         runtime._directory_inventory(cache.parent)
+
+
+def test_forged_existing_cache_is_rejected_during_materialization(closure):
+    _source_cache(closure.code, replacement="value = 999\n")
+    with pytest.raises(RuntimeError, match="cached bytecode differs from its source"):
+        runtime.PhotographyRuntime()
+
+
+def test_selected_cache_configuration_is_private_but_prepared_prefix_drift_refuses(closure, monkeypatch, tmp_path):
+    prepared = runtime.PhotographyRuntime()
+    assert set(prepared.payload) == {"schema", "parent", "codecs", "codec_import_environment"}
+    assert prepared.payload["schema"] == "tp.photography.runtime.v1"
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(tmp_path / "different-prefix"))
+    with pytest.raises(RuntimeError, match="bytecode configuration changed"):
+        prepared.verify()
+
+
+def test_source_equivalent_external_layout_does_not_change_public_runtime_identity(closure, monkeypatch, tmp_path):
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", None)
+    default = runtime.PhotographyRuntime()
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(tmp_path / "identity-prefix"))
+    prefixed = runtime.PhotographyRuntime()
+    assert prefixed.payload == default.payload
+    assert prefixed.sha256 == default.sha256
+
+
+def test_equivalent_effective_prefix_with_changed_raw_spelling_is_not_rebound(closure, monkeypatch, tmp_path):
+    prefix = tmp_path / "selected-prefix"
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(prefix))
+    prepared = runtime.PhotographyRuntime()
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(prefix) + "/.")
+    with pytest.raises(RuntimeError, match="bytecode configuration changed"):
+        prepared.verify()
+
+
+def test_relative_prefix_cwd_is_bound(closure, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", "relative-bytecode")
+    prepared = runtime.PhotographyRuntime()
+    _source_cache(closure.code)
+    prepared.verify()
+    other = tmp_path / "other-cwd"
+    other.mkdir()
+    monkeypatch.chdir(other)
+    with pytest.raises(RuntimeError, match="bytecode configuration changed"):
+        prepared.verify()
+
+
+@pytest.mark.parametrize("prefix_spelling", ["relative-prefix", "absolute-dot-prefix"])
+def test_direct_prefixed_inventory_uses_current_lexical_mapping(closure, monkeypatch, tmp_path, prefix_spelling):
+    monkeypatch.chdir(tmp_path)
+    prefix = "relative-prefix" if prefix_spelling == "relative-prefix" else str(tmp_path / "absolute-prefix") + "/."
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", prefix)
+    cache = _source_cache(closure.code, replacement="value = 999\n")
+    with pytest.raises(RuntimeError, match="cached bytecode differs from its source"):
+        runtime._directory_inventory(cache.parent)
+
+
+@pytest.mark.parametrize("field", ["cache_tag", "import_root", "optimization"])
+def test_prepared_cache_selection_configuration_cannot_drift(closure, monkeypatch, field):
+    prepared = runtime.PhotographyRuntime()
+    with monkeypatch.context() as change:
+        if field == "cache_tag":
+            change.setattr(runtime.sys.implementation, "cache_tag", "unreviewed-cache-tag")
+        elif field == "import_root":
+            change.setattr(runtime.sys, "path", [*runtime.sys.path, "/unreviewed-import-root"])
+        else:
+            flags = {key: getattr(runtime.sys.flags, key) for key in dir(runtime.sys.flags) if not key.startswith("_")}
+            flags["optimize"] = (runtime.sys.flags.optimize + 1) % 3
+            change.setattr(runtime.sys, "flags", SimpleNamespace(**flags))
+        with pytest.raises(RuntimeError, match="bytecode configuration changed"):
+            prepared.verify()
+
+
+@pytest.mark.parametrize("replacement", ["directory", "symlink"])
+def test_selected_cache_parent_replacement_refuses_even_with_identical_cache_bytes(closure, replacement):
+    prepared = runtime.PhotographyRuntime()
+    cache = _source_cache(closure.code)
+    prepared.verify()
+    original = cache.parent.with_name(cache.parent.name + "-original")
+    cache.parent.rename(original)
+    if replacement == "symlink":
+        cache.parent.symlink_to(original, target_is_directory=True)
+    else:
+        cache.parent.mkdir()
+        (cache.parent / cache.name).write_bytes((original / cache.name).read_bytes())
+    with pytest.raises(RuntimeError, match="namespace changed|ancestry is not a directory"):
+        prepared.verify()
+
+
+def test_selected_cache_file_symlink_refuses(closure):
+    prepared = runtime.PhotographyRuntime()
+    cache = _source_cache(closure.code)
+    outside = cache.with_suffix(".retained")
+    cache.rename(outside)
+    cache.symlink_to(outside)
+    with pytest.raises(RuntimeError, match="regular source file"):
+        prepared.verify()
+
+
+def test_initial_prefix_symlink_is_not_admitted(closure, monkeypatch, tmp_path):
+    target = tmp_path / "actual-cache-prefix"
+    target.mkdir()
+    prefix = tmp_path / "linked-cache-prefix"
+    prefix.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(prefix))
+    with pytest.raises(RuntimeError, match="ancestry is not a directory"):
+        runtime.PhotographyRuntime()
+
+
+def test_direct_selected_cache_parent_inventory_checks_forged_payload(closure):
+    cache = _source_cache(closure.code, replacement="value = 999\n")
+    with pytest.raises(RuntimeError, match="cached bytecode differs from its source"):
+        runtime._directory_inventory(cache.parent)
+
+
+def test_external_prefix_is_not_recursively_enumerated(closure, monkeypatch, tmp_path):
+    prefix = tmp_path / "external-prefix"
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(prefix))
+    unrelated = prefix / "unrelated" / "arbitrary.pyc"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_bytes(b"unrelated and not an admitted source cache")
+    scan = runtime.os.scandir
+
+    def selected_directories_only(path):
+        assert not Path(path).is_relative_to(prefix), "Never walk the global prefix"
+        return scan(path)
+
+    monkeypatch.setattr(runtime.os, "scandir", selected_directories_only)
+    prepared = runtime.PhotographyRuntime()
+    _source_cache(closure.code)
+    prepared.verify()
+
+
+def test_selected_cache_paths_deduplicate_lexical_aliases_and_optimization_variants(closure, monkeypatch, tmp_path):
+    root = tmp_path / "environment" / "site-packages"
+    root.mkdir(parents=True)
+    monkeypatch.syspath_prepend(str(root))
+    paths = runtime._selected_source_caches((closure.code,))
+    assert len(paths) == 3
+    assert {level for _, _, level in paths} == {0, 1, 2}
+    assert {source for _, source, _ in paths} == {closure.code}
+
+
+def test_selected_cache_verification_shares_aggregate_bytes(closure, monkeypatch):
+    prepared = runtime.PhotographyRuntime()
+    cache = _source_cache(closure.code)
+    monkeypatch.setattr(runtime, "_MAX_BYTECODE_VALIDATION_BYTES", cache.stat().st_size + closure.code.stat().st_size - 1)
+    with pytest.raises(RuntimeError, match="aggregate byte bound"):
+        prepared.verify()
+
+
+def test_selected_discovery_shares_directory_entry_budget(closure):
+    budget = ([1], [runtime._MAX_BYTECODE_VALIDATION_BYTES], set())
+    runtime._directory_inventory(closure.source, validation_budget=budget)
+    with pytest.raises(RuntimeError, match="entry bound"):
+        runtime._verify_selected_caches(runtime._selected_source_caches((closure.code,)), {}, {}, budget)
+
+
+def test_selected_source_cannot_change_after_the_entry_stat_check(closure, monkeypatch):
+    prepared = runtime.PhotographyRuntime()
+    cache = _source_cache(closure.code)
+    original = runtime._read_bytecode_input
+
+    def changed_source(path, maximum):
+        value = original(path, maximum)
+        if path == cache:
+            closure.code.write_text("value = 2\n")
+        return value
+
+    monkeypatch.setattr(runtime, "_read_bytecode_input", changed_source)
+    with pytest.raises(RuntimeError, match="source changed|cached bytecode differs"):
+        prepared.verify()
+
+
+def test_selected_prefix_obeys_existing_depth_bound(closure, monkeypatch, tmp_path):
+    prefix = tmp_path.joinpath(*("nested" for _ in range(33)))
+    monkeypatch.setattr(runtime.sys, "pycache_prefix", str(prefix))
+    with pytest.raises(RuntimeError, match="depth bound"):
+        runtime.PhotographyRuntime()
+
+
+def test_selected_source_disappearance_after_initial_stat_is_rejected(closure, monkeypatch):
+    cache = _source_cache(closure.code)
+    expected_source = runtime._stat_identity(closure.code.lstat())
+    exists = Path.exists
+    disappeared = []
+
+    def disappear_before_verifier_exists(path):
+        if path == closure.code:
+            closure.code.unlink()
+            disappeared.append(str(path))
+        return exists(path)
+
+    with monkeypatch.context() as change:
+        change.setattr(Path, "exists", disappear_before_verifier_exists)
+        with pytest.raises(RuntimeError, match="selected bytecode lost its bound source"):
+            runtime._verify_selected_caches(
+                ((cache, closure.code, 0),),
+                {},
+                {},
+                runtime._bytecode_budget(),
+                source_identities={str(closure.code): expected_source},
+            )
+    assert disappeared == [str(closure.code)]
+
+
+def test_generic_orphan_cache_is_still_non_authorizing(closure):
+    cache = _source_cache(closure.code)
+    closure.code.unlink()
+    assert runtime._verify_source_bytecode(cache, {}, [runtime._MAX_BYTECODE_VALIDATION_BYTES]) is False
+
+
+@pytest.mark.parametrize("seam", ["materialize", "verify"])
+def test_oversized_import_roots_refuse_before_copy_iteration_or_parent_traversal(closure, monkeypatch, seam):
+    prepared = runtime.PhotographyRuntime() if seam == "verify" else None
+    assert runtime.identity._MAX_IMPORT_SEARCH_PATHS == 256
+
+    class OversizedRoots(list):
+        def __len__(self):
+            return runtime.identity._MAX_IMPORT_SEARCH_PATHS + 1
+
+        def __iter__(self):
+            pytest.fail("Oversized import roots must be rejected before iterator or tuple copy")
+
+    def forbidden_parent(*_args):
+        pytest.fail("Oversized roots must be rejected before parent identity traversal")
+
+    with monkeypatch.context() as change:
+        change.setattr(runtime.sys, "path", OversizedRoots())
+        change.setattr(runtime.identity, "prepare_parent_output_runtime_identity", forbidden_parent)
+        change.setattr(runtime.identity, "verify_parent_output_runtime_identity", forbidden_parent)
+        with pytest.raises(RuntimeError, match="import roots exceed their inventory bound"):
+            runtime.PhotographyRuntime() if prepared is None else prepared.verify()
+
+
+def test_owning_import_root_limit_preserves_all_256_roots_without_slicing(closure, monkeypatch):
+    roots = [f"/admitted-import-root/{index}" for index in range(256)]
+    with monkeypatch.context() as change:
+        change.setattr(runtime.sys, "path", roots)
+        assert runtime._bytecode_configuration()[-1] == tuple(roots)
