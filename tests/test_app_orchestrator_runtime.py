@@ -12,6 +12,7 @@ import hashlib
 import importlib
 import io
 import json
+import logging
 import os
 import re
 import subprocess
@@ -298,9 +299,15 @@ def _capture_lux_cli_config_from_args(cli_args: list[str]) -> object:
         mock_orchestrator.enhance_batch.return_value = [{"status": "ok"}]
         return mock_orchestrator
 
-    with patch(
-        "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
-        side_effect=_mock_orchestrator_from_prepared,
+    # Configuration parity does not exercise logging. CliRunner closes its
+    # temporary stderr after invocation, so the CLI's forced root logging
+    # setup would leave subsequent orchestrator tests with a closed stream.
+    with (
+        patch("transformation_portal.lux_depth_v3.__main__._configure_logging"),
+        patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator.from_prepared",
+            side_effect=_mock_orchestrator_from_prepared,
+        ),
     ):
         result = CliRunner().invoke(lux_cli_app, cli_args)
     assert result.exit_code == 0, result.stdout
@@ -3601,6 +3608,9 @@ def test_argv_rejects_verbose_and_quiet_combination() -> None:
 
 
 def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: Path) -> None:
+    root_logger = logging.getLogger()
+    root_handlers = tuple(root_logger.handlers)
+    root_level = root_logger.level
     input_dir = tmp_path / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
     (input_dir / "frame.jpg").touch()
@@ -3683,6 +3693,8 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
 
     assert portal_path_fingerprint["canonical_json"] == direct_cli_fingerprint["canonical_json"]
     assert portal_path_fingerprint["sha256"] == direct_cli_fingerprint["sha256"]
+    assert tuple(root_logger.handlers) == root_handlers
+    assert root_logger.level == root_level
 
 
 def test_argv_normalization_includes_segmentation_controls() -> None:

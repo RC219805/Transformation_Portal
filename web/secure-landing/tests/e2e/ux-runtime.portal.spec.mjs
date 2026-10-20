@@ -884,6 +884,48 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await page.screenshot({ path: test.info().outputPath('failed-job-recovery.png') });
   });
 
+  test("terminal failure recovery supersedes a prior stream disconnect without removing Timeline history", async ({ page }, testInfo) => {
+    const job = {
+      id: "job-disconnected-failure", pipeline: "lux-depth", state: "running", progress: 0,
+      logs_tail: [], artifacts: { items: [] }, created_at: "2026-08-09T20:00:00Z",
+    };
+    await installHydratedPortalRoutes(page, { jobs: [job] });
+    let releaseFailure;
+    const failureGate = new Promise((resolve) => { releaseFailure = resolve; });
+    let streamResponses = 0;
+    await page.route("**/v1/jobs/job-disconnected-failure/events", async (route) => {
+      streamResponses += 1;
+      if (streamResponses > 1) await failureGate;
+      await route.fulfill({
+        status: 200, contentType: "text/event-stream; charset=utf-8",
+        body: streamResponses === 1
+          ? "retry: 1000\n: interrupted stream\n\n"
+          : `event: done\ndata: ${JSON.stringify({ state: "failed", exit_code: 1, error: job.error })}\n\n`,
+      });
+    });
+    await gotoHydratedPortal(page, "/portal?view=operate");
+    await expect(page.locator("#selectedJobTransportAlert")).toContainText(/disconnected|connection dropped/i);
+    const warningDetail = await page.locator("#selectedJobTransportAlert").innerText();
+    Object.assign(job, {
+      state: "failed", finished_at: new Date().toISOString(),
+      error: { code: "RUNNER_EXIT_NONZERO", message: "runner exited with code 1" },
+      logs_tail: ["PermissionError: runtime bytecode cache is not writable"],
+    });
+    releaseFailure();
+    await expect(page.locator("#selectedJobRecoveryTitle")).toHaveText("Inspect failure before rerun", { timeout: 10000 });
+    await expect(page.locator("#selectedJobRecoveryDetail")).toContainText("Inspect the failure in Logs");
+    await expect(page.locator("#selectedJobRecoveryDetail")).not.toContainText("Reconnecting");
+    await expect(page.locator("#selectedJobSummary")).toContainText("RUNNER_EXIT_NONZERO");
+    await expect(page.locator("#selectedJobStreamStatus")).toContainText("Closed");
+    await expect(page.locator("#selectedJobTransportAlert")).toBeHidden();
+    await page.locator("#inspectorLogsTab").click();
+    await expect(page.locator("#selectedJobLogPreview")).toContainText("runtime bytecode cache is not writable");
+    await page.locator("#inspectorTimelineTab").click();
+    await expect(page.locator("#selectedJobTimelineList")).toContainText(warningDetail);
+    await expect(page.locator("#selectedJobTimelineList")).toContainText("Run failed");
+    await page.screenshot({ path: testInfo.outputPath("terminal-failure-warning-history.png") });
+  });
+
   for (const [reason, title, message] of [
     ['unsupported_icc_profile', 'Convert to sRGB before rerun',
       'Input uses an unsupported ICC profile. Convert the image to sRGB with a profile-aware editor and upload the converted file. If Auto rejects its sRGB profile, select sRGB only for that converted file, then create a new job. Do not relabel Adobe RGB as sRGB.'],

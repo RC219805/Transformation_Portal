@@ -197,6 +197,7 @@ where = ["src"]
 exclude = ["tests*", "data*", "docs*", "scripts"]
 
 [tool.setuptools.package-data]
+"transformation_portal.api" = ["docs_assets/*.css"]
 "transformation_portal.schemas.run_card" = ["*.json"]
 "transformation_portal.schemas.lux" = ["*.json"]
 "transformation_portal.schemas.execution" = ["*.json"]

@@ -749,6 +749,41 @@ def test_build_run_card_result_summary_uses_cached_segmentation_metadata(tmp_pat
     ]
 
 
+@pytest.mark.parametrize("active_batch", [True, False])
+def test_prepared_run_card_segmentation_summary_references_frozen_mask(tmp_path: Path, active_batch: bool) -> None:
+    output_root = tmp_path / "output"
+    public_mask = output_root / "segmentation/image_01_materials_v3_masks.npz"
+    frozen_mask = output_root / "segmentation/execution/batch_01/image_01_materials_v3_masks.npz"
+    frozen_mask.parent.mkdir(parents=True)
+    np.savez_compressed(frozen_mask, glass=np.ones((2, 2), dtype=np.float32))
+    # A later execution may replace the compatibility alias with different bytes.
+    np.savez_compressed(public_mask, glass=np.zeros((2, 2), dtype=np.float32))
+    manifest_path = output_root / "manifests/image_01_combined.json"
+    cached_metadata = {
+        "backend": "efficientsam",
+        "mask_artifact_path": str(public_mask),
+        "mask_count": 1,
+    }
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch.config = EnhanceConfig(enable_materials_v3=True, enable_material_segmentation=True)
+    orch._prepared_execution = SimpleNamespace()
+    orch._active_prepared_batch_token = "batch_01" if active_batch else None
+    mapping_name = "_active_prepared_volatile_artifact_paths" if active_batch else "_latest_prepared_volatile_artifact_paths"
+    setattr(orch, mapping_name, {public_mask.relative_to(output_root).as_posix(): frozen_mask})
+    orch._active_run_card_segmentation_metadata = {str(manifest_path): cached_metadata}
+
+    summary = orch._build_run_card_result_summary(
+        [{"image": str(tmp_path / "inputs/image_01.png"), "status": "ok", "manifest": str(manifest_path)}]
+    )
+    artifact_index = _build_artifact_index(output_root, [frozen_mask])
+
+    assert summary[0]["segmentation_metadata"]["mask_artifact_path"] == str(frozen_mask)
+    assert summary[0]["segmentation_status"]["mask_artifact_path"] == artifact_index[0]["relative_path"]
+    assert artifact_index[0]["artifact_type"] == "segmentation_mask_npz"
+    assert cached_metadata["mask_artifact_path"] == str(public_mask)
+
+
 def test_build_run_card_result_summary_projects_quality_gate_and_capability(tmp_path: Path) -> None:
     output_root = tmp_path / "output"
     orch = object.__new__(EnhanceOrchestrator)

@@ -22,6 +22,7 @@ export function createDeferredOperateSurfaceApi(host) {
         _displayJobState,
         _displayJobStateTone,
         _isJobsHydrationPending,
+        _isJobTerminal,
         _jobFreshnessLabel,
         _jobHasActiveStream,
         _latestVisibleTransportWarning,
@@ -134,42 +135,44 @@ export function createDeferredOperateSurfaceApi(host) {
             };
         }
 
-        if (job.cancelPending) {
+        const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+        const terminalState = _isJobTerminal(job);
+
+        if (job.cancelPending && !terminalState) {
             return {
                 title: 'Cancel request pending',
                 detail: 'The run remains active until the backend confirms cancellation.'
             };
         }
 
-        const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
         const visibleWarning = _latestVisibleTransportWarning(job);
 
-        if (job.reconnectBlocked) {
+        if (job.reconnectBlocked && !terminalState) {
             return {
                 title: 'Restore authentication',
                 detail: 'Restore access to reconnect live updates.'
             };
         }
 
-        if (visibleWarning) {
+        if (visibleWarning && !terminalState) {
             return {
                 title: 'Review the latest warning',
                 detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
             };
         }
 
-        if (job.state === 'failed' || job.state === 'canceled') {
+        if (job.state === 'failed' || job.state === 'worker_lost' || job.state === 'canceled') {
             const inputRecovery = job.state === 'failed' ? _inputColorFailureRecovery(job.error) : null;
             if (artifactCount === 0 && inputRecovery) return inputRecovery;
             return artifactCount > 0
                 ? {
                     title: 'Open review for retained outputs',
-                    detail: 'Review the indexed outputs before deciding whether this run needs a retry.'
+                    detail: 'Review indexed outputs before retrying.'
                 }
                 : {
                     title: job.state === 'canceled' ? 'Run canceled' : 'Inspect failure before rerun',
                     detail: job.state === 'canceled'
-                        ? 'No outputs were indexed before cancellation. Prepare another run in Build.'
+                        ? 'No outputs were indexed. Prepare another run in Build.'
                         : 'No outputs were indexed. Inspect the failure in Logs before returning to Build.'
                 };
         }
@@ -380,26 +383,29 @@ export function createDeferredOperateSurfaceApi(host) {
         const readableError = getReadableError(selected.error);
         const outcomeSummary = jobOutcomeSummary(selected);
         const nativeReadyState = _nativeEventSourceReadyState(selected.eventSource);
-        const streamStatus = selected.reconnectBlocked
-            ? 'Blocked by auth'
-            : selected.usesFetchSse && _jobHasActiveStream(selected)
-                ? 'Fetch stream active'
-                : nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING
-                    ? 'SSE stream reconnecting'
-                    : nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN
-                        ? 'SSE stream active'
-                        : nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED
-                            ? 'SSE stream closed'
-                            : _jobHasActiveStream(selected)
-                                ? 'SSE stream active'
-                                : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
+        const terminalState = _isJobTerminal(selected);
+        const streamStatus = terminalState
+            ? 'Closed'
+            : selected.reconnectBlocked
+                ? 'Blocked by auth'
+                : selected.usesFetchSse && _jobHasActiveStream(selected)
+                    ? 'Fetch stream active'
+                    : nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING
+                        ? 'SSE stream reconnecting'
+                        : nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN
+                            ? 'SSE stream active'
+                            : nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED
+                                ? 'SSE stream closed'
+                                : _jobHasActiveStream(selected)
+                                    ? 'SSE stream active'
+                                    : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
         const transportLabel = formatTransportLabel(selected);
         const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
         const displayState = _displayJobState(selected);
         const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
             ? selected.transportWarnings[selected.transportWarnings.length - 1]
             : null;
-        const visibleAlert = latestWarning && latestWarning.tone !== 'info' ? latestWarning : null;
+        const visibleAlert = !terminalState && latestWarning && latestWarning.tone !== 'info' ? latestWarning : null;
 
         if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(displayState, 'Unknown');
         if (els.selectedJobIdLabel) {

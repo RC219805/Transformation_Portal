@@ -51,6 +51,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.api.docs import create_api_docs_router
 from transformation_portal.api.routes import JobRouteHandlers, create_jobs_router
 from transformation_portal.api.v1 import (
     ConfigMetadataEnvelope,
@@ -9177,14 +9178,17 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
 app = FastAPI(
     title="Transformation Portal Orchestrator",
     version="0.3.0",
-    docs_url="/docs" if ENABLE_API_DOCS else None,
-    redoc_url="/redoc" if ENABLE_API_DOCS else None,
+    docs_url=None,
+    redoc_url=None,
     openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
     lifespan=_orchestrator_lifespan,
 )
 app.state.cleanup_task = None
 app.state.job_repository = None
 app.state.job_repository_unavailable = False
+
+if ENABLE_API_DOCS:
+    app.include_router(create_api_docs_router(app))
 
 if ENABLE_TRUSTED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)

@@ -1047,6 +1047,39 @@ class TestRawMetadataValidation:
         )
         self.decoder._validate_raw_metadata(raw)  # must not raise
 
+    def test_three_color_dji_zero_second_green_passes_without_metadata_rewrite(self):
+        # Genuine DJI FC9184 camera metadata reported by LibRaw 0.22.1.
+        gains = [1.9658201932907104, 1.0, 1.59912109375, 0.0]
+        raw = self._make_raw(wb=gains.copy(), bl=[0, 0, 0, 0], raw_image_shape=(8, 12))
+        raw.num_colors = 3
+        self.decoder._validate_raw_metadata(raw)
+        assert raw.camera_whitebalance == gains
+
+    @pytest.mark.parametrize("num_colors", [None, 4, 2, "3", 3.0, True])
+    def test_zero_second_green_requires_native_three_color_authority(self, num_colors):
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5, 0.0])
+        if num_colors is not None:
+            raw.num_colors = num_colors
+        with pytest.raises(ValueError, match="zero or negative gain"):
+            self.decoder._validate_raw_metadata(raw)
+
+    @pytest.mark.parametrize(
+        "gains, message",
+        [
+            ([0.0, 1.0, 1.5, 0.0], "zero or negative gain"),
+            ([2.0, 0.0, 1.5, 0.0], "zero or negative gain"),
+            ([2.0, 1.0, 0.0, 0.0], "zero or negative gain"),
+            ([2.0, 1.0, 1.5, -1.0], "zero or negative gain"),
+            ([2.0, 1.0, 1.5, float("nan")], "NaN"),
+            ([2.0, 1.0, 1.5, float("inf")], "infinity"),
+        ],
+    )
+    def test_three_color_camera_retains_invalid_gain_guards(self, gains, message):
+        raw = self._make_raw(wb=gains)
+        raw.num_colors = 3
+        with pytest.raises(ValueError, match=message):
+            self.decoder._validate_raw_metadata(raw)
+
     def test_zero_wb_gain_raises(self):
         raw = self._make_raw(wb=[0.0, 1.0, 1.5, 1.0])
         with pytest.raises(ValueError, match="zero or negative gain"):

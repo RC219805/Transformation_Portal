@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 76rem;
+  margin: auto;
+  padding: 2rem;
+}
+
+a {
+  color: #2874ce;
+}
+
+details {
+  margin: 0.75rem 0;
+  border: 1px solid #888;
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+}
+
+summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid #2874ce;
+  outline-offset: 3px;
+}
+
+.method {
+  display: inline-block;
+  font-weight: 700;
+  min-width: 5rem;
+}
+
+.description {
+  white-space: pre-wrap;
+}
+
+pre {
+  overflow: auto;
+  padding: 0.75rem;
+  background: #8882;
+  font-size: 0.875rem;
+}
+
+#schemas > section {
+  scroll-margin-top: 1rem;
+}
+
+@media (max-width: 40rem) {
+  main {
+    padding: 1rem;
+  }
+}

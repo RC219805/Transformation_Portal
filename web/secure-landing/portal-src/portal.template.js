@@ -6459,7 +6459,12 @@ function _selectedArtifactForJob(job) {
     return hero;
 }
 
+function _isJobTerminal(job) {
+    return ['succeeded', 'ready', 'partial', 'failed', 'canceled', 'worker_lost'].includes(job?.state);
+}
+
 function _latestVisibleTransportWarning(job) {
+    if (_isJobTerminal(job)) return null;
     const warnings = Array.isArray(job?.transportWarnings) ? job.transportWarnings : [];
     for (let index = warnings.length - 1; index >= 0; index -= 1) {
         const warning = warnings[index];
@@ -6700,6 +6705,7 @@ function _createDeferredOperateSurfaceHost() {
         _displayJobState,
         _displayJobStateTone,
         _isJobsHydrationPending,
+        _isJobTerminal,
         _jobFreshnessLabel,
         _jobHasActiveStream,
         _latestVisibleTransportWarning,
