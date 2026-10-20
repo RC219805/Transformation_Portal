@@ -7067,8 +7067,8 @@ function _markJobEventActivity(job) {
 
 function _syncHydratedJob(existing, hydrated, rawJob = null) {
     if (!existing || !hydrated) return false;
-    // A delayed running snapshot cannot reverse a terminal SSE or GET result.
-    if (['succeeded', 'partial', 'failed', 'canceled'].includes(existing.state) && _isJobStreamRecoverable(hydrated)) return false;
+    // A delayed active snapshot cannot reverse a terminal SSE or GET result.
+    if (_isJobTerminal(existing) && _isJobStreamRecoverable(hydrated)) return false;
     if (_isJobStreamRecoverable(existing) && !_isJobStreamRecoverable(hydrated)) existing.logsLoadStatus = 'pending';
     existing.pipeline = hydrated.pipeline;
     existing.state = hydrated.state;

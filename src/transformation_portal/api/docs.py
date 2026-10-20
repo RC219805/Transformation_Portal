@@ -99,10 +99,12 @@ def _render_docs(schema: Mapping[str, Any], *, title: str, openapi_url: str, sty
 def _oauth_redirect_assets() -> tuple[str, bytes]:
     """Externalize exactly one trusted FastAPI callback script; reject helper drift."""
     document = get_swagger_ui_oauth2_redirect_html().body.decode("utf-8")
-    scripts = list(re.finditer(r"<script>(.*?)</script>", document, re.DOTALL))
+    scripts = list(re.finditer(r"<script>(.*?)</script>", document, re.DOTALL | re.IGNORECASE))
     if len(scripts) != 1 or not scripts[0].group(1).strip():
         raise RuntimeError("FastAPI OAuth redirect must contain exactly one inline script")
     script = scripts[0]
+    if re.search(r"</script\b", script.group(1), re.IGNORECASE):
+        raise RuntimeError("FastAPI OAuth redirect contains an unexpected script end tag")
     shell = document[: script.start()] + "__OAUTH_SCRIPT__" + document[script.end() :]
     if re.search(r"<(?:script|style)\b|\s(?:style|on\w+)\s*=", shell, re.IGNORECASE):
         raise RuntimeError("FastAPI OAuth redirect contains unexpected inline content")

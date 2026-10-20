@@ -146,19 +146,22 @@ def test_openapi_derived_html_is_escaped_and_schema_anchors_handle_special_names
     assert "Path-level parameters" in rendered
 
 
-def test_oauth_compatibility_uses_exact_trusted_script_as_external_asset():
+@pytest.mark.parametrize("opening_tag, closing_tag", [("script", "script"), ("SCRIPT", "SCRIPT"), ("ScRiPt", "sCrIpT")])
+def test_oauth_compatibility_uses_exact_trusted_script_as_external_asset(monkeypatch, opening_tag, closing_tag):
+    original = get_swagger_ui_oauth2_redirect_html().body.decode("utf-8")
+    document = original.replace("<script>", f"<{opening_tag}>").replace("</script>", f"</{closing_tag}>")
+    monkeypatch.setattr(docs, "get_swagger_ui_oauth2_redirect_html", lambda: Response(document))
     application = _app()
     application.include_router(docs.create_api_docs_router(application))
     with TestClient(application) as client:
         redirect = client.get("/docs/oauth2-redirect")
         script = client.get("/docs/assets/oauth2-redirect.js")
-    original = get_swagger_ui_oauth2_redirect_html().body.decode("utf-8")
-    original_script = re.search(r"<script>(.*?)</script>", original, re.DOTALL).group(1)
+    original_script = re.search(r"<script>(.*?)</script>", document, re.DOTALL | re.IGNORECASE).group(1)
     assert script.content == original_script.encode("utf-8")
     assert script.headers["content-type"].startswith("application/javascript")
     assert redirect.status_code == 200
     assert 'src="/docs/assets/oauth2-redirect.js"' in redirect.text
-    assert "<script>" not in redirect.text
+    assert f"<{opening_tag}>" not in redirect.text
     assert "<style" not in redirect.text
     assert "window.opener" not in redirect.text
 
@@ -168,10 +171,21 @@ def test_oauth_compatibility_uses_exact_trusted_script_as_external_asset():
     [
         "<html>No script</html>",
         "<script></script>",
+        "<SCRIPT></SCRIPT>",
+        "<ScRiPt>run()</sCrIpT >",
+        '<ScRiPt>run()</sCrIpT foo="bar">',
+        "<ScRiPt>run()</sCrIpT",
+        "<script>run()</script foo><SCRIPT>more()</SCRIPT>",
         "<script>one()</script><script>two()</script>",
+        "<SCRIPT>one()</SCRIPT><sCrIpT>two()</sCrIpT>",
         '<script src="external.js"></script>',
+        '<SCRIPT SRC="external.js"></SCRIPT>',
+        '<script>run()</script><SCRIPT SRC="external.js"></SCRIPT>',
         "<style>body{}</style><script>run()</script>",
+        "<STYLE>body{}</STYLE><ScRiPt>run()</sCrIpT>",
         '<body onload="run()"><script>run()</script>',
+        '<body oNlOaD="run()"><ScRiPt>run()</sCrIpT>',
+        '<body StYlE="color:red"><SCRIPT>run()</SCRIPT>',
     ],
 )
 def test_oauth_helper_shape_drift_fails_closed(monkeypatch, document):

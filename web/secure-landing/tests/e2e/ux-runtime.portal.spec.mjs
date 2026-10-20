@@ -861,7 +861,7 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     }] });
     await gotoHydratedPortal(page, "/portal?view=operate");
     await expect(page.locator("#selectedJobRecoveryTitle")).toHaveText("Run canceled");
-    await expect(page.locator("#selectedJobRecoveryDetail")).toContainText("before cancellation");
+    await expect(page.locator("#selectedJobRecoveryDetail")).toHaveText("No outputs were indexed. Prepare another run in Build.");
     await page.locator('[data-view-link="review"]').click();
     await expect(page.locator("#reviewStatusTitle")).toHaveText("Run canceled before review outputs were ready");
     await expect(page.locator("#emptyArtifactTitle")).toHaveText("No reviewable outputs indexed");
