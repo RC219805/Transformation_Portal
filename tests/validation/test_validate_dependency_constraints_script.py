@@ -148,7 +148,7 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
     requirements_dir.mkdir(parents=True, exist_ok=True)
     in_path = requirements_dir / "base.in"
     txt_path = requirements_dir / "base.txt"
-    in_path.write_text("Pillow>=10.3.0,<13  # Generic stale warning regression coverage\n", encoding="utf-8")
+    in_path.write_text("Pillow>=13.0.0,<14  # Generic stale warning regression coverage\n", encoding="utf-8")
     _write_lockfile(txt_path)
     _make_stale(in_path, txt_path)
 
@@ -163,7 +163,9 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("constraint", "minimum", "reason"),
     (
-        ("Pillow>=10.0.0,<13  # stale security floor", "10.3.0", "CVE-2024-28219"),
+        ("Pillow>=12.3.0,<14  # stale security floor", "13.0.0", "GHSA-8g5g-8vmr-9782"),
+        ("certifi>=2026.7.22", "2026.10.19", "GHSA-6q48-6c7w-9gw2"),
+        ("CERTIFI==2026.7.22  # case-insensitive security floor", "2026.10.19", "GHSA-6q48-6c7w-9gw2"),
         ("starlette==1.0.0  # stale Starlette pin", "1.3.1", "CVE-2026-48710"),
         ("sentence-transformers>=3.1.0,<6", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
         ("Mako>=1.4.1,<2", "1.4.2", "GHSA-5639-2j2p-m4mx"),
@@ -174,7 +176,7 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
         ("werkzeug==3.1.8", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
         ("WERKZEUG==3.1.8  # case-insensitive security floor", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
         ("WerkZeug>=3.1.8,<4  # mixed-case security floor", "3.1.9", "GHSA-g6x2-hccm-hh4m"),
-        ("PILLOW>=10.0.0,<13  # case-insensitive existing floor", "10.3.0", "CVE-2024-28219"),
+        ("PILLOW>=12.3.0,<14  # case-insensitive existing floor", "13.0.0", "GHSA-8g5g-8vmr-9782"),
         ("Sentence-Transformers>=5.4.1,<6  # mixed-case existing floor", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
         ("sentence_transformers>=5.4.1,<6  # underscore alias security floor", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
         ("Sentence.Transformers==5.4.1  # dotted alias security floor", "5.6.0", "GHSA-jhr6-gm9c-rqjv"),
@@ -408,7 +410,8 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
     (requirements_dir / "base.in").write_text(
         "\n".join(
             [
-                "Pillow>=10.3.0,<13  # Security regression coverage",
+                "Pillow>=13.0.0,<14  # Security regression coverage",
+                "certifi>=2026.10.19  # Security regression coverage",
                 "starlette==1.3.1  # direct runtime import + curated Starlette 1.x validation target",
             ]
         )

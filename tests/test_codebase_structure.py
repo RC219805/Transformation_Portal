@@ -605,7 +605,7 @@ class TestRootGovernanceMetadata:
         assert "cryptography==50.0.0" in (_repo_root / "requirements/ci.txt").read_text()
         assert "cryptography==50.0.0" in (_repo_root / "requirements/dev.txt").read_text()
         assert "cryptography==50.0.0" in (_repo_root / "requirements/all.txt").read_text()
-        assert "pillow==12.3.0" in (_repo_root / "requirements/base.txt").read_text()
+        assert "pillow==13.0.0" in (_repo_root / "requirements/base.txt").read_text()
 
         assert "**cryptography==50.0.0**" in security_policy
         assert "**cryptography==48.0.1**" not in security_policy
@@ -619,7 +619,7 @@ class TestRootGovernanceMetadata:
         assert "Starlette==1.6.0" in security_policy
         assert "Supported Apple Silicon lane runs on torch `2.13.0` / torchvision `0.28.0`" in security_policy
         assert "Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`" not in security_policy
-        assert "current governed lock baseline is pillow==12.3.0" in requirements_lint
+        assert "current governed lock baseline is pillow==13.0.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
 
     def test_pyproject_security_extras_track_current_cryptography_floor(self):
@@ -672,7 +672,8 @@ class TestRootGovernanceMetadata:
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
 
         required_dependency_ranges = {
-            "Pillow>=10.3.0,<13",
+            "Pillow>=13.0.0,<14",
+            "certifi>=2026.10.19",
             "scikit-learn>=1.8.0,<2",
             "fastapi>=0.136.1,<0.142",
             "starlette>=1.3.1,<1.7",
@@ -702,7 +703,7 @@ class TestRootGovernanceMetadata:
         for dependency in stale_dependency_ranges:
             assert dependency not in dependencies
 
-        assert "`Pillow`                | >=10.3.0" in contributing
+        assert "`Pillow`                | >=13.0.0" in contributing
         assert "`Pillow`                | >=10.0.0" not in contributing
 
     def test_pyproject_dev_extra_tracks_governed_dev_requirements(self):

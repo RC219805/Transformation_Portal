@@ -52,10 +52,14 @@ def test_model_utility_summary_distinguishes_isolated_workers(monkeypatch, capsy
 
 
 @pytest.mark.parametrize("missing_depth_pro", [False, True])
-def test_ml_diagnostic_preserves_import_status_without_claiming_inference(monkeypatch, capsys, missing_depth_pro):
+@pytest.mark.parametrize("pillow_version,pillow_warning", [("12.3.0", True), ("13.0.0", False)])
+def test_ml_diagnostic_preserves_import_status_without_claiming_inference(
+    monkeypatch, capsys, missing_depth_pro, pillow_version, pillow_warning
+):
     module = _load_script("ml_scope_diagnostic", "scripts/verification/verify_ml_deps.py")
     for name in ("numpy", "PIL", "cv2", "torchvision", "transformers", "diffusers", "depth_pro"):
         monkeypatch.setitem(sys.modules, name, SimpleNamespace(__version__="99.0"))
+    monkeypatch.setitem(sys.modules, "PIL", SimpleNamespace(__version__=pillow_version))
     torch = SimpleNamespace(
         __version__="99.0",
         backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
@@ -80,6 +84,8 @@ def test_ml_diagnostic_preserves_import_status_without_claiming_inference(monkey
     assert "Isolated runtime authorization and inference are not checked" in output
     assert "READY FOR APEX" not in output
     assert "ALL DEPENDENCIES VERIFIED" not in output
+    pillow_line = next(line for line in output.splitlines() if "Pillow" in line)
+    assert ("⚠️" in pillow_line) is pillow_warning
     if missing_depth_pro:
         assert "owning runtime" in output
     else:

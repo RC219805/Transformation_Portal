@@ -43,6 +43,10 @@ botocore==1.43.111
     #   -c all.txt
     #   boto3
     #   s3transfer
+certifi==2026.10.19
+    # via
+    #   -c all.txt
+    #   -r base.in
 click==8.4.2
     # via
     #   -c all.txt
@@ -126,7 +130,7 @@ opencv-python-headless==4.14.0.94 ; platform_system == "Linux"
     # via
     #   -c all.txt
     #   -r base.in
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   -c all.txt
     #   -r base.in

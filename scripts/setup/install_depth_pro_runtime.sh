@@ -152,7 +152,7 @@ run "${PYTHON_BIN}" -m pip install \
     "torch==2.13.0" \
     "torchvision==0.28.0" \
     "matplotlib==3.10.8" \
-    "pillow==12.3.0" \
+    "pillow==13.0.0" \
     "pillow_heif==1.3.0" \
     "timm==1.0.26" \
     "jsonschema==4.26.0"

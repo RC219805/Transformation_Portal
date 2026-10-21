@@ -49,8 +49,9 @@ build==1.6.1
     # via -r ci.in
 cachetools==7.2.1
     # via tox
-certifi==2026.7.22
+certifi==2026.10.19
     # via
+    #   -r base.in
     #   httpcore
     #   httpx
     #   requests
@@ -219,7 +220,7 @@ pathspec==1.1.1
     # via
     #   black
     #   mypy
-pillow==12.3.0
+pillow==13.0.0
     # via -r base.in
 platformdirs==4.13.0
     # via

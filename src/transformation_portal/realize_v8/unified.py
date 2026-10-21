@@ -148,7 +148,7 @@ def _save_with_meta(
 
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
-                img = Image.fromarray(arr_uint, mode="I;16")
+                img = Image.fromarray(arr_uint)
                 # Try saving the 16-bit grayscale image to ensure PIL supports it
                 try:
                     # Save to a temporary in-memory file to test support

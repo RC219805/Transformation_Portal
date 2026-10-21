@@ -182,8 +182,8 @@ def test_candidate_metrics_compare_against_reference_path_not_asset_ref(tmp_path
     Image.fromarray(np.full((8, 8, 3), 255, dtype=np.uint8)).save(delivery_path, format="JPEG")
     reference = np.zeros((8, 8), dtype=np.uint16)
     reference[2:6, 2:6] = 32768
-    Image.fromarray(reference, mode="I;16").save(reference_path)
-    Image.fromarray(reference.copy(), mode="I;16").save(candidate_path)
+    Image.fromarray(reference).save(reference_path)
+    Image.fromarray(reference.copy()).save(candidate_path)
     evalset_path = _write_evalset(
         tmp_path,
         delivery_path,
@@ -230,8 +230,8 @@ def test_candidate_mask_npz_enables_mask_aware_metrics(tmp_path):
     candidate[1:5, 1:7] = 50000
     mask = np.zeros((6, 8), dtype=np.float32)
     mask[2:4, 2:6] = 1.0
-    Image.fromarray(reference, mode="I;16").save(reference_path)
-    Image.fromarray(candidate, mode="I;16").save(candidate_path)
+    Image.fromarray(reference).save(reference_path)
+    Image.fromarray(candidate).save(candidate_path)
     np.savez(mask_path, z_mask=mask, a_mask=np.zeros((6, 8), dtype=np.float32))
     evalset_path = _write_evalset(
         tmp_path,
@@ -276,8 +276,8 @@ def test_candidate_mask_npz_enables_mask_aware_metrics(tmp_path):
 def test_absent_candidate_mask_preserves_mask_missing_metric_status(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(candidate_path)
     evalset_path = _write_evalset(
         tmp_path,
         reference_path,
@@ -310,7 +310,7 @@ def test_candidate_mask_supplied_but_output_missing_is_not_evaluated(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     missing_candidate_path = tmp_path / "missing_candidate.tif"
     mask_path = tmp_path / "materials_v3_masks.npz"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
     np.savez(mask_path, glass=np.ones((8, 8), dtype=np.float32))
     evalset_path = _write_evalset(
         tmp_path,
@@ -368,8 +368,8 @@ def test_invalid_explicit_candidate_mask_blocks_without_mask_missing_fallback(
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate16.tif"
     mask_path = tmp_path / "materials_v3_masks.npz"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(candidate_path)
     mask_builder(mask_path)
     evalset_path = _write_evalset(
         tmp_path,
@@ -411,8 +411,8 @@ def test_invalid_explicit_candidate_mask_blocks_without_mask_missing_fallback(
 def test_candidate_dimension_mismatch_fails_closed_without_resizing(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
-    Image.fromarray(np.zeros((4, 4), dtype=np.uint16), mode="I;16").save(candidate_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint16)).save(candidate_path)
     evalset_path = _write_evalset(
         tmp_path,
         reference_path,
@@ -444,7 +444,7 @@ def test_canonical_candidate_metrics_reject_unsupported_reference_bit_depth(tmp_
     reference_path = tmp_path / "reference8.tif"
     candidate_path = tmp_path / "candidate16.tif"
     Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(reference_path, format="TIFF")
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(candidate_path)
     evalset_path = _write_evalset(
         tmp_path,
         reference_path,
@@ -474,7 +474,7 @@ def test_canonical_candidate_metrics_reject_unsupported_reference_bit_depth(tmp_
 def test_canonical_candidate_metrics_reject_unsupported_candidate_bit_depth(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate8.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
     Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(candidate_path, format="TIFF")
     evalset_path = _write_evalset(
         tmp_path,
@@ -505,7 +505,7 @@ def test_canonical_candidate_metrics_reject_unsupported_candidate_bit_depth(tmp_
 def test_missing_and_unreadable_candidate_outputs_return_fail_closed_statuses(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     unreadable_path = tmp_path / "candidate16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(reference_path)
     unreadable_path.write_text("not a tiff", encoding="utf-8")
     evalset_path = _write_evalset(
         tmp_path,
@@ -542,7 +542,7 @@ def test_unreadable_reference_output_returns_fail_closed_status(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate16.tif"
     reference_path.write_text("not a tiff", encoding="utf-8")
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(candidate_path)
     evalset_path = _write_evalset(
         tmp_path,
         reference_path,
@@ -742,7 +742,7 @@ def test_rendering_asset_is_smoke_only_even_with_canonical_like_fields(tmp_path)
 
 def test_16bit_tiff_reference_is_canonical_scoring_eligible(tmp_path):
     image_path = tmp_path / "reference16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(image_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(image_path)
     evalset_path = _write_evalset(
         tmp_path,
         image_path,
@@ -1355,7 +1355,7 @@ def test_depth_backend_benchmark_blocks_depth_pro_without_license(tmp_path):
 
 def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
     image_path = tmp_path / "reference16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(image_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(image_path)
     evalset_path = _write_evalset(
         tmp_path,
         image_path,

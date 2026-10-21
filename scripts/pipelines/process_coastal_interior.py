@@ -120,7 +120,7 @@ def conservative_enhance(img, params):
         img_array = np.array(img_rgb, dtype=np.float32)
         img_16bit = (img_array / 255.0 * 65535).astype(np.uint16)
         # Note: PIL doesn't have great 16-bit support, so we'll save via numpy
-        return Image.fromarray(img_16bit, mode="I;16"), img_rgb
+        return Image.fromarray(img_16bit), img_rgb
     else:
         return img_rgb, img_rgb
 

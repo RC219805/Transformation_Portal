@@ -247,3 +247,41 @@ def test_virtualenv_activation_and_seed_wheel_security_floor() -> None:
         ]
         assert len(pins) == 1
         assert Version(next(iter(pins[0].specifier)).version) >= Version("21.7.13")
+
+
+@pytest.mark.parametrize(
+    ("package", "minimum", "rejected", "lockfiles"),
+    [
+        ("pillow", "13.0.0", "12.3.0", ("all.txt", "base.txt")),
+        ("certifi", "2026.10.19", "2026.7.22", ("all.txt", "base.txt", "ci.txt", "security.txt")),
+    ],
+)
+def test_image_and_tls_security_floors_cover_metadata_inputs_and_locks(
+    package: str, minimum: str, rejected: str, lockfiles: tuple[str, ...]
+) -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    declarations = [Requirement(line) for line in project["project"]["dependencies"]]
+    input_paths = ["requirements/base.in"]
+    if package == "certifi":
+        input_paths.append("requirements/security.in")
+    for relative_path in input_paths:
+        declarations.extend(
+            Requirement(line.split("#", 1)[0].strip())
+            for line in (REPO_ROOT / relative_path).read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith(("#", "-"))
+        )
+    matching = [requirement for requirement in declarations if requirement.name.lower() == package]
+    assert len(matching) == 1 + len(input_paths)
+    for requirement in matching:
+        assert Version(minimum) in requirement.specifier
+        assert Version(rejected) not in requirement.specifier
+
+    for filename in lockfiles:
+        pins = [
+            Requirement(line.strip())
+            for line in (REPO_ROOT / "requirements" / filename).read_text(encoding="utf-8").splitlines()
+            if line.lower().startswith(f"{package}==")
+        ]
+        assert len(pins) == 1
+        pin = next(iter(pins[0].specifier))
+        assert pin.operator == "==" and Version(pin.version) >= Version(minimum)

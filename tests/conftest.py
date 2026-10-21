@@ -220,7 +220,7 @@ def sample_depth_map(deterministic_rng) -> np.ndarray:
 @pytest.fixture
 def sample_depth_pil(sample_depth_map) -> Image.Image:
     """Create PIL Image from sample depth array."""
-    return Image.fromarray(sample_depth_map, mode="I;16")
+    return Image.fromarray(sample_depth_map)
 
 
 @pytest.fixture

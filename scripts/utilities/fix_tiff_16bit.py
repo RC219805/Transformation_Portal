@@ -41,7 +41,7 @@ def save_16bit_tiff_pil(image_array: np.ndarray, output_path: Path, compression=
         save_16bit_tiff_tifffile(array_16bit, output_path, compression)
     else:
         # Grayscale - PIL can handle this
-        img = Image.fromarray(array_16bit, mode="I;16")
+        img = Image.fromarray(array_16bit)
         img.save(output_path, compression=compression)
 
 

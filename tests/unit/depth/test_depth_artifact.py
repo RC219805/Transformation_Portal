@@ -433,6 +433,23 @@ class TestDepthArtifactWriter:
             loaded_metric = np.load(paths["depth_metric"])
             np.testing.assert_array_equal(loaded_metric, metric_map)
 
+    def test_write_artifact_preserves_preview_uint16_precision(self, tmp_path):
+        """The PNG preview retains intermediate depth values beyond 8-bit precision."""
+        depth = np.array([[0.0, 1.0 / 65535], [0.5, 1.0]], dtype=np.float32)
+        artifact = DepthArtifact(
+            depth_map=depth,
+            provenance=DepthProvenance(model_id="test", license_tier=LicenseTier.COMMERCIAL),
+        )
+
+        paths = DepthArtifactWriter(output_dir=tmp_path).write(artifact, stem="precision")
+
+        with Image.open(paths["depth_preview"]) as preview_image:
+            assert preview_image.mode == "I;16"
+            preview = np.array(preview_image)
+        assert preview.dtype == np.uint16
+        np.testing.assert_array_equal(preview, np.array([[0, 1], [32767, 65535]], dtype=np.uint16))
+        np.testing.assert_array_equal(np.load(paths["depth_float"]), depth)
+
     def test_write_artifact_persists_optional_arrays_as_float32(self):
         """Persisted optional arrays use the normalized artifact dtype."""
         depth_map = np.random.rand(4, 4).astype(np.float32)

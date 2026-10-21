@@ -554,7 +554,7 @@ def batch_process_vfx(
             if result["depth"] is not None:
                 depth_path = output_dir / f"{img_path.stem}_depth.png"
                 depth_img = (result["depth"] * 65535).astype(np.uint16)
-                Image.fromarray(depth_img, mode="I;16").save(depth_path)
+                Image.fromarray(depth_img).save(depth_path)
 
             _info(f"  Completed in {result['metrics']['total_ms']}ms")
 
@@ -620,7 +620,7 @@ def handle_enhance_vfx(args):
     if result["depth"] is not None:
         depth_path = args.output.with_name(f"{args.output.stem}_depth.png")
         depth_img = (result["depth"] * 65535).astype(np.uint16)
-        Image.fromarray(depth_img, mode="I;16").save(depth_path)
+        Image.fromarray(depth_img).save(depth_path)
 
     # Print metrics
     _info(f"✓ Completed in {result['metrics']['total_ms']}ms")

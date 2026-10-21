@@ -497,5 +497,5 @@ class DepthArtifactWriter:
         depth_u16 = (np.clip(normalized, 0.0, 1.0) * 65535).astype(np.uint16)
 
         # Save as 16-bit PNG
-        img = Image.fromarray(depth_u16, mode="I;16")
+        img = Image.fromarray(depth_u16)
         img.save(path)

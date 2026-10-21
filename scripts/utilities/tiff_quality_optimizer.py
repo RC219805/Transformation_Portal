@@ -157,12 +157,9 @@ class TIFFQualityOptimizer:
 
         # Convert array to PIL Image
         if array.dtype == np.uint16:
-            # PIL doesn't handle uint16 RGB well, need to convert mode
-            if array.ndim == 3:
-                # Convert to 16-bit mode for RGB
-                img = Image.fromarray(array.astype(np.uint16), mode="I;16")
-            else:
-                img = Image.fromarray(array, mode="I;16")
+            if array.ndim != 2:
+                raise ValueError("PIL cannot save multichannel uint16 TIFFs; use save_tiff_method_2_tifffile")
+            img = Image.fromarray(array)
         elif array.dtype == np.uint8:
             if array.ndim == 3 and array.shape[2] == 3:
                 img = Image.fromarray(array, mode="RGB")
@@ -176,7 +173,9 @@ class TIFFQualityOptimizer:
                 array = (array * 65535).astype(np.uint16)
             else:
                 array = array.astype(np.uint16)
-            img = Image.fromarray(array, mode="I;16" if array.ndim == 2 else "RGB")
+            if array.ndim != 2:
+                raise ValueError("PIL cannot save multichannel uint16 TIFFs; use save_tiff_method_2_tifffile")
+            img = Image.fromarray(array)
 
         # Save with compression
         save_kwargs = {"compression": compression}

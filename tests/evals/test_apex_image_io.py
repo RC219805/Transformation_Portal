@@ -23,7 +23,7 @@ pytestmark = pytest.mark.unit
 
 def test_16bit_tiff_metadata_detection_passes(tmp_path):
     path = tmp_path / "reference16.tif"
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(path)
 
     metadata = inspect_reference_image(path)
 
@@ -58,7 +58,7 @@ def test_jpeg_remains_noncanonical_for_16bit_load(tmp_path):
 
 def test_model_input_metadata_is_distinct_from_reference_metadata(tmp_path):
     path = tmp_path / "reference16.tif"
-    Image.fromarray(np.zeros((12, 16), dtype=np.uint16), mode="I;16").save(path)
+    Image.fromarray(np.zeros((12, 16), dtype=np.uint16)).save(path)
     reference_metadata = inspect_reference_image(path)
 
     model_input = derive_model_input_metadata(reference_metadata, downsampled_for_inference=True, input_dimensions=[8, 6])
