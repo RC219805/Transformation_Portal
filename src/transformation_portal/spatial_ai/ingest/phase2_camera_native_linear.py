@@ -32,6 +32,11 @@ BRADFORD_D65_TO_D50_F32: np.ndarray = np.array(
     dtype=np.float32,
 )
 PHASE2_FINGERPRINT_SCHEMA_VERSION = "1.0.0"
+# LibRaw 0.22.1 colorconst.cpp: linear sRGB -> XYZ(D65).
+LINEAR_SRGB_TO_XYZ_D65_F32 = np.array(
+    [[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750], [0.0193339, 0.1191920, 0.9503041]],
+    dtype=np.float32,
+)
 
 
 def _apply_3x3_f32_hwc(vec3: np.ndarray, mat3x3: np.ndarray) -> np.ndarray:
@@ -68,6 +73,72 @@ def _rawpy_demosaic(name: str):
     from transformation_portal.core.raw_runtime import resolve_demosaic_algorithm
 
     return resolve_demosaic_algorithm(name)
+
+
+def _inverse_3x3_f32(matrix: np.ndarray) -> np.ndarray:
+    """Invert native coefficients with fixed float32 scalar arithmetic."""
+    a, b, c = matrix[0]
+    d, e, f = matrix[1]
+    g, h, i = matrix[2]
+    try:
+        with np.errstate(over="raise", invalid="raise", divide="raise"):
+            c00, c01, c02 = e * i - f * h, f * g - d * i, d * h - e * g
+            c10, c11, c12 = c * h - b * i, a * i - c * g, b * g - a * h
+            c20, c21, c22 = b * f - c * e, c * d - a * f, a * e - b * d
+            determinant = a * c00 + b * c01 + c * c02
+            scale = np.max(np.abs(matrix[:3]))
+            minimum = np.float32(1e-6) * scale * scale * scale
+            if np.abs(determinant) <= minimum:
+                raise ValueError("Native rgb_xyz_matrix is singular or ill-conditioned")
+            inverse = np.array([[c00, c10, c20], [c01, c11, c21], [c02, c12, c22]], dtype=np.float32) / determinant
+    except FloatingPointError as error:
+        raise ValueError("Native rgb_xyz_matrix cannot be inverted with finite float32 arithmetic") from error
+    return inverse
+
+
+def _camera_to_xyz_f32(raw: Any) -> np.ndarray:
+    """Adapt native color metadata without discarding active channels or scales.
+
+    LibRaw ``cam_xyz_coeff`` inverts XYZ-to-camera coefficients. DNGs may
+    expose only its normalized camera-to-sRGB ``cmatrix``; restore the native
+    daylight column scales before XYZ conversion because no_auto_scale leaves
+    sensor values unscaled. Keep the historical 3x3 adapter unchanged.
+    """
+    matrix = np.asarray(raw.rgb_xyz_matrix, dtype=np.float32)
+    if not np.isfinite(matrix).all():
+        raise ValueError("rgb_xyz_matrix must contain finite coefficients")
+    if matrix.shape == (3, 3):
+        return matrix
+    if matrix.shape != (4, 3):
+        raise ValueError(f"Unexpected rgb_xyz_matrix shape: {matrix.shape}")
+    colors = getattr(raw, "num_colors", None)
+    if type(colors) is not int or colors != 3 or np.any(matrix[3] != 0):
+        raise ValueError("Native rgb_xyz_matrix requires three colors and an inactive fourth row")
+    if np.any(matrix):
+        return _inverse_3x3_f32(matrix[:3])
+
+    camera_to_srgb = np.asarray(getattr(raw, "color_matrix", None), dtype=np.float32)
+    daylight = np.asarray(getattr(raw, "daylight_whitebalance", None), dtype=np.float32)
+    if (
+        camera_to_srgb.shape != (3, 4)
+        or not np.isfinite(camera_to_srgb).all()
+        or np.any(camera_to_srgb[:, 3] != 0)
+        or camera_to_srgb[0, 0] <= np.float32(0.125)
+        or daylight.shape != (4,)
+        or not np.isfinite(daylight).all()
+        or np.any(daylight[:3] <= 0)
+        or daylight[3] < 0
+    ):
+        raise ValueError("Missing or singular native XYZ matrix requires valid inactive camera-to-sRGB and daylight metadata")
+    _inverse_3x3_f32(camera_to_srgb[:, :3])  # Fail closed on degenerate fallback coefficients.
+    try:
+        with np.errstate(over="raise", invalid="raise", divide="raise"):
+            scaled = camera_to_srgb[:, :3] * daylight[:3]
+            # Compose by treating the three camera columns as three RGB vectors.
+            composed = _apply_3x3_f32_hwc(scaled.T[np.newaxis], LINEAR_SRGB_TO_XYZ_D65_F32)[0].T
+    except FloatingPointError as error:
+        raise ValueError("Native camera-to-sRGB conversion requires finite float32 arithmetic") from error
+    return composed
 
 
 def ingest_phase2_xyz_d50_linear_fp32(
@@ -144,10 +215,7 @@ def ingest_phase2_xyz_d50_linear_fp32(
         scale = np.float32(1.0 / 65535.0)
         rgb = rgb16.astype(np.float32) * scale
 
-        # LibRaw camera RGB -> XYZ(D65) matrix, cast to float32.
-        rgb_to_xyz = np.asarray(raw.rgb_xyz_matrix, dtype=np.float32)
-        if rgb_to_xyz.shape != (3, 3):
-            raise ValueError(f"Unexpected rgb_xyz_matrix shape: {rgb_to_xyz.shape}")
+        rgb_to_xyz = _camera_to_xyz_f32(raw)
 
         xyz_d65 = _apply_3x3_f32_hwc(rgb, rgb_to_xyz)
         xyz_d50 = _apply_3x3_f32_hwc(xyz_d65, BRADFORD_D65_TO_D50_F32)

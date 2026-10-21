@@ -9821,6 +9821,12 @@ class EnhanceOrchestrator:
                 cached_metadata = cached_segmentation_metadata.get(manifest_path)
                 if isinstance(cached_metadata, dict):
                     segmentation_metadata = copy.deepcopy(cached_metadata)
+                    if getattr(self, "_prepared_execution", None) is not None:
+                        mask_path = self._prepared_carried_artifact_path(
+                            segmentation_metadata.get("mask_artifact_path"),
+                        )
+                        if mask_path is not None:
+                            segmentation_metadata["mask_artifact_path"] = str(mask_path)
             row = {
                 "image": Path(image_path).name,
                 "status": result.get("status"),

@@ -791,9 +791,14 @@ class LinearDecoder:
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance contains infinity values: {wb_arr}. " "Malformed camera EXIF."
                     )
-                if np.any(wb_arr <= 0.0):
-                    # All channels (R, G1, B, G2) must be positive
-                    bad_indices = np.where(wb_arr <= 0.0)[0].tolist()
+                invalid_gains = wb_arr <= 0.0
+                num_colors = getattr(raw, "num_colors", None)
+                if wb_arr.shape == (4,) and type(num_colors) is int and num_colors == 3 and wb_arr[3] == 0.0:
+                    # LibRaw can leave the redundant second-green coefficient
+                    # zero for three-color cameras; preserve its native value.
+                    invalid_gains[3] = False
+                if np.any(invalid_gains):
+                    bad_indices = np.where(invalid_gains)[0].tolist()
                     self._emit_telemetry("ingest.validation_failed", field="camera_whitebalance", reason="non_positive")
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance has zero or negative gain(s) "

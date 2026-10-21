@@ -4,6 +4,15 @@ import { readFileSync } from "node:fs";
 import { jobProgressSnapshot, renderJobProgress } from "../portal-src/internal/job-progress.js";
 import { createDeferredOperateSurfaceApi } from "../portal-src/operate-surface-deferred.js";
 
+const portalSource = readFileSync(new URL("../portal-src/portal.template.js", import.meta.url), "utf8");
+const warningHelperStart = portalSource.indexOf("function _isJobTerminal(");
+const warningHelperEnd = portalSource.indexOf("function _resetArtifactActionButtons(", warningHelperStart);
+assert.ok(warningHelperStart >= 0 && warningHelperEnd > warningHelperStart);
+const { isJobTerminal, latestVisibleTransportWarning } = new Function(`
+  ${portalSource.slice(warningHelperStart, warningHelperEnd)}
+  return { isJobTerminal: _isJobTerminal, latestVisibleTransportWarning: _latestVisibleTransportWarning };
+`)();
+
 function progressElement() {
   return {
     value: 0, max: 100, dataset: {}, attributes: new Map(),
@@ -65,8 +74,16 @@ test("progress rendering clears obsolete measurements and restores numeric state
 });
 
 function inspector(job) {
+  const alertClasses = new Set();
   const els = {
     selectedJobRecoveryTitle: {}, selectedJobRecoveryDetail: {}, selectedJobProgressText: {},
+    selectedJobStreamStatus: {}, selectedJobSummary: {}, selectedJobLogPreview: {},
+    selectedJobTransportAlert: {
+      classList: {
+        add: (name) => alertClasses.add(name), remove: (name) => alertClasses.delete(name),
+        contains: (name) => alertClasses.has(name),
+      },
+    },
     selectedJobProgressBar: progressElement(),
   };
   const state = { jobs: job ? [job] : [], selectedJobId: job?.id, inspectorTab: "overview" };
@@ -75,9 +92,10 @@ function inspector(job) {
     jobProgressSnapshot, renderJobProgress,
     EVENT_SOURCE_READY_STATE_CONNECTING: 0, EVENT_SOURCE_READY_STATE_OPEN: 1, EVENT_SOURCE_READY_STATE_CLOSED: 2,
     _isJobsHydrationPending: () => false, _toggleSurfaceSkeleton() {},
-    _reconcileJobTimeline() {}, _nativeEventSourceReadyState: () => null,
+    _isJobTerminal: isJobTerminal,
+    _reconcileJobTimeline() {}, _nativeEventSourceReadyState: () => job?.nativeReadyState ?? null,
     _jobHasActiveStream: () => false,
-    _latestVisibleTransportWarning: (selected) => selected?.transportWarnings?.at(-1),
+    _latestVisibleTransportWarning: latestVisibleTransportWarning,
     _displayJobState: (selected) => selected.state,
     formatDuration: () => "1m", formatTransportLabel: () => "closed", titleCaseToken: (value) => value,
     getReadableError: (error) => error?.message || "", jobOutcomeSummary: () => "",
@@ -117,6 +135,69 @@ test("specific errors and authentication recovery retain precedence over waiting
   assert.equal(inspector({ ...job, state: "failed", error }).selectedJobRecoveryDetail.textContent, error.message);
 });
 
+test("terminal inspector recovery ignores stale transport flags and retains warning history", () => {
+  const warning = { code: "reconnect_pending", tone: "warn", detail: "Event stream disconnected. Reconnecting in 3s." };
+  for (const [state, title] of [
+    ["failed", "Inspect failure before rerun"], ["worker_lost", "Inspect failure before rerun"], ["canceled", "Run canceled"],
+    ["partial", "Inspect the partial run"], ["succeeded", "Inspect the completed run"],
+    ["ready", "Inspect the completed run"],
+  ]) {
+    const job = {
+      id: "job-terminal", state, progress: 0, artifacts: [],
+      cancelPending: true, reconnectBlocked: true, nativeReadyState: 0,
+      error: { code: "RUNNER_EXIT_NONZERO", message: "runner exited with code 1" },
+      logs: ["PermissionError: runtime bytecode cache is not writable"],
+      transportWarnings: [warning], timeline: [{ kind: "transport", detail: warning.detail }],
+    };
+    const els = inspector(job);
+    assert.equal(els.selectedJobRecoveryTitle.textContent, title, state);
+    assert.doesNotMatch(els.selectedJobRecoveryDetail.textContent, /reconnect|authentication|cancel request pending/i, state);
+    assert.match(els.selectedJobStreamStatus.textContent, /^Closed •/, state);
+    assert.equal(els.selectedJobTransportAlert.classList.contains("hidden"), true, state);
+    assert.equal(els.selectedJobTransportAlert.textContent, "", state);
+    assert.equal(latestVisibleTransportWarning(job), null, state);
+    assert.deepEqual(job.transportWarnings, [warning]);
+    assert.deepEqual(job.timeline, [{ kind: "transport", detail: warning.detail }]);
+    assert.match(els.selectedJobLogPreview.textContent, /runtime bytecode cache/);
+    if (state === "failed") {
+      assert.equal(els.selectedJobSummary.textContent, job.error.message);
+      assert.match(els.selectedJobRecoveryDetail.textContent, /Inspect the failure in Logs/);
+    }
+  }
+});
+
+test("lost-worker recovery retains indexed outputs and original failure history", () => {
+  const warning = { code: "reconnect_pending", tone: "warn", detail: "Event stream disconnected. Reconnecting in 3s." };
+  const error = { code: "worker_lost_via_lease_reclaim", message: "Worker lease expired without heartbeat; job marked worker_lost." };
+  const job = {
+    id: "job-worker-lost", state: "worker_lost", artifacts: [{ path: "retained.tiff" }], error,
+    reconnectBlocked: true, transportWarnings: [warning], timeline: [{ kind: "transport", detail: warning.detail }],
+    logs: [error.message],
+  };
+  const els = inspector(job);
+  assert.equal(els.selectedJobRecoveryTitle.textContent, "Open review for retained outputs");
+  assert.match(els.selectedJobRecoveryDetail.textContent, /indexed outputs/);
+  assert.equal(els.selectedJobSummary.textContent, error.message);
+  assert.equal(els.selectedJobTransportAlert.classList.contains("hidden"), true);
+  assert.match(els.selectedJobStreamStatus.textContent, /^Closed •/);
+  assert.deepEqual(job.transportWarnings, [warning]);
+  assert.deepEqual(job.timeline, [{ kind: "transport", detail: warning.detail }]);
+  assert.equal(job.state, "worker_lost");
+});
+
+test("terminal input failure guidance takes priority over historical transport warnings", () => {
+  const error = {
+    code: "RUNNER_EXIT_NONZERO", message: "Convert the source profile before rerunning.",
+    details: { stage: "preprocess", reason: "unsupported_icc_profile" },
+  };
+  const els = inspector({
+    id: "job-color", state: "failed", artifacts: [], error,
+    transportWarnings: [{ code: "reconnect_pending", tone: "warn", detail: "Reconnecting in 3s." }],
+  });
+  assert.equal(els.selectedJobRecoveryTitle.textContent, "Convert to sRGB before rerun");
+  assert.equal(els.selectedJobRecoveryDetail.textContent, error.message);
+});
+
 const reviewSource = readFileSync(new URL("../portal-src/review-surface-deferred.js", import.meta.url), "utf8");
 function reviewSection(start, end) {
   const startIndex = reviewSource.indexOf(start);
@@ -151,4 +232,29 @@ test("Review retains success and partial-output guidance when outputs exist", ()
   assert.match(partial.detail, /no indexed outputs/);
   assert.match(partial.action, /Logs in Operate/);
   assert.match(reviewCopy.builders.partial_reviewable({ artifactCount: 1 }).action, /review the retained outputs/);
+});
+
+test("Review preserves lost-worker failure context with and without retained outputs", () => {
+  for (const artifactCount of [0, 1]) {
+    const error = { code: "worker_lost_via_lease_reclaim", message: "Worker lease expired without heartbeat; job marked worker_lost." };
+    const warning = { code: "reconnect_pending", tone: "warn", detail: "Event stream disconnected. Reconnecting in 3s." };
+    const job = {
+      state: "worker_lost", error, reconnectBlocked: true,
+      artifacts: artifactCount ? [{ path: "retained.tiff" }] : [],
+      transportWarnings: [warning], timeline: [{ kind: "transport", detail: warning.detail }],
+    };
+    const original = structuredClone(job);
+    const state = reviewCopy.state(job, artifactCount > 0, latestVisibleTransportWarning(job));
+    assert.equal(state, artifactCount ? "failed_reviewable" : "failed_unreviewable");
+    const banner = reviewCopy.builders[state]({ readableError: error.message, artifactCount });
+    assert.equal(banner.detail, error.message);
+    assert.match(banner.title, /Run failed/);
+    if (artifactCount) {
+      assert.match(banner.action, /review.*retained outputs/);
+    } else {
+      assert.match(banner.action, /Operate/);
+      assert.equal(reviewCopy.empty(job).title, "No reviewable outputs indexed");
+    }
+    assert.deepEqual(job, original);
+  }
 });

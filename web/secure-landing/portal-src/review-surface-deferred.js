@@ -795,7 +795,7 @@ export function createDeferredReviewSurfaceApi(host) {
   function _reviewStatusState(job, reviewableOutputs, visibleWarning) {
     if (!job) return "awaiting_job";
     if (job.state === "partial") return "partial_reviewable";
-    if (job.state === "failed") return reviewableOutputs ? "failed_reviewable" : "failed_unreviewable";
+    if (job.state === "failed" || job.state === "worker_lost") return reviewableOutputs ? "failed_reviewable" : "failed_unreviewable";
     if (job.state === "canceled") return reviewableOutputs ? "canceled_reviewable" : "canceled_unreviewable";
     if (job.state === "offline") return reviewableOutputs ? "offline_reviewable" : "offline_unreviewable";
     if (job.reconnectBlocked) return "transport_blocked";
@@ -934,7 +934,7 @@ export function createDeferredReviewSurfaceApi(host) {
         action: "Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives."
       };
     }
-    if (job.state === "failed" || job.state === "canceled" || job.state === "partial") {
+    if (job.state === "failed" || job.state === "worker_lost" || job.state === "canceled" || job.state === "partial") {
       return {
         tone: "warning",
         title: "No reviewable outputs indexed",

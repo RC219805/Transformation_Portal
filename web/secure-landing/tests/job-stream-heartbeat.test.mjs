@@ -38,7 +38,8 @@ function harness() {
     setInterval(callback) { watchdog = callback; return 1; },
   });
   vm.runInContext(
-    section('function _teardownJobEventStream(', 'function refreshJobStatus(')
+    section('function _isJobTerminal(', 'function _latestVisibleTransportWarning(')
+    + section('function _teardownJobEventStream(', 'function refreshJobStatus(')
     + section('function _applyJobStreamEvent(', 'async function _startAuthorizedFetchSse(')
     + section('function startJobEventStream(', 'async function recoverJobs(')
     + section('function startSseWatchdog(', 'function stopSseWatchdog('),
