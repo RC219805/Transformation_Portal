@@ -55,7 +55,7 @@ def example_single_image():
 
         depth_path = output_path.with_name(f"{output_path.stem}_depth.png")
         depth_img = (result["depth"] * 65535).astype(np.uint16)
-        Image.fromarray(depth_img, mode="I;16").save(depth_path)
+        Image.fromarray(depth_img).save(depth_path)
         _info(f"Saved depth map: {depth_path}")
 
     # Print metrics
