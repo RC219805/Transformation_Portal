@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -168,11 +169,13 @@ def test_manifest_load_supplies_backward_compatible_optional_defaults(
 def test_manifest_builder_tracks_run_duration_and_metadata(
     monkeypatch: pytest.MonkeyPatch,
     environment: EnvironmentInfo,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A started builder uses the tracked run ID and elapsed duration."""
     timestamps = iter((100.0, 103.25))
-    monkeypatch.setattr(manifest_module.time, "time", lambda: next(timestamps))
+    monkeypatch.setattr(manifest_module, "time", SimpleNamespace(time=lambda: next(timestamps)))
     monkeypatch.setattr(manifest_module.EnvironmentInfo, "capture", lambda: environment)
+    caplog.set_level("DEBUG", logger=manifest_module.__name__)
     builder = ManifestBuilder()
 
     builder.start("tracked-run")
@@ -192,7 +195,7 @@ def test_manifest_builder_supports_explicit_and_generated_run_ids(
     environment: EnvironmentInfo,
 ) -> None:
     """Callers may override the run ID or rely on the timestamp fallback."""
-    monkeypatch.setattr(manifest_module.time, "time", lambda: 1234.9)
+    monkeypatch.setattr(manifest_module, "time", SimpleNamespace(time=lambda: 1234.9))
     monkeypatch.setattr(manifest_module.EnvironmentInfo, "capture", lambda: environment)
     builder = ManifestBuilder()
     builder.start("tracked-run")
