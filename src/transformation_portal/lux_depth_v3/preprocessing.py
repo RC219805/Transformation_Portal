@@ -154,7 +154,14 @@ def preprocess_image(
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
             # Grayscale
-            pil_img = Image.fromarray(image, mode="L")
+            if image.dtype == np.uint8:
+                pil_img = Image.fromarray(image)
+            elif image.dtype == np.float32 or image.dtype == np.float64:
+                # Match RGB normalization before the common PIL processing path.
+                image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+                pil_img = Image.fromarray(image_uint8)
+            else:
+                raise ValueError(f"Unsupported array dtype: {image.dtype}")
         elif image.ndim == 3 and image.shape[2] == 3:
             # RGB
             if image.dtype == np.uint8:

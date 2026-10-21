@@ -195,7 +195,6 @@ class TestEnhanceBatchDoesNotReingestDepthArtifacts:
         depth_artifact = input_dir / "villa_depthpro_depth16.png"
         Image.fromarray(
             np.zeros((64, 64), dtype=np.uint16),
-            mode="I;16",
         ).save(depth_artifact)
 
         orchestrator = _create_orchestrator(tmp_path, output_root=output_root)
