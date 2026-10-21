@@ -30,7 +30,7 @@ huggingface_hub==1.16.0
 idna==3.16
 Jinja2==3.1.6
 markdown-it-py==4.1.0
-MarkupSafe==3.0.3
+MarkupSafe==3.0.4
 mdurl==0.1.2
 mlx==0.32.3
 mlx-metal==0.32.3
