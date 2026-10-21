@@ -18,6 +18,7 @@ test.describe(
       test(`${surface.label} has no automated WCAG A/AA violations`, async ({ page }) => {
         await page.goto(surface.path, { waitUntil: "domcontentloaded" });
         await expect(page.locator(surface.shell)).toBeVisible();
+        await expect(page.locator(".brand-lockup")).toHaveAccessibleName("Dynamic Neural Access Transformation Portal home");
         await expectNoWcagViolations(page, surface.label);
       });
     }

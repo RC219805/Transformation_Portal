@@ -209,20 +209,18 @@ export function createDeferredProfileSurfaceApi(host) {
             const label = snapshot.saved ? 'Saved' : snapshot.dirty ? 'Save Changes' : 'Save Profile';
             els.saveProfileBtn.textContent = label;
             els.saveProfileBtn.dataset.profileState = snapshot.saved ? 'saved' : snapshot.dirty ? 'dirty' : 'unsaved';
-            els.saveProfileBtn.setAttribute(
-                'aria-label',
-                snapshot.saved
-                    ? `Manage saved profile ${snapshot.activeName}. Current draft is saved.`
-                    : snapshot.dirty
-                        ? snapshot.activeName
-                            ? `Manage saved profile ${snapshot.activeName}. Current draft has unsaved changes.`
-                            : 'Manage saved profiles. Current unprofiled draft has unsaved changes.'
-                        : snapshot.missingActiveProfile
-                            ? `Manage saved profiles. ${snapshot.activeName} is no longer available; the current draft is unsaved.`
-                        : snapshot.unprofiledChanged
-                            ? 'Manage saved profiles. Current unprofiled draft has unsaved changes.'
-                            : 'Manage saved profiles. Current draft is not saved.'
-            );
+            const description = snapshot.saved
+                ? `Manage saved profile ${snapshot.activeName}. Current draft is saved.`
+                : snapshot.dirty
+                    ? snapshot.activeName
+                        ? `Manage saved profile ${snapshot.activeName}. Current draft has unsaved changes.`
+                        : 'Manage saved profiles. Current unprofiled draft has unsaved changes.'
+                    : snapshot.missingActiveProfile
+                        ? `Manage saved profiles. ${snapshot.activeName} is no longer available; the current draft is unsaved.`
+                    : snapshot.unprofiledChanged
+                        ? 'Manage saved profiles. Current unprofiled draft has unsaved changes.'
+                        : 'Manage saved profiles. Current draft is not saved.';
+            els.saveProfileBtn.setAttribute('aria-label', `${label}. ${description}`);
         }
         if (isOpen()) renderDialog();
         return snapshot;

@@ -1522,7 +1522,10 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert 'id="stagedUploadDropzone"' in html
     assert 'data-ui="staged-upload-dropzone"' in html
     assert 'role="button"' in html
-    assert 'aria-label="Choose files or drop files for staged upload"' in html
+    dropzone = re.search(r'<div id="stagedUploadDropzone"([^>]*)>(.*?)</div>', html, re.DOTALL)
+    assert dropzone is not None
+    assert "aria-label=" not in dropzone.group(1)
+    assert "Drop files here or choose a file set from disk." in dropzone.group(2)
     assert 'aria-describedby="stagedUploadStatus stagedUploadError"' in html
     assert 'id="stagedUploadFilesInput"' in html
     assert 'id="stagedUploadFolderInput"' in html
@@ -2468,13 +2471,13 @@ def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
     apply_body = _extract_js_function_body(content, "applyThemePreference")
 
     assert "Theme: System" in content
-    assert "Theme preference: system. Click to switch to dark." in content
+    assert "Theme: System. Click to switch to dark." in _portal_html_content()
     assert "Cycle Theme" in content
     assert "const nextIndex = (currentIndex + 1) % THEME_PREFERENCES.length;" in next_body
     assert "return THEME_PREFERENCES[nextIndex];" in next_body
     assert "applyThemePreference(_nextThemePreference(state.themePreference));" in content
     assert "Theme: System (${effectiveLabel})" in sync_body
-    assert "Theme preference: ${preference}. Click to switch to ${nextPreference}." in sync_body
+    assert "${els.themeBtn.textContent}. Click to switch to ${nextPreference}." in sync_body
     assert "document.documentElement.classList.toggle('dark', mode === 'dark');" in apply_body
     assert "document.documentElement.classList.toggle('light', mode === 'light');" in apply_body
 
