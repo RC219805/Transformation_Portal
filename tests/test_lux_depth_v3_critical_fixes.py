@@ -137,7 +137,7 @@ class TestFix2DimensionMismatch:
         # Simulate resize operation (as done in fix #2)
         from PIL import Image as PILImage
 
-        depth_pil = PILImage.fromarray((depth_map * 65535).astype(np.uint16), mode="I;16")
+        depth_pil = PILImage.fromarray((depth_map * 65535).astype(np.uint16))
         depth_resized = depth_pil.resize((original_shape[1], original_shape[0]), PILImage.Resampling.LANCZOS)
         depth_final = np.array(depth_resized, dtype=np.float32) / 65535.0
 

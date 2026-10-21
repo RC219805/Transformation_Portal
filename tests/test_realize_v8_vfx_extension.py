@@ -5,6 +5,7 @@
 Tests for realize_v8_unified_cli_extension.py
 """
 
+import importlib.util
 import tempfile
 from pathlib import Path
 
@@ -72,6 +73,34 @@ def temp_image_file(sample_image):
 
 
 # ==================== Test realize_v8_unified ====================
+
+
+def test_single_image_example_saves_full_precision_depth(tmp_path, monkeypatch):
+    example_path = Path(__file__).resolve().parents[1] / "examples/vfx_extension_example.py"
+    spec = importlib.util.spec_from_file_location("vfx_extension_example", example_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "renders").mkdir()
+    (tmp_path / "output").mkdir()
+    image = Image.new("RGB", (2, 2), color=(128, 128, 128))
+    image.save(tmp_path / "renders/interior.jpg")
+    depth = np.array([[0.0, 1.0 / 65535], [0.5, 1.0]], dtype=np.float32)
+    result = {
+        "image": image,
+        "array": np.full((2, 2, 3), 0.5, dtype=np.float32),
+        "depth": depth,
+        "metrics": {"total_ms": 4, "total_time_ms": 1, "depth_estimation_ms": 2, "vfx_ms": 1},
+    }
+    monkeypatch.setattr(module, "enhance_with_vfx", lambda *args, **kwargs: result)
+
+    module.example_single_image()
+
+    assert (tmp_path / "output/interior_enhanced.jpg").is_file()
+    with Image.open(tmp_path / "output/interior_enhanced_depth.png") as saved:
+        samples = np.array(saved)
+    assert samples.dtype == np.uint16
+    np.testing.assert_array_equal(samples, np.array([[0, 1], [32767, 65535]], dtype=np.uint16))
 
 
 class TestRealizeV8Unified:

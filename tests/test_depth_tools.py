@@ -64,7 +64,7 @@ def create_test_files(temp_dirs, deterministic_rng, num_images=3, create_depth_f
         # Create depth map (skip last one if requested)
         if create_depth_for_all or i < num_images - 1:
             depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-            depth = Image.fromarray(depth_arr, mode="I;16")
+            depth = Image.fromarray(depth_arr)
             depth_path = Path(temp_dirs["depths"]) / f"{base}_depth16.png"
             depth.save(depth_path)
 
@@ -100,7 +100,7 @@ class TestBatchProcessing:
         for i in range(2):
             base = f"test_image_{i:03d}"
             depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-            depth = Image.fromarray(depth_arr, mode="I;16")
+            depth = Image.fromarray(depth_arr)
             depth_path = Path(temp_dirs["depths"]) / f"{base}_depth16.png"
             depth.save(depth_path)
 
@@ -129,7 +129,7 @@ class TestBatchProcessing:
 
         # Create a depth map without corresponding image
         depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-        depth = Image.fromarray(depth_arr, mode="I;16")
+        depth = Image.fromarray(depth_arr)
         depth_path = Path(temp_dirs["depths"]) / "missing_source_depth16.png"
         depth.save(depth_path)
 
@@ -172,7 +172,7 @@ class TestExitCodes:
         """Test main returns 1 in strict mode (default) with errors"""
         # Create depth without corresponding image
         depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-        depth = Image.fromarray(depth_arr, mode="I;16")
+        depth = Image.fromarray(depth_arr)
         depth_path = Path(temp_dirs["depths"]) / "test_depth16.png"
         depth.save(depth_path)
 
@@ -193,7 +193,7 @@ class TestExitCodes:
 
         # Create a depth map without corresponding image
         depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-        depth = Image.fromarray(depth_arr, mode="I;16")
+        depth = Image.fromarray(depth_arr)
         depth_path = Path(temp_dirs["depths"]) / "missing_depth16.png"
         depth.save(depth_path)
 
@@ -213,7 +213,7 @@ class TestExitCodes:
         # Create only depth maps, no source images
         for i in range(2):
             depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
-            depth = Image.fromarray(depth_arr, mode="I;16")
+            depth = Image.fromarray(depth_arr)
             depth_path = Path(temp_dirs["depths"]) / f"test_{i}_depth16.png"
             depth.save(depth_path)
 

@@ -23,7 +23,7 @@ pytestmark = pytest.mark.unit
 
 def _write_image(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16)).save(path)
 
 
 def _write_evalset(

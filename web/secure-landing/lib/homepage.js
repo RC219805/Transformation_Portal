@@ -468,7 +468,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
 
     <header class="site-header" data-ui="homepage-header">
       <div class="site-header__inner">
-        <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access home">
+        <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access Transformation Portal home">
           <span class="brand-lockup__mark">
             ${renderBrandAsset({
               kind: "symbol",

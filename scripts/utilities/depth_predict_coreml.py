@@ -89,7 +89,7 @@ def main():
         out16 = os.path.join(OUT_DIR, f"{base}_depth16.png")
         out8 = os.path.join(OUT_DIR, f"{base}_depth8_vis.png")
 
-        Image.fromarray(d16, mode="I;16").save(out16)
+        Image.fromarray(d16).save(out16)
         Image.fromarray(d8, mode="L").save(out8)
 
         print("   ✓ saved:", os.path.basename(out16), "and", os.path.basename(out8))

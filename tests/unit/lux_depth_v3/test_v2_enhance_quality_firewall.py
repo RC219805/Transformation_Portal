@@ -42,7 +42,7 @@ def temp_16bit_tiff(tmp_path):
         tifffile.imwrite(tiff_path, image_array, photometric="rgb")
     except ImportError:
         # Fallback to PIL grayscale 16-bit
-        pil_img = Image.fromarray(image_array[:, :, 0], mode="I;16")
+        pil_img = Image.fromarray(image_array[:, :, 0])
         pil_img.save(tiff_path, format="TIFF")
 
     return tiff_path
@@ -191,6 +191,36 @@ class TestPassthroughMode:
 # Minimal integration-style test to verify the code actually works
 class TestRealProcessing:
     """Minimal tests with real (non-mocked) components where feasible."""
+
+    @pytest.mark.parametrize("alpha_sample", [1, 32769, 65535])
+    def test_16bit_alpha_resize_preserves_precision_in_emitted_tiff(self, tmp_path, alpha_sample):
+        """Resizing alpha keeps exact uint16 samples, including sub-8-bit precision."""
+        tifffile = pytest.importorskip("tifffile")
+        pytest.importorskip("imagecodecs")
+        alpha = np.full((2, 2), alpha_sample, dtype=np.uint16)
+        rgba = np.zeros((2, 2, 4), dtype=np.uint16)
+        rgba[:, :, 3] = alpha
+        source = tmp_path / "input.tiff"
+        tifffile.imwrite(source, rgba, photometric="rgb")
+        enhanced = np.full((4, 4, 3), 12345, dtype=np.uint16)
+        stage_result = Mock(
+            status=StageStatus.COMPLETED,
+            artifacts={"enhanced_image": enhanced, "enhancement_metadata": {}},
+            metadata={},
+        )
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage:
+            mock_stage.return_value.compute.return_value = stage_result
+            result = enhance_image(source, tmp_path / "enhanced.tiff", output_bit_depth=16)
+
+        emitted = tifffile.imread(result["output"])
+        assert emitted.dtype == np.uint16
+        assert emitted.shape == (4, 4, 4)
+        np.testing.assert_array_equal(emitted[:, :, :3], enhanced)
+        np.testing.assert_array_equal(emitted[:, :, 3], np.full((4, 4), alpha_sample, dtype=np.uint16))
+        assert result["bit_depth"]["quality_firewall_active"] is True
+        assert result["bit_depth"]["bit_depth_preserved"] is True
+        assert result["io"]["save_degraded"] is False
 
     def test_8bit_processing_works_end_to_end(self, temp_8bit_tiff, tmp_path):
         """Verify that 8-bit processing actually works (with mocked stage)."""

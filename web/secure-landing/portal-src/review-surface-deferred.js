@@ -1197,7 +1197,7 @@ export function createDeferredReviewSurfaceApi(host) {
       button.type = "button";
       button.dataset.artifactPath = _artifactRouteKey(artifact);
       button.setAttribute("aria-pressed", active ? "true" : "false");
-      button.setAttribute("aria-label", `${active ? "Selected" : "Select"} ${artifactDisplayLabel(artifact)}: ${artifactLabel(artifact)}`);
+      button.setAttribute("aria-description", artifactLabel(artifact));
       button.tabIndex = active ? 0 : -1;
       button.className = "rounded-2xl border p-3 text-left transition-colors " + (active
         ? "border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 shadow-sm"

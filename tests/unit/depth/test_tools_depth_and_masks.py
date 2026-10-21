@@ -12,7 +12,7 @@ pytestmark = pytest.mark.unit
 
 
 def _write_depth(path, values: np.ndarray) -> None:
-    Image.fromarray(values.astype(np.uint16), mode="I;16").save(path)
+    Image.fromarray(values.astype(np.uint16)).save(path)
 
 
 def test_load_depth_normalized_supports_percentile_histogram_and_linear(tmp_path) -> None:

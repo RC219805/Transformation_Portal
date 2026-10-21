@@ -82,7 +82,7 @@ function renderManagedPortalRecoveryPage({ reason, message, loginHref }) {
       <div class="login-vignette" aria-hidden="true"></div>
       <section id="main-content" class="content" tabindex="-1" data-ui="managed-recovery-shell" data-reason="${safeReason}">
         <div class="login-stage">
-          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
+          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access Transformation Portal home">
             <span class="brand-asset-frame brand-asset-frame--login">
               ${renderBrandAsset({
                 kind: "lockup",

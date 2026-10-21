@@ -12395,7 +12395,7 @@ function _syncThemeButton() {
     const effectiveLabel = state.theme === 'dark' ? 'Dark' : 'Light';
 
     els.themeBtn.textContent = preference === 'system' ? `Theme: System (${effectiveLabel})` : `Theme: ${preferenceLabel}`;
-    els.themeBtn.setAttribute('aria-label', `Theme preference: ${preference}. Click to switch to ${nextPreference}.`);
+    els.themeBtn.setAttribute('aria-label', `${els.themeBtn.textContent}. Click to switch to ${nextPreference}.`);
     els.themeBtn.title = preference === 'system' ? `Following system (${effectiveLabel}). Next: ${nextLabel}.` : `Theme locked to ${preferenceLabel}. Next: ${nextLabel}.`;
 }
 

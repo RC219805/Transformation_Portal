@@ -432,6 +432,38 @@ class TestPreprocessImage:
         # All channels should be identical
         assert np.allclose(result[:, :, 0], result[:, :, 1])
 
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    def test_numpy_float_grayscale_uses_normalized_sample_values(self, dtype):
+        """Float luminance follows the existing RGB clipping and 8-bit quantization."""
+        samples = np.array([-0.5, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5], dtype=dtype)
+        grayscale = np.tile(samples, (14, 2))
+
+        result, original_shape = preprocess_image(grayscale)
+        rgb_result, _ = preprocess_image(np.repeat(grayscale[:, :, None], 3, axis=2))
+
+        expected_row = np.array([0, 0, 63, 127, 191, 255, 255] * 2, dtype=np.float32) / 255
+        expected = np.repeat(np.tile(expected_row, (14, 1))[:, :, None], 3, axis=2)
+        assert original_shape == (14, 14)
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result, expected)
+        np.testing.assert_array_equal(result, rgb_result)
+
+    def test_numpy_uint8_grayscale_preserves_samples_across_rgb_channels(self):
+        samples = np.array([0, 1, 63, 127, 191, 254, 255], dtype=np.uint8)
+        grayscale = np.tile(samples, (14, 2))
+
+        result, original_shape = preprocess_image(grayscale)
+
+        expected = np.repeat((grayscale.astype(np.float32) / 255)[:, :, None], 3, axis=2)
+        assert original_shape == (14, 14)
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result, expected)
+
+    @pytest.mark.parametrize("dtype", [np.uint16, np.int32, np.bool_])
+    def test_numpy_grayscale_rejects_unsupported_dtypes(self, dtype):
+        with pytest.raises(ValueError, match="Unsupported array dtype"):
+            preprocess_image(np.zeros((14, 14), dtype=dtype))
+
     def test_invalid_array_shape_raises_error(self):
         """Test that invalid array shapes raise ValueError."""
         # 4D array (invalid)

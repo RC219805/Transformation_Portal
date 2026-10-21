@@ -833,7 +833,7 @@ def enhance_image(
                         )
                         from PIL import Image as PILImage
 
-                        alpha_pil = PILImage.fromarray(alpha_channel, mode="I;16")
+                        alpha_pil = PILImage.fromarray(alpha_channel)
                         alpha_resized = alpha_pil.resize(
                             (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS
                         )

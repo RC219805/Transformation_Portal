@@ -47,7 +47,7 @@ def check_dependencies():
     dependencies = {
         "Core": [
             ("numpy", "NumPy", "1.26.4"),
-            ("PIL", "Pillow", "12.3.0"),
+            ("PIL", "Pillow", "13.0.0"),
             ("cv2", "OpenCV", "4.13.0"),
         ],
         "ML": [

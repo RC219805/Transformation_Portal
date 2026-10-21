@@ -118,7 +118,11 @@ get_security_minimum() {
             return 0
             ;;
         "pillow")
-            echo "10.3.0|CVE-2024-28219 and multiple 9.x CVEs"
+            echo "13.0.0|GHSA-8g5g-8vmr-9782 and related image decoder fixes"
+            return 0
+            ;;
+        "certifi")
+            echo "2026.10.19|GHSA-6q48-6c7w-9gw2 (compromised trust roots)"
             return 0
             ;;
         "starlette")

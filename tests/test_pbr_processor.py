@@ -89,7 +89,7 @@ class TestPBRProcessorFromCachedDepth:
 
         depth_path = temp_workspace["root"] / "test_depth.png"
         depth_u16 = (sample_depth * 65535).astype(np.uint16)
-        Image.fromarray(depth_u16, mode="I;16").save(depth_path)
+        Image.fromarray(depth_u16).save(depth_path)
 
         output_dir = temp_workspace["root"] / "output"
 
@@ -111,7 +111,7 @@ class TestPBRProcessorFromCachedDepth:
         from PIL import Image
 
         depth_u16 = (sample_depth * 65535).astype(np.uint16)
-        Image.fromarray(depth_u16, mode="I;16").save(depth_png)
+        Image.fromarray(depth_u16).save(depth_png)
 
         # Save .npy with slightly different values to verify it's used
         modified_depth = sample_depth * 0.8  # Different from PNG

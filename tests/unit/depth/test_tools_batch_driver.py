@@ -21,7 +21,7 @@ def _write_rgb(path: Path, value: int = 128) -> None:
 
 def _write_depth(path: Path) -> None:
     depth = np.linspace(0, 65535, 8 * 8, dtype=np.uint16).reshape(8, 8)
-    Image.fromarray(depth, mode="I;16").save(path)
+    Image.fromarray(depth).save(path)
 
 
 def test_process_single_writes_output_with_default_tiff_format(tmp_path) -> None:

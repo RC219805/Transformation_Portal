@@ -366,7 +366,7 @@ class WorldClassProPipeline:
         # Save depth map for reference
         depth_path = self.output_dir / f"{stem}_DepthMap.tif"
         depth_16bit = np.clip(depth * 65535, 0, 65535).astype(np.uint16)
-        Image.fromarray(depth_16bit, mode="I;16").save(depth_path, compression="lzw")
+        Image.fromarray(depth_16bit).save(depth_path, compression="lzw")
         logger.info(f"Saved depth map: {depth_path.name}")
 
         result = {

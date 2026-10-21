@@ -188,7 +188,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "6a6d33b8cad0baee21ea8ca4209f6a3a1f3b723cae4e2e137b170196061c7333",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -210,7 +210,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -227,7 +227,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "03710ff9be2b791439ce75c29512679914555920552f083325928d78b903d19b",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -249,7 +249,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -410,7 +410,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "b32350525d780b4ab18eab9d8a693ffc55ae42a575b7e01856ae0c10c628a8af",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -432,7 +432,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -577,7 +577,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "562f6882c62e569b152b4f5d03d78adedc3bb04fe204c30287491dfa90315e93",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -599,7 +599,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -712,7 +712,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "f6209227debf895dffbf1e3d494e0f1f0408924bfb7a70bf6f88ffd5ca8a4858",
       "source_references": [
         ".github/agents/rag_system/indexer.py",
@@ -734,7 +734,7 @@
         ".github/agents/rag_system/cli.py": "13863e9f4937a5288fb0928ebdf0b77155081978a2cea518e267a0747c1776fb",
         ".github/agents/rag_system/templates.py": "38d3800fe36ac6c7514db05ef520c22292d6e14ba7f0018d25a585f89f15a91c",
         "tests/test_rag_documentation_authority.py": "2f214c5178f3082aefd25e21f4a6503f2efeb7e9f9a039c199c5d43836d76b71",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -988,8 +988,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "63c7766c969d1090e05d296c328c68e4a1b55178",
-      "content_sha256": "6de1caa0efa799b5678ab57c31efdf267f712918bfcbc6a50e0554981d9c9ac9",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
+      "content_sha256": "61cb92bd2976ddac0d41522ad083a7e0c3594d16b561a1d78b6ae5b8ab8a704b",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -6320,7 +6320,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "298d899bc749d05d1d82608cb035929b7de905baec3177ba1f9c35429b78ab4a",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -6334,7 +6334,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e",
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         "src/transformation_portal/cli/__init__.py": "9be10a4ec203f2ce341a8f72eb5e5cf37c17702646d75887f19e2c79034cb627",
         "src/transformation_portal/__main__.py": "af0b4ef53c5bbc73e07ab69cd078dee813369f14cab83150c456964c25f5de01",
         "tests/test_cli_unavailable_commands.py": "52fb78239c0bdfb8dc88efeebc092628a3c1a5a738792b921020c1ed0c1a9bb6",
@@ -8389,7 +8389,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "68271790c4d6dc3e5e85da932918d991f83fe7024a2946f72b56f0b6c60f7a37",
       "source_references": [
         "tools/ad_editorial_post_pipeline.py",
@@ -8407,9 +8407,9 @@
         "tests/test_ad_editorial_post_pipeline_paths.py": "700b4ccddc6dc32351d86f451a9d7fdef5d325a08ee5ffc9edeffa1f536d844e",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
-        "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
+        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9292,7 +9292,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "2a6f2bea011393d405ada181fd9b4274ddb807d8b73a8fcd72330c596c982490",
       "source_references": [
         "Makefile",
@@ -9301,8 +9301,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "a39f71c41d32b9733e0afa02f34462dba87417686cba88ea2ba12eee8d36fa11",
-        "requirements/dev.txt": "ee1faa136cd95effc9b9341b56c955cff2fe768d4267c5536effc01ebb09c58b"
+        "requirements/base.txt": "34071bccff08d1406f354796be9dece1a65953f2062187496ebfd152a1d5b35e",
+        "requirements/dev.txt": "4da05f283e6e0efb1aabf9b96c31dac1fe161918b34df3c929051978b6e23c07"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -9727,7 +9727,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "399b693a6f4568cee639dc806d8100b58dd42cec615fb1657e498f1e9aac040a",
       "source_references": [
         "Makefile",
@@ -9736,8 +9736,8 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "requirements/base.txt": "a39f71c41d32b9733e0afa02f34462dba87417686cba88ea2ba12eee8d36fa11",
-        "requirements/dev.txt": "ee1faa136cd95effc9b9341b56c955cff2fe768d4267c5536effc01ebb09c58b"
+        "requirements/base.txt": "34071bccff08d1406f354796be9dece1a65953f2062187496ebfd152a1d5b35e",
+        "requirements/dev.txt": "4da05f283e6e0efb1aabf9b96c31dac1fe161918b34df3c929051978b6e23c07"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -9833,7 +9833,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "bde9140e2011018eb923f0aeeb0bba2373740414dac8af16b9c1a7f5ff531fc3",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -9843,7 +9843,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -13128,7 +13128,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "9451a850895b649967bd1fbd68fe34398a41f1a06c4484374f2a2f2ca76a6842",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -13138,7 +13138,7 @@
       "source_sha256": {
         "src/transformation_portal/lux_depth_v3/__main__.py": "99ab2c7d8f74445a4a54e48c2beb38580bd94fa7b019353e639bbf13e6b0faeb",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e"
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -14749,7 +14749,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "d41b7764cf23fee171755716a3f35c92b7423c98",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "976e4bde0610d85d9464e7c99de232d8e8d17024a122c86e46f047623a433e6e",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
@@ -14780,16 +14780,16 @@
         "src/transformation_portal/orchestrator/photography_v6_adapter.py": "c1322b85fc28274cd7aad635a75a41e4b871a01558eec3cbf6a85352445a917c",
         "src/transformation_portal/orchestrator/execution_dispatch.py": "34508eba2239f0de09929211cf4507b3d32df657d49b5266ab5fece41c7a5b99",
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e",
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         "app.py": "182dfba3b7e0a49d72b1820a0b957eda795e4eb8fa213329d616a6c502dec65a",
         "src/transformation_portal/portal/lux_depth_jobs.py": "1dd19bbaf89166d6dade35639033cc92a9eae3316166b74deb1fa0728d3e19a1",
         "src/transformation_portal/orchestrator/lux_depth_adapter.py": "1076e05cc26fa3c1bd283a5e4792fc06974e8750ccd10d0a878053670a533a3d",
         "src/transformation_portal/orchestrator/execution_policy.py": "12b7061929a1d3654cb4cc8514c59e78febeb8ff18b16e3e76868d392afdc457",
         "src/transformation_portal/orchestrator/job_execution.py": "3ad91cc3162d41c297a09f8366fd7fd9dd973b1f62dbc0efa53539c3fe7bb88e",
         "src/transformation_portal/orchestrator/storage/operational.py": "40fceea3f30b7a7d05d00824057a34a47ec432cc0c1c069a8ca7f9bf2e6f507e",
-        "portal.html": "bd205f86801dbccd7e63c46d65f30c809cbc14947ce6afd66a0442865b30ab24",
+        "portal.html": "f2fc8074b349699866b7970ab4d7f7add7a6b80425e2860eedf07bfbf64322d0",
         "web/secure-landing/portal-src/internal/photography-unified.js": "1623ae318be12ce309312d4b429255720f966fe86357c42e138a16af7da21ca7",
-        "web/secure-landing/portal-src/portal.template.js": "ed19b288a59264549b9854eedb39c29653f43c966c50888fc1b106870c708df2"
+        "web/secure-landing/portal-src/portal.template.js": "bd3989696d9d3141591ca7d57fae7d1c035f08acf20a36b961164f226bf8f324"
       },
       "validation_commands": [
         "make test-lux-depth-contract",
@@ -14842,7 +14842,7 @@
       ],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "d41b7764cf23fee171755716a3f35c92b7423c98",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "bcf729e6295961b97ace5ae40962cbd5001e896ee4aac097bce7685fae5bbcf9",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
@@ -14875,16 +14875,16 @@
         "src/transformation_portal/portal/photography_jobs.py": "f26a5115e700ab1a62c4f1e4b33aeeb001256c316338e77d5bab2ccaf84910e5",
         "src/transformation_portal/orchestrator/job_execution.py": "3ad91cc3162d41c297a09f8366fd7fd9dd973b1f62dbc0efa53539c3fe7bb88e",
         "src/transformation_portal/orchestrator/photography_adapter.py": "4eeca7ad8c9708a0c12b89ff660f21abd93419010ed4b526e98be752e380d683",
-        "portal.html": "bd205f86801dbccd7e63c46d65f30c809cbc14947ce6afd66a0442865b30ab24",
+        "portal.html": "f2fc8074b349699866b7970ab4d7f7add7a6b80425e2860eedf07bfbf64322d0",
         "web/secure-landing/portal-src/internal/photography.js": "343227abefa1751b53b3855b047c1a6346f10aae3d8496914d138634be154eb3",
-        "web/secure-landing/portal-src/portal.template.js": "ed19b288a59264549b9854eedb39c29653f43c966c50888fc1b106870c708df2",
+        "web/secure-landing/portal-src/portal.template.js": "bd3989696d9d3141591ca7d57fae7d1c035f08acf20a36b961164f226bf8f324",
         "tests/lux_depth_v5/test_preview.py": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
         "tests/lux_depth_v5/test_pipeline.py": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
         "tests/orchestrator/test_managed_photography_api.py": "4c9265b65315d7b5e19704ec7bbff490d18ba9da06267f9094923e1c6f9f1e7a",
         "tests/orchestrator/test_managed_photography_publisher.py": "7b5e95b6e1e2635e3a547ec0bc3cd4c51aa10b4156041a268ff1d58bea40fd2b",
         "web/secure-landing/tests/photography.test.mjs": "28b0cc25064b23bf7e654e39698c4ce6347d0b81a302f2dc0915ef6cccb5eec8",
         "web/secure-landing/tests/preview-request-races.test.mjs": "0ae7c97351a0a49b2eecd39bfd0b2ef6b46ad07f59252910e5e555d777604dd3",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "9fa389781a0fc3544488491dee438cfce2aae82eaad3d398fe79897bcbb10446"
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "d3a55ce0575395f26cd26c4eb86fbd0205ac364501c1c6f075f8c6dbcda7afc5"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -14906,7 +14906,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "d41b7764cf23fee171755716a3f35c92b7423c98",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "d94d7bb7a80acf1a10138c8fd8af77bf0c8077e12ac7b716d31821f9bd59e91e",
       "source_references": [
         "Makefile",
@@ -14970,7 +14970,7 @@
       ],
       "source_sha256": {
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e",
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         "src/transformation_portal/lux_depth_v6/__init__.py": "c1bf7aebca676ac39597b2439d6bf82f795c6036b1bb381881201c12dbe026f7",
         "src/transformation_portal/lux_depth_v6/__main__.py": "5488e53b26b751d91c3d781024399bba0c74851c353bcce5029fc86b26958e8e",
         "src/transformation_portal/lux_depth_v6/depth_pro.py": "9ab89b9646a0a6b6984b0e3503fe3cb84aa1a997b33d2341fec9b01cdbda20ac",
@@ -15013,16 +15013,16 @@
         "src/transformation_portal/orchestrator/execution_dispatch.py": "34508eba2239f0de09929211cf4507b3d32df657d49b5266ab5fece41c7a5b99",
         "src/transformation_portal/orchestrator/execution_policy.py": "12b7061929a1d3654cb4cc8514c59e78febeb8ff18b16e3e76868d392afdc457",
         "src/transformation_portal/orchestrator/job_execution.py": "3ad91cc3162d41c297a09f8366fd7fd9dd973b1f62dbc0efa53539c3fe7bb88e",
-        "portal.html": "bd205f86801dbccd7e63c46d65f30c809cbc14947ce6afd66a0442865b30ab24",
+        "portal.html": "f2fc8074b349699866b7970ab4d7f7add7a6b80425e2860eedf07bfbf64322d0",
         "web/secure-landing/portal-src/internal/photography-v6.js": "cef21ea2c26e449684c7f3f16a058b1f4487cd059f4a9f089fc9341fce3ea63e",
-        "web/secure-landing/portal-src/portal.template.js": "ed19b288a59264549b9854eedb39c29653f43c966c50888fc1b106870c708df2",
+        "web/secure-landing/portal-src/portal.template.js": "bd3989696d9d3141591ca7d57fae7d1c035f08acf20a36b961164f226bf8f324",
         "tests/lux_depth_v6/test_managed.py": "8ebb4d3d933aed7a2a91de0422aad5462242700cf1f6c472b74679501c93df65",
         "tests/orchestrator/test_managed_v6_api.py": "7ff1f2a24dcbdebe13c171aed4256b7312643e4866e3425e6aee0a27278376d9",
         "tests/orchestrator/test_managed_v6_execution.py": "8353b73e6263d84706aacccb83a842f18f0f1d53edd176b6961f9e5a5b7564c7",
         "tests/orchestrator/test_managed_v6_services.py": "46d8b0241a7d27f28647a4664106cb7d300098a2d908cc77801d2f93aa1692d6",
         "tests/orchestrator/test_photography_v6_adapter.py": "490132b81f91b3eee882e6b5ce8d1b3b64b6f6974035d9ee5aef0a2feb565d2e",
         "web/secure-landing/tests/photography-v6.test.mjs": "e907aac5af6f6eb5d883afceb3161e1c6b6993a737a960f1356b19dcfdf59c4a",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "9fa389781a0fc3544488491dee438cfce2aae82eaad3d398fe79897bcbb10446",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "d3a55ce0575395f26cd26c4eb86fbd0205ac364501c1c6f075f8c6dbcda7afc5",
         "src/transformation_portal/core/execution_plan_v2.py": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
         "tests/lux_depth_v6/test_publication_integrity.py": "45328cb3aea5d986ace117c1d585816c6cb609818c16c4c684d21caaa06df0a7",
         "src/transformation_portal/core/depth_evidence.py": "0580fdfb65069c2112fcb8ad52666cedb2ba6a25f39ccdd3b11487d64e34fe9f",
@@ -16824,7 +16824,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a15c4036a607d147d6b23e8d708a5b16b0a15c02",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "44c64b26e362c6d0ef5b7574720d508d004646db8f8d2fc4bedb10b46c3bac0c",
       "source_references": [
         "pyproject.toml",
@@ -16832,7 +16832,7 @@
         "tests/enforcement/test_ml_fast_collection_contract.py"
       ],
       "source_sha256": {
-        "pyproject.toml": "0596a6d8a38c494e42eb137de4a33f698a760b5031dd3baa32c1a995389e317e",
+        "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
         "tests/enforcement/test_ml_fast_collection_contract.py": "866488e6395ea7e4268221abeaa1820ee0a5c81f77edc2a8e78f61d7d8f9ec22"
       },
@@ -17330,7 +17330,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "4e75a5e1dd14d71121d2f79abcc22d70b2753b8e90ea46babdb5a39fba324e3e",
       "source_references": [
         "requirements/Makefile",
@@ -17344,9 +17344,9 @@
         "requirements/Makefile": "2af3e148bed4c2f8570d7c810bc0017eb13f95d90576aa50607c6a872e06cf64",
         "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
-        "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
+        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -17362,7 +17362,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
+      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
       "content_sha256": "2c2d26bb14c0d9c4e89b219228aef09b1b97c0134f03e64d6b51b820e2ed68db",
       "source_references": [
         "scripts/setup/editorial_runtime.py",
@@ -17376,9 +17376,9 @@
         "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
         "tests/test_editorial_runtime.py": "bc8b9dc2a46ce0ff291b7e3fd88cd9f519b4b13659dda525c5725f94c1649a38",
-        "requirements/editorial.in": "cf0ac9de5d40f0ae420b14a2ece85fbd6d511b958d8a0f5fd30a09cb017200e3",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "ed6683363b144d2976c0c8732cbb26f742848a45b9114687278d959368feb56f",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "e84a9fa6042049808062fa50e53d25de3af57299a8c457dc39a0ba75d9e0ceae"
+        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
       },
       "validation_commands": [
         "make check-documentation-catalog",

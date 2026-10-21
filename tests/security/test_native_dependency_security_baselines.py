@@ -31,6 +31,7 @@ def test_da3_bootstrap_setuptools_matches_patched_runtime_authority() -> None:
     [
         ("ml-core-darwin-arm64.in", "fsspec", "2026.6.0"),
         ("da3-runtime-darwin-arm64.in", "werkzeug", "3.1.9"),
+        ("da3-runtime-darwin-arm64.in", "certifi", "2026.10.19"),
     ],
 )
 def test_native_inputs_exclude_vulnerable_versions(filename: str, package: str, minimum: str) -> None:
@@ -49,8 +50,12 @@ def test_native_inputs_exclude_vulnerable_versions(filename: str, package: str, 
     [
         ("ml-core-darwin-arm64.txt", "fsspec", "2026.6.0"),
         ("ml-core-darwin-arm64.txt", "requests", "2.34.2"),
+        ("ml-core-darwin-arm64.txt", "pillow", "13.0.0"),
+        ("ml-core-darwin-arm64.txt", "certifi", "2026.10.19"),
         ("da3-runtime-darwin-arm64.txt", "werkzeug", "3.1.9"),
         ("da3-runtime-darwin-arm64.txt", "requests", "2.34.2"),
+        ("da3-runtime-darwin-arm64.txt", "pillow", "13.0.0"),
+        ("da3-runtime-darwin-arm64.txt", "certifi", "2026.10.19"),
     ],
 )
 def test_native_locks_install_security_baselines(filename: str, package: str, minimum: str) -> None:

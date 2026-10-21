@@ -191,7 +191,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
         data-recovery-state="${escapeHtml(entryState.recoveryState)}"
       >
         <div class="login-stage" data-ui="login-stage">
-          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
+          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access Transformation Portal home">
             <span class="brand-asset-frame brand-asset-frame--login">
               ${renderBrandAsset({
                 kind: "lockup",

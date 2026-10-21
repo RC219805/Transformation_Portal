@@ -113,7 +113,7 @@ def test_image_load_stage_uses_tifffile_for_tiff_when_available(
 def test_image_load_stage_converts_16bit_images_to_float32(tmp_path: Path) -> None:
     image_path = tmp_path / "depth.png"
     source = np.linspace(0, 65535, 8 * 6, dtype=np.uint16).reshape(8, 6)
-    Image.fromarray(source, mode="I;16").save(image_path)
+    Image.fromarray(source).save(image_path)
 
     image_data = ImageLoadStage(load_exif=False, convert_16bit=True)._load_sync(image_path)
 
@@ -127,7 +127,7 @@ def test_image_load_stage_converts_16bit_images_to_float32(tmp_path: Path) -> No
 def test_image_load_stage_can_preserve_16bit_dtype(tmp_path: Path) -> None:
     image_path = tmp_path / "depth.png"
     source = np.full((8, 6), 1024, dtype=np.uint16)
-    Image.fromarray(source, mode="I;16").save(image_path)
+    Image.fromarray(source).save(image_path)
 
     image_data = ImageLoadStage(load_exif=False, convert_16bit=False)._load_sync(image_path)
 

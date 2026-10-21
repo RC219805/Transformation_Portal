@@ -482,6 +482,23 @@ async function gotoHydratedPortal(page, target = "/portal") {
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
+  test("theme accessible names include the visible label through every preference", async ({ page }) => {
+    await installHydratedPortalRoutes(page);
+    await page.emulateMedia({ colorScheme: "light" });
+    await gotoHydratedPortal(page, "/portal?view=build");
+    const themeButton = page.locator("#themeBtn");
+    for (const [label, nextPreference] of [
+      ["Theme: System (Light)", "dark"],
+      ["Theme: Dark", "light"],
+      ["Theme: Light", "system"],
+      ["Theme: System (Light)", "dark"],
+    ]) {
+      await expect(themeButton).toHaveText(label);
+      await expect(themeButton).toHaveAccessibleName(`${label}. Click to switch to ${nextPreference}.`);
+      await themeButton.click();
+    }
+  });
+
   test("capability catalog loads only for Overview and renders the latest draft after loading", async ({ page }) => {
     await installHydratedPortalRoutes(page);
     let overviewRequests = 0;
@@ -1463,6 +1480,14 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
       }
       await expect(preview).toHaveAttribute("alt", "Primary depth preview: outputs/depth-primary.png");
       await expect(page.locator("#artifactThumbnailRail")).toHaveAttribute("role", "group");
+      await expect(page.locator('#artifactThumbnailRail [data-artifact-path="outputs/depth-primary.png"]'))
+        .toHaveAccessibleName(/depth-primary\.png Primary depth.*68 B$/);
+      await expect(page.locator('#artifactThumbnailRail [data-artifact-path="outputs/secondary.png"]'))
+        .toHaveAccessibleName(/secondary\.png Secondary depth.*68 B$/);
+      await expect(page.locator('#artifactThumbnailRail [data-artifact-path="outputs/depth-primary.png"]'))
+        .toHaveAccessibleDescription("outputs/depth-primary.png");
+      await expect(page.locator('#artifactThumbnailRail [data-artifact-path="outputs/secondary.png"]'))
+        .toHaveAccessibleDescription("outputs/secondary.png");
       await expect(page.locator("#reviewStatusBanner")).toContainText(/Review|artifact/i);
       await expectNoWcagViolations(page, "Portal Review surface");
 
@@ -1561,6 +1586,7 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await expectNoWcagViolations(page, "Portal Build surface");
 
     const manageButton = page.locator("#saveProfileBtn");
+    await expect(manageButton).toHaveAccessibleName(/^Save Profile\. Manage saved profiles\./);
     await manageButton.click();
     const dialog = page.locator("#profileManagerDialog");
     const nameInput = page.locator("#profileManagerName");
@@ -1604,6 +1630,7 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await page.locator('[data-profile-action="close"]').click();
     await page.locator("#qualityTier").selectOption("standard");
     await expect(manageButton).toHaveText("Save Changes");
+    await expect(manageButton).toHaveAccessibleName(/^Save Changes\. Manage saved profile Morning Run\./);
     await expect(manageButton).toHaveAttribute("data-profile-state", "dirty");
     await manageButton.click();
     await expect(nameInput).toHaveValue("Morning Run");
@@ -1613,7 +1640,10 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await saveButton.click();
     await expect(page.locator("#profileManagerMessage")).toContainText("Morning Run” saved");
     await expect(manageButton).toHaveText("Saved");
+    await page.locator('[data-profile-action="close"]').click();
+    await expect(manageButton).toHaveAccessibleName(/^Saved\. Manage saved profile Morning Run\./);
 
+    await manageButton.click();
     await nameInput.fill("Alternate Run");
     await expect(saveButton).toHaveText("Save New Profile");
     await saveButton.click();
@@ -2242,6 +2272,8 @@ for (const width of [390, 1280]) {
     await gotoHydratedPortal(page, "/portal?view=build");
     await page.locator("#pipelineSelect").selectOption("lux-depth");
     await page.locator("#buildStepTab2").click();
+    const dropzone = page.locator("#stagedUploadDropzone");
+    await expect(dropzone).toHaveAccessibleName((await dropzone.innerText()).trim());
     const chooserPromise = page.waitForEvent("filechooser");
     await page.locator('[data-ui="staged-upload-pick-files"]').click();
     await (await chooserPromise).setFiles({

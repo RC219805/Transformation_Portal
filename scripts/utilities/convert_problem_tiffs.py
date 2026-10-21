@@ -8,6 +8,7 @@ named <origstem>_conv.png next to each original. Uses tifffile for robust loadin
 Usage:
     python convert_problem_tiffs.py /path/to/images
 """
+
 import sys
 from pathlib import Path
 
@@ -79,8 +80,7 @@ def convert_file(p: Path):
     # prepare PIL Image
     try:
         if arr2.ndim == 2:
-            mode = "I;16" if arr2.dtype == np.uint16 else None
-            im = Image.fromarray(arr2, mode=mode) if mode else Image.fromarray(arr2)
+            im = Image.fromarray(arr2)
         elif arr2.ndim == 3 and arr2.shape[2] in (3, 4):
             # if uint16 use 'I;16' per channel isn't supported; convert to uint8 for PNG
             if arr2.dtype == np.uint16:
