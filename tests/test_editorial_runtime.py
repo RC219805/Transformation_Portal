@@ -21,7 +21,7 @@ SPEC.loader.exec_module(runtime)
 
 
 def locked_pip() -> bytes:
-    return f"pip==26.2.1 --hash=sha256:{'a' * 64}\n".encode()
+    return f"pip==26.2.2 --hash=sha256:{'a' * 64}\n".encode()
 
 
 @pytest.mark.parametrize(
@@ -247,7 +247,7 @@ def authenticated_payload_fixture(tmp_path):
     module = site / "pip/__main__.py"
     module.parent.mkdir()
     module.write_bytes(b"print('trusted wheel source')\n")
-    wheel = wheels / "pip-26.2.1-py3-none-any.whl"
+    wheel = wheels / "pip-26.2.2-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("pip/__main__.py", module.read_bytes())
     contract = {
@@ -311,7 +311,7 @@ def test_old_bytecode_cache_is_not_on_invocation_search_path(authenticated_paylo
 def test_wrong_compiler_version_is_rejected(monkeypatch):
     monkeypatch.setattr(runtime, "require_target", lambda: None)
     monkeypatch.setattr(runtime.importlib.metadata, "version", lambda _name: "0")
-    with pytest.raises(ValueError, match="compiler requires pip==26.2.1"):
+    with pytest.raises(ValueError, match="compiler requires pip==26.2.2"):
         runtime.compile_lock()
 
 
@@ -347,7 +347,7 @@ def test_compiler_uses_frozen_source_and_constraint_bytes(tmp_path, monkeypatch)
         ("CONTRACT_PATH", "locks/editorial.json"),
     ):
         monkeypatch.setattr(runtime, variable, tmp_path / relative)
-    original = b"pip==26.2.1\n"
+    original = b"pip==26.2.2\n"
     runtime.INPUT_PATH.write_bytes(original)
     runtime.GENERIC_PATH.write_bytes(b"# original constraints\n")
     monkeypatch.setattr(runtime, "require_target", lambda: None)
@@ -368,9 +368,9 @@ def test_compiler_uses_frozen_source_and_constraint_bytes(tmp_path, monkeypatch)
             report = {
                 "install": [
                     {
-                        "metadata": {"name": "pip", "version": "26.2.1"},
+                        "metadata": {"name": "pip", "version": "26.2.2"},
                         "download_info": {
-                            "url": "https://files.pythonhosted.org/packages/pip-26.2.1-py3-none-any.whl",
+                            "url": "https://files.pythonhosted.org/packages/pip-26.2.2-py3-none-any.whl",
                             "archive_info": {"hashes": {"sha256": "a" * 64}},
                         },
                     }

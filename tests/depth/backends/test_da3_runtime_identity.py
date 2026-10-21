@@ -427,9 +427,19 @@ def test_dependency_closure_mismatch_is_non_authorizing(
     assert reason_prefix in evidence.payload["incomplete_reasons"]
 
 
-@pytest.mark.parametrize(("installed_version", "cacheable"), (("82.0.0", False), ("83.0.0", True)))
-def test_patched_bootstrap_setuptools_is_required_for_cache_authority(
+@pytest.mark.parametrize(
+    ("distribution", "required_version", "installed_version", "cacheable"),
+    (
+        ("setuptools", "83.0.0", "82.0.0", False),
+        ("setuptools", "83.0.0", "83.0.0", True),
+        ("pip", "26.2.2", "26.2.1", False),
+        ("pip", "26.2.2", "26.2.2", True),
+    ),
+)
+def test_patched_bootstrap_distributions_are_required_for_cache_authority(
     tmp_path: Path,
+    distribution: str,
+    required_version: str,
     installed_version: str,
     cacheable: bool,
 ) -> None:
@@ -437,17 +447,17 @@ def test_patched_bootstrap_setuptools_is_required_for_cache_authority(
     arguments = _inputs(tmp_path)
     governance_path = arguments["governance_contract_path"]
     governance = json.loads(governance_path.read_text())
-    governance["governed_additional_distributions"] = {"setuptools": "83.0.0"}
+    governance["governed_additional_distributions"] = {distribution: required_version}
     governance_path.write_text(json.dumps(governance))
     arguments["dependency_inventory"] = (
         *arguments["dependency_inventory"],
-        {**arguments["dependency_inventory"][0], "name": "setuptools", "version": installed_version},
+        {**arguments["dependency_inventory"][0], "name": distribution, "version": installed_version},
     )
 
     evidence = prepare_da3_runtime_identity(snapshot_path=snapshot, **arguments)
 
     assert evidence.cacheable is cacheable
-    reason = f"dependency_version_mismatch:setuptools:83.0.0:{installed_version}"
+    reason = f"dependency_version_mismatch:{distribution}:{required_version}:{installed_version}"
     assert (reason in evidence.payload["incomplete_reasons"]) is not cacheable
 
 

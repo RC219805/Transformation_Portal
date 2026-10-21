@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from email.parser import Parser
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -27,6 +28,9 @@ PIP_CHECK_TIMEOUT_SECONDS = 120
 PIP_FREEZE_TIMEOUT_SECONDS = 120
 MINIMUM_PYTHON_VERSION = (3, 11)
 FREEZE_EVIDENCE_NAME = "fastvlm-pip-freeze.txt"
+GOVERNED_REQUIREMENTS_PATH = SCRIPT_DIR.parent.parent / "config" / "fastvlm_runtime_requirements.txt"
+MAX_DEPENDENCY_METADATA_BYTES = 1024 * 1024
+MAX_DEPENDENCY_DISTRIBUTIONS = 4096
 _ALLOWED_BOOTSTRAP_PTH_PAYLOADS = frozenset(
     {
         b"import os; var = 'SETUPTOOLS_USE_DISTUTILS'; enabled = os.environ.get(var, 'local') == 'local'; "
@@ -209,7 +213,7 @@ def _read_regular_json(path: Path) -> Any:
         os.close(descriptor)
 
 
-def _read_regular_bytes(path: Path, *, description: str) -> bytes:
+def _read_regular_bytes(path: Path, *, description: str, max_bytes: int | None = None) -> bytes:
     try:
         before = path.lstat()
     except FileNotFoundError as exc:
@@ -226,10 +230,14 @@ def _read_regular_bytes(path: Path, *, description: str) -> bytes:
         if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise RuntimeVerificationError(f"{description} changed while being inspected: {path}")
         chunks: list[bytes] = []
+        total = 0
         while True:
             chunk = os.read(descriptor, 64 * 1024)
             if not chunk:
                 break
+            total += len(chunk)
+            if max_bytes is not None and total > max_bytes:
+                raise RuntimeVerificationError(f"{description} exceeds its byte limit: {path}")
             chunks.append(chunk)
         after_open = os.fstat(descriptor)
     finally:
@@ -421,6 +429,75 @@ def audit_runtime_venv(venv_dir: Path, *, expected_base_python: Path) -> None:
     _validate_venv_controls(target, expected_base_python=expected_base_python)
 
 
+def audit_runtime_requirements(venv_dir: Path, *, requirements: Path | None = None) -> None:
+    """Compare current exact pins with static metadata after the venv safety audit."""
+
+    pin_pattern = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9.!+_-]*)")
+
+    def canonical_name(name: str) -> str:
+        return re.sub(r"[-_.]+", "-", name).lower()
+
+    expected: dict[str, str] = {}
+    requirements_text = _read_regular_bytes(
+        requirements if requirements is not None else GOVERNED_REQUIREMENTS_PATH,
+        description="FastVLM governed requirements",
+        max_bytes=64 * 1024,
+    ).decode("utf-8")
+    for line in requirements_text.splitlines():
+        requirement = line.partition("#")[0].strip()
+        if not requirement:
+            continue
+        match = pin_pattern.fullmatch(requirement)
+        if match is None:
+            raise RuntimeVerificationError("FastVLM governed requirements must contain only exact pins")
+        name = canonical_name(match[1])
+        if name in expected:
+            raise RuntimeVerificationError(f"FastVLM governed requirements repeat a distribution: {name}")
+        expected[name] = match[2]
+    if not expected and requirements is None:
+        raise RuntimeVerificationError("FastVLM governed requirements contain no exact pins")
+
+    target = _lexical_absolute(venv_dir)
+    metadata_paths: list[Path] = []
+    for pattern in (
+        "lib/python*/site-packages",
+        "lib/python*/dist-packages",
+        "Lib/site-packages",
+    ):
+        if requirements is None:
+            for path in target.glob(f"{pattern}/*.egg-info"):
+                raise RuntimeVerificationError(
+                    f"FastVLM installed legacy metadata is outside the governed requirements: {path.name}"
+                )
+        for path in target.glob(f"{pattern}/*.dist-info"):
+            if len(metadata_paths) >= MAX_DEPENDENCY_DISTRIBUTIONS:
+                raise RuntimeVerificationError("FastVLM distribution metadata inventory is unbounded")
+            metadata_paths.append(path / "METADATA")
+    observed: dict[str, str] = {}
+    for path in sorted(metadata_paths):
+        _ensure_no_symlink_components(path)
+        payload = _read_regular_bytes(
+            path, description="FastVLM distribution metadata", max_bytes=MAX_DEPENDENCY_METADATA_BYTES
+        ).decode("utf-8")
+        metadata = Parser().parsestr(payload, headersonly=True)
+        names = metadata.get_all("Name", [])
+        versions = metadata.get_all("Version", [])
+        if len(names) != 1 or len(versions) != 1 or pin_pattern.fullmatch(f"{names[0]}=={versions[0]}") is None:
+            raise RuntimeVerificationError("FastVLM distribution metadata has ambiguous or invalid identity")
+        name = canonical_name(names[0])
+        if name in observed:
+            raise RuntimeVerificationError(f"FastVLM installed metadata repeats a distribution: {name}")
+        observed[name] = versions[0]
+    unexpected = sorted(observed.keys() - expected.keys())
+    if requirements is None and unexpected:
+        raise RuntimeVerificationError(f"FastVLM installed distributions are outside the governed requirements: {unexpected}")
+    for name, version in expected.items():
+        if observed.get(name) != version:
+            raise RuntimeVerificationError(
+                f"FastVLM installed distribution does not match the governed pin: {name}=={version}"
+            )
+
+
 def _validate_freeze_output(output: str) -> bytes:
     for line in output.splitlines():
         normalized = line.strip().lower()
@@ -462,6 +539,7 @@ def _build_staged_venv(base_python: Path, stage: Path, requirements: Path) -> by
     )
     _remove_allowlisted_bootstrap_pth(stage)
     audit_runtime_venv(stage, expected_base_python=base_python)
+    audit_runtime_requirements(stage, requirements=requirements)
     _run_checked(
         [str(stage_python), "-I", "-m", "pip", "--isolated", "check"],
         timeout_seconds=PIP_CHECK_TIMEOUT_SECONDS,
@@ -647,6 +725,7 @@ def audit_installed_runtime_venv(
     if not evidence_path.exists():
         raise RuntimeVerificationError(f"FastVLM dependency evidence is missing: {evidence_path}")
     audit_runtime_venv(target_venv, expected_base_python=expected_base_python)
+    audit_runtime_requirements(target_venv)
     return "verified"
 
 

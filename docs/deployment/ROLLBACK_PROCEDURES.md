@@ -484,7 +484,7 @@ If dependency conflicts occur during rollback:
 make repair-core-venv
 
 # Option 2: Use a rollback constraints file for the editable package install
-.venv/bin/python -m pip install --upgrade "pip==26.2.1"
+.venv/bin/python -m pip install --upgrade "pip==26.2.2"
 .venv/bin/python -m pip install --constraint requirements-rollback-YYYYMMDD.txt --build-constraint requirements-rollback-YYYYMMDD.txt -e .
 
 # Option 3: Regenerate and reinstall the governed core lane

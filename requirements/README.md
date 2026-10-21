@@ -219,16 +219,19 @@ layered install surface first.
 The local pilot currently expects the same toolchain as the advisory CI
 workflow:
 
-- `pip==26.2.1`
+- `pip==26.2.2`
 - `pip-tools==7.6.1`
 - `click==8.4.2`
 
-That toolchain includes the CVE-2026-13346 correction and the subsequent
-26.2.1 keyring fix while retaining the repository-validated pip-tools compiler.
+That toolchain retains the CVE-2026-13346 and keyring fixes, and pip 26.2.2
+vendors certifi 2026.10.19 to remove the compromised emSign root certificate
+([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)),
+as recorded in the [pip 26.2.2 release notes](https://pip.pypa.io/en/stable/news/#v26-2-2),
+while retaining the validated pip-tools compiler.
 To match the workflow locally:
 
 ```bash
-python -m pip install --upgrade "pip==26.2.1"
+python -m pip install --upgrade "pip==26.2.2"
 python -m pip install "pip-tools==7.6.1" "click==8.4.2"
 ```
 

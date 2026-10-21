@@ -214,7 +214,7 @@ path.write_text("\\n".join(header + body) + "\\n", encoding="utf-8")
 def _write_fake_pip_python(
     path: Path,
     *,
-    version: str = "26.2.1",
+    version: str = "26.2.2",
     click_version: str = "8.4.2",
 ) -> None:
     path.write_text(
@@ -286,7 +286,7 @@ def test_require_pip_compile_rejects_stale_pip_runtime(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     output = result.stdout + result.stderr
-    assert "requires pip==26.2.1" in output
+    assert "requires pip==26.2.2" in output
     assert "pip 26.1.2 from /test/site-packages/pip" in output
 
 

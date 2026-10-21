@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
         (
             "config/fastvlm_runtime_requirements.txt",
             (
-                "pip==26.2.1",
+                "pip==26.2.2",
                 "pillow==13.0.0",
                 "torch==2.13.0",
                 "torchvision==0.28.0",

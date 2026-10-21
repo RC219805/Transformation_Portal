@@ -241,7 +241,17 @@ promotes the venv with rollback. `fastvlm-pip-freeze.txt` is written through a
 no-follow regular temp file, flushed with `fsync`, and atomically replaced under
 the same transaction lock; an existing symlink or special file is rejected.
 
-The current compatibility closure pins `yarl==1.24.5`, `filelock==3.32.5`, and
+Installer `--verify-only` and runtime validation compare installed distribution
+names and versions with every current exact requirement before third-party
+imports. A safe venv layout or an older freeze file does not authorize stale
+dependency versions. If a required distribution is missing or its version has
+changed, reinstall with `make install-fastvlm-runtime` using the trusted original
+builder, then rerun `make check-fastvlm-runtime`. Validation does not upgrade an
+existing runtime automatically or authenticate every installed package byte.
+Governed validation also rejects unexpected distributions and malformed package
+metadata. Recover by reinstalling the complete governed closure.
+
+The current compatibility closure pins `yarl==1.25.1`, `filelock==3.32.5`, and
 `protobuf==7.36.2` alongside `coremltools==9.0`. Validate this closure in a fresh
 runtime: compare installed versions and freeze evidence with the exact
 requirements, load and round-trip the pinned `fastvithd.mlpackage` CoreML

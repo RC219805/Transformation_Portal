@@ -10,7 +10,7 @@ from packaging.version import Version
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GOVERNED_PIP_PIN = "pip==26.2.1"
+GOVERNED_PIP_PIN = "pip==26.2.2"
 GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.19.0"
@@ -139,10 +139,10 @@ def test_pip_26_2_runtime_constraints_are_paired_after_bootstrap(
 @pytest.mark.parametrize(
     "broken_block",
     [
-        'python -m pip install --upgrade "pip==26.2.1"\npython -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
-        'python -m pip install --upgrade "pip==26.2.1"\nPIP_CONSTRAINT=requirements/constraints.txt python -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
-        'python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-ci.txt\npython -m pip install --upgrade "pip==26.2.1"',
-        'python -m pip install --upgrade "pip==26.2.1"\n# --build-constraint requirements/constraints.txt\npython -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
+        'python -m pip install --upgrade "pip==26.2.2"\npython -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
+        'python -m pip install --upgrade "pip==26.2.2"\nPIP_CONSTRAINT=requirements/constraints.txt python -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
+        'python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-ci.txt\npython -m pip install --upgrade "pip==26.2.2"',
+        'python -m pip install --upgrade "pip==26.2.2"\n# --build-constraint requirements/constraints.txt\npython -m pip install -c requirements/constraints.txt -r requirements-ci.txt',
     ],
 )
 def test_build_constraint_contract_rejects_unpaired_or_stale_configuration(broken_block: str) -> None:
@@ -152,7 +152,7 @@ def test_build_constraint_contract_rejects_unpaired_or_stale_configuration(broke
 def test_core_make_targets_use_the_declared_pip_pin() -> None:
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "PIP_VERSION := 26.2.1" in makefile
+    assert "PIP_VERSION := 26.2.2" in makefile
     assert makefile.count('pip install --upgrade "pip==$(PIP_VERSION)"') == 3
 
 

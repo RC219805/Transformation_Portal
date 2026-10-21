@@ -29,8 +29,8 @@
       "url": "https://files.pythonhosted.org/packages/39/4b/f2ed53d83aa44ac19599ac0a54897f867fafb95f406980d1e24083f8cbe3/pillow-13.0.0-cp312-cp312-macosx_11_0_arm64.whl"
     },
     "pip": {
-      "sha256": "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e",
-      "url": "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl"
+      "sha256": "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70",
+      "url": "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl"
     },
     "pyyaml": {
       "sha256": "fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0",
@@ -59,7 +59,7 @@
   },
   "compiler": {
     "click": "8.4.2",
-    "pip": "26.2.1",
+    "pip": "26.2.2",
     "pip-tools": "7.6.1"
   },
   "core_pins": {
@@ -73,8 +73,8 @@
     "tifffile": "2026.3.3",
     "tqdm": "4.70.1"
   },
-  "input_sha256": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
-  "lock_sha256": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
+  "input_sha256": "8fd92b51faf9e52e52a3bf283647557f93f9ec9e5188bac955abdc99df1030de",
+  "lock_sha256": "95ba4c05ab7ef133b460596944bc26ac749f3385a7fbc31019379b01beeacfff",
   "schema": "tp.editorial.runtime.v1",
   "target": "darwin-arm64-py312"
 }
