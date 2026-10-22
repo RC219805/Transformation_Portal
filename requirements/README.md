@@ -224,7 +224,7 @@ workflow:
 - `click==8.4.2`
 
 That toolchain retains the CVE-2026-13346 and keyring fixes, and pip 26.2.2
-vendors certifi 2026.10.19 to remove the compromised emSign root certificate
+vendors certifi 2026.10.19 to remove the affected emSign root certificate
 ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)),
 as recorded in the [pip 26.2.2 release notes](https://pip.pypa.io/en/stable/news/#v26-2-2),
 while retaining the validated pip-tools compiler.
