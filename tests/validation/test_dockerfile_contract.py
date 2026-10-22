@@ -61,12 +61,16 @@ def test_cpu_preserves_python_and_pip_launchers() -> None:
     assert 'ENV PATH="/opt/python3.11/bin:${PATH}"' in stages["python-runtime-base"]
 
 
-def test_cpu_preserves_loadable_sqlite_extension_support() -> None:
+@pytest.mark.parametrize(
+    ("builder_stage", "runtime_stage"),
+    (("cpu-python-build", "python-runtime-base"), ("gpu-python-build", "gpu-runtime-base")),
+)
+def test_runtimes_preserve_loadable_sqlite_extension_support(builder_stage: str, runtime_stage: str) -> None:
     stages = _dockerfile_stages()
 
-    assert "--enable-loadable-sqlite-extensions" in stages["cpu-python-build"]
-    assert "assert hasattr(sqlite3.Connection, 'enable_load_extension')" in stages["python-runtime-base"]
-    assert "sqlite3.connect(':memory:').enable_load_extension(False)" in stages["python-runtime-base"]
+    assert "--enable-loadable-sqlite-extensions" in stages[builder_stage]
+    assert "assert hasattr(sqlite3.Connection, 'enable_load_extension')" in stages[runtime_stage]
+    assert "sqlite3.connect(':memory:').enable_load_extension(False)" in stages[runtime_stage]
 
 
 def test_runtime_stages_do_not_install_compiler_tooling() -> None:

@@ -211,6 +211,7 @@ RUN curl --fail --silent --show-error --location \
     && tar --extract --xz --file /tmp/python.tar.xz --directory /tmp/python-source --strip-components=1 \
     && cd /tmp/python-source \
     && LDFLAGS="-Wl,-rpath=/opt/python3.11/lib" ./configure \
+        --enable-loadable-sqlite-extensions \
         --prefix=/opt/python3.11 \
         --enable-shared \
         --with-ensurepip=install \
@@ -250,7 +251,7 @@ COPY --from=gpu-python-build /opt/python3.11-runtime/ /opt/python3.11/
 ENV PATH="/opt/python3.11/bin:${PATH}"
 
 # Verify extension availability against the actual runtime libraries.
-RUN python3.11 -c "import bz2, ctypes, curses, dbm.gnu, dbm.ndbm, lzma, readline, sqlite3, ssl, sys, uuid, venv, zlib; assert sys.version_info[:2] == (3, 11) and sys.version_info.releaselevel == 'final', sys.version"
+RUN python3.11 -c "import bz2, ctypes, curses, dbm.gnu, dbm.ndbm, lzma, readline, sqlite3, ssl, sys, uuid, venv, zlib; assert sys.version_info[:2] == (3, 11) and sys.version_info.releaselevel == 'final', sys.version; assert hasattr(sqlite3.Connection, 'enable_load_extension'); sqlite3.connect(':memory:').enable_load_extension(False)"
 
 # Recreate the same unprivileged identity as the Python runtime base. The
 # gpu stages use a different upstream image, so this is duplicated
