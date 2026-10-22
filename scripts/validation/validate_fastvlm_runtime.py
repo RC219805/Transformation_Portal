@@ -49,6 +49,7 @@ def _load_venv_helpers() -> Any:
 
 _venv_helpers = _load_venv_helpers()
 audit_runtime_venv = _venv_helpers.audit_runtime_venv
+audit_runtime_requirements = _venv_helpers.audit_runtime_requirements
 VenvManifestError = _venv_helpers.ManifestError
 VenvRuntimeVerificationError = _venv_helpers.RuntimeVerificationError
 
@@ -203,6 +204,7 @@ def build_runtime_evidence(
                         python_path.parent.parent,
                         expected_base_python=expected_base_python,
                     )
+                    audit_runtime_requirements(python_path.parent.parent)
                 except (OSError, UnicodeError, ValueError, VenvManifestError, VenvRuntimeVerificationError) as exc:
                     venv_audit_errors.append(str(exc))
         if venv_audit_skipped:
@@ -216,7 +218,10 @@ def build_runtime_evidence(
                 status=_status_for_errors(venv_audit_errors),
                 errors=venv_audit_errors,
                 path=python_path.parent.parent,
-                remediation="Rebuild the governed FastVLM venv; startup hooks, symlinks, and editable installs are prohibited.",
+                remediation=(
+                    "Rebuild the governed FastVLM venv to match current requirement pins; "
+                    "startup hooks, symlinks, and editable installs are prohibited."
+                ),
             )
         errors.extend(venv_audit_errors)
     else:
@@ -308,9 +313,7 @@ def main(argv: list[str] | None = None) -> int:
             include_sources=not bool(args.skip_source_check),
             include_python=not bool(args.skip_python_check),
             include_import_smoke=(
-                not bool(args.verify_only)
-                and not bool(args.skip_python_check)
-                and not bool(args.skip_source_check)
+                not bool(args.verify_only) and not bool(args.skip_python_check) and not bool(args.skip_source_check)
             ),
             expected_base_python=Path(args.base_python) if args.base_python else None,
         )

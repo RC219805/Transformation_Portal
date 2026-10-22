@@ -4,7 +4,7 @@ SHELL := /bin/sh
 # .venv immediately switch to the repo interpreter on subsequent lines.
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
-PIP_VERSION := 26.2.1
+PIP_VERSION := 26.2.2
 PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
 DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
 

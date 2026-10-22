@@ -558,7 +558,7 @@ def test_source_promotion_rolls_back_both_repositories_on_partial_failure(
     assert (runtime_root / "mlx-vlm/mlx_vlm/runtime.py").read_text(encoding="utf-8") == "MODE = 'safe-v1'\n"
 
 
-def test_fresh_venv_rebuild_never_executes_persistent_sitecustomize(tmp_path: Path) -> None:
+def test_fresh_venv_rebuild_never_executes_persistent_sitecustomize(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_script_module("fastvlm_clean_venv_test", "scripts/setup/install_fastvlm_venv.py")
     manifest = _manifest(tmp_path)
     runtime_root = tmp_path / "runtime"
@@ -593,6 +593,14 @@ def test_fresh_venv_rebuild_never_executes_persistent_sitecustomize(tmp_path: Pa
     assert not poison_marker.exists()
     assert not list(old_venv.rglob("sitecustomize.py"))
     assert not list(old_venv.rglob("*.pth"))
+    installed_pip_metadata = next(old_venv.glob("lib/python*/site-packages/pip-*.dist-info/METADATA"))
+    pip_version = next(
+        line.removeprefix("Version: ")
+        for line in installed_pip_metadata.read_text().splitlines()
+        if line.startswith("Version: ")
+    )
+    requirements.write_text(f"pip=={pip_version}\n", encoding="utf-8")
+    monkeypatch.setattr(module, "GOVERNED_REQUIREMENTS_PATH", requirements)
     trusted_python = Path(os.path.realpath(sys.executable))
     module.audit_runtime_venv(old_venv, expected_base_python=trusted_python)
     assert (

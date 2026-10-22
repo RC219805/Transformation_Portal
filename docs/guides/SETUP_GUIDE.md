@@ -106,7 +106,7 @@ Import-root identity uses canonical filesystem paths, so a library changing
 the same root from `str` to `pathlib.Path` does not invalidate it. A different
 root or changed bytes still fails verification.
 
-When the governed dependency lock changes, reinstall with
+When the governed dependency lock or bootstrap pins change, reinstall with
 `./scripts/setup/install_da3_runtime.sh --profile baseline` before using the
 updated cache authority. An existing runtime and its old marker do not attest
 the new dependency closure; never edit the marker to bypass reinstallation.

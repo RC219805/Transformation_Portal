@@ -483,6 +483,7 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
         audit_base_paths.append(expected_base_python)
 
     monkeypatch.setattr(module, "audit_runtime_venv", record_audit)
+    monkeypatch.setattr(module, "audit_runtime_requirements", lambda *_args, **_kwargs: None)
 
     assert (
         module.main(
@@ -700,6 +701,7 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     _write_manifest(manifest_path, _manifest(tmp_path))
     _write_fixture_runtime(runtime_root)
     module.audit_runtime_venv = lambda *_args, **_kwargs: None
+    module.audit_runtime_requirements = lambda *_args, **_kwargs: None
     monkeypatch.setattr(module, "verify_runtime_sources", lambda *_args, **_kwargs: [])
 
     rc = module.main(

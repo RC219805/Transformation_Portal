@@ -29,14 +29,14 @@ Do not install this target lock into the core environment.
 
 `requirements/editorial.in` declares editorial dependencies and constrains shared
 versions with `requirements/all.txt`. A dedicated trusted compiler environment
-must contain exactly pip 26.2.1, pip-tools 7.6.1, and Click 8.4.2. Create it outside
+must contain exactly pip 26.2.2, pip-tools 7.6.1, and Click 8.4.2. Create it outside
 the repository, without modifying core or optional runtimes:
 
 ```bash
 python3.12 -m venv /private/tmp/tp-editorial-compiler
 /private/tmp/tp-editorial-compiler/bin/python -m pip install \
   --disable-pip-version-check --only-binary=:all: --index-url https://pypi.org/simple \
-  'pip==26.2.1' 'pip-tools==7.6.1' 'click==8.4.2'
+  'pip==26.2.2' 'pip-tools==7.6.1' 'click==8.4.2'
 /private/tmp/tp-editorial-compiler/bin/python -I scripts/setup/editorial_runtime.py lock
 .venv/bin/python -I scripts/setup/editorial_runtime.py check --contract-only
 .venv/bin/pytest tests/test_editorial_runtime.py -q
