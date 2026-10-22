@@ -128,7 +128,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "de1074dab3dffcac2a4a099ea449f727d9934c0b365cbcf3381484ffae246f55",
       "source_references": [
         ".github/workflows/build.yml",
@@ -138,7 +138,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -895,7 +895,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "ee4480271974f5fd1c22b055aff99b444c60d2f33a191f66a1a74f937fb29ac4",
       "source_references": [
         ".github/workflows/build.yml",
@@ -905,7 +905,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -940,8 +940,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "9624b8e904293db9934ff74f9c9767461688e532",
-      "content_sha256": "09ac2d1271b93003284a5dc0eeb755bb2cff21e082a4c5dd1bb9ea56b7b49a7d",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "801f03ca3c88b3ddcbff81a3abc23c2b66050128b2531a997b1a75cfe5fe2106",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -3870,8 +3870,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "63c7766c969d1090e05d296c328c68e4a1b55178",
-      "content_sha256": "2fc5e76c395e0b6cff902618461e89adc1c81d81a9ab3af06f0931bc73436f75",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "a33dbe4935768eb0f006aee3f6025eea407229d4ee5c1b20f734963693c853e8",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -5930,7 +5930,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "02df44dd54edfa2dadd80f46ce09b9886988ce0d0061a1d0b7a33a956ce51036",
       "source_references": [
         ".github/workflows/build.yml",
@@ -5940,7 +5940,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -6153,7 +6153,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "9434f4cad1d0dad0082f8949c92922a3443cf303a83765d280d392ac5b90f5c7",
       "source_references": [
         ".github/workflows/build.yml",
@@ -6163,7 +6163,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -6214,7 +6214,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "f39cb8571abb5c765dc611a14583995cb555117855d3c37e1c51de10365b59bd",
       "source_references": [
         ".github/workflows/build.yml",
@@ -6224,7 +6224,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -6291,7 +6291,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9347e1db8543d5fedaf3b8f3d78272ba74ec78e4",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "5abf1ddb956a503b32518466f9bdc194b9ff290bd3b0dab81eb859268b19a6ed",
       "source_references": [
         ".github/workflows/build.yml",
@@ -6301,7 +6301,7 @@
       ],
       "source_sha256": {
         ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
-        ".github/workflows/security-unified.yml": "7497f22cdb42006a3bdf5e9fa7cb2facb4a9bd906484662bfcb00424290b7c1a",
+        ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
       },
@@ -7123,8 +7123,8 @@
       "successors": [],
       "review_status": "historical-evidence",
       "evidence_tier": "historical-record",
-      "source_commit": "7b2e53468aac16d6f0702825b4cc596488a07693",
-      "content_sha256": "26b4de1cfd120d7303b9f713036e8f270df1ec245e4876e8ef5d26802d1d1aef",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "9fdd4646e2100b748c6cfbf519f3fc84091a3d0f696a00808e93c3ba0a3ee216",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -8389,7 +8389,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "68271790c4d6dc3e5e85da932918d991f83fe7024a2946f72b56f0b6c60f7a37",
       "source_references": [
         "tools/ad_editorial_post_pipeline.py",
@@ -8405,11 +8405,11 @@
         "tools/ad_editorial_post_pipeline.py": "a97d12112e0e460cff72623e29f20dcc3a552b876e36cb6f63d322900246e161",
         "tools/sample_config.yml": "6365e96cdafb36cc6fa0da422a1f94552afda7c718b01aa583fd67668c54fd5c",
         "tests/test_ad_editorial_post_pipeline_paths.py": "700b4ccddc6dc32351d86f451a9d7fdef5d325a08ee5ffc9edeffa1f536d844e",
-        "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
+        "scripts/setup/editorial_runtime.py": "159f6be6c8e2e90e0239f8936c4908ae73391ae85b3876c9097c688b7664316b",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
-        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
+        "requirements/editorial.in": "8fd92b51faf9e52e52a3bf283647557f93f9ec9e5188bac955abdc99df1030de",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "95ba4c05ab7ef133b460596944bc26ac749f3385a7fbc31019379b01beeacfff",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "ce8b3babc8ac3a72ac8dad72543bf227b2770954ce2cd7155564ca9a9d5ecdd6"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -9292,7 +9292,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "2a6f2bea011393d405ada181fd9b4274ddb807d8b73a8fcd72330c596c982490",
       "source_references": [
         "Makefile",
@@ -9300,7 +9300,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
+        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
         "requirements/base.txt": "34071bccff08d1406f354796be9dece1a65953f2062187496ebfd152a1d5b35e",
         "requirements/dev.txt": "4da05f283e6e0efb1aabf9b96c31dac1fe161918b34df3c929051978b6e23c07"
       },
@@ -9727,15 +9727,15 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
-      "content_sha256": "399b693a6f4568cee639dc806d8100b58dd42cec615fb1657e498f1e9aac040a",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "e06f97c74909e60c951910a60cce133f4908fcff07b7d98b0830a916361a2217",
       "source_references": [
         "Makefile",
         "requirements/base.txt",
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
+        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
         "requirements/base.txt": "34071bccff08d1406f354796be9dece1a65953f2062187496ebfd152a1d5b35e",
         "requirements/dev.txt": "4da05f283e6e0efb1aabf9b96c31dac1fe161918b34df3c929051978b6e23c07"
       },
@@ -14749,7 +14749,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "976e4bde0610d85d9464e7c99de232d8e8d17024a122c86e46f047623a433e6e",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
@@ -14779,7 +14779,7 @@
         "src/transformation_portal/orchestrator/photography_adapter.py": "4eeca7ad8c9708a0c12b89ff660f21abd93419010ed4b526e98be752e380d683",
         "src/transformation_portal/orchestrator/photography_v6_adapter.py": "c1322b85fc28274cd7aad635a75a41e4b871a01558eec3cbf6a85352445a917c",
         "src/transformation_portal/orchestrator/execution_dispatch.py": "34508eba2239f0de09929211cf4507b3d32df657d49b5266ab5fece41c7a5b99",
-        "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
+        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
         "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         "app.py": "182dfba3b7e0a49d72b1820a0b957eda795e4eb8fa213329d616a6c502dec65a",
         "src/transformation_portal/portal/lux_depth_jobs.py": "1dd19bbaf89166d6dade35639033cc92a9eae3316166b74deb1fa0728d3e19a1",
@@ -14906,7 +14906,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
       "content_sha256": "d94d7bb7a80acf1a10138c8fd8af77bf0c8077e12ac7b716d31821f9bd59e91e",
       "source_references": [
         "Makefile",
@@ -14969,7 +14969,7 @@
         "tests/core/test_depth_evidence.py"
       ],
       "source_sha256": {
-        "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
+        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
         "pyproject.toml": "0f6b1178000aa0de2ce7e44b94f2c40766e61f6742567360bb8d6f246f0059d9",
         "src/transformation_portal/lux_depth_v6/__init__.py": "c1bf7aebca676ac39597b2439d6bf82f795c6036b1bb381881201c12dbe026f7",
         "src/transformation_portal/lux_depth_v6/__main__.py": "5488e53b26b751d91c3d781024399bba0c74851c353bcce5029fc86b26958e8e",
@@ -15288,8 +15288,8 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "1de1aea95095e9ebf9593694efd5955313b19efa",
-      "content_sha256": "88f8fc8c86bcf5ff3023119fe367915713804bec6f733d14aeb88cdd88e137f8",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "cd42fc0c24c955221be5f3afa85b3f983562e2993cb50a369eb67f72f1eae201",
       "source_references": [],
       "source_sha256": {},
       "validation_commands": [],
@@ -17330,8 +17330,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
-      "content_sha256": "4e75a5e1dd14d71121d2f79abcc22d70b2753b8e90ea46babdb5a39fba324e3e",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "09abecfb6e3c01e35768c49522586d4d206bcac885b1d8214ea1f40f3bea7d0b",
       "source_references": [
         "requirements/Makefile",
         "Makefile",
@@ -17341,12 +17341,12 @@
         "requirements/locks/editorial-darwin-arm64-py312.json"
       ],
       "source_sha256": {
-        "requirements/Makefile": "2af3e148bed4c2f8570d7c810bc0017eb13f95d90576aa50607c6a872e06cf64",
-        "Makefile": "baeb51756a0a2c7620fdb23043957972076dd50e8e943475d977a2aee0659e21",
-        "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
-        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
+        "requirements/Makefile": "ead201d32655cfdac75881b69ac96f3c0b786627d88b2126e7346659ae0ad028",
+        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
+        "scripts/setup/editorial_runtime.py": "159f6be6c8e2e90e0239f8936c4908ae73391ae85b3876c9097c688b7664316b",
+        "requirements/editorial.in": "8fd92b51faf9e52e52a3bf283647557f93f9ec9e5188bac955abdc99df1030de",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "95ba4c05ab7ef133b460596944bc26ac749f3385a7fbc31019379b01beeacfff",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "ce8b3babc8ac3a72ac8dad72543bf227b2770954ce2cd7155564ca9a9d5ecdd6"
       },
       "validation_commands": [
         "make check-documentation-catalog"
@@ -17362,8 +17362,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "12c19a2772068a366c4f5f0ad3004bdd9903b41f",
-      "content_sha256": "2c2d26bb14c0d9c4e89b219228aef09b1b97c0134f03e64d6b51b820e2ed68db",
+      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "content_sha256": "e83f7fdfa293acc13e14ae6d94c40dc1e83aa3c3831fca77801937915cdf590d",
       "source_references": [
         "scripts/setup/editorial_runtime.py",
         "scripts/validation/check_editorial_runtime.py",
@@ -17373,12 +17373,12 @@
         "requirements/locks/editorial-darwin-arm64-py312.json"
       ],
       "source_sha256": {
-        "scripts/setup/editorial_runtime.py": "03d16672c179be60ee3ae2111cfe0a8217a19edb8cdea3cb84f3a96bc6ad17f1",
+        "scripts/setup/editorial_runtime.py": "159f6be6c8e2e90e0239f8936c4908ae73391ae85b3876c9097c688b7664316b",
         "scripts/validation/check_editorial_runtime.py": "ee2b068abc24dc8aa9fb94ef4feefd4cbcdea1fc2f113fc75367673e9340aa6b",
-        "tests/test_editorial_runtime.py": "bc8b9dc2a46ce0ff291b7e3fd88cd9f519b4b13659dda525c5725f94c1649a38",
-        "requirements/editorial.in": "71cfc51c297633f2f13298120b8e49ede0b2ada935d8e495413f579449d98fa1",
-        "requirements/locks/editorial-darwin-arm64-py312.txt": "cca611899a11c6dc75d8fb903a77e8f56acc8f19de63a8acfcfc38738b179e67",
-        "requirements/locks/editorial-darwin-arm64-py312.json": "2eb148224d9e2eba32bcbd4239f37d5bc2b02c08a75862b60417751bee9314d8"
+        "tests/test_editorial_runtime.py": "875494d294657b87e096baf8564cb574528ca885290b704ec8d4d50dceb652b8",
+        "requirements/editorial.in": "8fd92b51faf9e52e52a3bf283647557f93f9ec9e5188bac955abdc99df1030de",
+        "requirements/locks/editorial-darwin-arm64-py312.txt": "95ba4c05ab7ef133b460596944bc26ac749f3385a7fbc31019379b01beeacfff",
+        "requirements/locks/editorial-darwin-arm64-py312.json": "ce8b3babc8ac3a72ac8dad72543bf227b2770954ce2cd7155564ca9a9d5ecdd6"
       },
       "validation_commands": [
         "make check-documentation-catalog",
