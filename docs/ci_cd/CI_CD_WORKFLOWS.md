@@ -44,9 +44,9 @@ The **CI Gate pattern** provides a single, stable check that aggregates all crit
 ```yaml
 ci_gate:
   name: CI Gate  # Stable name - never changes
-  needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, lint, typecheck, test, generate-manifest]
+  needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, docker-cpu-runtime, lint, typecheck, test, generate-manifest]
   if: ${{ always() }}  # Runs even if upstream fails
-  # Enforces results according to preflight run_full/run_frontdoor
+  # Enforces results according to preflight run_full/run_frontdoor/run_docker
 ```
 
 **Benefits:**
@@ -59,8 +59,9 @@ ci_gate:
 **Current Implementation:**
 - Workflow: `.github/workflows/build.yml`
 - Job name: `CI Gate` (require this in branch protection)
-- Aggregates: `preflight`, `lightweight`, `dependency-constraints`, `frontdoor-contract`, `lint`, `typecheck`, `test` (all matrix combinations), and `generate-manifest`.
+- Aggregates: `preflight`, `lightweight`, `dependency-constraints`, `frontdoor-contract`, `docker-cpu-runtime`, `lint`, `typecheck`, `test` (all matrix combinations), and `generate-manifest`.
 - Lightweight and dependency checks must succeed; full mode also enforces lint/typecheck/test/manifest and the frontdoor job when requested.
+- The requested Docker runtime job must succeed in every gate mode; an intentional skip is accepted only when `run_docker` is false.
 
 **Snapshot:** Read-only GitHub verification on 2026-09-21 showed `CI Gate` and
 `Dependency Security` required for main, both bound to GitHub Actions app `15368`,
@@ -82,11 +83,18 @@ Purpose: Validate that code is importable, tests pass, and manifests/config expe
 - `preflight` - Change classification; docs paths under setup/workflows can still request full CI
 - `lightweight`, `dependency-constraints` - Always required after classification
 - `frontdoor-contract` - Conditional frontdoor validation
+- `docker-cpu-runtime` - Conditional native Linux amd64 CPU image build and offline default-user/import/CLI/bootstrap smoke
 - `lint` - CI-pinned lint checks
 - `typecheck` - Blocking Python 3.12 mypy whitelist
 - `test` - Matrix-expanded test jobs (Python 3.11/3.12, core/ml tests)
 - `generate-manifest` - Montecito manifest generation
 - `CI Gate` - **Aggregator job** (this is what branch protection requires)
+
+The Docker classifier requests the CPU runtime job for its matching PR paths;
+non-PR events and incomplete PR inventories request it conservatively.
+Docker-classified changes also request the full suite. The smoke runs with
+networking disabled and proves the CPU runtime contract only,
+not GPU hardware acceptance.
 
 **Branch protection snapshot:** `CI Gate` and the independent
 `Dependency Security` job were required on 2026-09-21. Re-read GitHub before

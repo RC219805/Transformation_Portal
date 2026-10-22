@@ -42,6 +42,7 @@ jobs:
     outputs:
       run_full: ${{ steps.classify.outputs.run_full }}
       run_frontdoor: ${{ steps.classify.outputs.run_frontdoor }}
+      run_docker: ${{ steps.classify.outputs.run_docker }}
       reason: ${{ steps.classify.outputs.reason }}
     steps:
       - name: Classify change set
@@ -53,6 +54,7 @@ jobs:
             if (context.eventName !== 'pull_request') {
               core.setOutput('run_full', 'true');
               core.setOutput('run_frontdoor', 'true');
+              core.setOutput('run_docker', 'true');
               core.setOutput('reason', 'non-PR event (main push or manual trigger)');
               return;
             }
@@ -70,6 +72,7 @@ jobs:
             if (files.length === 0 || files.length >= 3000 || files.length !== pr.changed_files) {
               core.setOutput('run_full', 'true');
               core.setOutput('run_frontdoor', 'true');
+              core.setOutput('run_docker', 'true');
               core.setOutput('reason', 'incomplete or changed PR file inventory; full validation required');
               return;
             }
@@ -126,11 +129,29 @@ jobs:
               /^portal\.html$/,
             ];
 
+            const dockerMatchers = [
+              /^Dockerfile$/,
+              /^\.dockerignore$/,
+              /^docker-compose\.yml$/,
+              /^requirements\.txt$/,
+              /^requirements\/base\.(in|txt)$/,
+              /^pyproject\.toml$/,
+              /^setup\.(py|cfg)$/,
+              /^src\/transformation_portal\/cli\/__main__\.py$/,
+              /^\.github\/workflows\/build\.yml$/,
+              /^scripts\/validation\/(check_docker_runtime|validate_ci_config)\.py$/,
+              /^tests\/validation\/test_docker(file_contract|_runtime_probe)\.py$/,
+              /^tests\/test_ci_change_classification\.py$/,
+              /^tests\/test_validate_ci_config\.py$/,
+            ];
+
             const runFrontdoor = names.some(name => frontdoorMatchers.some(re => re.test(name)));
-            const runFull = runFrontdoor || names.some(name => fullSuiteMatchers.some(re => re.test(name)));
+            const runDocker = names.some(name => dockerMatchers.some(re => re.test(name)));
+            const runFull = runFrontdoor || runDocker || names.some(name => fullSuiteMatchers.some(re => re.test(name)));
 
             const reasons = [];
             if (runFrontdoor) reasons.push('frontdoor/runtime boundary changed');
+            if (runDocker) reasons.push('Docker runtime boundary changed');
             if (names.some(name => fullSuiteMatchers.some(re => re.test(name)))) {
               reasons.push('code/tests/deps/workflows changed');
             }
@@ -138,11 +159,13 @@ jobs:
 
             core.setOutput('run_full', runFull ? 'true' : 'false');
             core.setOutput('run_frontdoor', runFrontdoor ? 'true' : 'false');
+            core.setOutput('run_docker', runDocker ? 'true' : 'false');
             core.setOutput('reason', reason);
 
             core.info('');
             core.info(`Decision: run_full = ${runFull}`);
             core.info(`Decision: run_frontdoor = ${runFrontdoor}`);
+            core.info(`Decision: run_docker = ${runDocker}`);
             core.info(`Reason: ${reason}`);
 
   # Lightweight checks (always run, fast)
@@ -583,6 +606,59 @@ jobs:
           path: web/secure-landing/playwright-report/
           retention-days: 7
           if-no-files-found: ignore
+
+  docker-cpu-runtime:
+    name: Docker CPU runtime (native amd64)
+    needs: [preflight]
+    if: needs.preflight.outputs.run_docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify native Linux amd64 host
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+          test "$(docker version --format '{{.Server.Arch}}')" = "amd64"
+          docker version
+
+      - name: Reserve Docker build disk space
+        run: |
+          set -euo pipefail
+          df -h
+          # Disposable hosted-runner tools, preserving the Python toolcache.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android
+          free_kib=$(df -Pk / | awk 'NR == 2 {print $4}')
+          if [[ ! "$free_kib" =~ ^[0-9]+$ ]] || (( free_kib < 10 * 1024 * 1024 )); then
+            echo "Docker build requires at least 10 GiB free after runner cleanup."
+            exit 1
+          fi
+          df -h
+
+      - name: Build CPU runtime image
+        run: |
+          docker build --platform linux/amd64 --target cpu --pull --no-cache \
+            --progress=plain --tag transformation-portal:cpu-runtime-ci .
+
+      - name: Validate default CPU runtime offline
+        run: |
+          set -euo pipefail
+          container_name="tp-cpu-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$container_name" >/dev/null 2>&1 || true' EXIT
+          timeout 180s docker run --rm --name "$container_name" --network none \
+            --entrypoint python3.11 transformation-portal:cpu-runtime-ci \
+            /app/scripts/validation/check_docker_runtime.py --expected-architecture amd64
+
+      - name: Record final Docker disk usage
+        if: always()
+        run: |
+          docker system df
+          df -h
 
   lint:
     needs: [preflight]
@@ -1177,7 +1253,7 @@ jobs:
   ci_gate:
     name: CI Gate
     runs-on: ubuntu-24.04
-    needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, lint, typecheck, test, generate-manifest]
+    needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, docker-cpu-runtime, lint, typecheck, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
     permissions: {}
@@ -1189,12 +1265,14 @@ jobs:
           echo "Preflight decision:"
           echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
           echo "  run_frontdoor: ${{ needs.preflight.outputs.run_frontdoor }}"
+          echo "  run_docker:    ${{ needs.preflight.outputs.run_docker }}"
           echo "  reason:   ${{ needs.preflight.outputs.reason }}"
           echo ""
           echo "Job results:"
           echo "  lightweight:       ${{ needs.lightweight.result }}"
           echo "  dependency-constraints: ${{ needs['dependency-constraints'].result }}"
           echo "  frontdoor-contract:${{ needs['frontdoor-contract'].result }}"
+          echo "  docker-cpu-runtime:${{ needs['docker-cpu-runtime'].result }}"
           echo "  lint:              ${{ needs.lint.result }}"
           echo "  typecheck:         ${{ needs.typecheck.result }}"
           echo "  test:              ${{ needs.test.result }}"
@@ -1235,6 +1313,19 @@ jobs:
             echo "GATE_MODE=dependency-constraints (failed)" >> "$GITHUB_ENV"
             exit 1
           fi
+
+          # Enforce the requested native Docker runtime contract in every gate mode.
+          docker_required="${{ needs.preflight.outputs.run_docker }}"
+          docker_result="${{ needs['docker-cpu-runtime'].result }}"
+          case "$docker_required:$docker_result" in
+            true:success|false:success|false:skipped) ;;
+            *)
+              echo "❌ docker-cpu-runtime did not satisfy classification (required=$docker_required, result=$docker_result)"
+              echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+              echo "GATE_MODE=docker runtime (failed)" >> "$GITHUB_ENV"
+              exit 1
+              ;;
+          esac
 
           # If full suite was required, enforce all jobs
           if [ "${{ needs.preflight.outputs.run_full }}" = "true" ]; then
@@ -1344,6 +1435,7 @@ jobs:
             echo ""
             echo "### Preflight Decision"
             echo "- **run_full**: ${{ needs.preflight.outputs.run_full }}"
+            echo "- **run_docker**: ${{ needs.preflight.outputs.run_docker }}"
             echo "- **reason**: ${{ needs.preflight.outputs.reason }}"
             echo ""
             echo "### Job Results"
@@ -1351,6 +1443,7 @@ jobs:
             echo "|-----|--------|"
             echo "| lightweight | ${{ needs.lightweight.result }} |"
             echo "| dependency-constraints | ${{ needs['dependency-constraints'].result }} |"
+            echo "| docker-cpu-runtime | ${{ needs['docker-cpu-runtime'].result }} |"
             echo "| lint | ${{ needs.lint.result }} |"
             echo "| typecheck | ${{ needs.typecheck.result }} |"
             echo "| test | ${{ needs.test.result }} |"

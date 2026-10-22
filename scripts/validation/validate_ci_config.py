@@ -58,6 +58,9 @@ class CIValidator:
         f"python {COLD_ZONE_TOUCHED_FILE_SCRIPT} {BRANCH_COVERAGE_XML} --compare-ref origin/main"
     )
     REQUIRED_COLD_ZONE_COMPARE_REF_FETCH = "git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main"
+    DOCKER_RUNTIME_JOB = "docker-cpu-runtime"
+    DOCKER_RUNTIME_CONDITION = "needs.preflight.outputs.run_docker == 'true'"
+    DOCKER_RUNTIME_CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
     FIREWALL_WORKFLOW_NAME = "ci-quality-firewall.yml"
     FIREWALL_INTEGRATED_CACHE_ACTIONS = frozenset(
         {
@@ -388,6 +391,9 @@ class CIValidator:
             self.log_error("build.yml:ci_gate: Aggregator job must not request token permissions")
             valid = False
 
+        if not self._validate_docker_runtime_gate(jobs, ci_gate):
+            valid = False
+
         steps = ci_gate.get("steps", [])
         if not isinstance(steps, list):
             self.log_error("build.yml:ci_gate: Steps must be a list")
@@ -406,6 +412,82 @@ class CIValidator:
                 self.log_error("build.yml:ci_gate: Must not call github.rest.checks.create from CI Gate")
                 valid = False
 
+        return valid
+
+    def _validate_docker_runtime_gate(self, jobs: Dict, ci_gate: Dict) -> bool:
+        """Keep the native Docker contract scheduled and aggregated without privilege."""
+        valid = True
+        job = jobs.get(self.DOCKER_RUNTIME_JOB)
+        if not isinstance(job, dict):
+            self.log_error("build.yml:docker-cpu-runtime: Missing native Docker runtime job")
+            return False
+
+        expected_fields = {
+            "name": "Docker CPU runtime (native amd64)",
+            "runs-on": "ubuntu-24.04",
+            "timeout-minutes": 45,
+            "needs": ["preflight"],
+            "if": self.DOCKER_RUNTIME_CONDITION,
+            "permissions": {"contents": "read"},
+        }
+        for field, expected in expected_fields.items():
+            if job.get(field) != expected:
+                self.log_error(f"build.yml:docker-cpu-runtime: Must retain the native runtime {field} contract")
+                valid = False
+
+        if job.get("continue-on-error", False):
+            self.log_error("build.yml:docker-cpu-runtime: Must not continue on error")
+            valid = False
+
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            self.log_error("build.yml:docker-cpu-runtime: Steps must be a list")
+            valid = False
+        else:
+            actions = [step.get("uses") for step in steps if isinstance(step, dict) and "uses" in step]
+            if actions != [self.DOCKER_RUNTIME_CHECKOUT]:
+                self.log_error("build.yml:docker-cpu-runtime: Must use only the pinned repository checkout action")
+                valid = False
+            for step in steps:
+                if isinstance(step, dict) and (
+                    step.get("if") not in (None, "always()") or step.get("continue-on-error", False)
+                ):
+                    self.log_error("build.yml:docker-cpu-runtime: Steps must not skip or continue on error")
+                    valid = False
+
+        preflight = jobs.get("preflight", {})
+        outputs = preflight.get("outputs", {}) if isinstance(preflight, dict) else {}
+        if not isinstance(outputs, dict) or outputs.get("run_docker") != "${{ steps.classify.outputs.run_docker }}":
+            self.log_error("build.yml:preflight: Must expose the Docker classifier output")
+            valid = False
+
+        needs = ci_gate.get("needs", [])
+        if self.DOCKER_RUNTIME_JOB not in (needs if isinstance(needs, list) else [needs]):
+            self.log_error("build.yml:ci_gate: Must depend directly on docker-cpu-runtime")
+            valid = False
+        if ci_gate.get("if") != "${{ always() }}" or ci_gate.get("continue-on-error", False):
+            self.log_error("build.yml:ci_gate: Docker result aggregation must always run without continuing on error")
+            valid = False
+
+        gate_steps = ci_gate.get("steps", [])
+        if not isinstance(gate_steps, list):
+            gate_steps = []
+        enforcement = [step for step in gate_steps if isinstance(step, dict) and step.get("name") == "Enforce pass/fail"]
+        if len(enforcement) != 1 or not isinstance(enforcement[0].get("run"), str):
+            self.log_error("build.yml:ci_gate: Must retain one executable Enforce pass/fail step")
+            return False
+        step = enforcement[0]
+        if "if" in step or step.get("continue-on-error", False):
+            self.log_error("build.yml:ci_gate: Docker result enforcement must not skip or continue on error")
+            valid = False
+        script = "\n".join(line for line in step["run"].splitlines() if not line.lstrip().startswith("#"))
+        before_full_suite = script.split('if [ "${{ needs.preflight.outputs.run_full }}" = "true" ]; then', 1)[0]
+        if not all(
+            reference in before_full_suite
+            for reference in ("${{ needs.preflight.outputs.run_docker }}", "${{ needs['docker-cpu-runtime'].result }}")
+        ):
+            self.log_error("build.yml:ci_gate: Must enforce the Docker classifier and result before the full-suite branch")
+            valid = False
         return valid
 
     def validate_firewall_checkout_trust_contract(self, workflow_path: Path, config: Dict) -> bool:

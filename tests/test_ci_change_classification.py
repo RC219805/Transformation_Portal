@@ -130,14 +130,55 @@ def test_ordinary_documentation_keeps_lightweight_ci(path: str) -> None:
 
     assert outputs["run_full"] == "false"
     assert outputs["run_frontdoor"] == "false"
+    assert outputs["run_docker"] == "false"
 
 
-@pytest.mark.parametrize("previous_path,frontdoor", [("app.py", "false"), ("public/portal-assets/portal.js", "true")])
+@pytest.mark.parametrize(
+    "previous_path,frontdoor", [("app.py", "false"), ("public/portal-assets/portal.js", "true"), ("Dockerfile", "false")]
+)
 def test_renames_out_of_runtime_paths_retain_required_validation(previous_path: str, frontdoor: str) -> None:
     outputs = _classify([{"filename": "docs/archive/old-source.txt", "previous_filename": previous_path}])
 
     assert outputs["run_full"] == "true"
     assert outputs["run_frontdoor"] == frontdoor
+    assert outputs["run_docker"] == ("true" if previous_path == "Dockerfile" else "false")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Dockerfile",
+        ".dockerignore",
+        "docker-compose.yml",
+        "requirements.txt",
+        "requirements/base.in",
+        "requirements/base.txt",
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "src/transformation_portal/cli/__main__.py",
+        ".github/workflows/build.yml",
+        "scripts/validation/check_docker_runtime.py",
+        "scripts/validation/validate_ci_config.py",
+        "tests/validation/test_dockerfile_contract.py",
+        "tests/validation/test_docker_runtime_probe.py",
+        "tests/test_ci_change_classification.py",
+        "tests/test_validate_ci_config.py",
+    ],
+)
+def test_docker_runtime_inputs_require_the_native_image_job(path: str) -> None:
+    outputs = _classify([{"filename": path}])
+    assert outputs["run_docker"] == "true"
+    assert outputs["run_full"] == "true"
+
+
+@pytest.mark.parametrize(
+    "path", ["src/transformation_portal/example.py", "requirements/editorial.in", "tests/test_unrelated.py"]
+)
+def test_unrelated_full_suite_changes_do_not_require_a_docker_build(path: str) -> None:
+    outputs = _classify([{"filename": path}])
+    assert outputs["run_full"] == "true"
+    assert outputs["run_docker"] == "false"
 
 
 @pytest.mark.parametrize("event", ["push", "workflow_dispatch"])
@@ -146,6 +187,7 @@ def test_non_pr_events_require_all_contracts_without_api_inventory(event: str) -
 
     assert outputs["run_full"] == "true"
     assert outputs["run_frontdoor"] == "true"
+    assert outputs["run_docker"] == "true"
 
 
 @pytest.mark.parametrize("returned_count,declared_count", [(0, 0), (1, 2), (2, 1), (3000, 3000), (3000, 3001)])
@@ -156,6 +198,7 @@ def test_empty_stale_or_capped_inventory_fails_closed(returned_count: int, decla
 
     assert outputs["run_full"] == "true"
     assert outputs["run_frontdoor"] == "true"
+    assert outputs["run_docker"] == "true"
     assert "inventory" in outputs["reason"]
 
 
