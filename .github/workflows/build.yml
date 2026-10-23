@@ -608,7 +608,7 @@ jobs:
           if-no-files-found: ignore
 
   docker-cpu-runtime:
-    name: Docker CPU runtime (native amd64)
+    name: Docker runtime (native amd64)
     needs: [preflight]
     if: needs.preflight.outputs.run_docker == 'true'
     runs-on: ubuntu-24.04
@@ -634,8 +634,8 @@ jobs:
           # Disposable hosted-runner tools, preserving the Python toolcache.
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android
           free_kib=$(df -Pk / | awk 'NR == 2 {print $4}')
-          if [[ ! "$free_kib" =~ ^[0-9]+$ ]] || (( free_kib < 10 * 1024 * 1024 )); then
-            echo "Docker build requires at least 10 GiB free after runner cleanup."
+          if [[ ! "$free_kib" =~ ^[0-9]+$ ]] || (( free_kib < 30 * 1024 * 1024 )); then
+            echo "Docker builds require at least 30 GiB free after runner cleanup."
             exit 1
           fi
           df -h
@@ -653,6 +653,30 @@ jobs:
           timeout 180s docker run --rm --name "$container_name" --network none \
             --entrypoint python3.11 transformation-portal:cpu-runtime-ci \
             /app/scripts/validation/check_docker_runtime.py --expected-architecture amd64
+
+      - name: Verify GPU build disk space
+        run: |
+          set -euo pipefail
+          free_kib=$(df -Pk / | awk 'NR == 2 {print $4}')
+          if [[ ! "$free_kib" =~ ^[0-9]+$ ]] || (( free_kib < 30 * 1024 * 1024 )); then
+            echo "GPU build requires at least 30 GiB free."
+            exit 1
+          fi
+          df -h
+
+      - name: Build full GPU runtime image
+        run: |
+          docker build --platform linux/amd64 --target gpu --pull --no-cache \
+            --progress=plain --tag transformation-portal:gpu-runtime-ci .
+
+      - name: Validate default GPU runtime offline without hardware
+        run: |
+          set -euo pipefail
+          container_name="tp-gpu-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$container_name" >/dev/null 2>&1 || true' EXIT
+          timeout 180s docker run --rm --name "$container_name" --network none \
+            --entrypoint python3.11 transformation-portal:gpu-runtime-ci \
+            /app/scripts/validation/check_docker_runtime.py --expected-architecture amd64 --gpu-packages
 
       - name: Record final Docker disk usage
         if: always()

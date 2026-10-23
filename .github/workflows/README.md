@@ -13,10 +13,12 @@ non-PR events run the full suite. `lightweight` and `dependency-constraints` run
 for every classified change. Full runs add lint, Python 3.12 type checking,
 Python 3.11/3.12 core tests, Python 3.11 ML tests, and manifest generation.
 `frontdoor-contract` runs when the frontdoor classifier requests it.
-`docker-cpu-runtime` runs when `run_docker` requests it, building the CPU image
-on native Linux amd64 and checking its default user, imports, CLI, and offline
-bootstrap with networking disabled. This CPU smoke does not establish GPU
-hardware acceptance. A Docker-classified PR also requests the full suite.
+`docker-cpu-runtime` runs when `run_docker` requests it, sequentially building
+the CPU and full GPU images on native Linux amd64. Each image checks its default
+user, imports, CLI, and offline bootstrap with networking disabled. The GPU
+probe additionally checks the installed Torch/Torchvision packages without
+GPU access; it does not establish CUDA tensor execution or hardware acceptance.
+A Docker-classified PR also requests the full suite.
 
 `CI Gate` aggregates these results and permits intentional heavy-job skips in
 lightweight mode. A requested Docker runtime job must succeed in every gate

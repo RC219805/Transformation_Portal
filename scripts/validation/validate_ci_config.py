@@ -423,7 +423,7 @@ class CIValidator:
             return False
 
         expected_fields = {
-            "name": "Docker CPU runtime (native amd64)",
+            "name": "Docker runtime (native amd64)",
             "runs-on": "ubuntu-24.04",
             "timeout-minutes": 45,
             "needs": ["preflight"],
@@ -454,6 +454,8 @@ class CIValidator:
                 ):
                     self.log_error("build.yml:docker-cpu-runtime: Steps must not skip or continue on error")
                     valid = False
+            if not self._validate_docker_runtime_commands(steps):
+                valid = False
 
         preflight = jobs.get("preflight", {})
         outputs = preflight.get("outputs", {}) if isinstance(preflight, dict) else {}
@@ -488,6 +490,43 @@ class CIValidator:
         ):
             self.log_error("build.yml:ci_gate: Must enforce the Docker classifier and result before the full-suite branch")
             valid = False
+        return valid
+
+    def _validate_docker_runtime_commands(self, steps: List) -> bool:
+        """Require executable builds and offline probes for both final image targets."""
+        valid = True
+        for target, build_name, probe_name in (
+            ("cpu", "Build CPU runtime image", "Validate default CPU runtime offline"),
+            ("gpu", "Build full GPU runtime image", "Validate default GPU runtime offline without hardware"),
+        ):
+            image = f"transformation-portal:{target}-runtime-ci"
+            expected_build = (
+                f"docker build --platform linux/amd64 --target {target} --pull --no-cache " f"--progress=plain --tag {image} ."
+            )
+            expected_probe = (
+                "set -euo pipefail\n"
+                f'container_name="tp-{target}-runtime-${{GITHUB_RUN_ID}}-${{GITHUB_RUN_ATTEMPT}}"\n'
+                "trap 'docker rm -f \"$container_name\" >/dev/null 2>&1 || true' EXIT\n"
+                'timeout 180s docker run --rm --name "$container_name" --network none '
+                f"--entrypoint python3.11 {image} "
+                "/app/scripts/validation/check_docker_runtime.py --expected-architecture amd64"
+                + (" --gpu-packages" if target == "gpu" else "")
+            )
+            for name, expected in ((build_name, expected_build), (probe_name, expected_probe)):
+                matches = [step for step in steps if isinstance(step, dict) and step.get("name") == name]
+                if len(matches) != 1:
+                    self.log_error(f"build.yml:docker-cpu-runtime: Must retain one executable {target} build and probe")
+                    valid = False
+                    continue
+                step = matches[0]
+                script = step.get("run")
+                try:
+                    commands = shlex.split(script.replace("\\\n", " "), comments=True) if isinstance(script, str) else []
+                except ValueError:
+                    commands = []
+                if commands != shlex.split(expected) or set(step) - {"name", "run"}:
+                    self.log_error(f"build.yml:docker-cpu-runtime: Must execute the required {target} build and offline probe")
+                    valid = False
         return valid
 
     def validate_firewall_checkout_trust_contract(self, workflow_path: Path, config: Dict) -> bool:

@@ -83,18 +83,19 @@ Purpose: Validate that code is importable, tests pass, and manifests/config expe
 - `preflight` - Change classification; docs paths under setup/workflows can still request full CI
 - `lightweight`, `dependency-constraints` - Always required after classification
 - `frontdoor-contract` - Conditional frontdoor validation
-- `docker-cpu-runtime` - Conditional native Linux amd64 CPU image build and offline default-user/import/CLI/bootstrap smoke
+- `docker-cpu-runtime` - Conditional native Linux amd64 CPU and full GPU image builds with offline default-user/import/CLI/bootstrap probes
 - `lint` - CI-pinned lint checks
 - `typecheck` - Blocking Python 3.12 mypy whitelist
 - `test` - Matrix-expanded test jobs (Python 3.11/3.12, core/ml tests)
 - `generate-manifest` - Montecito manifest generation
 - `CI Gate` - **Aggregator job** (this is what branch protection requires)
 
-The Docker classifier requests the CPU runtime job for its matching PR paths;
+The Docker classifier requests the runtime job for its matching PR paths;
 non-PR events and incomplete PR inventories request it conservatively.
-Docker-classified changes also request the full suite. The smoke runs with
-networking disabled and proves the CPU runtime contract only,
-not GPU hardware acceptance.
+Docker-classified changes also request the full suite. Both image probes run
+with networking disabled. GPU package checks are software-only evidence for
+the installed Torch/Torchvision distributions; they do not establish CUDA
+tensor execution or GPU hardware acceptance.
 
 **Branch protection snapshot:** `CI Gate` and the independent
 `Dependency Security` job were required on 2026-09-21. Re-read GitHub before

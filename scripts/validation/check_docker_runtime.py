@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Check the default CPU image identity and its preserved offline bootstrap."""
+"""Check default image identity, offline bootstrap, and optional GPU packages."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import importlib.metadata
 import json
@@ -13,6 +14,8 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 
 BASE_PREFIX = Path("/opt/python3.11")
@@ -20,6 +23,7 @@ APP_PREFIX = Path("/opt/venv")
 EXPECTED_HOME = Path("/home/tp")
 LEGACY_PREFIX = Path("/usr/local/lib/python3.11")
 BOOTSTRAP_VERSIONS = {"pip": "26.2.2", "setuptools": "83.0.0"}
+GPU_VERSIONS = {"torch": "2.13.0+cu126", "torchvision": "0.28.0+cu126"}
 MACHINES = {"amd64": {"x86_64"}, "arm64": {"aarch64", "arm64"}}
 IMPORTS = (
     "bz2",
@@ -91,7 +95,46 @@ def _metadata_versions(python: Path) -> dict[str, str]:
     return json.loads(result.stdout)
 
 
-def _check_offline_venv(home: Path) -> dict[str, str]:
+def _installed_inventory(python: Path) -> dict:
+    program = """
+import hashlib, importlib.metadata as metadata, json
+from pathlib import Path
+packages = []
+for distribution in metadata.distributions():
+    package = {"name": distribution.metadata["Name"], "version": distribution.version}
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url:
+        package["direct_url"] = json.loads(direct_url)
+    packages.append(package)
+ca = Path(metadata.distribution("pip").locate_file("pip/_vendor/certifi/cacert.pem"))
+print(json.dumps({"packages": sorted(packages, key=lambda package: (package["name"].lower(), package["version"])),
+                  "pip_ca_sha256": hashlib.sha256(ca.read_bytes()).hexdigest()}))
+"""
+    result = subprocess.run([str(python), "-I", "-c", program], check=True, capture_output=True, text=True, timeout=30)
+    return json.loads(result.stdout)
+
+
+def _bootstrap_wheel_inventory() -> list[dict]:
+    inventory = []
+    for path in sorted((BASE_PREFIX / "share/python-wheels").iterdir()):
+        with zipfile.ZipFile(path) as archive:
+            metadata_paths = [
+                name for name in archive.namelist() if name.count("/") == 1 and name.endswith(".dist-info/METADATA")
+            ]
+            _require(len(metadata_paths) == 1, f"Bootstrap wheel must contain one package metadata record: {path.name}")
+            metadata = BytesParser().parsebytes(archive.read(metadata_paths[0]))
+            _require(bool(metadata["Name"] and metadata["Version"]), f"Bootstrap wheel metadata is incomplete: {path.name}")
+            package = {"filename": path.name, "name": metadata["Name"], "version": metadata["Version"]}
+            with path.open("rb") as source:
+                package["sha256"] = hashlib.file_digest(source, "sha256").hexdigest()
+            ca = "pip/_vendor/certifi/cacert.pem"
+            if ca in archive.namelist():
+                package["pip_ca_sha256"] = hashlib.sha256(archive.read(ca)).hexdigest()
+            inventory.append(package)
+    return inventory
+
+
+def _check_offline_venv(home: Path, *, inventories: dict | None = None) -> dict[str, str]:
     with tempfile.TemporaryDirectory(prefix="tp-docker-runtime-", dir=home) as directory:
         target = Path(directory) / "venv"
         subprocess.run(
@@ -102,6 +145,8 @@ def _check_offline_venv(home: Path) -> dict[str, str]:
         )
         versions = _metadata_versions(target / "bin/python")
         _check_versions(versions)
+        if inventories is not None:
+            inventories["offline_venv"] = _installed_inventory(target / "bin/python")
     return versions
 
 
@@ -117,16 +162,30 @@ def _check_module_launcher() -> None:
     _require(bool(result.stdout.strip()), "Default CLI module launcher returned empty help")
 
 
-def check_runtime(expected_architecture: str) -> dict:
+def _check_gpu_packages() -> dict:
+    for name, expected in GPU_VERSIONS.items():
+        _require(importlib.metadata.version(name) == expected, f"GPU package {name} must be {expected}")
+    torch = importlib.import_module("torch")
+    torchvision = importlib.import_module("torchvision")
+    _require(torch.__version__ == GPU_VERSIONS["torch"], "Imported torch version must match its CUDA package pin")
+    _require(
+        torchvision.__version__ == GPU_VERSIONS["torchvision"], "Imported torchvision version must match its CUDA package pin"
+    )
+    _require(torch.version.cuda == "12.6", "Torch must be built for CUDA 12.6")
+    return {**GPU_VERSIONS, "cuda_build": torch.version.cuda, "hardware_validation": "not_performed"}
+
+
+def check_runtime(expected_architecture: str, *, gpu_packages: bool = False) -> dict:
     home = _check_identity(expected_architecture)
     _check_prefix()
     _check_versions({name: importlib.metadata.version(name) for name in BOOTSTRAP_VERSIONS})
     _check_versions(_metadata_versions(BASE_PREFIX / "bin/python3.11"))
-    offline_versions = _check_offline_venv(home)
+    inventories = {}
+    offline_versions = _check_offline_venv(home, inventories=inventories if gpu_packages else None)
     for name in IMPORTS:
         importlib.import_module(name)
     _check_module_launcher()
-    return {
+    evidence = {
         "architecture": platform.machine(),
         "python": platform.python_version(),
         "uid": os.getuid(),
@@ -137,15 +196,25 @@ def check_runtime(expected_architecture: str) -> dict:
         "imports": list(IMPORTS),
         "module_launcher_help": "passed",
     }
+    if gpu_packages:
+        evidence["gpu_packages"] = _check_gpu_packages()
+        inventories["application"] = _installed_inventory(Path(sys.executable))
+        inventories["base"] = _installed_inventory(BASE_PREFIX / "bin/python3.11")
+        evidence["installed_inventory"] = inventories
+        evidence["bootstrap_wheels"] = _bootstrap_wheel_inventory()
+    return evidence
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-architecture", choices=sorted(MACHINES), required=True)
+    parser.add_argument(
+        "--gpu-packages", action="store_true", help="Verify CUDA package builds without requiring GPU hardware"
+    )
     args = parser.parse_args(argv)
     try:
-        evidence = check_runtime(args.expected_architecture)
-    except (OSError, RuntimeError, ValueError, ImportError, subprocess.SubprocessError) as exc:
+        evidence = check_runtime(args.expected_architecture, gpu_packages=args.gpu_packages)
+    except (OSError, RuntimeError, ValueError, ImportError, subprocess.SubprocessError, zipfile.BadZipFile) as exc:
         print(f"Docker runtime check failed: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(evidence, indent=2, sort_keys=True))
