@@ -128,7 +128,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
       "content_sha256": "de1074dab3dffcac2a4a099ea449f727d9934c0b365cbcf3381484ffae246f55",
       "source_references": [
         ".github/workflows/build.yml",
@@ -137,7 +137,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -895,8 +895,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
-      "content_sha256": "ee4480271974f5fd1c22b055aff99b444c60d2f33a191f66a1a74f937fb29ac4",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
+      "content_sha256": "a430e05608e68695b1196cd750e4adc1eb0ba3901433860e6e6cee5aaef19797",
       "source_references": [
         ".github/workflows/build.yml",
         ".github/workflows/security-unified.yml",
@@ -904,7 +904,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -5930,7 +5930,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
       "content_sha256": "02df44dd54edfa2dadd80f46ce09b9886988ce0d0061a1d0b7a33a956ce51036",
       "source_references": [
         ".github/workflows/build.yml",
@@ -5939,7 +5939,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -6153,7 +6153,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
       "content_sha256": "9434f4cad1d0dad0082f8949c92922a3443cf303a83765d280d392ac5b90f5c7",
       "source_references": [
         ".github/workflows/build.yml",
@@ -6162,7 +6162,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -6214,8 +6214,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
-      "content_sha256": "f39cb8571abb5c765dc611a14583995cb555117855d3c37e1c51de10365b59bd",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
+      "content_sha256": "57ce34cb113062dce6daa627e72c89ad263ef25bf4f8d50aff35e5ea0cf61de0",
       "source_references": [
         ".github/workflows/build.yml",
         ".github/workflows/security-unified.yml",
@@ -6223,7 +6223,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -6291,8 +6291,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e1941e94a52cf37c6590805c4a148403b66c7cb",
-      "content_sha256": "5abf1ddb956a503b32518466f9bdc194b9ff290bd3b0dab81eb859268b19a6ed",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
+      "content_sha256": "ffb9226b2b463154b2cffd6f107ad2bf751cf1f884c7b20cd9993324eca55ecd",
       "source_references": [
         ".github/workflows/build.yml",
         ".github/workflows/security-unified.yml",
@@ -6300,7 +6300,7 @@
         ".github/workflows/submit-pypi.yml"
       ],
       "source_sha256": {
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         ".github/workflows/security-unified.yml": "89a5c5f345734f064b5c42acdcdf9ba54c841dde20ad0c1b99a85f0ea04628b9",
         ".github/workflows/ci.yml": "73fa2592a760ca30946791c049760536716b2b96b69dacdc50535ceb2954a96e",
         ".github/workflows/submit-pypi.yml": "5bddfd1f05fb17e5bed37ac5c8d3d6a609ea24fe5e98fbe06c077dd159c472fc"
@@ -16824,7 +16824,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "bcca8f9e804bb9b1f39ffdef99f8b14779cc6a81",
+      "source_commit": "978d68b41ace657f305bacd7f0d8b3cd096b5de6",
       "content_sha256": "44c64b26e362c6d0ef5b7574720d508d004646db8f8d2fc4bedb10b46c3bac0c",
       "source_references": [
         "pyproject.toml",
@@ -16833,7 +16833,7 @@
       ],
       "source_sha256": {
         "pyproject.toml": "d18574f30f12f5279ce255866e9fe9c718ae805ae9b80e3ad89c5038d8c52896",
-        ".github/workflows/build.yml": "5a15b4392e9228ef033089e31ea8676d358349e2a3d33d8b36ebe619bebf5914",
+        ".github/workflows/build.yml": "267add66f2fa8d811c559d29185a9443f11deac9acad60287eb21cf168ac5e93",
         "tests/enforcement/test_ml_fast_collection_contract.py": "866488e6395ea7e4268221abeaa1820ee0a5c81f77edc2a8e78f61d7d8f9ec22"
       },
       "validation_commands": [
