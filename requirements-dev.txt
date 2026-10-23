@@ -32,7 +32,7 @@ isort>=5.13,<9
 autopep8>=2.0,<3
 libcst>=1.2,<2
 pre-commit>=4.0,<5
-virtualenv>=21.14.12,<22
+virtualenv>=21.14.13,<22
 
 # Documentation generation
 sphinx>=7.2,<9

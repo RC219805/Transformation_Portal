@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNED_PIP_PIN = "pip==26.2.2"
 GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
-PYPDF_SECURITY_FLOOR = "pypdf>=6.21.1"
+PYPDF_SECURITY_FLOOR = "pypdf>=6.21.2"
 GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
 GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
 
@@ -218,9 +218,10 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
         locked_versions.append(version)
     assert locked_versions[0] == locked_versions[1]
     assert Version("6.21.0") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
-    assert ">=6.21.1" in contributing
+    assert Version("6.21.1") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
+    assert ">=6.21.2" in contributing
     assert "GHSA-5hx5-vpf9-5wcv" in contributing
-    assert "`>=6.21.1`" in dependency_adr
+    assert "`>=6.21.2`" in dependency_adr
 
     governed_surfaces = "\n".join((ci_input, pyproject, all_lock, ci_lock, contributing, dependency_adr))
     assert "pypdf>=6.13.3" not in governed_surfaces
@@ -229,15 +230,15 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
 
 def test_virtualenv_activation_and_seed_wheel_security_floor() -> None:
     for relative_path in ("requirements/dev.in", "requirements-dev.txt", "requirements/ci.in"):
-        assert "virtualenv>=21.14.12,<22" in (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "virtualenv>=21.14.13,<22" in (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     for extra in ("dev", "ci"):
         requirements = [Requirement(line) for line in pyproject["project"]["optional-dependencies"][extra]]
         virtualenv_requirements = [requirement for requirement in requirements if requirement.name == "virtualenv"]
         assert len(virtualenv_requirements) == 1
-        assert Version("21.14.11") not in virtualenv_requirements[0].specifier
-        assert Version("21.14.12") in virtualenv_requirements[0].specifier
+        assert Version("21.14.12") not in virtualenv_requirements[0].specifier
+        assert Version("21.14.13") in virtualenv_requirements[0].specifier
 
     for relative_path in ("requirements/all.txt", "requirements/dev.txt", "requirements/ci.txt"):
         pins = [
@@ -246,7 +247,7 @@ def test_virtualenv_activation_and_seed_wheel_security_floor() -> None:
             if line.startswith("virtualenv==")
         ]
         assert len(pins) == 1
-        assert Version(next(iter(pins[0].specifier)).version) >= Version("21.14.12")
+        assert Version(next(iter(pins[0].specifier)).version) >= Version("21.14.13")
 
 
 def test_black_security_pin_is_shared_by_lint_and_generic_development_tools() -> None:

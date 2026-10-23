@@ -148,7 +148,7 @@ dev = [
     "libcst>=1.2,<2",
     "types-PyYAML>=6.0.12",
     "pre-commit>=4.0,<5",
-    "virtualenv>=21.14.12,<22",
+    "virtualenv>=21.14.13,<22",
 ]
 # CI/CD tools - see requirements/ci.in for pinned versions
 ci = [
@@ -157,8 +157,8 @@ ci = [
     "build>=1.0,<2",
     "twine>=4.0,<8",
     "tox>=4.5,<5",
-    "virtualenv>=21.14.12,<22",
-    "pypdf>=6.21.1",
+    "virtualenv>=21.14.13,<22",
+    "pypdf>=6.21.2",
 ]
 # All dependencies combined (minimal pointer, not full graph)
 # For production, use lockfiles: requirements/all.txt
