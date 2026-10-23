@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
                 "torchvision==0.28.0",
                 "transformers==5.10.4",
                 "pre-commit==4.6.2",
-                "virtualenv==21.7.13",
+                "virtualenv==21.14.13",
             ),
         ),
         (

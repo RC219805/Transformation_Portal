@@ -732,8 +732,8 @@ Certain packages require minimum versions due to CVEs:
 | `msgpack`               | >=1.2.1         | GHSA-6v7p-g79w-8964 |
 | `Pillow`                | >=13.0.0        | GHSA-8g5g-8vmr-9782 and related image decoder fixes |
 | `certifi`               | >=2026.10.19    | GHSA-6q48-6c7w-9gw2 (compromised emSign trust roots) |
-| `pypdf`                 | >=6.19.0        | GHSA-fwg2-594c-jp42 and GHSA-fp3f-mc75-235c; includes embedded-file, appearance-stream and page-label resource fixes |
-| `virtualenv`            | >=21.7.13       | GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes |
+| `pypdf`                 | >=6.21.2        | GHSA-5hx5-vpf9-5wcv plus full-file loading and xref resource fixes |
+| `virtualenv`            | >=21.14.13      | Bash prompt injection/link fixes and patched pip seeds for Python 3.11+ |
 | `starlette`             | >=1.3.1         | CVE-2026-48710 / PYSEC-2026-161 plus 2026 web-stack advisories |
 
 ### Approved Exceptions

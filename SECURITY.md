@@ -112,6 +112,10 @@ guarantee secure erasure from storage, backups, or process memory.
   versions come from the applicable lock, and current alert status requires a
   fresh scanner or service check; this chronology is not an open-alert inventory.
 
+  **October 2026**:
+  - **black==26.10.1** - Patched action-version validation baseline
+    (GHSA-cg8m-r9f2-5wm2); this repository does not use the affected `psf/black` Action
+
   **March 2026**:
   - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
     - **Supported-lane remediation**: macOS Apple Silicon ML core lock rotates to `torch==2.8.0` / `torchvision==0.23.0`
