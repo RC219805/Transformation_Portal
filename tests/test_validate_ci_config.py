@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -97,6 +99,215 @@ def test_build_workflow_ci_gate_contract_passes_repo_config() -> None:
 
     assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is True
     assert validator.errors == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("name", "Docker advisory"),
+        ("runs-on", "ubuntu-24.04-arm"),
+        ("timeout-minutes", 360),
+        ("needs", []),
+        ("if", "always()"),
+        ("permissions", {"contents": "write"}),
+        ("continue-on-error", True),
+        ("steps", None),
+    ],
+)
+def test_docker_runtime_gate_rejects_job_contract_drift(field: str, value: object) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    config["jobs"]["docker-cpu-runtime"][field] = value
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("build.yml:docker-cpu-runtime:" in error for error in validator.errors)
+
+
+@pytest.mark.parametrize("field,value", [("if", "false"), ("continue-on-error", True)])
+def test_docker_runtime_gate_rejects_skipped_or_advisory_steps(field: str, value: object) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    steps = config["jobs"]["docker-cpu-runtime"]["steps"]
+    step = next(step for step in steps if "run" in step)
+    step[field] = value
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("Steps must not skip or continue on error" in error for error in validator.errors)
+
+
+def test_docker_runtime_gate_rejects_unpinned_or_additional_actions() -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    config["jobs"]["docker-cpu-runtime"]["steps"].append({"uses": "docker/setup-buildx-action@v3"})
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("Must use only the pinned repository checkout action" in error for error in validator.errors)
+
+
+DOCKER_RUNTIME_COMMAND_STEPS = (
+    ("Build CPU runtime image", "build"),
+    ("Validate default CPU runtime offline", "run"),
+    ("Build full GPU runtime image", "build"),
+    ("Validate default GPU runtime offline without hardware", "run"),
+)
+
+
+@pytest.mark.parametrize("step_name,_command", DOCKER_RUNTIME_COMMAND_STEPS)
+@pytest.mark.parametrize("mutation", ["missing", "commented", "suppressed", "skip", "advisory", "shell"])
+def test_docker_runtime_gate_rejects_bypassed_image_build_or_probe(step_name: str, _command: str, mutation: str) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    steps = config["jobs"]["docker-cpu-runtime"]["steps"]
+    step = next(step for step in steps if step.get("name") == step_name)
+    if mutation == "missing":
+        steps.remove(step)
+    elif mutation == "commented":
+        step["run"] = "\n".join(f"# {line}" for line in step["run"].splitlines())
+    elif mutation == "suppressed":
+        step["run"] += " || true"
+    elif mutation == "skip":
+        step["if"] = "false"
+    elif mutation == "advisory":
+        step["continue-on-error"] = True
+    else:
+        step["shell"] = "bash {0} || true"
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("build.yml:docker-cpu-runtime:" in error for error in validator.errors)
+
+
+@pytest.mark.parametrize("step_name,command", DOCKER_RUNTIME_COMMAND_STEPS)
+@pytest.mark.parametrize("docker_fails", [False, True])
+def test_docker_runtime_build_and_probe_shells_propagate_command_failures(
+    tmp_path: Path, step_name: str, command: str, docker_fails: bool
+) -> None:
+    """Execute the saved shell with stub tools; no image build or container runs."""
+    _, config = _load_config(BUILD_WORKFLOW_PATH)
+    step = next(step for step in config["jobs"]["docker-cpu-runtime"]["steps"] if step.get("name") == step_name)
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    docker = tools / "docker"
+    docker_script = '#!/bin/bash\nprintf "%s\\n" "$*" >> "$DOCKER_LOG"\n'
+    docker_script += 'if [ "$1" = "$DOCKER_FAIL" ]; then exit 23; fi\n'
+    docker.write_text(docker_script, encoding="utf-8")
+    docker.chmod(0o755)
+    timeout = tools / "timeout"
+    timeout.write_text('#!/bin/bash\nshift\nexec "$@"\n', encoding="utf-8")
+    timeout.chmod(0o755)
+    log = tmp_path / "docker.log"
+    result = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", step["run"]],
+        env={
+            "PATH": f"{tools}:/usr/bin:/bin",
+            "DOCKER_LOG": str(log),
+            "DOCKER_FAIL": command if docker_fails else "",
+            "GITHUB_RUN_ID": "123",
+            "GITHUB_RUN_ATTEMPT": "1",
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == (23 if docker_fails else 0), result.stdout + result.stderr
+    calls = [shlex.split(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    assert calls[0][0] == command
+    assert "--gpus" not in calls[0] and "--user" not in calls[0]
+    if command == "run":
+        assert calls[-1] == ["rm", "-f", f"tp-{'gpu' if 'GPU' in step_name else 'cpu'}-runtime-123-1"]
+
+
+@pytest.mark.parametrize("missing_contract", ["job", "output", "dependency", "enforcement", "comment-only-enforcement"])
+def test_docker_runtime_gate_rejects_missing_scheduling_or_aggregation(missing_contract: str) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    jobs = config["jobs"]
+    if missing_contract == "job":
+        del jobs["docker-cpu-runtime"]
+    elif missing_contract == "output":
+        del jobs["preflight"]["outputs"]["run_docker"]
+    elif missing_contract == "dependency":
+        jobs["ci_gate"]["needs"].remove("docker-cpu-runtime")
+    else:
+        enforcement = next(step for step in jobs["ci_gate"]["steps"] if step.get("name") == "Enforce pass/fail")
+        enforcement["run"] = "echo Docker aggregation removed"
+        if missing_contract == "comment-only-enforcement":
+            enforcement["run"] += "\n# ${{ needs.preflight.outputs.run_docker }}\n# ${{ needs['docker-cpu-runtime'].result }}"
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert validator.errors
+
+
+@pytest.mark.parametrize("field,value", [("if", "false"), ("continue-on-error", True)])
+def test_docker_runtime_gate_rejects_bypassed_aggregator(field: str, value: object) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    config["jobs"]["ci_gate"][field] = value
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("Docker result aggregation must always run" in error for error in validator.errors)
+
+
+@pytest.mark.parametrize("field,value", [("if", "false"), ("continue-on-error", True)])
+def test_docker_runtime_gate_rejects_bypassed_enforcement(field: str, value: object) -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+    enforcement = next(step for step in config["jobs"]["ci_gate"]["steps"] if step.get("name") == "Enforce pass/fail")
+    enforcement[field] = value
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is False
+    assert any("Docker result enforcement must not skip or continue on error" in error for error in validator.errors)
+
+
+@pytest.mark.parametrize("run_full", ["true", "false"], ids=["full", "lightweight"])
+@pytest.mark.parametrize(
+    "run_docker,docker_result,passes",
+    [
+        ("true", "success", True),
+        ("true", "failure", False),
+        ("true", "cancelled", False),
+        ("true", "skipped", False),
+        ("true", "", False),
+        ("false", "success", True),
+        ("false", "skipped", True),
+        ("false", "failure", False),
+        ("false", "cancelled", False),
+        ("false", "", False),
+        ("", "skipped", False),
+        ("invalid", "success", False),
+    ],
+)
+def test_ci_gate_executes_docker_result_contract_in_every_mode(
+    tmp_path: Path, run_full: str, run_docker: str, docker_result: str, passes: bool
+) -> None:
+    _, config = _load_config(BUILD_WORKFLOW_PATH)
+    steps = config["jobs"]["ci_gate"]["steps"]
+    script = next(step["run"] for step in steps if step.get("name") == "Enforce pass/fail")
+    script = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+    values = {
+        "needs.preflight.outputs.run_full": run_full,
+        "needs.preflight.outputs.run_frontdoor": "false",
+        "needs.preflight.outputs.run_docker": run_docker,
+        "needs.lightweight.result": "success",
+        "needs['dependency-constraints'].result": "success",
+        "needs['frontdoor-contract'].result": "success",
+        "needs['docker-cpu-runtime'].result": docker_result,
+        "needs.lint.result": "success",
+        "needs.typecheck.result": "success",
+        "needs.test.result": "success",
+        "needs['generate-manifest'].result": "success",
+    }
+
+    def render_expression(match: re.Match[str]) -> str:
+        return values[match.group(1).strip()]
+
+    rendered = re.sub(r"\$\{\{\s*(.*?)\s*\}\}", render_expression, script)
+    github_env = tmp_path / "github-env"
+    result = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", "-c", rendered],
+        env={"GITHUB_ENV": str(github_env)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == (0 if passes else 1), result.stdout + result.stderr
+    assert f"GATE_STATUS={'success' if passes else 'failure'}" in github_env.read_text(encoding="utf-8")
 
 
 def test_worker_request_contract_runs_in_blocking_frontdoor_job() -> None:
