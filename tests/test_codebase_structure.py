@@ -729,18 +729,18 @@ class TestRootGovernanceMetadata:
         metadata_dev_packages = package_names(dev_extra)
 
         assert governed_dev_packages <= metadata_dev_packages
-        assert "black>=26.3.1" in dev_extra
+        assert "black>=26.10.1" in dev_extra
         assert "Werkzeug>=3.1.9,<4" in dev_extra
         assert "Werkzeug>=3.1.9,<4" in requirements_dev
         assert "black>=24.8" not in dev_extra
-        assert "black>=26.3.1" in requirements_dev
+        assert "black>=26.10.1" in requirements_dev
         assert "black>=24.8" not in contributing
         assert "mypy>=1.10  # Type checker" in contributing
 
         adr_032 = (_repo_root / "docs" / "architecture" / "ADR-032-dependency-pinning-strategy.md").read_text()
         assert "black>=24.8" not in adr_032
         assert "| `black`       | dev.in  | `>=24.8`" not in adr_032
-        assert "| `black`       | dev.in  | `>=26.3.1`" in adr_032
+        assert "| `black`       | dev.in  | `==26.10.1`" in adr_032
         assert "pylint>=3.0" in adr_032
 
     def test_contributing_dependency_audit_schedule_requires_completion_evidence(self):

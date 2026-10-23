@@ -130,7 +130,7 @@ pygments==2.21.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.20.0
+pypdf==6.21.2
     # via
     #   -c all.txt
     #   -r ci.in
@@ -203,7 +203,7 @@ urllib3==2.8.0
     #   id
     #   requests
     #   twine
-virtualenv==21.14.7
+virtualenv==21.14.13
     # via
     #   -c all.txt
     #   -r ci.in

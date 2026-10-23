@@ -25,7 +25,7 @@ autopep8==2.3.2
     # via
     #   -c all.txt
     #   -r dev.in
-black==26.3.1
+black==26.10.1
     # via
     #   -c all.txt
     #   -r dev.in
@@ -345,7 +345,7 @@ urllib3==2.8.0
     #   botocore
     #   requests
     #   responses
-virtualenv==21.14.7
+virtualenv==21.14.13
     # via
     #   -c all.txt
     #   -r dev.in

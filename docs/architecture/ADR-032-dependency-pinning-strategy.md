@@ -200,7 +200,7 @@ Exceptions to pinning rules require explicit approval via one of:
 | Package       | File    | Constraint      | Rationale                                  |
 |---------------|---------|-----------------|------------------------------------------- |
 | `mypy`        | dev.in  | `>=1.10`        | Type checker: benefits from latest rules   |
-| `black`       | dev.in  | `>=26.3.1`      | Formatter: deterministic, auto-updates OK  |
+| `black`       | dev.in  | `==26.10.1`     | Formatter: exact tested pin; patched action-version validation |
 | `flake8`      | dev.in  | `>=7.0`         | Linter: new rules are improvements         |
 | `pylint`      | dev.in  | `>=3.0`         | Linter: CLI stable across minor versions   |
 | `PyYAML`      | ml.in   | `>=6.0`         | Config parser: strong backward compat      |
@@ -209,7 +209,7 @@ Exceptions to pinning rules require explicit approval via one of:
 | `psutil`      | ml.in   | `>=5.9.0`       | System utilities: OS compatibility layer   |
 | `memory-profiler` | ml.in | `>=0.61.0`  | Dev/profiling tool in optional deps        |
 | `types-PyYAML` | dev.in | `>=6.0.12`     | Type stubs: must track PyYAML version      |
-| `pypdf`       | ci.in   | `>=6.19.0`      | PDF utilities: backward-compatible 6.x security floor |
+| `pypdf`       | ci.in   | `>=6.21.1`      | PDF utilities: backward-compatible 6.x security floor |
 
 ---
 

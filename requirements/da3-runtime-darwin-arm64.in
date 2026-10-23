@@ -32,5 +32,5 @@ safetensors==0.7.0  # Governed DA3 baseline
 trimesh==5.1.1  # Governed DA3 baseline
 addict==2.4.0  # Governed DA3 baseline
 pre-commit==4.6.2  # Governed DA3 baseline
-virtualenv==21.7.13  # GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes
+virtualenv==21.14.12  # Activation/creation fixes plus patched Python 3.11 pip seed
 Werkzeug>=3.1.9,<4  # Security floor for the transitive Open3D dashboard dependency

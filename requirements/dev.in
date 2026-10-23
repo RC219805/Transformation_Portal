@@ -22,7 +22,7 @@ Werkzeug>=3.1.9,<4  # GHSA-g6x2-hccm-hh4m: patched moto HTTP dependency
 mypy>=1.10
 flake8>=7.0
 pylint>=3.0
-black==26.3.1  # CAS determinism + Security: arbitrary file writes fixed in 26.3.1
+black==26.10.1  # CAS determinism + GHSA-cg8m-r9f2-5wm2: patched action version validation
 isort>=5.13,<9
 autopep8>=2.0,<3
 libcst>=1.2,<2
@@ -30,4 +30,4 @@ libcst>=1.2,<2
 # Additional development utilities
 types-PyYAML>=6.0.12
 pre-commit>=4.0,<5  # required by `make install-hooks` and `make pre-commit`; gated by .pre-commit-config.yaml
-virtualenv>=21.7.13,<22  # GHSA-p58f-9548-mpm2 and related activation/seed-wheel fixes
+virtualenv>=21.14.12,<22  # Activation/link fixes and patched pip seeds for supported Python
