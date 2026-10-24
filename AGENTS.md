@@ -113,6 +113,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-orchestrator-contract`,
   `make test-orchestrator-http-contract`, and
   `make validate-orchestrator-http` when a backend is running.
+  With `TP_ENABLE_API_DOCS=1`, `/docs`, `/redoc`, `/openapi.json`, and exact
+  packaged docs assets retain strict CSP. Docs readers, the OAuth redirect, and
+  packaged assets additionally use `no-store`; validate with
+  `./.venv/bin/pytest tests/orchestrator/test_api_docs.py -q`.
 - Execution-plan and Lux authority contracts:
   `./.venv/bin/pytest tests/core/test_execution_plan.py tests/core/test_execution_identity_v3.py tests/lux_depth_v3/test_execution_plan_adapter.py tests/lux_depth_v3/test_execution_lifecycle.py tests/lux_depth_v3/test_prepared_execution_callsites.py tests/depth/backends/test_execution_plan_workers.py tests/stage_graph/test_stage_registry.py tests/test_validate_ci_config.py -q`.
 - Depth-cache authority contracts:
@@ -181,7 +185,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   backend-authored: queued/running jobs without a measured value stay
   indeterminate, heartbeats and artifact presence do not invent percentages,
   and completed runs without indexed outputs direct operators to Logs and Run
-  Details rather than promise future Review artifacts.
+  Details rather than promise future Review artifacts. Treat `worker_lost` as
+  terminal alongside success, ready, partial, failure, and cancellation:
+  terminal recovery supersedes stale transport/auth/cancel banners without
+  erasing timeline history, and delayed queued/running hydration cannot regress
+  the terminal state.
   Managed V5 dispatch requires a current successful configuration preview and
   readiness; Review may show its verified bounded sRGB PNG derivative, while
   TIFF/float outputs remain the precision authority.
@@ -317,6 +325,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   Keep `native_recipe` explicit and provenance-bound for `torch_native` paths;
   rendering and export reject recipe or implementation mismatches, and novel
   cameras are revalidated before tensor conversion.
+- Camera-native linear ingest:
+  `./.venv/bin/pytest tests/spatial_ai/ingest/test_linear_decoder.py tests/spatial_ai/ingest/test_phase2_camera_native_linear.py -q`.
+  Preserve LibRaw three-color authority and the recorded effective transform;
+  accept an inactive fourth channel/row only for native three-color metadata,
+  and fail closed on active, non-finite, or singular matrix evidence.
 - SAM2 CPU fallback benchmark:
   `TP_RUN_BENCHMARKS=1 TP_SAM2_BENCHMARK_DEVICE=cpu ./.venv/bin/pytest tests/spatial_ai/segmentation/test_sam2_backend_performance.py::TestSAM2AutoModePerformance::test_auto_mode_latency_512x512 -v -s`.
   Requires `checkpoints/sam2.1_hiera_large.pt`.
@@ -376,6 +389,12 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `docker compose run --rm tp-init`,
   `docker compose up --build transformation-portal-cpu`, and
   `docker build --target cpu -t transformation-portal:cpu-nonroot-test .`.
+  Validate image and CI contracts with
+  `./.venv/bin/pytest tests/validation/test_docker_runtime_probe.py tests/validation/test_dockerfile_contract.py tests/test_validate_ci_config.py tests/cli/test_module_entrypoint.py -q`.
+  The hosted `docker-cpu-runtime` lane builds both CPU and full GPU targets on
+  native Linux amd64, then runs the default-user runtime probe offline. Its
+  `--gpu-packages` check verifies installed CUDA Torch/Torchvision packages;
+  it does not establish CUDA execution or GPU hardware acceptance.
   Do not add Compose healthchecks for CPU/GPU unless intentionally overriding
   Dockerfile healthchecks.
 
@@ -424,7 +443,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   is `./scripts/validation/validate_fastvlm_runtime.py --base-python "$(./scripts/setup/resolve_python_311.sh)" --verify-only --models smoke,default`.
   For an existing runtime, `--base-python` or `TP_FASTVLM_BASE_PYTHON` must name
   its trusted original builder; legacy v1 runtime evidence is non-authorizing,
-  so reinstall it with the governed v2 installer before use.
+  so reinstall it with the governed v2 installer before use. Validation also
+  fails closed on missing, changed, unexpected, or malformed installed package
+  metadata; recover with `make install-fastvlm-runtime` using the original
+  trusted builder, then rerun `make check-fastvlm-runtime`.
 - Governed editorial runtime:
   `make install-editorial-runtime`, `make check-editorial-runtime`, and
   `make test-editorial-contract` cover the separate native Darwin arm64 / Python
