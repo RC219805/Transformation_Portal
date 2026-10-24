@@ -16,7 +16,7 @@ coremltools==9.0
 datasets==5.0.1
 dill==0.4.1
 fastapi==0.141.1
-filelock==3.32.5
+filelock==4.2.1
 frozenlist==1.8.0
 fsspec==2026.6.0
 groovy==0.1.2
