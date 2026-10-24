@@ -653,15 +653,16 @@ class TestRootGovernanceMetadata:
                 assert Version(pin.group(1)) >= Version(floor), f"{path} pins a vulnerable {package}"
 
     def test_build_backend_excludes_vulnerable_setuptools(self):
-        """Package builds must use the fixed Unicode exclusion implementation."""
+        """Package builds must exclude vulnerable wheel-installation implementations."""
         pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
         build_requirements = [Requirement(value) for value in pyproject["build-system"]["requires"]]
         setuptools = next(requirement for requirement in build_requirements if requirement.name == "setuptools")
 
         assert Version("82.0.1") not in setuptools.specifier
-        assert Version("83.0.0") in setuptools.specifier
+        assert Version("83.0.0") not in setuptools.specifier
+        assert Version("84.1.0") in setuptools.specifier
         assert any(
-            specifier.operator == ">=" and Version(specifier.version) >= Version("83.0.0")
+            specifier.operator == ">=" and Version(specifier.version) >= Version("84.1.0")
             for specifier in setuptools.specifier
         )
 

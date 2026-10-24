@@ -8,3 +8,6 @@
 
 # Keep repository lock/install environments compatible with the governed compiler.
 click>=8.4.2,<8.5
+
+# Shared tox/virtualenv dependency; keep generic tooling on the patched lock-file implementation.
+filelock>=4.2.1,<5

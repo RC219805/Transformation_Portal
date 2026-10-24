@@ -43,9 +43,9 @@ RUN mkdir -p /opt/python3.11/share/python-wheels \
         --output /opt/python3.11/share/python-wheels/pip-26.2.2-py3-none-any.whl \
     && echo "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70  /opt/python3.11/share/python-wheels/pip-26.2.2-py3-none-any.whl" | sha256sum --check --strict \
     && curl --fail --silent --show-error --location \
-        https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl \
-        --output /opt/python3.11/share/python-wheels/setuptools-83.0.0-py3-none-any.whl \
-    && echo "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3  /opt/python3.11/share/python-wheels/setuptools-83.0.0-py3-none-any.whl" | sha256sum --check --strict
+        https://files.pythonhosted.org/packages/18/02/b4bbb90f8f29e334898ff45c6d9b1fffaa6f378017052b3023a06262b5f7/setuptools-84.1.0-py3-none-any.whl \
+        --output /opt/python3.11/share/python-wheels/setuptools-84.1.0-py3-none-any.whl \
+    && echo "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9  /opt/python3.11/share/python-wheels/setuptools-84.1.0-py3-none-any.whl" | sha256sum --check --strict
 
 RUN curl --fail --silent --show-error --location \
         "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz" \
@@ -136,7 +136,7 @@ COPY --from=cpu-python-build /opt/python3.11/include/ /opt/python3.11/include/
 
 RUN python -m venv ${VIRTUAL_ENV}
 RUN python -m pip install --no-cache-dir --upgrade \
-    pip==26.2.2 setuptools==83.0.0 wheel==0.48.0
+    pip==26.2.2 setuptools==84.1.0 wheel==0.48.0
 
 COPY requirements.txt .
 COPY requirements/ requirements/
@@ -199,9 +199,9 @@ RUN mkdir -p /opt/python3.11/share/python-wheels \
         --output /opt/python3.11/share/python-wheels/pip-26.2.2-py3-none-any.whl \
     && echo "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70  /opt/python3.11/share/python-wheels/pip-26.2.2-py3-none-any.whl" | sha256sum --check --strict \
     && curl --fail --silent --show-error --location \
-        https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl \
-        --output /opt/python3.11/share/python-wheels/setuptools-83.0.0-py3-none-any.whl \
-    && echo "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3  /opt/python3.11/share/python-wheels/setuptools-83.0.0-py3-none-any.whl" | sha256sum --check --strict
+        https://files.pythonhosted.org/packages/18/02/b4bbb90f8f29e334898ff45c6d9b1fffaa6f378017052b3023a06262b5f7/setuptools-84.1.0-py3-none-any.whl \
+        --output /opt/python3.11/share/python-wheels/setuptools-84.1.0-py3-none-any.whl \
+    && echo "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9  /opt/python3.11/share/python-wheels/setuptools-84.1.0-py3-none-any.whl" | sha256sum --check --strict
 
 RUN curl --fail --silent --show-error --location \
         "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz" \
@@ -280,7 +280,7 @@ COPY --from=gpu-python-build /opt/python3.11/include/ /opt/python3.11/include/
 
 RUN python3.11 -m venv ${VIRTUAL_ENV}
 RUN python3.11 -m pip install --no-cache-dir --upgrade \
-    pip==26.2.2 setuptools==83.0.0 wheel==0.48.0
+    pip==26.2.2 setuptools==84.1.0 wheel==0.48.0
 
 COPY requirements.txt .
 COPY requirements/ requirements/

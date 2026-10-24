@@ -430,8 +430,9 @@ def test_dependency_closure_mismatch_is_non_authorizing(
 @pytest.mark.parametrize(
     ("distribution", "required_version", "installed_version", "cacheable"),
     (
-        ("setuptools", "83.0.0", "82.0.0", False),
-        ("setuptools", "83.0.0", "83.0.0", True),
+        ("setuptools", "84.1.0", "83.0.0", False),
+        ("setuptools", "84.1.0", "84.0.0", False),
+        ("setuptools", "84.1.0", "84.1.0", True),
         ("pip", "26.2.2", "26.2.1", False),
         ("pip", "26.2.2", "26.2.2", True),
     ),

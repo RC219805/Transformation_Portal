@@ -110,7 +110,10 @@ def test_bootstrap_payload_regressions_are_rejected(probe, problem: str) -> None
         probe._check_prefix()
 
 
-@pytest.mark.parametrize("name,version", [("pip", "24.0"), ("pip", "26.2.1"), ("setuptools", "79.0.1")])
+@pytest.mark.parametrize(
+    "name,version",
+    [("pip", "24.0"), ("pip", "26.2.1"), ("setuptools", "79.0.1"), ("setuptools", "83.0.0"), ("setuptools", "84.0.0")],
+)
 def test_old_installed_bootstrap_versions_are_rejected(probe, name: str, version: str) -> None:
     versions = dict(probe.BOOTSTRAP_VERSIONS, **{name: version})
     with pytest.raises(RuntimeError, match="Bootstrap versions"):

@@ -20,6 +20,9 @@ pip-audit>=2.10,<3
 # Transitive cachecontrol[filecache] dependency; floor kept explicit for GHSA-6v7p-g79w-8964.
 msgpack>=1.2.1,<2
 
+# Transitive cachecontrol[filecache] dependency; retain the patched lock-file implementation.
+filelock>=4.2.1,<5
+
 # Independent scanner closure must not downgrade the patched runtime HTTP client.
 urllib3>=2.8.0,<3  # CVE-2026-97687/97688/97689
 certifi>=2026.10.19  # GHSA-6q48-6c7w-9gw2: preserve the patched runtime trust store.

@@ -48,7 +48,7 @@ docutils==0.23
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==4.1.1
+filelock==4.2.4
     # via
     #   -c all.txt
     #   python-discovery
