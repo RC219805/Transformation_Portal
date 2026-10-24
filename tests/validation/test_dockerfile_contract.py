@@ -130,13 +130,15 @@ def test_venv_bootstrap_uses_verified_patched_wheels(builder_stage: str) -> None
 
     assert "--with-wheel-pkg-dir=/opt/python3.11/share/python-wheels" in builder
     assert "https://files.pythonhosted.org/packages/" in builder
-    for wheel in ("pip-26.2.2-py3-none-any.whl", "setuptools-83.0.0-py3-none-any.whl"):
+    for wheel in ("pip-26.2.2-py3-none-any.whl", "setuptools-84.1.0-py3-none-any.whl"):
         checksum = re.search(
-            rf'echo "[a-f0-9]{{64}}  /opt/python3\.11/share/python-wheels/{re.escape(wheel)}" \| sha256sum --check --strict',
+            rf'echo "([a-f0-9]{{64}})  /opt/python3\.11/share/python-wheels/{re.escape(wheel)}" \| sha256sum --check --strict',
             builder,
         )
         assert checksum is not None
         assert checksum.start() < builder.index("./configure")
+        if wheel.startswith("setuptools-"):
+            assert checksum[1] == "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
     assert builder.index("rm -rf /opt/python3.11/lib/python3.11/ensurepip/_bundled") < builder.index(
         "cp -a /opt/python3.11 /opt/python3.11-runtime"
     )
@@ -158,7 +160,7 @@ def test_cpu_application_builder_uses_matching_headers_and_pinned_tools() -> Non
 
     assert "COPY --from=cpu-python-build /opt/python3.11/include/ /opt/python3.11/include/" in builder
     assert "python -m venv ${VIRTUAL_ENV}" in builder
-    assert "pip==26.2.2 setuptools==83.0.0 wheel==0.48.0" in builder
+    assert "pip==26.2.2 setuptools==84.1.0 wheel==0.48.0" in builder
 
 
 def test_gpu_build_uses_matching_python_headers_and_patched_cuda_wheels() -> None:
@@ -169,7 +171,7 @@ def test_gpu_build_uses_matching_python_headers_and_patched_cuda_wheels() -> Non
     assert "python3.11-dev" not in builder
     assert "python3-pip" not in builder
     assert "python3.11 -m venv ${VIRTUAL_ENV}" in builder
-    assert "pip==26.2.2 setuptools==83.0.0 wheel==0.48.0" in builder
+    assert "pip==26.2.2 setuptools==84.1.0 wheel==0.48.0" in builder
     assert "torch==2.13.0+cu126 torchvision==0.28.0+cu126" in builder
     assert "--index-url https://download.pytorch.org/whl/cu126" in builder
     assert "cu121" not in builder

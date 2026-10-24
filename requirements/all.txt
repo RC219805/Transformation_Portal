@@ -91,8 +91,9 @@ execnet==2.1.2
     # via pytest-xdist
 fastapi==0.141.1
     # via -r base.in
-filelock==4.1.1
+filelock==4.2.4
     # via
+    #   -r all.in
     #   python-discovery
     #   tox
     #   virtualenv

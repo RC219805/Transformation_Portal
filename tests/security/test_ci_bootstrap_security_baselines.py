@@ -11,8 +11,11 @@ pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNED_PIP_PIN = "pip==26.2.2"
+GOVERNED_SETUPTOOLS_PIN = "setuptools==84.1.0"
 GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
-SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
+SAFE_DETERMINISM_TOOLCHAIN = (
+    f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" "{GOVERNED_SETUPTOOLS_PIN}" "wheel==0.46.2"'
+)
 PYPDF_SECURITY_FLOOR = "pypdf>=6.21.2"
 GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
 GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
@@ -34,6 +37,7 @@ def test_determinism_workflows_pin_non_vulnerable_bootstrap_tools(
 
     assert workflow.count(SAFE_DETERMINISM_TOOLCHAIN) == expected_occurrences
     assert '"pip==24.0"' not in workflow
+    assert '"setuptools==83.0.0"' not in workflow
     assert '"setuptools==69.0.3"' not in workflow
     assert '"wheel==0.42.0"' not in workflow
 
@@ -265,6 +269,38 @@ def test_black_security_pin_is_shared_by_lint_and_generic_development_tools() ->
         assert version >= Version("26.10.1")
         versions.append(version)
     assert len(set(versions)) == 1
+
+
+def test_filelock_security_floor_covers_scanner_input_and_generic_locks() -> None:
+    for filename in ("all.in", "security.in"):
+        security_input = (REPO_ROOT / "requirements" / filename).read_text(encoding="utf-8")
+        declarations = [Requirement(line.strip()) for line in security_input.splitlines() if line.startswith("filelock")]
+        assert len(declarations) == 1, f"{filename} must declare the filelock security floor"
+        requirement = declarations[0]
+        assert requirement.name == "filelock"
+        assert requirement.url is None and requirement.marker is None and not requirement.extras
+        assert Version("4.1.1") not in requirement.specifier
+        assert Version("4.2.1") in requirement.specifier
+        assert any(
+            specifier.operator == ">=" and Version(specifier.version) >= Version("4.2.1")
+            for specifier in requirement.specifier
+        )
+
+    for filename in ("all.txt", "ci.txt", "dev.txt", "security.txt"):
+        declarations = [
+            Requirement(line.strip())
+            for line in (REPO_ROOT / "requirements" / filename).read_text(encoding="utf-8").splitlines()
+            if line.startswith("filelock")
+        ]
+        assert len(declarations) == 1, f"{filename} must pin filelock exactly once"
+        requirement = declarations[0]
+        assert requirement.name == "filelock"
+        assert requirement.url is None and requirement.marker is None and not requirement.extras
+        pins = list(requirement.specifier)
+        assert len(pins) == 1 and pins[0].operator == "=="
+        version = Version(pins[0].version)
+        assert not version.is_prerelease and not version.is_devrelease and version.local is None
+        assert version >= Version("4.2.1"), f"{filename} must exclude the vulnerable filelock closure"
 
 
 @pytest.mark.parametrize(
