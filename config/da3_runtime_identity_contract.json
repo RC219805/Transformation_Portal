@@ -9,7 +9,7 @@
   "governed_additional_distributions": {
     "depth-anything-3": "0.0.0",
     "pip": "26.2.2",
-    "setuptools": "83.0.0"
+    "setuptools": "84.1.0"
   },
   "runtime_marker_filename": ".tp-da3-runtime-authority.json",
   "non_authorizing_reason": ""

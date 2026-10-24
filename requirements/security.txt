@@ -22,8 +22,10 @@ cyclonedx-python-lib==11.12.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
-filelock==4.1.1
-    # via cachecontrol
+filelock==4.2.4
+    # via
+    #   -r security.in
+    #   cachecontrol
 idna==3.20
     # via requests
 license-expression==30.4.4

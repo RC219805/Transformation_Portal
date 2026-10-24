@@ -22,7 +22,7 @@ def test_da3_bootstrap_setuptools_matches_patched_runtime_authority() -> None:
     declaration = re.search(r'^SETUPTOOLS_VERSION="([^"]+)"$', installer, re.MULTILINE)
     assert declaration is not None
     version = declaration[1]
-    assert Version(version) >= Version("83.0.0")  # GHSA-h35f-9h28-mq5c
+    assert Version(version) >= Version("84.1.0")  # GHSA-xmj3-9gf7-h52w
     assert contract["governed_additional_distributions"]["setuptools"] == version
 
 

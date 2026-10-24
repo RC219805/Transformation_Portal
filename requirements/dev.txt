@@ -90,7 +90,7 @@ execnet==2.1.2
     # via
     #   -c all.txt
     #   pytest-xdist
-filelock==4.1.1
+filelock==4.2.4
     # via
     #   -c all.txt
     #   python-discovery

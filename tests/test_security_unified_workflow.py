@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -204,9 +205,25 @@ def test_pip_audit_workflow_contract_has_no_severity_or_top_level_count_fallback
 
 def test_security_tool_install_pins_a_non_vulnerable_setuptools() -> None:
     install_run = _workflow_step("Install security tools")["run"]
+    declarations = [
+        Requirement(token)
+        for line in install_run.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+        for token in shlex.split(line)
+        if token.lower().startswith("setuptools")
+    ]
 
     assert '"pip==26.2.2"' in install_run
-    assert '"setuptools==83.0.0"' in install_run
+    assert len(declarations) == 1
+    requirement = declarations[0]
+    assert requirement.name == "setuptools"
+    assert requirement.url is None and requirement.marker is None and not requirement.extras
+    pins = list(requirement.specifier)
+    assert len(pins) == 1 and pins[0].operator == "=="
+    version = Version(pins[0].version)
+    assert not version.is_prerelease and not version.is_devrelease and version.local is None
+    assert version >= Version("84.1.0")
+    assert '"setuptools==84.1.0"' in install_run
 
 
 def _urllib3_requirement(relative_path: str) -> Requirement:
