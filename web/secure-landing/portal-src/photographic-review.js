@@ -235,7 +235,8 @@ export function createPhotographicReview(host) {
     const controller = new AbortController();
     requests.add(controller);
     const requestJob = jobId;
-    const timer = setTimeout(() => controller.abort(), timeout);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
     try {
       const method = body ? "POST" : "GET";
       const response = await fetchImpl(photographicJobUrl(requestJob, path), {
@@ -253,6 +254,13 @@ export function createPhotographicReview(host) {
         throw error;
       }
       return payload.data;
+    } catch (error) {
+      if (timedOut) {
+        const deadline = new Error("Review request timed out. Refresh review before retrying; a submitted change may have completed.");
+        deadline.name = "TimeoutError";
+        throw deadline;
+      }
+      throw error;
     } finally { clearTimeout(timer); requests.delete(controller); }
   }
 
@@ -461,7 +469,7 @@ export function createPhotographicReview(host) {
     const sequence = ++dataRequest;
     status("Loading photographic review…");
     try {
-      const loaded = normalizedReview(await request());
+      const loaded = normalizedReview(await request("", null, 90000));
       if (jobId !== expectedJob || sequence !== dataRequest) return;
       data = loaded;
       if (deliverySources.some((source) => !data.scenes.some((scene) => scene.variants.some((variant) =>
