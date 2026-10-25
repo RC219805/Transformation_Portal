@@ -1471,9 +1471,12 @@
       "additionalProperties": false,
       "required": ["schema", "configuration_completeness"],
       "properties": {
-        "schema": { "const": "tp.stage.config.lux.v2.v1" },
+        "schema": { "const": "tp.stage.config.lux.v2.v2" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
         "preset": { "$ref": "#/$defs/shortString" },
+        "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
+        "color_contract": { "const": "encoded_srgb_v1" },
+        "processing_version": { "const": "1.2.0" },
         "device": { "type": "string", "minLength": 1, "maxLength": 128 },
         "upscaler_backend": { "$ref": "#/$defs/shortString" },
         "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
@@ -1491,6 +1494,9 @@
           "then": {
             "required": [
               "preset",
+              "input_color",
+              "color_contract",
+              "processing_version",
               "device",
               "upscaler_backend",
               "timeout_seconds",

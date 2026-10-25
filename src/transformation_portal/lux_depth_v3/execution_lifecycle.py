@@ -704,9 +704,14 @@ def _stage_configuration(
             }
         )
     elif stage == "v2":
+        from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+
         base.update(
             {
                 "preset": str(config.v2_preset),
+                "input_color": config.v2_input_color,
+                "color_contract": V2_COLOR_CONTRACT,
+                "processing_version": V2_PROCESSING_VERSION,
                 "device": str(config.v2_device),
                 "upscaler_backend": str(config.v2_upscaler_backend),
                 "timeout_seconds": int(config.v2_timeout),
@@ -1331,6 +1336,7 @@ def runtime_config_from_execution_plan(
         "fastvlm_timeout_seconds": output["captioning"]["timeout_seconds"],
         "enable_v2": v2 is not None,
         "v2_preset": v2["preset"] if v2 is not None else None,
+        "v2_input_color": v2["input_color"] if v2 is not None else "auto",
         "v2_device": v2["device"] if v2 is not None else "cpu",
         "v2_upscaler_backend": v2["upscaler_backend"] if v2 is not None else "default",
         "force_v2": v2["force"] if v2 is not None else False,

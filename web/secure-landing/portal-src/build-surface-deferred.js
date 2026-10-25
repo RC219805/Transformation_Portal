@@ -19,6 +19,8 @@
 //   - _resolveDa3ModelKey, canonicalArchiveCommand (cross-surface
 //     resolvers that this carve does not own)
 
+import { applyProcessingProfile, resolveProcessingProfile, processingProfileGuidance } from './internal/photographic-profiles.js';
+
 export function buildPathGuidance({ pipeline, workflow, authMode, uploadsAvailable = false }) {
     const direct = authMode === 'direct_debug';
     const photographyOutput = 'Choose an approved writable destination separate from the source folder and any manifest directories. Prefer a fresh folder for each run.';
@@ -65,7 +67,50 @@ export function createDeferredBuildSurfaceApi(host) {
         canonicalArchiveCommand,
         generatePayload,
         _stagedUploadsEnabledForState,
+        renderCLI,
+        scheduleConfigPreview,
+        persistDraft,
+        _domId,
     } = host;
+
+    let processingProfileBound = false;
+    const profileControls = {
+        select: _domId?.('processingProfile') || els.processingProfile,
+        hint: _domId?.('processingProfileHint') || els.processingProfileHint,
+        panel: _domId?.('photographicProfilePanel') || els.photographicProfilePanel,
+        inputColor: _domId?.('v2InputColor') || els.v2InputColor
+    };
+    function syncPhotoProfiles() {
+        if (!state.config) return;
+        const profile = resolveProcessingProfile(state.config);
+        const control = profileControls.select;
+        if (control) {
+            control.value = profile;
+            control.disabled = false;
+            if (!processingProfileBound) {
+                processingProfileBound = true;
+                control.addEventListener('change', (event) => {
+                    applyProcessingProfile(state.config, event.target.value);
+                    syncPhotoProfiles();
+                    persistDraft?.();
+                    renderCLI?.();
+                    scheduleConfigPreview?.();
+                });
+                els.emits?.outputBitDepth?.addEventListener?.('change', () => syncPhotoProfiles());
+                profileControls.inputColor?.addEventListener('change', (event) => {
+                    state.config.v2InputColor = event.target.value;
+                    persistDraft?.();
+                    renderCLI?.();
+                    scheduleConfigPreview?.();
+                });
+            }
+        }
+        const hint = processingProfileGuidance(profile, state.pipeline);
+        if (profileControls.hint && profileControls.hint.textContent !== hint) profileControls.hint.textContent = hint;
+        if (profileControls.panel) profileControls.panel.hidden = !['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'lux-depth'].includes(state.pipeline);
+        if (profileControls.inputColor) profileControls.inputColor.value = state.config.v2InputColor || 'auto';
+        if (els.emits?.outputBitDepth) els.emits.outputBitDepth.value = String(state.config.outputBitDepth);
+    }
 
     function _setSelectOptions(selectEl, options, selectedValue) {
         if (!selectEl || !Array.isArray(options) || options.length === 0) return;
@@ -186,6 +231,7 @@ export function createDeferredBuildSurfaceApi(host) {
     }
 
     function renderFieldPreviewStatuses(payload = null) {
+        syncPhotoProfiles();
         const currentPayload = payload || generatePayload();
         const guidance = buildPathGuidance({
             pipeline: currentPayload.pipeline,
@@ -271,5 +317,6 @@ export function createDeferredBuildSurfaceApi(host) {
         renderFieldPreviewStatuses,
         syncRuntimeWorkerModeControls,
         refreshArchiveFieldVisibility,
+        syncPhotoProfiles,
     };
 }

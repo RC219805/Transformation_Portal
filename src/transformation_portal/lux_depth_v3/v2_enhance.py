@@ -24,8 +24,11 @@ Reference: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 
 from __future__ import annotations
 
+import hashlib
+import io
 import logging
 import shutil
+import struct
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -35,7 +38,7 @@ from PIL import Image, ImageOps
 
 from ..stage_graph.stage import StageContext, StageStatus
 from ..stage_graph.stages.enhancement import EnhancementStage
-from .v2_presets import V2EnhancementConfig
+from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION, V2EnhancementConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,42 @@ class V2EnhancementError(Exception):
     """Raised when V2 enhancement operation fails."""
 
     pass
+
+
+def _expand_palette_png_snapshot(source: bytes) -> bytes:
+    """Expand palette entries without dropping or laundering source color evidence."""
+    color_chunks = {b"iCCP", b"sRGB", b"gAMA", b"cHRM", b"cICP", b"eXIf", b"mDCV", b"cLLI"}
+    retained = []
+    offset, seen_pixels, retained_size = 8, False, 0
+    for _ in range(8192):
+        if offset + 12 > len(source):
+            raise V2EnhancementError("Incomplete palette PNG metadata")
+        size, kind = struct.unpack_from(">I4s", source, offset)
+        end = offset + size + 12
+        if end > len(source):
+            raise V2EnhancementError("Incomplete palette PNG chunk")
+        if kind == b"IDAT":
+            seen_pixels = True
+        if kind in color_chunks:
+            if seen_pixels and kind != b"eXIf":
+                raise V2EnhancementError("Misplaced palette PNG color metadata")
+            retained_size += size
+            if retained_size > 4 * 1024**2:
+                raise V2EnhancementError("Palette PNG color metadata exceeds supported bounds")
+            retained.append(source[offset:end])
+        offset = end
+        if kind == b"IEND":
+            break
+    else:
+        raise V2EnhancementError("Palette PNG exceeds the metadata chunk budget")
+    with Image.open(io.BytesIO(source)) as palette:
+        expanded = palette.convert("RGBA" if "transparency" in palette.info else "RGB")
+        buffer = io.BytesIO()
+        expanded.save(buffer, format="PNG", icc_profile=None, exif=b"")
+    encoded = buffer.getvalue()
+    # Original ICC/transfer chunks, including their original CRCs and duplicate
+    # evidence, pass unchanged through the common photographic validator.
+    return encoded[:33] + b"".join(retained) + encoded[33:]
 
 
 def _normalize_icc_profile_payload(value: Any) -> bytes | None:
@@ -585,6 +624,7 @@ def enhance_image(
     device: str = "cpu",
     allow_8bit_output: bool = False,
     output_bit_depth: Optional[int] = None,
+    input_color: str = "auto",
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
@@ -685,11 +725,51 @@ def enhance_image(
     try:
         # Load input image with bit-depth preservation
         allow_8bit_load = output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output)
-        image, input_bits, metadata = load_image_preserve_bit_depth(
-            input_path,
-            allow_8bit_load,
-        )
+        try:
+            image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_load)
+        except (OSError, V2EnhancementError) as load_error:
+            # Pillow cannot open ordinary RGB float TIFFs. Diagnose the native
+            # header without attempting a lower-precision fallback or masking
+            # the existing integer quality-firewall error.
+            with input_path.open("rb") as header:
+                is_tiff = header.read(4) in {b"II*\0", b"MM\0*", b"II+\0", b"MM\0+"}
+            if is_tiff:
+                import tifffile
+
+                with tifffile.TiffFile(input_path) as native:
+                    native_dtype = native.pages[0].dtype
+                    if native_dtype is not None and native_dtype.kind == "f":
+                        raise V2EnhancementError(
+                            "V3 finishing supports at most 16-bit integer masters; use Unified/V5/V6 to retain float precision"
+                        ) from load_error
+            raise
+        input_dtype = str(image.dtype)
+        # Pixel processing has one explicit color domain. Preserve the source
+        # precision through the existing V4/V5 photographic color authority;
+        # an ICC is a transform, never a label copied onto unrelated pixels.
+        from transformation_portal.core.image_artifact import metadata_payload
+        from transformation_portal.lux_depth_v4.photography import decode_master, linear_to_srgb, output_srgb_icc
+
+        source_snapshot = input_path.read_bytes()
+        if metadata.get("format") == "PNG" and metadata.get("mode") == "P":
+            # Palette expansion is lossless for ordinary 8-bit PNG palette
+            # entries. It does not select a color interpretation: the same
+            # explicit policy/validated source ICC still authorizes conversion.
+            source_snapshot = _expand_palette_png_snapshot(source_snapshot)
+        master = decode_master(source_snapshot, source_name=input_path.name, input_color=input_color)
+        if master.source_bit_depth > 16:
+            raise V2EnhancementError(
+                "V3 finishing supports at most 16-bit masters; use Unified/V5/V6 to retain float precision"
+            )
+        prepared_pixels = linear_to_srgb(master.pixels)
+        if not np.isfinite(prepared_pixels).all() or np.any(prepared_pixels < -1e-6) or np.any(prepared_pixels > 1 + 1e-6):
+            raise V2EnhancementError(
+                "V3 finishing requires bounded encoded sRGB; use Unified/V5/V6 for extended/HDR or wide-gamut masters"
+            )
+        prepared_pixels = np.clip(prepared_pixels, 0, 1)
+        color_preparation = metadata_payload(master.metadata["color_preparation"])
         icc_profile = metadata.get("icc_profile")
+        source_icc_profile = icc_profile
         exif_data = metadata.get("exif")
         load_backend = str(metadata.get("load_backend") or "pil")
         source_had_icc = bool(icc_profile)
@@ -700,6 +780,7 @@ def enhance_image(
         save_degraded = False
         save_degradation_reason = None
         icc_preserved = False
+        icc_profile = output_srgb_icc()
 
         logger.debug(f"Loaded image: shape={image.shape}, dtype={image.dtype}, " f"bits_per_sample={input_bits}")
 
@@ -729,6 +810,8 @@ def enhance_image(
             logger.debug("RGBA input detected - extracting alpha channel for preservation")
             alpha_channel = _convert_alpha_to_target_dtype(image[:, :, 3], target_dtype)
             image = image[:, :, :3]  # RGB only for enhancement
+        if master.alpha is not None:
+            alpha_channel = _convert_alpha_to_target_dtype(master.alpha, target_dtype)
 
         # Enforce RGB (H, W, 3) contract for EnhancementStage
         if image.ndim == 2:
@@ -736,6 +819,7 @@ def enhance_image(
             image = np.stack([image, image, image], axis=2)
         elif image.ndim == 3 and image.shape[2] != 3:
             raise V2EnhancementError(f"Unexpected image shape: {image.shape} (expected (H,W,3) RGB)")
+        image = prepared_pixels
 
         # Load depth map if provided
         # NOTE: depth_aware_tone_mapping and atmospheric_effects config flags are
@@ -799,7 +883,10 @@ def enhance_image(
         # Ensure output dtype matches target (handle potential mismatches)
         if enhanced_image.dtype != target_dtype:
             logger.debug(f"Converting enhanced image from {enhanced_image.dtype} to {target_dtype}")
-            if target_dtype == np.dtype(np.uint8) and enhanced_image.dtype == np.uint16:
+            if np.issubdtype(enhanced_image.dtype, np.floating):
+                maximum = float(np.iinfo(np.uint16 if target_bits == 16 else np.uint8).max)
+                enhanced_image = np.rint(np.clip(enhanced_image, 0, 1) * maximum).astype(target_dtype)
+            elif target_dtype == np.dtype(np.uint8) and enhanced_image.dtype == np.uint16:
                 # 16-bit → 8-bit conversion with proper normalization
                 enhanced_image = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
             elif target_dtype == np.dtype(np.uint16) and enhanced_image.dtype == np.uint8:
@@ -847,7 +934,7 @@ def enhance_image(
                 # Preserve ICC profile (TIFF tag 34675)
                 if icc_profile:
                     extratags.append((34675, "B", len(icc_profile), icc_profile, False))
-                    icc_preserved = True
+                    icc_preserved = source_icc_profile == icc_profile
                     logger.debug("Preserving ICC profile in 16-bit TIFF output")
 
                 if exif_data:
@@ -899,10 +986,10 @@ def enhance_image(
             output_image = Image.fromarray(enhanced_image)
 
             # Preserve ICC profile and EXIF if present
-            save_kwargs = {}
+            save_kwargs: Dict[str, Any] = {}
             if icc_profile:
                 save_kwargs["icc_profile"] = icc_profile
-                icc_preserved = True
+                icc_preserved = source_icc_profile == icc_profile
                 logger.debug("Preserving ICC color profile")
 
             # Preserve EXIF data if present
@@ -953,6 +1040,17 @@ def enhance_image(
         return {
             "status": "success",
             "implementation": "v2_enhance",
+            "processing_version": V2_PROCESSING_VERSION,
+            "color": {
+                "contract": V2_COLOR_CONTRACT,
+                "input_policy": input_color,
+                "preparation": color_preparation,
+                "working_color": "bounded_encoded_srgb",
+                "output_color": "srgb",
+                "quantization": "at_final_output",
+                "source_icc_preserved": icc_preserved,
+                "output_icc_sha256": hashlib.sha256(icc_profile).hexdigest(),
+            },
             "artifact_contract": "canonical_v2_emitted_artifact",
             "is_canonical_emitted_artifact": True,
             "output_naming_policy": "canonical_v2_emitted_artifact",
@@ -981,7 +1079,7 @@ def enhance_image(
             "bit_depth": {
                 "input_bits_per_sample": input_bits,
                 "output_bits_per_sample": target_bits,
-                "input_dtype": str(image.dtype),
+                "input_dtype": input_dtype,
                 "output_dtype": str(enhanced_image.dtype),
                 "quality_firewall_active": input_bits == 16 and target_bits == 16,
                 "bit_depth_preserved": input_bits == target_bits,

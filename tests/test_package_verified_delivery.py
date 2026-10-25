@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import os
 import subprocess
@@ -16,10 +15,7 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "scripts" / "utilities" / "package_verified_delivery.py"
-SPEC = importlib.util.spec_from_file_location("package_verified_delivery", TOOL_PATH)
-assert SPEC is not None and SPEC.loader is not None
-packager = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(packager)
+from transformation_portal.core import verified_delivery as packager
 
 
 def _sha256(content: bytes) -> str:
@@ -87,6 +83,61 @@ def _assert_rejected_without_publication(case: dict[str, Any]) -> None:
     with pytest.raises(packager.PackageError):
         _build(case)
     assert list(case["output"].parent.iterdir()) == []
+
+
+def test_source_cli_shim_preserves_supported_library_api() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("delivery_source_shim", TOOL_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.PackageError is packager.PackageError
+    assert module.build_package is packager.build_package
+    assert module.main is packager.main
+
+
+def test_installed_library_without_source_checkout_uses_only_stdlib(package_case: dict[str, Any], tmp_path: Path) -> None:
+    import shutil
+
+    site = tmp_path / "installed-site"
+    package = site / "transformation_portal"
+    core = package / "core"
+    core.mkdir(parents=True)
+    source = PROJECT_ROOT / "src" / "transformation_portal"
+    for relative in ("__init__.py", "core/__init__.py", "core/verified_delivery.py"):
+        shutil.copyfile(source / relative, package / relative)
+    case = package_case
+    # -I and -S disable the editable checkout, site packages, environment Python
+    # paths, and third-party dependencies. Only this installed package is added.
+    code = """import json, pathlib, sys
+sys.path.insert(0, sys.argv[1])
+from transformation_portal.core import verified_delivery
+assert pathlib.Path(verified_delivery.__file__).is_relative_to(sys.argv[1])
+assert 'numpy' not in sys.modules and 'PIL' not in sys.modules and 'torch' not in sys.modules
+result = verified_delivery.build_package(*map(pathlib.Path, sys.argv[2:5]))
+print(json.dumps(result))
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            code,
+            str(site),
+            str(case["manifest_path"]),
+            str(case["source"]),
+            str(case["output"]),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["status"] == "verified"
+    assert all(path.is_file() for path in _products(case["output"]))
 
 
 def test_build_packages_only_explicit_members_and_verifiable_evidence(package_case: dict[str, Any]) -> None:

@@ -122,6 +122,8 @@ PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
 PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "portal.js",
     "portal-review.js",
+    "portal-photographic.js",
+    "portal-photographic.css",
     "portal-review.css",
     "portal-operate.js",
     "portal-build.js",
@@ -141,6 +143,8 @@ PORTAL_HTML_TEMPLATE_TOKENS = {
     "__PORTAL_CSS_URL__": "portal.css",
     "__PORTAL_JS_URL__": "portal.js",
     "__PORTAL_REVIEW_JS_URL__": "portal-review.js",
+    "__PORTAL_PHOTOGRAPHIC_JS_URL__": "portal-photographic.js",
+    "__PORTAL_PHOTOGRAPHIC_CSS_URL__": "portal-photographic.css",
     "__PORTAL_REVIEW_CSS_URL__": "portal-review.css",
     "__PORTAL_OPERATE_JS_URL__": "portal-operate.js",
     "__PORTAL_BUILD_JS_URL__": "portal-build.js",
@@ -332,6 +336,8 @@ def _portal_html_signature() -> Tuple[object, ...]:
             for asset_name in (
                 "portal.js",
                 "portal-review.js",
+                "portal-photographic.js",
+                "portal-photographic.css",
                 "portal-review.css",
                 "portal-operate.js",
                 "portal-build.js",

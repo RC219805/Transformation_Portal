@@ -309,6 +309,9 @@ class ConfigFingerprint:
     depth_device: str
     preset: Optional[str] = None
     v2_preset: Optional[str] = None
+    v2_input_color: Optional[str] = None
+    v2_color_contract: Optional[str] = None
+    v2_processing_version: Optional[str] = None
     v2_device: Optional[str] = None
     v2_upscaler_backend: Optional[str] = None
     depth_backend: Optional[str] = None
@@ -382,6 +385,9 @@ class ConfigFingerprint:
             depth_device="",
             preset=None,
             v2_preset=self.v2_preset,
+            v2_input_color=self.v2_input_color,
+            v2_color_contract=self.v2_color_contract,
+            v2_processing_version=self.v2_processing_version,
             v2_device=self.v2_device,
             v2_upscaler_backend=self.v2_upscaler_backend,
             depth_backend=None,

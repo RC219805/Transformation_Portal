@@ -350,9 +350,60 @@ class TestEnhancementStageCacheKey:
 
         assert stage.get_cache_key(wood_context) != stage.get_cache_key(metal_context)
 
+    def test_cache_key_binds_output_precision_and_normalization_revision(self) -> None:
+        context = StageContext(artifacts={"image": np.ones((8, 8, 3), dtype=np.uint16)})
+        byte_stage = EnhancementStage(version="operator-version", output_dtype=np.uint8)
+        master_stage = EnhancementStage(version="operator-version", output_dtype=np.uint16)
+
+        assert byte_stage.get_cache_key(context) != master_stage.get_cache_key(context)
+        assert "dtype_normalization_v2" in byte_stage.get_cache_key(context)
+
 
 class TestEnhancementStageBitDepth:
     """Tests for bit depth preservation."""
+
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16])
+    @pytest.mark.parametrize("level", [0, 1])
+    def test_near_black_integer_is_normalized_by_dtype(self, dtype, level) -> None:
+        """Sample one must stay near black, even when no larger sample exists."""
+        image = np.full((8, 8, 3), level, dtype=dtype)
+        image[0, 0] = 0
+        stage = EnhancementStage(
+            enhancement_strength=0.0,
+            clarity_strength=0.0,
+            material_strength=0.0,
+            output_dtype=np.dtype(dtype),
+        )
+
+        result = stage.compute(StageContext(artifacts={"image": image}))
+
+        np.testing.assert_array_equal(result.artifacts["enhanced_image"], image)
+
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16])
+    def test_near_black_integer_and_normalized_float_follow_same_contract(self, dtype) -> None:
+        image = np.full((8, 8, 3), 1, dtype=dtype)
+        normalized = image.astype(np.float32) / np.iinfo(dtype).max
+        depth = np.linspace(0.0, 1.0, 64, dtype=np.float32).reshape(8, 8)
+        stage = EnhancementStage(clarity_strength=0.0, output_dtype=np.dtype(dtype))
+
+        integer_result = stage.compute(StageContext(artifacts={"image": image, "depth_map": depth}))
+        float_result = stage.compute(StageContext(artifacts={"image": normalized, "depth_map": depth}))
+
+        np.testing.assert_array_equal(integer_result.artifacts["enhanced_image"], float_result.artifacts["enhanced_image"])
+
+    @pytest.mark.parametrize("level", [0.0, 1.0 / 255.0, 0.5, 1.0, 128.0])
+    def test_float_normalization_contract_is_preserved(self, level) -> None:
+        image = np.full((8, 8, 3), level, dtype=np.float32)
+        stage = EnhancementStage(enhancement_strength=0.0, clarity_strength=0.0, material_strength=0.0)
+
+        result = stage.compute(StageContext(artifacts={"image": image}))
+
+        expected = int((level if level <= 1.0 else level / 255.0) * 255.0)
+        np.testing.assert_array_equal(result.artifacts["enhanced_image"], np.full_like(image, expected, dtype=np.uint8))
+
+    def test_normalization_fix_changes_default_cache_namespace(self) -> None:
+        context = StageContext(artifacts={"image": np.ones((8, 8, 3), dtype=np.uint8)})
+        assert EnhancementStage().get_cache_key(context) != EnhancementStage(version="1.1.0").get_cache_key(context)
 
     def test_8bit_input_produces_8bit_output(self) -> None:
         """8-bit input should produce 8-bit output by default."""

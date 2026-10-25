@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -43,6 +44,40 @@ def _load_tool(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_shared_exports_work_in_isolated_editorial_python_without_installed_project() -> None:
+    # This exercises the runtime's -I source loading, not native RAW/PDF
+    # acceptance. Those optional imports are stubs as in the focused fixture.
+    script = r"""
+import importlib.abc, importlib.util, io, sys, types
+class NoInstalledProject(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "transformation_portal" or fullname.startswith("transformation_portal."):
+            raise ModuleNotFoundError("The governed editorial closure does not install the project")
+sys.meta_path.insert(0, NoInstalledProject())
+for name in ("rawpy", "reportlab", "reportlab.lib", "reportlab.lib.pagesizes",
+             "reportlab.lib.utils", "reportlab.pdfgen", "reportlab.pdfgen.canvas"):
+    sys.modules[name] = types.ModuleType(name)
+sys.modules["reportlab.lib.pagesizes"].A4 = (595.27, 841.89)
+sys.modules["reportlab.lib.utils"].ImageReader = object
+sys.modules["reportlab.pdfgen.canvas"].Canvas = object
+spec = importlib.util.spec_from_file_location("editorial_isolated_contract", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+import numpy as np
+from PIL import Image
+samples = np.linspace(.001, .003, 12 * 18 * 3, dtype=np.float32).reshape(12, 18, 3)
+resized = module.resize_long_edge(samples, 9)
+assert resized.shape == (6, 9, 3) and np.unique(resized).size > 100
+encoded = module.jpeg_bytes(resized, icc_profile=module._srgb_icc())
+with Image.open(io.BytesIO(encoded)) as image:
+    assert image.size == (9, 6) and image.info["icc_profile"]
+assert not any(name == "transformation_portal" or name.startswith("transformation_portal.") for name in sys.modules)
+"""
+    result = subprocess.run([sys.executable, "-I", "-c", script, str(TOOL_PATH)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
 
 
 def _cfg(module: ModuleType, project_root: Path, *, selects: dict | None = None, metadata: dict | None = None):

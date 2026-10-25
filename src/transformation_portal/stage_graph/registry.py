@@ -191,7 +191,7 @@ STAGE_DEFINITIONS: Mapping[StageRegistryIdentifier, StageDefinition] = MappingPr
         ),
         StageRegistryIdentifier.LUX_V2: StageDefinition(
             identifier=StageRegistryIdentifier.LUX_V2,
-            configuration_schema="tp.stage.config.lux.v2.v1",
+            configuration_schema="tp.stage.config.lux.v2.v2",
             allowed_output_kinds=("v2_enhanced_image",),
             resources=_ACCELERATOR_OPTIONAL,
         ),

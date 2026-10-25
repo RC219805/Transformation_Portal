@@ -151,6 +151,12 @@ def parse_arguments() -> argparse.Namespace:
 
     parser.add_argument("--preset", default="default", help="Enhancement preset (default: %(default)s)")
     parser.add_argument(
+        "--input-color",
+        default="auto",
+        choices=["auto", "auto_assume_srgb", "srgb", "linear_srgb"],
+        help="Source color policy; automatic modes validate metadata before converting to encoded sRGB",
+    )
+    parser.add_argument(
         "--device", default="cpu", choices=["cpu", "cuda", "mps"], help="Processing device (default: %(default)s)"
     )
     parser.add_argument("--upscaler", default="default", help="Upscaler backend (default: %(default)s)")
@@ -278,6 +284,7 @@ def run_v2_enhancement(
     output_bit_depth: int | None = None,
     masks_file: Path | None = None,
     asset_key: str | None = None,
+    input_color: str = "auto",
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -356,6 +363,7 @@ def run_v2_enhancement(
         device=device,
         allow_8bit_output=allow_8bit,
         output_bit_depth=output_bit_depth,
+        input_color=input_color,
     )
 
     # Add upscaler info to report (currently unused but maintained for compatibility)
@@ -418,6 +426,7 @@ def main() -> int:
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
             output_bit_depth=args.output_bit_depth,
+            input_color=args.input_color,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
             asset_key=resolved_asset_key,
         )

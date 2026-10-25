@@ -5743,6 +5743,7 @@ class EnhanceOrchestrator:
                 # Pass canonical asset key for depth/report identity alignment
                 asset_key=output_key.name,
                 output_bit_depth=self.config.output_bit_depth,
+                input_color=self.config.v2_input_color,
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_status = self._normalize_v2_status(v2_result.get("status"))
@@ -10033,6 +10034,9 @@ class EnhanceOrchestrator:
                     "depth_device": obj.depth_device,
                     "preset": obj.preset,
                     "v2_preset": obj.v2_preset,
+                    "v2_input_color": obj.v2_input_color,
+                    "v2_color_contract": obj.v2_color_contract,
+                    "v2_processing_version": obj.v2_processing_version,
                     "v2_device": obj.v2_device,
                     "v2_upscaler_backend": obj.v2_upscaler_backend,
                 }

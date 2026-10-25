@@ -277,6 +277,15 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
   - Options: `default`, `none`, or custom preset names
   - `none` normalizes to a disabled V2 stage during plan preparation.
   - Only used when `--enable-v2` is `on`
+- `--v2-input-color TEXT`: Explicit V2 source color policy (default: `auto`)
+  - Options: `auto`, `auto_assume_srgb`, `srgb`, `linear_srgb`
+  - Automatic metadata-aware conversion blocks ambiguous untagged PNG/TIFF.
+    Choose `auto_assume_srgb` only when the untagged source is known to be sRGB;
+    invalid/conflicting profiles still fail. Explicit encodings assert actual
+    source encoding and cannot relabel arbitrary profiles.
+  - V2 processes bounded SDR at version `1.2.0` / `encoded_srgb_v1`.
+    Float/extended inputs require Unified/V5/V6. See the
+    [photographic color and precision contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
 
 ### Output Deliverables
 
@@ -457,7 +466,13 @@ V2 reports expose material handoff and actual V2 material adjustment separately 
 - `v2_material_adjustments_applied`: `true` only when V2 applied at least one supported, non-empty material adjustment with material strength enabled.
 - `materials_applied`: deprecated boolean compatibility alias for `v2_material_adjustments_applied`; do not interpret it as supplied mask keys.
 
-For deterministic V2 TIFF output, ICC profiles are preserved when available, including TIFF tag `34675` fallback extraction. EXIF remains stripped; reports use `metadata_preservation_mode: "partial"` when ICC is preserved and EXIF is intentionally not written.
+V2 validates source metadata and performs supported profile-aware conversion
+before encoded-sRGB finishing. Output embeds matching deterministic sRGB ICC
+bytes; an arbitrary source profile is never copied onto converted pixels.
+Reports record color preparation, output ICC SHA and actual source-profile/EXIF
+preservation. Exact byte passthrough remains available only when no processing
+or explicit output encoding is requested. Historical processing contracts need
+their matching runtime rather than silent reinterpretation by version 1.2.0.
 
 ## Run Card Verification and Signing
 

@@ -174,7 +174,7 @@ readiness or photographic acceptance. See the
 | Camera RAW ingest | RAW runtime or external 16-bit TIFF conversion | Preserve sensor data and metadata |
 | Batch processing | TIFF | High-fidelity color pipeline |
 | Web gallery | JPEG at high quality | Efficient delivery |
-| Print/archive | 16-bit TIFF | Maximum quality |
+| Print/archive | 16-bit TIFF | Bounded SDR delivery; retain native float masters separately |
 
 ### Video Production
 
@@ -217,6 +217,10 @@ quality-gate evidence.
 - TIFF batch workflows are the preferred path for metadata-sensitive stills.
 - Video color metadata is controlled by `luxury_video_grader` options.
 - Lux Depth V3 reproducibility metadata lives in emitted reports and run cards.
+- V3 V2 finishing validates/converts supported source profiles to bounded
+  encoded sRGB; `--v2-input-color auto` blocks ambiguous untagged PNG/TIFF.
+  Explicit recorded sRGB assumptions and retained Unified/V5/V6 float masters
+  follow the [photographic color/precision contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
 
 ### File Size
 
