@@ -242,6 +242,10 @@ class AppReviewAccess:
             validate_photography_dispatch(raw, bindings)
         else:
             return [], "immutable_photographic_plan_unavailable"
+        # V6 freezes finishing in the outer V5 plan; its validated V4 inference
+        # child remains the sole input and source-color authority.
+        if plan["schema"] == "tp.execution.plan.v5":
+            plan = plan["inference"]
         bound = PhotographyBindings(bindings).to_payload()
         policy = app._execution_policy()
         root = Path(bound["input_root"])
