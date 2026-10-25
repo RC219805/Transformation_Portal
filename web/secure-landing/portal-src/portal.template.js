@@ -6780,6 +6780,10 @@ function _createDeferredBuildSurfaceHost() {
         canonicalArchiveCommand,
         generatePayload,
         _stagedUploadsEnabledForState,
+        renderCLI,
+        scheduleConfigPreview,
+        persistDraft: _persistTransientPortalDraft,
+        _domId,
     };
 }
 
@@ -9399,6 +9403,7 @@ function buildCanonicalLuxDepthArgs(config) {
         cache_depth: cacheDepth,
         enable_v2: enableV2,
         v2_preset: v2Preset,
+        v2_input_color: config.v2InputColor || 'auto',
         output_bit_depth: outputBitDepth,
         emit_run_card: emitRunCard,
         run_card_version: runCardVersion,
@@ -10449,7 +10454,7 @@ function renderCLI() {
         cliLines.push(`  --enable-v2 ${onoff(payload.args.enable_v2)}`);
 
         if (parseBoolLike(payload.args.enable_v2, false) && payload.args.v2_preset) {
-            cliLines.push(`  --v2-preset ${q(payload.args.v2_preset)}`);
+            cliLines.push(`  --v2-preset ${q(payload.args.v2_preset)} --v2-input-color ${q(payload.args.v2_input_color)}`);
         }
         if (parseBoolLike(payload.args.non_commercial_ok, false)) cliLines.push(`  --non-commercial-ok "true"`);
         if (parseBoolLike(payload.args.accept_apple_depth_pro_research_license, false)) {
@@ -12081,6 +12086,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.flags.quiet = parseBoolLike(data.args.quiet, c.flags.quiet);
             _normalizeVerboseQuietFlags(c.flags, true);
             c.v2Preset = data.args.v2_preset || c.v2Preset;
+            if ('v2_input_color' in data.args) c.v2InputColor = data.args.v2_input_color;
 
             c.outputBitDepth = Number(
                 data.args.output_bit_depth ?? data.args.outputBitDepth ?? c.outputBitDepth

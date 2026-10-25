@@ -281,7 +281,7 @@ class TestFix5AlphaChannelSafety:
             mock_instance.compute.return_value = mock_result
 
             # Run enhancement - should not crash despite dimension mismatch
-            result = enhance_image(input_path, output_path, config=None)
+            result = enhance_image(input_path, output_path, config=None, input_color="srgb")
             emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
             assert result["status"] == "success"
@@ -316,7 +316,7 @@ class TestFix5AlphaChannelSafety:
             mock_result.metadata = {}
             mock_instance.compute.return_value = mock_result
 
-            result = enhance_image(input_path, output_path, config=None)
+            result = enhance_image(input_path, output_path, config=None, input_color="srgb")
             emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
             assert result["status"] == "success"
             assert Path(result["output"]) == emitted_output

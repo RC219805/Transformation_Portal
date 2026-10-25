@@ -135,6 +135,9 @@
             "null"
           ]
         },
+        "v2_input_color": {"enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb", null]},
+        "v2_color_contract": {"enum": ["encoded_srgb_v1", null]},
+        "v2_processing_version": {"enum": ["1.2.0", null]},
         "v2_device": {
           "type": [
             "string",

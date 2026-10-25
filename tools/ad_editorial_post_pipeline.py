@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.util
 import io
 import json
 import logging
@@ -40,6 +41,28 @@ from reportlab.lib.utils import ImageReader  # FIXED: Added missing import
 from reportlab.pdfgen import canvas
 from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
+
+
+def _shared_export_operations():
+    """Load the shared boundary explicitly under the governed ``python -I`` lane.
+
+    The editorial closure intentionally does not install the full project.
+    Loading this exact dependency-light source file avoids ambient import roots
+    and keeps the same implementation used by installed managed callers.
+    """
+    source = Path(__file__).resolve().parents[1] / "src/transformation_portal/core/photographic_export.py"
+    spec = importlib.util.spec_from_file_location("editorial_shared_photographic_export", source)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Shared photographic export operations are unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_shared_exports = _shared_export_operations()
+jpeg_bytes = _shared_exports.jpeg_bytes
+_shared_resize_long_edge = _shared_exports.resize_long_edge
+_shared_unsharp_mask = _shared_exports.unsharp_mask
 
 # Optional deps
 try:
@@ -883,51 +906,15 @@ def save_jpeg_srgb(img: np.ndarray, path: Path, icc_bytes: Optional[bytes], qual
     """Save 8-bit JPEG with sRGB color space."""
     profile = icc_bytes if icc_bytes is not None else _srgb_icc()
     _validate_rgb_profile(profile, prophoto=False)
-    img8 = np.rint(_rgb_samples(img) * 255.0).astype(np.uint8)
-    im = Image.fromarray(img8)
-
-    # Use atomic write
-    def _write(p: Path):
-        im.save(
-            str(p),
-            format="JPEG",
-            quality=int(quality),
-            subsampling=0,
-            icc_profile=profile,
-            optimize=True,
-        )
-
-    atomic_write(path, _write)
+    encoded = jpeg_bytes(_rgb_samples(img), icc_profile=profile, quality=int(quality))
+    atomic_write(path, lambda temporary: temporary.write_bytes(encoded))
 
 
 # ----------------------------- transforms ---------------------------------- #
 
 
 def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
-    h, w = img.shape[:2]
-    if max(h, w) <= long_edge:
-        return img
-
-    if h >= w:
-        new_h = long_edge
-        new_w = int(w * (new_h / h))
-    else:
-        new_w = long_edge
-        new_h = int(h * (new_w / w))
-
-    out = np.stack(
-        [
-            np.asarray(
-                Image.fromarray(img[..., channel].astype(np.float32)).resize(
-                    (max(1, new_w), max(1, new_h)), Image.Resampling.LANCZOS
-                )
-            )
-            for channel in range(3)
-        ],
-        axis=-1,
-    )
-    out = np.clip(out, 0, 1).astype(np.float32)
-    return out
+    return _shared_resize_long_edge(img, long_edge)
 
 
 def auto_upright_small(img: np.ndarray, max_deg: float = 3.0) -> np.ndarray:
@@ -1170,14 +1157,7 @@ def reduce_hotspots(img: np.ndarray) -> np.ndarray:
 
 
 def unsharp_mask(img: np.ndarray, amount: float = 0.2, radius: float = 1.2, threshold: float = 0.0) -> np.ndarray:
-    if amount <= 0:
-        return img
-
-    low = gaussian_filter(img, sigma=(radius, radius, 0), mode="reflect")
-    high = img - low
-    mask = np.where(np.abs(high) > threshold, high, 0.0)
-    out = np.clip(img + amount * mask, 0, 1)
-    return out
+    return _shared_unsharp_mask(img, amount=amount, radius=radius, threshold=threshold)
 
 
 # ------------------------------ HDR / Pano --------------------------------- #

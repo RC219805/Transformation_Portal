@@ -4337,6 +4337,7 @@ class EnhanceOrchestrator:
                         enhanced_image_path,
                     ) = self._run_materials_v3_stage(
                         preprocessed_array=preprocessed_array,
+                        source_path=image_input.path,
                         depth_map=depth_map,
                         output_key=output_key,
                         artifact_shape=_shape_2d(result.depth),
@@ -4938,6 +4939,7 @@ class EnhanceOrchestrator:
         self,
         *,
         preprocessed_array: np.ndarray,
+        source_path: Path,
         depth_map: np.ndarray,
         output_key: Path,
         artifact_shape: Optional[tuple[int, int]] = None,
@@ -4952,10 +4954,22 @@ class EnhanceOrchestrator:
         enhanced_image_path: Optional[Path] = None
 
         try:
-            # APEX strict gate: enforce segmentation
-            # prerequisites before Materials V3.
+            # Preserve strict prerequisite ordering before any source decode.
             self._enforce_apex_materials_gate()
+            from transformation_portal.lux_depth_v4.photography import output_srgb_icc
 
+            from .ingest_adapter import raw_ingest_summary
+            from .preprocessing import is_raw_file
+            from .v2_enhance import prepare_materials_srgb_proxy
+
+            raw_contract = raw_ingest_summary(self.config) if is_raw_file(source_path) else None
+            materials_array, color_preparation = prepare_materials_srgb_proxy(
+                preprocessed_array,
+                source=None if raw_contract is not None else source_path.read_bytes(),
+                source_name=source_path.name,
+                input_color=self.config.v2_input_color,
+                raw_contract=raw_contract,
+            )
             from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
 
             # Convert float32 [0,1] to uint8 [0,255]
@@ -4992,13 +5006,16 @@ class EnhanceOrchestrator:
                 )
 
             materials_v3_result = self.materials_v3_engine.process(
-                image=preprocessed_array,
+                image=materials_array,
                 segmentation_result=segmentation_result,
                 depth_map=depth_map,
             )
             runtime_s = time.time() - t_materials_start
 
             if materials_v3_result:
+                materials_v3_result.setdefault("materials_v3_metadata", {}).setdefault("segmentation_metadata", {})[
+                    "color_preparation"
+                ] = color_preparation
                 if artifact_shape is not None:
                     materials_v3_result = self._align_materials_v3_handoff_payload(
                         materials_v3_result,
@@ -5080,7 +5097,10 @@ class EnhanceOrchestrator:
                                 compression="lzw",
                                 metadata={
                                     "software": ("Transformation" " Portal v3"),
+                                    "color_space": "srgb",
+                                    "materials_color_preparation": color_preparation,
                                 },
+                                iccprofile=output_srgb_icc(),
                             )
                         n_ops = len(
                             materials_v3_result.get(
@@ -5112,6 +5132,7 @@ class EnhanceOrchestrator:
                                 enhanced_uint8,
                             ),
                             optimize=True,
+                            icc_profile=output_srgb_icc(),
                         )
                         n_ops_8 = len(
                             materials_v3_result.get(
@@ -5257,6 +5278,7 @@ class EnhanceOrchestrator:
             recomputed_enhanced_path,
         ) = self._run_materials_v3_stage(
             preprocessed_array=preprocessed_array,
+            source_path=image_input.path,
             depth_map=np.asarray(
                 depth_for_materials,
                 dtype=np.float32,
@@ -5655,6 +5677,7 @@ class EnhanceOrchestrator:
         manifest_path: Path,
         skip_depth: bool,
         materials_v3_result: Optional[dict] = None,
+        materials_input_path: Optional[Path] = None,
         prepared_reuse: Optional[_PreparedReuseSnapshot] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
@@ -5678,6 +5701,9 @@ class EnhanceOrchestrator:
         if self.v2_runner is None or not self.config.enable_v2:
             logger.info("V2 stage disabled, skipping enhancement")
             return {"status": "skipped"}, 0.0, None
+
+        if materials_input_path is not None and image_input.path != materials_input_path:
+            raise LuxExecutionPlanAuthorityError("V2 Materials handoff does not match the returned intermediate path")
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
         skip_v2 = not self.config.force_v2 and self.should_skip_v2(
@@ -5743,6 +5769,10 @@ class EnhanceOrchestrator:
                 # Pass canonical asset key for depth/report identity alignment
                 asset_key=output_key.name,
                 output_bit_depth=self.config.output_bit_depth,
+                # A generated Materials handoff has its own validated sRGB
+                # encoding. Reapplying the original source assertion (e.g.
+                # linear_srgb) would reinterpret these already encoded pixels.
+                input_color=("auto" if materials_input_path is not None else self.config.v2_input_color),
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_status = self._normalize_v2_status(v2_result.get("status"))
@@ -6446,6 +6476,7 @@ class EnhanceOrchestrator:
                 manifest_path=manifest_path,
                 skip_depth=skip_depth,
                 materials_v3_result=materials_v3_result,
+                materials_input_path=enhanced_image_path,
                 prepared_reuse=prepared_reuse,
             )
         v2_result_status = self._normalize_v2_status(v2_result.get("status"))
@@ -10033,6 +10064,9 @@ class EnhanceOrchestrator:
                     "depth_device": obj.depth_device,
                     "preset": obj.preset,
                     "v2_preset": obj.v2_preset,
+                    "v2_input_color": obj.v2_input_color,
+                    "v2_color_contract": obj.v2_color_contract,
+                    "v2_processing_version": obj.v2_processing_version,
                     "v2_device": obj.v2_device,
                     "v2_upscaler_backend": obj.v2_upscaler_backend,
                 }

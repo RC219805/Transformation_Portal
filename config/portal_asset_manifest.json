@@ -51,6 +51,14 @@
     "brand/dna-symbol-light.svg": {
       "repo_path": "public/portal-assets/brand/dna-symbol-light.svg",
       "media_type": "image/svg+xml"
+    },
+    "portal-photographic.js": {
+      "repo_path": "public/portal-assets/portal-photographic.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic.css": {
+      "repo_path": "public/portal-assets/portal-photographic.css",
+      "media_type": "text/css; charset=utf-8"
     }
   }
 }

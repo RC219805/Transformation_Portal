@@ -15,6 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
+V2_COLOR_CONTRACT = "encoded_srgb_v1"
+V2_PROCESSING_VERSION = "1.2.0"
+
 
 @dataclass
 class V2EnhancementConfig:
@@ -47,7 +50,7 @@ class V2EnhancementConfig:
     # failure mode than a slightly softer tone curve on a clear sky.
     tone_depth_smoothing: bool = True
     tone_low_tex_strength: float = 0.6
-    version: str = "1.1.0"
+    version: str = V2_PROCESSING_VERSION
 
     def __post_init__(self) -> None:
         """Validate configuration parameters."""

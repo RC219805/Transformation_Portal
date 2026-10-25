@@ -13,12 +13,16 @@ const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_TEMPLATE_PATH = path.resolve(FRONTDOOR_ROOT, "portal-src", "portal.template.js");
 const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "internal", "index.js");
 const PORTAL_REVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "review-surface-deferred.js");
+const PORTAL_PHOTOGRAPHIC_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "photographic-review.js");
 const PORTAL_OPERATE_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "operate-surface-deferred.js");
 const PORTAL_BUILD_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "build-surface-deferred.js");
 const PORTAL_PROFILE_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "profile-surface-deferred.js");
 const PORTAL_OVERVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "overview-surface-deferred.js");
 const PORTAL_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.js");
 const PORTAL_REVIEW_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
+const PORTAL_PHOTOGRAPHIC_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-photographic.js");
+const PORTAL_PHOTOGRAPHIC_CSS_SOURCE = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles", "photographic-review.css");
+const PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-photographic.css");
 const PORTAL_OPERATE_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-operate.js");
 const PORTAL_BUILD_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-build.js");
 const PORTAL_PROFILE_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-profile.js");
@@ -128,6 +132,12 @@ async function renderPortalCssAsset() {
   return renderedCss;
 }
 
+async function renderPhotographicCssAsset() {
+  // Join the components layer already established by index.css. Source
+  // fragments do not introduce an independent global layer order.
+  return minifyCssText(`@layer components {${readFileSync(PORTAL_PHOTOGRAPHIC_CSS_SOURCE, "utf-8")}}`);
+}
+
 async function buildPortalCssAsset() {
   if (compatOverridesDisabled()) {
     console.log(
@@ -181,6 +191,7 @@ const cssOnly = process.argv.includes("--css-only");
 const emitMetafile = process.argv.includes("--emit-metafile");
 const METAFILE_DIR = path.resolve(FRONTDOOR_ROOT, ".metafiles");
 const PORTAL_METAFILE_PATH = path.resolve(METAFILE_DIR, "portal-bundle.json");
+const PHOTOGRAPHIC_METAFILE_PATH = path.resolve(METAFILE_DIR, "photographic-review-bundle.json");
 const REVIEW_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "review-surface-bundle.json");
 const OPERATE_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "operate-surface-bundle.json");
 const BUILD_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "build-surface-bundle.json");
@@ -203,12 +214,18 @@ if (process.argv.includes("--check-css")) {
       `${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} is stale. Run npm run build:portal from ${path.relative(REPO_ROOT, FRONTDOOR_ROOT)}.`
     );
   }
+  const photographicCss = existsSync(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH) ? readFileSync(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, "utf-8") : "";
+  if (photographicCss !== await renderPhotographicCssAsset()) {
+    throw new Error(`${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)} is stale. Run npm run build:portal.`);
+  }
   console.log(`portal css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)}`);
+  console.log(`photographic css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)}`);
   process.exit(0);
 }
 
 if (cssOnly) {
   const portalCssChanged = await buildPortalCssAsset();
+  writeIfChanged(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, await renderPhotographicCssAsset());
   const portalCssStats = statSync(PORTAL_CSS_ASSET_PATH);
   console.log(
     `portal css ${portalCssChanged ? "updated" : "unchanged"} (--css-only): ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} (${portalCssStats.size} bytes)`
@@ -234,6 +251,10 @@ const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY,
   minifyIdentifiers: true,
   minifySyntax: true,
   minifyWhitespace: true
+});
+const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
+  format: "esm", keepNames: true, metafile: emitMetafile,
+  minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
 });
 const deferredOperateSurfaceBuild = await bundleText(PORTAL_OPERATE_SURFACE_ENTRY, {
   format: "esm",
@@ -268,6 +289,7 @@ if (emitMetafile) {
     writeFileSync(PORTAL_METAFILE_PATH, JSON.stringify(internalBuild.metafile, null, 2), "utf-8");
   }
   if (deferredReviewSurfaceBuild.metafile) {
+    writeFileSync(PHOTOGRAPHIC_METAFILE_PATH, JSON.stringify(photographicReviewBuild.metafile, null, 2), "utf-8");
     writeFileSync(REVIEW_SURFACE_METAFILE_PATH, JSON.stringify(deferredReviewSurfaceBuild.metafile, null, 2), "utf-8");
   }
   if (deferredOperateSurfaceBuild.metafile) {
@@ -306,6 +328,8 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
 const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBuild.text.trim()}\n`);
+const photographicChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_ASSET_PATH, `${photographicReviewBuild.text.trim()}\n`);
+const photographicCssChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, await renderPhotographicCssAsset());
 const operateSurfaceChanged = writeIfChanged(PORTAL_OPERATE_SURFACE_ASSET_PATH, `${deferredOperateSurfaceBuild.text.trim()}\n`);
 const buildSurfaceChanged = writeIfChanged(PORTAL_BUILD_SURFACE_ASSET_PATH, `${deferredBuildSurfaceBuild.text.trim()}\n`);
 const profileSurfaceChanged = writeIfChanged(PORTAL_PROFILE_SURFACE_ASSET_PATH, `${deferredProfileSurfaceBuild.text.trim()}\n`);
@@ -316,6 +340,7 @@ const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PAT
 
 const portalStats = statSync(PORTAL_ASSET_PATH);
 const reviewSurfaceStats = statSync(PORTAL_REVIEW_SURFACE_ASSET_PATH);
+const photographicStats = statSync(PORTAL_PHOTOGRAPHIC_ASSET_PATH);
 const operateSurfaceStats = statSync(PORTAL_OPERATE_SURFACE_ASSET_PATH);
 const buildSurfaceStats = statSync(PORTAL_BUILD_SURFACE_ASSET_PATH);
 const profileSurfaceStats = statSync(PORTAL_PROFILE_SURFACE_ASSET_PATH);
@@ -327,6 +352,8 @@ console.log(
 console.log(
   `review surface bundle ${reviewSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_REVIEW_SURFACE_ASSET_PATH)} (${reviewSurfaceStats.size} bytes)`
 );
+console.log(`photographic review CSS ${photographicCssChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)}`);
+console.log(`photographic review bundle ${photographicChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_ASSET_PATH)} (${photographicStats.size} bytes)`);
 console.log(
   `operate surface bundle ${operateSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_OPERATE_SURFACE_ASSET_PATH)} (${operateSurfaceStats.size} bytes)`
 );

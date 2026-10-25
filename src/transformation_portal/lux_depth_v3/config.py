@@ -239,6 +239,7 @@ class EnhanceConfig:
 
     # V2 configuration
     v2_preset: Optional[str] = "default"  # None = skip V2 stage entirely
+    v2_input_color: str = "auto"
     v2_device: str = "cpu"
     v2_upscaler_backend: str = "default"
     enable_v2: bool = True  # Master switch for V2 stage
@@ -585,6 +586,13 @@ class EnhanceConfig:
 
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
+        if not isinstance(self.v2_input_color, str) or self.v2_input_color not in {
+            "auto",
+            "auto_assume_srgb",
+            "srgb",
+            "linear_srgb",
+        }:
+            raise ValueError("v2_input_color must be auto, auto_assume_srgb, srgb, or linear_srgb")
         deprecated_output_notices = []
         output_bit_depth_explicit = self.output_bit_depth is not _IMPLICIT_OUTPUT_BIT_DEPTH
         normalized_output_bit_depth = _normalize_output_bit_depth(self.output_bit_depth)

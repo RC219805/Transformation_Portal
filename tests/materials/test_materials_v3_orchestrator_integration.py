@@ -12,12 +12,21 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 
 pytestmark = pytest.mark.unit
+
+
+def _srgb_source(tmp_path):
+    from transformation_portal.lux_depth_v4.photography import output_srgb_icc
+
+    source = tmp_path / "source.jpg"
+    Image.new("RGB", (32, 32), (128, 128, 128)).save(source, icc_profile=output_srgb_icc())
+    return source
 
 
 @pytest.fixture
@@ -155,6 +164,7 @@ def test_run_materials_v3_stage_aligns_v2_handoff_artifacts_and_sets_metadata(
             with patch.object(orchestrator.materials_v3_engine, "process", return_value=materials_result):
                 result, _, enhanced_path = orchestrator._run_materials_v3_stage(
                     preprocessed_array=preprocessed_array,
+                    source_path=_srgb_source(tmp_path),
                     depth_map=depth_map,
                     output_key=output_key,
                     artifact_shape=(10, 12),
@@ -589,6 +599,7 @@ def test_apex_materials_stage_invokes_zero_pixel_ops_gate(
     ):
         orchestrator._run_materials_v3_stage(
             preprocessed_array=np.ones((32, 32, 3), dtype=np.float32) * 0.5,
+            source_path=_srgb_source(tmp_path),
             depth_map=np.ones((32, 32), dtype=np.float32),
             output_key=Path("apex/noop"),
         )
@@ -891,7 +902,8 @@ def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, 
         "materials_v3_metadata": {"version": "3.1"},
     }
 
-    def _run_stage(*, preprocessed_array, depth_map, output_key, artifact_shape):  # noqa: ARG001
+    def _run_stage(*, preprocessed_array, source_path, depth_map, output_key, artifact_shape):  # noqa: ARG001
+        assert source_path == input_path
         assert artifact_shape == (4, 4)
         expected_path.write_bytes(b"enhanced")
         return recomputed_result, 0.321, expected_path
@@ -946,6 +958,7 @@ def test_apex_strict_stage_wraps_materials_stage_exception_as_gate_error(
         with pytest.raises(ApexStrictGateError) as exc_info:
             orchestrator._run_materials_v3_stage(
                 preprocessed_array=preprocessed_array,
+                source_path=_srgb_source(tmp_path),
                 depth_map=depth_map,
                 output_key=Path("image_01"),
             )
@@ -980,6 +993,7 @@ def test_apex_non_strict_backend_requires_strict_segmentation_gate(
         with pytest.raises(ApexStrictGateError) as exc_info:
             orchestrator._run_materials_v3_stage(
                 preprocessed_array=preprocessed_array,
+                source_path=_srgb_source(tmp_path),
                 depth_map=depth_map,
                 output_key=Path("image_01"),
             )

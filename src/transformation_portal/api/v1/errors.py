@@ -42,6 +42,9 @@ ErrorCode = Literal[
     "AUTH_CONFIGURATION_ERROR",
     "ARTIFACT_DELETED",
     "ARTIFACT_STORE_UNAVAILABLE",
+    "ARTIFACT_CHANGED",
+    "ARTIFACT_UNAVAILABLE",
+    "APPROVAL_REQUIRED",
     "CONFLICT",
     "FORBIDDEN",
     "HTTP_ERROR",
@@ -53,6 +56,8 @@ ErrorCode = Literal[
     "QUEUE_UNAVAILABLE",
     "RATE_LIMITED",
     "REQUEST_TOO_LARGE",
+    "RESOURCE_EXHAUSTED",
+    "REVIEW_CONFLICT",
     "SERVICE_UNAVAILABLE",
     "UNAUTHORIZED",
     # Job-runner failure codes (set on job.error by app.py's runner exception

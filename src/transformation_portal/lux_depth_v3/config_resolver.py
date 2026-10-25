@@ -616,8 +616,13 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
 
         effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
 
+    from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+
     return {
         "enable_materials_v3": bool(config.enable_materials_v3),
+        "input_color": config.v2_input_color if config.enable_materials_v3 else None,
+        "color_contract": V2_COLOR_CONTRACT if config.enable_materials_v3 else None,
+        "processing_version": V2_PROCESSING_VERSION if config.enable_materials_v3 else None,
         "apply_pixel_ops": bool(config.apply_pixel_ops),
         # APEX Materials V3 strict-gate policy version. Bumped when the gate's
         # blocker semantics change so cache replays don't serve verdicts under
@@ -843,6 +848,8 @@ def compute_config_fingerprint(
         effective_da3_python = resolve_effective_da3_python_executable(config)
         effective_raw_python = resolve_effective_raw_python_executable(config)
 
+    from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+
     return ConfigFingerprint(
         model_variant=resolved_model_identity_for_backend(
             config,
@@ -853,6 +860,9 @@ def compute_config_fingerprint(
         depth_device=config.depth_device,
         preset=config.preset.value if config.preset else None,
         v2_preset=config.v2_preset,
+        v2_input_color=config.v2_input_color,
+        v2_color_contract=V2_COLOR_CONTRACT,
+        v2_processing_version=V2_PROCESSING_VERSION,
         v2_device=config.v2_device,
         v2_upscaler_backend=config.v2_upscaler_backend,
         depth_backend=config.depth_backend,
@@ -922,6 +932,9 @@ def build_run_card_config_fingerprint(
         "depth_device": base.depth_device,
         "preset": base.preset,
         "v2_preset": base.v2_preset,
+        "v2_input_color": base.v2_input_color,
+        "v2_color_contract": base.v2_color_contract,
+        "v2_processing_version": base.v2_processing_version,
         "v2_device": base.v2_device,
         "v2_upscaler_backend": base.v2_upscaler_backend,
         "output_bit_depth": base.output_bit_depth,

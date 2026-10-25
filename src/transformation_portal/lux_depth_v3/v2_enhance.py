@@ -24,18 +24,22 @@ Reference: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 
 from __future__ import annotations
 
+import hashlib
+import io
 import logging
 import shutil
+import struct
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, PngImagePlugin
 
+from ..core.image_artifact import ImageMaster
 from ..stage_graph.stage import StageContext, StageStatus
 from ..stage_graph.stages.enhancement import EnhancementStage
-from .v2_presets import V2EnhancementConfig
+from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION, V2EnhancementConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,226 @@ class V2EnhancementError(Exception):
     """Raised when V2 enhancement operation fails."""
 
     pass
+
+
+def _legacy_container_snapshot(source: bytes, image: Image.Image) -> bytes:
+    """Losslessly normalize supported WebP/BMP samples without inventing color.
+
+    The PNG carrier is private to the photographic decoder. Original profile
+    and EXIF evidence remain authorizing; untagged samples still require the
+    caller's recorded assumption or explicit encoding assertion.
+    """
+    profile = image.info.get("icc_profile")
+    declared_srgb = False
+    if image.format == "WEBP":
+        if source[:4] != b"RIFF" or source[8:12] != b"WEBP" or len(source) != int.from_bytes(source[4:8], "little") + 8:
+            raise V2EnhancementError("Invalid WebP container length")
+        offset, seen, total = 12, set(), 0
+        for _ in range(8192):
+            if offset == len(source):
+                break
+            if offset + 8 > len(source):
+                raise V2EnhancementError("Incomplete WebP metadata")
+            kind, size = source[offset : offset + 4], int.from_bytes(source[offset + 4 : offset + 8], "little")
+            end = offset + 8 + size
+            if end + size % 2 > len(source):
+                raise V2EnhancementError("Incomplete WebP chunk")
+            if kind in {b"ICCP", b"EXIF"}:
+                total += size
+                if kind in seen or total > 4 * 1024**2:
+                    raise V2EnhancementError("Duplicate or oversized WebP color metadata")
+                seen.add(kind)
+                if kind == b"ICCP":
+                    profile = source[offset + 8 : end]
+                    if not profile:
+                        raise V2EnhancementError("Empty WebP ICC metadata")
+            offset = end + size % 2
+        else:
+            raise V2EnhancementError("WebP exceeds the metadata chunk budget")
+    elif image.format == "BMP":
+        header_size = int.from_bytes(source[14:18], "little")
+        if header_size >= 108:
+            if header_size not in {108, 124} or len(source) < 14 + header_size:
+                raise V2EnhancementError("Unsupported BMP color header")
+            color_space = int.from_bytes(source[70:74], "little")
+            if color_space == 0x73524742:  # LCS_sRGB
+                declared_srgb = True
+            elif color_space == 0x4D424544 and header_size == 124:  # PROFILE_EMBEDDED
+                start = 14 + int.from_bytes(source[126:130], "little")
+                size = int.from_bytes(source[130:134], "little")
+                if start < 14 + header_size or not 0 < size <= 4 * 1024**2 or start + size > len(source):
+                    raise V2EnhancementError("Invalid BMP embedded ICC extent")
+                profile = source[start : start + size]
+            else:
+                raise V2EnhancementError("Unsupported calibrated, linked, or unknown BMP color metadata")
+    if image.mode not in {"RGB", "RGBA", "L", "P", "1"}:
+        raise V2EnhancementError("Unsupported WebP/BMP photographic sample layout")
+    if image.mode in {"P", "1"}:
+        image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+    metadata = PngImagePlugin.PngInfo()
+    if declared_srgb:
+        metadata.add(b"sRGB", b"\0")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", icc_profile=profile, exif=image.getexif().tobytes(), pnginfo=metadata)
+    return buffer.getvalue()
+
+
+def decode_v2_source(source: bytes, *, source_name: str, input_color: str = "auto") -> ImageMaster:
+    """Use photographic color authority for every supported legacy V3 format."""
+    from transformation_portal.core.image_artifact import ImageMaster, metadata_payload
+    from transformation_portal.lux_depth_v4.photography import decode_master
+
+    original = source
+    source_format = None
+    if source[:4] not in {b"II*\0", b"MM\0*", b"II+\0", b"MM\0+"}:
+        with Image.open(io.BytesIO(source)) as image:
+            source_format = image.format
+            if image.format in {"WEBP", "BMP"}:
+                source = _legacy_container_snapshot(source, image)
+            elif image.format == "PNG" and image.mode == "P":
+                source = _expand_palette_png_snapshot(source)
+    master = decode_master(source, source_name=source_name, input_color=input_color)
+    if source is original:
+        return master
+    metadata = metadata_payload(master.metadata)
+    metadata["source_format"] = source_format
+    metadata["source_normalization"] = {
+        "schema": "tp.v3.lossless_color_carrier.v1",
+        "source_format": source_format,
+        "carrier_format": "PNG",
+        "carrier_sha256": hashlib.sha256(source).hexdigest(),
+        "pixel_quantization": False,
+        "color_metadata_preserved": True,
+    }
+    return ImageMaster(
+        master.pixels, hashlib.sha256(original).hexdigest(), master.source_bit_depth, master.alpha, metadata, master.source_icc
+    )
+
+
+def bounded_encoded_srgb(master: ImageMaster) -> np.ndarray:
+    """V3 cannot retain float source precision or out-of-gamut/HDR samples."""
+    from transformation_portal.lux_depth_v4.photography import linear_to_srgb
+
+    if master.source_bit_depth > 16:
+        raise V2EnhancementError("V3 finishing supports at most 16-bit masters; use Unified/V5/V6 to retain float precision")
+    pixels = linear_to_srgb(master.pixels)
+    if not np.isfinite(pixels).all() or np.any(pixels < -1e-6) or np.any(pixels > 1 + 1e-6):
+        raise V2EnhancementError(
+            "V3 finishing requires bounded encoded sRGB; use Unified/V5/V6 for extended/HDR or wide-gamut masters"
+        )
+    return np.clip(pixels, 0, 1)
+
+
+def prepare_materials_srgb_proxy(
+    pixels: np.ndarray, *, source: bytes | None, source_name: str, input_color: str, raw_contract: dict | None = None
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Color-manage the existing Materials proxy while retaining its geometry.
+
+    Depth/model preprocessing is unchanged. Its RGB proxy still has the source
+    transfer/primaries, so apply the source's validated transform to that proxy
+    before Materials operates. Source-wide validation prevents a clipped proxy
+    from concealing extended/wide-gamut photographic samples.
+    """
+    from transformation_portal.core.image_artifact import metadata_payload
+    from transformation_portal.lux_depth_v4.color_preparation import apply_input_color, prepare_input_color
+    from transformation_portal.lux_depth_v4.photography import linear_to_srgb
+
+    if pixels.dtype != np.float32 or pixels.ndim != 3 or pixels.shape[2] != 3 or not np.isfinite(pixels).all():
+        raise V2EnhancementError("Materials requires a finite float32 RGB proxy")
+    if raw_contract is not None:
+        if (
+            raw_contract.get("contract") != "legacy_linear_srgb"
+            or raw_contract.get("preview_escape_enabled") is not False
+            or raw_contract.get("mode") not in {"auto", "force_rawpy"}
+            or input_color not in {"auto", "auto_assume_srgb", "linear_srgb"}
+        ):
+            raise V2EnhancementError(
+                "Materials RAW finishing requires the established linear-sRGB ingest; preview is depth-only"
+            )
+        linear = pixels
+        evidence = {
+            "schema": "tp.v3.materials_color.v1",
+            "input_policy": input_color,
+            "source_name": source_name,
+            "source_contract": raw_contract,
+            "source_precision_policy": "Existing clipped legacy RAW proxy; no precision or HDR recovery",
+        }
+    else:
+        if source is None:
+            raise V2EnhancementError("Materials color preparation requires its exact photographic source")
+        master = decode_v2_source(source, source_name=source_name, input_color=input_color)
+        bounded_encoded_srgb(master)
+        color = metadata_payload(master.metadata["color_preparation"])
+        origin = color["source_metadata"]
+        prepared = prepare_input_color(
+            input_color=input_color,
+            image_format=origin["image_format"],
+            profile=master.source_icc,
+            declared_color=origin["declared_color"],
+            exif_color=origin["exif_color"],
+            png_metadata=origin["png"],
+        )
+        samples = pixels
+        if prepared.source_color == "icc_gray":
+            if not np.array_equal(pixels[..., 0], pixels[..., 1]) or not np.array_equal(pixels[..., 0], pixels[..., 2]):
+                raise V2EnhancementError("Grayscale source profile does not match the Materials RGB proxy")
+            samples = pixels[..., 0]
+        linear = apply_input_color(samples, prepared)
+        evidence = {
+            "schema": "tp.v3.materials_color.v1",
+            "source_sha256": master.source_sha256,
+            "source_format": master.metadata["source_format"],
+            "preparation": color,
+            "source_precision_policy": "Existing V3 proxy precision; no precision recovery",
+        }
+    encoded = linear_to_srgb(linear)
+    if not np.isfinite(encoded).all() or np.any(encoded < -1e-6) or np.any(encoded > 1 + 1e-6):
+        raise V2EnhancementError("Materials proxy is outside bounded sRGB; use Unified/V5/V6 for extended/HDR sources")
+    return np.clip(encoded, 0, 1).astype(np.float32), {
+        **evidence,
+        "output_color": "bounded_encoded_srgb",
+        "color_contract": V2_COLOR_CONTRACT,
+        "processing_version": V2_PROCESSING_VERSION,
+        "geometry": list(pixels.shape[:2]),
+        "depth_preprocessing_changed": False,
+        "segmentation_preprocessing_changed": False,
+    }
+
+
+def _expand_palette_png_snapshot(source: bytes) -> bytes:
+    """Expand palette entries without dropping or laundering source color evidence."""
+    color_chunks = {b"iCCP", b"sRGB", b"gAMA", b"cHRM", b"cICP", b"eXIf", b"mDCV", b"cLLI"}
+    retained = []
+    offset, seen_pixels, retained_size = 8, False, 0
+    for _ in range(8192):
+        if offset + 12 > len(source):
+            raise V2EnhancementError("Incomplete palette PNG metadata")
+        size, kind = struct.unpack_from(">I4s", source, offset)
+        end = offset + size + 12
+        if end > len(source):
+            raise V2EnhancementError("Incomplete palette PNG chunk")
+        if kind == b"IDAT":
+            seen_pixels = True
+        if kind in color_chunks:
+            if seen_pixels and kind != b"eXIf":
+                raise V2EnhancementError("Misplaced palette PNG color metadata")
+            retained_size += size
+            if retained_size > 4 * 1024**2:
+                raise V2EnhancementError("Palette PNG color metadata exceeds supported bounds")
+            retained.append(source[offset:end])
+        offset = end
+        if kind == b"IEND":
+            break
+    else:
+        raise V2EnhancementError("Palette PNG exceeds the metadata chunk budget")
+    with Image.open(io.BytesIO(source)) as palette:
+        expanded = palette.convert("RGBA" if "transparency" in palette.info else "RGB")
+        buffer = io.BytesIO()
+        expanded.save(buffer, format="PNG", icc_profile=None, exif=b"")
+    encoded = buffer.getvalue()
+    # Original ICC/transfer chunks, including their original CRCs and duplicate
+    # evidence, pass unchanged through the common photographic validator.
+    return encoded[:33] + b"".join(retained) + encoded[33:]
 
 
 def _normalize_icc_profile_payload(value: Any) -> bytes | None:
@@ -585,6 +809,7 @@ def enhance_image(
     device: str = "cpu",
     allow_8bit_output: bool = False,
     output_bit_depth: Optional[int] = None,
+    input_color: str = "auto",
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
@@ -685,11 +910,37 @@ def enhance_image(
     try:
         # Load input image with bit-depth preservation
         allow_8bit_load = output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output)
-        image, input_bits, metadata = load_image_preserve_bit_depth(
-            input_path,
-            allow_8bit_load,
-        )
+        try:
+            image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_load)
+        except (OSError, V2EnhancementError) as load_error:
+            # Pillow cannot open ordinary RGB float TIFFs. Diagnose the native
+            # header without attempting a lower-precision fallback or masking
+            # the existing integer quality-firewall error.
+            with input_path.open("rb") as header:
+                is_tiff = header.read(4) in {b"II*\0", b"MM\0*", b"II+\0", b"MM\0+"}
+            if is_tiff:
+                import tifffile
+
+                with tifffile.TiffFile(input_path) as native:
+                    native_dtype = native.pages[0].dtype
+                    if native_dtype is not None and native_dtype.kind == "f":
+                        raise V2EnhancementError(
+                            "V3 finishing supports at most 16-bit integer masters; use Unified/V5/V6 to retain float precision"
+                        ) from load_error
+            raise
+        input_dtype = str(image.dtype)
+        # Pixel processing has one explicit color domain. Preserve the source
+        # precision through the existing V4/V5 photographic color authority;
+        # an ICC is a transform, never a label copied onto unrelated pixels.
+        from transformation_portal.core.image_artifact import metadata_payload
+        from transformation_portal.lux_depth_v4.photography import output_srgb_icc
+
+        source_snapshot = input_path.read_bytes()
+        master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
+        prepared_pixels = bounded_encoded_srgb(master)
+        color_preparation = metadata_payload(master.metadata["color_preparation"])
         icc_profile = metadata.get("icc_profile")
+        source_icc_profile = icc_profile
         exif_data = metadata.get("exif")
         load_backend = str(metadata.get("load_backend") or "pil")
         source_had_icc = bool(icc_profile)
@@ -700,6 +951,7 @@ def enhance_image(
         save_degraded = False
         save_degradation_reason = None
         icc_preserved = False
+        icc_profile = output_srgb_icc()
 
         logger.debug(f"Loaded image: shape={image.shape}, dtype={image.dtype}, " f"bits_per_sample={input_bits}")
 
@@ -729,6 +981,8 @@ def enhance_image(
             logger.debug("RGBA input detected - extracting alpha channel for preservation")
             alpha_channel = _convert_alpha_to_target_dtype(image[:, :, 3], target_dtype)
             image = image[:, :, :3]  # RGB only for enhancement
+        if master.alpha is not None:
+            alpha_channel = _convert_alpha_to_target_dtype(master.alpha, target_dtype)
 
         # Enforce RGB (H, W, 3) contract for EnhancementStage
         if image.ndim == 2:
@@ -736,6 +990,7 @@ def enhance_image(
             image = np.stack([image, image, image], axis=2)
         elif image.ndim == 3 and image.shape[2] != 3:
             raise V2EnhancementError(f"Unexpected image shape: {image.shape} (expected (H,W,3) RGB)")
+        image = prepared_pixels
 
         # Load depth map if provided
         # NOTE: depth_aware_tone_mapping and atmospheric_effects config flags are
@@ -799,7 +1054,10 @@ def enhance_image(
         # Ensure output dtype matches target (handle potential mismatches)
         if enhanced_image.dtype != target_dtype:
             logger.debug(f"Converting enhanced image from {enhanced_image.dtype} to {target_dtype}")
-            if target_dtype == np.dtype(np.uint8) and enhanced_image.dtype == np.uint16:
+            if np.issubdtype(enhanced_image.dtype, np.floating):
+                maximum = float(np.iinfo(np.uint16 if target_bits == 16 else np.uint8).max)
+                enhanced_image = np.rint(np.clip(enhanced_image, 0, 1) * maximum).astype(target_dtype)
+            elif target_dtype == np.dtype(np.uint8) and enhanced_image.dtype == np.uint16:
                 # 16-bit → 8-bit conversion with proper normalization
                 enhanced_image = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
             elif target_dtype == np.dtype(np.uint16) and enhanced_image.dtype == np.uint8:
@@ -847,7 +1105,7 @@ def enhance_image(
                 # Preserve ICC profile (TIFF tag 34675)
                 if icc_profile:
                     extratags.append((34675, "B", len(icc_profile), icc_profile, False))
-                    icc_preserved = True
+                    icc_preserved = source_icc_profile == icc_profile
                     logger.debug("Preserving ICC profile in 16-bit TIFF output")
 
                 if exif_data:
@@ -899,10 +1157,10 @@ def enhance_image(
             output_image = Image.fromarray(enhanced_image)
 
             # Preserve ICC profile and EXIF if present
-            save_kwargs = {}
+            save_kwargs: Dict[str, Any] = {}
             if icc_profile:
                 save_kwargs["icc_profile"] = icc_profile
-                icc_preserved = True
+                icc_preserved = source_icc_profile == icc_profile
                 logger.debug("Preserving ICC color profile")
 
             # Preserve EXIF data if present
@@ -953,6 +1211,17 @@ def enhance_image(
         return {
             "status": "success",
             "implementation": "v2_enhance",
+            "processing_version": V2_PROCESSING_VERSION,
+            "color": {
+                "contract": V2_COLOR_CONTRACT,
+                "input_policy": input_color,
+                "preparation": color_preparation,
+                "working_color": "bounded_encoded_srgb",
+                "output_color": "srgb",
+                "quantization": "at_final_output",
+                "source_icc_preserved": icc_preserved,
+                "output_icc_sha256": hashlib.sha256(icc_profile).hexdigest(),
+            },
             "artifact_contract": "canonical_v2_emitted_artifact",
             "is_canonical_emitted_artifact": True,
             "output_naming_policy": "canonical_v2_emitted_artifact",
@@ -981,7 +1250,7 @@ def enhance_image(
             "bit_depth": {
                 "input_bits_per_sample": input_bits,
                 "output_bits_per_sample": target_bits,
-                "input_dtype": str(image.dtype),
+                "input_dtype": input_dtype,
                 "output_dtype": str(enhanced_image.dtype),
                 "quality_firewall_active": input_bits == 16 and target_bits == 16,
                 "bit_depth_preserved": input_bits == target_bits,
