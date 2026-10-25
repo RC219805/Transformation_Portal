@@ -4417,9 +4417,11 @@ def test_artifact_retention_cleanup_keeps_job_when_delete_fails_then_retries(
     assert asyncio.run(orchestrator_app._job_repository().get(job.id)) is None
 
 
+@pytest.mark.parametrize("classification", ["legacy", "missing_authority", "unavailable"])
 def test_artifact_retention_authority_failure_does_not_starve_later_jobs(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    classification: str,
 ) -> None:
     now = orchestrator_app._now()
     jobs = []
@@ -4438,6 +4440,13 @@ def test_artifact_retention_authority_failure_does_not_starve_later_jobs(
 
     async def locator(job_id):
         return SimpleNamespace(tenant_id="tenant_a") if job_id == jobs[1].id else None
+
+    async def is_legacy(job_id):
+        if job_id == jobs[0].id:
+            if classification == "unavailable":
+                raise RuntimeError("retention classification unavailable")
+            return classification == "legacy"
+        return False
 
     async def revoke(*_args, **_kwargs):
         return None
@@ -4466,19 +4475,84 @@ def test_artifact_retention_authority_failure_does_not_starve_later_jobs(
         orchestrator_app,
         "get_operational_record_store",
         lambda: SimpleNamespace(
+            is_legacy_retention_job=is_legacy,
             get_locator=locator,
             revoke_generation=revoke,
             record_generation_deletion=deletion,
             generation_cleanup_state=no_cleanup_state,
         ),
     )
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.INFO):
         asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
 
     assert physical_deletions == [jobs[1].id], "missing authority must never fall back to physical deletion"
     assert "job_retention_legacy" in caplog.text
+    if classification == "legacy":
+        assert "artifact retention preserved legacy job" in caplog.text
+        assert not any(record.levelno >= logging.WARNING or record.exc_info for record in caplog.records)
+    else:
+        assert "artifact retention cleanup failed for job job_retention_legacy" in caplog.text
     assert asyncio.run(repository.get(jobs[1].id)).artifacts["lifecycle"]["deletion_status"] == "deleted"
     assert asyncio.run(repository.get(jobs[0].id)) is not None
+
+
+def test_artifact_retention_preserves_legacy_projection_and_bytes_without_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    now = orchestrator_app._now()
+    old = now - orchestrator_app.JOB_RETENTION_SECONDS - 10
+    artifact_path = tmp_path / "retained.txt"
+    artifact_path.write_bytes(b"legacy data must remain retained")
+    job = orchestrator_app.Job(
+        id="job_legacy_retention_hold",
+        created_at=old,
+        finished_at=old,
+        state="succeeded",
+        artifacts={
+            "items": [{"path": "retained.txt"}],
+            "lifecycle": {"created_at": old, "expires_at": old, "deletion_status": "available"},
+        },
+        artifact_lookup={"retained.txt": artifact_path},
+    )
+    _seed_job(job)
+    repository = orchestrator_app._job_repository()
+    before = asyncio.run(repository.get(job.id))
+
+    async def legacy(job_id):
+        assert job_id == job.id
+        return True
+
+    async def no_locator(_job_id):
+        return None
+
+    def forbidden_store():
+        pytest.fail("a legacy retention hold must never access the artifact store")
+
+    monkeypatch.setattr(orchestrator_app, "_uses_dispatch_authority", lambda: True)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", forbidden_store)
+    monkeypatch.setattr(
+        orchestrator_app,
+        "get_operational_record_store",
+        lambda: SimpleNamespace(is_legacy_retention_job=legacy, get_locator=no_locator),
+    )
+    with caplog.at_level(logging.INFO):
+        for _ in range(2):
+            asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now, scan_limit=None))
+            asyncio.run(orchestrator_app._cleanup_expired_jobs(now, scan_limit=None))
+
+    assert asyncio.run(repository.get(job.id)) == before
+    assert artifact_path.read_bytes() == b"legacy data must remain retained"
+    assert job.id in orchestrator_app.JOBS
+    assert "artifact retention preserved legacy job job_legacy_retention_hold" in caplog.text
+    assert not any(record.levelno >= logging.WARNING or record.exc_info for record in caplog.records)
+    # Automatic preservation must not turn an explicit request into deletion
+    # authority or a false success response.
+    with pytest.raises(orchestrator_app._JobRepositoryUnavailable, match="generation revocation unavailable"):
+        asyncio.run(orchestrator_app._delete_job_artifacts_for_job(job, reason="explicit_delete"))
+    assert asyncio.run(repository.get(job.id)) == before
+    assert artifact_path.read_bytes() == b"legacy data must remain retained"
 
 
 @pytest.mark.parametrize("deletion_status", ["pending", "failed"])
@@ -4529,6 +4603,9 @@ def test_durable_revoked_artifacts_stay_hidden_and_retain_projection_until_physi
     async def no_cleanup_state(_job_id):
         return None
 
+    async def not_legacy(_job_id):
+        return False
+
     async def no_outbox():
         return None
 
@@ -4545,6 +4622,7 @@ def test_durable_revoked_artifacts_stay_hidden_and_retain_projection_until_physi
         orchestrator_app,
         "get_operational_record_store",
         lambda: SimpleNamespace(
+            is_legacy_retention_job=not_legacy,
             get_locator=locator,
             revoke_generation=revoke,
             record_generation_deletion=deletion,
