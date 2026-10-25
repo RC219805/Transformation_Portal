@@ -45,6 +45,27 @@ class Base(DeclarativeBase):
     """Declarative base for orchestrator ORM models."""
 
 
+class PhotographicReviewStateModel(Base):
+    """Mutable review projection, independent of immutable execution authority."""
+
+    __tablename__ = "photographic_review_states"
+    job_id: Mapped[str] = mapped_column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class PhotographicReviewEventModel(Base):
+    """Exact review mutations retained for the parent job's lifetime."""
+
+    __tablename__ = "photographic_review_events"
+    job_id: Mapped[str] = mapped_column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    canonical_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class JobModel(Base):
     """Persistent slice of an orchestrator job."""
 

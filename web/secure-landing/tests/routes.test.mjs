@@ -2998,7 +2998,9 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",
-    "brand/dna-symbol-light.svg"
+    "brand/dna-symbol-light.svg",
+    "portal-photographic.js",
+    "portal-photographic.css"
   ]);
 });
 

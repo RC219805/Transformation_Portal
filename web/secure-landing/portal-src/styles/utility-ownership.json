@@ -1513,6 +1513,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/photographic-review.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1584,6 +1585,7 @@
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/build-surface-deferred.js",
         "web/secure-landing/portal-src/operate-surface-deferred.js",
+        "web/secure-landing/portal-src/photographic-review.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/profile-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"

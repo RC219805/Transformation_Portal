@@ -1,3 +1,5 @@
+import { createLazyPhotographicReview } from "./photographic-review-loader.js";
+
 export function createDeferredReviewSurfaceApi(host) {
   const {
     state,
@@ -50,6 +52,8 @@ export function createDeferredReviewSurfaceApi(host) {
     _jobHasReviewableOutputs,
     _latestVisibleTransportWarning,
   } = host;
+
+  const photographicReview = createLazyPhotographicReview(host);
 
   function setTextContentIfChanged(element, value) {
     if (!element) return false;
@@ -221,7 +225,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
     if (artifactViewerObjectUrl && artifactViewerPreviewPath === artifactPath && artifactViewerPreviewSource === context.url) {
       _renderArtifactViewerInlineImage(artifactViewerObjectUrl, context.zoomPercent);
-      _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
+      _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% preview zoom.`);
       return;
     }
 
@@ -263,12 +267,12 @@ export function createDeferredReviewSurfaceApi(host) {
         _revokeArtifactViewerObjectUrl();
         artifactViewerObjectUrl = objectUrl;
         _renderArtifactViewerInlineImage(objectUrl, context.zoomPercent);
-        _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
+        _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% preview zoom.`);
         return;
       }
 
       _renderArtifactViewerInlineImage(context.url, context.zoomPercent);
-      _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
+      _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% preview zoom.`);
     } catch (err) {
       if (requestId !== artifactViewerPreviewRequestId) return;
       const abortReason = err?.name === "AbortError" ? _artifactViewerAbortReason(controller) : "";
@@ -1004,6 +1008,7 @@ export function createDeferredReviewSurfaceApi(host) {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
     if (jobsLoading) {
+      photographicReview.show(null, null);
       _resetArtifactActionButtons();
       _renderReviewStatusBanner(null, null);
       _renderArtifactProvenance(null, null);
@@ -1018,6 +1023,7 @@ export function createDeferredReviewSurfaceApi(host) {
     els.artifactThumbnailRail.setAttribute("aria-label", "Artifact choices");
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
+    photographicReview.show(selected, selected ? _selectedArtifactForJob(selected) : null);
 
     if (!selected) {
       _resetArtifactActionButtons();
@@ -1045,7 +1051,8 @@ export function createDeferredReviewSurfaceApi(host) {
       updateRunCardActions(null);
       if (els.emptyArtifactState) els.emptyArtifactState.style.display = "block";
       renderConsoleContextRibbon();
-      _syncConsoleRoute(true);
+      // A failed jobs fetch does not prove a deep-linked run/artifact is gone.
+      if (state.jobsLoadStatus === "ready") _syncConsoleRoute(true);
       return;
     }
 
@@ -1345,7 +1352,7 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerPath) els.artifactViewerPath.textContent = relPath;
     if (els.artifactViewerFingerprint) els.artifactViewerFingerprint.textContent = _artifactFingerprintLabel(artifact);
     if (els.artifactViewerZoomValue) {
-      els.artifactViewerZoomValue.textContent = inlinePreview ? `${zoomPercent}% zoom` : "Inline preview unavailable";
+      els.artifactViewerZoomValue.textContent = inlinePreview ? `${zoomPercent}% preview zoom · reduced image` : "Inline preview unavailable";
     }
     if (els.artifactViewerPrevBtn) els.artifactViewerPrevBtn.disabled = index <= 0;
     if (els.artifactViewerNextBtn) els.artifactViewerNextBtn.disabled = index >= artifacts.length - 1;
@@ -1386,7 +1393,7 @@ export function createDeferredReviewSurfaceApi(host) {
       }
       if (state.auth?.mode !== "direct_debug") {
         _renderArtifactViewerInlineImage(url, zoomPercent);
-        _setArtifactViewerStatus(`${artifactName} preview open at ${zoomPercent}% zoom.`);
+        _setArtifactViewerStatus(`${artifactName} preview open at ${zoomPercent}% preview zoom.`);
       } else {
         if (els.artifactViewerImage) {
           els.artifactViewerImage.classList.add("hidden");

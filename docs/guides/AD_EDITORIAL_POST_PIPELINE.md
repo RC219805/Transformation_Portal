@@ -133,6 +133,14 @@ still introduces uint16 quantization at each intermediate write; optional edits
 and clipping can reduce detail. Correct output encoding is not photographic
 quality acceptance.
 
+Resize, unsharp masking and JPEG encoding share the supported
+`core/photographic_export.py` implementation with approved delivery exports.
+The isolated editorial command loads that exact source file explicitly; it
+does not require the full project to be installed or add an ambient import root.
+Its governed RAW/PDF runtime, ProPhoto-to-sRGB conversion, ICC validation and
+atomic-write wrapper remain separate. See the
+[photographic delivery contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#export-an-approved-set).
+
 ## HDR brackets
 
 ```yaml

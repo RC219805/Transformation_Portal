@@ -25,6 +25,7 @@ from transformation_portal.lux_depth_v3.v2_enhance import (
     resolve_v2_emitted_artifact_path,
 )
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
+from transformation_portal.lux_depth_v4.photography import output_srgb_icc
 from transformation_portal.stage_graph.stage import StageStatus
 
 pytestmark = pytest.mark.unit
@@ -289,7 +290,7 @@ class TestEnhanceImage:
             mock_stage.compute.return_value = mock_result
 
             # Run enhancement
-            report = enhance_image(input_path, output_path)
+            report = enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify report
             assert report["status"] == "success"
@@ -325,7 +326,7 @@ class TestEnhanceImage:
             result = Mock(status=StageStatus.COMPLETED, metadata={})
             result.artifacts = {"enhanced_image": enhanced}
             stage_cls.return_value.compute.return_value = result
-            report = enhance_image(input_path, output_path, output_bit_depth=16)
+            report = enhance_image(input_path, output_path, output_bit_depth=16, input_color="auto_assume_srgb")
 
         reopened = tifffile.imread(report["output"])
         assert Path(report["output"]).suffix == ".tif"
@@ -343,12 +344,7 @@ class TestEnhanceImage:
         tifffile.imwrite(input_path, source, photometric="rgb")
         config = V2EnhancementConfig.from_preset("none")
 
-        report = enhance_image(
-            input_path,
-            caller_path,
-            config=config,
-            output_bit_depth=8,
-        )
+        report = enhance_image(input_path, caller_path, config=config, output_bit_depth=8, input_color="auto_assume_srgb")
 
         emitted_path = Path(report["output"])
         with Image.open(emitted_path) as reopened_image:
@@ -380,7 +376,7 @@ class TestEnhanceImage:
             result.artifacts = {"enhanced_image": enhanced}
             stage_cls.return_value.compute.return_value = result
             with pytest.raises(V2EnhancementError, match="publishing an 8-bit file"):
-                enhance_image(input_path, output_path, output_bit_depth=16)
+                enhance_image(input_path, output_path, output_bit_depth=16, input_color="auto_assume_srgb")
 
         assert not expected_output.exists()
 
@@ -397,7 +393,7 @@ class TestEnhanceImage:
             result = Mock(status=StageStatus.COMPLETED, metadata={})
             result.artifacts = {"enhanced_image": np.full((2, 2, 3), 32768, dtype=np.uint16)}
             stage_cls.return_value.compute.return_value = result
-            report = enhance_image(input_path, output_path, output_bit_depth=16)
+            report = enhance_image(input_path, output_path, output_bit_depth=16, input_color="auto_assume_srgb")
 
         reopened = tifffile.imread(report["output"])
         assert reopened.dtype == np.uint16
@@ -418,6 +414,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=1.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         metadata = report["enhancement_metadata"]
@@ -442,6 +439,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=1.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         metadata = report["enhancement_metadata"]
@@ -466,6 +464,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=1.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         metadata = report["enhancement_metadata"]
@@ -490,6 +489,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=1.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         metadata = report["enhancement_metadata"]
@@ -514,6 +514,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=0.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         metadata = report["enhancement_metadata"]
@@ -548,7 +549,7 @@ class TestEnhanceImage:
             mock_stage.compute.return_value = mock_result
 
             # Run enhancement
-            report = enhance_image(input_path, output_path, depth_map_path=depth_path)
+            report = enhance_image(input_path, output_path, depth_map_path=depth_path, input_color="auto_assume_srgb")
 
             # Verify depth map was passed to stage
             assert report["depth_map"] == str(depth_path)
@@ -578,7 +579,9 @@ class TestEnhanceImage:
             material_strength=0.0,
         )
 
-        report = enhance_image(input_path, output_path, depth_map_path=depth_path, config=config)
+        report = enhance_image(
+            input_path, output_path, depth_map_path=depth_path, config=config, input_color="auto_assume_srgb"
+        )
 
         assert report["status"] == "success"
         assert report["depth_consumed"] is True
@@ -609,7 +612,7 @@ class TestEnhanceImage:
             mock_result.metadata = {"has_depth": False}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path, depth_map_path=depth_path)
+            report = enhance_image(input_path, output_path, depth_map_path=depth_path, input_color="auto_assume_srgb")
 
             assert report["depth_map"] == str(depth_path)
             assert report["depth_consumed"] is False
@@ -644,7 +647,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}  # No explicit has_depth
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path, depth_map_path=depth_path)
+            report = enhance_image(input_path, output_path, depth_map_path=depth_path, input_color="auto_assume_srgb")
 
             # Verify structured depth block
             assert "depth" in report
@@ -674,7 +677,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path, depth_map_path=None)
+            report = enhance_image(input_path, output_path, depth_map_path=None, input_color="auto_assume_srgb")
 
             # Verify structured depth block for no depth request
             assert "depth" in report
@@ -700,7 +703,9 @@ class TestEnhanceImage:
 
         # Use "none" preset for passthrough
         config = V2EnhancementConfig(preset="none")
-        report = enhance_image(input_path, output_path, depth_map_path=depth_path, config=config)
+        report = enhance_image(
+            input_path, output_path, depth_map_path=depth_path, config=config, input_color="auto_assume_srgb"
+        )
 
         assert report["status"] == "passthrough"
         assert report["artifact_contract"] == "passthrough_exact_copy"
@@ -735,7 +740,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path, config=config)
+            report = enhance_image(input_path, output_path, config=config, input_color="auto_assume_srgb")
 
             # Verify config was used
             assert report["preset"] == "luxury_estate"
@@ -760,7 +765,7 @@ class TestEnhanceImage:
 
         # Should not call EnhancementStage
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
-            report = enhance_image(input_path, output_path, config=config)
+            report = enhance_image(input_path, output_path, config=config, input_color="auto_assume_srgb")
 
             # Verify passthrough
             assert report["status"] == "passthrough"
@@ -789,10 +794,7 @@ class TestEnhanceImage:
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as stage_cls:
             report = enhance_image(
-                input_path,
-                caller_path,
-                config=config,
-                output_bit_depth=output_bit_depth,
+                input_path, caller_path, config=config, output_bit_depth=output_bit_depth, input_color="auto_assume_srgb"
             )
 
         stage_cls.assert_not_called()
@@ -835,7 +837,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, raw_suffix_output)
+            report = enhance_image(input_path, raw_suffix_output, input_color="auto_assume_srgb")
 
         assert report["status"] == "success"
         assert report["output"] == str(expected_output)
@@ -848,7 +850,7 @@ class TestEnhanceImage:
         output_path = tmp_path / "output.png"
 
         with pytest.raises(FileNotFoundError, match="Input image not found"):
-            enhance_image(input_path, output_path)
+            enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
     def test_enhance_image_stage_failure(self, tmp_path):
         """Test error handling when EnhancementStage fails."""
@@ -869,7 +871,7 @@ class TestEnhanceImage:
             mock_stage.compute.return_value = mock_result
 
             with pytest.raises(V2EnhancementError, match="Enhancement failed: Test error"):
-                enhance_image(input_path, output_path)
+                enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
     def test_enhance_image_creates_output_directory(self, tmp_path):
         """Test that output directory is created if it doesn't exist."""
@@ -891,7 +893,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path)
+            report = enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify output directory was created
             assert output_path.parent.exists()
@@ -917,7 +919,7 @@ class TestEnhanceImage:
 
             # Test with different devices
             for device in ["cpu", "cuda", "mps"]:
-                report = enhance_image(input_path, output_path, device=device)
+                report = enhance_image(input_path, output_path, device=device, input_color="auto_assume_srgb")
 
                 # Verify device was passed to context
                 call_args = mock_stage.compute.call_args
@@ -950,7 +952,7 @@ class TestEnhanceImage:
             mock_stage.compute.return_value = mock_result
 
             # Run enhancement
-            report = enhance_image(input_path, output_path)
+            report = enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify output is RGBA
             output_image = Image.open(expected_output)
@@ -990,7 +992,7 @@ class TestEnhanceImage:
                 mock_result.metadata = {}
                 mock_stage.compute.return_value = mock_result
 
-                enhance_image(input_path, output_path)
+                enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
                 # Verify spatial dimensions preserved
                 output_image = Image.open(expected_output)
@@ -1011,7 +1013,7 @@ class TestEnhanceImage:
         # Add fake EXIF data
         exif_bytes = b"Exif\x00\x00MM\x00*\x00\x00\x00\x08"  # Minimal EXIF header
         # Add fake ICC profile
-        icc_profile = b"ICC_PROFILE" * 100  # Fake ICC data
+        icc_profile = output_srgb_icc()  # Genuine encoded-sRGB authority
 
         pil_image.save(input_path, format="JPEG", quality=95, exif=exif_bytes, icc_profile=icc_profile)
 
@@ -1021,7 +1023,7 @@ class TestEnhanceImage:
 
         # Run passthrough enhancement
         config = V2EnhancementConfig.from_preset("none")
-        report = enhance_image(input_path, output_path, config=config)
+        report = enhance_image(input_path, output_path, config=config, input_color="auto_assume_srgb")
 
         assert report["status"] == "passthrough"
         assert report["artifact_contract"] == "passthrough_exact_copy"
@@ -1045,7 +1047,7 @@ class TestEnhanceImage:
         # Create test image with ICC profile
         test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
         pil_image = Image.fromarray(test_image, mode="RGB")
-        icc_profile = b"ICC_PROFILE_DATA" * 100  # Fake ICC profile
+        icc_profile = output_srgb_icc()  # Genuine encoded-sRGB authority
 
         pil_image.save(input_path, format="JPEG", quality=95, icc_profile=icc_profile)
 
@@ -1059,7 +1061,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            enhance_image(input_path, output_path)
+            enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify ICC profile preserved
             output_image = Image.open(expected_output)
@@ -1089,7 +1091,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            report = enhance_image(input_path, output_path, allow_8bit_output=False)
+            report = enhance_image(input_path, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
 
         assert report["status"] == "success"
         assert report["output"] == str(expected_output)
@@ -1117,7 +1119,7 @@ class TestEnhanceImage:
         # Create a minimal fake ICC profile for testing purposes.
         # Real ICC profiles have a 128-byte header; we use a small payload (~1.1KB)
         # sufficient to verify the preservation mechanism works.
-        icc_profile = b"\x00\x00\x02\x10" + b"ICC_PROFILE_DATA_16BIT" * 50
+        icc_profile = output_srgb_icc()
 
         # Save input with ICC profile using tifffile extratags (uncompressed to avoid imagecodecs)
         tifffile.imwrite(
@@ -1141,7 +1143,7 @@ class TestEnhanceImage:
 
             # Mock tifffile.imwrite at the tifffile module level (since it's imported locally)
             with patch("tifffile.imwrite") as mock_imwrite:
-                enhance_image(input_path, output_path, allow_8bit_output=False)
+                enhance_image(input_path, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
 
                 # Verify tifffile.imwrite was called
                 assert mock_imwrite.called, "tifffile.imwrite was not called"
@@ -1190,7 +1192,7 @@ class TestEnhanceImage:
                 mock_result.metadata = {}
                 mock_stage.compute.return_value = mock_result
 
-                enhance_image(input_path, output_path)
+                enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
                 # Verify exif_transpose was called
                 mock_transpose.assert_called_once()
@@ -1252,7 +1254,7 @@ class TestEnhanceImage:
             mock_stage.compute.side_effect = compute
 
             with patch("tifffile.imwrite"):
-                report = enhance_image(input_path, output_path, allow_8bit_output=False)
+                report = enhance_image(input_path, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
 
         assert report["status"] == "success"
         assert report["io"]["load_backend"] == "tifffile"
@@ -1264,7 +1266,7 @@ class TestEnhanceImage:
 
         call_args = mock_stage.compute.call_args
         context = call_args[0][0]
-        np.testing.assert_array_equal(context.get_artifact("image"), expected)
+        np.testing.assert_allclose(context.get_artifact("image"), expected.astype(np.float32) / 65535, atol=1e-7)
 
     def test_16bit_tiff_allowed_8bit_output_reports_normalized_exif(self, tmp_path):
         """PIL 8-bit output should not report normalized EXIF as fully preserved."""
@@ -1303,7 +1305,7 @@ class TestEnhanceImage:
 
             mock_stage.compute.side_effect = compute
 
-            report = enhance_image(input_path, output_path, allow_8bit_output=True)
+            report = enhance_image(input_path, output_path, allow_8bit_output=True, input_color="auto_assume_srgb")
 
         assert report["status"] == "success"
         assert report["io"]["load_backend"] == "tifffile"
@@ -1339,7 +1341,7 @@ class TestEnhanceImage:
 
         input_path = tmp_path / "input_with_icc_tag.tif"
         output_path = tmp_path / "output_with_icc_tag.tif"
-        icc_bytes = b"test-icc-profile"
+        icc_bytes = output_srgb_icc()
         source = np.full((4, 5, 3), 32768, dtype=np.uint16)
         tifffile.imwrite(
             input_path,
@@ -1364,6 +1366,7 @@ class TestEnhanceImage:
                 clarity_strength=0.0,
                 material_strength=0.0,
             ),
+            input_color="auto_assume_srgb",
         )
 
         assert report["status"] == "success"
@@ -1401,7 +1404,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            enhance_image(input_path, output_path)
+            enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify EnhancementStage received RGB (H, W, 3)
             call_args = mock_stage.compute.call_args
@@ -1431,7 +1434,7 @@ class TestEnhanceImage:
             mock_result.metadata = {}
             mock_stage.compute.return_value = mock_result
 
-            enhance_image(input_path, output_path)
+            enhance_image(input_path, output_path, input_color="auto_assume_srgb")
 
             # Verify EnhancementStage received RGB (H, W, 3)
             call_args = mock_stage.compute.call_args

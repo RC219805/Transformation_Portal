@@ -48,9 +48,12 @@ const SCRIPT_STUB_ROUTES = new Map([
   "/__mock-portal/portal-operate.js",
   "/__mock-portal/portal-overview.js",
   "/__mock-portal/portal-review.js",
+  "/__mock-portal/portal-photographic.js",
 ].map((pathname) => [pathname, { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }]));
 
 const FILE_ROUTES = new Map([
+  ["/portal/assets/portal-photographic.css", { type: "text/css; charset=utf-8", file: "portal-photographic.css" }],
+  ["/portal/assets/portal-photographic.js", { type: "text/javascript; charset=utf-8", file: "portal-photographic.js" }],
   ["/__mock-portal/portal-review.css", { type: "text/css; charset=utf-8", file: "portal-review.css" }],
   ["/__mock-portal/portal-sans.woff2", { type: "font/woff2", file: "fonts/portal-sans.woff2" }],
   ["/__mock-portal/portal-mono.woff2", { type: "font/woff2", file: "fonts/portal-mono.woff2" }],
@@ -77,6 +80,8 @@ const PLACEHOLDER_SUBSTITUTIONS = Object.freeze({
   __PORTAL_PROFILE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-profile.js`,
   __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-operate.js`,
   __PORTAL_OVERVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-overview.js`,
+  __PORTAL_PHOTOGRAPHIC_CSS_URL__: "/portal/assets/portal-photographic.css",
+  __PORTAL_PHOTOGRAPHIC_JS_URL__: "/portal/assets/portal-photographic.js",
   __PORTAL_REVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-review.js`,
   __PORTAL_BRAND_LIGHT_URL__: `${PUBLIC_ORIGIN}/__mock-portal/dna-symbol-light.svg`,
   __PORTAL_BRAND_DARK_URL__: `${PUBLIC_ORIGIN}/__mock-portal/dna-symbol-dark.svg`,

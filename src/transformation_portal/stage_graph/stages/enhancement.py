@@ -33,7 +33,7 @@ class EnhancementStage(Stage):
         enhancement_strength: float = 0.7,
         clarity_strength: float = 0.5,
         material_strength: float = 0.6,
-        version: str = "1.1.0",
+        version: str = "1.1.1",
         output_dtype: Optional[np.dtype] = None,
         tone_low_tex_strength: float = 0.6,
         tone_depth_smoothing: bool = True,
@@ -221,7 +221,11 @@ class EnhancementStage(Stage):
             material_hash = hashlib.sha256(material_bytes).hexdigest()[:8]
 
         # Configuration
+        shape_key = "x".join(str(side) for side in image.shape)
         config_str = (
+            # Callers can supply their own stage version; bind the corrected
+            # normalization semantics and precision independently of that value.
+            f"dtype_normalization_v2_{image.dtype}_{shape_key}_{np.dtype(self.output_dtype)}_"
             f"{self.enhancement_strength:.2f}_"
             f"{self.clarity_strength:.2f}_"
             f"{self.material_strength:.2f}_"
@@ -249,17 +253,19 @@ class EnhancementStage(Stage):
         Returns:
             Enhanced image (H, W, 3) - same dtype as input (controlled by output_dtype)
         """
-        # Detect input range for normalization
+        # Integer encoding is determined by dtype, including near-black frames
+        # whose highest sample is one. Float callers retain the existing
+        # normalized [0, 1] contract (and legacy 0..255 float compatibility).
         input_dtype = image.dtype
-        is_16bit = input_dtype == np.uint16
-        max_value = 65535.0 if is_16bit else 255.0
 
         # Start with input - convert to float32 [0, 1] for processing
         enhanced = image.copy().astype(np.float32)
 
         # Normalize to [0, 1] preserving precision
-        if enhanced.max() > 1.0:
-            enhanced = enhanced / max_value
+        if np.issubdtype(input_dtype, np.integer):
+            enhanced = enhanced / float(np.iinfo(input_dtype).max)
+        elif enhanced.max() > 1.0:
+            enhanced = enhanced / 255.0
 
         # Apply global tone mapping
         enhanced = self._apply_tone_mapping(enhanced, depth_map)

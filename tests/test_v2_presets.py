@@ -29,7 +29,7 @@ class TestV2EnhancementConfig:
         # Banding-mitigation guards default ON — see ADR-022 addendum.
         assert config.tone_depth_smoothing is True
         assert config.tone_low_tex_strength == 0.6
-        assert config.version == "1.1.0"
+        assert config.version == "1.2.0"
 
     def test_custom_config(self):
         """Test custom configuration."""
@@ -100,7 +100,7 @@ class TestV2EnhancementConfig:
         assert config_dict["atmospheric_effects"] is True
         assert config_dict["tone_depth_smoothing"] is True
         assert config_dict["tone_low_tex_strength"] == 0.6
-        assert config_dict["version"] == "1.1.0"
+        assert config_dict["version"] == "1.2.0"
 
 
 class TestPresetLoading:

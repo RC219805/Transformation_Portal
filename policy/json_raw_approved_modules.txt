@@ -83,3 +83,7 @@ src/transformation_portal/storage/merkle_dag.py
 # Uses raw JSON for cache storage and retrieval
 src/transformation_portal/core/execution_wrapper.py
 src/transformation_portal/core/cas_dag_executor.py
+
+# Verified delivery packager - unchanged PR #2267 ASCII/indented manifest bytes.
+# Stdlib-only source CLI and installed-wheel operation; strict spec rejects non-JSON values.
+src/transformation_portal/core/verified_delivery.py

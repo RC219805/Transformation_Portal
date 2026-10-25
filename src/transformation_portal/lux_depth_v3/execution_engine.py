@@ -425,6 +425,7 @@ def run_v2_stage(
             # Pass canonical asset key for depth/report identity alignment
             asset_key=output_key.name,
             output_bit_depth=config.output_bit_depth,
+            input_color=config.v2_input_color,
         )
         v2_runtime_s = v2_result.get("runtime_s", 0.0)
 
