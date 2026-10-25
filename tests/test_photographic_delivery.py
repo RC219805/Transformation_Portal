@@ -311,7 +311,7 @@ def test_cohesion_flags_outliers_without_adjusting_or_neutralizing_twilight() ->
 
 
 def test_shared_editorial_primitives_keep_precision_and_require_explicit_sdr() -> None:
-    samples = np.linspace(0.3, 0.302, 80 * 100 * 3, dtype=np.float32).reshape(80, 100, 3)
+    samples = np.linspace(0.3, 0.302, 80 * 100 * 3, dtype=np.float32).reshape((80, 100, 3))
     resized = resize_long_edge(samples, 40)
     assert resized.dtype == np.float32 and len(np.unique(resized)) > 256
     sharpened = unsharp_mask(resized)

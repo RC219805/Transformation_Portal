@@ -88,6 +88,11 @@ Stable automation hooks include `data-ui="photographic-review"`,
 and the crop/pan controls. Existing portal routes, selectors and managed session
 behavior remain in use.
 
+Fit/native previews use an actor/job/source-scoped blob cache bounded to 12
+entries and 40 MiB. Contact-sheet thumbnails load lazily and retain at most 64
+entries of at most 1 MiB each. Scope changes abort outstanding requests and
+release their object URLs; no image bytes or API keys enter browser storage.
+
 ## Source identity and retained float masters
 
 An ordinary photographic source is bound to its physical file SHA-256. A native
@@ -173,10 +178,24 @@ metadata still fails. Explicit encodings assert the source's actual encoding;
 they do not relabel arbitrary ICC data. Finished pixels carry matching sRGB ICC
 bytes, not an unrelated source profile.
 
+V3 retains WebP/BMP admission: its private lossless PNG carrier preserves source
+ICC/EXIF evidence before shared color validation. Untagged WebP/BMP require the
+same recorded sRGB assumption or explicit encoding assertion as untagged
+PNG/TIFF; unsupported BMP calibration or malformed color data fails closed.
+When Materials V3 is enabled, the source policy also governs its existing
+proxy. The validated source transform converts that proxy to bounded encoded
+sRGB without changing depth/segmentation model preprocessing or proxy geometry. Its internal
+TIFF/PNG carries the resulting sRGB profile, and V2 validates that encoding with
+`auto` rather than reapplying an original linear-source assertion. The source
+preparation and proxy precision limits are recorded in segmentation metadata.
+The established clipped `legacy_linear_srgb` RAW proxy is supported separately;
+debug RAW preview is depth-only and cannot authorize a Materials color handoff.
+
 Float32 input or a conversion requiring extended/out-of-range values fails
 closed with guidance to Unified/V5/V6. The legacy exact-copy passthrough remains
 byte-exact only when no processing/explicit encoding is requested. V2 plan
-configuration schema `tp.stage.config.lux.v2.v2`, fingerprints and run-card
+configuration schema `tp.stage.config.lux.v2.v2`, Materials configuration
+`tp.stage.config.lux.materials_v3.v2`, fingerprints and run-card
 metadata bind color policy, contract and processing version. Stage registry ID
 and plan V1 remain stable. Historical processing contracts require their matching
 environment; do not weaken replay to silently reinterpret old plans.
@@ -306,6 +325,13 @@ Managed delivery publishes ZIP, checksum, receipt, inventory and contact sheet
 under the parent job's authenticated artifact namespace. Downloads recheck
 current approvals, ownership and retention. Withdrawing approval or changing an
 authorizing component invalidates access to that saved approved-set delivery.
+Managed downloads use the authenticated frontdoor origin. In `direct_debug`,
+thumbnails and delivery/companion downloads supply the page-local API key in
+request headers, never in URLs. Large direct-debug downloads stream to the
+operator-selected file through the browser's File System Access API. Where that
+API is unavailable, the bounded fallback requires a known Content-Length of at
+most 64 MiB and enforces that limit while reading. Use a supported browser or
+the managed frontdoor for larger or unknown-length downloads.
 Private export failure cleanup removes only uncommitted request-owned artifacts;
 uncertain state remains subject to parent retention and explicit reconciliation.
 Request cancellation does not stop a running blocking operation. The handler
@@ -316,6 +342,9 @@ The artifact adapter also drains snapshot/companion reads, immutable writes,
 readback and exact-key rollback before releasing its private scratch. A successful
 new immutable write records ownership even if cancellation arrived during IO;
 failed writes and collisions never authorize deleting a preexisting key.
+Verified download scratch remains owned until response execution ends, including
+invalid/malformed ranges, failed sends and repeated cancellation; cleanup does
+not depend on a successful-response background task.
 
 ## Validation and deployment limits
 
@@ -329,6 +358,7 @@ Focused source contracts from the repository root:
   tests/orchestrator/test_photographic_review_http.py \
   tests/orchestrator/test_photographic_review_store.py \
   tests/orchestrator/test_photographic_review_thread_ownership.py \
+  tests/orchestrator/test_photographic_review_response.py \
   tests/evals/test_apex_metrics.py tests/evals/test_property_quality.py -q
 make test-portal-contract
 make test-frontdoor-contract
@@ -343,9 +373,10 @@ selection, persistence/reconciliation and precision guidance. The local official
 Node 22.23.3 measurement is 15,366/4,351 bytes. Eager `portal.js` remains capped at
 421,000/104,500 (measured 420,950/104,287); existing Review JS remains capped at
 55,000/12,500 (41,836/12,342). The photographic Review assets have separate
-40,000/13,000 JS and 6,000/1,600 CSS limits, measured at 36,706/12,991 and
+40,500/14,500 JS and 6,000/1,600 CSS limits, measured at 40,047/14,242 and
 4,500/1,261 respectively. This exception does not raise eager
-or existing Review budgets. Rebuild and validate current bytes rather than
+or existing Review budgets. The photographic allowance includes authenticated
+thumbnail fetches and bounded/streamed direct-debug downloads. Rebuild and validate current bytes rather than
 treat these dated measurements as performance acceptance.
 
 For the focused frontend units, from `web/secure-landing`:

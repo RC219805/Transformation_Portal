@@ -3812,3 +3812,97 @@ test("@portal-browser rate-limited job hydration preserves the Review deep link 
   expect(new URL(page.url()).searchParams.get("job")).toBe(jobId);
   expect(new URL(page.url()).searchParams.get("artifact")).toBe(artifactPath);
 });
+
+test("@portal-browser direct-debug photographic thumbnails and clicked downloads preserve authenticated streaming and cancel stale access", async ({ page }) => {
+  const jobId = "job-photo-direct-auth";
+  const otherId = "job-photo-direct-other";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sourceSha = "a".repeat(64);
+  const fileSha = "b".repeat(64);
+  const key = "frontdoor-browser-smoke"; // Public synthetic fixture credential only.
+  const variant = { role: "final", artifact_path: "input-0000/delivery.tif", sha256: sourceSha,
+    width: 800, height: 600, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: [{
+      path: variant.artifact_path, name: "delivery.tif", sha256: sourceSha, media_kind: "image", browser_previewable: false,
+      content_type: "image/tiff", size_bytes: 4096, url: `/v1/jobs/${jobId}/artifacts/${variant.artifact_path}`,
+    }] } };
+  await installHydratedPortalRoutes(page, { authMode: "direct_debug", jobs: [job, { ...job, id: otherId }] });
+  await page.addInitScript(() => {
+    window.__savedPhotoFiles = [];
+    window.__photoDownloadAborts = 0;
+    window.showSaveFilePicker = async ({ suggestedName }) => {
+      if (window.__cancelPhotoPicker) throw new DOMException("Canceled by operator", "AbortError");
+      const record = { filename: suggestedName, gesture: navigator.userActivation.isActive, chunks: [], closed: false };
+      window.__savedPhotoFiles.push(record);
+      return { createWritable: async () => new WritableStream({ write(chunk) { record.chunks.push(...chunk); }, close() { record.closed = true; } }) };
+    };
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (String(input).includes("/photographic-review/files/")) init?.signal?.addEventListener("abort", () => { window.__photoDownloadAborts += 1; });
+      return originalFetch(input, init);
+    };
+  });
+  const binaryRequests = [];
+  let holdDownload = false;
+  let releaseDownload;
+  const downloadGate = new Promise((resolve) => { releaseDownload = resolve; });
+  await page.route("**/photographic-review**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.headers()["x-api-key"] !== key || request.headers().authorization !== `Bearer ${key}`) {
+      await fulfillJson(route, { success: false, error: { message: "fixture requires page-local authorization" } }, 401); return;
+    }
+    if (url.pathname.endsWith("/render")) {
+      binaryRequests.push({ url: request.url(), headers: request.headers() });
+      await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(256, 192),
+        headers: { "X-TP-Source-SHA256": sourceSha } }); return;
+    }
+    if (url.pathname.includes("/files/")) {
+      binaryRequests.push({ url: request.url(), headers: request.headers() });
+      if (holdDownload) await downloadGate;
+      await route.fulfill({ status: 200, body: "synthetic-file", contentType: "application/octet-stream",
+        headers: { "X-TP-Artifact-SHA256": fileSha, "Content-Length": "14" } }).catch(() => {}); return;
+    }
+    if (url.pathname.endsWith("/delivery")) {
+      await fulfillJson(route, { success: true, data: { download_url: `${base}/files/export/photos.zip`, filename: "photos.zip", sha256: fileSha, size_bytes: 14,
+        files: [{ filename: "inventory.json", url: `${base}/files/export/inventory.json` }] } }); return;
+    }
+    await fulfillJson(route, { success: true, data: { state_version: 1, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant] }],
+      decisions: [{ ...variant, status: "approved" }], groups: [], presets: ["website"] } });
+  });
+  try {
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await page.locator("#connectionDetails > summary").click();
+    await page.locator("#apiKeyInput").fill(key);
+    await page.locator("#apiKeyInput").press("Tab");
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator('[data-ui="photographic-review"]')).toBeVisible();
+    await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Approved");
+    const thumbnail = page.locator('[data-ui="photographic-contact-sheet"] img');
+    await thumbnail.scrollIntoViewIfNeeded();
+    await expect(thumbnail).toHaveAttribute("src", /^blob:/);
+    await expect.poll(() => binaryRequests.some(({ url }) => new URL(url).searchParams.get("max_edge") === "256")).toBe(true);
+    await page.locator('[data-ui="photographic-preset"]').check();
+    await page.locator('[data-ui="photographic-deliver-approved"]').click();
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect.poll(() => page.evaluate(() => window.__savedPhotoFiles.map((file) => [file.filename, file.gesture, file.closed, new TextDecoder().decode(new Uint8Array(file.chunks))])))
+      .toEqual([["photos.zip", true, true, "synthetic-file"]]);
+    await page.locator('[data-ui="photographic-delivery-companion"]').click();
+    await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Saved inventory.json");
+    const beforeCancel = binaryRequests.filter(({ url }) => url.includes("/files/")).length;
+    await page.evaluate(() => { window.__cancelPhotoPicker = true; });
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Download canceled");
+    expect(binaryRequests.filter(({ url }) => url.includes("/files/"))).toHaveLength(beforeCancel);
+    await page.evaluate(() => { window.__cancelPhotoPicker = false; });
+    holdDownload = true;
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect.poll(() => binaryRequests.filter(({ url }) => url.includes("/files/")).length).toBe(beforeCancel + 1);
+    await page.locator('[data-view-link="operate"]').click();
+    await page.locator(`[data-job-id="${otherId}"][data-action="inspect-job"]`).click();
+    await expect.poll(() => page.evaluate(() => window.__photoDownloadAborts)).toBeGreaterThan(0);
+    expect(binaryRequests.every(({ url, headers }) => headers["x-api-key"] === key && !url.includes(key))).toBe(true);
+    expect(await page.evaluate(() => [localStorage.getItem("tp_api_key"), sessionStorage.getItem("tp_api_key")])).toEqual([null, null]);
+  } finally { releaseDownload(); }
+});

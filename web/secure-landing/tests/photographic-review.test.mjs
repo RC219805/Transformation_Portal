@@ -69,6 +69,8 @@ class Element {
   replaceChildren(...items) { this.children = [...items]; }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; if (key === "src") this.src = ""; }
+  remove() { this.removed = true; }
+  click() { this.clicked = true; }
   addEventListener(key, handler) { this.listeners[key] = handler; }
   querySelectorAll(selector) {
     const key = selector.match(/^\[data-(.+)\]$/)?.[1]?.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
@@ -79,8 +81,10 @@ class Element {
   async trigger(event = "click") { this.listeners[event]?.({ preventDefault() {}, key: "" }); await settle(); }
 }
 async function settle() { for (let count = 0; count < 8; count += 1) await new Promise((resolve) => setImmediate(resolve)); }
-function fixture({ responseHash = null, mutationError = false, extraFetch = null, renderDebounceMs = 0 } = {}) {
+function fixture({ responseHash = null, mutationError = false, extraFetch = null, renderDebounceMs = 0, authMode = "managed" } = {}) {
   const root = new Element("main");
+  const body = new Element("body");
+  const state = { auth: { mode: authMode } };
   const requests = [];
   let saved = [];
   const data = () => ({ state_version: saved.length, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant, original] }],
@@ -106,10 +110,10 @@ function fixture({ responseHash = null, mutationError = false, extraFetch = null
     }
     return new Response(JSON.stringify({ success: true, data: data() }));
   };
-  const api = createPhotographicReview({ state: {}, els: { artifactShellContent: root }, document: { createElement: (tag) => new Element(tag) }, fetchImpl, renderDebounceMs,
+  const api = createPhotographicReview({ state, els: { artifactShellContent: root }, document: { body, createElement: (tag) => new Element(tag) }, fetchImpl, renderDebounceMs,
     _buildAuthHeaders: (headers, method) => ({ ...headers, ...(method === "POST" ? { "X-CSRF-Token": "fixture-csrf" } : { "x-api-key": "fixture-key" }) }) });
   const job = { id: "job-one", pipeline: "lux-depth", artifacts: [{ ...variant, path: variant.artifact_path }] };
-  return { root, requests, api, job };
+  return { root, body, state, requests, api, job };
 }
 
 test("Review exposes explicit versions, fit-preview truth, and sends authenticated SHA-bound render requests", async () => {
@@ -430,4 +434,117 @@ test("native variants with identical array bytes remain independently selectable
   assert.deepEqual(payload.approved_sources, [{ artifact_path: second.artifact_path, sha256: SHA, source_identity_sha256: second.source_identity_sha256 }]);
   assert.deepEqual(payload.approved_sha256, [SHA]);
   assert.deepEqual(payload.scene_labels, { "input-0000": "Living room" });
+});
+
+function directDownloadFixture(t, extraFetch = null) {
+  const before = globalThis.location;
+  globalThis.location = { origin: "http://localhost" };
+  t.after(() => { if (before === undefined) delete globalThis.location; else globalThis.location = before; });
+  const base = "/v1/jobs/job-one/photographic-review";
+  const h = fixture({ authMode: "direct_debug", extraFetch: (url, options) => {
+    const custom = extraFetch?.(url, options);
+    if (custom) return custom;
+    if (url === base) return new Response(JSON.stringify({ success: true, data: { state_version: 1,
+      scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant] }],
+      decisions: [{ ...variant, status: "approved" }], groups: [], presets: ["website"],
+    } }));
+    if (url.endsWith("/delivery")) return new Response(JSON.stringify({ success: true, data: {
+      download_url: `${base}/files/export/photos.zip`, filename: "photos.zip", sha256: ORIGINAL_SHA, size_bytes: 7,
+      files: [{ filename: "inventory.json", url: `${base}/files/export/inventory.json` }],
+    } }));
+    if (url.includes("/files/")) return new Response("archive", { headers: { "Content-Type": "application/octet-stream", "Content-Length": "7", "X-TP-Artifact-SHA256": ORIGINAL_SHA } });
+    return null;
+  } });
+  t.after(() => h.api.show(null, null));
+  return h;
+}
+
+async function prepareDirectDownload(h) {
+  h.api.show(h.job, variant); await settle();
+  const checkbox = h.root.find("photographic-preset"); checkbox.checked = true; await checkbox.trigger("change");
+  await h.root.find("photographic-deliver-approved").trigger();
+  return h.root.find("photographic-delivery-download");
+}
+
+test("direct-debug thumbnails and streamed ZIP/companion downloads use authenticated headers and retain filenames", async (t) => {
+  const previousPicker = globalThis.showSaveFilePicker;
+  const saved = [];
+  globalThis.showSaveFilePicker = async ({ suggestedName }) => {
+    const record = { filename: suggestedName, chunks: [], closed: false };
+    saved.push(record);
+    const stream = new WritableStream({ write: (chunk) => record.chunks.push(chunk), close: () => { record.closed = true; } });
+    return { createWritable: async () => stream };
+  };
+  t.after(() => { if (previousPicker === undefined) delete globalThis.showSaveFilePicker; else globalThis.showSaveFilePicker = previousPicker; });
+  const h = directDownloadFixture(t);
+  const link = await prepareDirectDownload(h);
+  const thumbnail = h.requests.find((request) => request.url.includes("max_edge=256"));
+  assert.equal(thumbnail.options.headers["x-api-key"], "fixture-key");
+  await link.trigger();
+  await h.root.find("photographic-delivery-companion").trigger();
+  assert.deepEqual(saved.map((record) => [record.filename, record.closed, new TextDecoder().decode(record.chunks[0])]), [
+    ["photos.zip", true, "archive"], ["inventory.json", true, "archive"],
+  ]);
+  const requests = h.requests.filter((request) => request.url.includes("/files/"));
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(({ options }) => options.headers["x-api-key"] === "fixture-key" && options.credentials === "same-origin" && options.cache === "no-store"));
+  assert.ok(h.requests.every(({ url }) => !url.includes("fixture-key")));
+});
+
+test("direct-debug fallback refuses unknown or oversized lengths before reading a download body", async (t) => {
+  const previousPicker = globalThis.showSaveFilePicker;
+  delete globalThis.showSaveFilePicker;
+  t.after(() => { if (previousPicker !== undefined) globalThis.showSaveFilePicker = previousPicker; });
+  for (const length of [null, String(64 * 1024 * 1024 + 1)]) {
+    let read = false;
+    const h = directDownloadFixture(t, (url) => {
+      if (!url.includes("/files/")) return null;
+      return { ok: true, headers: new Headers({ ...(length ? { "Content-Length": length } : {}), "X-TP-Artifact-SHA256": ORIGINAL_SHA }),
+        body: { getReader() { read = true; throw new Error("unbounded reader must not open"); } } };
+    });
+    await (await prepareDirectDownload(h)).trigger();
+    assert.equal(read, false);
+    assert.match(h.root.find("photographic-review-status").textContent, /known file size up to 64 MiB.*managed front door/);
+    assert.equal(h.requests.find((request) => request.url.includes("/files/")).options.signal.aborted, true);
+  }
+});
+
+test("bounded direct-debug fallback revokes blob URLs and cancels stale job downloads", async (t) => {
+  const previousPicker = globalThis.showSaveFilePicker;
+  delete globalThis.showSaveFilePicker;
+  t.after(() => { if (previousPicker !== undefined) globalThis.showSaveFilePicker = previousPicker; });
+  const revoked = t.mock.method(URL, "revokeObjectURL");
+  const h = directDownloadFixture(t);
+  await (await prepareDirectDownload(h)).trigger();
+  const anchor = h.body.children[0];
+  assert.equal(anchor.download, "photos.zip");
+  assert.equal(anchor.clicked, true);
+  assert.ok(anchor.href.startsWith("blob:"));
+  h.api.show(null, null); await settle();
+  assert.ok(revoked.mock.calls.some(({ arguments: args }) => args[0] === anchor.href));
+  let resolveFetch;
+  const pending = directDownloadFixture(t, (url) => url.includes("/files/") ? new Promise((resolve) => { resolveFetch = resolve; }) : null);
+  const link = await prepareDirectDownload(pending);
+  await link.trigger();
+  const download = pending.requests.find((request) => request.url.includes("/files/"));
+  pending.api.show(null, null);
+  assert.equal(download.options.signal.aborted, true);
+  resolveFetch(new Response("archive", { headers: { "Content-Length": "7", "X-TP-Artifact-SHA256": ORIGINAL_SHA } }));
+  await settle();
+  assert.equal(pending.body.children.length, 0, "an old job response cannot create a download in a new scope");
+});
+
+test("direct-debug download refuses a mismatched artifact hash and a stream exceeding its advertised size", async (t) => {
+  const previousPicker = globalThis.showSaveFilePicker;
+  delete globalThis.showSaveFilePicker;
+  t.after(() => { if (previousPicker !== undefined) globalThis.showSaveFilePicker = previousPicker; });
+  for (const [hash, message] of [[SHA, /Verified download unavailable/], [ORIGINAL_SHA, /exceeded its bounded size/]]) {
+    const h = directDownloadFixture(t, (url) => url.includes("/files/") ? new Response("too long", {
+      headers: { "Content-Length": "7", "X-TP-Artifact-SHA256": hash },
+    }) : null);
+    await (await prepareDirectDownload(h)).trigger();
+    assert.match(h.root.find("photographic-review-status").textContent, message);
+    assert.equal(h.body.children.length, 0);
+    assert.equal(h.requests.find((request) => request.url.includes("/files/")).options.signal.aborted, true);
+  }
 });

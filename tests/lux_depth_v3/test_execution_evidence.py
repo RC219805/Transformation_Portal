@@ -5009,7 +5009,7 @@ def test_verifier_rejects_stale_batch_native_output_path_after_index_refresh(
     [
         pytest.param("depth_path", {}, id="depth"),
         pytest.param("depth_float_path", {"save_float_depth": True}, id="float-depth"),
-        pytest.param("v2_output_path", {"enable_v2": True}, id="v2-output"),
+        pytest.param("v2_output_path", {"enable_v2": True, "v2_input_color": "srgb"}, id="v2-output"),
     ],
 )
 def test_verifier_rejects_deleted_produced_batch_native_output(

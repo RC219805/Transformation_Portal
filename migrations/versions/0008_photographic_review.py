@@ -8,6 +8,9 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+# Alembic exposes these operation methods through its dynamic migration proxy.
+# pylint: disable=no-member
+
 revision = "0008_photographic_review"
 down_revision = "0007_photography_bindings"
 branch_labels = None

@@ -616,8 +616,13 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
 
         effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
 
+    from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+
     return {
         "enable_materials_v3": bool(config.enable_materials_v3),
+        "input_color": config.v2_input_color if config.enable_materials_v3 else None,
+        "color_contract": V2_COLOR_CONTRACT if config.enable_materials_v3 else None,
+        "processing_version": V2_PROCESSING_VERSION if config.enable_materials_v3 else None,
         "apply_pixel_ops": bool(config.apply_pixel_ops),
         # APEX Materials V3 strict-gate policy version. Bumped when the gate's
         # blocker semantics change so cache replays don't serve verdicts under

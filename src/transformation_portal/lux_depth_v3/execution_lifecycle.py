@@ -645,6 +645,9 @@ def _stage_configuration(
         materials = build_materials_fingerprint_payload(config)
         base.update(
             {
+                "input_color": materials["input_color"],
+                "color_contract": materials["color_contract"],
+                "processing_version": materials["processing_version"],
                 "apply_pixel_ops": materials["apply_pixel_ops"],
                 "pixel_ops_strict_policy_version": materials["pixel_ops_strict_policy_version"],
                 "enable_material_segmentation": materials["enable_material_segmentation"],
@@ -712,6 +715,7 @@ def _stage_configuration(
                 "input_color": config.v2_input_color,
                 "color_contract": V2_COLOR_CONTRACT,
                 "processing_version": V2_PROCESSING_VERSION,
+                "materials_color_handoff": "validated_srgb" if config.enable_materials_v3 else "none",
                 "device": str(config.v2_device),
                 "upscaler_backend": str(config.v2_upscaler_backend),
                 "timeout_seconds": int(config.v2_timeout),
@@ -1252,6 +1256,10 @@ def runtime_config_from_execution_plan(
     materials = _node_configuration(plan, StageRegistryIdentifier.LUX_MATERIALS_V3, required=False)
     pbr = _node_configuration(plan, StageRegistryIdentifier.LUX_PBR, required=False)
     v2 = _node_configuration(plan, StageRegistryIdentifier.LUX_V2, required=False)
+    if materials is not None and v2 is not None and materials["input_color"] != v2["input_color"]:
+        raise LuxExecutionPlanAuthorityError("Materials and V2 must share the same explicit source color policy")
+    if v2 is not None and v2["materials_color_handoff"] != ("validated_srgb" if materials is not None else "none"):
+        raise LuxExecutionPlanAuthorityError("V2 Materials color handoff does not match the planned Materials stage")
     reconstruction = _node_configuration(plan, StageRegistryIdentifier.LUX_RECONSTRUCTION, required=False)
 
     acknowledgements = plan.license_acknowledgements
@@ -1336,7 +1344,9 @@ def runtime_config_from_execution_plan(
         "fastvlm_timeout_seconds": output["captioning"]["timeout_seconds"],
         "enable_v2": v2 is not None,
         "v2_preset": v2["preset"] if v2 is not None else None,
-        "v2_input_color": v2["input_color"] if v2 is not None else "auto",
+        "v2_input_color": (
+            v2["input_color"] if v2 is not None else materials["input_color"] if materials is not None else "auto"
+        ),
         "v2_device": v2["device"] if v2 is not None else "cpu",
         "v2_upscaler_backend": v2["upscaler_backend"] if v2 is not None else "default",
         "force_v2": v2["force"] if v2 is not None else False,

@@ -127,6 +127,13 @@ export function createPhotographicReview(host) {
   const imageCache = new Map();
   const imageInFlight = new Map();
   const thumbnailImages = new Map();
+  const thumbnailLoads = new WeakMap();
+  const thumbnailObserver = globalThis.IntersectionObserver ? new IntersectionObserver((entries) => {
+    entries.filter((entry) => entry.isIntersecting).forEach((entry) => { thumbnailObserver.unobserve(entry.target); thumbnailLoads.get(entry.target)?.(); });
+  }, { rootMargin: "200px" }) : null;
+  let downloadController = null;
+  let downloadObjectUrl = "";
+  let downloadRevoke = null;
   let activeImageKey = "";
   let imageTimer = null;
   let finishImageDelay = null;
@@ -187,6 +194,9 @@ export function createPhotographicReview(host) {
     if (nodes.blink) { nodes.blink.textContent = "Start blink"; nodes.blink.setAttribute("aria-pressed", "false"); }
   }
   function releaseImages() {
+    clearDownload();
+    thumbnailObserver?.disconnect();
+    thumbnailImages.forEach((image) => { if (image.src?.startsWith("blob:")) URL.revokeObjectURL(image.src); });
     imageCache.forEach((entry) => URL.revokeObjectURL(entry.url));
     imageCache.clear(); imageInFlight.clear(); thumbnailImages.clear(); activeImageKey = "";
     if (imageTimer) clearTimeout(imageTimer);
@@ -456,6 +466,7 @@ export function createPhotographicReview(host) {
       data = loaded;
       if (deliverySources.some((source) => !data.scenes.some((scene) => scene.variants.some((variant) =>
         photographicDecisionMatches(source, variant) && decision(variant)?.status === "approved")))) {
+        clearDownload();
         nodes.deliveryResult.textContent = "A delivery approval changed. Recheck the selected versions and create a newly verified bundle.";
         deliverySources = [];
       }
@@ -523,8 +534,30 @@ export function createPhotographicReview(host) {
       if (url) {
         const key = imageKey(variant, false, 256);
         let image = thumbnailImages.get(key);
-        if (!image) { image = el("img"); image.src = url; image.alt = ""; image.loading = "lazy"; thumbnailImages.set(key, image); }
-        while (thumbnailImages.size > 64) thumbnailImages.delete(thumbnailImages.keys().next().value);
+        if (!image) {
+          image = el("img"); image.alt = ""; image.loading = "lazy"; thumbnailImages.set(key, image);
+          if (state.auth?.mode === "direct_debug") {
+            const target = image;
+            const load = async () => {
+              if (thumbnailImages.get(key) !== target) return;
+              try {
+                const source = await loadImage(variant, false, 256);
+                if (!source) return;
+                if (thumbnailImages.get(key) !== target) { URL.revokeObjectURL(source.url); return; }
+                target.src = source.url;
+              } catch (error) { if (thumbnailImages.get(key) === target && error.name !== "AbortError") status(error.message, true); }
+            };
+            thumbnailLoads.set(target, load);
+            if (thumbnailObserver) thumbnailObserver.observe(target); else void load();
+          } else image.src = url;
+        }
+        while (thumbnailImages.size > 64) {
+          const oldest = thumbnailImages.keys().next().value;
+          const removed = thumbnailImages.get(oldest);
+          thumbnailObserver?.unobserve(removed);
+          if (removed.src?.startsWith("blob:")) URL.revokeObjectURL(removed.src);
+          thumbnailImages.delete(oldest);
+        }
         control.append(image);
       }
       control.append(el("span", scene.label || scene.scene_id), el("small", decision(variant)?.status?.replaceAll("_", " ") || "Unreviewed"));
@@ -634,23 +667,24 @@ export function createPhotographicReview(host) {
     }
   }
 
-  async function loadImage(variant, sequence, native) {
+  async function loadImage(variant, native, edge = 1600) {
     const geometry = native ? nativeCropGeometry(variant, center, cropSize) : null;
-    const key = imageKey(variant, native);
-    if (imageCache.has(key)) {
+    const thumbnail = edge === 256;
+    const key = imageKey(variant, native, edge);
+    if (!thumbnail && imageCache.has(key)) {
       const cached = imageCache.get(key);
       imageCache.delete(key); imageCache.set(key, cached);
       return cached;
     }
-    if (imageInFlight.has(key) && !imageControllers.get(key)?.signal.aborted) return imageInFlight.get(key);
+    if (!thumbnail && imageInFlight.has(key) && !imageControllers.get(key)?.signal.aborted) return imageInFlight.get(key);
     checkBackoff();
     const params = new URLSearchParams({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant),
-      ...(geometry ? Object.fromEntries(Object.entries(geometry).map(([name, value]) => [name, String(value)])) : { max_edge: "1600" }) });
+      ...(geometry ? Object.fromEntries(Object.entries(geometry).map(([name, value]) => [name, String(value)])) : { max_edge: String(edge) }) });
     const controller = new AbortController();
     const requestJob = jobId;
     const requestActor = actorScope;
     requests.add(controller);
-    imageControllers.set(key, controller);
+    if (!thumbnail) imageControllers.set(key, controller);
     const timer = setTimeout(() => controller.abort(), 30000);
     const promise = (async () => {
       try {
@@ -666,7 +700,9 @@ export function createPhotographicReview(host) {
           || Number(response.headers.get("X-TP-Native-Height")) !== geometry.height))) throw new Error("Image source identity or native dimensions could not be verified.");
         const blob = await response.blob();
         if (requestJob !== jobId || requestActor !== actorScope || controller.signal.aborted) return null;
+        if (thumbnail && blob.size > 1024 * 1024) throw new Error("Thumbnail exceeds its display limit.");
         const entry = { url: URL.createObjectURL(blob), geometry, bytes: blob.size };
+        if (thumbnail) return entry;
         imageCache.set(key, entry);
         let bytes = [...imageCache.values()].reduce((total, image) => total + image.bytes, 0);
         while (imageCache.size > 12 || (bytes > 40 * 1024 * 1024 && imageCache.size > 1)) {
@@ -681,7 +717,7 @@ export function createPhotographicReview(host) {
         if (imageInFlight.get(key) === promise) imageInFlight.delete(key);
       }
     })();
-    imageInFlight.set(key, promise);
+    if (!thumbnail) imageInFlight.set(key, promise);
     return promise;
   }
 
@@ -720,7 +756,7 @@ export function createPhotographicReview(host) {
       figure.caption.textContent = imageMetadata(variant);
       figure.image.alt = `${photographicVariantLabel(variant)} ${inspection === "native" ? "native crop" : "reduced browser preview"}`;
       try {
-        const source = await loadImage(variant, sequence, inspection === "native");
+        const source = await loadImage(variant, inspection === "native");
         if (sequence !== imageRequest || !source) return;
         if (!source.url) { figure.caption.textContent += " · Full-frame preview unavailable; use a native crop."; return; }
         figure.image.style.width = source.geometry ? `${source.geometry.width}px` : "";
@@ -844,7 +880,79 @@ export function createPhotographicReview(host) {
       if (result) { chooseVariants(); render(); resetPreview(); }
     }
   }
+  function clearDownload() {
+    downloadController?.abort(); downloadController = null;
+    if (downloadRevoke) clearTimeout(downloadRevoke);
+    downloadRevoke = null;
+    if (downloadObjectUrl) URL.revokeObjectURL(downloadObjectUrl);
+    downloadObjectUrl = "";
+  }
+  function downloadScope() { return JSON.stringify([jobId, actorScope, deliverySources]); }
+  function bindDownload(link, url, filename, sha = "") {
+    link.href = url; link.download = filename;
+    if (state.auth?.mode !== "direct_debug") return;
+    const scope = downloadScope();
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      clearDownload();
+      const controller = new AbortController();
+      downloadController = controller; requests.add(controller);
+      const timer = setTimeout(() => controller.abort(), 30 * 60 * 1000);
+      let writable = null;
+      try {
+        checkBackoff();
+        if (scope !== downloadScope() || !photographicAssetUrl(url, jobId)) throw new Error("Delivery selection changed. Create a current verified bundle.");
+        const handle = globalThis.showSaveFilePicker ? await globalThis.showSaveFilePicker({ suggestedName: filename }) : null;
+        if (scope !== downloadScope() || controller.signal.aborted) return;
+        status(`Downloading ${filename} through authenticated access…`);
+        const response = await fetchImpl(url, { method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
+          headers: _buildAuthHeaders({ Accept: "application/octet-stream" }, "GET") });
+        checkRateLimit(response);
+        const returnedSha = response.headers.get("X-TP-Artifact-SHA256");
+        if (!response.ok || !SHA256.test(returnedSha || "") || (sha && returnedSha !== sha)) throw new Error("Verified download unavailable. Refresh review and check current approval.");
+        if (!response.body) throw new Error("Download stream is unavailable.");
+        if (handle) {
+          writable = await handle.createWritable();
+          await response.body.pipeTo(writable, { signal: controller.signal, preventClose: true });
+          if (scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed during download; the file was not committed.");
+          await writable.close(); writable = null;
+          status(`Saved ${filename}.`);
+        } else {
+          const limit = 64 * 1024 * 1024;
+          const length = Number(response.headers.get("Content-Length"));
+          if (!Number.isSafeInteger(length) || length < 1 || length > limit) throw new Error("Direct debug fallback requires a known file size up to 64 MiB. Use Chrome's save picker or the managed front door for this download.");
+          const reader = response.body.getReader();
+          const chunks = [];
+          let size = 0;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > length || size > limit) throw new Error("Download exceeded its bounded size; use the managed front door.");
+            chunks.push(value);
+          }
+          if (size !== length || scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed or its download was incomplete.");
+          downloadObjectUrl = URL.createObjectURL(new Blob(chunks, { type: response.headers.get("Content-Type") || "application/octet-stream" }));
+          const anchor = doc.createElement("a"); anchor.href = downloadObjectUrl; anchor.download = filename;
+          doc.body.append(anchor); anchor.click(); anchor.remove();
+          downloadRevoke = setTimeout(() => { if (downloadObjectUrl === anchor.href) { URL.revokeObjectURL(downloadObjectUrl); downloadObjectUrl = ""; } }, 1000);
+          status(`Download started for ${filename}.`);
+        }
+      } catch (error) {
+        controller.abort();
+        if (writable) await writable.abort().catch(() => {});
+        if (downloadController === controller) {
+          clearDownload();
+          if (scope === downloadScope()) status(error.name === "AbortError" ? "Download canceled." : error.message, true);
+        }
+      } finally {
+        clearTimeout(timer); requests.delete(controller);
+        if (downloadController === controller) downloadController = null;
+      }
+    });
+  }
   async function deliver() {
+    clearDownload();
     nodes.deliveryResult.replaceChildren();
     let presets;
     try { presets = deliveryPresets(); } catch (error) { status(error.message, true); return; }
@@ -858,14 +966,13 @@ export function createPhotographicReview(host) {
     const url = photographicAssetUrl(result.download_url, jobId);
     if (!url || !SHA256.test(result.sha256 || "")) { status("Delivery response did not contain a verified job-bound download.", true); return; }
     const link = el("a", `Download ${result.filename || "verified delivery ZIP"}`, "operator-action-btn operator-action-btn-primary", "photographic-delivery-download");
-    link.href = url;
-    link.download = result.filename || "delivery.zip";
+    bindDownload(link, url, result.filename || "delivery.zip", result.sha256);
     nodes.deliveryResult.append(link, el("p", `SHA-256 ${result.sha256} · ${result.size_bytes} bytes. Inventory and source-master links are retained inside the bundle.`));
     for (const file of result.files || []) {
       const fileUrl = photographicAssetUrl(file.url, jobId);
       if (!fileUrl || file.filename === result.filename) continue;
       const companion = el("a", file.filename, "operator-action-btn operator-action-btn-secondary", "photographic-delivery-companion");
-      companion.href = fileUrl; companion.download = file.filename;
+      bindDownload(companion, fileUrl, file.filename);
       nodes.deliveryResult.append(companion);
     }
     if (createToast) createToast("Approved delivery is ready.", "success");
@@ -898,5 +1005,6 @@ export function createPhotographicReview(host) {
     void load();
   }
   doc?.addEventListener?.("visibilitychange", () => { if (doc.hidden) stopBlink(); });
+  globalThis.addEventListener?.("pagehide", () => { requests.forEach((controller) => controller.abort()); releaseImages(); });
   return { show, refresh: () => load(true) };
 }

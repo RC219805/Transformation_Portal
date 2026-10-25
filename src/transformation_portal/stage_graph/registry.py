@@ -179,7 +179,7 @@ STAGE_DEFINITIONS: Mapping[StageRegistryIdentifier, StageDefinition] = MappingPr
         ),
         StageRegistryIdentifier.LUX_MATERIALS_V3: StageDefinition(
             identifier=StageRegistryIdentifier.LUX_MATERIALS_V3,
-            configuration_schema="tp.stage.config.lux.materials_v3.v1",
+            configuration_schema="tp.stage.config.lux.materials_v3.v2",
             allowed_output_kinds=("materials_v3_masks",),
             resources=_ACCELERATOR_OPTIONAL,
         ),

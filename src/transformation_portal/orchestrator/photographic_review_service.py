@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 from urllib.parse import quote
 
-from starlette.background import BackgroundTask
 from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.types import Receive, Scope, Send
 
 from transformation_portal.api.v1.envelopes import ApiEnvelope
 from transformation_portal.api.v1.photographic_review import (
@@ -75,6 +75,25 @@ async def _owned_thread(operation: Callable[_Params, _Result], *args: _Params.ar
         if not worker.cancelled():
             worker.exception()  # Retrieve a worker failure while preserving the caller's cancellation.
         raise
+
+
+class _OwnedDownloadResponse(FileResponse):
+    """Release verified download scratch after every response execution exit.
+
+    FileResponse background tasks do not run on range-error early returns or
+    failed/cancelled sends. Keep its normal range/header behavior while owning
+    the private directory in a response-level finally block.
+    """
+
+    def __init__(self, path: Path, *, directory: Path, media_type: str, filename: str, headers: dict[str, str]) -> None:
+        super().__init__(path, media_type=media_type, filename=filename, headers=headers)
+        self._directory = directory
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await _owned_thread(shutil.rmtree, self._directory)
 
 
 @asynccontextmanager
@@ -845,13 +864,13 @@ class PhotographicReviewService:
             await self.revalidate(context)
             if not delivery_is_approved(context, await self.state(context), delivery):
                 raise ReviewAccessError("Delivery approval was withdrawn", status=409, code="APPROVAL_REQUIRED")
+            return _OwnedDownloadResponse(
+                path,
+                directory=directory,
+                media_type=ref["content_type"],
+                filename=filename,
+                headers={**HEADERS, "X-TP-Artifact-SHA256": ref["sha256"]},
+            )
         except BaseException:
             shutil.rmtree(directory)
             raise
-        return FileResponse(
-            path,
-            media_type=ref["content_type"],
-            filename=filename,
-            headers={**HEADERS, "X-TP-Artifact-SHA256": ref["sha256"]},
-            background=BackgroundTask(shutil.rmtree, directory),
-        )

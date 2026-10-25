@@ -278,6 +278,9 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
   - `none` normalizes to a disabled V2 stage during plan preparation.
   - Only used when `--enable-v2` is `on`
 - `--v2-input-color TEXT`: Explicit V2 source color policy (default: `auto`)
+  - The same source policy color-manages an enabled Materials V3 proxy before
+    its operations. Its internal sRGB output is validated separately by V2;
+    depth/segmentation model preprocessing remains unchanged.
   - Options: `auto`, `auto_assume_srgb`, `srgb`, `linear_srgb`
   - Automatic metadata-aware conversion blocks ambiguous untagged PNG/TIFF.
     Choose `auto_assume_srgb` only when the untagged source is known to be sRGB;
