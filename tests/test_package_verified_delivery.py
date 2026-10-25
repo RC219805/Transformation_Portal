@@ -478,15 +478,17 @@ def test_unknown_spec_fields_and_duplicate_json_keys_are_rejected(package_case: 
     assert list(case["output"].parent.iterdir()) == []
 
 
-@pytest.mark.parametrize("malformed_json", ["oversized-integer", "deep-nesting"])
-def test_extreme_json_values_return_package_errors_without_cli_tracebacks(
-    package_case: dict[str, Any], malformed_json: str
+@pytest.mark.parametrize("invalid_manifest", ["oversized-integer", "deep-nesting", "array-root"])
+def test_invalid_manifests_return_package_errors_without_cli_tracebacks(
+    package_case: dict[str, Any], invalid_manifest: str
 ) -> None:
     case = package_case
-    if malformed_json == "oversized-integer":
+    if invalid_manifest == "oversized-integer":
         text = '{"schema":' + "9" * 5000 + ',"archive_root":"batch","files":[]}'
-    else:
+    elif invalid_manifest == "deep-nesting":
         text = "[" * 20_000 + "0" + "]" * 20_000
+    else:
+        text = "[]"
     case["manifest_path"].write_text(text, encoding="utf-8")
     with pytest.raises(packager.PackageError):
         _build(case)
@@ -508,7 +510,9 @@ def test_extreme_json_values_return_package_errors_without_cli_tracebacks(
     )
     assert result.returncode == 2
     assert "Traceback" not in result.stderr
-    assert "invalid JSON manifest" in result.stderr
+    # Decoder limits vary across Python versions; schema rejection is valid too.
+    assert result.stderr.startswith("error: ")
+    assert result.stdout == ""
     assert list(case["output"].parent.iterdir()) == []
 
 
