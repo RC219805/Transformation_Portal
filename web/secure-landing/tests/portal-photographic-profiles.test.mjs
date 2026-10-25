@@ -41,3 +41,31 @@ test("deferred Build profile changes update canonical encoding and refresh previ
   assert.match(els.processingProfileHint.textContent, /8-bit encoded-sRGB PNG/);
   assert.deepEqual([previews, saves, renders], [1, 1, 1]);
 });
+
+test("profile availability preserves inactive and active Build-step visibility ownership", () => {
+  const classes = new Set();
+  const central = { hidden: true, ariaHidden: "true", stepHidden: "true" };
+  const panel = {
+    classList: { toggle: (name, hidden) => { if (hidden) classes.add(name); else classes.delete(name); } },
+    get hidden() { return central.hidden; },
+    set hidden(value) { throw new Error(`Profile sync cannot override central step visibility: ${value}`); },
+    attributes: central,
+  };
+  const state = { pipeline: "lux-depth-v3", config: createPortalConfigState() };
+  const api = createDeferredBuildSurfaceApi({ state, els: { photographicProfilePanel: panel } });
+  api.syncPhotoProfiles();
+  assert.equal(classes.has("hidden"), false);
+  assert.deepEqual(central, { hidden: true, ariaHidden: "true", stepHidden: "true" }, "inactive step stays hidden and inaccessible");
+  Object.assign(central, { hidden: false, ariaHidden: "false", stepHidden: "false" });
+  api.syncPhotoProfiles();
+  assert.equal(panel.hidden, false, "active photographic step remains visible");
+  state.pipeline = "archive-gate-a";
+  api.syncPhotoProfiles();
+  assert.equal(classes.has("hidden"), true, "unsupported pipelines remain unavailable to the central step renderer");
+  assert.deepEqual(central, { hidden: false, ariaHidden: "false", stepHidden: "false" });
+  Object.assign(central, { hidden: true, ariaHidden: "true", stepHidden: "true" });
+  state.pipeline = "lux-depth-v6";
+  api.syncPhotoProfiles();
+  assert.equal(classes.has("hidden"), false);
+  assert.equal(panel.hidden, true, "returning to photography cannot expose an inactive step");
+});

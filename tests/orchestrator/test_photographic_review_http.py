@@ -25,8 +25,8 @@ from transformation_portal.orchestrator.photographic_review_store import MemoryR
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture
-def review_case(monkeypatch):
+@pytest.fixture(params=["v1", "v2"])
+def review_case(monkeypatch, request):
     from transformation_portal.orchestrator import photographic_review_service as service
     from transformation_portal.orchestrator import photographic_review_store as stores
 
@@ -70,7 +70,9 @@ def review_case(monkeypatch):
     discarded = []
     controls = SimpleNamespace(fail_after_publish=None)
     job_id = "job_photo_" + uuid.uuid4().hex
-    base = f"/v1/jobs/{job_id}/photographic-review"
+    base = f"/{request.param}/jobs/{job_id}/photographic-review"
+    canonical_base = f"/v1/jobs/{job_id}/photographic-review"
+    other_base = f"/{'v2' if request.param == 'v1' else 'v1'}/jobs/{job_id}/photographic-review"
 
     async def materialize(ref, destination, maximum_bytes):
         value = assets[ref["storage_path"]] if ref.get("kind") == "review_asset" else blobs[ref["artifact_path"]]
@@ -128,6 +130,8 @@ def review_case(monkeypatch):
         yield SimpleNamespace(
             client=client,
             base=base,
+            canonical_base=canonical_base,
+            other_base=other_base,
             job_id=job_id,
             path=path,
             original_path=original_path,
@@ -267,9 +271,12 @@ def test_revision_preview_commit_approval_export_and_revocation_flow(review_case
     assert exported.status_code == 200, exported.text
     delivery = exported.json()["data"]
     assert delivery["filename"].startswith("seaview-house-approved-")
-    downloaded = case.client.get(delivery["download_url"])
+    assert delivery["download_url"].startswith(case.canonical_base + "/files/")
+    download_alias = case.base + delivery["download_url"].removeprefix(case.canonical_base)
+    downloaded = case.client.get(download_alias)
     assert downloaded.status_code == 200
     assert hashlib.sha256(downloaded.content).hexdigest() == delivery["sha256"]
+    assert case.client.get(delivery["download_url"]).content == downloaded.content
     with zipfile.ZipFile(io.BytesIO(downloaded.content)) as archive:
         assert archive.testzip() is None
         name = next(name for name in archive.namelist() if name.endswith("/approval-record.json"))
@@ -282,6 +289,7 @@ def test_revision_preview_commit_approval_export_and_revocation_flow(review_case
             assert hashlib.sha256(archive.read(member)).hexdigest() == digest
     assert _approve(case, new["artifact_path"], new["sha256"], version=4, status="needs_revision").status_code == 200
     assert case.client.get(delivery["download_url"]).status_code == 409
+    assert case.client.get(download_alias).status_code == 409
     assert hashlib.sha256(case.blobs[case.path]).hexdigest() == case.sha
 
 
@@ -292,6 +300,71 @@ def test_authentication_unknown_job_and_no_implicit_approval(review_case):
     payload = {"property_name": "House", "presets": ["website"], "approved_sha256": [case.sha], "expected_version": 0}
     assert case.client.post(case.base + "/delivery", json=payload).status_code == 400
     assert not case.assets
+
+
+@pytest.mark.parametrize(
+    ("method", "suffix"),
+    [
+        ("GET", ""),
+        ("GET", "/render"),
+        ("GET", "/native-crop"),
+        ("GET", "/quality"),
+        ("POST", "/decisions"),
+        ("POST", "/lighting-groups"),
+        ("POST", "/revisions"),
+        ("POST", "/delivery"),
+        ("GET", "/files/" + "0" * 64 + "/delivery.zip"),
+    ],
+)
+def test_each_versioned_operation_retains_auth_and_job_rejection(review_case, method, suffix):
+    case = review_case
+    params = {
+        "artifact_path": case.path,
+        "sha256": case.sha,
+        "reference_path": case.original_path,
+        "reference_sha256": case.original_sha,
+        "x": 0,
+        "y": 0,
+        "width": 8,
+        "height": 8,
+    }
+    bodies = {
+        "/decisions": {"artifact_path": case.path, "sha256": case.sha, "status": "selected", "expected_version": 0},
+        "/lighting-groups": {
+            "groups": [{"name": "Daylight", "reference_sha256": case.sha, "members": [case.sha]}],
+            "expected_version": 0,
+        },
+        "/revisions": {
+            "artifact_path": case.path,
+            "sha256": case.sha,
+            "scene_id": "input-0000",
+            "expected_version": 0,
+            "recipe": {},
+            "preview_only": True,
+        },
+        "/delivery": {"property_name": "House", "presets": ["website"], "approved_sha256": [case.sha], "expected_version": 0},
+    }
+    kwargs = {"json": bodies[suffix]} if method == "POST" else {"params": params}
+    denied = case.client.request(method, case.base + suffix, headers={"x-api-key": "invalid"}, **kwargs)
+    assert denied.status_code == 401 and denied.json()["error"]["code"] == "UNAUTHORIZED"
+    absent = case.client.request(method, case.base.replace(case.job_id, "job_other") + suffix, **kwargs)
+    assert absent.status_code == 404 and absent.json()["error"]["code"] == "NOT_FOUND"
+    assert not case.assets and not case.calls
+
+
+def test_aliases_share_exact_review_state_and_compare_and_swap(review_case):
+    case = review_case
+    assert _approve(case).status_code == 200
+    current = case.client.get(case.base).json()
+    alias = case.client.get(case.other_base).json()
+    assert alias == current
+    assert alias["schema"] == "tp.photographic_review.v1"
+    assert alias["data"]["state_version"] == 1
+    stale = case.client.post(
+        case.other_base + "/decisions",
+        json={"artifact_path": case.path, "sha256": case.sha, "status": "needs_revision", "expected_version": 0},
+    )
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "REVIEW_CONFLICT"
 
 
 def test_decoder_validation_never_exposes_internal_paths(review_case, monkeypatch):

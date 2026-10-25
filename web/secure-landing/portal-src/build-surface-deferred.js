@@ -107,7 +107,8 @@ export function createDeferredBuildSurfaceApi(host) {
         }
         const hint = processingProfileGuidance(profile, state.pipeline);
         if (profileControls.hint && profileControls.hint.textContent !== hint) profileControls.hint.textContent = hint;
-        if (profileControls.panel) profileControls.panel.hidden = !['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'lux-depth'].includes(state.pipeline);
+        // The central step renderer owns hidden and ARIA state; this class declares pipeline availability only.
+        if (profileControls.panel) profileControls.panel.classList.toggle('hidden', !['lux-depth-v3', 'lux-depth-v5', 'lux-depth-v6', 'lux-depth'].includes(state.pipeline));
         if (profileControls.inputColor) profileControls.inputColor.value = state.config.v2InputColor || 'auto';
         if (els.emits?.outputBitDepth) els.emits.outputBitDepth.value = String(state.config.outputBitDepth);
     }

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any, Awaitable, Callable
 
 from fastapi import APIRouter, Query, Request
 from starlette.responses import Response
@@ -26,10 +26,17 @@ PathQuery = Annotated[str, Query(min_length=1, max_length=1024)]
 
 
 def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
-    router = APIRouter(prefix="/v1/jobs/{job_id}/photographic-review", tags=["Photographic review"])
+    router = APIRouter(tags=["Photographic review"])
+    versioned = APIRouter(prefix="/jobs/{job_id}/photographic-review")
     service = PhotographicReviewService()
 
-    async def invoke(request, job_id, method, *args, **kwargs):
+    async def invoke(
+        request: Request,
+        job_id: str,
+        method: Callable[..., Awaitable[dict[str, Any] | Response]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
         try:
             context = await runtime.authorize(request, job_id)
             if isinstance(context, Response):
@@ -60,11 +67,11 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
                 retriable=True,
             )
 
-    @router.get("", response_model=ApiEnvelope[dict])
-    async def catalogue(request: Request, job_id: str):
+    @versioned.get("", response_model=ApiEnvelope[dict])
+    async def catalogue(request: Request, job_id: str) -> Response:
         return await invoke(request, job_id, service.catalogue)
 
-    @router.get("/render")
+    @versioned.get("/render")
     async def render(
         request: Request,
         job_id: str,
@@ -72,7 +79,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         sha256: HashQuery,
         max_edge: int = Query(default=1600, ge=1, le=1600),
         source_identity_sha256: OptionalHashQuery = None,
-    ):
+    ) -> Response:
         return await invoke(
             request,
             job_id,
@@ -83,7 +90,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             source_identity_sha256=source_identity_sha256,
         )
 
-    @router.get("/native-crop")
+    @versioned.get("/native-crop")
     async def crop(
         request: Request,
         job_id: str,
@@ -94,7 +101,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         width: int = Query(ge=1, le=2048),
         height: int = Query(ge=1, le=2048),
         source_identity_sha256: OptionalHashQuery = None,
-    ):
+    ) -> Response:
         return await invoke(
             request,
             job_id,
@@ -105,7 +112,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             source_identity_sha256=source_identity_sha256,
         )
 
-    @router.get("/quality", response_model=ApiEnvelope[dict])
+    @versioned.get("/quality", response_model=ApiEnvelope[dict])
     async def quality(
         request: Request,
         job_id: str,
@@ -115,7 +122,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         reference_sha256: HashQuery,
         source_identity_sha256: OptionalHashQuery = None,
         reference_identity_sha256: OptionalHashQuery = None,
-    ):
+    ) -> Response:
         return await invoke(
             request,
             job_id,
@@ -128,24 +135,26 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             reference_identity_sha256=reference_identity_sha256,
         )
 
-    @router.post("/decisions", response_model=ApiEnvelope[dict])
-    async def decision(request: Request, job_id: str, payload: ReviewDecisionRequest):
+    @versioned.post("/decisions", response_model=ApiEnvelope[dict])
+    async def decision(request: Request, job_id: str, payload: ReviewDecisionRequest) -> Response:
         return await invoke(request, job_id, service.decision, payload)
 
-    @router.post("/lighting-groups", response_model=ApiEnvelope[dict])
-    async def groups(request: Request, job_id: str, payload: LightingGroupsRequest):
+    @versioned.post("/lighting-groups", response_model=ApiEnvelope[dict])
+    async def groups(request: Request, job_id: str, payload: LightingGroupsRequest) -> Response:
         return await invoke(request, job_id, service.groups, payload)
 
-    @router.post("/revisions", response_model=ApiEnvelope[dict])
-    async def revision(request: Request, job_id: str, payload: RevisionRequest):
+    @versioned.post("/revisions", response_model=ApiEnvelope[dict])
+    async def revision(request: Request, job_id: str, payload: RevisionRequest) -> Response:
         return await invoke(request, job_id, service.revision, payload)
 
-    @router.post("/delivery", response_model=ApiEnvelope[dict])
-    async def delivery(request: Request, job_id: str, payload: DeliveryRequest):
+    @versioned.post("/delivery", response_model=ApiEnvelope[dict])
+    async def delivery(request: Request, job_id: str, payload: DeliveryRequest) -> Response:
         return await invoke(request, job_id, service.delivery, payload)
 
-    @router.get("/files/{identity}/{filename}")
-    async def download(request: Request, job_id: str, identity: str, filename: str):
+    @versioned.get("/files/{identity}/{filename}")
+    async def download(request: Request, job_id: str, identity: str, filename: str) -> Response:
         return await invoke(request, job_id, service.download, identity, filename)
 
+    router.include_router(versioned, prefix="/v1")
+    router.include_router(versioned, prefix="/v2")
     return router

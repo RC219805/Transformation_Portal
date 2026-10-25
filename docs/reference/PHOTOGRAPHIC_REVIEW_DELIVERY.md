@@ -36,9 +36,12 @@ backend is an environment/deployment failure; do not switch storage modes to
 make an acceptance claim. Readiness for a new inference remains the selected
 pipeline's separate preview, license, runtime and dispatch contract.
 
-The additive API prefix is `/v1/jobs/{job_id}/photographic-review`. JSON uses the
-existing `ApiEnvelope` with schema `tp.photographic_review.v1`; image/file routes
-return authenticated bytes with `no-store` and `nosniff`.
+The additive API prefixes are `/v1/jobs/{job_id}/photographic-review` and
+`/v2/jobs/{job_id}/photographic-review`, with identical methods, authentication,
+and review state. Returned review/download links use the canonical `/v1` prefix.
+Both versions use the existing `ApiEnvelope` with schema
+`tp.photographic_review.v1`; image/file routes return authenticated bytes with
+`no-store` and `nosniff`.
 
 | Route | Purpose |
 | --- | --- |
@@ -360,6 +363,7 @@ Focused source contracts from the repository root:
   tests/orchestrator/test_photographic_review_thread_ownership.py \
   tests/orchestrator/test_photographic_review_response.py \
   tests/evals/test_apex_metrics.py tests/evals/test_property_quality.py -q
+.venv/bin/python -m pytest tests/test_app_route_inventory.py -q
 make test-portal-contract
 make test-frontdoor-contract
 .venv/bin/python scripts/validation/check_portal_asset_budgets.py
