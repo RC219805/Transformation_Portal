@@ -125,7 +125,9 @@ def review_case(monkeypatch, request):
         return context
 
     application = FastAPI()
-    application.include_router(create_photographic_review_router(ReviewRuntime(authorize, error)))
+    application.include_router(
+        create_photographic_review_router(ReviewRuntime(authorize, error, authorize_admission=authorize))
+    )
     with TestClient(application, headers={"x-api-key": "fixture-key"}) as client:
         yield SimpleNamespace(
             client=client,
@@ -600,3 +602,18 @@ def test_insufficient_delivery_disk_rejects_before_source_materialization(review
     )
     assert response.status_code == 400 and "require" in response.json()["error"]["message"]
     assert not case.assets and not case.calls
+
+
+@pytest.fixture
+def enable_admission(monkeypatch):
+    from transformation_portal.orchestrator import photographic_admission as admission
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1")
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * 1024**3))
+
+
+def test_admitted_native_review_revision_export_download_and_revocation(enable_admission, review_case):
+    # Exercise the same real-pixel/ZIP contract with the independent admission
+    # branch, including response ownership and the optimistic mutation fence.
+    test_catalogue_native_crop_and_fit_are_hash_bound_display_derivatives(review_case)
+    test_revision_preview_commit_approval_export_and_revocation_flow(review_case)

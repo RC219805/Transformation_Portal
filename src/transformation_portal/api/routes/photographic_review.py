@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, Awaitable, Callable, Literal
 
 from fastapi import APIRouter, Query, Request
@@ -16,6 +18,7 @@ from transformation_portal.api.v1.photographic_review import (
     ReviewDecisionRequest,
     RevisionRequest,
 )
+from transformation_portal.orchestrator.photographic_admission import ReviewOverload
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewInputError, ReviewRuntime
 from transformation_portal.orchestrator.photographic_review_service import PhotographicReviewService, envelope
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict
@@ -27,9 +30,17 @@ PathQuery = Annotated[str, Query(min_length=1, max_length=1024)]
 
 
 def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
-    router = APIRouter(tags=["Photographic review"])
-    versioned = APIRouter(prefix="/jobs/{job_id}/photographic-review")
     service = PhotographicReviewService()
+
+    @asynccontextmanager
+    async def lifespan(_app: Any) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            await service.admission.close()
+
+    router = APIRouter(tags=["Photographic review"], lifespan=lifespan)
+    versioned = APIRouter(prefix="/jobs/{job_id}/photographic-review")
 
     async def invoke(
         request: Request,
@@ -40,14 +51,37 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         **kwargs: Any,
     ) -> Response:
         try:
-            authorize = (
-                runtime.authorize_history if lightweight_authorization and runtime.authorize_history else runtime.authorize
-            )
-            context = await authorize(request, job_id)
+            authorize = runtime.authorize
+            if lightweight_authorization:
+                authorize = runtime.authorize_history or authorize
+            elif service.admission.config.enabled:
+                if runtime.authorize_admission is None:
+                    raise RuntimeError("Photographic admission requires a lightweight authenticated adapter")
+                authorize = runtime.authorize_admission
+            if service.admission.config.enabled and not lightweight_authorization:
+                async with service.admission.authorization():
+                    context = await authorize(request, job_id)
+            else:
+                context = await authorize(request, job_id)
             if isinstance(context, Response):
                 return context
-            result = await method(context, *args, **kwargs)
+            result = (
+                await method(context, *args, **kwargs)
+                if lightweight_authorization
+                else await service.execute(context, method, *args, **kwargs)
+            )
             return result if isinstance(result, Response) else envelope(result)
+        except ReviewOverload as exc:
+            response = runtime.error_response(
+                exc.status,
+                code="RESOURCE_EXHAUSTED",
+                message=str(exc),
+                details={"job_id": job_id, "reason": exc.reason, "scope": "process"},
+                retriable=exc.retriable,
+            )
+            if exc.retriable:
+                response.headers["Retry-After"] = "1"
+            return response
         except ReviewConflict as exc:
             return runtime.error_response(409, code="REVIEW_CONFLICT", message=str(exc), details={"job_id": job_id})
         except ReviewAccessError as exc:

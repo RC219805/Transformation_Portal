@@ -30,6 +30,11 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
 )
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
 from transformation_portal.orchestrator.artifact_store.generation import _verify_staged
+from transformation_portal.orchestrator.photographic_admission import (
+    current_review_lease,
+    owned_review_directory,
+    run_review_thread,
+)
 from transformation_portal.orchestrator.photographic_review_access import (
     ReviewAccessError,
     ReviewContext,
@@ -174,7 +179,10 @@ class AppReviewAccess:
 
     def runtime(self) -> ReviewRuntime:
         return ReviewRuntime(
-            authorize=self.authorize, error_response=self.app._error_response, authorize_history=self.authorize_history
+            authorize=self.authorize,
+            error_response=self.app._error_response,
+            authorize_history=self.authorize_history,
+            authorize_admission=self.authorize_admission,
         )
 
     def _storage_job_id(self, job: Any) -> str:
@@ -343,10 +351,10 @@ class AppReviewAccess:
     async def _read_indexed(self, request: Request, job: Any, ref: dict, maximum_bytes: int) -> bytes:
         expected_sha, expected_size = _identity(ref, maximum_bytes)
         chunks = await self._indexed_chunks(request, job, ref["artifact_path"], maximum_bytes)
-        with tempfile.TemporaryDirectory(prefix="tp-native-review-") as directory:
+        with owned_review_directory(prefix="tp-native-review-") as directory:
             target = Path(directory) / "snapshot"
             await _owned_operation(_stream_snapshot(chunks, target, maximum_bytes, expected_size, expected_sha))
-            return await _owned_operation(asyncio.to_thread(target.read_bytes))
+            return await _owned_operation(run_review_thread(target.read_bytes))
 
     async def _native_reference(self, request: Request, job: Any, final: dict, inventory: list[dict]) -> dict | None:
         """Select retained native components exclusively from committed inventory.
@@ -471,7 +479,21 @@ class AppReviewAccess:
         """Authenticate retained history without discovering or reading photographs."""
         return await self._authorize(request, job_id, include_references=False)
 
-    async def _authorize(self, request: Request, job_id: str, *, include_references: bool) -> ReviewContext | Response:
+    async def authorize_admission(self, request: Request, job_id: str) -> ReviewContext | Response:
+        return await self._authorize(request, job_id, include_references=False, admission=True)
+
+    async def _binding_identity(self, job: Any, tenant_id: str) -> str:
+        if self.app._uses_dispatch_authority():
+            inventory = await self.app.get_operational_record_store().committed_manifest(job.id, tenant_id)
+        else:
+            inventory = job.artifacts
+        # The inventory binds descriptor/receipt bytes, including their recorded
+        # presentation, without reading those bytes before resource admission.
+        return hashlib.sha256(canonicalize_json(inventory or {})).hexdigest()
+
+    async def _authorize(
+        self, request: Request, job_id: str, *, include_references: bool, admission: bool = False
+    ) -> ReviewContext | Response:
         app = self.app
         try:
             await app._cleanup_expired_jobs(app._now(), force=False)
@@ -488,6 +510,18 @@ class AppReviewAccess:
                 # headers cannot manufacture a human identity for approvals.
                 actor = {"username": "api_key_operator", "role": "operator", "assurance": "backend_api_key"}
             references = await self._references(request, job, tenant) if include_references else []
+            binding_identity = await self._binding_identity(job, tenant_id) if admission else None
+
+            async def revalidate() -> None:
+                await self._revalidate(request, job, tenant_id)
+                if binding_identity is not None:
+                    current = await self._job(request, job_id)
+                    if (
+                        isinstance(current, Response)
+                        or await self._binding_identity(current[0], tenant_id) != binding_identity
+                    ):
+                        raise ReviewAccessError("Photographic source bindings changed; reload before review")
+
             issued: set[str] = set()
 
             async def publish(storage: str, source: Path, mime: str) -> None:
@@ -502,7 +536,10 @@ class AppReviewAccess:
                 materialize=lambda ref, dest, limit: self._materialize(request, job, tenant_id, ref, dest, limit),
                 publish=publish,
                 discard=lambda paths: self._discard(job, tenant_id, issued, paths),
-                revalidate=lambda: self._revalidate(request, job, tenant_id),
+                revalidate=revalidate,
+                discover_references=lambda: self._references(request, job, tenant),
+                binding_identity=binding_identity,
+                publication_root=getattr(self.app._artifact_store(), "root_dir", None) if admission else None,
             )
         except ReviewAccessError as exc:
             return app._error_response(exc.status, code=exc.code, message=str(exc), details={"job_id": job_id})
@@ -557,7 +594,7 @@ class AppReviewAccess:
             if ref not in originals:
                 raise ReviewAccessError("Original binding changed")
             data, _ = await _owned_operation(
-                asyncio.to_thread(
+                run_review_thread(
                     snapshot,
                     Path(ref["private_original_root"]),
                     Path(ref["private_original_root"]) / ref["private_original_path"],
@@ -615,7 +652,7 @@ class AppReviewAccess:
         if isinstance(response, FileResponse):
             _, path, _ = self.app._validate_resolved_job_artifact_path(job, Path(response.path))
             data, _ = await _owned_operation(
-                asyncio.to_thread(snapshot, self.app._job_output_dir(job), path, maximum_bytes=maximum_bytes)
+                run_review_thread(snapshot, self.app._job_output_dir(job), path, maximum_bytes=maximum_bytes)
             )
             return _single_chunk(data)
         raise ReviewAccessError("Unexpected artifact response", status=503, code="ARTIFACT_UNAVAILABLE")
@@ -634,7 +671,7 @@ class AppReviewAccess:
         if size > MAX_REVIEW_IMAGE_BYTES:
             raise ReviewAccessError("Review source exceeds the admitted byte budget", status=413, code="RESOURCE_EXHAUSTED")
         chunks = await self._indexed_chunks(request, job, reference["artifact_path"], MAX_REVIEW_IMAGE_BYTES)
-        with tempfile.TemporaryDirectory(prefix="tp-review-identity-") as directory:
+        with owned_review_directory(prefix="tp-review-identity-") as directory:
             identity = await _owned_operation(
                 _stream_snapshot(chunks, Path(directory) / "snapshot", MAX_REVIEW_IMAGE_BYTES, size, None)
             )
@@ -667,14 +704,31 @@ class AppReviewAccess:
         store = None
         storage_job_id = self._storage_job_id(job)
         try:
-            with tempfile.TemporaryDirectory(prefix="tp-review-publish-") as directory:
+            with owned_review_directory(prefix="tp-review-publish-") as directory:
                 staged = Path(directory).resolve() / "artifact"
-                size, digest = await _owned_operation(asyncio.to_thread(_publication_snapshot, source, staged, maximum_bytes))
+                size, digest = await _owned_operation(run_review_thread(_publication_snapshot, source, staged, maximum_bytes))
                 store = self.app._artifact_store()
+                lease = current_review_lease.get()
+                if lease is not None:
+                    local_root = getattr(store, "root_dir", None)
+                    if local_root is not None:
+                        parent = (local_root / storage_job_id / PurePosixPath(storage_path).parent).resolve()
+                        if not parent.is_relative_to(local_root):
+                            raise ReviewAccessError("Invalid review publication namespace")
+                        if not parent.exists():
+                            # A new server-created publication namespace is
+                            # private to this operation; track its in-progress
+                            # staging blocks too, without crediting old data.
+                            lease.track_path(parent)
+                    lease.check_scratch(0)
                 await _owned_operation(
                     store.write_immutable_file(storage_job_id, storage_path, staged, content_type=content_type),
                     completed=completed,
                 )
+                if lease is not None and getattr(store, "root_dir", None) is not None:
+                    # Only this successful immutable write is owned; existing
+                    # retained directories never reduce remaining commitments.
+                    lease.track_path(store.root_dir / storage_job_id / storage_path)
                 # Reuse GenerationPublisher's complete streamed digest/length
                 # verification. Store metadata alone cannot grant visibility.
                 await _owned_operation(_verify_staged(store, storage_job_id, storage_path, size, digest))

@@ -34,6 +34,9 @@ class ReviewContext:
     publish: Callable[[str, Path, str], Awaitable[None]]
     discard: Callable[[list[str]], Awaitable[None]] | None = None
     revalidate: Callable[[], Awaitable[None]] | None = None
+    discover_references: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None
+    binding_identity: str | None = None
+    publication_root: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -41,3 +44,4 @@ class ReviewRuntime:
     authorize: Callable[[Request, str], Awaitable[ReviewContext | Response]]
     error_response: Callable[..., Response]
     authorize_history: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None
+    authorize_admission: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None

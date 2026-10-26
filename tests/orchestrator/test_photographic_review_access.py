@@ -62,10 +62,16 @@ async def test_history_authorizes_same_job_scope_without_discovering_or_reading_
     app, job, store, _ = fake_app
     access = adapter.AppReviewAccess(app)
     access._references = AsyncMock(side_effect=AssertionError("History must not discover image references"))
+    access._binding_identity = AsyncMock(side_effect=AssertionError("History must not require an artifact inventory"))
+    app._artifact_store = Mock(side_effect=AssertionError("History must not require photographic storage"))
     context = await access.authorize_history(_request(), job.id)
     assert isinstance(context, ReviewContext) and context.references == []
     assert context.actor["username"] == "api_key_operator"
+    assert context.binding_identity is None and context.publication_root is None
+    await context.revalidate()
     access._references.assert_not_awaited()
+    access._binding_identity.assert_not_awaited()
+    app._artifact_store.assert_not_called()
     app._get_job_artifact.assert_not_awaited()
     store.open_bytes.assert_not_awaited()
     app._has_valid_api_key = lambda _: False
@@ -1505,3 +1511,33 @@ async def test_cancelled_publication_drains_owned_work_and_rolls_back_only_succe
         delete_release.set()
         await asyncio.to_thread(finished.wait, 2)
         await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_admission_authenticates_before_discovery_and_binds_manifest_identity(fake_app, monkeypatch):
+    app, job, _, _ = fake_app
+    access = adapter.AppReviewAccess(app)
+    discover = AsyncMock(return_value=[_reference()])
+    monkeypatch.setattr(access, "_references", discover)
+    context = await access.authorize_admission(_request(), "job")
+    assert isinstance(context, ReviewContext) and context.references == []
+    assert context.actor["assurance"] == "backend_api_key"
+    assert context.binding_identity == hashlib.sha256(canonicalize_json(job.artifacts)).hexdigest()
+    discover.assert_not_awaited()
+    assert await context.discover_references() == [_reference()]
+    discover.assert_awaited_once()
+    await context.revalidate()
+    job.artifacts["items"][0]["sha256"] = "f" * 64
+    with pytest.raises(ReviewAccessError, match="bindings changed"):
+        await context.revalidate()
+
+
+async def test_admission_invalid_credentials_never_discover_or_queue(fake_app, monkeypatch):
+    app, _, _, _ = fake_app
+    app._has_valid_api_key = lambda _: False
+    access = adapter.AppReviewAccess(app)
+    discover = AsyncMock()
+    monkeypatch.setattr(access, "_references", discover)
+    result = await access.authorize_admission(_request(), "job")
+    assert result.status_code == 401
+    discover.assert_not_awaited()
+    app._load_job_view.assert_not_awaited()

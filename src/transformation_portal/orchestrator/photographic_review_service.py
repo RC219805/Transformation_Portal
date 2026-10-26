@@ -36,6 +36,19 @@ from transformation_portal.api.v1.photographic_review import (
     RevisionRequest,
 )
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.orchestrator.photographic_admission import (
+    PhotographicAdmissionController,
+    ReviewAdmissionConfig,
+    ReviewCost,
+    ReviewLease,
+    ReviewOverload,
+    ReviewRequestTicket,
+    current_review_lease,
+    drain_owned,
+    operation_cost,
+    owned_review_directory,
+    run_review_thread,
+)
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewContext, ReviewInputError
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict, get_review_store
 
@@ -61,7 +74,7 @@ async def _owned_thread(operation: Callable[_Params, _Result], *args: _Params.ar
     worker and defer cancellation until it is quiescent, including repeated
     cancellation, so enclosing scratch and resource guards retain ownership.
     """
-    worker = asyncio.create_task(asyncio.to_thread(operation, *args, **kwargs))
+    worker = asyncio.create_task(run_review_thread(operation, *args, **kwargs))
     try:
         return await asyncio.shield(worker)
     except asyncio.CancelledError:
@@ -88,12 +101,22 @@ class _OwnedDownloadResponse(FileResponse):
     def __init__(self, path: Path, *, directory: Path, media_type: str, filename: str, headers: dict[str, str]) -> None:
         super().__init__(path, media_type=media_type, filename=filename, headers=headers)
         self._directory = directory
+        self.admission_lease: ReviewLease | None = None
+        self.admission_ticket: ReviewRequestTicket | None = None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            await _owned_thread(shutil.rmtree, self._directory)
+            try:
+                await _owned_thread(shutil.rmtree, self._directory)
+            finally:
+                try:
+                    if self.admission_lease is not None:
+                        await self.admission_lease.release()
+                finally:
+                    if self.admission_ticket is not None:
+                        await self.admission_ticket.release()
 
 
 @asynccontextmanager
@@ -108,11 +131,22 @@ async def publication(context: ReviewContext) -> AsyncIterator[list[str]]:
     try:
         yield paths
     except BaseException:
-        if context.discard is not None and paths:
-            try:
-                await asyncio.shield(context.discard(paths))
-            except Exception:
-                LOGGER.warning("Unable to discard uncommitted review publication for job %s", context.job_id, exc_info=True)
+
+        async def cleanup() -> None:
+            lease = current_review_lease.get()
+            if lease is not None:
+                await lease.release_expensive()
+            if context.discard is not None and paths:
+                try:
+                    await context.discard(paths)
+                except Exception:
+                    LOGGER.warning(
+                        "Unable to discard uncommitted review publication for job %s", context.job_id, exc_info=True
+                    )
+
+        # A shield alone lets repeated cancellation abandon the coroutine.
+        # Drain cleanup before its owner's scratch/ticket can be released.
+        await drain_owned(cleanup())
         raise
 
 
@@ -267,7 +301,7 @@ def resolve(
     return ref
 
 
-def _check_geometry(path: Path) -> None:
+def _check_geometry(path: Path) -> tuple[int, int]:
     if path.suffix.lower() == ".npy":
         import numpy as np
 
@@ -295,6 +329,7 @@ def _check_geometry(path: Path) -> None:
             width, height = source.size
     if min(width, height) < 1 or width * height > 40_000_000 or max(width, height) > 65536:
         raise ReviewAccessError("Image exceeds the managed review pixel budget", status=413, code="RESOURCE_EXHAUSTED")
+    return width, height
 
 
 async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) -> DeliveryImage:
@@ -306,7 +341,10 @@ async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) 
     observed = await context.materialize(ref, path, MAX_IMAGE_BYTES)
     if observed["sha256"] != ref["sha256"]:
         raise ReviewAccessError("Artifact changed during photographic inspection")
-    await _owned_thread(_check_geometry, path)
+    width, height = await _owned_thread(_check_geometry, path)
+    lease = current_review_lease.get()
+    if lease is not None and width * height > lease.cost.max_pixels:
+        raise ReviewOverload("admitted_geometry_changed", status=413)
     native = None
     if ref.get("native") is not None:
         from transformation_portal.photographic_delivery import NativeWorkingMaster
@@ -350,7 +388,7 @@ async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) 
 
 
 async def load_image(context: ReviewContext, ref: JsonObject) -> DeliveryImage:
-    with tempfile.TemporaryDirectory(prefix="tp-photo-read-") as directory:
+    with owned_review_directory(prefix="tp-photo-read-") as directory:
         image = await spool_image(context, ref, Path(directory).resolve() / "source")
         data = await _owned_thread(image.snapshot)
         native = getattr(image, "native", None)
@@ -437,9 +475,263 @@ def _metadata(image: DeliveryImage) -> JsonObject:
     return inspect_image(image)
 
 
-class PhotographicReviewService:
+class _LegacyExpensiveGate:
+    """Keep disabled/direct-call compatibility; an admitted operation owns its vector."""
+
     def __init__(self) -> None:
-        self.expensive = asyncio.Semaphore(1)
+        self._semaphore = asyncio.Semaphore(1)
+
+    async def __aenter__(self) -> None:
+        if current_review_lease.get() is None:
+            await self._semaphore.acquire()
+
+    async def __aexit__(self, *_error: Any) -> None:
+        if current_review_lease.get() is None:
+            self._semaphore.release()
+
+
+class PhotographicReviewService:
+    def __init__(self, admission_config: ReviewAdmissionConfig | None = None) -> None:
+        self.expensive = _LegacyExpensiveGate()
+        self.admission = PhotographicAdmissionController(admission_config)
+
+    async def execute(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Authorize before queueing; reserve once through all IO and publication."""
+        if not self.admission.config.enabled:
+            return await method(context, *args, **kwargs)
+        operation = method.__name__
+        ticket = await self.admission.begin_request(context.tenant_id)
+        transferred = False
+        try:
+            await self.revalidate(context)
+            if operation == "render" and context.binding_identity is not None:
+                state = await self.state(context)
+                key = (
+                    context.tenant_id,
+                    context.job_id,
+                    context.binding_identity,
+                    state["state_version"],
+                    "photographic-render-v1",
+                    args,
+                    canonicalize_json(kwargs),
+                )
+                result = await self.admission.coalesce(key, lambda: self._execute_reserved(context, method, *args, **kwargs))
+                await self.revalidate(context)
+            else:
+                result = await self._execute_reserved(context, method, *args, **kwargs)
+            if isinstance(result, _OwnedDownloadResponse):
+                result.admission_ticket = ticket
+                transferred = True
+            return result
+        finally:
+            if not transferred:
+                await ticket.release()
+
+    async def _execute_reserved(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        state = await self.state(context)
+        operation = method.__name__
+        self._validate_admission_request(state, operation, args)
+        inspections = self._cost_inspections(state, operation, args, kwargs)
+        cost = self._resource_cost(context, state, operation, args, inspections)
+        lease = await self.admission.acquire(context.tenant_id, cost)
+        token = current_review_lease.set(lease)
+        transferred = False
+        result = None
+        try:
+            # Reference discovery has bounded streamed snapshots but no image
+            # decode. Complete output-space preflight follows resolved geometry.
+            lease.check_scratch(min(lease.cost.scratch_bytes, 2 * 1024**3), preparing=True)
+            await self.revalidate(context)
+            if context.discover_references is not None:
+                context = replace(context, references=await context.discover_references())
+            if method.__name__ == "catalogue":
+                # Discovery and each image take separate complete turns. A
+                # catalogue may not monopolize the protected inspection slot.
+                current_review_lease.reset(token)
+                token = None
+                await lease.release()
+            result = await method(context, *args, **kwargs)
+            await self.revalidate(context)
+            if isinstance(result, _OwnedDownloadResponse):
+                result.admission_lease = lease
+                transferred = True
+            return result
+        except BaseException:
+            if isinstance(result, _OwnedDownloadResponse):
+                await _owned_thread(shutil.rmtree, result._directory)
+            raise
+        finally:
+            if token is not None:
+                current_review_lease.reset(token)
+            if not transferred:
+                await lease.release()
+
+    @staticmethod
+    def _validate_admission_request(state: JsonObject, operation: str, args: tuple[Any, ...]) -> None:
+        """Reject cheap stale/approval errors before estimating expensive work.
+
+        Full source authorization and current-decision checks still run after
+        discovery; this preflight cannot authorize an operation or publication.
+        """
+        if operation in {"decision", "groups", "revision", "delivery"} and args:
+            if args[0].expected_version != state["state_version"]:
+                raise ReviewConflict("Review changed; reload before continuing")
+        if operation == "delivery" and args:
+            payload = args[0]
+            approved = [row for row in state.get("decisions", []) if row["status"] == "approved"]
+            if payload.approved_sources:
+                valid = all(
+                    any(
+                        row["artifact_path"] == item.artifact_path
+                        and row["sha256"] == item.sha256
+                        and (
+                            item.source_identity_sha256 is None
+                            or row.get("source_identity_sha256", row["sha256"]) == item.source_identity_sha256
+                        )
+                        for row in approved
+                    )
+                    for item in payload.approved_sources
+                )
+            else:
+                valid = all(any(row["sha256"] == sha for row in approved) for sha in payload.approved_sha256)
+            if not valid:
+                raise ReviewInputError("Delivery requires current approval for every exact source identity")
+
+    def _resource_cost(
+        self,
+        context: ReviewContext,
+        state: JsonObject,
+        operation: str,
+        args: tuple[Any, ...],
+        inspections: list[JsonObject] | None,
+    ) -> ReviewCost:
+        """Freeze geometry-derived temporary and publication filesystem claims."""
+        cost = operation_cost(operation, self.admission.config, inspections)
+        rows = inspections or [{"width": 8000, "height": 5000, "alpha": True}]
+
+        def source_bound(row: JsonObject) -> JsonObject:
+            # Before descriptor discovery, reserve every permitted companion.
+            # Known no-alpha inspections can omit only the alpha byte bound.
+            pixels = row["width"] * row["height"]
+            return {
+                "size_bytes": MAX_IMAGE_BYTES,
+                "native": {
+                    "descriptor": {"size_bytes": 2 * 1024**2},
+                    "source_icc": {"size_bytes": 16 * 1024**2},
+                    "alpha": {"size_bytes": min(MAX_IMAGE_BYTES, pixels * 4 + 4096)} if row.get("alpha", True) else None,
+                },
+            }
+
+        refs = [source_bound(row) for row in rows]
+        closures = [
+            sum(part["size_bytes"] for part in [ref, *(part for part in ref["native"].values() if part)]) for ref in refs
+        ]
+        source = max(closures)
+        workspace, publication_bytes = source + 256 * 1024**2, 0
+        if operation == "delivery":
+            from transformation_portal.photographic_delivery import ExportPreset
+
+            payload = args[0] if args else None
+            count = len(payload.approved_sources or payload.approved_sha256) if payload is not None else len(rows)
+            if inspections is None:
+                rows, refs = rows * count, refs * count
+            presets = (
+                [ExportPreset.from_payload(value) for value in payload.presets]
+                if payload is not None
+                else [ExportPreset.from_payload("retouch_print")]
+            )
+            complete = delivery_disk_budget([{"inspection": row} for row in rows], refs, presets)
+            sources = sum(closures) if inspections is not None else sum(closures) * count
+            products = (complete - sources - 2 * 1024**3) // 5
+            workspace = sources + products * 3 + 2 * 1024**3
+            publication_bytes = products * 2
+        elif operation == "revision":
+            product = cost.max_pixels * 16 + 65536
+            workspace += product * 2
+            publication_bytes = product * 2
+        elif operation == "groups":
+            count = sum(len(group.members) for group in args[0].groups) if args else len(rows)
+            workspace = (sum(closures) if inspections is not None else source * count) + 256 * 1024**2
+        elif operation == "download":
+            identity, filename = args if len(args) == 2 else (None, None)
+            files = [
+                entry
+                for delivery in state.get("deliveries", [])
+                if delivery["id"] == identity
+                for entry in delivery["files"]
+                if entry["filename"] == filename
+            ]
+            size = files[0]["size_bytes"] if len(files) == 1 else MAX_BUNDLE_BYTES
+            workspace = max(size, source) + 256 * 1024**2
+        temporary = Path(tempfile.gettempdir()).resolve()
+        claims = [(temporary, workspace)]
+        if publication_bytes:
+            if context.publication_root is None:
+                claims[0] = (temporary, workspace + publication_bytes)
+            else:
+                claims.append((context.publication_root, publication_bytes))
+        return replace(cost, scratch_bytes=sum(size for _, size in claims), filesystems=tuple(claims))
+
+    @staticmethod
+    def _cost_inspections(
+        state: JsonObject, operation: str, args: tuple[Any, ...], kwargs: JsonObject
+    ) -> list[JsonObject] | None:
+        """Use server-authored inspections only for the exact requested hashes."""
+        decisions = state.get("decisions", [])
+        selectors: list[tuple[str | None, str, str | None]] = []
+        if operation in {"render", "quality"} and len(args) >= 2:
+            selectors.append((args[0], args[1], kwargs.get("source_identity_sha256")))
+            if operation == "quality" and len(args) >= 4:
+                selectors.append((args[2], args[3], kwargs.get("reference_identity_sha256")))
+        elif operation in {"decision", "revision"} and args:
+            selectors.append((args[0].artifact_path, args[0].sha256, args[0].source_identity_sha256))
+        elif operation == "delivery" and args:
+            payload = args[0]
+            if payload.approved_sources:
+                selectors.extend(
+                    (item.artifact_path, item.sha256, item.source_identity_sha256) for item in payload.approved_sources
+                )
+            else:
+                selectors.extend((None, sha, None) for sha in payload.approved_sha256)
+        elif operation == "groups" and args:
+            for group in args[0].groups:
+                for identity in group.members:
+                    matches = [row for row in decisions if row.get("source_identity_sha256", row["sha256"]) == identity]
+                    if len(matches) != 1:
+                        return None
+                    selectors.append((matches[0]["artifact_path"], matches[0]["sha256"], identity))
+        if not selectors:
+            return None
+        result = []
+        for path, sha, identity in selectors:
+            matches = [
+                row
+                for row in decisions
+                if row["sha256"] == sha
+                and (path is None or row["artifact_path"] == path)
+                and (identity is None or row.get("source_identity_sha256", sha) == identity)
+            ]
+            if len(matches) != 1 or not isinstance(matches[0].get("inspection"), dict):
+                return None
+            result.append(matches[0]["inspection"])
+        return result
+
+    @asynccontextmanager
+    async def _catalogue_turn(self, context: ReviewContext) -> AsyncIterator[None]:
+        if not self.admission.config.enabled:
+            async with self.expensive:
+                yield
+            return
+        state = await self.state(context)
+        lease = await self.admission.acquire(context.tenant_id, self._resource_cost(context, state, "catalogue", (), None))
+        token = current_review_lease.set(lease)
+        try:
+            lease.check_scratch(lease.cost.scratch_bytes)
+            await self.revalidate(context)
+            yield
+        finally:
+            current_review_lease.reset(token)
+            await lease.release()
 
     async def state(self, context: ReviewContext) -> JsonObject:
         return await get_review_store().get(context.job_id, context.tenant_id)
@@ -447,6 +739,9 @@ class PhotographicReviewService:
     async def mutate(
         self, context: ReviewContext, expected_version: int, change: ReviewChange, kind: str, details: JsonObject
     ) -> JsonObject:
+        lease = current_review_lease.get()
+        if lease is not None:
+            await lease.release_expensive()
         await self.revalidate(context)
         updated = await get_review_store().mutate(
             context.job_id,
@@ -468,8 +763,8 @@ class PhotographicReviewService:
 
         state = await self.state(context)
         scenes: dict[str, JsonObject] = {}
-        async with self.expensive:
-            for ref in [*context.references, *revision_refs(state)]:
+        for ref in [*context.references, *revision_refs(state)]:
+            async with self._catalogue_turn(context):
                 if len(scenes) >= 32 and ref["scene_id"] not in scenes:
                     raise ReviewInputError("Photographic review is bounded to 32 scenes")
                 image = await load_image(context, ref)
@@ -505,6 +800,7 @@ class PhotographicReviewService:
                         "presentation_policy_sha256": ref.get("presentation_policy_sha256"),
                     }
                 )
+                del image
         await self.revalidate(context)
         for scene in scenes.values():
             finals = [v for v in scene["variants"] if v["role"] not in {"original", "working_master"}]
@@ -580,6 +876,7 @@ class PhotographicReviewService:
         async with self.expensive:
             image = await load_image(context, ref)
             inspection = await _owned_thread(_metadata, image)
+            del image
         decision: JsonObject = {
             "artifact_path": payload.artifact_path,
             "sha256": payload.sha256,
@@ -620,7 +917,7 @@ class PhotographicReviewService:
                 raise ReviewInputError("Lighting reference must be an explicit group member")
         refs = [*context.references, *revision_refs(state)]
         async with self.expensive:
-            with tempfile.TemporaryDirectory(prefix="tp-photo-groups-") as directory:
+            with owned_review_directory(prefix="tp-photo-groups-") as directory:
                 images: list[DeliveryImage] = []
                 for index, sha in enumerate(members):
                     matches = [ref for ref in refs if source_identity(ref) == sha]
@@ -714,6 +1011,7 @@ class PhotographicReviewService:
         async with self.expensive:
             image = await load_image(context, ref)
             result = await _owned_thread(create_revision, image, recipe, reference_sha256=payload.reference_sha256)
+            del image
         preview = "data:image/png;base64," + base64.b64encode(result["preview_bytes"]).decode("ascii")
         if payload.preview_only:
             await self.revalidate(context)
@@ -736,7 +1034,7 @@ class PhotographicReviewService:
             "input_color": "auto",
         }
         async with publication(context) as publication_paths:
-            with tempfile.TemporaryDirectory(prefix="tp-photo-revision-") as directory:
+            with owned_review_directory(prefix="tp-photo-revision-") as directory:
                 path = Path(directory).resolve() / "master.tif"
                 await _owned_thread(path.write_bytes, result["source_bytes"])
                 await context.publish(storage, path, "image/tiff")
@@ -753,6 +1051,7 @@ class PhotographicReviewService:
                 current["revisions"].append(entry)
                 return current
 
+            del result["source_bytes"], result["preview_bytes"]
             updated = await self.mutate(context, payload.expected_version, change, "revision", entry)
         return {
             **public_state(updated, context),
@@ -836,11 +1135,14 @@ class PhotographicReviewService:
             async with self.expensive:
                 source_refs = [resolve(context, state, row["artifact_path"], row["sha256"]) for row in decisions]
                 required = delivery_disk_budget(decisions, source_refs, presets)
-                if shutil.disk_usage(tempfile.gettempdir()).free < required:
+                lease = current_review_lease.get()
+                if lease is not None:
+                    lease.check_scratch(required)
+                elif shutil.disk_usage(tempfile.gettempdir()).free < required:
                     raise ReviewInputError(
                         f"Insufficient scratch disk for verified delivery; require {required / 1024**3:.1f} GiB free"
                     )
-                with tempfile.TemporaryDirectory(prefix="tp-approved-delivery-") as directory:
+                with owned_review_directory(prefix="tp-approved-delivery-") as directory:
                     root = Path(directory).resolve()
                     images: list[DeliveryImage] = []
                     for index, decision in enumerate(decisions):
@@ -988,8 +1290,14 @@ class PhotographicReviewService:
         if ref is None:
             raise ReviewAccessError("Delivery file is unavailable", status=404, code="NOT_FOUND")
         directory = Path(tempfile.mkdtemp(prefix="tp-delivery-download-"))
+        owner = current_review_lease.get()
+        if owner is not None:
+            owner.track_path(directory)
         try:
             path = directory / "verified-download"
+            lease = current_review_lease.get()
+            if lease is not None:
+                lease.check_scratch(ref["size_bytes"])
             await context.materialize(ref, path, MAX_BUNDLE_BYTES)
             await self.revalidate(context)
             if not delivery_is_approved(context, await self.state(context), delivery):
