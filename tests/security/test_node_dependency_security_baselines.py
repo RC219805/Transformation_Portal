@@ -14,8 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize(
     ("relative_directory", "package", "minimum_version", "manifest_section"),
     (
-        (".", "undici", "7.29.1", "overrides"),
-        ("cloudflare/transformationportal-worker", "undici", "7.29.1", "overrides"),
+        (".", "undici", "7.30.1", "overrides"),
+        ("cloudflare/transformationportal-worker", "undici", "7.30.1", "overrides"),
         ("web/secure-landing", "next", "16.3.6", "dependencies"),
         ("web/secure-landing", "fast-uri", "3.1.8", None),
     ),

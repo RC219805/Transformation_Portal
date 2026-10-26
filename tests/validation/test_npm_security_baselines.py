@@ -16,6 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize(
     ("lock_path", "package_name", "minimum_version"),
     (
+        # GHSA-xjj6-f33q-929c: excessive content-encoding denial of service.
+        ("package-lock.json", "undici", "7.30.1"),
+        ("cloudflare/transformationportal-worker/package-lock.json", "undici", "7.30.1"),
         # GHSA-wq5f-xc86-pv6w: bundled librsvg vulnerability.
         ("package-lock.json", "sharp", "0.35.5"),
         ("cloudflare/transformationportal-worker/package-lock.json", "sharp", "0.35.5"),
