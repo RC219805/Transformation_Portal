@@ -462,6 +462,45 @@ def test_patched_bootstrap_distributions_are_required_for_cache_authority(
     assert (reason in evidence.payload["incomplete_reasons"]) is not cacheable
 
 
+@pytest.mark.parametrize(
+    ("installed_version", "refresh_marker", "cacheable"),
+    (
+        ("3.32.5", True, False),
+        ("4.2.0", True, False),
+        ("4.2.1", False, False),
+        ("4.2.1", True, True),
+    ),
+)
+def test_filelock_security_rotation_requires_patched_inventory_and_current_marker(
+    tmp_path: Path,
+    installed_version: str,
+    refresh_marker: bool,
+    cacheable: bool,
+) -> None:
+    snapshot = _write_snapshot(tmp_path)
+    arguments = _inputs(tmp_path)
+    governance_path = arguments["governance_contract_path"]
+    governance = json.loads(governance_path.read_text())
+    lock_path = governance_path.parent / governance["dependency_lock_path"]
+    lock_path.write_bytes(lock_path.read_bytes() + b"filelock==4.2.1\n")
+    governance["dependency_lock_sha256"] = hashlib.sha256(lock_path.read_bytes()).hexdigest()
+    governance_path.write_text(json.dumps(governance))
+    arguments["dependency_inventory"] = (
+        *arguments["dependency_inventory"],
+        {**arguments["dependency_inventory"][0], "name": "filelock", "version": installed_version},
+    )
+    if refresh_marker:
+        _write_runtime_authority(arguments["runtime_authority_path"], governance_path)
+
+    evidence = prepare_da3_runtime_identity(snapshot_path=snapshot, **arguments)
+
+    assert evidence.cacheable is cacheable
+    reasons = evidence.payload["incomplete_reasons"]
+    version_mismatch = f"dependency_version_mismatch:filelock:4.2.1:{installed_version}"
+    assert (version_mismatch in reasons) is (installed_version != "4.2.1")
+    assert ("runtime_authority_marker_mismatch" in reasons) is not refresh_marker
+
+
 def test_complete_evidence_adapts_to_exact_core_runtime_contract(tmp_path: Path) -> None:
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
     from transformation_portal.lux_depth_v3.depth_cache_runtime import PreparedDepthCacheRuntimeEvidence
