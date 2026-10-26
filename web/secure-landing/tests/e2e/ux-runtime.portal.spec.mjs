@@ -188,6 +188,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
         rumTelemetry: false,
         fastVlmCaptioning: false,
         photographicRecordedPresentation: options.photographicRecordedPresentation === true,
+        photographicDeliveryHistory: options.photographicDeliveryHistory === true,
       },
     });
   });
@@ -3699,6 +3700,118 @@ test("@portal-browser photographic native inspection, saved approval, revision a
   await expect(page.locator('[data-ui="photographic-primary-image"]')).toBeVisible();
   await expectNoWcagViolations(page, "Photographic review in dark mobile mode");
   await page.locator('[data-ui="photographic-review"]').screenshot({ path: test.info().outputPath("photographic-review-mobile-dark.png") });
+});
+
+test("@portal-browser photographic lost export response survives reload and recovers history without another POST", async ({ page }, testInfo) => {
+  const jobId = "job-photographic-history-recovery";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sourceSha = "a".repeat(64);
+  const policySha = "b".repeat(64);
+  const archiveSha = "c".repeat(64);
+  const artifactPath = "input-0000/delivery.tif";
+  const downloadUrl = `${base}/files/committed/recovered.zip`;
+  const variant = { role: "final", artifact_path: artifactPath, sha256: sourceSha, source_identity_sha256: sourceSha,
+    width: 800, height: 600, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic preservation reference",
+    presentation_policy_sha256: policySha,
+    presentation: { available_views: ["recorded", "clip_srgb"], policy: { stage: "display_referred" }, policy_sha256: policySha } };
+  const preset = { name: "website", format: "jpeg", intended_use: "Website delivery", long_edge: 1600,
+    jpeg_quality: 92, sharpen_amount: 0, render: "perceptual_srgb", shoulder: 0.8 };
+  const artifact = { path: artifactPath, relative_path: artifactPath, name: "delivery.tif", sha256: sourceSha,
+    media_kind: "image", artifact_type: "image", content_type: "image/tiff", size_bytes: 4096, browser_previewable: false };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-26T01:00:00Z", artifacts: { items: [artifact] } };
+  const requests = [];
+  let version = 0;
+  let approval = null;
+  let frozenBody = null;
+  let committed = null;
+  let allowRecovery = false;
+  await installHydratedPortalRoutes(page, { jobs: [job], photographicRecordedPresentation: true, photographicDeliveryHistory: true });
+  await page.route(`**${base}**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    requests.push({ method: request.method(), path: url.pathname, correlation: url.searchParams.get("request_correlation_id") });
+    if (request.method() === "GET" && url.pathname === base) {
+      await fulfillJson(route, { success: true, data: { state_version: version,
+        scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant] }],
+        decisions: approval ? [approval] : [], groups: [], presets: [preset] } });
+      return;
+    }
+    if (url.pathname.endsWith("/render")) {
+      expect(url.searchParams.get("view")).toBe("recorded");
+      await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(800, 600),
+        headers: { "Cache-Control": "no-store", "X-TP-Source-SHA256": sourceSha, "X-TP-Source-Identity-SHA256": sourceSha,
+          "X-TP-Presentation-View": "recorded", "X-TP-Presentation-Policy-SHA256": policySha,
+          "X-TP-Native-Width": "800", "X-TP-Native-Height": "600" } });
+      return;
+    }
+    if (url.pathname.endsWith("/decisions") && request.method() === "POST") {
+      approval = request.postDataJSON();
+      expect(approval.expected_version).toBe(0);
+      expect(approval.inspection_presentation).toEqual({ view: "recorded", policy_sha256: policySha });
+      version += 1;
+      await fulfillJson(route, { success: true, data: { state_version: version } });
+      return;
+    }
+    if (url.pathname.endsWith("/delivery") && request.method() === "POST") {
+      expect(frozenBody).toBeNull();
+      frozenBody = request.postDataJSON();
+      expect(request.headers()["x-csrf-token"]).toBe("hydrated-ux-csrf");
+      expect(frozenBody.expected_version).toBe(1);
+      expect(frozenBody.request_correlation_id).toMatch(/^[A-Za-z0-9._:-]{1,64}$/);
+      committed = { id: "committed", created_at: 1, approval_version: frozenBody.expected_version,
+        request_correlation_id: frozenBody.request_correlation_id, request_fingerprint_schema: "tp.photo.delivery_intent.v1",
+        request_fingerprint_sha256: archiveSha,
+        intent: { property_name: frozenBody.property_name,
+          sources: frozenBody.approved_sources.map((source) => ({ ...source, presentation_policy_sha256: policySha })),
+          scene_labels: frozenBody.scene_labels, presets: [{ schema: "tp.photo.export_preset.v1", ...preset }] },
+        approval_at_creation: "recorded", current_recorded_approval: "approved", source_validation: "not_checked", file_validation: "not_checked",
+        files: [{ filename: "recovered.zip", url: downloadUrl, sha256: archiveSha, size_bytes: 4096, content_type: "application/zip" }] };
+      version += 1;
+      // The fixture has committed exactly once. Drop its response and keep
+      // history temporarily unavailable so reload must retain the frozen attempt.
+      await route.abort("connectionfailed");
+      return;
+    }
+    if (url.pathname.endsWith("/deliveries") && request.method() === "GET") {
+      if (committed && !allowRecovery) {
+        await fulfillJson(route, { success: false, error: { message: "History temporarily unavailable after response loss" } }, 503);
+        return;
+      }
+      if (committed && url.searchParams.has("request_correlation_id")) expect(url.searchParams.get("request_correlation_id")).toBe(frozenBody.request_correlation_id);
+      await fulfillJson(route, { success: true, data: { state_version: version, snapshot_count: committed ? 1 : 0,
+        items: committed ? [committed] : [], next_cursor: null } });
+      return;
+    }
+    await fulfillJson(route, { success: false, error: { message: "Unsupported recovery fixture request" } }, 404);
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  await expect(page.locator('[data-ui="photographic-presentation"]')).toHaveValue("recorded");
+  await expect(page.locator('[data-ui="photographic-primary-image"]')).toBeVisible();
+  await page.locator('[data-ui="photographic-decision-note"]').fill("Synthetic browser source approval; no human photographic acceptance.");
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Approved");
+  await page.locator('[data-ui="photographic-preset"][value="website"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Recovery fixture");
+  await page.locator('[data-ui="photographic-deliver-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-delivery-history-status"]')).toContainText("Original export outcome remains unknown");
+  await expect(page.locator('[data-ui="photographic-deliver-approved"]')).toBeDisabled();
+  const retained = await page.evaluate(() => JSON.parse(sessionStorage.getItem("tp.photo.delivery_recovery.v1")));
+  expect(retained).toHaveLength(1);
+  expect(retained[0].attempt.body).toEqual(frozenBody);
+  expect(requests.filter((request) => request.method === "POST" && request.path.endsWith("/delivery"))).toHaveLength(1);
+
+  allowRecovery = true;
+  const beforeReload = requests.length;
+  await page.reload();
+  await expect(page.locator('[data-ui="photographic-delivery-history-status"]')).toContainText("Recovered the committed delivery for the original request. No export was retried.");
+  await expect(page.locator('[data-ui="photographic-delivery-history-download"]')).toHaveAttribute("href", downloadUrl);
+  expect(requests.slice(beforeReload).every((request) => request.method === "GET")).toBe(true);
+  expect(requests.slice(beforeReload).some((request) => request.path.endsWith("/deliveries") && request.correlation === frozenBody.request_correlation_id)).toBe(true);
+  expect(requests.filter((request) => request.method === "POST" && request.path.endsWith("/delivery"))).toHaveLength(1);
+  expect(frozenBody.expected_version).toBe(1);
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("tp.photo.delivery_recovery.v1")))).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("photographic-recovered-after-reload.png"), fullPage: true });
 });
 
 test("@portal-browser photographic catalogue timeout is visible and Refresh review recovers the selected job", async ({ page }) => {
