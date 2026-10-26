@@ -51,8 +51,9 @@ efficientsam==1.0.0
     # via -r ml-core-darwin-arm64.in
 einops==0.8.2
     # via controlnet-aux
-filelock==3.28.0
+filelock==4.2.4
     # via
+    #   -r ml-core-darwin-arm64.in
     #   controlnet-aux
     #   diffusers
     #   huggingface-hub
