@@ -86,11 +86,17 @@ positional input / `--output-dir` interface:
 ```bash
 .venv/bin/python scripts/enhance_image.py input/scene.png \
   --preset architectural \
+  --input-color auto_assume_srgb \
   --output-dir output/scene_finishing \
   --device cpu
 ```
 
 Accepted V2 names are `default`, `luxury_estate`, `architectural`, and `none`.
+The example explicitly asserts that its untagged PNG is known to be sRGB;
+otherwise use metadata-aware `--input-color auto` and prepare an unambiguous
+source. V2 converts supported profiles to bounded encoded sRGB and emits a
+matching output profile; float/extended sources require Unified/V5/V6. See the
+[photographic color contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
 This command finishes an image; use the `MaterialBackend` API above to generate
 six PBR maps. See [CLI Reference](../cli/CLI_REFERENCE.md) for pipeline routing.
 

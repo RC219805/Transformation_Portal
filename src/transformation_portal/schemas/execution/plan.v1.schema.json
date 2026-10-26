@@ -1313,8 +1313,11 @@
       "additionalProperties": false,
       "required": ["schema", "configuration_completeness"],
       "properties": {
-        "schema": { "const": "tp.stage.config.lux.materials_v3.v1" },
+        "schema": { "const": "tp.stage.config.lux.materials_v3.v2" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
+        "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
+        "color_contract": { "const": "encoded_srgb_v1" },
+        "processing_version": { "const": "1.2.0" },
         "apply_pixel_ops": { "type": "boolean" },
         "pixel_ops_strict_policy_version": { "$ref": "#/$defs/shortString" },
         "enable_material_segmentation": { "type": "boolean" },
@@ -1377,6 +1380,9 @@
           },
           "then": {
             "required": [
+              "input_color",
+              "color_contract",
+              "processing_version",
               "apply_pixel_ops",
               "pixel_ops_strict_policy_version",
               "enable_material_segmentation",
@@ -1471,9 +1477,13 @@
       "additionalProperties": false,
       "required": ["schema", "configuration_completeness"],
       "properties": {
-        "schema": { "const": "tp.stage.config.lux.v2.v1" },
+        "schema": { "const": "tp.stage.config.lux.v2.v2" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
         "preset": { "$ref": "#/$defs/shortString" },
+        "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
+        "color_contract": { "const": "encoded_srgb_v1" },
+        "processing_version": { "const": "1.2.0" },
+        "materials_color_handoff": { "enum": ["none", "validated_srgb"] },
         "device": { "type": "string", "minLength": 1, "maxLength": 128 },
         "upscaler_backend": { "$ref": "#/$defs/shortString" },
         "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
@@ -1491,6 +1501,10 @@
           "then": {
             "required": [
               "preset",
+              "input_color",
+              "color_contract",
+              "processing_version",
+              "materials_color_handoff",
               "device",
               "upscaler_backend",
               "timeout_seconds",

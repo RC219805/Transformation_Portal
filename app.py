@@ -53,6 +53,7 @@ from starlette.responses import Response, StreamingResponse
 
 from transformation_portal.api.docs import create_api_docs_router
 from transformation_portal.api.routes import JobRouteHandlers, create_jobs_router
+from transformation_portal.api.routes.photographic_review import create_photographic_review_router
 from transformation_portal.api.v1 import (
     ConfigMetadataEnvelope,
     ConfigPreviewEnvelope,
@@ -163,6 +164,7 @@ from transformation_portal.portal.job_artifacts import (
     InvalidArtifactPathError,
     JobRunMetadata,
 )
+from transformation_portal.portal.photographic_review_access import AppReviewAccess, forget_review_for_job
 from transformation_portal.portal.sam2_checkpoint_security import (
     ManagedSam2CheckpointValidationResult,
     _ManagedSam2BoundedChecksumCache,
@@ -2149,6 +2151,7 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "cache_depth": True,
     "enable_v2": False,
     "v2_preset": "default",
+    "v2_input_color": "auto",
     "output_bit_depth": 16,
     "emit_run_card": True,
     "run_card_version": "v1",
@@ -3544,6 +3547,7 @@ async def _cleanup_expired_jobs(
         ):
             try:
                 await _job_repository().delete(job.id)
+                await forget_review_for_job(sys.modules[__name__], job)
             except Exception:  # noqa: BLE001 - one failed cleanup must not block others
                 LOGGER.exception("job repository cleanup delete failed for %s", job.id)
                 continue
@@ -3741,6 +3745,11 @@ async def _cleanup_expired_job_artifacts(
         try:
             job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
             if not _artifact_retention_due(job, now):
+                continue
+            if _uses_dispatch_authority() and await get_operational_record_store().is_legacy_retention_job(job.id):
+                LOGGER.info(
+                    "artifact retention preserved legacy job %s without dispatch authority; migration required", job.id
+                )
                 continue
             deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
         except Exception:  # noqa: BLE001 - one authority/store failure must not starve later jobs
@@ -5613,6 +5622,15 @@ def _build_lux_config_preview(
     normalized_args["v2_preset"] = str(
         _pick(args, "v2_preset", "v2Preset", default=defaults["v2_preset"]) or defaults["v2_preset"]
     ).strip() or str(defaults["v2_preset"])
+    v2_input_color = _pick(args, "v2_input_color", "v2InputColor", default="auto")
+    if not isinstance(v2_input_color, str) or v2_input_color not in {"auto", "auto_assume_srgb", "srgb", "linear_srgb"}:
+        errors.append(
+            _portal_issue(
+                "v2_input_color", "invalid_input_color", "V2 input color must be auto, auto_assume_srgb, srgb, or linear_srgb."
+            )
+        )
+        v2_input_color = "auto"
+    normalized_args["v2_input_color"] = v2_input_color
     normalized_args["enable_reconstruction"] = _as_bool(
         _pick(args, "enable_reconstruction", "enableReconstruction", default=defaults["enable_reconstruction"]),
         default=bool(defaults["enable_reconstruction"]),
@@ -8727,6 +8745,15 @@ def _argv_from_request(
             v2_preset = _pick(args, "v2_preset", "v2Preset")
             if v2_preset:
                 argv.extend(["--v2-preset", str(v2_preset)])
+            v2_input_color = _pick(args, "v2_input_color", "v2InputColor", default="auto")
+            if not isinstance(v2_input_color, str) or v2_input_color not in {
+                "auto",
+                "auto_assume_srgb",
+                "srgb",
+                "linear_srgb",
+            }:
+                raise HTTPException(status_code=400, detail="Unsupported V2 input color policy")
+            argv.extend(["--v2-input-color", v2_input_color])
 
         if _as_bool(
             _pick(
@@ -11526,3 +11553,6 @@ def _revalidate_dispatch_paths(
 ) -> None:
     """Recheck the same worker policy used by the standalone execution service."""
     _execution_policy().validate_dispatch_paths(locator, plan_bytes, output_root, execution_bindings=execution_bindings)
+
+
+app.include_router(create_photographic_review_router(AppReviewAccess(sys.modules[__name__]).runtime()))

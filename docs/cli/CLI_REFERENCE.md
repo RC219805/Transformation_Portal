@@ -215,6 +215,10 @@ Current option groups include:
   `--fastvlm-mlx-vlm-dir`, and `--fastvlm-timeout-seconds`.
 - Reproducibility: output encoding, `--emit-run-card`, `--run-card-version`,
   `--keep-intermediates`, and run-card signing/verifier tools.
+- V2 source color: `--v2-input-color auto|auto_assume_srgb|srgb|linear_srgb`.
+  Automatic mode blocks ambiguous untagged PNG/TIFF; known untagged sRGB inputs
+  need an explicit recorded assumption. V2 processes bounded SDR; see the
+  [photographic color and precision contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
 - Safety and execution: `--strict-inputs`, `--verify-images`,
   `--allow-semantic-fallback`, `--max-workers`, `--max-gpu-workers`,
   `--overwrite`, and `--force-depth`.

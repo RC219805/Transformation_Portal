@@ -3550,3 +3550,404 @@ for (const theme of ['light', 'dark']) {
     expect(runtime.jobSubmissions).toBe(0);
   });
 }
+
+async function photographicFixturePng(width, height) {
+  const { crc32, deflateSync } = await import("node:zlib");
+  const chunk = (name, body) => {
+    const type = Buffer.from(name);
+    const length = Buffer.alloc(4); length.writeUInt32BE(body.length);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([type, body])));
+    return Buffer.concat([length, type, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
+  const rows = Buffer.alloc((width * 3 + 1) * height, 128);
+  for (let y = 0; y < height; y += 1) rows[y * (width * 3 + 1)] = 0;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+test("@portal-browser photographic native inspection, saved approval, revision and approved delivery use exact identities", async ({ page }) => {
+  const jobId = "job-photographic-workbench";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sha = "a".repeat(64);
+  const originalSha = "b".repeat(64);
+  const revisionSha = "c".repeat(64);
+  const deliveryPath = "input-0000/delivery.tif";
+  const artifact = { path: deliveryPath, relative_path: deliveryPath, name: "delivery.tif", media_kind: "image", artifact_type: "image", previewable: true,
+    browser_previewable: false, content_type: "image/tiff", size_bytes: 4096, sha256: sha,
+    url: `/v1/jobs/${jobId}/artifacts/${deliveryPath}`, preview_url: `/v1/jobs/${jobId}/artifacts/input-0000/preview.png`,
+    display_hint: { role: "primary_preview", priority: 1200, label: "Photographic master" } };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100, created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: [artifact] } };
+  const variants = [
+    { role: "final", artifact_path: deliveryPath, sha256: sha, width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" },
+    { role: "original", artifact_path: "original/input-0000.tif", sha256: originalSha, width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Retained source" },
+  ];
+  const saved = [];
+  const posted = [];
+  const nativeRequests = [];
+  let version = 0;
+  await installHydratedPortalRoutes(page, { jobs: [job] });
+  await page.route(`**${base}**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === base) {
+      await fulfillJson(route, { success: true, data: { schema: "tp.photographic_review.v1", state_version: version,
+        scenes: [{ scene_id: "input-0000", label: "Living room", variants }], decisions: saved, groups: [],
+        presets: [{ name: "website", format: "jpeg", long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, intended_use: "Website delivery" }] } });
+      return;
+    }
+    if (url.pathname.endsWith("/render") || url.pathname.endsWith("/native-crop")) {
+      const native = url.pathname.endsWith("/native-crop");
+      const width = native ? Number(url.searchParams.get("width")) : 800;
+      const height = native ? Number(url.searchParams.get("height")) : 600;
+      if (native) nativeRequests.push(Object.fromEntries(url.searchParams));
+      await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(width, height), headers: {
+        "Cache-Control": "no-store", "X-TP-Source-SHA256": url.searchParams.get("sha256"),
+        "X-TP-Native-Width": String(width), "X-TP-Native-Height": String(height),
+      } });
+      return;
+    }
+    if (request.method() === "POST") {
+      const payload = request.postDataJSON();
+      posted.push({ pathname: url.pathname, payload, csrf: request.headers()["x-csrf-token"] });
+      expect(payload.expected_version).toBe(version);
+      if (url.pathname.endsWith("/decisions")) {
+        saved.splice(0, saved.length, ...saved.filter((item) => item.sha256 !== payload.sha256), payload);
+        version += 1;
+        await fulfillJson(route, { success: true, data: { state_version: version } });
+      } else if (url.pathname.endsWith("/revisions")) {
+        if (payload.preview_only) await fulfillJson(route, { success: true, data: { preview_data_url: `data:image/png;base64,${(await photographicFixturePng(80, 60)).toString("base64")}`,
+          receipt: { schema: "tp.photo.revision.v1", source_master_sha256: payload.sha256, width: 8000, height: 6000, output_bit_depth: 32,
+            review_status: "unreviewed", approval_transferred: false, reference_sha256: payload.reference_sha256, recipe: payload.recipe } } });
+        else {
+          variants[0].role = "previous_revision";
+          variants.unshift({ ...variants[0], role: "final", artifact_path: "review/revision-1/master.tif", sha256: revisionSha, bit_depth: 32 });
+          version += 1;
+          await fulfillJson(route, { success: true, data: { state_version: version } });
+        }
+      } else if (url.pathname.endsWith("/delivery")) {
+        await fulfillJson(route, { success: true, data: { download_url: `${base}/files/opaque/Living-room-v1.zip`, filename: "Living-room-v1.zip", sha256: "d".repeat(64), size_bytes: 4096, inventory: [] } });
+      } else await fulfillJson(route, { success: true, data: {} });
+      return;
+    }
+    await fulfillJson(route, { success: false, error: { message: "unsupported fixture request" } }, 404);
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const workbench = page.locator('[data-ui="photographic-review"]');
+  await expect(workbench).toBeVisible();
+  await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText("8000 × 6000 px · 16-bit · sRGB");
+  await expect(page.locator('[data-ui="photographic-resolution-status"]')).toContainText("Fit previews are reduced");
+  await page.locator('[data-ui="photographic-inspection"]').selectOption("native");
+  const image = page.locator('[data-ui="photographic-primary-image"]');
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((node) => [node.naturalWidth, node.naturalHeight, getComputedStyle(node).width, getComputedStyle(node).height])).toEqual([512, 512, "512px", "512px"]);
+  await page.locator('[data-ui="photographic-pan-right"]').click();
+  await expect.poll(() => nativeRequests.some((request) => request.sha256 === sha && Number(request.x) > 3744)).toBe(true);
+  await page.locator('[data-ui="photographic-comparison-mode"]').selectOption("wipe");
+  await expect(page.locator('[data-ui="photographic-comparison-stage"]')).toHaveAttribute("data-mode", "wipe");
+  await page.locator('[data-ui="photographic-comparison-mode"]').selectOption("blink");
+  await page.locator('[data-ui="photographic-blink"]').click();
+  await expect(page.locator('[data-ui="photographic-blink"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('[data-ui="photographic-blink"]').click();
+  await page.locator('[data-ui="photographic-decision-note"]').fill("Native window edges and ceiling cove checked.");
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${sha}`);
+  expect(posted.find((item) => item.pathname.endsWith("/decisions"))).toMatchObject({ csrf: "hydrated-ux-csrf", payload: { sha256: sha, artifact_path: deliveryPath, status: "approved" } });
+  await page.reload();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${sha}`);
+  await page.locator('[data-ui="photographic-revision-exposure"]').fill("-0.1");
+  await expect(page.locator('[data-ui="photographic-create-revision"]')).toBeDisabled();
+  await page.locator('[data-ui="photographic-preview-revision"]').click();
+  await expect(page.locator('[data-ui="photographic-variant-preview"]')).toBeVisible();
+  await page.locator('[data-ui="photographic-create-revision"]').click();
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue("review/revision-1/master.tif");
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Unreviewed");
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-delivery-version"]')).toHaveValue("review/revision-1/master.tif");
+  await page.locator('[data-ui="photographic-preset"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Seaview");
+  await page.locator('[data-ui="photographic-deliver-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-delivery-download"]')).toHaveAttribute("href", `${base}/files/opaque/Living-room-v1.zip`);
+  const delivery = posted.find((item) => item.pathname.endsWith("/delivery"));
+  expect(delivery.payload).toMatchObject({ property_name: "Seaview", presets: ["website"], approved_sha256: [revisionSha],
+    approved_sources: [{ artifact_path: "review/revision-1/master.tif", sha256: revisionSha, source_identity_sha256: revisionSha }] });
+  await expectNoHorizontalOverflow(page, "Photographic review at desktop width");
+  await expect(page.locator("#toastContainer .toast-active").last()).toHaveCSS("opacity", "1");
+  await expectNoWcagViolations(page, "Photographic review");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: test.info().outputPath("photographic-review-desktop.png"), fullPage: true });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.reload();
+  await expect(page.locator('[data-ui="photographic-review"]')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page, "Photographic review at mobile width");
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("#selectedJobStateBadge")).toHaveCSS("color", "rgb(241, 245, 249)");
+  await expect(page.locator(".photo-review-title")).toHaveCSS("color", "rgb(244, 246, 250)");
+  await page.locator('[data-ui="photographic-review"]').scrollIntoViewIfNeeded();
+  await page.locator('[data-ui="photographic-comparison-mode"]').selectOption("wipe");
+  await expect(page.locator('[data-ui="photographic-comparison-stage"]')).toHaveAttribute("data-mode", "wipe");
+  await expect(page.locator('[data-ui="photographic-primary-image"]')).toBeVisible();
+  await expectNoWcagViolations(page, "Photographic review in dark mobile mode");
+  await page.locator('[data-ui="photographic-review"]').screenshot({ path: test.info().outputPath("photographic-review-mobile-dark.png") });
+});
+
+test("@portal-browser photographic catalogue timeout is visible and Refresh review recovers the selected job", async ({ page }) => {
+  const jobId = "job-photographic-catalogue-deadline";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sha = "a".repeat(64);
+  const artifactPath = "input-0000/delivery.tif";
+  const artifact = { path: artifactPath, relative_path: artifactPath, name: "delivery.tif", sha256: sha,
+    media_kind: "image", artifact_type: "image", content_type: "image/tiff", size_bytes: 4096, browser_previewable: false };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", artifacts: { items: [artifact] } };
+  const data = { state_version: 0, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [{
+    role: "final", artifact_path: artifactPath, sha256: sha, width: 8000, height: 6000,
+    bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master",
+  }] }], decisions: [], groups: [], presets: [] };
+  let catalogueRequests = 0;
+  let mutations = 0;
+  await page.clock.install();
+  await installHydratedPortalRoutes(page, { jobs: [job] });
+  await page.route(`**${base}**`, async (route) => {
+    if (route.request().method() === "POST") { mutations += 1; await route.abort(); return; }
+    if (new URL(route.request().url()).pathname === base) {
+      catalogueRequests += 1;
+      if (catalogueRequests === 1) return; // Intentionally retain an unresponsive request until its client deadline.
+      await fulfillJson(route, { success: true, data });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(80, 60),
+      headers: { "X-TP-Source-SHA256": sha, "Cache-Control": "no-store" } });
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const status = page.locator('[data-ui="photographic-review-status"]');
+  await expect(status).toHaveText("Loading photographic review…");
+  await page.clock.fastForward(43510);
+  await expect(status).toHaveText("Loading photographic review…");
+  await page.clock.fastForward(47000);
+  await expect(status).toContainText("timed out. Refresh review");
+  await expect(status).toHaveAttribute("data-tone", "error");
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(status).toContainText("Review refreshed");
+  await expect(status).toHaveAttribute("data-tone", "info");
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue(artifactPath);
+  await expect(page).toHaveURL(new RegExp(`job=${jobId}`));
+  expect(catalogueRequests).toBe(2);
+  expect(mutations).toBe(0);
+});
+
+test("@portal-browser real photographic API preserves native identity through saved review, revision and verified ZIP download", async ({ page }, testInfo) => {
+  const jobId = process.env.TP_REVIEW_REAL_HTTP_JOB_ID || "";
+  test.skip(!jobId, "Run against the isolated real photographic-review fixture backend with TP_REVIEW_REAL_HTTP_JOB_ID set.");
+  test.setTimeout(90000);
+  const base = `/v1/jobs/${encodeURIComponent(jobId)}/photographic-review`;
+  // Deliberately no page.route() or installHydratedPortalRoutes(): every API,
+  // image and ZIP request traverses the managed frontdoor and real service.
+  await gotoHydratedPortal(page, `/portal?view=review&job=${encodeURIComponent(jobId)}`);
+  await expect(page.locator('[data-ui="photographic-review"]')).toBeVisible();
+  const getState = () => page.evaluate(async (url) => {
+    const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`Review HTTP ${response.status}`);
+    return (await response.json()).data;
+  }, base);
+  const initial = await getState();
+  const final = initial.scenes[0].variants.find((variant) => variant.role === "final");
+  expect(final.bit_depth).toBe(16);
+  await page.locator('[data-ui="photographic-inspection"]').selectOption("native");
+  const native = page.locator('[data-ui="photographic-primary-image"]');
+  await expect(native).toBeVisible();
+  await expect.poll(() => native.evaluate((image) => [image.naturalWidth, image.naturalHeight, Number.parseFloat(getComputedStyle(image).width), Number.parseFloat(getComputedStyle(image).height)]))
+    .toEqual([Math.min(final.width, 512), Math.min(final.height, 512), Math.min(final.width, 512), Math.min(final.height, 512)]);
+  await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText(final.sha256);
+  await page.locator('[data-ui="photographic-measure-quality"]').click();
+  await expect(page.locator('[data-ui="photographic-quality-results"]')).toContainText("spatial_v2");
+  expect((await getState()).decisions).toHaveLength(0);
+  await page.locator('[data-ui="photographic-lighting-group"]').fill("Daylight");
+  await page.locator('[data-ui="photographic-reference"]').selectOption(final.source_identity_sha256 || final.sha256);
+  await page.locator('[data-ui="photographic-save-reference"]').click();
+  await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Lighting reference saved");
+  await page.locator('[data-ui="photographic-decision-note"]').fill("Synthetic browser acceptance: native geometry and source identity inspected.");
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${final.sha256}`);
+  await page.reload();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${final.sha256}`);
+  const beforeRevision = await getState();
+  expect(beforeRevision.groups[0].reference_sha256).toBe(final.source_identity_sha256 || final.sha256);
+  await page.locator('[data-ui="photographic-revision-exposure"]').fill("-0.1");
+  await page.locator('[data-ui="photographic-preview-revision"]').click();
+  await expect(page.locator('[data-ui="photographic-variant-preview"]')).toBeVisible();
+  expect((await getState()).state_version).toBe(beforeRevision.state_version);
+  await page.locator('[data-ui="photographic-create-revision"]').click();
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Unreviewed");
+  const revised = await getState();
+  const revision = revised.scenes[0].variants.find((variant) => variant.role === "final");
+  expect(revision.sha256).not.toBe(final.sha256);
+  expect(revision.bit_depth).toBe(32);
+  expect(revised.scenes[0].variants.find((variant) => variant.sha256 === final.sha256).role).toBe("previous_revision");
+  await expect(page.locator('[data-ui="photographic-reference"]')).toHaveValue(final.source_identity_sha256 || final.sha256);
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-delivery-version"]')).toHaveValue(revision.artifact_path);
+  await page.locator('[data-ui="photographic-preset"][value="photographic_master"]').check();
+  await page.locator('[data-ui="photographic-preset"][value="website"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Synthetic Acceptance House");
+  await page.locator('[data-ui="photographic-scene-delivery-label"]').fill("Living room");
+  await page.locator('[data-ui="photographic-deliver-approved"]').click();
+  const zipLink = page.locator('[data-ui="photographic-delivery-download"]');
+  await expect(zipLink).toBeVisible();
+  const downloadEvent = page.waitForEvent("download");
+  await zipLink.click();
+  const downloaded = await downloadEvent;
+  const archivePath = testInfo.outputPath("synthetic-approved-set.zip");
+  await downloaded.saveAs(archivePath);
+  const archiveBytes = await readFile(archivePath);
+  const { createHash } = await import("node:crypto");
+  const archiveSha = createHash("sha256").update(archiveBytes).digest("hex");
+  await expect(page.locator('[data-ui="photographic-delivery-result"]')).toContainText(archiveSha);
+  const { execFileSync } = await import("node:child_process");
+  const repoRoot = path.resolve(SPEC_DIR, "../../../..");
+  const verified = JSON.parse(execFileSync(path.join(repoRoot, ".venv/bin/python"), ["-c", [
+    "import hashlib,json,sys,zipfile",
+    "with zipfile.ZipFile(sys.argv[1]) as z:",
+    " assert z.testzip() is None",
+    " names=z.namelist()",
+    " assert any(n.endswith('/contact-sheet.jpg') for n in names)",
+    " assert any(n.endswith('/inventory.json') for n in names)",
+    " assert any('living-room' in n for n in names)",
+    " approval=json.loads(z.read(next(n for n in names if n.endswith('/approval-record.json'))))",
+    " assert [m['sha256'] for m in approval['masters']]==[sys.argv[2]]",
+    " sums=z.read(next(n for n in names if n.endswith('/_package/SHA256SUMS.txt'))).decode().splitlines()",
+    " for line in sums:",
+    "  digest,name=line.split('  ',1)",
+    "  assert hashlib.sha256(z.read(name)).hexdigest()==digest",
+    " print(json.dumps({'members':len(names),'verified_sha256_members':len(sums),'approved_sha256':sys.argv[2]}))",
+  ].join("\n"), archivePath, revision.sha256], { encoding: "utf8" }));
+  expect(verified.members).toBeGreaterThanOrEqual(8);
+  expect(verified.verified_sha256_members).toBe(verified.members - 1);
+  const verificationPath = testInfo.outputPath("photographic-real-api-verification.json");
+  await writeFile(verificationPath, JSON.stringify({ archive_sha256: archiveSha, source_identity_sha256: revision.source_identity_sha256 || revision.sha256, ...verified }, null, 2));
+  await testInfo.attach("real photographic API and independently verified delivery", { path: verificationPath, contentType: "application/json" });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("photographic-real-api.png"), fullPage: true });
+});
+
+test("@portal-browser rate-limited job hydration preserves the Review deep link until recovery", async ({ page }) => {
+  const jobId = "job-review-rate-limit";
+  const artifactPath = "input-0000/delivery.tif";
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: [{
+      name: "delivery.tif", path: artifactPath, relative_path: artifactPath, sha256: "a".repeat(64), media_kind: "image",
+      content_type: "image/tiff", size_bytes: 1024, browser_previewable: false,
+      url: `/v1/jobs/${jobId}/artifacts/${artifactPath}`,
+    }] } };
+  await installHydratedPortalRoutes(page, { jobs: [job] });
+  let limited = true;
+  await page.route(/\/v1\/jobs(?:\/job-review-rate-limit)?$/, async (route) => {
+    if (!limited) { await route.fallback(); return; }
+    await route.fulfill({ status: 429, headers: { ...jsonHeaders(), "Retry-After": "60" },
+      body: JSON.stringify({ success: false, error: { code: "RATE_LIMITED", message: "fixture request budget" } }) });
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}&artifact=${encodeURIComponent(artifactPath)}`);
+  await expect(page.locator("#artifactSelectionTitle")).toContainText("No artifact selected");
+  await expect.poll(() => new URL(page.url()).searchParams.get("job")).toBe(jobId);
+  expect(new URL(page.url()).searchParams.get("artifact")).toBe(artifactPath);
+  limited = false;
+  await page.reload();
+  await expect(page.locator("#artifactSelectionTitle")).toContainText("delivery.tif");
+  expect(new URL(page.url()).searchParams.get("job")).toBe(jobId);
+  expect(new URL(page.url()).searchParams.get("artifact")).toBe(artifactPath);
+});
+
+test("@portal-browser direct-debug photographic thumbnails and clicked downloads preserve authenticated streaming and cancel stale access", async ({ page }) => {
+  const jobId = "job-photo-direct-auth";
+  const otherId = "job-photo-direct-other";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sourceSha = "a".repeat(64);
+  const fileSha = "b".repeat(64);
+  const key = "frontdoor-browser-smoke"; // Public synthetic fixture credential only.
+  const variant = { role: "final", artifact_path: "input-0000/delivery.tif", sha256: sourceSha,
+    width: 800, height: 600, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: [{
+      path: variant.artifact_path, name: "delivery.tif", sha256: sourceSha, media_kind: "image", browser_previewable: false,
+      content_type: "image/tiff", size_bytes: 4096, url: `/v1/jobs/${jobId}/artifacts/${variant.artifact_path}`,
+    }] } };
+  await installHydratedPortalRoutes(page, { authMode: "direct_debug", jobs: [job, { ...job, id: otherId }] });
+  await page.addInitScript(() => {
+    window.__savedPhotoFiles = [];
+    window.__photoDownloadAborts = 0;
+    window.showSaveFilePicker = async ({ suggestedName }) => {
+      if (window.__cancelPhotoPicker) throw new DOMException("Canceled by operator", "AbortError");
+      const record = { filename: suggestedName, gesture: navigator.userActivation.isActive, chunks: [], closed: false };
+      window.__savedPhotoFiles.push(record);
+      return { createWritable: async () => new WritableStream({ write(chunk) { record.chunks.push(...chunk); }, close() { record.closed = true; } }) };
+    };
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (String(input).includes("/photographic-review/files/")) init?.signal?.addEventListener("abort", () => { window.__photoDownloadAborts += 1; });
+      return originalFetch(input, init);
+    };
+  });
+  const binaryRequests = [];
+  let holdDownload = false;
+  let releaseDownload;
+  const downloadGate = new Promise((resolve) => { releaseDownload = resolve; });
+  await page.route("**/photographic-review**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.headers()["x-api-key"] !== key || request.headers().authorization !== `Bearer ${key}`) {
+      await fulfillJson(route, { success: false, error: { message: "fixture requires page-local authorization" } }, 401); return;
+    }
+    if (url.pathname.endsWith("/render")) {
+      binaryRequests.push({ url: request.url(), headers: request.headers() });
+      await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(256, 192),
+        headers: { "X-TP-Source-SHA256": sourceSha } }); return;
+    }
+    if (url.pathname.includes("/files/")) {
+      binaryRequests.push({ url: request.url(), headers: request.headers() });
+      if (holdDownload) await downloadGate;
+      await route.fulfill({ status: 200, body: "synthetic-file", contentType: "application/octet-stream",
+        headers: { "X-TP-Artifact-SHA256": fileSha, "Content-Length": "14" } }).catch(() => {}); return;
+    }
+    if (url.pathname.endsWith("/delivery")) {
+      await fulfillJson(route, { success: true, data: { download_url: `${base}/files/export/photos.zip`, filename: "photos.zip", sha256: fileSha, size_bytes: 14,
+        files: [{ filename: "inventory.json", url: `${base}/files/export/inventory.json` }] } }); return;
+    }
+    await fulfillJson(route, { success: true, data: { state_version: 1, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant] }],
+      decisions: [{ ...variant, status: "approved" }], groups: [], presets: ["website"] } });
+  });
+  try {
+    await gotoHydratedPortal(page, "/portal?view=build");
+    await page.locator("#connectionDetails > summary").click();
+    await page.locator("#apiKeyInput").fill(key);
+    await page.locator("#apiKeyInput").press("Tab");
+    await page.locator('[data-view-link="review"]').click();
+    await expect(page.locator('[data-ui="photographic-review"]')).toBeVisible();
+    await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Approved");
+    const thumbnail = page.locator('[data-ui="photographic-contact-sheet"] img');
+    await thumbnail.scrollIntoViewIfNeeded();
+    await expect(thumbnail).toHaveAttribute("src", /^blob:/);
+    await expect.poll(() => binaryRequests.some(({ url }) => new URL(url).searchParams.get("max_edge") === "256")).toBe(true);
+    await page.locator('[data-ui="photographic-preset"]').check();
+    await page.locator('[data-ui="photographic-deliver-approved"]').click();
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect.poll(() => page.evaluate(() => window.__savedPhotoFiles.map((file) => [file.filename, file.gesture, file.closed, new TextDecoder().decode(new Uint8Array(file.chunks))])))
+      .toEqual([["photos.zip", true, true, "synthetic-file"]]);
+    await page.locator('[data-ui="photographic-delivery-companion"]').click();
+    await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Saved inventory.json");
+    const beforeCancel = binaryRequests.filter(({ url }) => url.includes("/files/")).length;
+    await page.evaluate(() => { window.__cancelPhotoPicker = true; });
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Download canceled");
+    expect(binaryRequests.filter(({ url }) => url.includes("/files/"))).toHaveLength(beforeCancel);
+    await page.evaluate(() => { window.__cancelPhotoPicker = false; });
+    holdDownload = true;
+    await page.locator('[data-ui="photographic-delivery-download"]').click();
+    await expect.poll(() => binaryRequests.filter(({ url }) => url.includes("/files/")).length).toBe(beforeCancel + 1);
+    await page.locator('[data-view-link="operate"]').click();
+    await page.locator(`[data-job-id="${otherId}"][data-action="inspect-job"]`).click();
+    await expect.poll(() => page.evaluate(() => window.__photoDownloadAborts)).toBeGreaterThan(0);
+    expect(binaryRequests.every(({ url, headers }) => headers["x-api-key"] === key && !url.includes(key))).toBe(true);
+    expect(await page.evaluate(() => [localStorage.getItem("tp_api_key"), sessionStorage.getItem("tp_api_key")])).toEqual([null, null]);
+  } finally { releaseDownload(); }
+});

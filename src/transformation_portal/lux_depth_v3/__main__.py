@@ -493,6 +493,11 @@ def main(
             " when --enable-v2 is on."
         ),
     ),
+    v2_input_color: str = typer.Option(
+        "auto",
+        "--v2-input-color",
+        help="V2 source color: auto, auto_assume_srgb, srgb, or linear_srgb. Auto rejects ambiguous untagged PNG/TIFF.",
+    ),
     # Emit Options (Deliverables)
     output_bit_depth: Optional[int] = typer.Option(
         None,
@@ -1062,6 +1067,7 @@ def main(
         enable_depth_cache=enable_cache_depth,
         enable_v2=enable_v2_bool,
         v2_preset=v2_preset_value,
+        v2_input_color=v2_input_color,
         generate_pbr=enable_pbr,
         save_float_depth=enable_save_float_depth,
         quality_tier=quality_tier,

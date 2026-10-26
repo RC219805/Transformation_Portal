@@ -786,6 +786,29 @@ def test_preview_reports_non_integer_output_bit_depth_without_truncation(
     )
 
 
+@pytest.mark.parametrize("policy", ["auto", "auto_assume_srgb", "srgb", "linear_srgb", None])
+def test_managed_v3_carries_explicit_finishing_input_color(policy: str | None, tmp_path: Path) -> None:
+    source = tmp_path / "input"
+    source.mkdir()
+    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": policy}
+    preview = orchestrator_app._build_lux_config_preview(args)
+    assert preview["normalized_args"]["v2_input_color"] == (policy or "auto")
+    argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
+    assert _flag_value(argv, "--v2-input-color") == (policy or "auto")
+
+
+@pytest.mark.parametrize("invalid", [True, "assume_any_profile", [], {}])
+def test_managed_v3_rejects_unknown_finishing_color_policy(invalid: object, tmp_path: Path) -> None:
+    source = tmp_path / "input"
+    source.mkdir()
+    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": invalid}
+    preview = orchestrator_app._build_lux_config_preview(args)
+    assert any(error["field"] == "v2_input_color" for error in preview["field_errors"])
+    with pytest.raises(orchestrator_app.HTTPException) as rejection:
+        orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
+    assert rejection.value.status_code == 400
+
+
 def test_argv_rejects_explicit_8_with_truthy_legacy_bit_depth_alias() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",
@@ -942,6 +965,8 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
+    assert f'data-photographic-review-js-url="{bundle.urls["portal-photographic.js"]}"' in html_content
+    assert f'data-photographic-review-css-url="{bundle.urls["portal-photographic.css"]}"' in html_content
     assert f'data-profile-surface-js-url="{bundle.urls["portal-profile.js"]}"' in html_content
     assert "@import" not in css_content
     assert "--ux-target-min-size:" in css_content
@@ -1084,6 +1109,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "shared-ui-tokens.css": orchestrator_app.PORTAL_ASSETS_DIR / "shared-ui-tokens.css",
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
+        "portal-photographic.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.js",
+        "portal-photographic.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.css",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         # Surface-split deferred bundles. Operate, Build, and Profile are real
         # carves; Overview is an intentional placeholder (see commit fe2ed28).
@@ -1101,6 +1128,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "shared-ui-tokens.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
         "portal-review.js": "text/javascript; charset=utf-8",
+        "portal-photographic.js": "text/javascript; charset=utf-8",
+        "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
@@ -3422,6 +3451,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "cache_depth": "--cache-depth",
         "enable_v2": "--enable-v2",
         "v2_preset": "--v2-preset",
+        "v2_input_color": "--v2-input-color",
         "output_bit_depth": "--output-bit-depth",
         "emit_run_card": "--emit-run-card",
         "run_card_version": "--run-card-version",

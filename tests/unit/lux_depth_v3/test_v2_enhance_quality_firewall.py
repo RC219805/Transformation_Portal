@@ -103,10 +103,7 @@ class TestQualityFirewallLoad:
         with patch("tifffile.imread", side_effect=RuntimeError("Mock tifffile load failure")):
             with pytest.raises(V2EnhancementError, match="blocked by Quality Firewall"):
                 enhance_image(
-                    temp_16bit_tiff,
-                    output_path,
-                    allow_8bit_output=True,
-                    output_bit_depth=16,
+                    temp_16bit_tiff, output_path, allow_8bit_output=True, output_bit_depth=16, input_color="auto_assume_srgb"
                 )
 
         assert not output_path.exists()
@@ -132,7 +129,7 @@ class TestQualityFirewallMetadata:
             mock_result.metadata = {}
             mock_stage_instance.compute.return_value = mock_result
 
-            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False)
+            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
 
             # Check metadata structure
             assert "bit_depth" in result
@@ -161,7 +158,7 @@ class TestDtypeConsistency:
             mock_stage_instance.compute.return_value = mock_result
 
             # Run enhancement
-            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False)
+            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
 
             # Verify EnhancementStage was initialized with correct dtype
             call_kwargs = MockStage.call_args[1]
@@ -181,7 +178,9 @@ class TestPassthroughMode:
         # Create config with preset='none'
         config = V2EnhancementConfig(preset="none", enhancement_strength=0.0, clarity_strength=0.0, material_strength=0.0)
 
-        result = enhance_image(temp_8bit_tiff, output_path, config=config, allow_8bit_output=False)
+        result = enhance_image(
+            temp_8bit_tiff, output_path, config=config, allow_8bit_output=False, input_color="auto_assume_srgb"
+        )
 
         # Verify passthrough
         assert result["status"] == "passthrough"
@@ -211,7 +210,7 @@ class TestRealProcessing:
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage:
             mock_stage.return_value.compute.return_value = stage_result
-            result = enhance_image(source, tmp_path / "enhanced.tiff", output_bit_depth=16)
+            result = enhance_image(source, tmp_path / "enhanced.tiff", output_bit_depth=16, input_color="auto_assume_srgb")
 
         emitted = tifffile.imread(result["output"])
         assert emitted.dtype == np.uint16
@@ -244,7 +243,7 @@ class TestRealProcessing:
             mock_stage_instance.compute.return_value = mock_result
 
             # Run enhancement
-            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False)
+            result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False, input_color="auto_assume_srgb")
             emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
             # Verify success

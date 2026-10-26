@@ -807,7 +807,7 @@ def test_topological_order_uses_node_order_to_break_ready_ties() -> None:
         "lux.materials_v3",
         StageRegistryIdentifier.LUX_MATERIALS_V3,
         configuration={
-            "schema": "tp.stage.config.lux.materials_v3.v1",
+            "schema": "tp.stage.config.lux.materials_v3.v2",
             "configuration_completeness": "structural_legacy",
         },
         outputs=[],

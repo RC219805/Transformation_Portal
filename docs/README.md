@@ -28,6 +28,7 @@ runtime, photographic, hosted-service, and production acceptance stay separate.
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md) |
 | Unified LuxDepth | [Common CLI/API, complete photography, Materials, and replay](reference/LUX_DEPTH.md) |
+| Photographic review and delivery | [Native inspection, explicit approvals, precise revisions and verified exports](reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
 | LuxDepthV4 candidate | [V4 photography and evaluation](reference/LUX_DEPTH_V4.md) |
 | LuxDepthV5 candidate | [V5 depth evidence and evaluation](reference/LUX_DEPTH_V5.md), [Execution Plan V4](reference/EXECUTION_PLAN_V4.md) |

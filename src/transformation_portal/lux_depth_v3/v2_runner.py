@@ -96,6 +96,7 @@ class V2Runner:
         masks_file: Optional[Path] = None,
         asset_key: Optional[str] = None,
         output_bit_depth: Optional[int] = None,
+        input_color: str = "auto",
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -216,6 +217,9 @@ class V2Runner:
 
         cmd.extend(["--preset", preset])
         cmd.extend(["--device", device])
+        if not isinstance(input_color, str) or input_color not in {"auto", "auto_assume_srgb", "srgb", "linear_srgb"}:
+            raise ValueError("Unsupported V2 input color policy")
+        cmd.extend(["--input-color", input_color])
 
         if upscaler_backend is not None:
             cmd.extend(["--upscaler", upscaler_backend])

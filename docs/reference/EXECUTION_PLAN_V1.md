@@ -60,6 +60,20 @@ entrypoint also bounds body bytes, nesting, string length, nodes, edges,
 fanout, inputs, and requested outputs, and rejects duplicate object members
 and non-finite numbers.
 
+V3 V2 finishing now carries configuration schema `tp.stage.config.lux.v2.v2`
+under the existing `tp.stage.lux.v2.v1` registry identity. Its closed config
+binds `input_color`, `color_contract=encoded_srgb_v1`, and
+`processing_version=1.2.0` alongside the finishing controls. The outer plan V1
+contract also carries Materials configuration `tp.stage.config.lux.materials_v3.v2`
+under its existing registry identity. It binds that same source policy and
+color/processing contract for the geometry-preserving encoded-sRGB Materials
+proxy; the V2 node explicitly records its validated-sRGB internal handoff.
+Depth/segmentation model preprocessing remains unchanged, while legacy Stage A reuse
+invalidates when its retained Materials artifacts change. The plan V1
+contract remains unchanged. Older processing contracts require their matching
+environment; current validation does not silently reinterpret them. See the
+[photographic color contract](PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
+
 Native preparation and carried-plan input binding both reject paths that
 collide after Unicode NFC normalization and case folding. This keeps a
 consumed plan's selection valid on the same portable filesystems as a native

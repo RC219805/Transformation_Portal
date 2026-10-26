@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from tests.core.test_execution_plan import _valid_payload
 from transformation_portal.core.execution_plan import CanonicalExecutionPlan
@@ -827,5 +827,205 @@ async def test_cleanup_reservations_are_bounded_and_a_failed_first_check_cannot_
         assert len(second) == len(third) == 1
         assert len(set(first + second + third)) == 3
         assert await store.generation_cleanup_candidates() == []
+    finally:
+        await _SharedEngine.dispose(database_url)
+
+
+async def _legacy_retention_snapshot(engine):
+    """Keep complete row values, not counts, around the classification read."""
+    snapshot = {}
+    async with engine.connect() as connection:
+        for table in (
+            "jobs",
+            "job_artifacts",
+            "job_events",
+            "dispatch_plans",
+            "dispatch_attempts",
+            "operational_records",
+            "operational_outbox",
+            "committed_generations",
+            "operational_audit_events",
+            "admission_capacity",
+        ):
+            rows = await connection.scalars(
+                text(f"SELECT to_jsonb(retained) FROM {table} AS retained ORDER BY to_jsonb(retained)::text")
+            )
+            snapshot[table] = list(rows)
+    return snapshot
+
+
+async def _assert_legacy_retention_read_only(store, database_url, job_id, expected):
+    engine, _ = await _SharedEngine.get(database_url)
+    before = await _legacy_retention_snapshot(engine)
+    statements = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        assert await store.is_legacy_retention_job(job_id) is expected
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    assert len(statements) == 1, "classification must inspect one consistent statement snapshot"
+    assert statements[0].lstrip().upper().startswith("SELECT ")
+    assert await _legacy_retention_snapshot(engine) == before, "classification may not repair, prune, or revoke rows"
+
+
+async def _create_legacy_retention_projection(database_url, job_id, state, artifact_path):
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    record = _record(job_id)
+    record.state = state
+    record.finished_at = None if state in {"queued", "running"} else time.time() - 100
+    record.artifacts = {
+        "items": [{"path": "retained.tif", "sha256": "a" * 64}],
+        "lifecycle": {"expires_at": time.time() - 100, "deletion_status": "available"},
+    }
+    record.artifact_lookup = {"retained.tif": artifact_path}
+    await PostgresJobRepository(database_url=database_url).create(record)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["succeeded", "partial", "failed", "canceled", "worker_lost"])
+async def test_legacy_retention_preserves_each_terminal_projection_without_dispatch_history(service_urls, tmp_path, state):
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    job_id = f"job_legacy_retention_{state}"
+    try:
+        await _create_legacy_retention_projection(database_url, job_id, state, tmp_path / "retained.tif")
+        assert await store.get_locator(job_id) is None
+        await _assert_legacy_retention_read_only(store, database_url, job_id, True)
+    finally:
+        await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["queued", "running"])
+async def test_legacy_retention_never_classifies_an_active_projection(service_urls, tmp_path, state):
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    job_id = f"job_legacy_retention_{state}"
+    try:
+        await _create_legacy_retention_projection(database_url, job_id, state, tmp_path / "retained.tif")
+        await _assert_legacy_retention_read_only(store, database_url, job_id, False)
+    finally:
+        await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.asyncio
+async def test_legacy_retention_requires_an_actual_job_projection(service_urls):
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    try:
+        await _assert_legacy_retention_read_only(store, database_url, "job_missing_legacy_retention", False)
+    finally:
+        await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.asyncio
+async def test_legacy_retention_is_job_scoped_and_excludes_a_real_modern_terminal_dispatch(service_urls, tmp_path):
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    try:
+        locator = await _admit(store, "job_modern_legacy_retention_guard", tmp_path)
+        claim = await store.claim_dispatch(locator, "worker", lease_seconds=10)
+        await store.finish_dispatch(claim, state="failed", exit_code=1)
+        legacy_id = "job_unrelated_legacy_retention"
+        await _create_legacy_retention_projection(database_url, legacy_id, "succeeded", tmp_path / "retained.tif")
+        assert await store.get_locator(locator.job_id) == locator
+        await _assert_legacy_retention_read_only(store, database_url, locator.job_id, False)
+        await _assert_legacy_retention_read_only(store, database_url, legacy_id, True)
+    finally:
+        await _SharedEngine.dispose(database_url)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("history", ["attempt", "record", "pending_outbox", "delivered_outbox", "generation"])
+async def test_legacy_retention_rejects_each_isolated_surviving_dispatch_history(service_urls, tmp_path, history):
+    from transformation_portal.orchestrator.models import (
+        CommittedGenerationModel,
+        DispatchAttemptModel,
+        DispatchPlanModel,
+        OperationalOutboxModel,
+        OperationalRecordModel,
+    )
+
+    database_url, _ = service_urls
+    store = PostgresOperationalRecordStore(database_url=database_url)
+    job_id = f"job_legacy_retention_orphan_{history}"
+    try:
+        await _create_legacy_retention_projection(database_url, job_id, "succeeded", tmp_path / "retained.tif")
+        engine, factory = await _SharedEngine.get(database_url)
+        raw = _plan()
+        digest = hashlib.sha256(raw).hexdigest()
+        now = time.time()
+        async with factory() as session:
+            async with session.begin():
+                # Controlled isolated evidence models partial modern-history
+                # corruption. Its existence must not be silently called legacy,
+                # even when the surviving row has a different tenant binding.
+                if history == "attempt":
+                    session.add(DispatchPlanModel(digest=digest, canonical_bytes=raw))
+                    await session.flush()
+                    session.add(
+                        DispatchAttemptModel(
+                            job_id=job_id,
+                            attempt_id=uuid.uuid4().hex,
+                            dispatch_id=uuid.uuid4().hex,
+                            tenant_id="different_tenant",
+                            plan_digest=digest,
+                            api_version="v1",
+                            output_root=str(tmp_path / "owned-attempt"),
+                            requested_output_root=str(tmp_path / "requested-output"),
+                            state="succeeded",
+                            admitted_at=now - 10,
+                            finished_at=now,
+                        )
+                    )
+                elif history == "record":
+                    session.add(
+                        OperationalRecordModel(
+                            job_id=job_id,
+                            tenant_id="different_tenant",
+                            kind="admitted",
+                            created_at=now,
+                            canonical_bytes=raw,
+                            digest=digest,
+                        )
+                    )
+                elif history in {"pending_outbox", "delivered_outbox"}:
+                    session.add(
+                        OperationalOutboxModel(
+                            job_id=job_id,
+                            kind="event",
+                            payload={"retained": True},
+                            created_at=now,
+                            delivered_at=now if history == "delivered_outbox" else None,
+                        )
+                    )
+                else:
+                    session.add(
+                        CommittedGenerationModel(
+                            generation_id=uuid.uuid4().hex,
+                            job_id=job_id,
+                            tenant_id="different_tenant",
+                            manifest_digest=digest,
+                            manifest_bytes=raw,
+                            created_at=now,
+                        )
+                    )
+        async with engine.connect() as connection:
+            for table, present in (
+                ("dispatch_attempts", history == "attempt"),
+                ("operational_records", history == "record"),
+                ("operational_outbox", history in {"pending_outbox", "delivered_outbox"}),
+                ("committed_generations", history == "generation"),
+            ):
+                count = await connection.scalar(text(f"SELECT count(*) FROM {table} WHERE job_id=:job_id"), {"job_id": job_id})
+                assert count == int(present), "each absence guard must be exercised independently"
+        if history != "attempt":
+            assert await store.get_locator(job_id) is None
+        await _assert_legacy_retention_read_only(store, database_url, job_id, False)
     finally:
         await _SharedEngine.dispose(database_url)

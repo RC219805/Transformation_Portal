@@ -37,6 +37,8 @@ Contract notes:
     data-console-view="overview"
     data-bootstrap-status="pending"
     data-review-surface-js-url="__PORTAL_REVIEW_JS_URL__"
+    data-photographic-review-js-url="__PORTAL_PHOTOGRAPHIC_JS_URL__"
+    data-photographic-review-css-url="__PORTAL_PHOTOGRAPHIC_CSS_URL__"
     data-review-surface-css-url="__PORTAL_REVIEW_CSS_URL__"
     data-operate-surface-js-url="__PORTAL_OPERATE_JS_URL__"
     data-build-surface-js-url="__PORTAL_BUILD_JS_URL__"
@@ -802,6 +804,16 @@ Contract notes:
                         </div>
                     </section>
 
+                    <section id="photographicProfilePanel" data-build-step-panel="3" class="build-step-panel space-y-4 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="photographic-processing-profile">
+                        <label for="processingProfile" class="block text-xs font-medium text-slate-700 dark:text-slate-300">Photographic processing profile</label>
+                        <select id="processingProfile" disabled aria-describedby="processingProfileHint" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors">
+                            <option value="photographic_master">Photographic master</option>
+                            <option value="web_delivery">Web delivery</option>
+                            <option value="retouch_print">Retouch / print</option>
+                        </select>
+                        <p id="processingProfileHint" class="text-[12px] leading-6 text-slate-600 dark:text-slate-300">V3 requests a 16-bit sRGB TIFF; keep the original source master. Select delivery formats after approval in Review.</p>
+                    </section>
+
                     <section id="fieldsLuxUnified" data-build-step-panel="3" class="hidden pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="lux-unified-controls">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="unifiedWorkflow">Unified workflow</label>
@@ -1099,6 +1111,16 @@ Contract notes:
                     </div>
 
                     <!-- Native Emit Checkboxes -->
+                    <div class="mt-4">
+                        <label for="v2InputColor" class="block text-xs font-medium text-slate-700 dark:text-slate-300">V3 finishing input color</label>
+                        <select id="v2InputColor" aria-describedby="v2InputColorHint" class="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors">
+                            <option value="auto">Auto (validate embedded metadata)</option>
+                            <option value="auto_assume_srgb">Auto; explicitly assume sRGB when untagged</option>
+                            <option value="srgb">Assert known sRGB encoding</option>
+                            <option value="linear_srgb">Assert known linear sRGB encoding</option>
+                        </select>
+                        <p id="v2InputColorHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">V2 finishing converts supported tagged inputs to bounded encoded sRGB. Auto blocks ambiguous PNG/TIFF; assumptions are recorded. An encoding assertion does not convert an arbitrary profile. Extended/HDR masters require Unified/V5/V6.</p>
+                    </div>
                     <fieldset class="mt-4 group-bare">
                         <legend class="sr-only">Emit outputs</legend>
                         <div class="build-option-grid gap-3">
