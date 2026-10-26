@@ -17,6 +17,7 @@ REQUIREMENTS = Path(__file__).resolve().parents[2] / "config/fastvlm_runtime_req
     [
         ("aiohttp", "3.14.4"),  # GHSA-2g87-pp6c-29x5 and related parser/resource fixes.
         ("certifi", "2026.10.19"),  # GHSA-6q48-6c7w-9gw2: compromised emSign roots.
+        ("filelock", "4.2.1"),  # Minimum patched version for the October 2026 filelock advisories.
         ("pillow", "13.0.0"),  # GHSA-8g5g-8vmr-9782 and related image decoder fixes.
         ("yarl", "1.25.1"),  # Required by aiohttp 3.14.4.
         ("fsspec", "2026.6.0"),  # GHSA-27vj-qcqg-25rc: ReferenceFileSystem template injection.

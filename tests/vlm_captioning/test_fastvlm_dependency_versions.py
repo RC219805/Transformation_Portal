@@ -11,7 +11,7 @@ import pytest
 from tests.vlm_captioning.test_fastvlm_runtime_manifest import _manifest, _write_fixture_runtime
 
 pytestmark = [pytest.mark.unit, pytest.mark.security]
-PINS = {"pip": "26.2.2", "Pillow": "13.0.0", "aiohttp": "3.14.4", "certifi": "2026.10.19"}
+PINS = {"pip": "26.2.2", "Pillow": "13.0.0", "aiohttp": "3.14.4", "certifi": "2026.10.19", "filelock": "4.2.1"}
 
 
 def _load(relative_path: str):  # noqa: ANN202
@@ -53,7 +53,14 @@ def test_current_pins_are_verified_without_runtime_execution(dependency_fixture)
 
 
 @pytest.mark.parametrize(
-    "name,version", [("pip", "26.2.1"), ("Pillow", "12.3.0"), ("aiohttp", "3.14.3"), ("certifi", "2026.6.17")]
+    "name,version",
+    [
+        ("pip", "26.2.1"),
+        ("Pillow", "12.3.0"),
+        ("aiohttp", "3.14.3"),
+        ("certifi", "2026.6.17"),
+        ("filelock", "3.32.5"),
+    ],
 )
 def test_stale_governed_versions_are_rejected(dependency_fixture, name: str, version: str) -> None:  # noqa: ANN001
     module, venv, paths, _requirements = dependency_fixture
@@ -133,7 +140,9 @@ def test_installer_verify_only_rejects_stale_installed_pins(
     )
 
 
-@pytest.mark.parametrize("name,version", [("pip", "26.2.1"), ("Pillow", "12.3.0"), ("aiohttp", "3.14.3")])
+@pytest.mark.parametrize(
+    "name,version", [("pip", "26.2.1"), ("Pillow", "12.3.0"), ("aiohttp", "3.14.3"), ("filelock", "3.32.5")]
+)
 def test_validator_checks_current_pins_before_import_smoke(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, version: str
 ) -> None:
