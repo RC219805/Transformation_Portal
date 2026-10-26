@@ -3746,6 +3746,11 @@ async def _cleanup_expired_job_artifacts(
             job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
             if not _artifact_retention_due(job, now):
                 continue
+            if _uses_dispatch_authority() and await get_operational_record_store().is_legacy_retention_job(job.id):
+                LOGGER.info(
+                    "artifact retention preserved legacy job %s without dispatch authority; migration required", job.id
+                )
+                continue
             deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
         except Exception:  # noqa: BLE001 - one authority/store failure must not starve later jobs
             LOGGER.exception("artifact retention cleanup failed for job %s", record.id)

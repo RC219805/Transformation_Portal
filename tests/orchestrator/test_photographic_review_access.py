@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import sys
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,11 +15,13 @@ import pytest
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
+from tests.lux_depth_v5 import test_pipeline as controlled_pipeline
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewContext
 from transformation_portal.portal import photographic_review_access as adapter
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
+request_case = controlled_pipeline.request_case
 
 
 def _request():
@@ -835,6 +838,95 @@ async def test_original_is_derived_only_from_immutable_bound_plan_and_revalidate
     with pytest.raises(ReviewAccessError, match="no longer authorized"):
         await context.materialize(context.references[0], tmp_path / "refused.jpg", 1024)
     assert not (tmp_path / "refused.jpg").exists()
+
+
+@pytest.fixture(params=["v5", "v6", "unified_infer", "unified_process"])
+def admitted_originals(request, request_case, fake_app, monkeypatch):
+    from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.lux_depth_adapter import prepare_unified_dispatch
+    from transformation_portal.orchestrator.photography_adapter import prepare_photography_dispatch
+    from transformation_portal.orchestrator.photography_v6_adapter import prepare_v6_dispatch
+
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", sys.executable)
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+    publisher = GenerationPublisher(artifact_store=None, record_store=None)
+    if request.param == "v5":
+        admitted = prepare_photography_dispatch(request_case, publisher=publisher)
+    elif request.param == "v6":
+        admitted = prepare_v6_dispatch(ManagedLuxDepthV6Request(request_case), publisher=publisher)
+    else:
+        workflow = request.param.removeprefix("unified_")
+        native_request = ManagedLuxDepthV6Request(request_case) if workflow == "process" else request_case
+        admitted = prepare_unified_dispatch(native_request, workflow=workflow, publisher=publisher)
+    records = SimpleNamespace(
+        get_locator=AsyncMock(return_value=SimpleNamespace(tenant_id="local")),
+        fetch_plan=AsyncMock(return_value=admitted.plan_bytes),
+        fetch_execution_bindings=AsyncMock(return_value=admitted.bindings_bytes),
+        committed_manifest=AsyncMock(return_value={"files": []}),
+    )
+    policy = SimpleNamespace(input_roots=(request_case.input_dir,), resolve_path=Mock(return_value=request_case.input_dir))
+    app, job, _, _ = fake_app
+    app._uses_dispatch_authority = lambda: True
+    app.get_operational_record_store = lambda: records
+    app._execution_policy = lambda: policy
+    return app, job, records, policy, request_case
+
+
+async def test_originals_use_exact_validated_native_inference_authority(admitted_originals, tmp_path):
+    app, _, records, policy, request_case = admitted_originals
+    context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+
+    assert isinstance(context, ReviewContext)
+    assert len(context.references) == 1
+    reference = context.references[0]
+    plan = json.loads(records.fetch_plan.return_value)
+    inference = plan["inference"] if plan["schema"] == "tp.execution.plan.v5" else plan
+    admitted_input = inference["inputs"][0]
+    assert reference["artifact_path"] == "original/input-0000.tif"
+    assert reference["role"] == "original"
+    assert reference["sha256"] == reference["source_identity_sha256"] == admitted_input["sha256"]
+    assert reference["size_bytes"] == admitted_input["size_bytes"]
+    assert reference["input_color"] == inference["configuration"]["input_color"] == "srgb"
+    output = tmp_path / "original-copy.tif"
+    await context.materialize(reference, output, 16 * 1024)
+    assert output.read_bytes() == (request_case.input_dir / admitted_input["path"]).read_bytes()
+    assert not request_case.output_dir.exists()
+
+    policy.resolve_path.return_value = tmp_path / "revoked"
+    with pytest.raises(ReviewAccessError, match="no longer authorized"):
+        await context.materialize(reference, tmp_path / "refused.tif", 16 * 1024)
+    assert not (tmp_path / "refused.tif").exists()
+
+
+@pytest.mark.parametrize("field,value", [("sha256", "f" * 64), ("input_color", "linear_srgb")])
+async def test_originals_reject_changed_inference_before_physical_access(admitted_originals, field, value):
+    app, _, records, policy, _ = admitted_originals
+    plan = json.loads(records.fetch_plan.return_value)
+    inference = plan["inference"] if plan["schema"] == "tp.execution.plan.v5" else plan
+    if field == "sha256":
+        inference["inputs"][0][field] = value
+    else:
+        inference["configuration"][field] = value
+    records.fetch_plan.return_value = canonicalize_json(plan)
+
+    response = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+
+    assert isinstance(response, Response)
+    assert response.status_code == 503
+    assert json.loads(response.body)["error"]["code"] == "REVIEW_UNAVAILABLE"
+    policy.resolve_path.assert_not_called()
+
+
+async def test_originals_never_infer_missing_physical_bindings(admitted_originals):
+    app, job, records, policy, _ = admitted_originals
+    records.fetch_execution_bindings.return_value = None
+
+    originals, reason = await adapter.AppReviewAccess(app)._originals(job, None)
+
+    assert originals == []
+    assert reason == "immutable_original_binding_unavailable"
+    policy.resolve_path.assert_not_called()
 
 
 async def test_registered_actual_app_routes_reject_unauthenticated_and_return_typed_missing_job(monkeypatch):

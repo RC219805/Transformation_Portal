@@ -221,6 +221,27 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
             attempt = await session.get(DispatchAttemptModel, job_id)
             return None if attempt is None else self._locator(attempt)
 
+    async def is_legacy_retention_job(self, job_id: str) -> bool:
+        """Identify terminal projections with no dispatch-era authority or history.
+
+        These pre-cutover rows cannot authorize generation revocation. A missing
+        locator alone is insufficient: surviving canonical records, outbox rows,
+        or committed generations must still surface an authority failure.
+        This read-only classification grants no execution or deletion authority.
+        """
+        async with self._session() as session:
+            legacy_id = await session.scalar(
+                select(JobModel.id).where(
+                    JobModel.id == job_id,
+                    JobModel.state.in_(TERMINAL_STATES),
+                    ~select(DispatchAttemptModel.job_id).where(DispatchAttemptModel.job_id == job_id).exists(),
+                    ~select(OperationalRecordModel.job_id).where(OperationalRecordModel.job_id == job_id).exists(),
+                    ~select(OperationalOutboxModel.job_id).where(OperationalOutboxModel.job_id == job_id).exists(),
+                    ~select(CommittedGenerationModel.job_id).where(CommittedGenerationModel.job_id == job_id).exists(),
+                )
+            )
+            return legacy_id is not None
+
     @staticmethod
     def _matches(attempt: DispatchAttemptModel, locator: DispatchLocator) -> bool:
         return PostgresOperationalRecordStore._locator(attempt) == locator

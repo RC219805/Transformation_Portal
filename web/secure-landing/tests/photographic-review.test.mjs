@@ -130,6 +130,65 @@ test("Review exposes explicit versions, fit-preview truth, and sends authenticat
   assert.equal(render.options.headers["x-api-key"], "fixture-key");
 });
 
+test("a retained photographic catalogue may finish after 43.51 seconds within its bounded 90-second budget", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let complete;
+  const h = fixture({ extraFetch: (url) => url.endsWith("/photographic-review")
+    ? new Promise((resolve) => { complete = resolve; }) : null });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, variant);
+  const catalogue = h.requests.find((request) => request.url.endsWith("/photographic-review"));
+  t.mock.timers.tick(43510);
+  assert.equal(catalogue.options.signal.aborted, false);
+  complete(new Response(JSON.stringify({ success: true, data: { state_version: 0,
+    scenes: [{ scene_id: "input-0000", variants: [variant, original] }], decisions: [], groups: [], presets: [] } })));
+  await settle();
+  assert.match(h.root.find("photographic-review-status").textContent, /Review loaded/);
+  assert.equal(h.root.find("photographic-primary").value, variant.artifact_path);
+});
+
+test("a catalogue deadline is visible at 90 seconds and Refresh review recovers without replaying changes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let first = true;
+  const h = fixture({ extraFetch: (url, options) => {
+    if (!url.endsWith("/photographic-review") || !first) return null;
+    first = false;
+    return new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
+  } });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, variant);
+  const catalogue = h.requests.find((request) => request.url.endsWith("/photographic-review"));
+  t.mock.timers.tick(89999);
+  assert.equal(catalogue.options.signal.aborted, false);
+  t.mock.timers.tick(1);
+  await settle();
+  assert.equal(catalogue.options.signal.aborted, true);
+  assert.match(h.root.find("photographic-review-status").textContent, /timed out.*Refresh review/);
+  assert.equal(h.root.find("photographic-review-status").dataset.tone, "error");
+  assert.equal(h.root.find("photographic-review").classList.contains("hidden"), false);
+  await h.root.find("photographic-review-refresh").trigger();
+  assert.match(h.root.find("photographic-review-status").textContent, /Review refreshed/);
+  assert.equal(h.root.find("photographic-review-status").dataset.tone, "info");
+  assert.equal(h.requests.filter((request) => request.options.method === "POST").length, 0);
+});
+
+test("an intentional catalogue abort cannot publish a stale timeout or loading status in the next job", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = fixture({ extraFetch: (url, options) => url === "/v1/jobs/job-one/photographic-review"
+    ? new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Scope changed", "AbortError")))) : null });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, variant);
+  const previous = h.requests[0];
+  h.api.show({ ...h.job, id: "job-two" }, variant);
+  await settle();
+  assert.equal(previous.options.signal.aborted, true);
+  assert.match(h.root.find("photographic-review-status").textContent, /Review loaded/);
+  t.mock.timers.tick(90000);
+  await settle();
+  assert.match(h.root.find("photographic-review-status").textContent, /Review loaded/);
+  assert.equal(h.root.find("photographic-review-status").dataset.tone, "info");
+});
+
 test("saved human decisions use the exact selected master, state version, and managed CSRF transport", async () => {
   const h = fixture();
   h.api.show(h.job, variant); await settle();

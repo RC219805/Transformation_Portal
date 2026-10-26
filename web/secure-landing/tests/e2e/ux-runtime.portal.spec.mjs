@@ -3692,6 +3692,51 @@ test("@portal-browser photographic native inspection, saved approval, revision a
   await page.locator('[data-ui="photographic-review"]').screenshot({ path: test.info().outputPath("photographic-review-mobile-dark.png") });
 });
 
+test("@portal-browser photographic catalogue timeout is visible and Refresh review recovers the selected job", async ({ page }) => {
+  const jobId = "job-photographic-catalogue-deadline";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const sha = "a".repeat(64);
+  const artifactPath = "input-0000/delivery.tif";
+  const artifact = { path: artifactPath, relative_path: artifactPath, name: "delivery.tif", sha256: sha,
+    media_kind: "image", artifact_type: "image", content_type: "image/tiff", size_bytes: 4096, browser_previewable: false };
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", artifacts: { items: [artifact] } };
+  const data = { state_version: 0, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [{
+    role: "final", artifact_path: artifactPath, sha256: sha, width: 8000, height: 6000,
+    bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master",
+  }] }], decisions: [], groups: [], presets: [] };
+  let catalogueRequests = 0;
+  let mutations = 0;
+  await page.clock.install();
+  await installHydratedPortalRoutes(page, { jobs: [job] });
+  await page.route(`**${base}**`, async (route) => {
+    if (route.request().method() === "POST") { mutations += 1; await route.abort(); return; }
+    if (new URL(route.request().url()).pathname === base) {
+      catalogueRequests += 1;
+      if (catalogueRequests === 1) return; // Intentionally retain an unresponsive request until its client deadline.
+      await fulfillJson(route, { success: true, data });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(80, 60),
+      headers: { "X-TP-Source-SHA256": sha, "Cache-Control": "no-store" } });
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const status = page.locator('[data-ui="photographic-review-status"]');
+  await expect(status).toHaveText("Loading photographic review…");
+  await page.clock.fastForward(43510);
+  await expect(status).toHaveText("Loading photographic review…");
+  await page.clock.fastForward(47000);
+  await expect(status).toContainText("timed out. Refresh review");
+  await expect(status).toHaveAttribute("data-tone", "error");
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(status).toContainText("Review refreshed");
+  await expect(status).toHaveAttribute("data-tone", "info");
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue(artifactPath);
+  await expect(page).toHaveURL(new RegExp(`job=${jobId}`));
+  expect(catalogueRequests).toBe(2);
+  expect(mutations).toBe(0);
+});
+
 test("@portal-browser real photographic API preserves native identity through saved review, revision and verified ZIP download", async ({ page }, testInfo) => {
   const jobId = process.env.TP_REVIEW_REAL_HTTP_JOB_ID || "";
   test.skip(!jobId, "Run against the isolated real photographic-review fixture backend with TP_REVIEW_REAL_HTTP_JOB_ID set.");
