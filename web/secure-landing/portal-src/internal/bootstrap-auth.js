@@ -10,7 +10,8 @@ export function defaultPortalBootstrapPayload() {
       reviewSurfaceDeferred: false,
       stagedUploads: false,
       rumTelemetry: false,
-      fastVlmCaptioning: false
+      fastVlmCaptioning: false,
+      photographicRecordedPresentation: false
     }
   };
 }

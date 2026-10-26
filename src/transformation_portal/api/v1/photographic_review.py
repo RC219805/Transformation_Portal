@@ -13,12 +13,19 @@ class ReviewMutation(BaseModel):
     expected_version: int = Field(ge=0)
 
 
+class InspectionPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    view: Literal["recorded", "clip_srgb"]
+    policy_sha256: Digest | None = None
+
+
 class ReviewDecisionRequest(ReviewMutation):
     artifact_path: ArtifactPath
     sha256: Digest
     source_identity_sha256: Digest | None = None
     status: Literal["selected", "needs_revision", "approved"]
     note: str = Field(default="", max_length=2000)
+    inspection_presentation: InspectionPresentation | None = None
 
 
 class LightingGroup(BaseModel):
@@ -40,6 +47,7 @@ class RevisionRequest(ReviewMutation):
     recipe: dict[str, Any]
     reference_sha256: Digest | None = None
     preview_only: bool = True
+    presentation_policy_sha256: Digest | None = None
 
 
 class ApprovedSource(BaseModel):

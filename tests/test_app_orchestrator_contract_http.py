@@ -194,6 +194,18 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["stagedUploads"] is False
     assert body["features"]["rumTelemetry"] is False
     assert body["features"]["fastVlmCaptioning"] is False
+    assert body["features"]["photographicRecordedPresentation"] is False
+
+
+@pytest.mark.parametrize("value,enabled", [("0", False), ("1", True), ("invalid", False)])
+def test_portal_bootstrap_recorded_presentation_rollout_is_independent_and_disabled_by_default(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, value: str, enabled: bool
+) -> None:
+    monkeypatch.setenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", value)
+    response = client.get("/portal/bootstrap")
+    assert response.status_code == 200
+    assert response.json()["features"]["photographicRecordedPresentation"] is enabled
+    assert response.json()["features"]["reviewSurfaceDeferred"] is False
 
 
 def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(

@@ -85,10 +85,13 @@ export function photographicRetryAfterMs(value, now = Date.now()) {
 }
 
 export function photographicPreviewMatches(receipt, variant, recipe, referenceSha = null) {
-  return Boolean(receipt && receipt.schema === "tp.photo.revision.v1" && variant
+  return Boolean(receipt && ["tp.photo.revision.v1", "tp.photo.revision.v2"].includes(receipt.schema) && variant
     && receipt.source_master_sha256 === variant.sha256
     && (!variant.source_identity_sha256 || (receipt.source_identity_sha256 || receipt.source_master_sha256) === variant.source_identity_sha256) && receipt.width === variant.width && receipt.height === variant.height
     && receipt.output_bit_depth === 32 && receipt.review_status === "unreviewed" && receipt.approval_transferred === false
+    && (receipt.schema !== "tp.photo.revision.v2" || ((receipt.input_presentation_policy_sha256 || null) === (variant.presentation_policy_sha256 || null)
+      && receipt.output_presentation?.schema === "tp.photo.revision_presentation.v1"
+      && ["working_linear", "display_referred"].includes(receipt.output_presentation.stage)))
     && (receipt.reference_sha256 || null) === (referenceSha || null)
     && Object.entries(recipe).every(([key, value]) => JSON.stringify(receipt.recipe?.[key]) === JSON.stringify(value)));
 }
@@ -118,6 +121,7 @@ export function createPhotographicReview(host) {
   let comparePath = "";
   let mode = "side_by_side";
   let inspection = "fit";
+  let presentationView = "recorded";
   let center = { x: 0.5, y: 0.5 };
   let cropSize = 512;
   let requests = new Set();
@@ -135,6 +139,7 @@ export function createPhotographicReview(host) {
   let downloadObjectUrl = "";
   let downloadRevoke = null;
   let activeImageKey = "";
+  let displayedInspectionKey = "";
   let imageTimer = null;
   let finishImageDelay = null;
   let retryAt = 0;
@@ -194,6 +199,7 @@ export function createPhotographicReview(host) {
     if (nodes.blink) { nodes.blink.textContent = "Start blink"; nodes.blink.setAttribute("aria-pressed", "false"); }
   }
   function releaseImages() {
+    displayedInspectionKey = "";
     clearDownload();
     thumbnailObserver?.disconnect();
     thumbnailImages.forEach((image) => { if (image.src?.startsWith("blob:")) URL.revokeObjectURL(image.src); });
@@ -211,8 +217,15 @@ export function createPhotographicReview(host) {
     checkBackoff();
   }
   function identity(variant) { return variant?.source_identity_sha256 || variant?.sha256 || ""; }
+  function recordedPresentationEnabled() { return state.auth?.features?.photographicRecordedPresentation === true; }
+  function presentationAware(variant) { return Array.isArray(variant?.presentation?.available_views) && variant.presentation.available_views.includes("clip_srgb"); }
+  function viewFor(variant) {
+    return recordedPresentationEnabled() && presentationView === "recorded" && variant?.presentation?.available_views?.includes("recorded")
+      && SHA256.test(variant.presentation_policy_sha256 || "") ? "recorded" : "clip_srgb";
+  }
   function imageKey(variant, native, edge = 1600) {
     return JSON.stringify([jobId, actorScope, variant.artifact_path, variant.sha256, identity(variant),
+      viewFor(variant), variant.presentation_policy_sha256 || null,
       native ? nativeCropGeometry(variant, center, cropSize) : { max_edge: edge }]);
   }
   function currentScene() { return data?.scenes.find((scene) => scene.scene_id === sceneId) || null; }
@@ -280,9 +293,12 @@ export function createPhotographicReview(host) {
     nodes.compare = select("photographic-comparison", [], () => { comparePath = nodes.compare.value; render(); });
     nodes.mode = select("photographic-comparison-mode", [["side_by_side", "Side by side"], ["wipe", "Wipe"], ["blink", "Blink"]], () => { mode = nodes.mode.value; stopBlink(); renderStage(); });
     nodes.inspection = select("photographic-inspection", [["fit", "Fit preview"], ["native", "Native 1:1 crop"]], () => { inspection = nodes.inspection.value; stopBlink(); void renderImages(); });
+    nodes.presentation = select("photographic-presentation", [["recorded", "Recorded presentation when verified"], ["clip_srgb", "Legacy clipping comparison"]], () => {
+      presentationView = nodes.presentation.value; stopBlink(); renderContactSheet(); void renderImages();
+    });
     const controls = el("div", "", "photo-review-controls");
     controls.append(field("Photograph", nodes.scene), field("Selected version", nodes.primary), field("Compare with", nodes.compare),
-      field("Comparison", nodes.mode), field("Inspection", nodes.inspection), refresh);
+      field("Comparison", nodes.mode), field("Inspection", nodes.inspection), field("Presentation", nodes.presentation), refresh);
     nodes.nativeControls = el("div", "", "photo-review-controls hidden", "photographic-native-controls");
     nodes.cropSize = select("photographic-crop-size", [["256", "256 px crop"], ["512", "512 px crop"], ["1024", "1024 px crop"], ["2048", "2048 px crop"]], () => { cropSize = Number(nodes.cropSize.value); void renderImages(); });
     nodes.cropSize.value = String(cropSize);
@@ -537,7 +553,8 @@ export function createPhotographicReview(host) {
       const control = button("", "photographic-contact-item", () => { sceneId = scene.scene_id; chooseVariants(); render(); });
       control.className = "photo-review-contact-select";
       control.setAttribute("aria-pressed", String(scene.scene_id === sceneId));
-      const query = new URLSearchParams({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), max_edge: "256" });
+      const query = new URLSearchParams({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), max_edge: "256",
+        ...(presentationAware(variant) ? { view: viewFor(variant) } : {}) });
       const url = photographicAssetUrl(`${photographicJobUrl(jobId, "/render")}?${query}`, jobId);
       if (url) {
         const key = imageKey(variant, false, 256);
@@ -658,6 +675,9 @@ export function createPhotographicReview(host) {
     for (const option of nodes.mode.options) option.disabled = option.value !== "side_by_side" && !aligned;
     nodes.stage.dataset.mode = mode;
     nodes.stage.dataset.inspection = inspection;
+    nodes.presentation.value = recordedPresentationEnabled() ? presentationView : "clip_srgb";
+    nodes.presentation.disabled = !recordedPresentationEnabled();
+    nodes.stage.dataset.presentation = viewFor(primary);
     nodes.figures[1].figure.classList.toggle("hidden", !comparison);
     nodes.figures[1].caption.classList.toggle("hidden", !comparison);
     nodes.wipeField.classList.toggle("hidden", mode !== "wipe");
@@ -668,7 +688,13 @@ export function createPhotographicReview(host) {
     nodes.nativeNotice.textContent = inspection === "native"
       ? "Native crops: 1 source pixel per CSS pixel after the server size and source-hash checks pass. Both views share the same normalized center; scroll and arrow controls pan together."
       : "Fit previews are reduced for the browser. Enlarging one does not show native detail; choose Native 1:1 crop to inspect source pixels.";
-    nodes.nativeNotice.textContent += " Display pixels are an 8-bit encoded sRGB derivative with the explicit linear-to-sRGB clipping view. Native 1:1 describes geometry; master precision and highlights remain authoritative in the original file.";
+    nodes.nativeNotice.textContent += " Display pixels are an 8-bit encoded sRGB derivative. Native 1:1 describes geometry; master precision and highlights remain authoritative in the original file.";
+    for (const [label, variant] of [["Selected", primary], ["Comparison", comparison]]) {
+      if (!variant) continue;
+      nodes.nativeNotice.textContent += viewFor(variant) === "recorded"
+        ? ` ${label}: authoritative recorded presentation (${variant.presentation?.policy?.stage || "recorded"}); rendered deliveries receive no second tone transform.`
+        : ` ${label}: explicit linear-to-sRGB clipping view${!recordedPresentationEnabled() ? "; recorded-presentation rollout is disabled" : presentationView === "recorded" ? "; recorded authority is unavailable, so this is a labelled clipping fallback" : ""}.`;
+    }
     if (comparison && !aligned) nodes.nativeNotice.textContent += " Image dimensions differ; wipe and blink are unavailable because pixel alignment is unproven.";
     if (!currentScene()?.variants.some((variant) => variant.role === "original")) {
       nodes.nativeNotice.textContent += ` Original unavailable: ${currentScene()?.original_unavailable_reason || currentScene()?.unavailable_reason || "a verified retained input has not been bound to this run"}.`;
@@ -687,6 +713,7 @@ export function createPhotographicReview(host) {
     if (!thumbnail && imageInFlight.has(key) && !imageControllers.get(key)?.signal.aborted) return imageInFlight.get(key);
     checkBackoff();
     const params = new URLSearchParams({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant),
+      ...(presentationAware(variant) ? { view: viewFor(variant) } : {}),
       ...(geometry ? Object.fromEntries(Object.entries(geometry).map(([name, value]) => [name, String(value)])) : { max_edge: String(edge) }) });
     const controller = new AbortController();
     const requestJob = jobId;
@@ -704,6 +731,8 @@ export function createPhotographicReview(host) {
         if (!/^image\/png(?:;|$)/i.test(response.headers.get("Content-Type") || "")
           || response.headers.get("X-TP-Source-SHA256") !== variant.sha256
           || (variant.source_identity_sha256 && response.headers.get("X-TP-Source-Identity-SHA256") !== variant.source_identity_sha256)
+          || (presentationAware(variant) && (response.headers.get("X-TP-Presentation-View") !== viewFor(variant)
+          || response.headers.get("X-TP-Presentation-Policy-SHA256") !== (variant.presentation_policy_sha256 || "none")))
           || (native && (Number(response.headers.get("X-TP-Native-Width")) !== geometry.width
           || Number(response.headers.get("X-TP-Native-Height")) !== geometry.height))) throw new Error("Image source identity or native dimensions could not be verified.");
         const blob = await response.blob();
@@ -746,6 +775,7 @@ export function createPhotographicReview(host) {
       return;
     }
     activeImageKey = nextKey;
+    displayedInspectionKey = "";
     stopBlink();
     const sequence = ++imageRequest;
     imageControllers.forEach((controller, key) => { if (!keys.includes(key)) controller.abort(); });
@@ -777,6 +807,7 @@ export function createPhotographicReview(host) {
             return;
           }
           figure.image.classList.remove("hidden");
+          if (index === 0) displayedInspectionKey = imageKey(variant, inspection === "native");
           if (source.geometry) { figure.cropCaption = ` · Crop x=${source.geometry.x}, y=${source.geometry.y}, ${source.geometry.width} × ${source.geometry.height}, native 1:1 verified`; figure.caption.textContent = imageMetadata(variant) + figure.cropCaption; }
         };
         figure.image.onerror = () => { if (sequence === imageRequest) status("Image display failed. Retained metadata and downloads remain available.", true); };
@@ -844,7 +875,9 @@ export function createPhotographicReview(host) {
   async function saveDecision(statusValue) {
     const variant = currentVariant();
     if (!variant || variant.role === "original") return;
-    const result = await mutate("/decisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), status: statusValue, note: nodes.note.value }, "Decision saved for this exact artifact hash.");
+    const inspected = presentationAware(variant) && displayedInspectionKey === imageKey(variant, inspection === "native");
+    const result = await mutate("/decisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), status: statusValue, note: nodes.note.value,
+      ...(inspected ? { inspection_presentation: { view: viewFor(variant), policy_sha256: variant.presentation_policy_sha256 || null } } : {}) }, "Decision saved for this exact artifact hash; presentation evidence does not change its approval scope.");
     if (result && statusValue === "approved") { deliverySelections.set(sceneId, variant.artifact_path); renderContactSheet(); updateDeliveryButton(); }
   }
   async function saveLightingGroup() {
@@ -863,7 +896,7 @@ export function createPhotographicReview(host) {
     if (!variant) return;
     let recipe;
     try { recipe = photographicRecipe({ ...revisionDraft, materials: materialDrafts }); } catch (error) { status(error.message, true); return; }
-    const key = JSON.stringify([variant.artifact_path, variant.sha256, identity(variant), recipe, nodes.reference.value]);
+    const key = JSON.stringify([variant.artifact_path, variant.sha256, identity(variant), variant.presentation_policy_sha256 || null, recipe, nodes.reference.value]);
     const expectedJob = jobId;
     if (!previewOnly && variantPreview?.key !== key) { status("Render and inspect the current adjustments before creating a revision.", true); return; }
     if (previewOnly) {
@@ -871,8 +904,9 @@ export function createPhotographicReview(host) {
       setPending(true);
       try {
         const result = await request("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
+          ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
           reference_sha256: nodes.reference.value || null, expected_version: data.state_version, preview_only: true }, 90000);
-        if (currentVariant()?.artifact_path !== variant.artifact_path || key !== JSON.stringify([variant.artifact_path, currentVariant().sha256, identity(currentVariant()), photographicRecipe({ ...revisionDraft, materials: materialDrafts }), nodes.reference.value])) return;
+        if (currentVariant()?.artifact_path !== variant.artifact_path || key !== JSON.stringify([variant.artifact_path, currentVariant().sha256, identity(currentVariant()), currentVariant().presentation_policy_sha256 || null, photographicRecipe({ ...revisionDraft, materials: materialDrafts }), nodes.reference.value])) return;
         if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result.preview_data_url || "")
           || !photographicPreviewMatches(result.receipt, variant, recipe, nodes.reference.value || null)) throw new Error("Rendered variant preview identity or recipe could not be verified.");
         variantPreview = { key, result };
@@ -884,6 +918,7 @@ export function createPhotographicReview(host) {
       finally { if (jobId === expectedJob) { setPending(false); nodes.commitRevision.disabled = !variantPreview; updateDeliveryButton(); } }
     } else {
       const result = await mutate("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
+        ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
         reference_sha256: nodes.reference.value || null, preview_only: false }, "Revision created separately and remains unapproved.", 180000);
       if (result) { chooseVariants(); render(); resetPreview(); }
     }

@@ -135,7 +135,8 @@ export async function GET(request) {
           reviewSurfaceDeferred: resolveReviewSurfaceDeferred(session),
           stagedUploads: resolveStagedUploads(session),
           rumTelemetry: resolveRumTelemetry(session),
-          fastVlmCaptioning: resolveFastVlmCaptioning(session)
+          fastVlmCaptioning: resolveFastVlmCaptioning(session),
+          photographicRecordedPresentation: String(process.env.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED || "").trim() === "1"
         }
       },
       {

@@ -8,11 +8,13 @@ from .cohesion import RevisionRecipe, cohesion_diagnostics, create_revision
 from .exports import export_delivery, package_delivery
 from .models import DeliveryImage, ExportPreset, destination_presets, inspect_image
 from .native import NativeWorkingMaster
+from .presentation import PresentationPolicy
 
 __all__ = [
     "DeliveryImage",
     "ExportPreset",
     "NativeWorkingMaster",
+    "PresentationPolicy",
     "RevisionRecipe",
     "cohesion_diagnostics",
     "create_revision",

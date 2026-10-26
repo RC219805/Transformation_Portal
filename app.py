@@ -9480,6 +9480,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "stagedUploads": _portal_staged_uploads_enabled(None),
                 "rumTelemetry": _portal_rum_enabled(None),
                 "fastVlmCaptioning": _portal_fastvlm_captioning_enabled(actor),
+                "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
             },
         },
         headers={"Cache-Control": "no-store"},

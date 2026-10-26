@@ -40,7 +40,7 @@ from transformation_portal.orchestrator.photographic_review_access import Review
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict, get_review_store
 
 if TYPE_CHECKING:
-    from transformation_portal.photographic_delivery import DeliveryImage, ExportPreset
+    from transformation_portal.photographic_delivery import DeliveryImage, ExportPreset, PresentationPolicy
 
 JsonObject = dict[str, Any]
 ReviewChange = Callable[[JsonObject], JsonObject]
@@ -127,7 +127,47 @@ def base_url(context: ReviewContext) -> str:
 
 
 def revision_refs(state: JsonObject) -> list[JsonObject]:
-    return [entry["variant"] for entry in state["revisions"]]
+    from transformation_portal.photographic_delivery.presentation import revision_policy
+
+    result = []
+    for entry in state["revisions"]:
+        ref = deepcopy(entry["variant"])
+        ref.pop("presentation_policy", None)
+        ref.pop("presentation_policy_sha256", None)
+        policy = revision_policy(entry.get("receipt"), ref["sha256"])
+        if policy is not None:
+            ref.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+        result.append(ref)
+    return result
+
+
+def presentation_policy(ref: JsonObject) -> PresentationPolicy | None:
+    """Read only adapter/committed-receipt policy, independently of source approval."""
+    from transformation_portal.photographic_delivery import PresentationPolicy
+
+    payload = ref.get("presentation_policy")
+    if payload is None:
+        if ref.get("presentation_policy_sha256") is not None:
+            raise ReviewAccessError("Recorded presentation authority is incomplete")
+        return None
+    policy = PresentationPolicy.from_payload(payload)
+    identity = source_identity(ref)
+    if identity is None:
+        raise ReviewAccessError("Recorded presentation requires its source identity")
+    policy.validate_binding(ref["sha256"], identity)
+    if policy.sha256 != ref.get("presentation_policy_sha256"):
+        raise ReviewAccessError("Recorded presentation policy changed; reload before inspection")
+    return policy
+
+
+def presentation_metadata(ref: JsonObject) -> JsonObject:
+    policy = presentation_policy(ref)
+    return {
+        "available_views": ["recorded", "clip_srgb"] if policy is not None else ["clip_srgb"],
+        "policy_sha256": policy.sha256 if policy is not None else None,
+        "policy": policy.to_payload() if policy is not None else None,
+        "unavailable_reason": None if policy is not None else "recorded_presentation_authority_not_retained",
+    }
 
 
 def public_state(state: JsonObject, context: ReviewContext | None = None) -> JsonObject:
@@ -302,6 +342,7 @@ async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) 
         version=ref.get("version", "v1"),
         input_color=ref.get("input_color", "auto"),
         native=native,
+        presentation=presentation_policy(ref),
     )
     if getattr(image, "source_identity_sha256", image.source_sha256) != source_identity(ref):
         raise ReviewAccessError("Working master identity changed; reload before review")
@@ -324,12 +365,24 @@ async def load_image(context: ReviewContext, ref: JsonObject) -> DeliveryImage:
         return replace(image, source_path=None, source_bytes=data, native=native)
 
 
-def _display(image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int = 1600) -> tuple[bytes, int, int]:
+def _display(
+    image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int = 1600, view: str = "clip_srgb"
+) -> tuple[bytes, int, int]:
     import numpy as np
     from PIL import Image
 
+    from transformation_portal.core.image_artifact import ImageMaster
     from transformation_portal.lux_depth_v4.photography import linear_to_srgb, output_srgb_icc
     from transformation_portal.lux_depth_v5.preview import preview_samples
+    from transformation_portal.photographic_delivery.presentation import render_presentation
+
+    if view not in {"recorded", "clip_srgb"}:
+        raise ReviewInputError("Unsupported photographic presentation view")
+    if view == "recorded" and image.presentation is None:
+        raise ReviewAccessError(
+            "Recorded presentation is unavailable; choose the explicitly labelled clipping view",
+            code="PRESENTATION_UNAVAILABLE",
+        )
 
     master = image.decode()
     height, width = master.shape
@@ -340,6 +393,17 @@ def _display(image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int
         if x + w > width or y + h > height:
             raise ReviewInputError("Native crop must remain inside the source geometry")
         values = master.pixels[y : y + h, x : x + w]
+        if view == "recorded":
+            assert image.presentation is not None  # Checked before decoding; keep crop rendering policy explicit.
+            selected = ImageMaster(
+                values,
+                master.source_sha256,
+                master.source_bit_depth,
+                None if master.alpha is None else master.alpha[y : y + h, x : x + w],
+                master.metadata,
+            )
+            selected, _ = render_presentation(selected, image.presentation, image.presentation.recipe)
+            values = selected.pixels
         samples = np.rint(np.clip(linear_to_srgb(values), 0, 1) * 255).astype(np.uint8)
         if master.alpha is not None:
             alpha = np.rint(master.alpha[y : y + h, x : x + w] * 255).astype(np.uint8)
@@ -347,7 +411,12 @@ def _display(image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int
     else:
         if not 1 <= max_edge <= 1600:
             raise ReviewInputError("Fit previews require max_edge in [1,1600]")
-        samples = preview_samples(master)
+        if view == "recorded":
+            assert image.presentation is not None
+            master, _ = render_presentation(master, image.presentation, image.presentation.recipe)
+            samples = preview_samples(master, max_edge=max_edge)
+        else:
+            samples = preview_samples(master)
         if max(samples.shape[:2]) > max_edge:
             scale = max_edge / max(samples.shape[:2])
             with Image.fromarray(samples) as source:
@@ -432,6 +501,8 @@ class PhotographicReviewService:
                         "identity_status": ref.get("identity_status", "verified_indexed_bytes"),
                         "preview_url": base_url(context) + "/render",
                         "native_crop_url": base_url(context) + "/native-crop",
+                        "presentation": presentation_metadata(ref),
+                        "presentation_policy_sha256": ref.get("presentation_policy_sha256"),
                     }
                 )
         await self.revalidate(context)
@@ -474,12 +545,13 @@ class PhotographicReviewService:
         crop: NativeCrop | None = None,
         max_edge: int = 1600,
         source_identity_sha256: str | None = None,
+        view: str = "clip_srgb",
     ) -> Response:
         state = await self.state(context)
         ref = resolve(context, state, artifact_path, sha256, source_identity_sha256, require_identity=True)
         async with self.expensive:
             image = await load_image(context, ref)
-            raw, width, height = await _owned_thread(_display, image, crop, max_edge)
+            raw, width, height = await _owned_thread(_display, image, crop, max_edge, view)
         await self.revalidate(context)
         return Response(
             raw,
@@ -490,7 +562,11 @@ class PhotographicReviewService:
                 "X-TP-Source-Identity-SHA256": image.source_identity_sha256,
                 "X-TP-Native-Width": str(width),
                 "X-TP-Native-Height": str(height),
-                "X-TP-Display-Transform": "linear_srgb_to_8bit_srgb_clip_v1",
+                "X-TP-Display-Transform": (
+                    "linear_srgb_to_8bit_srgb_clip_v1" if view == "clip_srgb" else "recorded_presentation_to_8bit_srgb_v1"
+                ),
+                "X-TP-Presentation-View": view,
+                "X-TP-Presentation-Policy-SHA256": image.presentation.sha256 if image.presentation is not None else "none",
             },
         )
 
@@ -515,6 +591,13 @@ class PhotographicReviewService:
             "created_at": time.time(),
             "inspection": inspection,
         }
+        if payload.inspection_presentation is not None:
+            audit = payload.inspection_presentation.model_dump()
+            policy = presentation_policy(ref)
+            expected = policy.sha256 if policy is not None else None
+            if audit["policy_sha256"] != expected or (audit["view"] == "recorded" and policy is None):
+                raise ReviewAccessError("Inspected presentation changed; reload before recording the decision")
+            decision["inspection_presentation"] = audit
 
         def change(current: JsonObject) -> JsonObject:
             current["decisions"] = [row for row in current["decisions"] if row["artifact_path"] != payload.artifact_path] + [
@@ -618,6 +701,11 @@ class PhotographicReviewService:
         if payload.scene_id != ref["scene_id"]:
             raise ReviewInputError("Revision scene must match its exact source artifact")
         recipe = RevisionRecipe.from_payload(payload.recipe)
+        policy = presentation_policy(ref)
+        if "presentation_policy_sha256" in payload.model_fields_set and payload.presentation_policy_sha256 != (
+            policy.sha256 if policy is not None else None
+        ):
+            raise ReviewAccessError("Revision presentation changed; reload before creating a revision")
         if payload.reference_sha256 is not None and not any(
             payload.reference_sha256 in group["members"] and group["reference_sha256"] == payload.reference_sha256
             for group in state["groups"]

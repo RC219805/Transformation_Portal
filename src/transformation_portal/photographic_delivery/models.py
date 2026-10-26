@@ -16,6 +16,7 @@ from transformation_portal.core.photographic_export import export_metadata
 from transformation_portal.lux_depth_v4.photography import decode_master
 
 from .native import NativeWorkingMaster, read_snapshot
+from .presentation import PresentationPolicy
 
 MAX_SOURCE_BYTES = 2 * 1024**3
 MAX_IMAGE_PIXELS = 100_000_000
@@ -77,6 +78,7 @@ class DeliveryImage:
     input_color: str = "auto"
     metadata: Mapping[str, str] = field(default_factory=dict)
     native: NativeWorkingMaster | None = None
+    presentation: PresentationPolicy | None = None
 
     def __post_init__(self) -> None:
         validate_source_sha256(self.source_sha256)
@@ -103,6 +105,10 @@ class DeliveryImage:
         }:
             raise ValueError("Unsupported explicit input color policy")
         object.__setattr__(self, "metadata", export_metadata(self.metadata))
+        if self.presentation is not None:
+            if not isinstance(self.presentation, PresentationPolicy):
+                raise ValueError("Photographic presentation requires an explicit validated policy")
+            self.presentation.validate_binding(self.source_sha256, self.source_identity_sha256)
 
     @property
     def source_identity_sha256(self) -> str:
@@ -132,8 +138,14 @@ class DeliveryImage:
         if self.native is not None:
             if self.input_color not in {"auto", "linear_srgb"}:
                 raise ValueError("Native working masters explicitly use extended linear sRGB")
-            return self.native.decode(snapshot, self.source_sha256)[0]
-        return decode_master(snapshot, source_name=self.source_name, input_color=self.input_color, max_pixels=MAX_IMAGE_PIXELS)
+            master = self.native.decode(snapshot, self.source_sha256)[0]
+        else:
+            master = decode_master(
+                snapshot, source_name=self.source_name, input_color=self.input_color, max_pixels=MAX_IMAGE_PIXELS
+            )
+        if self.presentation is not None:
+            self.presentation.validate_master(master)
+        return master
 
 
 @dataclass(frozen=True)

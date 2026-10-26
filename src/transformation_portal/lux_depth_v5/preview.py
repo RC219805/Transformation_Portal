@@ -17,22 +17,24 @@ MAX_PREVIEW_EDGE = 1600
 MAX_PREVIEW_BYTES = MAX_PREVIEW_EDGE**2 * 4 + 1024 * 1024
 
 
-def preview_shape(shape: tuple[int, int]) -> tuple[int, int]:
+def preview_shape(shape: tuple[int, int], *, max_edge: int = MAX_PREVIEW_EDGE) -> tuple[int, int]:
     """Retain aspect ratio without upscaling, with deterministic integer rounding."""
+    if type(max_edge) is not int or not 1 <= max_edge <= MAX_PREVIEW_EDGE:
+        raise ValueError("Preview max_edge must be an integer in [1,1600]")
     height, width = shape
     edge = max(height, width)
-    if edge <= MAX_PREVIEW_EDGE:
+    if edge <= max_edge:
         return height, width
-    return max(1, height * MAX_PREVIEW_EDGE // edge), max(1, width * MAX_PREVIEW_EDGE // edge)
+    return max(1, height * max_edge // edge), max(1, width * max_edge // edge)
 
 
-def preview_samples(master: ImageMaster) -> np.ndarray:
+def preview_samples(master: ImageMaster, *, max_edge: int = MAX_PREVIEW_EDGE) -> np.ndarray:
     """Area-average linear light, premultiplying alpha to prevent transparent halos.
 
     Process one float32 source plane at a time. All RGB encoding and interleaved
     preview allocations are bounded by the 1600-pixel derivative, not the source.
     """
-    height, width = preview_shape(master.shape)
+    height, width = preview_shape(master.shape, max_edge=max_edge)
 
     def resize(values: np.ndarray) -> np.ndarray:
         if values.shape == (height, width):

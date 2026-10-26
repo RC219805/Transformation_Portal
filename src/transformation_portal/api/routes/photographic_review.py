@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Awaitable, Callable
+from typing import Annotated, Any, Awaitable, Callable, Literal
 
 from fastapi import APIRouter, Query, Request
 from starlette.responses import Response
@@ -79,6 +79,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         sha256: HashQuery,
         max_edge: int = Query(default=1600, ge=1, le=1600),
         source_identity_sha256: OptionalHashQuery = None,
+        view: Literal["recorded", "clip_srgb"] = "clip_srgb",
     ) -> Response:
         return await invoke(
             request,
@@ -88,6 +89,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             sha256,
             max_edge=max_edge,
             source_identity_sha256=source_identity_sha256,
+            view=view,
         )
 
     @versioned.get("/native-crop")
@@ -101,6 +103,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         width: int = Query(ge=1, le=2048),
         height: int = Query(ge=1, le=2048),
         source_identity_sha256: OptionalHashQuery = None,
+        view: Literal["recorded", "clip_srgb"] = "clip_srgb",
     ) -> Response:
         return await invoke(
             request,
@@ -110,6 +113,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             sha256,
             crop=(x, y, width, height),
             source_identity_sha256=source_identity_sha256,
+            view=view,
         )
 
     @versioned.get("/quality", response_model=ApiEnvelope[dict])
