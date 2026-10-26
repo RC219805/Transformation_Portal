@@ -264,7 +264,13 @@ class ReviewLease:
                 if info.st_dev != device or stat.S_ISLNK(info.st_mode):
                     continue
                 if stat.S_ISDIR(info.st_mode):
-                    paths.extend(path.iterdir())
+                    try:
+                        paths.extend(path.iterdir())
+                    except FileNotFoundError:
+                        # A response cleanup worker can remove its private
+                        # directory after lstat while its lease is still owned.
+                        # An incomplete footprint grants no allocation credit.
+                        return claimed
                 elif stat.S_ISREG(info.st_mode) and (device, info.st_ino) not in seen:
                     seen.add((device, info.st_ino))
                     observed += info.st_blocks * 512

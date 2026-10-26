@@ -369,6 +369,71 @@ async def test_download_response_owns_io_and_scratch_until_failed_send_cleanup(m
     assert service.admission.snapshot()["outstanding"] == 0
 
 
+async def test_scratch_sampling_survives_owned_download_directory_cleanup(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from transformation_portal.orchestrator import photographic_admission as admission
+    from transformation_portal.orchestrator import photographic_review_service as service_module
+
+    controller = PhotographicAdmissionController(configuration())
+    lease = await controller.acquire(
+        "a", ReviewCost(1, GIB, decode_slots=0, interactive=False, filesystems=((tmp_path, GIB),))
+    )
+    inspection = await controller.acquire("b", ReviewCost(1, GIB, filesystems=((tmp_path, GIB),)))
+    directory = tmp_path / "download"
+    directory.mkdir()
+    source = directory / "artifact"
+    source.write_bytes(b"verified")
+    lease.track_path(directory)
+    response = _OwnedDownloadResponse(
+        source, directory=directory, media_type="application/zip", filename="test.zip", headers={}
+    )
+    response.admission_lease = lease
+    cleanup_started, enumeration_started, removed = threading.Event(), threading.Event(), threading.Event()
+    original_rmtree, original_iterdir = service_module.shutil.rmtree, Path.iterdir
+
+    def cleanup(path, *args, **kwargs):
+        if Path(path) == directory:
+            cleanup_started.set()
+            assert enumeration_started.wait(5)
+            try:
+                return original_rmtree(path, *args, **kwargs)
+            finally:
+                removed.set()
+        return original_rmtree(path, *args, **kwargs)
+
+    def enumerate_directory(path):
+        if path == directory:
+            # remaining() has already observed this directory via lstat.
+            # Its response worker removes it before enumeration can begin.
+            enumeration_started.set()
+            assert removed.wait(5)
+        return original_iterdir(path)
+
+    monkeypatch.setattr(service_module.shutil, "rmtree", cleanup)
+    monkeypatch.setattr(Path, "iterdir", enumerate_directory)
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * GIB))
+
+    async def failed_send(_message):
+        raise OSError("controlled transport failure")
+
+    task = asyncio.create_task(
+        response({"type": "http", "method": "GET", "headers": [], "extensions": {}}, AsyncMock(), failed_send)
+    )
+    try:
+        assert await asyncio.to_thread(cleanup_started.wait, 2)
+        inspection.check_scratch(0)
+        assert lease.remaining(tmp_path.stat().st_dev) == GIB  # Vanished allocations grant no credit.
+        with pytest.raises(OSError, match="transport"):
+            await task
+        assert lease.released and not directory.exists()
+    finally:
+        enumeration_started.set()
+        await asyncio.gather(task, return_exceptions=True)
+        await lease.release()
+        await inspection.release()
+
+
 async def test_measured_inspection_headroom_takes_precedence_over_minimum():
     controller = PhotographicAdmissionController(configuration())
     assert controller.interactive_reserve == 6 * GIB
