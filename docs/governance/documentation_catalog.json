@@ -4286,7 +4286,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "846aba436f96c4c614aa25318314f652584575d4cb621ef02e01fbb2b9895703",
       "source_references": [
         "app.py",
@@ -4860,7 +4860,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "71fa63f4f654afa8aa2bd1e0ce856b2643dbdb98d83628a7cad84bf0117414e2",
       "source_references": [
         "app.py",
@@ -14677,7 +14677,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "1d95ebb6956320a4269698e851ebfb9c4c1927f5f62d619b9c819d45ce1fb328",
       "source_references": [
         "src/transformation_portal/core/execution_plan_v4.py",
@@ -14751,7 +14751,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "976e4bde0610d85d9464e7c99de232d8e8d17024a122c86e46f047623a433e6e",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
@@ -14844,7 +14844,7 @@
       ],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "bcf729e6295961b97ace5ae40962cbd5001e896ee4aac097bce7685fae5bbcf9",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
@@ -14886,7 +14886,7 @@
         "tests/orchestrator/test_managed_photography_publisher.py": "7b5e95b6e1e2635e3a547ec0bc3cd4c51aa10b4156041a268ff1d58bea40fd2b",
         "web/secure-landing/tests/photography.test.mjs": "28b0cc25064b23bf7e654e39698c4ce6347d0b81a302f2dc0915ef6cccb5eec8",
         "web/secure-landing/tests/preview-request-races.test.mjs": "0ae7c97351a0a49b2eecd39bfd0b2ef6b46ad07f59252910e5e555d777604dd3",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "66f9d004512c71819fb6998989a301bde2826298004f31905cd466c2cc005300"
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "b58c0cf716e2c015022154d358d6d8f49e5d220acce4ce7c2867c78e396a81fe"
       },
       "validation_commands": [
         "make check-documentation-catalog",
@@ -14908,7 +14908,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "d94d7bb7a80acf1a10138c8fd8af77bf0c8077e12ac7b716d31821f9bd59e91e",
       "source_references": [
         "Makefile",
@@ -15024,7 +15024,7 @@
         "tests/orchestrator/test_managed_v6_services.py": "46d8b0241a7d27f28647a4664106cb7d300098a2d908cc77801d2f93aa1692d6",
         "tests/orchestrator/test_photography_v6_adapter.py": "490132b81f91b3eee882e6b5ce8d1b3b64b6f6974035d9ee5aef0a2feb565d2e",
         "web/secure-landing/tests/photography-v6.test.mjs": "e907aac5af6f6eb5d883afceb3161e1c6b6993a737a960f1356b19dcfdf59c4a",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "66f9d004512c71819fb6998989a301bde2826298004f31905cd466c2cc005300",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "b58c0cf716e2c015022154d358d6d8f49e5d220acce4ce7c2867c78e396a81fe",
         "src/transformation_portal/core/execution_plan_v2.py": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
         "tests/lux_depth_v6/test_publication_integrity.py": "45328cb3aea5d986ace117c1d585816c6cb609818c16c4c684d21caaa06df0a7",
         "src/transformation_portal/core/depth_evidence.py": "0580fdfb65069c2112fcb8ad52666cedb2ba6a25f39ccdd3b11487d64e34fe9f",
@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9b49dd8af0a525b088ff26fb860635cc97e5973e",
+      "source_commit": "9d83cd94e7f8a0f236cf2bc6ce889ff490967af0",
       "content_sha256": "4b9cf11e43dda3b67831d2ff0a05ce667daccc84efbd739fad41cccd1713cff2",
       "source_references": [
         "app.py",
@@ -15199,7 +15199,7 @@
         "tests/evals/test_apex_metrics.py": "7e40038fad5b486d193299a5fc2c2163c2fedd512be7b9d4cffae1363f95f3af",
         "web/secure-landing/tests/photographic-review.test.mjs": "8cf43a4dcd36ef8f61e72e7bee8fbdc71c920b4a9ad42abd542b7d0108fd8eb5",
         "web/secure-landing/tests/portal-photographic-profiles.test.mjs": "1c4811f34fe7cbb83e316ec042ac7092753a1e4c8c4b93abe05d11fc8be224e3",
-        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "66f9d004512c71819fb6998989a301bde2826298004f31905cd466c2cc005300",
+        "web/secure-landing/tests/e2e/ux-runtime.portal.spec.mjs": "b58c0cf716e2c015022154d358d6d8f49e5d220acce4ce7c2867c78e396a81fe",
         "tools/ad_editorial_post_pipeline.py": "ea15d11bc549a896600bbc20e2de4aa2a684e265fa2bd096fca4d5157d666612",
         "tests/test_ad_editorial_post_pipeline_paths.py": "7eb292203176ab569471e1e7242622ca64c250ea9aab2d1c5eddd6cdef88da2d",
         "tests/orchestrator/test_photographic_review_thread_ownership.py": "51c7bd8d2076f82fd6536c1e637f053339ec462cc4f564d85551440fb5c3036c",
