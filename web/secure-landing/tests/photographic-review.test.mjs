@@ -4,12 +4,15 @@ import {
   createPhotographicReview, photographicVariantLabel, photographicProperties,
   photographicDecisionMatches, nativeCropGeometry, photographicAssetUrl, photographicRecipe, photographicPreviewMatches, photographicRetryAfterMs,
 } from "../portal-src/photographic-review.js";
+import { photographicDeliveryAttempt } from "../portal-src/photographic-delivery-history.js";
 
 const SHA = "a".repeat(64);
 const ORIGINAL_SHA = "b".repeat(64);
 const variant = { role: "final", artifact_path: "input-0000/delivery.tif", sha256: SHA,
   width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" };
 const original = { ...variant, role: "original", artifact_path: "original/input-0000/source.tif", sha256: ORIGINAL_SHA };
+const WEBSITE_PRESET = { schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg", intended_use: "Website encoded-sRGB delivery",
+  long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, render: "perceptual_srgb", shoulder: 0.8 };
 
 test("photographic properties identify the master independently from a reduced preview", () => {
   assert.equal(photographicVariantLabel(variant), "Final · input-0000/delivery.tif");
@@ -81,14 +84,16 @@ class Element {
   async trigger(event = "click") { this.listeners[event]?.({ preventDefault() {}, key: "" }); await settle(); }
 }
 async function settle() { for (let count = 0; count < 8; count += 1) await new Promise((resolve) => setImmediate(resolve)); }
-function fixture({ responseHash = null, mutationError = false, extraFetch = null, renderDebounceMs = 0, authMode = "managed" } = {}) {
+function fixture({ responseHash = null, mutationError = false, extraFetch = null, renderDebounceMs = 0, authMode = "managed", sessionStorage = undefined, historyEnabled = true } = {}) {
   const root = new Element("main");
   const body = new Element("body");
-  const state = { auth: { mode: authMode } };
+  const state = { auth: { mode: authMode, features: { photographicDeliveryHistory: historyEnabled } } };
   const requests = [];
+  const recoveryValues = new Map();
+  const recoveryStorage = sessionStorage === undefined ? { getItem: (key) => recoveryValues.get(key), setItem: (key, value) => recoveryValues.set(key, value) } : sessionStorage;
   let saved = [];
   const data = () => ({ state_version: saved.length, scenes: [{ scene_id: "input-0000", label: "Living room", variants: [variant, original] }],
-    decisions: saved, groups: [], presets: [{ name: "website", intended_use: "Website delivery" }] });
+    decisions: saved, groups: [], presets: [WEBSITE_PRESET] });
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
     const extra = extraFetch?.(url, options);
@@ -111,7 +116,7 @@ function fixture({ responseHash = null, mutationError = false, extraFetch = null
     }
     return new Response(JSON.stringify({ success: true, data: data() }));
   };
-  const api = createPhotographicReview({ state, els: { artifactShellContent: root }, document: { body, createElement: (tag) => new Element(tag) }, fetchImpl, renderDebounceMs,
+  const api = createPhotographicReview({ state, els: { artifactShellContent: root }, document: { body, createElement: (tag) => new Element(tag) }, fetchImpl, renderDebounceMs, sessionStorage: recoveryStorage,
     _buildAuthHeaders: (headers, method) => ({ ...headers, ...(method === "POST" ? { "X-CSRF-Token": "fixture-csrf" } : { "x-api-key": "fixture-key" }) }) });
   const job = { id: "job-one", pipeline: "lux-depth", artifacts: [{ ...variant, path: variant.artifact_path }] };
   return { root, body, state, requests, api, job };
@@ -697,4 +702,156 @@ test("direct-debug download refuses a mismatched artifact hash and a stream exce
     assert.equal(h.body.children.length, 0);
     assert.equal(h.requests.find((request) => request.url.includes("/files/")).options.signal.aborted, true);
   }
+});
+
+function recoveredDelivery(body) {
+  return { id: "committed", created_at: 1, approval_version: body.expected_version,
+    request_correlation_id: body.request_correlation_id, request_fingerprint_schema: "tp.photo.delivery_intent.v1",
+    request_fingerprint_sha256: SHA, intent: photographicDeliveryAttempt(body, [variant], [WEBSITE_PRESET]).intent,
+    approval_at_creation: "recorded", current_recorded_approval: "approved", source_validation: "not_checked", file_validation: "not_checked",
+    files: [{ filename: "recovered.zip", url: "/v1/jobs/job-one/photographic-review/files/committed/recovered.zip", sha256: SHA, size_bytes: 20, content_type: "application/zip" }] };
+}
+
+async function prepareExport(h) {
+  h.api.show(h.job, variant); await settle();
+  await h.root.find("photographic-decision-approved").trigger();
+  const checkbox = h.root.find("photographic-preset"); checkbox.checked = true; await checkbox.trigger("change");
+}
+
+test("a lost export response recovers the committed matching request through GET without another POST", async (t) => {
+  const previous = globalThis.location; globalThis.location = { origin: "http://localhost" };
+  t.after(() => { globalThis.location = previous; });
+  let committed = null;
+  const h = fixture({ extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") {
+      committed = recoveredDelivery(JSON.parse(options.body));
+      return Promise.reject(new TypeError("Response lost after commit"));
+    }
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: {
+      state_version: committed ? 2 : 0, snapshot_count: committed ? 1 : 0, items: committed ? [committed] : [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(h.requests.filter((request) => request.url.endsWith("/delivery")).length, 1);
+  assert.match(h.root.find("photographic-delivery-history-status").textContent, /Recovered.*original request.*No export was retried/);
+  assert.match(h.root.find("photographic-delivery-history-download").href, /committed\/recovered.zip/);
+  assert.equal(h.root.find("photographic-deliver-approved").disabled, false);
+});
+
+test("an unknown export preserves its original version and blocks another POST through refresh and reconciliation", async () => {
+  let sent = null;
+  const h = fixture({ extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") { sent = JSON.parse(options.body); return Promise.reject(new TypeError("network lost")); }
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: sent?.expected_version ?? 0, snapshot_count: 0, items: [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(sent.expected_version, 1);
+  assert.equal(h.root.find("photographic-deliver-approved").disabled, true);
+  assert.match(h.root.find("photographic-delivery-history-status").textContent, /still unknown.*no automatic export retry/);
+  await h.root.find("photographic-review-refresh").trigger();
+  await h.root.find("photographic-delivery-reconcile").trigger();
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(h.requests.filter((request) => request.url.endsWith("/delivery")).length, 1);
+  assert.equal(sent.expected_version, 1);
+});
+
+test("reloading restores a scoped unknown attempt and reconciles without issuing any POST", async () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  let sent = null;
+  const first = fixture({ sessionStorage: storage, extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") { sent = JSON.parse(options.body); return Promise.reject(new TypeError("lost")); }
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: sent?.expected_version ?? 0, snapshot_count: 0, items: [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(first); await first.root.find("photographic-deliver-approved").trigger();
+  const entry = recoveredDelivery(sent);
+  const second = fixture({ sessionStorage: storage, extraFetch: (url) => url.includes("/deliveries?")
+    ? new Response(JSON.stringify({ success: true, data: { state_version: 2, snapshot_count: 1, items: [entry], next_cursor: null } })) : null });
+  second.api.show(second.job, variant); await settle();
+  assert.equal(second.requests.filter((request) => request.options.method === "POST").length, 0);
+  assert.match(second.root.find("photographic-delivery-history-status").textContent, /Recovered/);
+  assert.deepEqual(JSON.parse(values.get("tp.photo.delivery_recovery.v1")), []);
+});
+
+test("history is visible independently of a pending catalogue and never renders withdrawn download links", async () => {
+  let finish;
+  const pendingCatalogue = new Promise((resolve) => { finish = resolve; });
+  const entry = { id: "old", approval_at_creation: "recorded", current_recorded_approval: "withdrawn", files: [
+    { filename: "old.zip", url: "/v1/jobs/job-one/photographic-review/files/old/old.zip", sha256: SHA } ] };
+  const h = fixture({ extraFetch: (url) => {
+    if (url.endsWith("/photographic-review")) return pendingCatalogue;
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: 2, snapshot_count: 1, items: [entry], next_cursor: null } }));
+    return null;
+  } });
+  h.api.show(h.job, variant); await settle();
+  assert.ok(h.root.find("photographic-delivery-history-entry"));
+  assert.equal(h.root.find("photographic-delivery-history-download"), undefined);
+  finish(new Response(JSON.stringify({ success: true, data: { state_version: 2, scenes: [], decisions: [], presets: [] } })));
+  await settle();
+});
+
+test("late export transport failure cannot regress a delivery already recovered while the response was pending", async () => {
+  let rejectResponse;
+  let committed = null;
+  const deferred = new Promise((_resolve, reject) => { rejectResponse = reject; });
+  const h = fixture({ extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") { committed = recoveredDelivery(JSON.parse(options.body)); return deferred; }
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: {
+      state_version: committed ? 2 : 0, snapshot_count: committed ? 1 : 0, items: committed ? [committed] : [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  await h.root.find("photographic-delivery-reconcile").trigger();
+  assert.match(h.root.find("photographic-delivery-history-status").textContent, /Recovered/);
+  rejectResponse(new TypeError("Late transport failure")); await settle();
+  assert.match(h.root.find("photographic-delivery-history-status").textContent, /Recovered/);
+  assert.equal(h.root.find("photographic-deliver-approved").disabled, false);
+  assert.equal(h.requests.filter((request) => request.url.endsWith("/delivery")).length, 1);
+});
+
+test("disabled history UI retains the legacy export payload and does not call the history API", async () => {
+  const h = fixture({ historyEnabled: false });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(h.requests.some((request) => request.url.includes("/deliveries?")), false);
+  const sent = JSON.parse(h.requests.find((request) => request.url.endsWith("/delivery")).options.body);
+  assert.equal(Object.hasOwn(sent, "request_correlation_id"), false);
+  assert.equal(h.root.find("photographic-delivery-history-controls").classList.contains("hidden"), true);
+});
+
+for (const [name, storage] of [
+  ["unavailable", null],
+  ["throwing read", { getItem() { throw new Error("Disabled"); }, setItem() {} }],
+  ["quota rejected", { getItem() { return null; }, setItem() { throw new Error("QuotaExceededError"); } }],
+  ["write not retained", { getItem() { return null; }, setItem() {} }],
+]) {
+  test(`history-enabled export refuses ${name} session recovery before any POST and remains safe after reload`, async () => {
+    const first = fixture({ sessionStorage: storage });
+    await prepareExport(first);
+    await first.root.find("photographic-deliver-approved").trigger();
+    assert.equal(first.requests.some((request) => request.url.endsWith("/delivery")), false);
+    assert.match(first.root.find("photographic-review-status").textContent, /Session recovery storage.*No export was submitted/);
+    const reloaded = fixture({ sessionStorage: storage });
+    await prepareExport(reloaded);
+    await reloaded.root.find("photographic-deliver-approved").trigger();
+    assert.equal(reloaded.requests.some((request) => request.url.endsWith("/delivery")), false);
+  });
+}
+
+test("a full bounded recovery catalogue blocks a new export before POST", async () => {
+  const entries = Array.from({ length: 16 }, (_, index) => ({ scope: `other-${index}`, attempt: {
+    body: { expected_version: 0, request_correlation_id: `prior-${index}` }, intent: {} } }));
+  const values = new Map([["tp.photo.delivery_recovery.v1", JSON.stringify(entries)]]);
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  const h = fixture({ sessionStorage: storage });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(h.requests.some((request) => request.url.endsWith("/delivery")), false);
+  assert.match(h.root.find("photographic-review-status").textContent, /storage is unavailable or full.*No export was submitted/);
+  assert.deepEqual(JSON.parse(values.get("tp.photo.delivery_recovery.v1")), entries);
 });

@@ -273,6 +273,74 @@ async def test_new_postgres_store_instance_observes_committed_review_and_audit(r
     assert len(await _events(restarted, job_id)) == 1
 
 
+async def test_delivery_recovery_metadata_and_unknown_fields_survive_legacy_style_mutation(review_store):
+    store, job_id = review_store
+    delivery = {
+        "id": "saved",
+        "request_correlation_id": "attempt",
+        "request_fingerprint_schema": "tp.photo.delivery_intent.v1",
+        "request_fingerprint_sha256": "a" * 64,
+        "approval_version": 0,
+        "future_optional_field": {"preserve": True},
+    }
+
+    def save(state):
+        state["deliveries"].append(delivery)
+        state["future_projection_field"] = {"preserve": True}
+        return state
+
+    first = await store.mutate(
+        job_id, "tenant-a", 0, save, {"kind": "delivery", "details": {"request_correlation_id": "attempt"}}
+    )
+    updated = await store.mutate(job_id, "tenant-a", 1, _approve, {"kind": "decision"})
+    assert updated["deliveries"] == first["deliveries"] == [delivery]
+    assert updated["future_projection_field"] == {"preserve": True}
+    assert json.loads((await _events(store, job_id))[0])["details"]["request_correlation_id"] == "attempt"
+
+
+async def test_postgres_delivery_recovery_metadata_survives_separate_process_restart(review_store):
+    store, job_id = review_store
+    if isinstance(store, MemoryReviewStore):
+        pytest.skip("durable delivery recovery requires the migrated Postgres lane")
+
+    def save(state):
+        state["deliveries"].append(
+            {
+                "id": "saved",
+                "approval_version": 0,
+                "request_correlation_id": "original-attempt",
+                "request_fingerprint_schema": "tp.photo.delivery_intent.v1",
+                "request_fingerprint_sha256": "a" * 64,
+                "future_field": {"preserved": True},
+            }
+        )
+        return state
+
+    expected = await store.mutate(job_id, "tenant-a", 0, save, {"kind": "delivery"})
+    code = """
+import asyncio, json, os
+from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+from transformation_portal.orchestrator.storage.postgres import _SharedEngine
+async def run():
+    url = os.environ['TP_TEST_POSTGRES_URL']
+    state = await PostgresReviewStore(url).get(os.environ['TP_REVIEW_TEST_JOB_ID'], 'tenant-a')
+    print(json.dumps(state, sort_keys=True))
+    await _SharedEngine.dispose(url)
+asyncio.run(run())
+"""
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        code,
+        env={**os.environ, "TP_REVIEW_TEST_JOB_ID": job_id},
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+    assert process.returncode == 0, "separate delivery-history process failed"
+    assert json.loads(stdout) == expected
+
+
 async def test_postgres_approval_survives_separate_python_process_restart(review_store):
     store, job_id = review_store
     if isinstance(store, MemoryReviewStore):

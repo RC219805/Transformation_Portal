@@ -173,7 +173,9 @@ class AppReviewAccess:
         self.app = app_module
 
     def runtime(self) -> ReviewRuntime:
-        return ReviewRuntime(authorize=self.authorize, error_response=self.app._error_response)
+        return ReviewRuntime(
+            authorize=self.authorize, error_response=self.app._error_response, authorize_history=self.authorize_history
+        )
 
     def _storage_job_id(self, job: Any) -> str:
         # Match the parent's ordinary retention/deletion namespace. Canonical
@@ -463,6 +465,13 @@ class AppReviewAccess:
         return reference
 
     async def authorize(self, request: Request, job_id: str) -> ReviewContext | Response:
+        return await self._authorize(request, job_id, include_references=True)
+
+    async def authorize_history(self, request: Request, job_id: str) -> ReviewContext | Response:
+        """Authenticate retained history without discovering or reading photographs."""
+        return await self._authorize(request, job_id, include_references=False)
+
+    async def _authorize(self, request: Request, job_id: str, *, include_references: bool) -> ReviewContext | Response:
         app = self.app
         try:
             await app._cleanup_expired_jobs(app._now(), force=False)
@@ -478,7 +487,7 @@ class AppReviewAccess:
                 # API middleware authenticates non-pilot callers. Unsigned actor
                 # headers cannot manufacture a human identity for approvals.
                 actor = {"username": "api_key_operator", "role": "operator", "assurance": "backend_api_key"}
-            references = await self._references(request, job, tenant)
+            references = await self._references(request, job, tenant) if include_references else []
             issued: set[str] = set()
 
             async def publish(storage: str, source: Path, mime: str) -> None:

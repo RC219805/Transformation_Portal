@@ -767,6 +767,12 @@ class PhotographicReviewService:
         }
 
     async def delivery(self, context: ReviewContext, payload: DeliveryRequest) -> JsonObject:
+        from transformation_portal.orchestrator.photographic_delivery_history import (
+            APPLIED_SCHEMA,
+            INTENT_SCHEMA,
+            applied_derivatives,
+            delivery_intent,
+        )
         from transformation_portal.photographic_delivery import ExportPreset, export_delivery, package_delivery
 
         state = await self.state(context)
@@ -819,6 +825,12 @@ class PhotographicReviewService:
         }
         if set(payload.scene_labels) - selected_scene_ids:
             raise ReviewInputError("Delivery labels must name selected approved scenes only")
+        intent, intent_sha256 = delivery_intent(
+            context,
+            payload,
+            [resolve(context, state, row["artifact_path"], row["sha256"]) for row in decisions],
+            presets,
+        )
         identity = uuid.uuid4().hex
         async with publication(context) as publication_paths:
             async with self.expensive:
@@ -843,6 +855,7 @@ class PhotographicReviewService:
                     inventory = await _owned_thread(
                         export_delivery, images, root / "products", property_name=payload.property_name, export_presets=presets
                     )
+                    effective_derivatives = applied_derivatives(inventory)
                     approval = canonicalize_json(
                         {
                             "schema": "tp.photo.approved_set.v1",
@@ -903,6 +916,13 @@ class PhotographicReviewService:
                 "inventory": inventory,
                 "actor": context.actor,
                 "created_at": time.time(),
+                "approval_version": payload.expected_version,
+                "request_correlation_id": payload.request_correlation_id,
+                "request_fingerprint_schema": INTENT_SCHEMA,
+                "request_fingerprint_sha256": intent_sha256,
+                "intent": intent,
+                "applied_derivatives_schema": APPLIED_SCHEMA,
+                "applied_derivatives": effective_derivatives,
             }
 
             def change(current: JsonObject) -> JsonObject:
@@ -919,11 +939,17 @@ class PhotographicReviewService:
                     "approved_sha256": hashes,
                     "archive_sha256": files[0]["sha256"],
                     "approval_version": payload.expected_version,
+                    "request_correlation_id": payload.request_correlation_id,
+                    "request_fingerprint_schema": INTENT_SCHEMA,
+                    "request_fingerprint_sha256": intent_sha256,
                 },
             )
         return {
             "state_version": updated["state_version"],
             "id": identity,
+            "request_correlation_id": payload.request_correlation_id,
+            "request_fingerprint_schema": INTENT_SCHEMA,
+            "request_fingerprint_sha256": intent_sha256,
             "filename": files[0]["filename"],
             "download_url": base_url(context) + f"/files/{identity}/{quote(files[0]['filename'])}",
             "sha256": files[0]["sha256"],
@@ -934,6 +960,22 @@ class PhotographicReviewService:
                 for f in files
             ],
         }
+
+    async def deliveries(
+        self,
+        context: ReviewContext,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+        request_correlation_id: str | None = None,
+    ) -> JsonObject:
+        from transformation_portal.orchestrator.photographic_delivery_history import history_page
+
+        result = history_page(
+            context, await self.state(context), limit=limit, cursor=cursor, request_correlation_id=request_correlation_id
+        )
+        await self.revalidate(context)
+        return result
 
     async def download(self, context: ReviewContext, identity: str, filename: str) -> FileResponse:
         state = await self.state(context)

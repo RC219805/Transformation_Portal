@@ -40,3 +40,4 @@ class ReviewContext:
 class ReviewRuntime:
     authorize: Callable[[Request, str], Awaitable[ReviewContext | Response]]
     error_response: Callable[..., Response]
+    authorize_history: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None
