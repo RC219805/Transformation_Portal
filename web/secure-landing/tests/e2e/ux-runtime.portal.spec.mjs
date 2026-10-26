@@ -3754,6 +3754,15 @@ test("@portal-browser photographic lost export response survives reload and reco
       return;
     }
     if (url.pathname.endsWith("/delivery") && request.method() === "POST") {
+      if (frozenBody) {
+        const nextBody = request.postDataJSON();
+        expect(nextBody.expected_version).toBe(2);
+        expect(nextBody.request_correlation_id).not.toBe(frozenBody.request_correlation_id);
+        version += 1;
+        await fulfillJson(route, { success: true, data: { state_version: version, filename: "next-explicit.zip",
+          download_url: `${base}/files/next/next-explicit.zip`, sha256: archiveSha, size_bytes: 4096 } });
+        return;
+      }
       expect(frozenBody).toBeNull();
       frozenBody = request.postDataJSON();
       expect(request.headers()["x-csrf-token"]).toBe("hydrated-ux-csrf");
@@ -3811,6 +3820,12 @@ test("@portal-browser photographic lost export response survives reload and reco
   expect(requests.filter((request) => request.method === "POST" && request.path.endsWith("/delivery"))).toHaveLength(1);
   expect(frozenBody.expected_version).toBe(1);
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("tp.photo.delivery_recovery.v1")))).toEqual([]);
+  await page.locator('[data-ui="photographic-preset"][value="website"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Next explicit export");
+  await page.locator('[data-ui="photographic-deliver-approved"]').click();
+  await expect(page.locator('[data-ui="photographic-delivery-download"]')).toHaveAttribute("href", `${base}/files/next/next-explicit.zip`);
+  expect(requests.filter((request) => request.method === "POST" && request.path.endsWith("/delivery"))).toHaveLength(2);
+  expect(frozenBody.expected_version).toBe(1);
   await page.screenshot({ path: testInfo.outputPath("photographic-recovered-after-reload.png"), fullPage: true });
 });
 

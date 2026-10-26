@@ -540,6 +540,17 @@ blocks submission with an actionable diagnostic. Storage failure never turns an
 unknown outcome into success or authorizes a retry.
 History itself remains available after reload without browser metadata.
 
+After resolving an original attempt, the portal keeps that exact frozen record
+until an authoritative catalogue GET reaches at least the reconciled review
+version. A failed or stale refresh enters `refresh_required` and keeps new exports
+blocked; manual reconciliation repeats GET requests without changing the original
+body or version. Unreadable or malformed recovery storage is distinct from an
+absent record: it cannot be overwritten or treated as permission to submit. Once
+storage recovers, reconcile its retained scoped attempt before another export.
+A local rate-limit cooldown is checked before creating or saving an attempt, so
+an unsent request creates no orphan recovery record. After the cooldown expires,
+the operator may explicitly submit a fresh export.
+
 No additional database migration is required beyond
 `0008_photographic_review`. New entry/event metadata is additive and older
 readers preserve it. Deploy matching backend/frontdoor versions: an older strict
