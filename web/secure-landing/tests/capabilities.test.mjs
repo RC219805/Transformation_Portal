@@ -46,6 +46,7 @@ test("portal capability catalog derives rollout-gated controls from bootstrap fl
   const fallbackFeatures = defaultPortalBootstrapPayload().features;
   assert.equal(fallbackFeatures.stagedUploads, false);
   assert.equal(fallbackFeatures.fastVlmCaptioning, false);
+  assert.equal(fallbackFeatures.photographicRecordedPresentation, false);
 
   const gatedCatalog = buildPortalCapabilityCatalog({
     pipeline: "lux-depth-v3",

@@ -38,7 +38,8 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_RUM_ENABLED",
   "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
   "TP_PORTAL_FASTVLM_CAPTIONING_ENABLED",
-  "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT"
+  "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT",
+  "TP_PHOTO_REVIEW_RECORDED_UI_ENABLED"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -153,6 +154,7 @@ function withTempEnvironment(overrides = {}) {
     delete process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
   }
 
+  process.env.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED = String(overrides.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED || "0");
   if (typeof overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED === "string") {
     process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED = overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED;
   } else {
@@ -1893,6 +1895,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.stagedUploads, false);
       assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.features.fastVlmCaptioning, false);
+      assert.equal(body.features.photographicRecordedPresentation, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
       restoreFetch();
@@ -1970,6 +1973,24 @@ test("managed bootstrap enables review surface deferral for rollout cohorts", as
   } finally {
     env.cleanup();
   }
+});
+
+for (const value of ["1", "0", "invalid"]) test(`managed bootstrap recorded presentation rollout is independent (${value})`, async () => {
+  const env = withTempEnvironment({ TP_PHOTO_REVIEW_RECORDED_UI_ENABLED: value });
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+      username: "admin", accessEmail: "admin@example.com", role: "admin"
+    });
+    const response = await GET(buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET", headers: new Headers({ cookie: `__Host-tp_session=${session.id}`, "Cf-Access-Jwt-Assertion": createAccessJwt() })
+    }));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.features.photographicRecordedPresentation, value === "1");
+    assert.equal(body.features.reviewSurfaceDeferred, false);
+  } finally { env.cleanup(); }
 });
 
 test("managed bootstrap enables staged uploads for rollout cohorts", async () => {

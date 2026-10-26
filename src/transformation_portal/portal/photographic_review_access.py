@@ -375,9 +375,6 @@ class AppReviewAccess:
                 "input_color": "linear_srgb",
                 "identity_status": "committed_inventory_identity",
             }
-        if "master.npy" not in records:
-            final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
-            return None
         if "photograph.json" not in records:
             final["working_master_unavailable_reason"] = "native_descriptor_not_in_committed_inventory"
             return None
@@ -392,6 +389,20 @@ class AppReviewAccess:
             raise ReviewAccessError("Native photographic descriptor schema is unsupported")
         if descriptor.get("input_id") != final["scene_id"]:
             raise ReviewAccessError("Native descriptor belongs to a different scene")
+        from transformation_portal.photographic_delivery.presentation import descriptor_policy
+
+        policy = descriptor_policy(
+            descriptor,
+            descriptor_sha256=records["photograph.json"]["sha256"],
+            artifact_sha256=final["sha256"],
+            source_identity_sha256=final["source_identity_sha256"],
+            delivery_path=str(PurePosixPath(final["artifact_path"]).relative_to(parent.parent)),
+        )
+        if policy is not None:
+            final.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+        if "master.npy" not in records:
+            final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
+            return None
         master = descriptor.get("master")
         if (
             not isinstance(master, dict)
@@ -433,7 +444,7 @@ class AppReviewAccess:
             "alpha_sha256": alpha["sha256"] if alpha is not None else None,
             "source_icc_sha256": profile["sha256"] if profile is not None else None,
         }
-        return {
+        reference = {
             **main,
             "role": "working_master",
             "label": final["label"],
@@ -441,6 +452,15 @@ class AppReviewAccess:
             "source_identity_sha256": hashlib.sha256(canonicalize_json(identity)).hexdigest(),
             "native": {"descriptor": records["photograph.json"], "alpha": alpha, "source_icc": profile},
         }
+        policy = descriptor_policy(
+            descriptor,
+            descriptor_sha256=records["photograph.json"]["sha256"],
+            artifact_sha256=main["sha256"],
+            source_identity_sha256=reference["source_identity_sha256"],
+        )
+        if policy is not None:
+            reference.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+        return reference
 
     async def authorize(self, request: Request, job_id: str) -> ReviewContext | Response:
         app = self.app
@@ -538,8 +558,25 @@ class AppReviewAccess:
             chunks = _single_chunk(data)
         elif ref.get("kind") == "review_asset":
             state = await get_review_store().get(job.id, tenant_id)
-            if ref not in _saved_assets(state):
+            # Presentation is derived from the committed receipt after selecting
+            # the saved variant. It never grants storage access or replaces any
+            # persisted path, byte identity, tenant, or source-reference field.
+            selected = {
+                key: value for key, value in ref.items() if key not in {"presentation_policy", "presentation_policy_sha256"}
+            }
+            if selected not in _saved_assets(state):
                 raise ReviewAccessError("Derivative is not in the saved review state", status=404, code="NOT_FOUND")
+            if "presentation_policy" in ref or "presentation_policy_sha256" in ref:
+                from transformation_portal.photographic_delivery.presentation import revision_policy
+
+                entries = [entry for entry in state.get("revisions", []) if entry.get("variant") == selected]
+                policy = revision_policy(entries[0].get("receipt"), selected["sha256"]) if len(entries) == 1 else None
+                if (
+                    policy is None
+                    or ref.get("presentation_policy") != policy.to_payload()
+                    or ref.get("presentation_policy_sha256") != policy.sha256
+                ):
+                    raise ReviewAccessError("Saved revision presentation no longer matches its committed receipt")
             storage = _safe_relative(ref["storage_path"])
             chunks = await self.app._artifact_store().open_bytes(self._storage_job_id(job), storage)
         elif ref.get("kind") == "native_icc":

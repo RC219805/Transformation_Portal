@@ -187,6 +187,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
         stagedUploads: Boolean(options.stagedUploads),
         rumTelemetry: false,
         fastVlmCaptioning: false,
+        photographicRecordedPresentation: options.photographicRecordedPresentation === true,
       },
     });
   });
@@ -3572,6 +3573,7 @@ test("@portal-browser photographic native inspection, saved approval, revision a
   const sha = "a".repeat(64);
   const originalSha = "b".repeat(64);
   const revisionSha = "c".repeat(64);
+  const policySha = "e".repeat(64);
   const deliveryPath = "input-0000/delivery.tif";
   const artifact = { path: deliveryPath, relative_path: deliveryPath, name: "delivery.tif", media_kind: "image", artifact_type: "image", previewable: true,
     browser_previewable: false, content_type: "image/tiff", size_bytes: 4096, sha256: sha,
@@ -3579,14 +3581,15 @@ test("@portal-browser photographic native inspection, saved approval, revision a
     display_hint: { role: "primary_preview", priority: 1200, label: "Photographic master" } };
   const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100, created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: [artifact] } };
   const variants = [
-    { role: "final", artifact_path: deliveryPath, sha256: sha, width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" },
+    { role: "final", artifact_path: deliveryPath, sha256: sha, width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master",
+      presentation_policy_sha256: policySha, presentation: { available_views: ["recorded", "clip_srgb"], policy: { stage: "display_referred" }, policy_sha256: policySha } },
     { role: "original", artifact_path: "original/input-0000.tif", sha256: originalSha, width: 8000, height: 6000, bit_depth: 16, color_profile: "sRGB", intended_use: "Retained source" },
   ];
   const saved = [];
   const posted = [];
   const nativeRequests = [];
   let version = 0;
-  await installHydratedPortalRoutes(page, { jobs: [job] });
+  await installHydratedPortalRoutes(page, { jobs: [job], photographicRecordedPresentation: true });
   await page.route(`**${base}**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -3603,6 +3606,7 @@ test("@portal-browser photographic native inspection, saved approval, revision a
       if (native) nativeRequests.push(Object.fromEntries(url.searchParams));
       await route.fulfill({ status: 200, contentType: "image/png", body: await photographicFixturePng(width, height), headers: {
         "Cache-Control": "no-store", "X-TP-Source-SHA256": url.searchParams.get("sha256"),
+        "X-TP-Presentation-View": url.searchParams.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": variants.find((item) => item.sha256 === url.searchParams.get("sha256"))?.presentation_policy_sha256 || "none",
         "X-TP-Native-Width": String(width), "X-TP-Native-Height": String(height),
       } });
       return;
@@ -3617,11 +3621,13 @@ test("@portal-browser photographic native inspection, saved approval, revision a
         await fulfillJson(route, { success: true, data: { state_version: version } });
       } else if (url.pathname.endsWith("/revisions")) {
         if (payload.preview_only) await fulfillJson(route, { success: true, data: { preview_data_url: `data:image/png;base64,${(await photographicFixturePng(80, 60)).toString("base64")}`,
-          receipt: { schema: "tp.photo.revision.v1", source_master_sha256: payload.sha256, width: 8000, height: 6000, output_bit_depth: 32,
+          receipt: { schema: "tp.photo.revision.v2", source_master_sha256: payload.sha256, width: 8000, height: 6000, output_bit_depth: 32,
+            input_presentation_policy_sha256: payload.presentation_policy_sha256, output_presentation: { schema: "tp.photo.revision_presentation.v1", stage: "display_referred" },
             review_status: "unreviewed", approval_transferred: false, reference_sha256: payload.reference_sha256, recipe: payload.recipe } } });
         else {
           variants[0].role = "previous_revision";
-          variants.unshift({ ...variants[0], role: "final", artifact_path: "review/revision-1/master.tif", sha256: revisionSha, bit_depth: 32 });
+          variants.unshift({ ...variants[0], role: "final", artifact_path: "review/revision-1/master.tif", sha256: revisionSha, bit_depth: 32,
+            presentation_policy_sha256: "f".repeat(64) });
           version += 1;
           await fulfillJson(route, { success: true, data: { state_version: version } });
         }
@@ -3637,9 +3643,12 @@ test("@portal-browser photographic native inspection, saved approval, revision a
   await expect(workbench).toBeVisible();
   await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText("8000 × 6000 px · 16-bit · sRGB");
   await expect(page.locator('[data-ui="photographic-resolution-status"]')).toContainText("Fit previews are reduced");
+  await expect(page.locator('[data-ui="photographic-presentation"]')).toBeEnabled();
+  await expect(page.locator('[data-ui="photographic-resolution-status"]')).toContainText("authoritative recorded presentation");
   await page.locator('[data-ui="photographic-inspection"]').selectOption("native");
   const image = page.locator('[data-ui="photographic-primary-image"]');
   await expect(image).toBeVisible();
+  await expect.poll(() => nativeRequests.some((request) => request.sha256 === sha && request.view === "recorded")).toBe(true);
   await expect.poll(() => image.evaluate((node) => [node.naturalWidth, node.naturalHeight, getComputedStyle(node).width, getComputedStyle(node).height])).toEqual([512, 512, "512px", "512px"]);
   await page.locator('[data-ui="photographic-pan-right"]').click();
   await expect.poll(() => nativeRequests.some((request) => request.sha256 === sha && Number(request.x) > 3744)).toBe(true);

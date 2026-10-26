@@ -12,9 +12,10 @@ from scipy.ndimage import gaussian_filter
 from transformation_portal.core.image_artifact import ImageMaster, metadata_payload, validate_source_sha256
 from transformation_portal.lux_depth_v4.photography import linear_to_srgb, output_srgb_icc
 from transformation_portal.lux_depth_v5.preview import encode_preview
-from transformation_portal.lux_depth_v6.color import GradeRecipe, RenderRecipe, grade_master, render_master
+from transformation_portal.lux_depth_v6.color import GradeRecipe, RenderRecipe, grade_master
 
 from .models import DeliveryImage, bounded_number, canonical_bytes, sha256, slug
+from .presentation import RENDERER_CONTRACT, render_presentation
 
 
 @dataclass(frozen=True)
@@ -184,11 +185,13 @@ def create_revision(image: DeliveryImage, recipe: RevisionRecipe, *, reference_s
     )
     adjusted = _apply_materials(adjusted, recipe.materials)
     source_bytes = extended_tiff_bytes(adjusted)
-    display, render_receipt = render_master(adjusted, RenderRecipe())
+    render_recipe = image.presentation.recipe if image.presentation is not None else RenderRecipe()
+    display, render_receipt = render_presentation(adjusted, image.presentation, render_recipe)
     preview, preview_receipt = encode_preview(display, relative_path="preview.png")
     payload = recipe.to_payload()
     receipt = {
-        "schema": "tp.photo.revision.v1",
+        "schema": "tp.photo.revision.v2",
+        "processing_contract": "tp.photo.revision_processing.v2",
         "source_master_sha256": image.source_sha256,
         "source_identity_sha256": image.source_identity_sha256,
         "source_bundle": image.source_bundle,
@@ -208,6 +211,16 @@ def create_revision(image: DeliveryImage, recipe: RevisionRecipe, *, reference_s
         "grade": grade_receipt,
         "preview_render": render_receipt,
         "preview": preview_receipt,
+        "output_presentation": {
+            "schema": "tp.photo.revision_presentation.v1",
+            "stage": image.presentation.stage if image.presentation is not None else "working_linear",
+            "recipe": render_recipe.to_payload(),
+            "renderer_contract": RENDERER_CONTRACT,
+        },
+        "input_presentation_policy_sha256": image.presentation.sha256 if image.presentation is not None else None,
+        "input_presentation_authority": (
+            "recorded_input_policy" if image.presentation is not None else "explicit_legacy_revision_operation"
+        ),
         "review_status": "unreviewed",
         "approval_transferred": False,
         "quality_acceptance": "human_review_required",

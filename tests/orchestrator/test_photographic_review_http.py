@@ -293,6 +293,68 @@ def test_revision_preview_commit_approval_export_and_revocation_flow(review_case
     assert hashlib.sha256(case.blobs[case.path]).hexdigest() == case.sha
 
 
+def test_recorded_view_recovers_saved_revision_policy_and_audits_without_changing_approval_scope(review_case):
+    import base64
+
+    case = review_case
+    query = {"artifact_path": case.path, "sha256": case.sha}
+    assert case.client.get(case.base + "/render", params={**query, "view": "recorded"}).status_code == 409
+    legacy = case.client.get(case.base + "/render", params=query)
+    explicit = case.client.get(case.base + "/render", params={**query, "view": "clip_srgb"})
+    assert legacy.content == explicit.content
+    assert legacy.headers["x-tp-presentation-view"] == "clip_srgb"
+    assert legacy.headers["x-tp-presentation-policy-sha256"] == "none"
+    assert case.client.get(case.base + "/render", params={**query, "view": "guessed"}).status_code == 422
+    request = {
+        **query,
+        "scene_id": "input-0000",
+        "expected_version": 0,
+        "recipe": {"exposure_stops": -0.1},
+        "presentation_policy_sha256": None,
+    }
+    preview = case.client.post(case.base + "/revisions", json={**request, "preview_only": True}).json()["data"]
+    saved = case.client.post(case.base + "/revisions", json={**request, "preview_only": False})
+    assert saved.status_code == 200, saved.text
+    current = next(
+        item for item in case.client.get(case.base).json()["data"]["scenes"][0]["variants"] if item["role"] == "final"
+    )
+    policy_sha = current["presentation_policy_sha256"]
+    assert current["presentation"]["available_views"] == ["recorded", "clip_srgb"]
+    query = {"artifact_path": current["artifact_path"], "sha256": current["sha256"], "view": "recorded"}
+    fit = case.client.get(case.base + "/render", params=query)
+    assert fit.status_code == 200, fit.text
+    assert fit.headers["x-tp-presentation-policy-sha256"] == policy_sha
+    expected = np.asarray(Image.open(io.BytesIO(base64.b64decode(preview["preview_data_url"].split(",", 1)[1]))))
+    np.testing.assert_array_equal(np.asarray(Image.open(io.BytesIO(fit.content))), expected)
+    crop = case.client.get(case.base + "/native-crop", params={**query, "x": 11, "y": 7, "width": 13, "height": 9})
+    np.testing.assert_array_equal(np.asarray(Image.open(io.BytesIO(crop.content))), expected[7:16, 11:24])
+    approval = {
+        "artifact_path": current["artifact_path"],
+        "sha256": current["sha256"],
+        "status": "approved",
+        "expected_version": 1,
+        "inspection_presentation": {"view": "recorded", "policy_sha256": "0" * 64},
+    }
+    assert case.client.post(case.base + "/decisions", json=approval).status_code == 409
+    approval["inspection_presentation"]["policy_sha256"] = policy_sha
+    decision = case.client.post(case.base + "/decisions", json=approval)
+    assert decision.status_code == 200, decision.text
+    recorded = decision.json()["data"]["decisions"][0]
+    assert recorded["inspection_presentation"] == approval["inspection_presentation"]
+    assert recorded["source_identity_sha256"] == current["sha256"]
+    stale = case.client.post(
+        case.base + "/revisions",
+        json={
+            **request,
+            "artifact_path": current["artifact_path"],
+            "sha256": current["sha256"],
+            "expected_version": 2,
+            "presentation_policy_sha256": "0" * 64,
+        },
+    )
+    assert stale.status_code == 409
+
+
 def test_authentication_unknown_job_and_no_implicit_approval(review_case):
     case = review_case
     assert case.client.get(case.base, headers={"x-api-key": "invalid"}).status_code == 401

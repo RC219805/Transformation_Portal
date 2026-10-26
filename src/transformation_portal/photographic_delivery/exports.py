@@ -13,10 +13,11 @@ from PIL import Image, ImageDraw
 from transformation_portal.core.image_artifact import ImageMaster, metadata_payload
 from transformation_portal.core.photographic_export import jpeg_bytes, resize_long_edge, unsharp_mask
 from transformation_portal.lux_depth_v4.photography import linear_to_srgb, output_srgb_icc
-from transformation_portal.lux_depth_v6.color import RenderRecipe, render_master
+from transformation_portal.lux_depth_v6.color import RenderRecipe
 
 from .cohesion import extended_tiff_bytes
 from .models import DeliveryImage, ExportPreset, canonical_bytes, sha256, slug
+from .presentation import render_presentation
 
 
 def _safe_empty_output(output_dir: Path) -> Path:
@@ -123,6 +124,7 @@ def export_delivery(
             "color_preparation": metadata_payload(master.metadata["color_preparation"]),
             "source_icc_sha256": sha256(master.source_icc) if master.source_icc else None,
             "master_content_sha256": master.content_hash(),
+            "presentation_policy_sha256": image.presentation.sha256 if image.presentation is not None else None,
             "metadata": dict(image.metadata),
             **metadata_payload(master.metadata.get("native_working_master", {})),
         }
@@ -152,7 +154,7 @@ def export_delivery(
             else:
                 render_key = (preset.render, preset.shoulder)
                 if cached_render != render_key or cached_display is None or cached_receipt is None:
-                    cached_display, cached_receipt = render_master(master, RenderRecipe(*render_key))
+                    cached_display, cached_receipt = render_presentation(master, image.presentation, RenderRecipe(*render_key))
                     cached_render = render_key
                 display, receipt = _sdr(master, preset, cached_display, cached_receipt)
                 height, width = display.shape[:2]
@@ -174,6 +176,7 @@ def export_delivery(
                 **_write_new(root, relative, payload),
                 "source_master_sha256": image.source_sha256,
                 "source_identity_sha256": image.source_identity_sha256,
+                "presentation_policy_sha256": image.presentation.sha256 if image.presentation is not None else None,
                 "source_bundle": image.source_bundle,
                 "source_master_content_sha256": source_info["master_content_sha256"],
                 "source_bit_depth": master.source_bit_depth,
@@ -234,7 +237,7 @@ def export_delivery(
         if cached_display is not None:
             preview_master, preview_render = cached_display, cached_receipt
         else:
-            preview_master, preview_render = render_master(master, RenderRecipe())
+            preview_master, preview_render = render_presentation(master, image.presentation, RenderRecipe())
         preview_pixels = resize_long_edge(preview_master.pixels, 340)
         if preview_master.alpha is not None and np.any(preview_master.alpha != 1):
             # Contact-sheet-only white composite is explicit; master alpha stays intact.
@@ -264,7 +267,7 @@ def export_delivery(
         "thumbnail_long_edge": 340,
         "jpeg_quality": 92,
         "icc_sha256": sha256(output_srgb_icc()),
-        "render_selection": "last_requested_SDR_preset_or_explicit_perceptual_srgb_preview",
+        "render_selection": "recorded_source_presentation_or_explicit_requested_legacy_render",
         "scope": "Bounded contact preview; native artifact inspection and human approval remain separate",
     }
     inventory: dict[str, Any] = {
@@ -285,7 +288,7 @@ def export_delivery(
         "",
         inventory["precision_policy"],
         inventory["quality_acceptance"],
-        "Contact sheet: the last requested SDR render per source, or a perceptual-sRGB preview for master-only sets; thumbnails do not replace native inspection.",
+        "Contact sheet: recorded source presentation when verified, otherwise the last requested SDR render or perceptual-sRGB master-only preview; thumbnails do not replace native inspection.",
         "",
         "File\tIntended use\tDimensions\tBits\tProfile\tSource master SHA-256",
     ]

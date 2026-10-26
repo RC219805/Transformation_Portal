@@ -105,6 +105,7 @@ function fixture({ responseHash = null, mutationError = false, extraFetch = null
       const params = new URL(url, "http://localhost").searchParams;
       return new Response(new Blob(["png"], { type: "image/png" }), { headers: {
         "X-TP-Source-SHA256": url.includes("/native-crop?") ? responseHash || params.get("sha256") : params.get("sha256"),
+        "X-TP-Presentation-View": params.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": "none",
         "X-TP-Native-Width": params.get("width") || "1600", "X-TP-Native-Height": params.get("height") || "1200",
       } });
     }
@@ -192,6 +193,7 @@ test("an intentional catalogue abort cannot publish a stale timeout or loading s
 test("saved human decisions use the exact selected master, state version, and managed CSRF transport", async () => {
   const h = fixture();
   h.api.show(h.job, variant); await settle();
+  h.root.find("photographic-primary-image").onload();
   h.root.find("photographic-decision-note").value = "Window edges and sky inspected.";
   await h.root.find("photographic-decision-approved").trigger();
   const mutation = h.requests.find((request) => request.url.endsWith("/decisions"));
@@ -199,6 +201,95 @@ test("saved human decisions use the exact selected master, state version, and ma
     source_identity_sha256: SHA, status: "approved", note: "Window edges and sky inspected.", expected_version: 0 });
   assert.equal(mutation.options.headers["X-CSRF-Token"], "fixture-csrf");
   assert.match(h.root.find("photographic-decision-status").textContent, /Approved.*exact SHA-256/);
+});
+
+test("recorded presentation is explicit, policy-bound in requests/cache, and clipping fallback is labelled", async () => {
+  let policySha = "c".repeat(64);
+  const h = fixture({ extraFetch: (url) => {
+    if (url.endsWith("/photographic-review")) return new Response(JSON.stringify({ success: true, data: {
+      state_version: 0, scenes: [{ scene_id: "input-0000", label: "Room", variants: [
+        { ...variant, presentation_policy_sha256: policySha, presentation: { available_views: ["recorded", "clip_srgb"],
+          policy: { stage: "display_referred" }, policy_sha256: policySha } }, original,
+      ] }], decisions: [], groups: [], presets: [],
+    } }));
+    if (url.includes("/render?") || url.includes("/native-crop?")) {
+      const params = new URL(url, "http://localhost").searchParams;
+      return new Response(new Blob(["png"], { type: "image/png" }), { headers: {
+        "X-TP-Source-SHA256": params.get("sha256"),
+        "X-TP-Presentation-View": params.get("view"),
+        "X-TP-Presentation-Policy-SHA256": params.get("sha256") === SHA ? policySha : "none",
+        "X-TP-Native-Width": params.get("width") || "1600", "X-TP-Native-Height": params.get("height") || "1200",
+      } });
+    }
+    return null;
+  } });
+  h.state.auth.features = { photographicRecordedPresentation: true };
+  h.api.show(h.job, variant); await settle();
+  let requests = h.requests.filter((request) => request.url.includes("/render?"));
+  assert.equal(new URL(requests.find((request) => request.url.includes(`sha256=${SHA}`)).url, "http://localhost").searchParams.get("view"), "recorded");
+  assert.match(h.root.find("photographic-resolution-status").textContent, /authoritative recorded presentation.*display_referred/);
+  assert.match(h.root.find("photographic-resolution-status").textContent, /labelled clipping fallback/);
+  const before = requests.length;
+  h.root.find("photographic-presentation").value = "clip_srgb";
+  await h.root.find("photographic-presentation").trigger("change");
+  assert.ok(h.requests.filter((request) => request.url.includes("/render?")).length > before);
+  h.root.find("photographic-presentation").value = "recorded";
+  await h.root.find("photographic-presentation").trigger("change");
+  const afterViews = h.requests.filter((request) => request.url.includes("/render?")).length;
+  policySha = "d".repeat(64);
+  await h.root.find("photographic-review-refresh").trigger();
+  assert.ok(h.requests.filter((request) => request.url.includes("/render?")).length > afterViews,
+    "A policy change with unchanged source bytes must not reuse old rendered pixels");
+  h.root.find("photographic-primary-image").onload();
+  await h.root.find("photographic-decision-approved").trigger();
+  const mutation = h.requests.find((request) => request.url.endsWith("/decisions"));
+  assert.deepEqual(JSON.parse(mutation.options.body).inspection_presentation, { view: "recorded", policy_sha256: policySha });
+});
+
+test("a stale policy response fails inspection closed without replacing source approval", async () => {
+  const digest = "c".repeat(64);
+  const approved = { artifact_path: variant.artifact_path, sha256: SHA, source_identity_sha256: SHA, status: "approved" };
+  const h = fixture({ extraFetch: (url) => url.endsWith("/photographic-review") ? new Response(JSON.stringify({ success: true, data: {
+    state_version: 1, scenes: [{ scene_id: "input-0000", variants: [{ ...variant, presentation_policy_sha256: digest,
+      presentation: { available_views: ["recorded", "clip_srgb"], policy_sha256: digest } }] }], decisions: [approved],
+  } })) : null });
+  h.state.auth.features = { photographicRecordedPresentation: true };
+  h.api.show(h.job, variant); await settle();
+  assert.match(h.root.find("photographic-review-status").textContent, /identity or native dimensions could not be verified/);
+  assert.match(h.root.find("photographic-decision-status").textContent, /Approved.*exact SHA-256/);
+});
+
+test("recorded presentation rollout is disabled independently of advertised source authority", async () => {
+  const h = fixture({ extraFetch: (url) => url.endsWith("/photographic-review") ? new Response(JSON.stringify({ success: true, data: {
+    state_version: 0, scenes: [{ scene_id: "input-0000", variants: [{ ...variant, presentation_policy_sha256: "c".repeat(64),
+      presentation: { available_views: ["recorded", "clip_srgb"], policy_sha256: "c".repeat(64) } }] }],
+  } })) : null });
+  h.api.show(h.job, variant); await settle();
+  assert.equal(h.root.find("photographic-presentation").disabled, true);
+  assert.match(h.root.find("photographic-resolution-status").textContent, /rollout is disabled/);
+  assert.ok(h.requests.filter((request) => request.url.includes("/render?")).every((request) =>
+    new URL(request.url, "http://localhost").searchParams.get("view") === "clip_srgb"));
+});
+
+test("legacy catalogue and image headers keep clipping and original mutation shapes even when rollout is requested", async () => {
+  const h = fixture({ extraFetch: (url) => {
+    if (!url.includes("/render?") && !url.includes("/native-crop?")) return null;
+    const params = new URL(url, "http://localhost").searchParams;
+    return new Response(new Blob(["png"], { type: "image/png" }), { headers: {
+      "X-TP-Source-SHA256": params.get("sha256"),
+      "X-TP-Native-Width": params.get("width") || "1600", "X-TP-Native-Height": params.get("height") || "1200",
+    } });
+  } });
+  h.state.auth.features = { photographicRecordedPresentation: true };
+  h.api.show(h.job, variant); await settle();
+  h.root.find("photographic-primary-image").onload();
+  assert.equal(h.root.find("photographic-primary-image").classList.contains("hidden"), false);
+  assert.ok(h.requests.filter((request) => request.url.includes("/render?")).every((request) =>
+    !new URL(request.url, "http://localhost").searchParams.has("view")));
+  assert.match(h.root.find("photographic-resolution-status").textContent, /labelled clipping fallback/);
+  await h.root.find("photographic-decision-approved").trigger();
+  const payload = JSON.parse(h.requests.find((request) => request.url.endsWith("/decisions")).options.body);
+  assert.equal(Object.hasOwn(payload, "inspection_presentation"), false);
 });
 
 test("native 1:1 fails closed on a changed source hash and never falls back to an enlarged preview", async () => {

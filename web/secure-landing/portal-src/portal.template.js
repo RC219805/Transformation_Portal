@@ -4849,7 +4849,8 @@ function _defaultPortalBootstrap() {
             reviewSurfaceDeferred: false,
             stagedUploads: false,
             rumTelemetry: false,
-            fastVlmCaptioning: false
+            fastVlmCaptioning: false,
+            photographicRecordedPresentation: false
         }
     };
 }
@@ -5507,7 +5508,8 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
-            fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning)
+            fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
+            photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true
         }
     };
     // The logout button is rendered with the `hidden` attribute and only

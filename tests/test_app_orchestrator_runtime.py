@@ -1423,6 +1423,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "stagedUploads: false" in default_body
     assert "rumTelemetry: false" in default_body
     assert "fastVlmCaptioning: false" in default_body
+    assert "photographicRecordedPresentation: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
@@ -1471,6 +1472,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "stagedUploads: Boolean(bootstrap.features?.stagedUploads)" in content
     assert "rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)" in content
     assert "fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning)" in content
+    assert "photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true" in content
     assert "res.headers.get('traceparent')" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body

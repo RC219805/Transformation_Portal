@@ -404,6 +404,39 @@ async def test_review_derivative_requires_exact_saved_server_reference(fake_app,
     assert store.open_bytes.await_count == 1
 
 
+async def test_saved_revision_reopens_through_real_adapter_with_receipt_derived_presentation(fake_app, monkeypatch, tmp_path):
+    from transformation_portal.orchestrator.photographic_review_service import _display, load_image, revision_refs
+    from transformation_portal.photographic_delivery import DeliveryImage, RevisionRecipe, create_revision
+
+    app, _, store, _ = fake_app
+    bodies, _, _ = _native_inventory(False, False)
+    raw = bodies["v6/input-0000/delivery.tif"]
+    result = create_revision(
+        DeliveryImage("source.tif", hashlib.sha256(raw).hexdigest(), "Room", source_bytes=raw), RevisionRecipe()
+    )
+    source = {
+        **_reference(result["source_bytes"]),
+        "kind": "review_asset",
+        "storage_path": "photographic-review/rev-one/master.tif",
+        "source_name": "master.tif",
+    }
+    state = {"revisions": [{"variant": source, "receipt": result["receipt"]}], "deliveries": []}
+    monkeypatch.setattr(adapter, "get_review_store", lambda: SimpleNamespace(get=AsyncMock(return_value=state)))
+    store.open_bytes.side_effect = lambda *_: _chunks(result["source_bytes"])
+    context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+    ref = revision_refs(state)[0]
+    assert "presentation_policy" in ref and "presentation_policy" not in source
+    reopened = await load_image(context, ref)
+    assert _display(reopened, view="recorded")[0]
+    count = store.open_bytes.await_count
+    for changed in ({"storage_path": "photographic-review/forged/master.tif"}, {"sha256": "0" * 64}):
+        with pytest.raises(ReviewAccessError, match="saved review state"):
+            await context.materialize({**ref, **changed}, tmp_path / "forged.tif", 1024**2)
+    with pytest.raises(ReviewAccessError, match="committed receipt"):
+        await context.materialize({**ref, "presentation_policy_sha256": "0" * 64}, tmp_path / "forged.tif", 1024**2)
+    assert store.open_bytes.await_count == count
+
+
 async def test_arbitrary_nested_review_state_cannot_claim_a_derivative(fake_app, monkeypatch, tmp_path):
     app, _, store, data = fake_app
     source = {**_reference(data), "kind": "review_asset", "storage_path": "photographic-review/forged/image.tif"}
@@ -624,13 +657,24 @@ def _native_inventory(alpha=True, icc=True):
     import numpy as np
 
     from transformation_portal.core.image_artifact import ImageMaster
+    from transformation_portal.lux_depth_v6.color import RenderRecipe, render_master
+    from transformation_portal.lux_depth_v6.products import _delivery
 
     pixels = np.full((8, 12, 3), 1.25, dtype=np.float32)
     opacity = np.full((8, 12), 0.6, dtype=np.float32) if alpha else None
     profile = b"synthetic-icc-profile-for-carrier-test" if icc else None
     master = ImageMaster(pixels, "1" * 64, 16, opacity, {"purpose": "synthetic-test"}, profile)
-    descriptor = {"schema": "tp.lux.graded_photograph.v2", "input_id": "input-0000", "master": master.to_payload()}
-    bodies = {"v6/input-0000/delivery.tif": b"photograph", "v6/input-0000/photograph.json": canonicalize_json(descriptor)}
+    display, render = render_master(master, RenderRecipe())
+    delivery, delivery_descriptor = _delivery(display, "input-0000/delivery.tif")
+    descriptor = {
+        "schema": "tp.lux.graded_photograph.v2",
+        "input_id": "input-0000",
+        "master": master.to_payload(),
+        "display": display.to_payload(),
+        "render": render,
+        "delivery": delivery_descriptor,
+    }
+    bodies = {"v6/input-0000/delivery.tif": delivery, "v6/input-0000/photograph.json": canonicalize_json(descriptor)}
     arrays = {"master.npy": pixels}
     if opacity is not None:
         arrays["alpha.npy"] = opacity
@@ -655,6 +699,28 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
     app.get_operational_record_store = lambda: records
     app._get_job_artifact.side_effect = lambda _job_id, path, **_kwargs: StreamingResponse(_chunks(bodies[path]))
     monkeypatch.setattr(adapter.AppReviewAccess, "_originals", AsyncMock(return_value=([], "original_unavailable")))
+
+
+async def test_legacy_minimal_descriptor_keeps_clip_readable_without_invented_recorded_authority(fake_app, monkeypatch):
+    app, *_ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    path = "v6/input-0000/photograph.json"
+    descriptor = json.loads(bodies[path])
+    for key in ("render", "display", "delivery"):
+        descriptor.pop(key)
+    bodies[path] = canonicalize_json(descriptor)
+    for row in inventory:
+        if row["path"] == path:
+            row.update(sha256=hashlib.sha256(bodies[path]).hexdigest(), size_bytes=len(bodies[path]))
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+    assert all("presentation_policy" not in ref for ref in context.references)
+    from transformation_portal.orchestrator.photographic_review_service import _display, load_image
+
+    image = await load_image(context, next(ref for ref in context.references if ref["role"] == "working_master"))
+    assert _display(image)[0]
+    with pytest.raises(ReviewAccessError, match="Recorded presentation is unavailable"):
+        _display(image, view="recorded")
 
 
 @pytest.mark.parametrize("alpha,icc", [(False, False), (True, False), (True, True)])
@@ -957,6 +1023,8 @@ def _change_native_component(bodies, inventory, component):
 
     import numpy as np
 
+    from transformation_portal.core.image_artifact import artifact_content_hash
+
     path = "v6/input-0000/" + ("photograph.json" if component == "descriptor" else "alpha.npy")
     if component == "descriptor":
         descriptor = json.loads(bodies[path])
@@ -966,9 +1034,20 @@ def _change_native_component(bodies, inventory, component):
         buffer = io.BytesIO()
         np.save(buffer, np.full((8, 12), 0.3, dtype=np.float32), allow_pickle=False)
         bodies[path] = buffer.getvalue()
+    descriptor_path = "v6/input-0000/photograph.json"
+    descriptor = json.loads(bodies[descriptor_path])
+    descriptor["render"]["input_master_sha256"] = artifact_content_hash(
+        descriptor["master"],
+        {
+            "pixels": np.load(io.BytesIO(bodies["v6/input-0000/master.npy"]), allow_pickle=False),
+            "alpha": np.load(io.BytesIO(bodies["v6/input-0000/alpha.npy"]), allow_pickle=False),
+        },
+    )
+    bodies[descriptor_path] = canonicalize_json(descriptor)
     for row in inventory:
-        if row["path"] == path:
-            row.update(sha256=hashlib.sha256(bodies[path]).hexdigest(), size_bytes=len(bodies[path]))
+        if row["path"] in {path, descriptor_path}:
+            current = bodies[row["path"]]
+            row.update(sha256=hashlib.sha256(current).hexdigest(), size_bytes=len(current))
 
 
 @pytest.mark.parametrize("component", ["descriptor", "alpha"])
@@ -1110,6 +1189,7 @@ async def test_exact_delivery_selectors_export_distinct_native_bundles_with_shar
         if path.endswith("photograph.json"):
             descriptor = json.loads(content)
             descriptor["input_id"] = "input-0001"
+            descriptor["delivery"]["path"] = "input-0001/delivery.tif"
             content = canonicalize_json(descriptor)
         bodies[second_path] = content
         inventory.append({"path": second_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
