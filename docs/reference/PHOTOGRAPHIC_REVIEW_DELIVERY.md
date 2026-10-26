@@ -79,22 +79,99 @@ fixtures, edges and material texture. Wipe/blink require matching native
 geometry; mismatched images need an aligned reference rather than a fabricated
 pixel comparison.
 
-Both browser views are **8-bit encoded-sRGB display derivatives**. The current
-native display transform clips to the display range; it does not change the
-master and cannot expose all extended/HDR values. A native crop preserves spatial
+Both browser views are **8-bit encoded-sRGB display derivatives**. Recorded
+presentation uses the authority described below; the explicit clipping comparison
+clips to the display range. Neither changes the master or exposes all extended/HDR values. A native crop preserves spatial
 sampling, not master bit depth. Retain and inspect/download the precision
 authority separately. Do not infer 16/32-bit precision from an 8-bit browser PNG.
 
 Stable automation hooks include `data-ui="photographic-review"`,
 `photographic-scene`, `photographic-primary`, `photographic-comparison`,
-`photographic-comparison-mode`, `photographic-inspection`, `photographic-crop-size`
+`photographic-comparison-mode`, `photographic-inspection`, `photographic-presentation`, `photographic-crop-size`
 and the crop/pan controls. Existing portal routes, selectors and managed session
 behavior remain in use.
 
-Fit/native previews use an actor/job/source-scoped blob cache bounded to 12
+Fit/native previews use an actor/job/source/presentation-scoped blob cache bounded to 12
 entries and 40 MiB. Contact-sheet thumbnails load lazily and retain at most 64
 entries of at most 1 MiB each. Scope changes abort outstanding requests and
 release their object URLs; no image bytes or API keys enter browser storage.
+
+## Recorded photographic presentation
+
+`GET /render` and `GET /native-crop` accept `view=recorded` or
+`view=clip_srgb`. Omitting `view` preserves the historical clipping comparison.
+The workbench requests recorded presentation only when the catalogue advertises
+it; otherwise it explicitly labels and requests the clipping fallback. A direct
+recorded request without retained authority returns `409 PRESENTATION_UNAVAILABLE`.
+Neither filenames, dtype, pixel ranges, ICC encoding nor a TIFF description
+establish processing stage.
+
+Catalogue variants expose `presentation.available_views`, the nullable validated
+policy and its digest, and the separate `presentation_policy_sha256`. The immutable
+`tp.photo.presentation_policy.v1` binds exact source identity, processing stage,
+recipe and the retained descriptor or committed revision receipt. Its
+`renderer_contract=tp.photo.presentation_renderer.v1` identifies the existing
+versioned SDR numerical transform and render-before-reduction ordering. A change
+to those numerical semantics requires a new renderer contract and matching
+historical support; do not silently reinterpret an existing contract.
+
+Verified V6 working masters use their recorded render recipe, including exports
+whose requested destination recipe differs. Export receipts retain the requested
+recipe separately from the actual applied recipe. Descriptor-bound
+V6 delivery TIFFs are already display referred: inspection, SDR export and
+contact sheets do not apply another tone transform. Destination resizing,
+sharpening, encoding and quantization remain explicit export operations. An
+unrecognized or legacy minimal descriptor has no recorded presentation authority;
+its existing clipping view remains available. Conflicting retained recipe,
+stage, path or content identities fail closed.
+
+Recorded fit views render native working pixels before area reduction, retaining
+premultiplied-alpha reduction. Native views crop at the exact source coordinates
+before the pointwise transform. Responses preserve source and geometry headers
+and add `X-TP-Presentation-View` and `X-TP-Presentation-Policy-SHA256` (`none` when
+unavailable). The browser verifies those values and includes view and policy
+identity in cache and in-flight keys. Policy changes do not reuse old pixels.
+
+New `tp.photo.revision.v2` receipts explicitly record output presentation and
+renderer contract. A revision from a display-referred delivery inherits that
+stage even though its separate precision carrier is float32 TIFF; bounded edits
+do not justify a second tone transform. Recognized historical
+`tp.photo.revision.v1` receipts retain their original working-master/preview
+render semantics. Unknown receipts receive no inferred recorded view. Receipt
+hashing binds the completed receipt and never embeds its own policy digest.
+When the input has no recorded authority, an explicit revision request retains
+the existing legacy operation: save the unbounded adjusted master and render a
+perceptual preview. Its new receipt marks
+`input_presentation_authority=explicit_legacy_revision_operation`, with no input
+policy identity. Only that actually executed output operation establishes the
+new revision's recorded view; the parent's stage stays unknown and its recorded
+view stays unavailable. Conflicting recognized authority cannot use this fallback.
+New clients also send optional `presentation_policy_sha256` with revision
+requests; a changed supplied policy fails before preview or publication.
+
+Decisions may carry optional `inspection_presentation` containing view and policy
+digest, validated against the current source. This is additive inspection audit
+metadata. It does not invalidate or expand an existing source approval, approve
+destination proofs, assert byte integrity, or establish production acceptance.
+The managed review projection needs no database migration; preserve receipts and
+decisions on rollback and deploy matching backend and workbench code when using
+the additive request fields and V2 revision semantics.
+
+Roll out the backend API before enabling the independent recorded-view UI flag:
+`TP_PHOTO_REVIEW_RECORDED_UI_ENABLED=1` advertises
+`photographicRecordedPresentation` through bootstrap. Configure the flag on the
+managed frontdoor for authenticated sessions and on the backend for standalone
+direct-debug sessions. The default is disabled. Set the corresponding flags to
+`0`, restart the affected frontdoor/backend processes and reload the workbench to return
+the UI to its explicitly labelled clipping view; API recorded-view support and
+the no-second-render guard remain available. Delivery-history UI and resource
+admission have separate rollout controls. This does not rewrite existing review
+decisions or retained generations.
+The UI flag is intent, not backend capability. An older catalogue without
+presentation metadata retains the omitted-view clipping request, original
+image-header checks and original decision/revision request shapes, even if the
+UI rollout was requested. Advertised presentation capability enables strict new
+header verification independently of the UI flag.
 
 ## Source identity and retained float masters
 
