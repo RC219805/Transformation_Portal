@@ -37,7 +37,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         try:
             yield
         finally:
-            await service.admission.close()
+            await service.close()
 
     router = APIRouter(tags=["Photographic review"], lifespan=lifespan)
     versioned = APIRouter(prefix="/jobs/{job_id}/photographic-review")

@@ -17,8 +17,10 @@ import shutil
 import tempfile
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
+from contextvars import Token
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -58,6 +60,11 @@ if TYPE_CHECKING:
 JsonObject = dict[str, Any]
 ReviewChange = Callable[[JsonObject], JsonObject]
 NativeCrop = tuple[int, int, int, int]
+# Fit one tenant's complete current catalogue: 32 scenes with original/native/
+# final sources plus the 128-revision limit, without retaining pixel buffers.
+_INSPECTION_CACHE_LIMIT = 1024
+_TENANT_INSPECTION_CACHE_LIMIT = 256
+InspectionKey = tuple[str, str, str, str, str, str]
 _Params = ParamSpec("_Params")
 _Result = TypeVar("_Result")
 
@@ -494,6 +501,75 @@ class PhotographicReviewService:
     def __init__(self, admission_config: ReviewAdmissionConfig | None = None) -> None:
         self.expensive = _LegacyExpensiveGate()
         self.admission = PhotographicAdmissionController(admission_config)
+        # Planning metadata only: never image bytes, approvals or completed
+        # render results. The service/router lifecycle owns this bounded LRU.
+        self._inspection_costs: OrderedDict[InspectionKey, JsonObject] = OrderedDict()
+
+    async def close(self) -> None:
+        await self.admission.close()
+        self._inspection_costs.clear()
+
+    def _remember_inspection(self, context: ReviewContext, ref: JsonObject, inspection: JsonObject) -> None:
+        if not self.admission.config.enabled or not context.binding_identity:
+            return
+        width, height, alpha = (inspection.get(name) for name in ("width", "height", "alpha"))
+        if (
+            type(width) is not int
+            or type(height) is not int
+            or min(width, height) <= 0
+            or width * height > 40_000_000
+            or type(alpha) is not bool
+        ):
+            return
+        identity = source_identity(ref)
+        if identity is None:
+            return
+        key = (
+            context.tenant_id,
+            context.job_id,
+            context.binding_identity,
+            ref["artifact_path"],
+            ref["sha256"],
+            identity,
+        )
+        self._inspection_costs[key] = {"width": width, "height": height, "alpha": alpha}
+        self._inspection_costs.move_to_end(key)
+        tenant_keys = [item for item in self._inspection_costs if item[0] == context.tenant_id]
+        for stale in tenant_keys[:-_TENANT_INSPECTION_CACHE_LIMIT]:
+            del self._inspection_costs[stale]
+        while len(self._inspection_costs) > _INSPECTION_CACHE_LIMIT:
+            self._inspection_costs.popitem(last=False)
+
+    def _admission_inspections(
+        self, context: ReviewContext, state: JsonObject, operation: str, args: tuple[Any, ...], kwargs: JsonObject
+    ) -> list[JsonObject] | None:
+        saved = self._cost_inspections(state, operation, args, kwargs)
+        if saved is not None or not self.admission.config.enabled or not context.binding_identity:
+            return saved
+        prefix = context.tenant_id, context.job_id, context.binding_identity
+        candidates = {
+            key[3:]: {
+                "artifact_path": key[3],
+                "sha256": key[4],
+                "source_identity_sha256": key[5],
+                "inspection": dict(inspection),
+            }
+            for key, inspection in self._inspection_costs.items()
+            if key[:3] == prefix
+        }
+        # Reuse the exact selector rules used for persisted inspections. This
+        # projection is local planning data and cannot become a saved decision.
+        for row in state.get("decisions", []):
+            if isinstance(row.get("inspection"), dict):
+                candidates[row["artifact_path"], row["sha256"], row.get("source_identity_sha256", row["sha256"])] = row
+        result = self._cost_inspections({**state, "decisions": list(candidates.values())}, operation, args, kwargs)
+        if result is not None:
+            selected = {id(inspection) for inspection in result}
+            for key in list(self._inspection_costs):
+                candidate = candidates.get(key[3:]) if key[:3] == prefix else None
+                if candidate is not None and id(candidate["inspection"]) in selected:
+                    self._inspection_costs.move_to_end(key)
+        return result
 
     async def execute(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Authorize before queueing; reserve once through all IO and publication."""
@@ -531,10 +607,10 @@ class PhotographicReviewService:
         state = await self.state(context)
         operation = method.__name__
         self._validate_admission_request(state, operation, args)
-        inspections = self._cost_inspections(state, operation, args, kwargs)
+        inspections = self._admission_inspections(context, state, operation, args, kwargs)
         cost = self._resource_cost(context, state, operation, args, inspections)
         lease = await self.admission.acquire(context.tenant_id, cost)
-        token = current_review_lease.set(lease)
+        token: Token[ReviewLease | None] | None = current_review_lease.set(lease)
         transferred = False
         result = None
         try:
@@ -544,7 +620,7 @@ class PhotographicReviewService:
             await self.revalidate(context)
             if context.discover_references is not None:
                 context = replace(context, references=await context.discover_references())
-            if method.__name__ == "catalogue":
+            if method.__name__ == "catalogue" and token is not None:
                 # Discovery and each image take separate complete turns. A
                 # catalogue may not monopolize the protected inspection slot.
                 current_review_lease.reset(token)
@@ -769,6 +845,7 @@ class PhotographicReviewService:
                     raise ReviewInputError("Photographic review is bounded to 32 scenes")
                 image = await load_image(context, ref)
                 metadata = await _owned_thread(_metadata, image)
+                self._remember_inspection(context, ref, metadata)
                 scene = scenes.setdefault(
                     ref["scene_id"],
                     {

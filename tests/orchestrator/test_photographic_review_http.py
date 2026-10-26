@@ -103,6 +103,7 @@ def review_case(monkeypatch, request):
         materialize,
         publish,
         discard,
+        binding_identity="b" * 64,
     )
 
     def error(status, **kwargs):
@@ -617,3 +618,40 @@ def test_admitted_native_review_revision_export_download_and_revocation(enable_a
     # branch, including response ownership and the optimistic mutation fence.
     test_catalogue_native_crop_and_fit_are_hash_bound_display_derivatives(review_case)
     test_revision_preview_commit_approval_export_and_revocation_flow(review_case)
+
+
+def test_admitted_catalogue_supports_unapproved_retained_size_revision(enable_admission, review_case, monkeypatch):
+    from transformation_portal.orchestrator import photographic_review_service as service
+
+    case = review_case
+    original_metadata = service._metadata
+
+    def retained_size_metadata(image):
+        # Keep the real pixel/revision/receipt flow small in the unit lane.
+        # The independently measured retained-size planner must still reserve
+        # its full 30 MP cost; no decision or preliminary approval supplies it.
+        return {**original_metadata(image), "width": 6708, "height": 4472, "alpha": False}
+
+    monkeypatch.setattr(service, "_metadata", retained_size_metadata)
+    request = {
+        "artifact_path": case.path,
+        "sha256": case.sha,
+        "scene_id": "input-0000",
+        "expected_version": 0,
+        "recipe": {"exposure_stops": -0.1},
+        "preview_only": True,
+    }
+    assert case.client.post(case.base + "/revisions", json=request).status_code == 413
+    catalogue = case.client.get(case.base)
+    assert catalogue.status_code == 200, catalogue.text
+    assert catalogue.json()["data"]["decisions"] == []
+    preview = case.client.post(case.base + "/revisions", json=request)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["data"]["preview_data_url"].startswith("data:image/png;base64,")
+    committed = case.client.post(case.base + "/revisions", json={**request, "preview_only": False})
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["data"]["decisions"] == []
+    assert committed.json()["data"]["revision"]["review_status"] == "unreviewed"
+    reopened = case.client.get(case.base)
+    assert reopened.status_code == 200 and reopened.json()["data"]["state_version"] == 1
+    assert reopened.json()["data"]["decisions"] == []

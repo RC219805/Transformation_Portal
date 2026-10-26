@@ -566,6 +566,64 @@ async def test_cost_reduction_requires_matching_composite_identity():
     ) == [state["decisions"][0]["inspection"]]
 
 
+async def test_catalogue_cost_metadata_requires_exact_tenant_job_binding_and_source():
+    from transformation_portal.api.v1.photographic_review import RevisionRequest
+
+    service = PhotographicReviewService(configuration())
+    case = context()
+    ref = {"artifact_path": "master.npy", "sha256": "a" * 64, "source_identity_sha256": "b" * 64}
+    inspection = {"width": 6708, "height": 4472, "alpha": False, "private_bytes": b"must not be retained"}
+    service._remember_inspection(case, ref, inspection)
+    payload = RevisionRequest(
+        artifact_path=ref["artifact_path"],
+        sha256=ref["sha256"],
+        source_identity_sha256=ref["source_identity_sha256"],
+        scene_id="input-0000",
+        expected_version=0,
+        recipe={},
+    )
+    state = {"state_version": 0, "decisions": []}
+    planned = service._admission_inspections(case, state, "revision", (payload,), {})
+    assert planned == [{"width": 6708, "height": 4472, "alpha": False}]
+    assert service._resource_cost(case, state, "revision", (payload,), planned).memory_bytes < 6 * GIB
+    assert state["decisions"] == []
+    for changed in [replace(case, tenant_id="other"), replace(case, job_id="other"), replace(case, binding_identity="other")]:
+        assert service._admission_inspections(changed, state, "revision", (payload,), {}) is None
+    for changed in [
+        payload.model_copy(update={"sha256": "c" * 64}),
+        payload.model_copy(update={"source_identity_sha256": "c" * 64}),
+    ]:
+        assert service._admission_inspections(case, state, "revision", (changed,), {}) is None
+    await service.close()
+    assert not service._inspection_costs
+
+
+async def test_catalogue_cost_metadata_is_bounded_lru_and_disabled_with_legacy_lane():
+    service = PhotographicReviewService(configuration())
+    metadata = {"width": 100, "height": 100, "alpha": False}
+    case = context()
+    for index in range(256):
+        service._remember_inspection(case, {"artifact_path": str(index), "sha256": f"{index:064x}"}, metadata)
+    assert len(service._inspection_costs) == 256
+    assert service._admission_inspections(case, {"decisions": []}, "render", ("0", "0" * 64), {}) == [metadata]
+    service._remember_inspection(case, {"artifact_path": "256", "sha256": f"{256:064x}"}, metadata)
+    assert len(service._inspection_costs) == 256
+    assert any(key[3] == "0" for key in service._inspection_costs)
+    assert not any(key[3] == "1" for key in service._inspection_costs)
+    for tenant in range(1, 5):
+        for index in range(256):
+            service._remember_inspection(
+                replace(case, tenant_id=str(tenant)), {"artifact_path": str(index), "sha256": f"{index:064x}"}, metadata
+            )
+    assert len(service._inspection_costs) == 1024
+    assert all(key[0] != case.tenant_id for key in service._inspection_costs)
+    legacy = PhotographicReviewService(ReviewAdmissionConfig())
+    legacy._remember_inspection(case, {"artifact_path": "source", "sha256": "a" * 64}, metadata)
+    assert not legacy._inspection_costs
+    await service.close()
+    await legacy.close()
+
+
 async def test_untrusted_auth_work_is_bounded_without_claiming_a_tenant_or_io_slot():
     controller = PhotographicAdmissionController(configuration(outstanding=3, tenant_outstanding=2, queued=2, tenant_queued=1))
     async with controller.authorization(), controller.authorization(), controller.request("a"):

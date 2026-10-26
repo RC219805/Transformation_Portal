@@ -452,6 +452,12 @@ most 6 GiB for bulk work under the default process ceiling. Per-operation cost
 is the greater of its conservative allocation estimate and 1.5 times measured
 peak. Server-authored, hash-bound inspection geometry may reduce that cost;
 verified source headers must remain within the admitted geometry before decode.
+Verified catalogue inspections may supply that geometry before any approval.
+Their metadata-only cache is bound to tenant, job, current inventory, path, SHA
+and composite source identity, capped at 1,024 entries per service/256 per tenant
+with least-recently-used eviction, and cleared at shutdown. It never stores
+pixels or decisions. Missing or ambiguous entries retain conservative costs;
+ordinary catalogue → preview → save does not require preliminary approval.
 A native-alpha 40 MP revision exceeded the 8 GiB class ceiling after the margin
 and is rejected rather than downsampled. Final recorded-path probes bind
 presentation math `3f1f3a61da03855ff8b3a37dc75545e0c244da57` at report HEAD
