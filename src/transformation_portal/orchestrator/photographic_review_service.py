@@ -591,7 +591,21 @@ class PhotographicReviewService:
                     args,
                     canonicalize_json(kwargs),
                 )
-                result = await self.admission.coalesce(key, lambda: self._execute_reserved(context, method, *args, **kwargs))
+
+                async def shared_render() -> Any:
+                    return await self._execute_reserved(context, method, *args, _shared_render=True, **kwargs)
+
+                try:
+                    result = await self.admission.coalesce(key, shared_render)
+                except ReviewAccessError as error:
+                    if error.status not in {401, 403}:
+                        raise
+                    # An earlier subscriber may lose access before its source
+                    # read completes. Its owner has already drained and released
+                    # the lease. Make one private, equally bounded attempt so
+                    # another follower's later revocation cannot poison it.
+                    await self.revalidate(context)
+                    result = await self._execute_reserved(context, method, *args, **kwargs)
                 await self.revalidate(context)
             else:
                 result = await self._execute_reserved(context, method, *args, **kwargs)
@@ -603,7 +617,9 @@ class PhotographicReviewService:
             if not transferred:
                 await ticket.release()
 
-    async def _execute_reserved(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def _execute_reserved(
+        self, context: ReviewContext, method: Callable[..., Any], *args: Any, _shared_render: bool = False, **kwargs: Any
+    ) -> Any:
         state = await self.state(context)
         operation = method.__name__
         self._validate_admission_request(state, operation, args)
@@ -626,8 +642,15 @@ class PhotographicReviewService:
                 current_review_lease.reset(token)
                 token = None
                 await lease.release()
-            result = await method(context, *args, **kwargs)
-            await self.revalidate(context)
+            if _shared_render and method == self.render:
+                result = await self._render_response(context, *args, **kwargs)
+            else:
+                result = await method(context, *args, **kwargs)
+            # A shared read retains source/materialization checks here, while
+            # execute validates each subscriber's actor and source binding after
+            # the shared bytes exist. The leader cannot authorize its followers.
+            if not _shared_render:
+                await self.revalidate(context)
             if isinstance(result, _OwnedDownloadResponse):
                 result.admission_lease = lease
                 transferred = True
@@ -920,12 +943,26 @@ class PhotographicReviewService:
         source_identity_sha256: str | None = None,
         view: str = "clip_srgb",
     ) -> Response:
+        result = await self._render_response(context, artifact_path, sha256, crop, max_edge, source_identity_sha256, view)
+        await self.revalidate(context)
+        return result
+
+    async def _render_response(
+        self,
+        context: ReviewContext,
+        artifact_path: str,
+        sha256: str,
+        crop: NativeCrop | None = None,
+        max_edge: int = 1600,
+        source_identity_sha256: str | None = None,
+        view: str = "clip_srgb",
+    ) -> Response:
+        """Compute a verified read; its public/subscriber boundary checks access."""
         state = await self.state(context)
         ref = resolve(context, state, artifact_path, sha256, source_identity_sha256, require_identity=True)
         async with self.expensive:
             image = await load_image(context, ref)
             raw, width, height = await _owned_thread(_display, image, crop, max_edge, view)
-        await self.revalidate(context)
         return Response(
             raw,
             media_type="image/png",
