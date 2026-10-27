@@ -449,19 +449,29 @@ async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) 
 
 
 async def load_image(context: ReviewContext, ref: JsonObject) -> DeliveryImage:
-    with owned_review_directory(prefix="tp-photo-read-") as directory:
-        image = await spool_image(context, ref, Path(directory).resolve() / "source")
-        data = await _owned_thread(image.snapshot)
-        native = getattr(image, "native", None)
-        if native is not None:
-            values: JsonObject = {}
-            for name in ("descriptor", "alpha", "source_icc"):
-                path = getattr(native, name + "_path", None)
-                if path is not None:
-                    values[name + "_bytes"] = await _owned_thread(path.read_bytes)
-                    values[name + "_path"] = None
-            native = replace(native, **values)
-        return replace(image, source_path=None, source_bytes=data, native=native)
+    image: DeliveryImage | None = None
+    data: bytes | None = None
+    native = None
+    values: JsonObject = {}
+    try:
+        with owned_review_directory(prefix="tp-photo-read-") as directory:
+            image = await spool_image(context, ref, Path(directory).resolve() / "source")
+            data = await _owned_thread(image.snapshot)
+            native = getattr(image, "native", None)
+            if native is not None:
+                values = {}
+                for name in ("descriptor", "alpha", "source_icc"):
+                    path = getattr(native, name + "_path", None)
+                    if path is not None:
+                        values[name + "_bytes"] = await _owned_thread(path.read_bytes)
+                        values[name + "_path"] = None
+                native = replace(native, **values)
+            return replace(image, source_path=None, source_bytes=data, native=native)
+    finally:
+        # A companion read can fail after the full source snapshot exists.
+        # The returned image owns successful snapshots; inactive loader frames
+        # must not retain them after the caller releases its reservation.
+        del image, data, native, values
 
 
 def _display(
@@ -948,40 +958,49 @@ class PhotographicReviewService:
                 if len(scenes) >= 32 and ref["scene_id"] not in scenes:
                     raise ReviewInputError("Photographic review is bounded to 32 scenes")
                 image = await load_image(context, ref)
-                metadata = await _owned_thread(_metadata, image)
-                self._remember_inspection(context, ref, metadata)
-                scene = scenes.setdefault(
-                    ref["scene_id"],
-                    {
-                        "scene_id": ref["scene_id"],
-                        "label": ref.get("label", ref["scene_id"]),
-                        "variants": [],
-                        "original_unavailable_reason": ref.get("original_unavailable_reason"),
-                    },
-                )
-                scene["variants"].append(
-                    {
-                        **metadata,
-                        "intended_use": (
-                            "Retained input / comparison reference"
-                            if ref["role"] == "original"
-                            else "Native float working master" if ref["role"] == "working_master" else metadata["intended_use"]
-                        ),
-                        "id": ref["artifact_path"],
-                        "role": ref["role"],
-                        "artifact_path": ref["artifact_path"],
-                        "sha256": image.source_sha256,
-                        "source_name": ref["source_name"],
-                        "version": ref.get("version", "v1"),
-                        "source_identity_sha256": source_identity(ref),
-                        "identity_status": ref.get("identity_status", "verified_indexed_bytes"),
-                        "preview_url": base_url(context) + "/render",
-                        "native_crop_url": base_url(context) + "/native-crop",
-                        "presentation": presentation_metadata(ref),
-                        "presentation_policy_sha256": ref.get("presentation_policy_sha256"),
-                    }
-                )
-                del image
+                try:
+                    metadata = await _owned_thread(_metadata, image)
+                    self._remember_inspection(context, ref, metadata)
+                    scene = scenes.setdefault(
+                        ref["scene_id"],
+                        {
+                            "scene_id": ref["scene_id"],
+                            "label": ref.get("label", ref["scene_id"]),
+                            "variants": [],
+                            "original_unavailable_reason": ref.get("original_unavailable_reason"),
+                        },
+                    )
+                    scene["variants"].append(
+                        {
+                            **metadata,
+                            "intended_use": (
+                                "Retained input / comparison reference"
+                                if ref["role"] == "original"
+                                else (
+                                    "Native float working master"
+                                    if ref["role"] == "working_master"
+                                    else metadata["intended_use"]
+                                )
+                            ),
+                            "id": ref["artifact_path"],
+                            "role": ref["role"],
+                            "artifact_path": ref["artifact_path"],
+                            "sha256": image.source_sha256,
+                            "source_name": ref["source_name"],
+                            "version": ref.get("version", "v1"),
+                            "source_identity_sha256": source_identity(ref),
+                            "identity_status": ref.get("identity_status", "verified_indexed_bytes"),
+                            "preview_url": base_url(context) + "/render",
+                            "native_crop_url": base_url(context) + "/native-crop",
+                            "presentation": presentation_metadata(ref),
+                            "presentation_policy_sha256": ref.get("presentation_policy_sha256"),
+                        }
+                    )
+                finally:
+                    # This source owns a separate lease. Drop its snapshot
+                    # before that lease exits, including metadata failure or
+                    # cancellation after the blocking worker has drained.
+                    del image
         await self.revalidate(context)
         for scene in scenes.values():
             finals = [v for v in scene["variants"] if v["role"] not in {"original", "working_master"}]

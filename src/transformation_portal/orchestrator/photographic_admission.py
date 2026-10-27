@@ -290,9 +290,8 @@ class ReviewLease:
             raise ReviewOverload("operation_scratch_limit", status=413)
         config = self.controller.config
         devices: dict[int, Path] = {}
-        for owner in self.controller._active:
-            for root, _ in owner.claims():
-                devices[root.stat().st_dev] = root
+        for root, _ in self.claims():
+            devices[root.stat().st_dev] = root
         temporary_device = Path(tempfile.gettempdir()).stat().st_dev
         for device, root in devices.items():
             remaining = sum(owner.remaining(device) for owner in self.controller._active)

@@ -8,6 +8,7 @@ import io
 import threading
 import traceback
 import weakref
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -220,4 +221,227 @@ async def test_cancelled_worker_drops_its_buffers_before_final_release(revision_
         finish.set()
     with pytest.raises(asyncio.CancelledError):
         await task
+    assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0
+
+
+@pytest.fixture
+async def catalogue_case(revision_case, monkeypatch):
+    case = revision_case
+    raw = io.BytesIO()
+    with Image.new("RGB", (8, 6), "white") as image:
+        image.save(raw, format="PNG")
+    # A valid encoded PNG with a substantial immutable source snapshot. Track
+    # its DeliveryImage owner rather than relying on reservation counters alone.
+    source = raw.getvalue() + bytes(8 * 1024**2)
+    sha = hashlib.sha256(source).hexdigest()
+    ref = {**case.context.references[0], "role": "final", "sha256": sha}
+
+    async def materialize(selected, path, maximum):
+        assert selected["sha256"] == sha and len(source) <= maximum
+        path.write_bytes(source)
+        return {"sha256": sha, "size_bytes": len(source)}
+
+    case.context = replace(case.context, references=[ref], materialize=materialize)
+    case.service.state.return_value["decisions"] = []
+    load_image = review.load_image
+
+    async def track(context, selected):
+        snapshot = await load_image(context, selected)
+        assert len(snapshot.source_bytes) > 8 * 1024**2
+        case.images.append(weakref.ref(snapshot))
+        return snapshot
+
+    monkeypatch.setattr(review, "load_image", track)
+    case.start = lambda: asyncio.create_task(case.service.execute(case.context, case.service.catalogue))
+    return case
+
+
+async def test_failed_catalogue_metadata_drops_snapshot_before_per_image_lease_release(catalogue_case, monkeypatch):
+    case = catalogue_case
+    releases = []
+    original = ReviewLease.release
+
+    async def release(lease):
+        try:
+            if case.images:
+                assert all(value() is None for value in case.images), "catalogue retained its source after its image turn"
+                assert all(value() is None for value in case.buffers), "metadata worker retained its failed allocation"
+                releases.append(lease)
+        finally:
+            await original(lease)
+
+    def fail(image):
+        values = np.zeros(8 * 1024**2, dtype=np.uint8)
+        case.buffers.append(weakref.ref(values))
+        raise ReviewInputError("controlled catalogue metadata failure")
+
+    monkeypatch.setattr(ReviewLease, "release", release)
+    monkeypatch.setattr(review, "_metadata", fail)
+    task = case.start()
+    case.tasks.append(task)
+    with pytest.raises(ReviewInputError, match="controlled catalogue metadata failure"):
+        await task
+    assert releases and case.images and case.buffers
+    assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0
+
+
+@pytest.mark.parametrize("worker_fails", [False, True])
+async def test_repeatedly_cancelled_catalogue_drops_snapshot_before_per_image_lease_release(
+    catalogue_case, monkeypatch, worker_fails
+):
+    case = catalogue_case
+    started, finish = threading.Event(), threading.Event()
+    releases = []
+    original = ReviewLease.release
+
+    async def release(lease):
+        try:
+            if case.images:
+                assert all(value() is None for value in case.images), "cancelled catalogue retained its source image"
+                assert all(value() is None for value in case.buffers), "cancelled metadata worker retained its allocation"
+                releases.append(lease)
+        finally:
+            await original(lease)
+
+    def metadata(image):
+        values = np.zeros(8 * 1024**2, dtype=np.uint8)
+        case.buffers.append(weakref.ref(values))
+        started.set()
+        assert finish.wait(5)
+        if worker_fails:
+            raise ReviewInputError("catalogue metadata failed while cancelled")
+        return {"width": 8, "height": 6, "alpha": False}
+
+    monkeypatch.setattr(ReviewLease, "release", release)
+    monkeypatch.setattr(review, "_metadata", metadata)
+    task = case.start()
+    case.tasks.append(task)
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        for _ in range(3):
+            task.cancel()
+            await asyncio.sleep(0)
+        assert not task.done()
+        assert all(value() is not None for value in case.images)
+        assert all(value() is not None for value in case.buffers)
+        assert case.service.admission.snapshot()["memory_reserved_bytes"] > 0
+    finally:
+        finish.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert releases and case.images and case.buffers
+    assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0
+
+
+@pytest.fixture
+async def companion_case(revision_case, monkeypatch):
+    from transformation_portal.photographic_delivery import NativeWorkingMaster
+
+    case = revision_case
+    raw = io.BytesIO()
+    np.save(raw, np.zeros((700, 1024, 3), dtype=np.float32), allow_pickle=False)
+    source, descriptor = raw.getvalue(), b"{}"
+    sha, descriptor_sha = (hashlib.sha256(value).hexdigest() for value in (source, descriptor))
+    native = NativeWorkingMaster(descriptor_sha256=descriptor_sha, descriptor_bytes=descriptor)
+    ref = {
+        **case.context.references[0],
+        "artifact_path": "source/master.npy",
+        "source_name": "master.npy",
+        "role": "working_master",
+        "sha256": sha,
+        "source_identity_sha256": native.identity(sha),
+        "native": {"descriptor": {"source_name": "photograph.json", "sha256": descriptor_sha}},
+    }
+
+    async def materialize(selected, path, maximum):
+        data = source if selected["sha256"] == sha else descriptor
+        assert len(data) <= maximum
+        path.write_bytes(data)
+        return {"sha256": selected["sha256"], "size_bytes": len(data)}
+
+    case.context = replace(case.context, references=[ref], materialize=materialize)
+    case.service.state.return_value["decisions"] = []
+    case.load_frames = []
+    load_image, spool_image = review.load_image, review.spool_image
+
+    def track_load(context, selected):
+        operation = load_image(context, selected)
+        case.load_frames.append(operation.cr_frame)
+        return operation
+
+    async def track_spool(*args):
+        image = await spool_image(*args)
+        case.images.append(weakref.ref(image))
+        return image
+
+    monkeypatch.setattr(review, "load_image", track_load)
+    monkeypatch.setattr(review, "spool_image", track_spool)
+    return case
+
+
+@pytest.mark.parametrize("operation", ["catalogue", "render"])
+@pytest.mark.parametrize("outcome", ["failure", "cancel_success", "cancel_failure"])
+async def test_native_companion_read_drops_load_snapshot_before_lease_release(companion_case, monkeypatch, operation, outcome):
+    from pathlib import Path
+
+    case = companion_case
+    started, finish = threading.Event(), threading.Event()
+    releases = []
+    original_release, original_read = ReviewLease.release, Path.read_bytes
+
+    async def release(lease):
+        try:
+            if case.images:
+                assert case.load_frames
+                for frame in case.load_frames:
+                    assert "data" not in frame.f_locals, "closed load_image retained the native source snapshot"
+                    assert "values" not in frame.f_locals, "closed load_image retained companion snapshots"
+                assert all(value() is None for value in case.images), "closed load_image retained its path-backed source"
+                assert all(value() is None for value in case.buffers), "companion worker retained its allocation"
+                releases.append(lease)
+        finally:
+            await original_release(lease)
+
+    def read(path):
+        if path.name != "photograph.json":
+            return original_read(path)
+        values = np.zeros(8 * 1024**2, dtype=np.uint8)
+        case.buffers.append(weakref.ref(values))
+        started.set()
+        assert finish.wait(5)
+        if outcome != "cancel_success":
+            raise OSError("controlled native companion read failure")
+        return original_read(path)
+
+    monkeypatch.setattr(ReviewLease, "release", release)
+    monkeypatch.setattr(Path, "read_bytes", read)
+    if operation == "catalogue":
+        invocation = case.service.execute(case.context, case.service.catalogue)
+    else:
+        ref = case.context.references[0]
+        invocation = case.service.execute(
+            case.context,
+            case.service.render,
+            ref["artifact_path"],
+            ref["sha256"],
+            source_identity_sha256=ref["source_identity_sha256"],
+        )
+    task = asyncio.create_task(invocation)
+    case.tasks.append(task)
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        assert all(value() is not None for value in case.images)
+        assert case.service.admission.snapshot()["memory_reserved_bytes"] > 0
+        if outcome != "failure":
+            for _ in range(3):
+                task.cancel()
+                await asyncio.sleep(0)
+            assert not task.done()
+            assert case.service.admission.snapshot()["memory_reserved_bytes"] > 0
+    finally:
+        finish.set()
+    error = OSError if outcome == "failure" else asyncio.CancelledError
+    with pytest.raises(error):
+        await task
+    assert releases and case.images and case.buffers
     assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0

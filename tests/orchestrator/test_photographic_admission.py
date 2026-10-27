@@ -809,6 +809,53 @@ async def test_local_publication_filesystem_is_checked_independently(monkeypatch
     await lease.release()
 
 
+async def test_inspection_checks_only_its_filesystems_and_all_shared_commitments(monkeypatch, tmp_path):
+    import tempfile
+    from pathlib import Path
+
+    from transformation_portal.orchestrator import photographic_admission as module
+
+    temporary = Path(tempfile.gettempdir()).resolve()
+    publication = tmp_path / "publication"
+    publication.mkdir()
+    original_stat = Path.stat
+
+    def filesystem_stat(path, *args, **kwargs):
+        info = original_stat(path, *args, **kwargs)
+        return SimpleNamespace(st_dev=999999) if path == publication else info
+
+    monkeypatch.setattr(Path, "stat", filesystem_stat)
+    controller = PhotographicAdmissionController(configuration())
+    bulk = await controller.acquire(
+        "tenant-a", ReviewCost(1, 6 * GIB, interactive=False, filesystems=((temporary, 4 * GIB), (publication, 2 * GIB)))
+    )
+    inspection = await controller.acquire("tenant-a", ReviewCost(1, 2 * GIB, filesystems=((temporary, 2 * GIB),)))
+    available = {temporary: 8 * GIB, publication: GIB}
+    checked = []
+
+    def disk_usage(path):
+        checked.append(path)
+        return SimpleNamespace(free=available[path])
+
+    monkeypatch.setattr(module.shutil, "disk_usage", disk_usage)
+    try:
+        inspection.check_scratch(0)
+        assert checked == [temporary], "unrelated publication pressure blocked protected inspection"
+        available[temporary] -= 1
+        with pytest.raises(ReviewOverload) as caught:
+            inspection.check_scratch(0)  # Four other + two own + two filesystem floor.
+        assert caught.value.reason == "scratch_unavailable"
+        available[temporary] += 1
+        checked.clear()
+        with pytest.raises(ReviewOverload) as caught:
+            bulk.check_scratch(0)
+        assert caught.value.reason == "scratch_unavailable" and publication in checked
+    finally:
+        await inspection.release()
+        await bulk.release()
+        await controller.close()
+
+
 async def test_cas_releases_expensive_capacity_but_retains_owned_scratch(monkeypatch, tmp_path):
     from transformation_portal.api.v1.photographic_review import DeliveryRequest
     from transformation_portal.orchestrator import photographic_admission as module
