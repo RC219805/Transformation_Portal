@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import io
 import os
 import re
 import stat
 import tempfile
 from pathlib import Path, PurePosixPath
+from types import FrameType
 from typing import Any, AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping, TypeVar
 
 from fastapi import Request
@@ -30,6 +32,13 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
 )
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
 from transformation_portal.orchestrator.artifact_store.generation import _verify_staged
+from transformation_portal.orchestrator.photographic_admission import (
+    ReviewOverload,
+    current_review_lease,
+    drain_owned,
+    owned_review_directory,
+    run_review_thread,
+)
 from transformation_portal.orchestrator.photographic_review_access import (
     ReviewAccessError,
     ReviewContext,
@@ -47,6 +56,29 @@ MAX_NATIVE_ICC_BYTES = 16 * 1024**2
 _Result = TypeVar("_Result")
 
 
+def _clear_owned_operation_failure(error: BaseException, owned_frame: FrameType | None) -> None:
+    """Release locals of stopped workers, never another suspended async caller."""
+    pending, seen = [error], set()
+    while pending:
+        failure = pending.pop()
+        if id(failure) in seen:
+            continue
+        seen.add(id(failure))
+        trace = failure.__traceback__
+        while trace is not None:
+            frame = trace.tb_frame
+            asynchronous = frame.f_code.co_flags & (inspect.CO_COROUTINE | inspect.CO_ASYNC_GENERATOR | inspect.CO_GENERATOR)
+            if not asynchronous or frame is owned_frame:
+                try:
+                    frame.clear()
+                except RuntimeError:
+                    pass  # An executing frame still owns its locals.
+            trace = trace.tb_next
+        pending.extend(value for value in (failure.__cause__, failure.__context__) if value is not None)
+        if isinstance(failure, BaseExceptionGroup):
+            pending.extend(failure.exceptions)
+
+
 async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable[[], None] | None = None) -> _Result:
     """Drain owned IO before cancellation releases snapshots or publication keys.
 
@@ -54,10 +86,17 @@ async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable
     cancellation arrived during the operation, so its exact new key can be
     rolled back after the write has stopped. Failed writes never acquire it.
     """
+    owned_frame = operation.cr_frame if inspect.iscoroutine(operation) else None
     worker = asyncio.ensure_future(operation)
+    cancelled = False
+    result: _Result | None = None
     try:
         result = await asyncio.shield(worker)
+        if completed is not None:
+            completed()
+        return result
     except asyncio.CancelledError:
+        cancelled = True
         while not worker.done():
             try:
                 await asyncio.shield(worker)
@@ -65,12 +104,25 @@ async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable
                 continue
             except Exception:
                 break
-        if not worker.cancelled() and worker.exception() is None and completed is not None:
-            completed()
+        if not worker.cancelled():
+            failure = worker.exception()
+            if failure is None:
+                if completed is not None:
+                    completed()
+            else:
+                _clear_owned_operation_failure(failure, owned_frame)
         raise
-    if completed is not None:
-        completed()
-    return result
+    except BaseException as error:
+        if worker.done():
+            _clear_owned_operation_failure(error, owned_frame)
+        raise
+    finally:
+        result = None
+        del operation, worker, owned_frame, completed
+        if cancelled:
+            # Completed-task callbacks can retain a discarded successful result
+            # for this loop turn. Keep the lease until that handoff is drained.
+            await drain_owned(asyncio.sleep(0))
 
 
 def _icc_bytes(data: bytes) -> bytes:
@@ -174,7 +226,10 @@ class AppReviewAccess:
 
     def runtime(self) -> ReviewRuntime:
         return ReviewRuntime(
-            authorize=self.authorize, error_response=self.app._error_response, authorize_history=self.authorize_history
+            authorize=self.authorize,
+            error_response=self.app._error_response,
+            authorize_history=self.authorize_history,
+            authorize_admission=self.authorize_admission,
         )
 
     def _storage_job_id(self, job: Any) -> str:
@@ -343,10 +398,10 @@ class AppReviewAccess:
     async def _read_indexed(self, request: Request, job: Any, ref: dict, maximum_bytes: int) -> bytes:
         expected_sha, expected_size = _identity(ref, maximum_bytes)
         chunks = await self._indexed_chunks(request, job, ref["artifact_path"], maximum_bytes)
-        with tempfile.TemporaryDirectory(prefix="tp-native-review-") as directory:
+        with owned_review_directory(prefix="tp-native-review-") as directory:
             target = Path(directory) / "snapshot"
             await _owned_operation(_stream_snapshot(chunks, target, maximum_bytes, expected_size, expected_sha))
-            return await _owned_operation(asyncio.to_thread(target.read_bytes))
+            return await _owned_operation(run_review_thread(target.read_bytes))
 
     async def _native_reference(self, request: Request, job: Any, final: dict, inventory: list[dict]) -> dict | None:
         """Select retained native components exclusively from committed inventory.
@@ -355,114 +410,122 @@ class AppReviewAccess:
         discovery. No inferred sibling path grants read authority or substitutes
         for a missing descriptor/alpha inventory entry.
         """
-        parent = PurePosixPath(final["artifact_path"]).parent
-        records: dict[str, dict] = {}
-        for item in inventory:
-            raw_path = item.get("path") or item.get("relative_path")
-            if not isinstance(raw_path, str):
-                continue
-            path = PurePosixPath(_safe_relative(raw_path))
-            if path.parent != parent or path.name not in {"master.npy", "photograph.json", "alpha.npy", "source-icc.npy"}:
-                continue
-            if path.name in records:
-                raise ReviewAccessError("Native master inventory is ambiguous")
-            records[path.name] = {
-                "artifact_path": raw_path,
-                "sha256": item.get("sha256"),
-                "size_bytes": item.get("size_bytes"),
-                "kind": "indexed",
-                "source_name": path.name,
-                "scene_id": final["scene_id"],
-                "role": "native_component",
-                "input_color": "linear_srgb",
-                "identity_status": "committed_inventory_identity",
-            }
-        if "photograph.json" not in records:
-            final["working_master_unavailable_reason"] = "native_descriptor_not_in_committed_inventory"
-            return None
-        raw = await self._read_indexed(request, job, records["photograph.json"], MAX_NATIVE_DESCRIPTOR_BYTES)
-        descriptor = decode_bounded_json_object(raw)
-        if descriptor.get("schema") not in {
-            "tp.lux.photograph.v2",
-            "tp.lux.photograph.v3",
-            "tp.lux.graded_photograph.v1",
-            "tp.lux.graded_photograph.v2",
-        }:
-            raise ReviewAccessError("Native photographic descriptor schema is unsupported")
-        if descriptor.get("input_id") != final["scene_id"]:
-            raise ReviewAccessError("Native descriptor belongs to a different scene")
-        from transformation_portal.photographic_delivery.presentation import descriptor_policy
-
-        policy = descriptor_policy(
-            descriptor,
-            descriptor_sha256=records["photograph.json"]["sha256"],
-            artifact_sha256=final["sha256"],
-            source_identity_sha256=final["source_identity_sha256"],
-            delivery_path=str(PurePosixPath(final["artifact_path"]).relative_to(parent.parent)),
-        )
-        if policy is not None:
-            final.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
-        if "master.npy" not in records:
-            final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
-            return None
-        master = descriptor.get("master")
-        if (
-            not isinstance(master, dict)
-            or master.get("schema") != "tp.image.master.v1"
-            or master.get("color_space") != "linear_srgb"
-        ):
-            raise ReviewAccessError("Native descriptor lacks explicit linear-sRGB master authority")
-        alpha = records.get("alpha.npy")
-        if master.get("alpha_mode") == "straight":
-            if alpha is None:
-                final["working_master_unavailable_reason"] = "native_alpha_not_in_committed_inventory"
+        raw: bytes | None = None
+        carrier_bytes: bytes | None = None
+        profile_bytes: bytes | None = None
+        try:
+            parent = PurePosixPath(final["artifact_path"]).parent
+            records: dict[str, dict] = {}
+            for item in inventory:
+                raw_path = item.get("path") or item.get("relative_path")
+                if not isinstance(raw_path, str):
+                    continue
+                path = PurePosixPath(_safe_relative(raw_path))
+                if path.parent != parent or path.name not in {"master.npy", "photograph.json", "alpha.npy", "source-icc.npy"}:
+                    continue
+                if path.name in records:
+                    raise ReviewAccessError("Native master inventory is ambiguous")
+                records[path.name] = {
+                    "artifact_path": raw_path,
+                    "sha256": item.get("sha256"),
+                    "size_bytes": item.get("size_bytes"),
+                    "kind": "indexed",
+                    "source_name": path.name,
+                    "scene_id": final["scene_id"],
+                    "role": "native_component",
+                    "input_color": "linear_srgb",
+                    "identity_status": "committed_inventory_identity",
+                }
+            if "photograph.json" not in records:
+                final["working_master_unavailable_reason"] = "native_descriptor_not_in_committed_inventory"
                 return None
-            _identity(alpha, MAX_REVIEW_IMAGE_BYTES)
-        elif master.get("alpha_mode") is not None or alpha is not None:
-            raise ReviewAccessError("Native alpha inventory disagrees with the descriptor")
-        profile = None
-        if "source-icc.npy" in records:
-            carrier = records["source-icc.npy"]
-            carrier_bytes = await self._read_indexed(request, job, carrier, MAX_NATIVE_ICC_BYTES + 65536)
-            profile_bytes = _icc_bytes(carrier_bytes)
-            profile_sha = hashlib.sha256(profile_bytes).hexdigest()
-            if master.get("source_icc_sha256") != profile_sha:
-                raise ReviewAccessError("Native ICC carrier disagrees with its retained descriptor")
-            profile = {
-                **carrier,
-                "artifact_path": str(parent / "source-icc.raw"),
-                "source_name": "source.icc",
-                "sha256": profile_sha,
-                "size_bytes": len(profile_bytes),
-                "kind": "native_icc",
-                "carrier_ref": carrier,
+            raw = await self._read_indexed(request, job, records["photograph.json"], MAX_NATIVE_DESCRIPTOR_BYTES)
+            descriptor = decode_bounded_json_object(raw)
+            if descriptor.get("schema") not in {
+                "tp.lux.photograph.v2",
+                "tp.lux.photograph.v3",
+                "tp.lux.graded_photograph.v1",
+                "tp.lux.graded_photograph.v2",
+            }:
+                raise ReviewAccessError("Native photographic descriptor schema is unsupported")
+            if descriptor.get("input_id") != final["scene_id"]:
+                raise ReviewAccessError("Native descriptor belongs to a different scene")
+            from transformation_portal.photographic_delivery.presentation import descriptor_policy
+
+            policy = descriptor_policy(
+                descriptor,
+                descriptor_sha256=records["photograph.json"]["sha256"],
+                artifact_sha256=final["sha256"],
+                source_identity_sha256=final["source_identity_sha256"],
+                delivery_path=str(PurePosixPath(final["artifact_path"]).relative_to(parent.parent)),
+            )
+            if policy is not None:
+                final.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+            if "master.npy" not in records:
+                final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
+                return None
+            master = descriptor.get("master")
+            if (
+                not isinstance(master, dict)
+                or master.get("schema") != "tp.image.master.v1"
+                or master.get("color_space") != "linear_srgb"
+            ):
+                raise ReviewAccessError("Native descriptor lacks explicit linear-sRGB master authority")
+            alpha = records.get("alpha.npy")
+            if master.get("alpha_mode") == "straight":
+                if alpha is None:
+                    final["working_master_unavailable_reason"] = "native_alpha_not_in_committed_inventory"
+                    return None
+                _identity(alpha, MAX_REVIEW_IMAGE_BYTES)
+            elif master.get("alpha_mode") is not None or alpha is not None:
+                raise ReviewAccessError("Native alpha inventory disagrees with the descriptor")
+            profile = None
+            if "source-icc.npy" in records:
+                carrier = records["source-icc.npy"]
+                carrier_bytes = await self._read_indexed(request, job, carrier, MAX_NATIVE_ICC_BYTES + 65536)
+                profile_bytes = _icc_bytes(carrier_bytes)
+                profile_sha = hashlib.sha256(profile_bytes).hexdigest()
+                if master.get("source_icc_sha256") != profile_sha:
+                    raise ReviewAccessError("Native ICC carrier disagrees with its retained descriptor")
+                profile = {
+                    **carrier,
+                    "artifact_path": str(parent / "source-icc.raw"),
+                    "source_name": "source.icc",
+                    "sha256": profile_sha,
+                    "size_bytes": len(profile_bytes),
+                    "kind": "native_icc",
+                    "carrier_ref": carrier,
+                }
+            main = records["master.npy"]
+            _identity(main, MAX_REVIEW_IMAGE_BYTES)
+            identity = {
+                "schema": "tp.photo.source_identity.v1",
+                "master_sha256": main["sha256"],
+                "descriptor_sha256": records["photograph.json"]["sha256"],
+                "alpha_sha256": alpha["sha256"] if alpha is not None else None,
+                "source_icc_sha256": profile["sha256"] if profile is not None else None,
             }
-        main = records["master.npy"]
-        _identity(main, MAX_REVIEW_IMAGE_BYTES)
-        identity = {
-            "schema": "tp.photo.source_identity.v1",
-            "master_sha256": main["sha256"],
-            "descriptor_sha256": records["photograph.json"]["sha256"],
-            "alpha_sha256": alpha["sha256"] if alpha is not None else None,
-            "source_icc_sha256": profile["sha256"] if profile is not None else None,
-        }
-        reference = {
-            **main,
-            "role": "working_master",
-            "label": final["label"],
-            "version": "native",
-            "source_identity_sha256": hashlib.sha256(canonicalize_json(identity)).hexdigest(),
-            "native": {"descriptor": records["photograph.json"], "alpha": alpha, "source_icc": profile},
-        }
-        policy = descriptor_policy(
-            descriptor,
-            descriptor_sha256=records["photograph.json"]["sha256"],
-            artifact_sha256=main["sha256"],
-            source_identity_sha256=reference["source_identity_sha256"],
-        )
-        if policy is not None:
-            reference.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
-        return reference
+            reference = {
+                **main,
+                "role": "working_master",
+                "label": final["label"],
+                "version": "native",
+                "source_identity_sha256": hashlib.sha256(canonicalize_json(identity)).hexdigest(),
+                "native": {"descriptor": records["photograph.json"], "alpha": alpha, "source_icc": profile},
+            }
+            policy = descriptor_policy(
+                descriptor,
+                descriptor_sha256=records["photograph.json"]["sha256"],
+                artifact_sha256=main["sha256"],
+                source_identity_sha256=reference["source_identity_sha256"],
+            )
+            if policy is not None:
+                reference.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+            return reference
+        finally:
+            # Discovery failures unwind before the service owns a method frame.
+            # Release verified companion snapshots before its lease can end.
+            del raw, carrier_bytes, profile_bytes
 
     async def authorize(self, request: Request, job_id: str) -> ReviewContext | Response:
         return await self._authorize(request, job_id, include_references=True)
@@ -471,7 +534,21 @@ class AppReviewAccess:
         """Authenticate retained history without discovering or reading photographs."""
         return await self._authorize(request, job_id, include_references=False)
 
-    async def _authorize(self, request: Request, job_id: str, *, include_references: bool) -> ReviewContext | Response:
+    async def authorize_admission(self, request: Request, job_id: str) -> ReviewContext | Response:
+        return await self._authorize(request, job_id, include_references=False, admission=True)
+
+    async def _binding_identity(self, job: Any, tenant_id: str) -> str:
+        if self.app._uses_dispatch_authority():
+            inventory = await self.app.get_operational_record_store().committed_manifest(job.id, tenant_id)
+        else:
+            inventory = job.artifacts
+        # The inventory binds descriptor/receipt bytes, including their recorded
+        # presentation, without reading those bytes before resource admission.
+        return hashlib.sha256(canonicalize_json(inventory or {})).hexdigest()
+
+    async def _authorize(
+        self, request: Request, job_id: str, *, include_references: bool, admission: bool = False
+    ) -> ReviewContext | Response:
         app = self.app
         try:
             await app._cleanup_expired_jobs(app._now(), force=False)
@@ -488,6 +565,18 @@ class AppReviewAccess:
                 # headers cannot manufacture a human identity for approvals.
                 actor = {"username": "api_key_operator", "role": "operator", "assurance": "backend_api_key"}
             references = await self._references(request, job, tenant) if include_references else []
+            binding_identity = await self._binding_identity(job, tenant_id) if admission else None
+
+            async def revalidate() -> None:
+                await self._revalidate(request, job, tenant_id)
+                if binding_identity is not None:
+                    current = await self._job(request, job_id)
+                    if (
+                        isinstance(current, Response)
+                        or await self._binding_identity(current[0], tenant_id) != binding_identity
+                    ):
+                        raise ReviewAccessError("Photographic source bindings changed; reload before review")
+
             issued: set[str] = set()
 
             async def publish(storage: str, source: Path, mime: str) -> None:
@@ -502,7 +591,10 @@ class AppReviewAccess:
                 materialize=lambda ref, dest, limit: self._materialize(request, job, tenant_id, ref, dest, limit),
                 publish=publish,
                 discard=lambda paths: self._discard(job, tenant_id, issued, paths),
-                revalidate=lambda: self._revalidate(request, job, tenant_id),
+                revalidate=revalidate,
+                discover_references=lambda: self._references(request, job, tenant),
+                binding_identity=binding_identity,
+                publication_root=getattr(self.app._artifact_store(), "root_dir", None) if admission else None,
             )
         except ReviewAccessError as exc:
             return app._error_response(exc.status, code=exc.code, message=str(exc), details={"job_id": job_id})
@@ -557,14 +649,17 @@ class AppReviewAccess:
             if ref not in originals:
                 raise ReviewAccessError("Original binding changed")
             data, _ = await _owned_operation(
-                asyncio.to_thread(
+                run_review_thread(
                     snapshot,
                     Path(ref["private_original_root"]),
                     Path(ref["private_original_root"]) / ref["private_original_path"],
                     maximum_bytes=maximum_bytes,
                 )
             )
-            chunks = _single_chunk(data)
+            try:
+                chunks = _single_chunk(data)
+            finally:
+                del data
         elif ref.get("kind") == "review_asset":
             state = await get_review_store().get(job.id, tenant_id)
             # Presentation is derived from the committed receipt after selecting
@@ -593,12 +688,18 @@ class AppReviewAccess:
             if not isinstance(carrier, dict) or carrier.get("kind") != "indexed":
                 raise ReviewAccessError("Native ICC carrier reference is unavailable")
             data = await self._read_indexed(request, current[0], carrier, MAX_NATIVE_ICC_BYTES + 65536)
-            chunks = _single_chunk(_icc_bytes(data))
+            try:
+                chunks = _single_chunk(_icc_bytes(data))
+            finally:
+                del data
         elif ref.get("kind") == "indexed":
             chunks = await self._indexed_chunks(request, current[0], ref["artifact_path"], maximum_bytes)
         else:
             raise ReviewAccessError("Unknown review source", status=400, code="INVALID_ARGUMENT")
-        return await _stream_snapshot(chunks, destination, maximum_bytes, expected_size, expected_sha)
+        try:
+            return await _stream_snapshot(chunks, destination, maximum_bytes, expected_size, expected_sha)
+        finally:
+            del chunks
 
     async def _indexed_chunks(
         self, request: Request, job: Any, artifact_path: str, maximum_bytes: int
@@ -614,10 +715,7 @@ class AppReviewAccess:
             return _byte_stream(response.body_iterator)
         if isinstance(response, FileResponse):
             _, path, _ = self.app._validate_resolved_job_artifact_path(job, Path(response.path))
-            data, _ = await _owned_operation(
-                asyncio.to_thread(snapshot, self.app._job_output_dir(job), path, maximum_bytes=maximum_bytes)
-            )
-            return _single_chunk(data)
+            return _confined_file_chunks(self.app._job_output_dir(job), path, maximum_bytes)
         raise ReviewAccessError("Unexpected artifact response", status=503, code="ARTIFACT_UNAVAILABLE")
 
     async def _fresh_indexed_identity(self, request: Request, job: Any, reference: dict) -> dict:
@@ -634,7 +732,7 @@ class AppReviewAccess:
         if size > MAX_REVIEW_IMAGE_BYTES:
             raise ReviewAccessError("Review source exceeds the admitted byte budget", status=413, code="RESOURCE_EXHAUSTED")
         chunks = await self._indexed_chunks(request, job, reference["artifact_path"], MAX_REVIEW_IMAGE_BYTES)
-        with tempfile.TemporaryDirectory(prefix="tp-review-identity-") as directory:
+        with owned_review_directory(prefix="tp-review-identity-") as directory:
             identity = await _owned_operation(
                 _stream_snapshot(chunks, Path(directory) / "snapshot", MAX_REVIEW_IMAGE_BYTES, size, None)
             )
@@ -667,14 +765,31 @@ class AppReviewAccess:
         store = None
         storage_job_id = self._storage_job_id(job)
         try:
-            with tempfile.TemporaryDirectory(prefix="tp-review-publish-") as directory:
+            with owned_review_directory(prefix="tp-review-publish-") as directory:
                 staged = Path(directory).resolve() / "artifact"
-                size, digest = await _owned_operation(asyncio.to_thread(_publication_snapshot, source, staged, maximum_bytes))
+                size, digest = await _owned_operation(run_review_thread(_publication_snapshot, source, staged, maximum_bytes))
                 store = self.app._artifact_store()
+                lease = current_review_lease.get()
+                if lease is not None:
+                    local_root = getattr(store, "root_dir", None)
+                    if local_root is not None:
+                        parent = (local_root / storage_job_id / PurePosixPath(storage_path).parent).resolve()
+                        if not parent.is_relative_to(local_root):
+                            raise ReviewAccessError("Invalid review publication namespace")
+                        if not parent.exists():
+                            # A new server-created publication namespace is
+                            # private to this operation; track its in-progress
+                            # staging blocks too, without crediting old data.
+                            lease.track_path(parent)
+                    lease.check_scratch(0)
                 await _owned_operation(
                     store.write_immutable_file(storage_job_id, storage_path, staged, content_type=content_type),
                     completed=completed,
                 )
+                if lease is not None and getattr(store, "root_dir", None) is not None:
+                    # Only this successful immutable write is owned; existing
+                    # retained directories never reduce remaining commitments.
+                    lease.track_path(store.root_dir / storage_job_id / storage_path)
                 # Reuse GenerationPublisher's complete streamed digest/length
                 # verification. Store metadata alone cannot grant visibility.
                 await _owned_operation(_verify_staged(store, storage_job_id, storage_path, size, digest))
@@ -693,7 +808,7 @@ class AppReviewAccess:
                     await _owned_operation(store.delete(storage_job_id, storage_path))
                 except Exception:
                     self.app.LOGGER.exception("private review publication cleanup deferred for job %s", job.id)
-            if isinstance(exc, ReviewAccessError) or not isinstance(exc, Exception):
+            if isinstance(exc, (ReviewAccessError, ReviewOverload)) or not isinstance(exc, Exception):
                 raise
             self.app.LOGGER.exception("photographic review artifact publication unavailable for job %s", job.id)
             raise ReviewAccessError(
@@ -742,6 +857,7 @@ async def _stream_snapshot(
     chunks: AsyncIterator[bytes], destination: Path, maximum_bytes: int, expected_size: int, expected_sha: str | None
 ) -> dict:
     digest, size, created = hashlib.sha256(), 0, False
+    chunk = b""
     try:
         with destination.open("xb") as handle:
             created = True
@@ -762,13 +878,48 @@ async def _stream_snapshot(
             destination.unlink(missing_ok=True)
         raise
     finally:
-        close = getattr(chunks, "aclose", None)
-        if close is not None:
-            await close()
+        close = None
+        try:
+            close = getattr(chunks, "aclose", None)
+            if close is not None:
+                await close()
+        finally:
+            del chunk, chunks, close
+
+
+async def _confined_file_chunks(root_path: Path, path: Path, maximum_bytes: int) -> AsyncIterator[bytes]:
+    """Feed a private verified snapshot without retaining an entire local file.
+
+    The consumer hashes and finishes its owned snapshot before using any bytes.
+    Keep the source descriptor pinned through EOF and the named-inode check;
+    cancellation drains each owned read before that descriptor can close.
+    """
+    if type(maximum_bytes) is not int or maximum_bytes <= 0:
+        raise ValueError("Input byte budget must be a positive integer")
+    with _pin_output_root(root_path) as root:
+        descriptor, relative = _open_confined_artifact(root, path)
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= maximum_bytes:
+                raise ValueError("Input must be a bounded regular file without link aliases")
+            size = 0
+            while chunk := await _owned_operation(run_review_thread(os.read, descriptor, 1024 * 1024)):
+                size += len(chunk)
+                if size > maximum_bytes:
+                    raise ValueError("Input exceeds byte budget")
+                yield chunk
+            _validate_confined_entry_identity(root, relative, before, context="photographic input")
+            if size != before.st_size:
+                raise ValueError("Input changed during snapshot")
+        finally:
+            os.close(descriptor)
 
 
 async def _single_chunk(data: bytes) -> AsyncIterator[bytes]:
-    yield data
+    try:
+        yield data
+    finally:
+        del data
 
 
 async def _byte_stream(chunks: AsyncIterable[object]) -> AsyncIterator[bytes]:

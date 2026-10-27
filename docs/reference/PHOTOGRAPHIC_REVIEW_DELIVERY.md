@@ -427,19 +427,126 @@ Verified download scratch remains owned until response execution ends, including
 invalid/malformed ranges, failed sends and repeated cancellation; cleanup does
 not depend on a successful-response background task.
 
+## Opt-in bounded resource admission
+
+`TP_PHOTO_REVIEW_ENABLED=1` enables process-local photographic admission. It is
+**off by default**. The initial pilot requires one backend process; these
+accounting reservations do not reserve operating-system RAM or disk, coordinate
+multiple processes, or control unrelated filesystem writers. Authenticate the
+actor, tenant and parent job before entering a tenant queue; reference discovery
+and photographic IO run only after admission. Delivery history and review-state
+reconciliation remain lightweight control operations.
+
+Defaults are 12 GiB photographic memory, a 4 GiB minimum inspection reserve and
+an 8 GiB bulk class ceiling; two decode workers with at most one bulk operation;
+and two IO slots with one strictly reserved for inspection. Each tenant may own
+two operations, at most one noninteractive. Export and downloads serialize while
+inspection can materialize concurrently. A bounded photographic thread pool
+keeps admitted inspection separate from unrelated default-executor work.
+The bulk memory ceiling applies to the aggregate of all noninteractive owners,
+including failed work that has released worker slots but still retains buffers.
+
+The measured inspection reserve takes precedence over its minimum. Baseline
+CPU probes at `f79f49207ed2e4589b006017dec90edd51137cb2` measured a 40 MP float32
+TIFF fit peak increment of 3,465,723,904 bytes. The 1.5-times measurement margin,
+whole-GiB rounding and one-GiB allocator allowance protect **6 GiB**, leaving at
+most 6 GiB for bulk work under the default process ceiling. Per-operation cost
+is the greater of its conservative allocation estimate and 1.5 times measured
+peak. Server-authored, hash-bound inspection geometry may reduce that cost;
+verified source headers must remain within the admitted geometry before decode.
+Verified catalogue inspections may supply that geometry before any approval.
+Their metadata-only cache is bound to tenant, job, current inventory, path, SHA
+and composite source identity, capped at 1,024 entries per service/256 per tenant
+with least-recently-used eviction, and cleared at shutdown. It never stores
+pixels or decisions. Missing or ambiguous entries retain conservative costs;
+ordinary catalogue → preview → save does not require preliminary approval.
+A native-alpha 40 MP revision exceeded the 8 GiB class ceiling after the margin
+and is rejected rather than downsampled. Final recorded-path probes bind
+presentation math `3f1f3a61da03855ff8b3a37dc75545e0c244da57` at report HEAD
+`2f6faa712a6aea3e3b8cf82b1f32de26fe0928d5`, with eight source hashes verified:
+24 cases completed and transparent SDR export was correctly rejected. The
+largest recorded-fit increment was 3,506,323,456 bytes; the controller retains
+higher peaks observed across all probes. These CPU allocation measurements do
+not establish photographic or live-service acceptance. Review the limits before
+enabling the pilot; never increase ceilings automatically to make work fit.
+
+Outstanding requests are bounded to 32 per process/eight per tenant, including
+coalesced render subscribers. Waiting work is bounded to 24 per process/six per
+tenant, with five-second inspection and 30-second bulk/transfer deadlines.
+Queues preserve FIFO within tenant/class and round-robin across tenants.
+Equivalent in-flight renders share work only within the same tenant, job,
+source/descriptor/receipt inventory, review version and render parameters; each
+subscriber revalidates its own actor and source binding before receiving bytes.
+If the shared owner's source read fails with 401/403, an independently authorized
+subscriber may make one private attempt under its own complete resource lease.
+That attempt never coalesces again or retries a source-integrity conflict;
+ordinary shared reads and revocation after computation still compute once.
+Mutation and export requests never coalesce. Disconnecting the final subscriber
+cancels a queued render; a running worker retains its resources until it is
+quiescent.
+
+Scratch accounting is capped at 64 GiB, with 2 GiB protected for inspection and
+an additional 2 GiB physical free-space floor. Complete export scratch includes
+selected sources, decoded-geometry-derived products, ZIP and publication copies;
+its preflight additionally preserves inspection headroom. Geometry-derived
+claims cover the temporary and local publication filesystems separately. Every
+physical check includes all owners' remaining commitments on that filesystem;
+only this operation's tracked private allocation blocks reduce its outstanding
+commitment. Existing retained directories never grant allocation credit.
+Insufficient physical space never authorizes deletion of retained data. Downloads own their transfer
+and scratch leases through response execution and cleanup, including failed
+sends, invalid ranges and repeated cancellation. Publication uses its existing
+operation lease and immutable-key cleanup fences; it never recursively acquires
+capacity. Once workers and publication are quiescent, release decode/IO slots
+before review compare-and-swap or rollback cleanup. Release memory only after
+buffer-owning method and worker frames are quiescent and their retained locals
+have been dropped; failed publication keeps memory charged through that unwind.
+Private scratch remains owned until final cleanup. Those retained publication claims continue to
+count against the bulk scratch ceiling and protect inspection headroom, without
+holding released worker slots. Outstanding download requests remain charged
+until their response finalizer completes. Shutdown stops admission and drains
+owners before stopping the pool.
+Legacy local-file discovery streams bounded chunks into a private verified
+snapshot instead of collecting a whole file inside the transfer memory profile.
+
+Configuration names use `TP_PHOTO_REVIEW_` plus the uppercase field names:
+`MEMORY_BYTES`, `INTERACTIVE_MEMORY_BYTES`, `BULK_MEMORY_BYTES`, `DECODE_SLOTS`,
+`BULK_DECODE_SLOTS`, `IO_SLOTS`, `INTERACTIVE_IO_SLOTS`, `NONINTERACTIVE_SLOTS`,
+`TENANT_SLOTS`, `TENANT_NONINTERACTIVE_SLOTS`, `OUTSTANDING`,
+`TENANT_OUTSTANDING`, `QUEUED`, `TENANT_QUEUED`, `INTERACTIVE_WAIT_SECONDS`,
+`BULK_WAIT_SECONDS`, `SCRATCH_BYTES`, `INTERACTIVE_SCRATCH_BYTES`, and
+`SCRATCH_FLOOR_BYTES`. Byte values are positive integer bytes, durations are
+integer seconds, and `ENABLED` accepts only `0` or `1`. Invalid configurations
+fail closed; limits cannot eliminate the measured inspection reservation.
+
+Overload preserves the existing API envelope with `RESOURCE_EXHAUSTED`, a
+bounded reason and `scope: process`. Tenant caps return 429; transient shared
+capacity, queue deadlines and disk pressure return 503. Both are retriable with
+`Retry-After: 1`, which is not an estimated completion time. Permanently
+oversized operations return non-retriable 413. Publication preserves typed
+overload and retry metadata after cleaning up only its owned immutable keys.
+No overload changes precision, creates approval, raises a budget, or deletes
+source/delivery data. Roll back by
+setting `TP_PHOTO_REVIEW_ENABLED=0` and restarting matching API code; retained
+review decisions, revisions, deliveries and bytes require no migration.
+
 ## Validation and deployment limits
 
 Focused source contracts from the repository root:
 
 ```bash
 .venv/bin/python -m pytest tests/test_photographic_delivery.py \
-  tests/test_photographic_native_master.py tests/test_package_verified_delivery.py \
+  tests/test_photographic_native_master.py tests/test_photographic_presentation.py \
+  tests/test_package_verified_delivery.py \
   tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q
 .venv/bin/python -m pytest tests/orchestrator/test_photographic_review_access.py \
+  tests/orchestrator/test_photographic_admission.py \
+  tests/orchestrator/test_photographic_memory_ownership.py \
   tests/orchestrator/test_photographic_review_http.py \
   tests/orchestrator/test_photographic_review_store.py \
   tests/orchestrator/test_photographic_review_thread_ownership.py \
   tests/orchestrator/test_photographic_review_response.py \
+  tests/orchestrator/test_photographic_coalescing_authorization.py \
   tests/evals/test_apex_metrics.py tests/evals/test_property_quality.py -q
 .venv/bin/python -m pytest tests/test_app_route_inventory.py -q
 make test-portal-contract
