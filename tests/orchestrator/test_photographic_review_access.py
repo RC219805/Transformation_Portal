@@ -601,6 +601,77 @@ async def test_original_sha_failure_drops_nested_snapshot_bytes_before_final_lea
         await service.close()
 
 
+@pytest.mark.parametrize("failure", ["descriptor-limit", "icc-identity"])
+async def test_native_discovery_drops_companion_buffers_before_lease_release(fake_app, monkeypatch, failure):
+    import io
+    from dataclasses import replace
+
+    import numpy as np
+
+    from transformation_portal.core.execution_plan import ExecutionPlanLimitError
+    from transformation_portal.orchestrator import photographic_admission as admission
+    from transformation_portal.orchestrator import photographic_review_service as service_module
+
+    app, job, _, _ = fake_app
+    bodies, _, _ = _native_inventory(alpha=False, icc=True)
+    if failure == "descriptor-limit":
+        bodies["v6/input-0000/photograph.json"] = json.dumps({"schema": "unsupported", "padding": "x" * (1024**2)}).encode()
+        error_type, message = ExecutionPlanLimitError, "maximum size"
+    else:
+        carrier = io.BytesIO()
+        np.save(carrier, np.zeros(8 * 1024**2, dtype=np.uint8), allow_pickle=False)
+        bodies["v6/input-0000/source-icc.npy"] = carrier.getvalue()
+        error_type, message = ReviewAccessError, "ICC carrier disagrees"
+    inventory = [
+        {"path": path, "sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)} for path, data in bodies.items()
+    ]
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    access = adapter.AppReviewAccess(app)
+    context = await access.authorize_admission(_request(), job.id)
+    failures, retained = [], []
+    discover = context.discover_references
+
+    async def capture_failure():
+        try:
+            return await discover()
+        except BaseException as error:
+            failures.append(error)
+            raise
+
+    context = replace(context, discover_references=capture_failure)
+    service = service_module.PhotographicReviewService(admission.ReviewAdmissionConfig(enabled=True))
+    monkeypatch.setattr(
+        service,
+        "state",
+        AsyncMock(return_value={"state_version": 0, "decisions": [], "revisions": [], "groups": []}),
+    )
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * admission.GIB))
+    release = admission.ReviewLease.release
+
+    async def inspect_release(lease):
+        for error in failures:
+            trace = error.__traceback__
+            while trace is not None:
+                frame = trace.tb_frame
+                if frame.f_code.co_name == "_native_reference":
+                    retained.extend(
+                        (name, len(value))
+                        for name, value in frame.f_locals.items()
+                        if isinstance(value, bytes) and len(value) >= 1024**2
+                    )
+                trace = trace.tb_next
+        await release(lease)
+
+    monkeypatch.setattr(admission.ReviewLease, "release", inspect_release)
+    try:
+        with pytest.raises(error_type, match=message):
+            await service.execute(context, service.catalogue)
+        assert failures and not retained, f"native discovery retained companion bytes at lease release: {retained}"
+        assert service.admission.snapshot()["memory_reserved_bytes"] == 0
+    finally:
+        await service.close()
+
+
 @pytest.mark.parametrize("worker_failure", [False, True], ids=["discarded-success", "failed-worker"])
 async def test_cancelled_original_snapshot_drops_completed_worker_buffers_before_release(
     fake_app, tmp_path, monkeypatch, worker_failure

@@ -1058,27 +1058,41 @@ class PhotographicReviewService:
         view: str = "clip_srgb",
     ) -> Response:
         """Compute a verified read; its public/subscriber boundary checks access."""
-        state = await self.state(context)
-        ref = resolve(context, state, artifact_path, sha256, source_identity_sha256, require_identity=True)
-        async with self.expensive:
-            image = await load_image(context, ref)
-            raw, width, height = await _owned_thread(_display, image, crop, max_edge, view)
-        return Response(
-            raw,
-            media_type="image/png",
-            headers={
-                **HEADERS,
-                "X-TP-Source-SHA256": sha256,
-                "X-TP-Source-Identity-SHA256": image.source_identity_sha256,
-                "X-TP-Native-Width": str(width),
-                "X-TP-Native-Height": str(height),
-                "X-TP-Display-Transform": (
-                    "linear_srgb_to_8bit_srgb_clip_v1" if view == "clip_srgb" else "recorded_presentation_to_8bit_srgb_v1"
-                ),
-                "X-TP-Presentation-View": view,
-                "X-TP-Presentation-Policy-SHA256": image.presentation.sha256 if image.presentation is not None else "none",
-            },
-        )
+        image: DeliveryImage | None = None
+        raw: bytes | None = None
+        try:
+            state = await self.state(context)
+            ref = resolve(context, state, artifact_path, sha256, source_identity_sha256, require_identity=True)
+            async with self.expensive:
+                image = await load_image(context, ref)
+                raw, width, height = await _owned_thread(_display, image, crop, max_edge, view)
+            return Response(
+                raw,
+                media_type="image/png",
+                headers={
+                    **HEADERS,
+                    "X-TP-Source-SHA256": sha256,
+                    "X-TP-Source-Identity-SHA256": image.source_identity_sha256,
+                    "X-TP-Native-Width": str(width),
+                    "X-TP-Native-Height": str(height),
+                    "X-TP-Display-Transform": (
+                        "linear_srgb_to_8bit_srgb_clip_v1" if view == "clip_srgb" else "recorded_presentation_to_8bit_srgb_v1"
+                    ),
+                    "X-TP-Presentation-View": view,
+                    "X-TP-Presentation-Policy-SHA256": image.presentation.sha256 if image.presentation is not None else "none",
+                },
+            )
+        except BaseException:
+            # A successful worker's result can remain in its wakeup callback
+            # when response construction fails. Keep the lease through that
+            # handoff before the failed nested render drops its own snapshots.
+            await drain_owned(asyncio.sleep(0))
+            raise
+        finally:
+            # Private render/fallback calls are nested beneath the captured
+            # public method. Drop this owner's snapshots before its lease can
+            # exit, even when rendering or response construction fails.
+            del image, raw
 
     async def decision(self, context: ReviewContext, payload: ReviewDecisionRequest) -> JsonObject:
         state = await self.state(context)

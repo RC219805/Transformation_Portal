@@ -20,7 +20,7 @@ from transformation_portal.api.v1.photographic_review import RevisionRequest
 from transformation_portal.orchestrator import photographic_admission as admission
 from transformation_portal.orchestrator import photographic_review_service as review
 from transformation_portal.orchestrator.photographic_admission import GIB, ReviewAdmissionConfig, ReviewLease
-from transformation_portal.orchestrator.photographic_review_access import ReviewContext, ReviewInputError
+from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewContext, ReviewInputError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -445,3 +445,155 @@ async def test_native_companion_read_drops_load_snapshot_before_lease_release(co
         await task
     assert releases and case.images and case.buffers
     assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0
+
+
+@pytest.fixture
+async def private_render_case(catalogue_case, monkeypatch):
+    case = catalogue_case
+    case.display_started, case.display_finish = threading.Event(), threading.Event()
+    case.render_frames, case.releases = [], []
+    render_response, original_release = case.service._render_response, ReviewLease.release
+
+    def track(*args, **kwargs):
+        operation = render_response(*args, **kwargs)
+        case.render_frames.append(operation.cr_frame)
+        return operation
+
+    async def release(lease):
+        try:
+            if case.images:
+                for frame in case.render_frames:
+                    assert "image" not in frame.f_locals, "nested render retained its source snapshot"
+                    assert "raw" not in frame.f_locals, "nested render retained its encoded display"
+                assert all(value() is None for value in case.images), "nested render retained its source owner"
+                assert all(value() is None for value in case.buffers), "render worker retained its failed allocation"
+                assert case.service.admission.snapshot()["memory_reserved_bytes"] >= lease.cost.memory_bytes
+                case.releases.append(lease)
+        finally:
+            await original_release(lease)
+
+    monkeypatch.setattr(case.service, "_render_response", track)
+    monkeypatch.setattr(ReviewLease, "release", release)
+    case.outcome = "failure"
+
+    def display(image, *_args, **_kwargs):
+        values = np.zeros(8 * 1024**2, dtype=np.uint8)
+        case.buffers.append(weakref.ref(values))
+        case.display_started.set()
+        assert case.display_finish.wait(5)
+        if case.outcome not in {"cancel_success", "response_failure"}:
+            raise ReviewInputError("controlled private display failure")
+        return (memoryview(values) if case.outcome == "response_failure" else b"unused"), 8, 6
+
+    monkeypatch.setattr(review, "_display", display)
+
+    def start(context=None):
+        context = case.context if context is None else context
+        ref = context.references[0]
+        task = asyncio.create_task(
+            case.service.execute(
+                context, case.service.render, ref["artifact_path"], ref["sha256"], source_identity_sha256=ref["sha256"]
+            )
+        )
+        case.tasks.append(task)
+        return task
+
+    case.start = start
+    try:
+        yield case
+    finally:
+        case.display_finish.set()
+
+
+async def settle_private_render(case, task, outcome):
+    try:
+        assert await asyncio.to_thread(case.display_started.wait, 2)
+        assert case.images and all(value() is not None for value in case.images)
+        assert case.service.admission.snapshot()["memory_reserved_bytes"] > 0
+        if outcome.startswith("cancel"):
+            for _ in range(3):
+                task.cancel()
+                await asyncio.sleep(0)
+            assert not task.done()
+            assert case.service.admission.snapshot()["memory_reserved_bytes"] > 0
+    finally:
+        case.display_finish.set()
+    expected = asyncio.CancelledError if outcome.startswith("cancel") else ReviewInputError
+    message = (
+        None
+        if outcome.startswith("cancel")
+        else ("controlled display response failure" if outcome == "response_failure" else "controlled private display failure")
+    )
+    with pytest.raises(expected, match=message) as caught:
+        await task
+    if not outcome.startswith("cancel"):
+        owner = "fail_response" if outcome == "response_failure" else "display"
+        assert any(frame.name == owner for frame in traceback.extract_tb(caught.value.__traceback__))
+    assert case.releases and case.buffers
+    assert case.service.admission.snapshot()["memory_reserved_bytes"] == 0
+
+
+@pytest.mark.parametrize("outcome", ["failure", "cancel_success", "cancel_failure"])
+async def test_private_render_drops_nested_source_before_lease_release(private_render_case, outcome):
+    case = private_render_case
+    case.outcome = outcome
+    await settle_private_render(case, case.start(), outcome)
+
+
+async def test_failed_render_response_drops_nested_encoded_output_before_lease_release(private_render_case, monkeypatch):
+    case = private_render_case
+    case.outcome = "response_failure"
+
+    def fail_response(*_args, **_kwargs):
+        raise ReviewInputError("controlled display response failure")
+
+    monkeypatch.setattr(review, "Response", fail_response)
+    await settle_private_render(case, case.start(), case.outcome)
+
+
+@pytest.mark.parametrize("auth_status", [401, 403])
+@pytest.mark.parametrize("outcome", ["failure", "cancel_success", "cancel_failure"])
+async def test_private_render_fallback_drops_nested_source_before_lease_release(private_render_case, auth_status, outcome):
+    case = private_render_case
+    case.outcome = outcome
+    started, finish = asyncio.Event(), asyncio.Event()
+    original_materialize = case.context.materialize
+    revoked = set()
+
+    def context(actor):
+        async def revalidate():
+            if actor in revoked:
+                raise ReviewAccessError("Controlled actor revocation", status=auth_status)
+
+        async def materialize(*args):
+            if actor == "leader":
+                started.set()
+                await finish.wait()
+                await revalidate()
+            return await original_materialize(*args)
+
+        return replace(
+            case.context,
+            actor={"username": actor},
+            binding_identity="same-private-source-binding",
+            materialize=materialize,
+            revalidate=revalidate,
+        )
+
+    leader = case.start(context("leader"))
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        follower = case.start(context("follower"))
+        for _ in range(20):
+            if case.service.admission.snapshot()["coalesced"] == 1:
+                break
+            await asyncio.sleep(0)
+        assert case.service.admission.snapshot()["coalesced"] == 1
+        revoked.add("leader")
+    finally:
+        finish.set()
+    with pytest.raises(ReviewAccessError) as caught:
+        await leader
+    assert caught.value.status == auth_status
+    await settle_private_render(case, follower, outcome)
+    assert case.service.admission.snapshot()["admitted"] == 2

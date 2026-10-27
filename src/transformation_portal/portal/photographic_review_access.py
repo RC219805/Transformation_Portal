@@ -410,114 +410,122 @@ class AppReviewAccess:
         discovery. No inferred sibling path grants read authority or substitutes
         for a missing descriptor/alpha inventory entry.
         """
-        parent = PurePosixPath(final["artifact_path"]).parent
-        records: dict[str, dict] = {}
-        for item in inventory:
-            raw_path = item.get("path") or item.get("relative_path")
-            if not isinstance(raw_path, str):
-                continue
-            path = PurePosixPath(_safe_relative(raw_path))
-            if path.parent != parent or path.name not in {"master.npy", "photograph.json", "alpha.npy", "source-icc.npy"}:
-                continue
-            if path.name in records:
-                raise ReviewAccessError("Native master inventory is ambiguous")
-            records[path.name] = {
-                "artifact_path": raw_path,
-                "sha256": item.get("sha256"),
-                "size_bytes": item.get("size_bytes"),
-                "kind": "indexed",
-                "source_name": path.name,
-                "scene_id": final["scene_id"],
-                "role": "native_component",
-                "input_color": "linear_srgb",
-                "identity_status": "committed_inventory_identity",
-            }
-        if "photograph.json" not in records:
-            final["working_master_unavailable_reason"] = "native_descriptor_not_in_committed_inventory"
-            return None
-        raw = await self._read_indexed(request, job, records["photograph.json"], MAX_NATIVE_DESCRIPTOR_BYTES)
-        descriptor = decode_bounded_json_object(raw)
-        if descriptor.get("schema") not in {
-            "tp.lux.photograph.v2",
-            "tp.lux.photograph.v3",
-            "tp.lux.graded_photograph.v1",
-            "tp.lux.graded_photograph.v2",
-        }:
-            raise ReviewAccessError("Native photographic descriptor schema is unsupported")
-        if descriptor.get("input_id") != final["scene_id"]:
-            raise ReviewAccessError("Native descriptor belongs to a different scene")
-        from transformation_portal.photographic_delivery.presentation import descriptor_policy
-
-        policy = descriptor_policy(
-            descriptor,
-            descriptor_sha256=records["photograph.json"]["sha256"],
-            artifact_sha256=final["sha256"],
-            source_identity_sha256=final["source_identity_sha256"],
-            delivery_path=str(PurePosixPath(final["artifact_path"]).relative_to(parent.parent)),
-        )
-        if policy is not None:
-            final.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
-        if "master.npy" not in records:
-            final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
-            return None
-        master = descriptor.get("master")
-        if (
-            not isinstance(master, dict)
-            or master.get("schema") != "tp.image.master.v1"
-            or master.get("color_space") != "linear_srgb"
-        ):
-            raise ReviewAccessError("Native descriptor lacks explicit linear-sRGB master authority")
-        alpha = records.get("alpha.npy")
-        if master.get("alpha_mode") == "straight":
-            if alpha is None:
-                final["working_master_unavailable_reason"] = "native_alpha_not_in_committed_inventory"
+        raw: bytes | None = None
+        carrier_bytes: bytes | None = None
+        profile_bytes: bytes | None = None
+        try:
+            parent = PurePosixPath(final["artifact_path"]).parent
+            records: dict[str, dict] = {}
+            for item in inventory:
+                raw_path = item.get("path") or item.get("relative_path")
+                if not isinstance(raw_path, str):
+                    continue
+                path = PurePosixPath(_safe_relative(raw_path))
+                if path.parent != parent or path.name not in {"master.npy", "photograph.json", "alpha.npy", "source-icc.npy"}:
+                    continue
+                if path.name in records:
+                    raise ReviewAccessError("Native master inventory is ambiguous")
+                records[path.name] = {
+                    "artifact_path": raw_path,
+                    "sha256": item.get("sha256"),
+                    "size_bytes": item.get("size_bytes"),
+                    "kind": "indexed",
+                    "source_name": path.name,
+                    "scene_id": final["scene_id"],
+                    "role": "native_component",
+                    "input_color": "linear_srgb",
+                    "identity_status": "committed_inventory_identity",
+                }
+            if "photograph.json" not in records:
+                final["working_master_unavailable_reason"] = "native_descriptor_not_in_committed_inventory"
                 return None
-            _identity(alpha, MAX_REVIEW_IMAGE_BYTES)
-        elif master.get("alpha_mode") is not None or alpha is not None:
-            raise ReviewAccessError("Native alpha inventory disagrees with the descriptor")
-        profile = None
-        if "source-icc.npy" in records:
-            carrier = records["source-icc.npy"]
-            carrier_bytes = await self._read_indexed(request, job, carrier, MAX_NATIVE_ICC_BYTES + 65536)
-            profile_bytes = _icc_bytes(carrier_bytes)
-            profile_sha = hashlib.sha256(profile_bytes).hexdigest()
-            if master.get("source_icc_sha256") != profile_sha:
-                raise ReviewAccessError("Native ICC carrier disagrees with its retained descriptor")
-            profile = {
-                **carrier,
-                "artifact_path": str(parent / "source-icc.raw"),
-                "source_name": "source.icc",
-                "sha256": profile_sha,
-                "size_bytes": len(profile_bytes),
-                "kind": "native_icc",
-                "carrier_ref": carrier,
+            raw = await self._read_indexed(request, job, records["photograph.json"], MAX_NATIVE_DESCRIPTOR_BYTES)
+            descriptor = decode_bounded_json_object(raw)
+            if descriptor.get("schema") not in {
+                "tp.lux.photograph.v2",
+                "tp.lux.photograph.v3",
+                "tp.lux.graded_photograph.v1",
+                "tp.lux.graded_photograph.v2",
+            }:
+                raise ReviewAccessError("Native photographic descriptor schema is unsupported")
+            if descriptor.get("input_id") != final["scene_id"]:
+                raise ReviewAccessError("Native descriptor belongs to a different scene")
+            from transformation_portal.photographic_delivery.presentation import descriptor_policy
+
+            policy = descriptor_policy(
+                descriptor,
+                descriptor_sha256=records["photograph.json"]["sha256"],
+                artifact_sha256=final["sha256"],
+                source_identity_sha256=final["source_identity_sha256"],
+                delivery_path=str(PurePosixPath(final["artifact_path"]).relative_to(parent.parent)),
+            )
+            if policy is not None:
+                final.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+            if "master.npy" not in records:
+                final["working_master_unavailable_reason"] = "native_master_not_in_committed_inventory"
+                return None
+            master = descriptor.get("master")
+            if (
+                not isinstance(master, dict)
+                or master.get("schema") != "tp.image.master.v1"
+                or master.get("color_space") != "linear_srgb"
+            ):
+                raise ReviewAccessError("Native descriptor lacks explicit linear-sRGB master authority")
+            alpha = records.get("alpha.npy")
+            if master.get("alpha_mode") == "straight":
+                if alpha is None:
+                    final["working_master_unavailable_reason"] = "native_alpha_not_in_committed_inventory"
+                    return None
+                _identity(alpha, MAX_REVIEW_IMAGE_BYTES)
+            elif master.get("alpha_mode") is not None or alpha is not None:
+                raise ReviewAccessError("Native alpha inventory disagrees with the descriptor")
+            profile = None
+            if "source-icc.npy" in records:
+                carrier = records["source-icc.npy"]
+                carrier_bytes = await self._read_indexed(request, job, carrier, MAX_NATIVE_ICC_BYTES + 65536)
+                profile_bytes = _icc_bytes(carrier_bytes)
+                profile_sha = hashlib.sha256(profile_bytes).hexdigest()
+                if master.get("source_icc_sha256") != profile_sha:
+                    raise ReviewAccessError("Native ICC carrier disagrees with its retained descriptor")
+                profile = {
+                    **carrier,
+                    "artifact_path": str(parent / "source-icc.raw"),
+                    "source_name": "source.icc",
+                    "sha256": profile_sha,
+                    "size_bytes": len(profile_bytes),
+                    "kind": "native_icc",
+                    "carrier_ref": carrier,
+                }
+            main = records["master.npy"]
+            _identity(main, MAX_REVIEW_IMAGE_BYTES)
+            identity = {
+                "schema": "tp.photo.source_identity.v1",
+                "master_sha256": main["sha256"],
+                "descriptor_sha256": records["photograph.json"]["sha256"],
+                "alpha_sha256": alpha["sha256"] if alpha is not None else None,
+                "source_icc_sha256": profile["sha256"] if profile is not None else None,
             }
-        main = records["master.npy"]
-        _identity(main, MAX_REVIEW_IMAGE_BYTES)
-        identity = {
-            "schema": "tp.photo.source_identity.v1",
-            "master_sha256": main["sha256"],
-            "descriptor_sha256": records["photograph.json"]["sha256"],
-            "alpha_sha256": alpha["sha256"] if alpha is not None else None,
-            "source_icc_sha256": profile["sha256"] if profile is not None else None,
-        }
-        reference = {
-            **main,
-            "role": "working_master",
-            "label": final["label"],
-            "version": "native",
-            "source_identity_sha256": hashlib.sha256(canonicalize_json(identity)).hexdigest(),
-            "native": {"descriptor": records["photograph.json"], "alpha": alpha, "source_icc": profile},
-        }
-        policy = descriptor_policy(
-            descriptor,
-            descriptor_sha256=records["photograph.json"]["sha256"],
-            artifact_sha256=main["sha256"],
-            source_identity_sha256=reference["source_identity_sha256"],
-        )
-        if policy is not None:
-            reference.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
-        return reference
+            reference = {
+                **main,
+                "role": "working_master",
+                "label": final["label"],
+                "version": "native",
+                "source_identity_sha256": hashlib.sha256(canonicalize_json(identity)).hexdigest(),
+                "native": {"descriptor": records["photograph.json"], "alpha": alpha, "source_icc": profile},
+            }
+            policy = descriptor_policy(
+                descriptor,
+                descriptor_sha256=records["photograph.json"]["sha256"],
+                artifact_sha256=main["sha256"],
+                source_identity_sha256=reference["source_identity_sha256"],
+            )
+            if policy is not None:
+                reference.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
+            return reference
+        finally:
+            # Discovery failures unwind before the service owns a method frame.
+            # Release verified companion snapshots before its lease can end.
+            del raw, carrier_bytes, profile_bytes
 
     async def authorize(self, request: Request, job_id: str) -> ReviewContext | Response:
         return await self._authorize(request, job_id, include_references=True)
