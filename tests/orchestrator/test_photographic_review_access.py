@@ -1044,6 +1044,53 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
     monkeypatch.setattr(adapter.AppReviewAccess, "_originals", AsyncMock(return_value=([], "original_unavailable")))
 
 
+@pytest.mark.parametrize("npy_version", [(1, 0), (2, 0)])
+@pytest.mark.parametrize("oversized", [False, True])
+async def test_native_alpha_spooling_matches_verified_geometry_budget(fake_app, monkeypatch, tmp_path, npy_version, oversized):
+    import io
+
+    import numpy as np
+
+    from transformation_portal.orchestrator.photographic_review_service import spool_image
+
+    app, *_ = fake_app
+    bodies, _, _ = _native_inventory(alpha=True, icc=False)
+    alpha = np.full((8, 12), 0.6, dtype=np.float32)
+    encoded = io.BytesIO()
+    np.lib.format.write_array(encoded, alpha, version=npy_version, allow_pickle=False)
+    budget = alpha.size * 4 + 4108
+    standard = encoded.getvalue()
+    prefix_bytes = 10 if npy_version == (1, 0) else 12
+    header_size = int.from_bytes(standard[8:prefix_bytes], "little")
+    header = standard[prefix_bytes : prefix_bytes + header_size].strip()
+    header += b" " * (4096 - len(header) - 1) + b"\n"
+    body = standard[:8] + (4096).to_bytes(prefix_bytes - 8, "little") + header + standard[prefix_bytes + header_size :]
+    if oversized:
+        body += b"x" * (budget + 1 - len(body))
+    artifact = "v6/input-0000/alpha.npy"
+    bodies[artifact] = body
+    inventory = [
+        {"path": path, "sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)} for path, data in bodies.items()
+    ]
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+    selected = next(ref for ref in context.references if ref["role"] == "working_master")
+    app._get_job_artifact.reset_mock()
+    target = tmp_path / "native-spool"
+    if oversized:
+        with pytest.raises(ReviewAccessError, match="admitted byte budget") as caught:
+            await spool_image(context, selected, target)
+        assert caught.value.status == 413 and caught.value.code == "RESOURCE_EXHAUSTED"
+        assert not (target / "alpha.npy").exists(), "oversized alpha was written outside its frozen geometry claim"
+        assert not any(call.args[1] == artifact for call in app._get_job_artifact.await_args_list)
+        assert (target / "master.npy").read_bytes() == bodies["v6/input-0000/master.npy"]
+    else:
+        image = await spool_image(context, selected, target)
+        assert image.native is not None and image.native.alpha_path == target / "alpha.npy"
+        assert (target / "alpha.npy").read_bytes() == body
+        np.testing.assert_array_equal(image.decode().alpha, alpha)
+
+
 async def test_legacy_minimal_descriptor_keeps_clip_readable_without_invented_recorded_authority(fake_app, monkeypatch):
     app, *_ = fake_app
     bodies, inventory, _ = _native_inventory(False, False)

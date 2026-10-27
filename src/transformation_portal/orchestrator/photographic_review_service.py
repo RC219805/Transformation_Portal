@@ -426,7 +426,13 @@ async def spool_image(context: ReviewContext, ref: JsonObject, directory: Path) 
             companion_path = (
                 directory / {"descriptor": "photograph.json", "alpha": "alpha.npy", "source_icc": "source.icc"}[name]
             )
-            budget = {"descriptor": 2 * 1024**2, "alpha": MAX_IMAGE_BYTES, "source_icc": 16 * 1024**2}[name]
+            # Native alpha is float32 with a bounded 4096-byte NPY header
+            # plus at most 12 bytes for the v2 magic/version/length prefix.
+            budget = {
+                "descriptor": 2 * 1024**2,
+                "alpha": min(MAX_IMAGE_BYTES, width * height * 4 + 4108),
+                "source_icc": 16 * 1024**2,
+            }[name]
             actual = await context.materialize(companion, companion_path, budget)
             if actual["sha256"] != companion["sha256"]:
                 raise ReviewAccessError("Working master companion changed during inspection")
@@ -810,7 +816,7 @@ class PhotographicReviewService:
                 "native": {
                     "descriptor": {"size_bytes": 2 * 1024**2},
                     "source_icc": {"size_bytes": 16 * 1024**2},
-                    "alpha": {"size_bytes": min(MAX_IMAGE_BYTES, pixels * 4 + 4096)} if row.get("alpha", True) else None,
+                    "alpha": {"size_bytes": min(MAX_IMAGE_BYTES, pixels * 4 + 4108)} if row.get("alpha", True) else None,
                 },
             }
 
@@ -837,7 +843,9 @@ class PhotographicReviewService:
             products = (complete - sources - 2 * 1024**3) // 5
             workspace = sources + products * 3 + 2 * 1024**3
             publication_bytes = products * 2
-        elif operation == "revision":
+        elif operation == "revision" and (not args or not args[0].preview_only):
+            # Previews encode in memory and return before any product file or
+            # publication is written. Their full source scratch stays reserved.
             product = cost.max_pixels * 16 + 65536
             workspace += product * 2
             publication_bytes = product * 2

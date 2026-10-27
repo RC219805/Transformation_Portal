@@ -861,6 +861,122 @@ async def test_local_publication_filesystem_is_checked_independently(monkeypatch
     await lease.release()
 
 
+async def test_revision_preview_omits_unwritten_publication_claim_without_reducing_source_budget(monkeypatch, tmp_path):
+    import hashlib
+    import io
+    import tempfile
+    from pathlib import Path
+
+    from PIL import Image
+
+    from transformation_portal import photographic_delivery
+    from transformation_portal.api.v1.photographic_review import RevisionRequest
+    from transformation_portal.orchestrator import photographic_admission as module
+
+    raw = io.BytesIO()
+    with Image.new("RGB", (8, 6), "white") as image:
+        image.save(raw, format="PNG")
+    data = raw.getvalue()
+    sha = hashlib.sha256(data).hexdigest()
+    ref = {
+        "artifact_path": "final.png",
+        "source_name": "final.png",
+        "scene_id": "scene",
+        "sha256": sha,
+        "source_identity_sha256": sha,
+        "input_color": "srgb",
+        "role": "final",
+    }
+    inspection = {"width": 8, "height": 6, "alpha": False}
+    state = {
+        "state_version": 0,
+        "decisions": [{**ref, "status": "selected", "inspection": inspection}],
+        "revisions": [],
+        "groups": [],
+    }
+    temporary = Path(tempfile.gettempdir()).resolve()
+    publication = tmp_path / "publication"
+    publication.mkdir()
+    original_stat = Path.stat
+
+    def filesystem_stat(path, *args, **kwargs):
+        info = original_stat(path, *args, **kwargs)
+        return SimpleNamespace(st_dev=999999) if path == publication else info
+
+    async def materialize(selected, destination, maximum):
+        assert selected["sha256"] == sha and len(data) <= maximum
+        destination.write_bytes(data)
+        return {"sha256": sha, "size_bytes": len(data)}
+
+    case = replace(
+        context(identity=None), references=[ref], materialize=AsyncMock(side_effect=materialize), publication_root=publication
+    )
+    service = PhotographicReviewService(configuration())
+    monkeypatch.setattr(service, "state", AsyncMock(return_value=state))
+    preview = RevisionRequest(
+        artifact_path=ref["artifact_path"],
+        sha256=sha,
+        source_identity_sha256=sha,
+        scene_id="scene",
+        expected_version=0,
+        recipe={},
+        preview_only=True,
+    )
+    save = preview.model_copy(update={"preview_only": False})
+    preview_cost = service._resource_cost(case, state, "revision", (preview,), [inspection])
+    save_cost = service._resource_cost(case, state, "revision", (save,), [inspection])
+    available = {temporary: 100 * GIB, publication: 0}
+    checked, rendered = [], []
+
+    def disk_usage(path):
+        checked.append(path)
+        return SimpleNamespace(free=available[path])
+
+    create_revision = photographic_delivery.create_revision
+
+    def tracked_revision(*args, **kwargs):
+        lease = current_review_lease.get()
+        assert lease is not None
+        rendered.append(lease.cost)
+        return create_revision(*args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", filesystem_stat)
+    monkeypatch.setattr(module.shutil, "disk_usage", disk_usage)
+    monkeypatch.setattr(photographic_delivery, "create_revision", tracked_revision)
+    try:
+        result = await service.execute(case, service.revision, preview)
+        assert result["preview_data_url"].startswith("data:image/png;base64,")
+        assert rendered == [preview_cost] and publication not in checked
+        assert preview_cost.memory_bytes == save_cost.memory_bytes
+        assert preview_cost.decode_slots == save_cost.decode_slots == 1
+        assert preview_cost.io_slots == save_cost.io_slots == 1
+        source_scratch = (512 + 2 + 16 + 256) * 1024**2
+        assert preview_cost.filesystems == ((temporary, source_scratch),)
+        assert preview_cost.scratch_bytes == source_scratch
+        assert (
+            service._resource_cost(replace(case, publication_root=None), state, "revision", (preview,), [inspection])
+            == preview_cost
+        )
+        assert save_cost.scratch_bytes > preview_cost.scratch_bytes and publication in dict(save_cost.filesystems)
+        case.publish.assert_not_awaited()
+
+        checked.clear()
+        with pytest.raises(ReviewOverload) as caught:
+            await service.execute(case, service.revision, save)
+        assert caught.value.reason == "scratch_unavailable" and publication in checked
+        assert len(rendered) == case.materialize.await_count == 1
+        case.publish.assert_not_awaited()
+
+        available[temporary] = source_scratch + 4 * GIB - 1  # Source claim + protected inspection + physical floor.
+        with pytest.raises(ReviewOverload) as caught:
+            await service.execute(case, service.revision, preview)
+        assert caught.value.reason == "scratch_unavailable"
+        assert len(rendered) == case.materialize.await_count == 1
+        assert service.admission.snapshot()["active"] == service.admission.snapshot()["outstanding"] == 0
+    finally:
+        await service.close()
+
+
 async def test_inspection_checks_only_its_filesystems_and_all_shared_commitments(monkeypatch, tmp_path):
     import tempfile
     from pathlib import Path
