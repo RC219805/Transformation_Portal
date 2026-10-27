@@ -621,6 +621,68 @@ async function prepareDirectDownload(h) {
   return h.root.find("photographic-delivery-download");
 }
 
+function approvedHistoryResponse() {
+  return new Response(JSON.stringify({ success: true, data: { state_version: 2, snapshot_count: 1, next_cursor: null,
+    items: [{ id: "older-approved", approval_at_creation: "recorded", current_recorded_approval: "approved",
+      files: [{ filename: "older.zip", url: "/v1/jobs/job-one/photographic-review/files/older/older.zip", sha256: ORIGINAL_SHA }] }] } }));
+}
+
+test("direct-debug approved history downloads survive invalidation of the latest export selection", async (t) => {
+  const previousPicker = globalThis.showSaveFilePicker;
+  delete globalThis.showSaveFilePicker;
+  t.after(() => { if (previousPicker !== undefined) globalThis.showSaveFilePicker = previousPicker; });
+  let withdrawn = false, finishHistory;
+  const h = directDownloadFixture(t, (url) => {
+    if (url.includes("/deliveries?")) return withdrawn ? new Promise((resolve) => { finishHistory = resolve; }) : approvedHistoryResponse();
+    if (withdrawn && url.endsWith("/photographic-review")) return new Response(JSON.stringify({ success: true, data: {
+      state_version: 3, scenes: [{ scene_id: "input-0000", variants: [variant] }],
+      decisions: [{ ...variant, status: "needs_revision" }], groups: [], presets: [WEBSITE_PRESET],
+    } }));
+    return null;
+  });
+  const latest = await prepareDirectDownload(h);
+  const history = h.root.find("photographic-delivery-history-download");
+  assert.ok(history);
+  withdrawn = true;
+  await h.api.refresh(); await settle();
+  assert.match(h.root.find("photographic-delivery-result").textContent, /approval changed/);
+  const before = h.requests.filter(({ url }) => url.includes("/files/")).length;
+  await latest.trigger();
+  assert.equal(h.requests.filter(({ url }) => url.includes("/files/")).length, before, "the latest link remains bound to its selected sources");
+  await history.trigger();
+  const download = h.requests.filter(({ url }) => url.includes("/files/")).at(-1);
+  assert.match(download.url, /\/older\/older.zip$/);
+  assert.equal(download.options.headers["x-api-key"], "fixture-key");
+  assert.equal(download.options.credentials, "same-origin");
+  assert.equal(h.body.children.at(-1).download, "older.zip");
+  finishHistory(approvedHistoryResponse()); await settle();
+});
+
+for (const changedScope of ["logout", "job", "actor", "tenant"]) {
+  test(`direct-debug history download is canceled when ${changedScope} changes its authenticated scope`, async (t) => {
+    const previousPicker = globalThis.showSaveFilePicker;
+    delete globalThis.showSaveFilePicker;
+    t.after(() => { if (previousPicker !== undefined) globalThis.showSaveFilePicker = previousPicker; });
+    let finishDownload;
+    const h = directDownloadFixture(t, (url) => url.includes("/deliveries?") ? approvedHistoryResponse()
+      : url.includes("/files/") ? new Promise((resolve) => { finishDownload = resolve; }) : null);
+    h.api.show(h.job, variant); await settle();
+    const link = h.root.find("photographic-delivery-history-download");
+    await link.trigger();
+    const download = h.requests.find(({ url }) => url.includes("/files/"));
+    if (changedScope === "logout") h.api.show(null, null);
+    else if (changedScope === "job") h.api.show({ ...h.job, id: "job-two" }, variant);
+    else { h.state.auth[changedScope] = `${changedScope}-two`; h.api.show(h.job, variant); }
+    assert.equal(download.options.signal.aborted, true);
+    finishDownload(new Response("archive", { headers: { "Content-Length": "7", "X-TP-Artifact-SHA256": ORIGINAL_SHA } }));
+    await settle();
+    assert.equal(h.body.children.length, 0, "a stale authenticated response cannot save a file");
+    const before = h.requests.filter(({ url }) => url.includes("/files/")).length;
+    await link.trigger();
+    assert.equal(h.requests.filter(({ url }) => url.includes("/files/")).length, before, "a stale link cannot start another download");
+  });
+}
+
 test("direct-debug thumbnails and streamed ZIP/companion downloads use authenticated headers and retain filenames", async (t) => {
   const previousPicker = globalThis.showSaveFilePicker;
   const saved = [];
@@ -1005,4 +1067,102 @@ test("an active local cooldown creates no delivery attempt or POST and expiry pe
   assert.equal(submitted.expected_version, 1);
   assert.equal(submitted.request_correlation_id, "explicit-after-cooldown-1");
   assert.equal(h.requests.filter((request) => request.url.endsWith("/delivery")).length, 1);
+});
+
+test("a received export 429 clears only its rejected attempt and requires an explicit retry after cooldown", async (t) => {
+  let now = 100000;
+  t.mock.method(Date, "now", () => now);
+  let correlations = 0;
+  t.mock.method(globalThis.crypto, "randomUUID", () => `rejected-then-explicit-${++correlations}`);
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  const submitted = [];
+  const h = fixture({ sessionStorage: storage, extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") {
+      submitted.push(JSON.parse(options.body));
+      if (submitted.length === 1) return new Response("rate limited before export", { status: 429, headers: { "Retry-After": "2" } });
+      return new Response(JSON.stringify({ success: true, data: { state_version: 2, filename: "explicit.zip",
+        download_url: "/v1/jobs/job-one/photographic-review/files/new/explicit.zip", sha256: SHA, size_bytes: 20 } }));
+    }
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: 1, snapshot_count: 0, items: [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.deepEqual(JSON.parse(values.get("tp.photo.delivery_recovery.v1")), []);
+  assert.equal(h.root.find("photographic-deliver-approved").disabled, false);
+  assert.match(h.root.find("photographic-review-status").textContent, /Rate limited.*Retry after/);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(submitted.length, 1);
+  assert.equal(correlations, 1, "the active cooldown creates no replacement attempt");
+  now += 2001;
+  await h.root.find("photographic-delivery-reconcile").trigger();
+  assert.equal(submitted.length, 1, "expiry and GET history never retry the POST automatically");
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(submitted.length, 2);
+  assert.equal(submitted[0].expected_version, 1);
+  assert.equal(submitted[1].expected_version, 1, "a rejected request did not commit a new review version");
+  assert.notEqual(submitted[1].request_correlation_id, submitted[0].request_correlation_id);
+});
+
+for (const clearFailure of ["unavailable storage", "replaced attempt"]) {
+  test(`a received export 429 stays blocked when compare-clear finds ${clearFailure}`, async (t) => {
+    let now = 100000, refuseClear = false;
+    t.mock.method(Date, "now", () => now);
+    const values = new Map();
+    const storage = { getItem: (key) => values.get(key), setItem: (key, value) => {
+      if (refuseClear && value === "[]") throw new Error("Storage disabled");
+      values.set(key, value);
+    } };
+    let submitted;
+    const h = fixture({ sessionStorage: storage, extraFetch: (url, options) => {
+      if (url.endsWith("/delivery") && options.method === "POST") {
+        submitted = JSON.parse(options.body);
+        if (clearFailure === "unavailable storage") refuseClear = true;
+        else {
+          const entries = JSON.parse(values.get("tp.photo.delivery_recovery.v1"));
+          entries[0].attempt.body.request_correlation_id = "another-retained-attempt";
+          values.set("tp.photo.delivery_recovery.v1", JSON.stringify(entries));
+        }
+        return new Response("rate limited", { status: 429, headers: { "Retry-After": "2" } });
+      }
+      if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: 1, snapshot_count: 0, items: [], next_cursor: null } }));
+      return null;
+    } });
+    await prepareExport(h);
+    await h.root.find("photographic-deliver-approved").trigger();
+    const retained = values.get("tp.photo.delivery_recovery.v1");
+    assert.equal(JSON.parse(retained).length, 1);
+    assert.equal(JSON.parse(retained)[0].attempt.body.request_correlation_id,
+      clearFailure === "unavailable storage" ? submitted.request_correlation_id : "another-retained-attempt");
+    assert.match(h.root.find("photographic-review-status").textContent, /rejected export.*could not be cleared safely.*Export remains blocked/);
+    assert.equal(h.root.find("photographic-deliver-approved").disabled, true);
+    now += 2001;
+    await h.root.find("photographic-delivery-reconcile").trigger();
+    await h.root.find("photographic-deliver-approved").trigger();
+    assert.equal(h.root.find("photographic-deliver-approved").disabled, true);
+    assert.equal(h.requests.filter(({ url }) => url.endsWith("/delivery")).length, 1);
+    assert.equal(values.get("tp.photo.delivery_recovery.v1"), retained, "reconciliation cannot erase a different or unavailable record");
+  });
+}
+
+test("a received export 503 remains uncertain and uses GET-only reconciliation", async () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  const h = fixture({ sessionStorage: storage, extraFetch: (url, options) => {
+    if (url.endsWith("/delivery") && options.method === "POST") return new Response(JSON.stringify({ success: false,
+      error: { message: "upstream unavailable" } }), { status: 503 });
+    if (url.includes("/deliveries?")) return new Response(JSON.stringify({ success: true, data: { state_version: 1, snapshot_count: 0, items: [], next_cursor: null } }));
+    return null;
+  } });
+  await prepareExport(h);
+  await h.root.find("photographic-deliver-approved").trigger();
+  const retained = values.get("tp.photo.delivery_recovery.v1");
+  assert.equal(JSON.parse(retained).length, 1);
+  assert.equal(h.root.find("photographic-deliver-approved").disabled, true);
+  await h.root.find("photographic-delivery-reconcile").trigger();
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(h.requests.filter(({ url }) => url.endsWith("/delivery")).length, 1);
+  assert.equal(values.get("tp.photo.delivery_recovery.v1"), retained);
+  assert.match(h.root.find("photographic-delivery-history-status").textContent, /still unknown.*no automatic export retry/);
 });

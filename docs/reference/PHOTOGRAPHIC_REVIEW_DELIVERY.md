@@ -550,6 +550,12 @@ storage recovers, reconcile its retained scoped attempt before another export.
 A local rate-limit cooldown is checked before creating or saving an attempt, so
 an unsent request creates no orphan recovery record. After the cooldown expires,
 the operator may explicitly submit a fresh export.
+A received HTTP 429 rejection compare-clears only the exact saved attempt and
+retains its cooldown; a failed or conflicting clear keeps export blocked. HTTP
+503 and transport failures remain uncertain and require GET-only reconciliation.
+An approved historical download is bound to its authenticated actor, tenant and
+job independently of the latest export selection; the server still revalidates
+its approval, source identity and bytes when it is downloaded.
 
 No additional database migration is required beyond
 `0008_photographic_review`. New entry/event metadata is additive and older

@@ -221,13 +221,17 @@ export function createPhotographicReview(host) {
     if (imageTimer) clearTimeout(imageTimer);
     finishImageDelay?.(); finishImageDelay = null; imageTimer = null;
   }
-  function checkBackoff() {
-    if (Date.now() < retryAt) throw new Error(`Rate limited. Retry after ${Math.ceil((retryAt - Date.now()) / 1000)} seconds; your selection and saved decisions are retained.`);
+  function checkBackoff(httpStatus = null) {
+    if (Date.now() < retryAt) {
+      const error = new Error(`Rate limited. Retry after ${Math.ceil((retryAt - Date.now()) / 1000)} seconds; your selection and saved decisions are retained.`);
+      if (httpStatus !== null) error.httpStatus = httpStatus;
+      throw error;
+    }
   }
   function checkRateLimit(response) {
     if (response.status !== 429) return;
     retryAt = Math.max(retryAt, Date.now() + photographicRetryAfterMs(response.headers.get("Retry-After")));
-    checkBackoff();
+    checkBackoff(response.status);
   }
   function identity(variant) { return variant?.source_identity_sha256 || variant?.sha256 || ""; }
   function recordedPresentationEnabled() { return state.auth?.features?.photographicRecordedPresentation === true; }
@@ -960,11 +964,12 @@ export function createPhotographicReview(host) {
     if (downloadObjectUrl) URL.revokeObjectURL(downloadObjectUrl);
     downloadObjectUrl = "";
   }
-  function downloadScope() { return JSON.stringify([jobId, actorScope, deliverySources]); }
-  function bindDownload(link, url, filename, sha = "") {
+  function downloadScope(history = false) { return JSON.stringify(history ? [jobId, actorScope, scopeGeneration] : [jobId, actorScope, scopeGeneration, deliverySources]); }
+  function bindDownload(link, url, filename, sha = "", history = false) {
     link.href = url; link.download = filename;
     if (state.auth?.mode !== "direct_debug") return;
-    const scope = downloadScope();
+    const currentScope = () => downloadScope(history);
+    const scope = currentScope();
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       clearDownload();
@@ -974,9 +979,9 @@ export function createPhotographicReview(host) {
       let writable = null;
       try {
         checkBackoff();
-        if (scope !== downloadScope() || !photographicAssetUrl(url, jobId)) throw new Error("Delivery selection changed. Create a current verified bundle.");
+        if (scope !== currentScope() || !photographicAssetUrl(url, jobId)) throw new Error("Delivery selection changed. Create a current verified bundle.");
         const handle = globalThis.showSaveFilePicker ? await globalThis.showSaveFilePicker({ suggestedName: filename }) : null;
-        if (scope !== downloadScope() || controller.signal.aborted) return;
+        if (scope !== currentScope() || controller.signal.aborted) return;
         status(`Downloading ${filename} through authenticated access…`);
         const response = await fetchImpl(url, { method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
           headers: _buildAuthHeaders({ Accept: "application/octet-stream" }, "GET") });
@@ -987,7 +992,7 @@ export function createPhotographicReview(host) {
         if (handle) {
           writable = await handle.createWritable();
           await response.body.pipeTo(writable, { signal: controller.signal, preventClose: true });
-          if (scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed during download; the file was not committed.");
+          if (scope !== currentScope() || controller.signal.aborted) throw new Error("Delivery changed during download; the file was not committed.");
           await writable.close(); writable = null;
           status(`Saved ${filename}.`);
         } else {
@@ -1004,7 +1009,7 @@ export function createPhotographicReview(host) {
             if (size > length || size > limit) throw new Error("Download exceeded its bounded size; use the managed front door.");
             chunks.push(value);
           }
-          if (size !== length || scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed or its download was incomplete.");
+          if (size !== length || scope !== currentScope() || controller.signal.aborted) throw new Error("Delivery changed or its download was incomplete.");
           downloadObjectUrl = URL.createObjectURL(new Blob(chunks, { type: response.headers.get("Content-Type") || "application/octet-stream" }));
           const anchor = doc.createElement("a"); anchor.href = downloadObjectUrl; anchor.download = filename;
           doc.body.append(anchor); anchor.click(); anchor.remove();
@@ -1016,7 +1021,7 @@ export function createPhotographicReview(host) {
         if (writable) await writable.abort().catch(() => {});
         if (downloadController === controller) {
           clearDownload();
-          if (scope === downloadScope()) status(error.name === "AbortError" ? "Download canceled." : error.message, true);
+          if (scope === currentScope()) status(error.name === "AbortError" ? "Download canceled." : error.message, true);
         }
       } finally {
         clearTimeout(timer); requests.delete(controller);
@@ -1045,7 +1050,7 @@ export function createPhotographicReview(host) {
           const url = photographicAssetUrl(file.url, jobId);
           if (!url || !SHA256.test(file.sha256 || "")) continue;
           const link = el("a", `Download ${file.filename}`, "operator-action-btn operator-action-btn-secondary", "photographic-delivery-history-download");
-          bindDownload(link, url, file.filename, file.sha256);
+          bindDownload(link, url, file.filename, file.sha256, true);
           row.append(link);
         }
       }
@@ -1195,7 +1200,12 @@ export function createPhotographicReview(host) {
       void load(); void loadDeliveryHistory();
     } catch (error) {
       if (expectedScope !== deliveryRecoveryScope() || expectedGeneration !== scopeGeneration || deliveryAttempt !== attempt) return;
-      if ([400, 422].includes(error.httpStatus)) { deliveryOutcome = "idle"; saveDeliveryAttempt(null); status(error.message, true); }
+      if ([400, 422, 429].includes(error.httpStatus)) {
+        const cleared = saveDeliveryAttempt(null);
+        deliveryOutcome = cleared ? "idle" : "refresh_required";
+        if (!cleared) recoveryStorageBlocked = true;
+        status(`${error.message}${cleared ? "" : " The rejected export's recovery record could not be cleared safely. Export remains blocked; restore session storage and reconcile delivery history."}`, true);
+      }
       else {
         deliveryOutcome = "outcome_unknown";
         status("Export outcome is unknown. Reconciling committed history; the original request will not be retried.", true);
