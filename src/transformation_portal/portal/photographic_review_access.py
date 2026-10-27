@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import io
 import os
 import re
 import stat
 import tempfile
 from pathlib import Path, PurePosixPath
+from types import FrameType
 from typing import Any, AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping, TypeVar
 
 from fastapi import Request
@@ -33,6 +35,7 @@ from transformation_portal.orchestrator.artifact_store.generation import _verify
 from transformation_portal.orchestrator.photographic_admission import (
     ReviewOverload,
     current_review_lease,
+    drain_owned,
     owned_review_directory,
     run_review_thread,
 )
@@ -53,6 +56,29 @@ MAX_NATIVE_ICC_BYTES = 16 * 1024**2
 _Result = TypeVar("_Result")
 
 
+def _clear_owned_operation_failure(error: BaseException, owned_frame: FrameType | None) -> None:
+    """Release locals of stopped workers, never another suspended async caller."""
+    pending, seen = [error], set()
+    while pending:
+        failure = pending.pop()
+        if id(failure) in seen:
+            continue
+        seen.add(id(failure))
+        trace = failure.__traceback__
+        while trace is not None:
+            frame = trace.tb_frame
+            asynchronous = frame.f_code.co_flags & (inspect.CO_COROUTINE | inspect.CO_ASYNC_GENERATOR | inspect.CO_GENERATOR)
+            if not asynchronous or frame is owned_frame:
+                try:
+                    frame.clear()
+                except RuntimeError:
+                    pass  # An executing frame still owns its locals.
+            trace = trace.tb_next
+        pending.extend(value for value in (failure.__cause__, failure.__context__) if value is not None)
+        if isinstance(failure, BaseExceptionGroup):
+            pending.extend(failure.exceptions)
+
+
 async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable[[], None] | None = None) -> _Result:
     """Drain owned IO before cancellation releases snapshots or publication keys.
 
@@ -60,10 +86,17 @@ async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable
     cancellation arrived during the operation, so its exact new key can be
     rolled back after the write has stopped. Failed writes never acquire it.
     """
+    owned_frame = operation.cr_frame if inspect.iscoroutine(operation) else None
     worker = asyncio.ensure_future(operation)
+    cancelled = False
+    result: _Result | None = None
     try:
         result = await asyncio.shield(worker)
+        if completed is not None:
+            completed()
+        return result
     except asyncio.CancelledError:
+        cancelled = True
         while not worker.done():
             try:
                 await asyncio.shield(worker)
@@ -71,12 +104,25 @@ async def _owned_operation(operation: Awaitable[_Result], *, completed: Callable
                 continue
             except Exception:
                 break
-        if not worker.cancelled() and worker.exception() is None and completed is not None:
-            completed()
+        if not worker.cancelled():
+            failure = worker.exception()
+            if failure is None:
+                if completed is not None:
+                    completed()
+            else:
+                _clear_owned_operation_failure(failure, owned_frame)
         raise
-    if completed is not None:
-        completed()
-    return result
+    except BaseException as error:
+        if worker.done():
+            _clear_owned_operation_failure(error, owned_frame)
+        raise
+    finally:
+        result = None
+        del operation, worker, owned_frame, completed
+        if cancelled:
+            # Completed-task callbacks can retain a discarded successful result
+            # for this loop turn. Keep the lease until that handoff is drained.
+            await drain_owned(asyncio.sleep(0))
 
 
 def _icc_bytes(data: bytes) -> bytes:
@@ -602,7 +648,10 @@ class AppReviewAccess:
                     maximum_bytes=maximum_bytes,
                 )
             )
-            chunks = _single_chunk(data)
+            try:
+                chunks = _single_chunk(data)
+            finally:
+                del data
         elif ref.get("kind") == "review_asset":
             state = await get_review_store().get(job.id, tenant_id)
             # Presentation is derived from the committed receipt after selecting
@@ -631,12 +680,18 @@ class AppReviewAccess:
             if not isinstance(carrier, dict) or carrier.get("kind") != "indexed":
                 raise ReviewAccessError("Native ICC carrier reference is unavailable")
             data = await self._read_indexed(request, current[0], carrier, MAX_NATIVE_ICC_BYTES + 65536)
-            chunks = _single_chunk(_icc_bytes(data))
+            try:
+                chunks = _single_chunk(_icc_bytes(data))
+            finally:
+                del data
         elif ref.get("kind") == "indexed":
             chunks = await self._indexed_chunks(request, current[0], ref["artifact_path"], maximum_bytes)
         else:
             raise ReviewAccessError("Unknown review source", status=400, code="INVALID_ARGUMENT")
-        return await _stream_snapshot(chunks, destination, maximum_bytes, expected_size, expected_sha)
+        try:
+            return await _stream_snapshot(chunks, destination, maximum_bytes, expected_size, expected_sha)
+        finally:
+            del chunks
 
     async def _indexed_chunks(
         self, request: Request, job: Any, artifact_path: str, maximum_bytes: int
@@ -652,10 +707,7 @@ class AppReviewAccess:
             return _byte_stream(response.body_iterator)
         if isinstance(response, FileResponse):
             _, path, _ = self.app._validate_resolved_job_artifact_path(job, Path(response.path))
-            data, _ = await _owned_operation(
-                run_review_thread(snapshot, self.app._job_output_dir(job), path, maximum_bytes=maximum_bytes)
-            )
-            return _single_chunk(data)
+            return _confined_file_chunks(self.app._job_output_dir(job), path, maximum_bytes)
         raise ReviewAccessError("Unexpected artifact response", status=503, code="ARTIFACT_UNAVAILABLE")
 
     async def _fresh_indexed_identity(self, request: Request, job: Any, reference: dict) -> dict:
@@ -797,6 +849,7 @@ async def _stream_snapshot(
     chunks: AsyncIterator[bytes], destination: Path, maximum_bytes: int, expected_size: int, expected_sha: str | None
 ) -> dict:
     digest, size, created = hashlib.sha256(), 0, False
+    chunk = b""
     try:
         with destination.open("xb") as handle:
             created = True
@@ -817,13 +870,48 @@ async def _stream_snapshot(
             destination.unlink(missing_ok=True)
         raise
     finally:
-        close = getattr(chunks, "aclose", None)
-        if close is not None:
-            await close()
+        close = None
+        try:
+            close = getattr(chunks, "aclose", None)
+            if close is not None:
+                await close()
+        finally:
+            del chunk, chunks, close
+
+
+async def _confined_file_chunks(root_path: Path, path: Path, maximum_bytes: int) -> AsyncIterator[bytes]:
+    """Feed a private verified snapshot without retaining an entire local file.
+
+    The consumer hashes and finishes its owned snapshot before using any bytes.
+    Keep the source descriptor pinned through EOF and the named-inode check;
+    cancellation drains each owned read before that descriptor can close.
+    """
+    if type(maximum_bytes) is not int or maximum_bytes <= 0:
+        raise ValueError("Input byte budget must be a positive integer")
+    with _pin_output_root(root_path) as root:
+        descriptor, relative = _open_confined_artifact(root, path)
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= maximum_bytes:
+                raise ValueError("Input must be a bounded regular file without link aliases")
+            size = 0
+            while chunk := await _owned_operation(run_review_thread(os.read, descriptor, 1024 * 1024)):
+                size += len(chunk)
+                if size > maximum_bytes:
+                    raise ValueError("Input exceeds byte budget")
+                yield chunk
+            _validate_confined_entry_identity(root, relative, before, context="photographic input")
+            if size != before.st_size:
+                raise ValueError("Input changed during snapshot")
+        finally:
+            os.close(descriptor)
 
 
 async def _single_chunk(data: bytes) -> AsyncIterator[bytes]:
-    yield data
+    try:
+        yield data
+    finally:
+        del data
 
 
 async def _byte_stream(chunks: AsyncIterable[object]) -> AsyncIterator[bytes]:

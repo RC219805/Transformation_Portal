@@ -7,6 +7,8 @@ import hashlib
 import json
 import sys
 import threading
+import tracemalloc
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -408,6 +410,255 @@ async def test_file_response_fallback_uses_confined_snapshot(fake_app, tmp_path)
 
     assert output.read_bytes() == data
     app._validate_resolved_job_artifact_path.assert_called_once()
+
+
+@pytest.mark.parametrize("reported_large_file", [False, True], ids=["complete", "512mib-truncated-header"])
+async def test_legacy_file_response_identity_keeps_download_memory_bounded(
+    fake_app, tmp_path, monkeypatch, reported_large_file
+):
+    from transformation_portal.orchestrator.photographic_admission import (
+        PhotographicAdmissionController,
+        ReviewAdmissionConfig,
+        ReviewCost,
+    )
+
+    app, job, _, _ = fake_app
+    content = b"p" * (8 * 1024**2 + 17)
+    source = tmp_path / "legacy.tif"
+    source.write_bytes(content)
+    indexed_size = adapter.MAX_REVIEW_IMAGE_BYTES if reported_large_file else len(content)
+    job.artifacts["items"][0].update(sha256=None, size_bytes=indexed_size, fingerprint_status="skipped_size")
+    app._validate_resolved_job_artifact_path = Mock(return_value=(tmp_path, source, source.name))
+    app._get_job_artifact.side_effect = None
+    app._get_job_artifact.return_value = FileResponse(source)
+    original_stat, original_read = adapter.os.fstat, adapter.os.read
+    identity = source.stat()
+    reads = []
+
+    def file_stat(descriptor):
+        observed = original_stat(descriptor)
+        if reported_large_file and (observed.st_dev, observed.st_ino) == (identity.st_dev, identity.st_ino):
+            fields = {name: getattr(observed, name) for name in dir(observed) if name.startswith("st_")}
+            fields["st_size"] = indexed_size
+            return SimpleNamespace(**fields)
+        return observed
+
+    def file_read(descriptor, maximum):
+        observed = original_stat(descriptor)
+        if (observed.st_dev, observed.st_ino) == (identity.st_dev, identity.st_ino):
+            reads.append(maximum)
+        return original_read(descriptor, maximum)
+
+    monkeypatch.setattr(adapter.os, "fstat", file_stat)
+    monkeypatch.setattr(adapter.os, "read", file_read)
+    controller = PhotographicAdmissionController(ReviewAdmissionConfig(enabled=True))
+    lease = await controller.acquire("local", ReviewCost(256 * 1024**2, 32 * 1024**2, decode_slots=0, interactive=False))
+    token = adapter.current_review_lease.set(lease)
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    before, _ = tracemalloc.get_traced_memory()
+    tracemalloc.reset_peak()
+    try:
+        result = await adapter.AppReviewAccess(app).authorize(_request(), job.id)
+        _, peak = tracemalloc.get_traced_memory()
+        assert peak - before < 6 * 1024**2, "Legacy identity must not retain the complete artifact in a transfer lease"
+        assert reads and max(reads) <= 1024**2
+        if reported_large_file:
+            assert isinstance(result, Response) and result.status_code == 503
+        else:
+            assert isinstance(result, ReviewContext)
+            assert result.references[0]["sha256"] == hashlib.sha256(content).hexdigest()
+            assert result.references[0]["size_bytes"] == len(content)
+        assert source.read_bytes() == content
+        assert job.artifacts["items"][0]["sha256"] is None
+    finally:
+        if not was_tracing:
+            tracemalloc.stop()
+        adapter.current_review_lease.reset(token)
+        await lease.release()
+        await controller.close()
+
+
+@pytest.mark.parametrize("mutation", ["replace", "symlink", "grow"])
+async def test_file_response_snapshot_rejects_source_change_before_using_private_bytes(
+    fake_app, tmp_path, monkeypatch, mutation
+):
+    app, _, _, data = fake_app
+    source = tmp_path / "source.tif"
+    source.write_bytes(data)
+    app._validate_resolved_job_artifact_path = Mock(return_value=(tmp_path, source, source.name))
+    app._get_job_artifact.side_effect = None
+    app._get_job_artifact.return_value = FileResponse(source)
+    context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
+    original_read = adapter.os.read
+    changed = False
+
+    def mutate_after_read(descriptor, maximum):
+        nonlocal changed
+        chunk = original_read(descriptor, maximum)
+        if chunk and not changed:
+            changed = True
+            if mutation == "grow":
+                with source.open("ab") as handle:
+                    handle.write(b"!")
+            else:
+                retained = source.with_name("retained.tif")
+                source.rename(retained)
+                if mutation == "symlink":
+                    source.symlink_to(retained)
+                else:
+                    source.write_bytes(data)
+        return chunk
+
+    monkeypatch.setattr(adapter.os, "read", mutate_after_read)
+    destination = tmp_path / "private.tif"
+    with pytest.raises(ReviewAccessError):
+        await context.materialize(context.references[0], destination, 1024)
+    assert changed and not destination.exists()
+
+
+async def test_original_sha_failure_drops_nested_snapshot_bytes_before_final_lease_release(fake_app, tmp_path, monkeypatch):
+    from transformation_portal.orchestrator import photographic_admission as admission
+    from transformation_portal.orchestrator import photographic_review_service as service_module
+
+    app, job, _, _ = fake_app
+    source = tmp_path / "original.tif"
+    source.write_bytes(b"x" * (8 * 1024**2))
+    ref = {
+        **_reference(),
+        "kind": "original",
+        "artifact_path": source.name,
+        "source_name": source.name,
+        "sha256": "a" * 64,
+        "source_identity_sha256": "a" * 64,
+        "size_bytes": source.stat().st_size,
+        "private_original_root": str(tmp_path),
+        "private_original_path": source.name,
+    }
+    access = adapter.AppReviewAccess(app)
+    monkeypatch.setattr(access, "_originals", AsyncMock(return_value=([ref], None)))
+    failures = []
+    stream = adapter._stream_snapshot
+
+    async def capture_failure(*args):
+        try:
+            return await stream(*args)
+        except BaseException as error:
+            failures.append(error)
+            raise
+
+    monkeypatch.setattr(adapter, "_stream_snapshot", capture_failure)
+
+    async def materialize(selected, destination, maximum):
+        return await access._materialize(_request(), job, "local", selected, destination, maximum)
+
+    context = ReviewContext(
+        job_id=job.id,
+        tenant_id="local",
+        actor={"username": "operator"},
+        references=[ref],
+        materialize=materialize,
+        publish=AsyncMock(),
+        revalidate=AsyncMock(),
+    )
+    service = service_module.PhotographicReviewService(admission.ReviewAdmissionConfig(enabled=True))
+    monkeypatch.setattr(
+        service,
+        "state",
+        AsyncMock(
+            return_value={"state_version": 0, "decisions": [{**ref, "inspection": {"width": 8, "height": 6, "alpha": False}}]}
+        ),
+    )
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * admission.GIB))
+    retained = []
+    release = admission.ReviewLease.release
+
+    async def inspect_release(lease):
+        if failures:
+            trace = failures[-1].__traceback__
+            while trace is not None:
+                frame = trace.tb_frame
+                if frame.f_code.co_name in {"_materialize_verified", "_stream_snapshot"}:
+                    for name in ("data", "chunk"):
+                        value = frame.f_locals.get(name)
+                        if isinstance(value, bytes) and len(value) >= source.stat().st_size:
+                            retained.append((frame.f_code.co_name, name, len(value)))
+                trace = trace.tb_next
+        await release(lease)
+
+    monkeypatch.setattr(admission.ReviewLease, "release", inspect_release)
+
+    async def render(case, *_args):
+        await case.materialize(ref, tmp_path / "private.tif", adapter.MAX_REVIEW_IMAGE_BYTES)
+
+    try:
+        with pytest.raises(ReviewAccessError, match="changed"):
+            await service.execute(context, render, ref["artifact_path"], ref["sha256"])
+        assert failures and not retained, f"nested adapter frames retained encoded buffers at final release: {retained}"
+        assert not (tmp_path / "private.tif").exists()
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("worker_failure", [False, True], ids=["discarded-success", "failed-worker"])
+async def test_cancelled_original_snapshot_drops_completed_worker_buffers_before_release(
+    fake_app, tmp_path, monkeypatch, worker_failure
+):
+    import numpy as np
+
+    from transformation_portal.orchestrator import photographic_admission as admission
+
+    app, job, _, _ = fake_app
+    ref = {**_reference(), "kind": "original", "private_original_root": str(tmp_path), "private_original_path": "original.tif"}
+    access = adapter.AppReviewAccess(app)
+    monkeypatch.setattr(access, "_originals", AsyncMock(return_value=([ref], None)))
+    started, finish = threading.Event(), threading.Event()
+    buffers, failures = [], []
+
+    def blocked_snapshot(*_args, **_kwargs):
+        values = np.ones(1024 * 1024, dtype=np.float64)
+        buffers.append(weakref.ref(values))
+        started.set()
+        assert finish.wait(timeout=5), "controlled snapshot worker was not released"
+        if worker_failure:
+            error = RuntimeError("original snapshot failed after cancellation")
+            failures.append(error)
+            raise error
+        return values, {}
+
+    monkeypatch.setattr(adapter, "snapshot", blocked_snapshot)
+    controller = admission.PhotographicAdmissionController(admission.ReviewAdmissionConfig(enabled=True))
+    lease = await controller.acquire("local", admission.ReviewCost(256 * admission.MIB, 32 * admission.MIB, interactive=False))
+    token = adapter.current_review_lease.set(lease)
+    task = asyncio.create_task(access._materialize_verified(_request(), job, "local", ref, tmp_path / "private.tif", 1024))
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        finish.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert lease.cost.memory_bytes == 256 * admission.MIB
+        assert buffers and all(
+            buffer() is None for buffer in buffers
+        ), "quiescent owned snapshot worker retained decoded buffers"
+        assert not (tmp_path / "private.tif").exists()
+        if worker_failure:
+            assert type(failures[0]) is RuntimeError and str(failures[0]) == "original snapshot failed after cancellation"
+            trace = failures[0].__traceback__
+            names = []
+            while trace is not None:
+                names.append(trace.tb_frame.f_code.co_name)
+                trace = trace.tb_next
+            assert "blocked_snapshot" in names
+    finally:
+        finish.set()
+        await asyncio.gather(task, return_exceptions=True)
+        adapter.current_review_lease.reset(token)
+        await lease.release()
+        await controller.close()
 
 
 async def test_review_derivative_requires_exact_saved_server_reference(fake_app, monkeypatch, tmp_path):
@@ -1371,7 +1622,7 @@ async def test_cancelled_snapshot_drains_its_thread_before_removing_owned_destin
         app._get_job_artifact.return_value = FileResponse(source)
     context = await adapter.AppReviewAccess(app).authorize(_request(), "job")
     ref = next(row for row in context.references if row["role"] == ("original" if source_kind == "original" else "final"))
-    snapshot = adapter.snapshot
+    operation = adapter.snapshot if source_kind == "original" else adapter.os.read
     started, release, finished = threading.Event(), threading.Event(), threading.Event()
 
     def blocked_snapshot(*args, **kwargs):
@@ -1379,11 +1630,14 @@ async def test_cancelled_snapshot_drains_its_thread_before_removing_owned_destin
         try:
             assert release.wait(timeout=5), "test did not release the controlled snapshot thread"
             assert source.is_file()
-            return snapshot(*args, **kwargs)
+            return operation(*args, **kwargs)
         finally:
             finished.set()
 
-    monkeypatch.setattr(adapter, "snapshot", blocked_snapshot)
+    if source_kind == "original":
+        monkeypatch.setattr(adapter, "snapshot", blocked_snapshot)
+    else:
+        monkeypatch.setattr(adapter.os, "read", blocked_snapshot)
     destination = tmp_path / "owned-snapshot.tif"
     task = asyncio.create_task(context.materialize(ref, destination, 1024))
     try:

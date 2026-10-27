@@ -443,6 +443,8 @@ and two IO slots with one strictly reserved for inspection. Each tenant may own
 two operations, at most one noninteractive. Export and downloads serialize while
 inspection can materialize concurrently. A bounded photographic thread pool
 keeps admitted inspection separate from unrelated default-executor work.
+The bulk memory ceiling applies to the aggregate of all noninteractive owners,
+including failed work that has released worker slots but still retains buffers.
 
 The measured inspection reserve takes precedence over its minimum. Baseline
 CPU probes at `f79f49207ed2e4589b006017dec90edd51137cb2` measured a 40 MP float32
@@ -495,13 +497,17 @@ Insufficient physical space never authorizes deletion of retained data. Download
 and scratch leases through response execution and cleanup, including failed
 sends, invalid ranges and repeated cancellation. Publication uses its existing
 operation lease and immutable-key cleanup fences; it never recursively acquires
-capacity. After workers and publication are quiescent, release memory/decode/IO
-before review compare-and-swap or rollback cleanup; retain only private scratch
-ownership until its final cleanup. Those retained publication claims continue to
+capacity. Once workers and publication are quiescent, release decode/IO slots
+before review compare-and-swap or rollback cleanup. Release memory only after
+buffer-owning method and worker frames are quiescent and their retained locals
+have been dropped; failed publication keeps memory charged through that unwind.
+Private scratch remains owned until final cleanup. Those retained publication claims continue to
 count against the bulk scratch ceiling and protect inspection headroom, without
 holding released worker slots. Outstanding download requests remain charged
 until their response finalizer completes. Shutdown stops admission and drains
 owners before stopping the pool.
+Legacy local-file discovery streams bounded chunks into a private verified
+snapshot instead of collecting a whole file inside the transfer memory profile.
 
 Configuration names use `TP_PHOTO_REVIEW_` plus the uppercase field names:
 `MEMORY_BYTES`, `INTERACTIVE_MEMORY_BYTES`, `BULK_MEMORY_BYTES`, `DECODE_SLOTS`,
@@ -530,9 +536,12 @@ Focused source contracts from the repository root:
 
 ```bash
 .venv/bin/python -m pytest tests/test_photographic_delivery.py \
-  tests/test_photographic_native_master.py tests/test_package_verified_delivery.py \
+  tests/test_photographic_native_master.py tests/test_photographic_presentation.py \
+  tests/test_package_verified_delivery.py \
   tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q
 .venv/bin/python -m pytest tests/orchestrator/test_photographic_review_access.py \
+  tests/orchestrator/test_photographic_admission.py \
+  tests/orchestrator/test_photographic_memory_ownership.py \
   tests/orchestrator/test_photographic_review_http.py \
   tests/orchestrator/test_photographic_review_store.py \
   tests/orchestrator/test_photographic_review_thread_ownership.py \

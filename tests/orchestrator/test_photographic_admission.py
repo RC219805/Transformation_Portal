@@ -107,6 +107,62 @@ async def test_download_serializes_with_bulk_but_not_inspection():
     await (await export).release()
 
 
+async def test_tuned_bulk_memory_limit_bounds_all_concurrent_requests():
+    controller = PhotographicAdmissionController(
+        configuration(bulk_memory_bytes=2 * GIB, io_slots=3, noninteractive_slots=2, decode_slots=3, bulk_decode_slots=2)
+    )
+    cost = ReviewCost(2 * GIB, 0, interactive=False)
+    first = await controller.acquire("tenant-a", cost)
+    waiting = asyncio.create_task(controller.acquire("tenant-b", cost))
+    try:
+        await tick()
+        assert not waiting.done(), "concurrent requests exceeded the configured aggregate bulk memory limit"
+        assert controller.snapshot()["memory_reserved_bytes"] == 2 * GIB
+        await first.release()
+        second = await waiting
+        await second.release()
+        assert controller.snapshot()["active"] == controller.snapshot()["queued"] == 0
+    finally:
+        await first.release()
+        if not waiting.done():
+            waiting.cancel()
+        result = (await asyncio.gather(waiting, return_exceptions=True))[0]
+        if not isinstance(result, BaseException):
+            await result.release()
+        await controller.close()
+
+
+async def test_retained_bulk_memory_counts_after_worker_slots_are_released():
+    controller = PhotographicAdmissionController(configuration(bulk_memory_bytes=2 * GIB))
+    first = await controller.acquire("tenant-a", ReviewCost(2 * GIB, 0, interactive=False))
+    waiting = asyncio.create_task(controller.acquire("tenant-b", ReviewCost(2 * GIB, 0, interactive=False)))
+    inspection = None
+    try:
+        await first.release_expensive(memory_quiescent=False)
+        await first.release_expensive(memory_quiescent=False)
+        assert first.cost.memory_bytes == 2 * GIB
+        assert first.cost.io_slots == first.cost.decode_slots == 0
+        inspection = await controller.acquire("tenant-a", inspection_cost(controller))
+        await tick()
+        assert not waiting.done(), "retained bulk buffers bypassed the aggregate memory limit"
+        await first.release_expensive()
+        second = await waiting
+        await second.release()
+        assert first.cost.memory_bytes == first.cost.io_slots == first.cost.decode_slots == 0
+        await first.release_expensive(memory_quiescent=False)
+        assert first.cost.memory_bytes == 0, "repeated release must not expand a reservation"
+    finally:
+        if inspection is not None:
+            await inspection.release()
+        await first.release()
+        if not waiting.done():
+            waiting.cancel()
+        result = (await asyncio.gather(waiting, return_exceptions=True))[0]
+        if not isinstance(result, BaseException):
+            await result.release()
+        await controller.close()
+
+
 async def test_fifo_per_tenant_and_round_robin_across_waiting_tenants():
     controller = PhotographicAdmissionController(configuration())
     full = ReviewCost(12 * GIB, 1, decode_slots=2)
@@ -819,7 +875,8 @@ async def test_retained_publication_scratch_preserves_inspection_headroom(monkey
     state = {"state_version": 0}
 
     async def hold_commit_or_cleanup(*_args):
-        assert owner.cost.io_slots == owner.cost.memory_bytes == owner.cost.decode_slots == 0
+        assert owner.cost.io_slots == owner.cost.decode_slots == 0
+        assert owner.cost.memory_bytes == (1 if phase == "rollback" else 0)
         assert owner.cost.scratch_bytes == 2 * GIB and not owner.released
         entered.set()
         await finish.wait()
@@ -844,7 +901,7 @@ async def test_retained_publication_scratch_preserves_inspection_headroom(monkey
     oversized = None
     inspection = bounded = None
     try:
-        await entered.wait()
+        await asyncio.wait_for(entered.wait(), 2)
         oversized = asyncio.create_task(controller.acquire("large", ReviewCost(1, 62 * GIB, interactive=False)))
         await tick()
         assert not oversized.done(), "retained publication scratch consumed protected inspection capacity"
@@ -877,16 +934,15 @@ async def test_retained_publication_scratch_preserves_inspection_headroom(monkey
         await service.close()
 
 
-async def test_publication_rollback_releases_expensive_capacity_before_cleanup():
+async def test_publication_rollback_releases_workers_but_retains_memory_before_cleanup():
     from transformation_portal.orchestrator.photographic_review_service import publication
 
     controller = PhotographicAdmissionController(configuration())
     lease = await controller.acquire("a", ReviewCost(1, 1, interactive=False))
+    observed = []
 
     async def discard(paths):
-        assert paths == ["photographic-review/owned/file"]
-        assert lease.cost.io_slots == lease.cost.decode_slots == lease.cost.memory_bytes == 0
-        assert not lease.released
+        observed.append((paths, lease.cost.io_slots, lease.cost.decode_slots, lease.cost.memory_bytes, lease.released))
 
     case = replace(context(), discard=discard)
     token = current_review_lease.set(lease)
@@ -895,6 +951,7 @@ async def test_publication_rollback_releases_expensive_capacity_before_cleanup()
             async with publication(case) as paths:
                 paths.append("photographic-review/owned/file")
                 raise OSError("controlled failure")
+        assert observed == [(["photographic-review/owned/file"], 0, 0, 1, False)]
     finally:
         current_review_lease.reset(token)
         await lease.release()

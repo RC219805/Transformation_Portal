@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import inspect
 import io
 import logging
 import math
@@ -24,6 +25,7 @@ from contextvars import Token
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from types import CodeType, FrameType
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 from urllib.parse import quote
 
@@ -74,6 +76,35 @@ LOGGER = logging.getLogger(__name__)
 HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
 
+def _clear_failed_frames(
+    error: BaseException, completed_frames: Sequence[FrameType] = (), completed_codes: Sequence[CodeType] = ()
+) -> None:
+    """Drop worker locals and explicitly closed owned coroutine frames."""
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        trace = current.__traceback__
+        while trace is not None:
+            frame = trace.tb_frame
+            # A shared exception may also point into another subscriber's
+            # suspended retry. Only its owner can prove an async frame closed;
+            # frame.clear() alone does not protect suspended coroutines.
+            suspended_code = frame.f_code.co_flags & (inspect.CO_COROUTINE | inspect.CO_ASYNC_GENERATOR | inspect.CO_GENERATOR)
+            if not suspended_code or frame in completed_frames or frame.f_code in completed_codes:
+                try:
+                    frame.clear()
+                except RuntimeError:
+                    pass  # The current executing frame cannot be cleared.
+            trace = trace.tb_next
+        pending.extend(item for item in (current.__cause__, current.__context__) if item is not None)
+        if isinstance(current, BaseExceptionGroup):
+            pending.extend(current.exceptions)
+
+
 async def _owned_thread(operation: Callable[_Params, _Result], *args: _Params.args, **kwargs: _Params.kwargs) -> _Result:
     """Keep caller-owned paths and semaphore capacity until blocking work stops.
 
@@ -82,9 +113,14 @@ async def _owned_thread(operation: Callable[_Params, _Result], *args: _Params.ar
     cancellation, so enclosing scratch and resource guards retain ownership.
     """
     worker = asyncio.create_task(run_review_thread(operation, *args, **kwargs))
+    # These single-await wrappers cannot resume after propagating an error.
+    # Once this worker has stopped, its source-bound arguments are quiescent.
+    worker_codes = (run_review_thread.__code__, PhotographicAdmissionController.run_blocking.__code__)
+    cancelled = False
     try:
         return await asyncio.shield(worker)
     except asyncio.CancelledError:
+        cancelled = True
         while not worker.done():
             try:
                 await asyncio.shield(worker)
@@ -93,8 +129,22 @@ async def _owned_thread(operation: Callable[_Params, _Result], *args: _Params.ar
             except Exception:
                 break
         if not worker.cancelled():
-            worker.exception()  # Retrieve a worker failure while preserving the caller's cancellation.
+            failure = worker.exception()  # Preserve cancellation while draining a separate worker failure.
+            if failure is not None:
+                _clear_failed_frames(failure, completed_codes=worker_codes)
         raise
+    except BaseException as error:
+        _clear_failed_frames(error, completed_codes=worker_codes)
+        raise
+    finally:
+        # A propagated traceback retains this frame, even after the worker
+        # stopped. Do not keep its source snapshot/closure/future alive there.
+        del operation, args, kwargs, worker
+        if cancelled:
+            # The wakeup callback can still hold a completed worker's discarded
+            # result until this event-loop turn ends. Keep the reservation
+            # through that handoff, including repeated cancellation.
+            await drain_owned(asyncio.sleep(0))
 
 
 class _OwnedDownloadResponse(FileResponse):
@@ -142,7 +192,11 @@ async def publication(context: ReviewContext) -> AsyncIterator[list[str]]:
         async def cleanup() -> None:
             lease = current_review_lease.get()
             if lease is not None:
-                await lease.release_expensive()
+                # The generator's caller is still suspended with its revision
+                # bytes, and a failed worker can retain arrays in tracebacks.
+                # Free worker slots now, keeping memory until that method has
+                # unwound and _execute_reserved clears inactive failed frames.
+                await lease.release_expensive(memory_quiescent=False)
             if context.discard is not None and paths:
                 try:
                     await context.discard(paths)
@@ -629,6 +683,8 @@ class PhotographicReviewService:
         token: Token[ReviewLease | None] | None = current_review_lease.set(lease)
         transferred = False
         result = None
+        pending_operation = None
+        method_frame = None
         try:
             # Reference discovery has bounded streamed snapshots but no image
             # decode. Complete output-space preflight follows resolved geometry.
@@ -643,9 +699,19 @@ class PhotographicReviewService:
                 token = None
                 await lease.release()
             if _shared_render and method == self.render:
-                result = await self._render_response(context, *args, **kwargs)
+                pending_operation = self._render_response(context, *args, **kwargs)
             else:
-                result = await method(context, *args, **kwargs)
+                pending_operation = method(context, *args, **kwargs)
+            if inspect.iscoroutine(pending_operation):
+                method_frame = pending_operation.cr_frame
+            result = await pending_operation
+            if (
+                method_frame is not None
+                and inspect.iscoroutine(pending_operation)
+                and inspect.getcoroutinestate(pending_operation) == inspect.CORO_CLOSED
+            ):
+                method_frame.clear()
+                method_frame = None
             # A shared read retains source/materialization checks here, while
             # execute validates each subscriber's actor and source binding after
             # the shared bytes exist. The leader cannot authorize its followers.
@@ -655,9 +721,24 @@ class PhotographicReviewService:
                 result.admission_lease = lease
                 transferred = True
             return result
-        except BaseException:
-            if isinstance(result, _OwnedDownloadResponse):
-                await _owned_thread(shutil.rmtree, result._directory)
+        except BaseException as error:
+            try:
+                if isinstance(result, _OwnedDownloadResponse):
+                    await _owned_thread(shutil.rmtree, result._directory)
+            finally:
+                result = None
+                # The awaited method and its blocking workers are quiescent.
+                # Keep exception types/messages/stack locations, but remove
+                # their now-inactive buffer-owning locals before releasing
+                # the final memory reservation, even if cleanup itself fails.
+                completed = (
+                    (method_frame,)
+                    if method_frame is not None
+                    and inspect.iscoroutine(pending_operation)
+                    and inspect.getcoroutinestate(pending_operation) == inspect.CORO_CLOSED
+                    else ()
+                )
+                _clear_failed_frames(error, completed)
             raise
         finally:
             if token is not None:
@@ -1128,6 +1209,7 @@ class PhotographicReviewService:
             del image
         preview = "data:image/png;base64," + base64.b64encode(result["preview_bytes"]).decode("ascii")
         if payload.preview_only:
+            del result["source_bytes"], result["preview_bytes"]
             await self.revalidate(context)
             return {"preview_data_url": preview, "receipt": result["receipt"], "state_version": state["state_version"]}
         if len(state["revisions"]) >= 128:

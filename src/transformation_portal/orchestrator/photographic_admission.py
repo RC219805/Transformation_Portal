@@ -233,9 +233,9 @@ class ReviewLease:
     tracked_paths: set[Path] = field(default_factory=set)
     future_scratch_finished: bool = False
 
-    async def release_expensive(self) -> None:
-        """Workers/publication are quiescent; CAS and cleanup own scratch only."""
-        await drain_owned(self.controller._release_expensive(self))
+    async def release_expensive(self, *, memory_quiescent: bool = True) -> None:
+        """Release workers; retain memory until buffers and tracebacks are gone."""
+        await drain_owned(self.controller._release_expensive(self, memory_quiescent=memory_quiescent))
 
     def track_path(self, path: Path) -> None:
         self.tracked_paths.add(path)
@@ -510,7 +510,8 @@ class PhotographicAdmissionController:
         if not cost.interactive and (
             len(bulk) >= config.noninteractive_slots
             or sum(not row.cost.interactive for row in tenant) >= config.tenant_noninteractive_slots
-            or sum(row.cost.memory_bytes for row in bulk) + cost.memory_bytes > config.memory_bytes - self.interactive_reserve
+            or sum(row.cost.memory_bytes for row in self._active if not row.cost.interactive) + cost.memory_bytes
+            > min(config.bulk_memory_bytes, config.memory_bytes - self.interactive_reserve)
             # Publication keeps its scratch commitment after releasing workers.
             # That retained claim must still protect inspection headroom.
             or sum(row.cost.scratch_bytes for row in self._active if not row.cost.interactive) + cost.scratch_bytes
@@ -615,21 +616,27 @@ class PhotographicAdmissionController:
                 self._idle.set()
             self._schedule()
 
-    async def _release_expensive(self, lease: ReviewLease) -> None:
-        if lease.released or lease.future_scratch_finished:
+    async def _release_expensive(self, lease: ReviewLease, *, memory_quiescent: bool = True) -> None:
+        if lease.released:
             return
-        # The worker and publication are quiescent. Keep only private bytes
-        # still owned through CAS/rollback, not the completed future workspace.
-        devices: dict[int, tuple[Path, int]] = {}
-        for root, size in lease.claims():
-            device = root.stat().st_dev
-            devices[device] = (root, devices.get(device, (root, 0))[1] + size)
-        held = tuple((root, max(0, size - lease.remaining(device))) for device, (root, size) in devices.items())
+        # Workers are quiescent. Failed caller/worker frames can still retain
+        # decoded buffers, independently of their released I/O/decode slots.
+        held = lease.cost.filesystems
+        if not lease.future_scratch_finished:
+            # Keep private bytes still owned through CAS/rollback, not the
+            # completed future workspace. Repeated calls never expand a claim.
+            devices: dict[int, tuple[Path, int]] = {}
+            for root, size in lease.claims():
+                device = root.stat().st_dev
+                devices[device] = (root, devices.get(device, (root, 0))[1] + size)
+            held = tuple((root, max(0, size - lease.remaining(device))) for device, (root, size) in devices.items())
         async with self._lock:
-            if not lease.released and not lease.future_scratch_finished:
+            if not lease.released:
+                if lease.future_scratch_finished:
+                    held = lease.cost.filesystems
                 lease.cost = replace(
                     lease.cost,
-                    memory_bytes=0,
+                    memory_bytes=0 if memory_quiescent else lease.cost.memory_bytes,
                     decode_slots=0,
                     io_slots=0,
                     scratch_bytes=sum(size for _, size in held),
