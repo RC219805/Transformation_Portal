@@ -31,6 +31,7 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
 from transformation_portal.orchestrator.artifact_store.generation import _verify_staged
 from transformation_portal.orchestrator.photographic_admission import (
+    ReviewOverload,
     current_review_lease,
     owned_review_directory,
     run_review_thread,
@@ -747,7 +748,7 @@ class AppReviewAccess:
                     await _owned_operation(store.delete(storage_job_id, storage_path))
                 except Exception:
                     self.app.LOGGER.exception("private review publication cleanup deferred for job %s", job.id)
-            if isinstance(exc, ReviewAccessError) or not isinstance(exc, Exception):
+            if isinstance(exc, (ReviewAccessError, ReviewOverload)) or not isinstance(exc, Exception):
                 raise
             self.app.LOGGER.exception("photographic review artifact publication unavailable for job %s", job.id)
             raise ReviewAccessError(

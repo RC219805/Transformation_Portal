@@ -1541,3 +1541,87 @@ async def test_admission_invalid_credentials_never_discover_or_queue(fake_app, m
     assert result.status_code == 401
     discover.assert_not_awaited()
     app._load_job_view.assert_not_awaited()
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("phase", ["before-write", "readback"])
+async def test_http_publication_overload_preserves_retry_envelope_and_owned_cleanup(fake_app, monkeypatch, version, phase):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes.photographic_review import create_photographic_review_router
+    from transformation_portal.orchestrator import photographic_admission as admission
+    from transformation_portal.orchestrator import photographic_review_service as service
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1")
+    app, _, store, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    original_bodies = dict(bodies)
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store, published, staged_paths, owners = MemoryReviewStore(), {}, [], []
+    monkeypatch.setattr(service, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    capacity_available = True
+    monkeypatch.setattr(
+        admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * admission.GIB if capacity_available else 1)
+    )
+    original_snapshot, original_verify = adapter._publication_snapshot, adapter._verify_staged
+
+    def snapshot_then_drop_capacity(source, staged, maximum):
+        nonlocal capacity_available
+        result = original_snapshot(source, staged, maximum)
+        staged_paths.append(staged)
+        owners.append(admission.current_review_lease.get())
+        if phase == "before-write":
+            capacity_available = False
+        return result
+
+    async def write(_job, key, source, **_kwargs):
+        published[key] = source.read_bytes()
+
+    async def delete(_job, key):
+        return int(published.pop(key, None) is not None)
+
+    async def verify_then_overload(*args):
+        await original_verify(*args)
+        raise admission.ReviewOverload("scratch_unavailable")
+
+    monkeypatch.setattr(adapter, "_publication_snapshot", snapshot_then_drop_capacity)
+    if phase == "readback":
+        monkeypatch.setattr(adapter, "_verify_staged", verify_then_overload)
+    store.write_immutable_file.side_effect = write
+    store.open_bytes.side_effect = lambda _job, key: _chunks(published[key])
+    store.delete.side_effect = delete
+    api = FastAPI()
+    api.include_router(create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+    base = f"/{version}/jobs/job/photographic-review"
+    async with api.router.lifespan_context(api):
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver") as client:
+            catalogue = await client.get(base)
+            assert catalogue.status_code == 200, catalogue.text
+            native = next(row for row in catalogue.json()["data"]["scenes"][0]["variants"] if row["role"] == "working_master")
+            response = await client.post(
+                base + "/revisions",
+                json={
+                    **{key: native[key] for key in ("artifact_path", "sha256", "source_identity_sha256")},
+                    "scene_id": "input-0000",
+                    "expected_version": 0,
+                    "recipe": {"exposure_stops": -0.1},
+                    "preview_only": False,
+                },
+            )
+    assert response.status_code == 503 and response.headers.get("Retry-After") == "1", response.text
+    error = response.json()["error"]
+    assert error["code"] == "RESOURCE_EXHAUSTED" and error["retriable"] is True
+    assert error["details"] == {"job_id": "job", "reason": "scratch_unavailable", "scope": "process"}
+    assert staged_paths and all(not path.parent.exists() for path in staged_paths)
+    assert all(owner is not None and owner.released for owner in owners)
+    assert published == {} and bodies == original_bodies
+    assert (await state_store.get("job", "local"))["state_version"] == 0
+    if phase == "before-write":
+        store.write_immutable_file.assert_not_awaited()
+        store.delete.assert_not_awaited()
+    else:
+        store.write_immutable_file.assert_awaited_once()
+        store.delete.assert_awaited_once()

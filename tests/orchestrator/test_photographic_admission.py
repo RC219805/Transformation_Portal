@@ -805,6 +805,78 @@ async def test_cas_releases_expensive_capacity_but_retains_owned_scratch(monkeyp
     assert service.admission.snapshot()["active"] == service.admission.snapshot()["outstanding"] == 0
 
 
+@pytest.mark.parametrize("phase", ["cas", "rollback"])
+async def test_retained_publication_scratch_preserves_inspection_headroom(monkeypatch, phase):
+    from transformation_portal.orchestrator import photographic_review_service as module
+
+    service = PhotographicReviewService(configuration())
+    controller = service.admission
+    owner = await controller.acquire("a", ReviewCost(1, 2 * GIB, interactive=False))
+    # Model an already allocated 2 GiB private publication without allocating
+    # that amount of disk in the synthetic contract suite.
+    monkeypatch.setattr(owner, "remaining", lambda _device: 0)
+    entered, finish = asyncio.Event(), asyncio.Event()
+    state = {"state_version": 0}
+
+    async def hold_commit_or_cleanup(*_args):
+        assert owner.cost.io_slots == owner.cost.memory_bytes == owner.cost.decode_slots == 0
+        assert owner.cost.scratch_bytes == 2 * GIB and not owner.released
+        entered.set()
+        await finish.wait()
+        return state
+
+    monkeypatch.setattr(module, "get_review_store", lambda: SimpleNamespace(mutate=hold_commit_or_cleanup))
+    case = replace(context(), discard=hold_commit_or_cleanup)
+
+    async def publish():
+        token = current_review_lease.set(owner)
+        try:
+            async with module.publication(case) as paths:
+                paths.append("photographic-review/owned/file")
+                if phase == "rollback":
+                    raise OSError("controlled publication failure")
+                await service.mutate(case, 0, lambda value: value, "delivery", {})
+        finally:
+            current_review_lease.reset(token)
+            await owner.release()
+
+    publication = asyncio.create_task(publish())
+    oversized = None
+    inspection = bounded = None
+    try:
+        await entered.wait()
+        oversized = asyncio.create_task(controller.acquire("large", ReviewCost(1, 62 * GIB, interactive=False)))
+        await tick()
+        assert not oversized.done(), "retained publication scratch consumed protected inspection capacity"
+        inspection = await controller.acquire("a", ReviewCost(1, 2 * GIB))
+        bounded = await controller.acquire("bounded", ReviewCost(1, 60 * GIB, interactive=False))
+        assert controller.snapshot()["scratch_reserved_bytes"] == 64 * GIB
+        assert owner.cost.io_slots == 0 and bounded.cost.io_slots == inspection.cost.io_slots == 1
+        await inspection.release()
+        await bounded.release()
+        finish.set()
+        if phase == "rollback":
+            with pytest.raises(OSError, match="controlled publication"):
+                await publication
+        else:
+            await publication
+        following = await oversized
+        await following.release()
+    finally:
+        finish.set()
+        await asyncio.gather(publication, return_exceptions=True)
+        for lease in (inspection, bounded):
+            if lease is not None:
+                await lease.release()
+        if oversized is not None:
+            if not oversized.done():
+                oversized.cancel()
+            result = (await asyncio.gather(oversized, return_exceptions=True))[0]
+            if not isinstance(result, BaseException):
+                await result.release()
+        await service.close()
+
+
 async def test_publication_rollback_releases_expensive_capacity_before_cleanup():
     from transformation_portal.orchestrator.photographic_review_service import publication
 

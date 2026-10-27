@@ -511,7 +511,9 @@ class PhotographicAdmissionController:
             len(bulk) >= config.noninteractive_slots
             or sum(not row.cost.interactive for row in tenant) >= config.tenant_noninteractive_slots
             or sum(row.cost.memory_bytes for row in bulk) + cost.memory_bytes > config.memory_bytes - self.interactive_reserve
-            or sum(row.cost.scratch_bytes for row in bulk) + cost.scratch_bytes
+            # Publication keeps its scratch commitment after releasing workers.
+            # That retained claim must still protect inspection headroom.
+            or sum(row.cost.scratch_bytes for row in self._active if not row.cost.interactive) + cost.scratch_bytes
             > config.scratch_bytes - config.interactive_scratch_bytes
             or sum(row.cost.decode_slots for row in bulk) + cost.decode_slots > config.bulk_decode_slots
             or sum(row.cost.io_slots for row in bulk) + cost.io_slots > config.io_slots - config.interactive_io_slots
