@@ -570,8 +570,10 @@ class PhotographicReviewService:
         self._inspection_costs: OrderedDict[InspectionKey, JsonObject] = OrderedDict()
 
     async def close(self) -> None:
-        await self.admission.close()
-        self._inspection_costs.clear()
+        try:
+            await self.admission.close()
+        finally:
+            self._inspection_costs.clear()
 
     def _remember_inspection(self, context: ReviewContext, ref: JsonObject, inspection: JsonObject) -> None:
         if not self.admission.config.enabled or not context.binding_identity:

@@ -407,9 +407,11 @@ class PhotographicAdmissionController:
                 queues.clear()
             for tenants in self._tenants.values():
                 tenants.clear()
-        await drain_owned(self._idle.wait())
-        if self._executor is not None:
-            await drain_owned(asyncio.to_thread(self._executor.shutdown, wait=True, cancel_futures=False))
+        try:
+            await drain_owned(self._idle.wait())
+        finally:
+            if self._executor is not None:
+                await drain_owned(asyncio.to_thread(self._executor.shutdown, wait=True, cancel_futures=False))
 
     def snapshot(self) -> dict[str, Any]:
         """Bounded process-level diagnostics; no actors, source keys or tenants."""

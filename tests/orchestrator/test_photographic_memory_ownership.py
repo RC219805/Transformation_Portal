@@ -597,3 +597,33 @@ async def test_private_render_fallback_drops_nested_source_before_lease_release(
     assert caught.value.status == auth_status
     await settle_private_render(case, follower, outcome)
     assert case.service.admission.snapshot()["admitted"] == 2
+
+
+async def test_cancelled_service_close_clears_inspection_cache_after_active_owner_drains(revision_case):
+    case = revision_case
+    context = replace(case.context, binding_identity="bounded-inspection-binding")
+    case.service._remember_inspection(context, context.references[0], {"width": 8, "height": 6, "alpha": False})
+    assert len(case.service._inspection_costs) == 1
+    owner = await case.service.admission.acquire(context.tenant_id, admission.ReviewCost(1, 1))
+    closing = asyncio.create_task(case.service.close())
+    try:
+        for _ in range(20):
+            if case.service.admission._closed:
+                break
+            await asyncio.sleep(0)
+        assert case.service.admission._closed
+        for _ in range(3):
+            closing.cancel()
+            await asyncio.sleep(0)
+        assert not closing.done() and case.service._inspection_costs
+        assert case.service.admission.snapshot()["active"] == 1
+        await owner.release()
+        with pytest.raises(asyncio.CancelledError):
+            await closing
+        assert case.service.admission.snapshot()["active"] == 0
+        assert not case.service._inspection_costs, "cancelled completed shutdown retained inspection metadata"
+        await case.service.close()
+        assert not case.service._inspection_costs
+    finally:
+        await owner.release()
+        await asyncio.gather(closing, return_exceptions=True)

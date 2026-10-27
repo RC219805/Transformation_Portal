@@ -551,6 +551,58 @@ async def test_shutdown_rejects_waiters_and_drains_active_ownership_before_pool_
         await controller.acquire("c", ReviewCost(1, 1))
 
 
+async def test_cancelled_shutdown_drains_active_worker_and_closes_real_pool():
+    controller = PhotographicAdmissionController(configuration())
+    owner = await controller.acquire("a", ReviewCost(1, 1))
+    started, finish, stopped = threading.Event(), threading.Event(), threading.Event()
+
+    def blocking():
+        started.set()
+        try:
+            assert finish.wait(5)
+            return "finished"
+        finally:
+            stopped.set()
+
+    async def work():
+        token = current_review_lease.set(owner)
+        try:
+            return await _owned_thread(blocking)
+        finally:
+            current_review_lease.reset(token)
+            await owner.release()
+
+    worker = asyncio.create_task(work())
+    closing = None
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        pool = controller._executor
+        assert pool is not None and any(thread.is_alive() for thread in pool._threads)
+        closing = asyncio.create_task(controller.close())
+        await tick()
+        for _ in range(3):
+            closing.cancel()
+            await tick()
+        assert not closing.done()
+        assert not stopped.is_set() and not pool._shutdown
+        assert controller.snapshot()["active"] == 1
+
+        finish.set()
+        assert await worker == "finished"
+        with pytest.raises(asyncio.CancelledError):
+            await closing
+        assert stopped.is_set() and pool._shutdown
+        assert not any(thread.is_alive() for thread in pool._threads)
+        with pytest.raises(RuntimeError, match="shutdown"):
+            pool.submit(lambda: None)
+        assert controller.snapshot()["active"] == 0
+        await controller.close()  # A cancelled completed close remains idempotent.
+    finally:
+        finish.set()
+        await asyncio.gather(worker, *(() if closing is None else (closing,)), return_exceptions=True)
+        await controller.close()
+
+
 async def test_http_overload_preserves_envelope_and_retry_header_without_discovery(monkeypatch):
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
