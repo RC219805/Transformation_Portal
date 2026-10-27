@@ -474,9 +474,14 @@ tenant, with five-second inspection and 30-second bulk/transfer deadlines.
 Queues preserve FIFO within tenant/class and round-robin across tenants.
 Equivalent in-flight renders share work only within the same tenant, job,
 source/descriptor/receipt inventory, review version and render parameters; each
-subscriber retains its own authentication and final revalidation. Mutation and
-export requests never coalesce. Disconnecting the final subscriber cancels a
-queued render; a running worker retains its resources until it is quiescent.
+subscriber revalidates its own actor and source binding before receiving bytes.
+If the shared owner's source read fails with 401/403, an independently authorized
+subscriber may make one private attempt under its own complete resource lease.
+That attempt never coalesces again or retries a source-integrity conflict;
+ordinary shared reads and revocation after computation still compute once.
+Mutation and export requests never coalesce. Disconnecting the final subscriber
+cancels a queued render; a running worker retains its resources until it is
+quiescent.
 
 Scratch accounting is capped at 64 GiB, with 2 GiB protected for inspection and
 an additional 2 GiB physical free-space floor. Complete export scratch includes
@@ -492,8 +497,11 @@ sends, invalid ranges and repeated cancellation. Publication uses its existing
 operation lease and immutable-key cleanup fences; it never recursively acquires
 capacity. After workers and publication are quiescent, release memory/decode/IO
 before review compare-and-swap or rollback cleanup; retain only private scratch
-ownership until its final cleanup. Outstanding download requests remain charged
-until their response finalizer completes. Shutdown stops admission and drains owners before stopping the pool.
+ownership until its final cleanup. Those retained publication claims continue to
+count against the bulk scratch ceiling and protect inspection headroom, without
+holding released worker slots. Outstanding download requests remain charged
+until their response finalizer completes. Shutdown stops admission and drains
+owners before stopping the pool.
 
 Configuration names use `TP_PHOTO_REVIEW_` plus the uppercase field names:
 `MEMORY_BYTES`, `INTERACTIVE_MEMORY_BYTES`, `BULK_MEMORY_BYTES`, `DECODE_SLOTS`,
@@ -509,8 +517,10 @@ Overload preserves the existing API envelope with `RESOURCE_EXHAUSTED`, a
 bounded reason and `scope: process`. Tenant caps return 429; transient shared
 capacity, queue deadlines and disk pressure return 503. Both are retriable with
 `Retry-After: 1`, which is not an estimated completion time. Permanently
-oversized operations return non-retriable 413. No overload changes precision,
-creates approval, raises a budget, or deletes source/delivery data. Roll back by
+oversized operations return non-retriable 413. Publication preserves typed
+overload and retry metadata after cleaning up only its owned immutable keys.
+No overload changes precision, creates approval, raises a budget, or deletes
+source/delivery data. Roll back by
 setting `TP_PHOTO_REVIEW_ENABLED=0` and restarting matching API code; retained
 review decisions, revisions, deliveries and bytes require no migration.
 
@@ -527,6 +537,7 @@ Focused source contracts from the repository root:
   tests/orchestrator/test_photographic_review_store.py \
   tests/orchestrator/test_photographic_review_thread_ownership.py \
   tests/orchestrator/test_photographic_review_response.py \
+  tests/orchestrator/test_photographic_coalescing_authorization.py \
   tests/evals/test_apex_metrics.py tests/evals/test_property_quality.py -q
 .venv/bin/python -m pytest tests/test_app_route_inventory.py -q
 make test-portal-contract

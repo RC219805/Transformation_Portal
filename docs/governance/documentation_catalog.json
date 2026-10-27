@@ -15158,7 +15158,8 @@
         "web/secure-landing/portal-src/photographic-delivery-history.js",
         "web/secure-landing/tests/photographic-delivery-history.test.mjs",
         "src/transformation_portal/orchestrator/photographic_admission.py",
-        "tests/orchestrator/test_photographic_admission.py"
+        "tests/orchestrator/test_photographic_admission.py",
+        "tests/orchestrator/test_photographic_coalescing_authorization.py"
       ],
       "source_sha256": {
         "app.py": "2135ebbbc0e6cf76590d3075a21354da2f59405789436da8ce7e319c3e5747a5",
@@ -15218,7 +15219,8 @@
         "web/secure-landing/portal-src/photographic-delivery-history.js": "e79d815d48f209eeec70058de07c77abe5b9162d38628f147668a246c0a1cf4e",
         "web/secure-landing/tests/photographic-delivery-history.test.mjs": "a05bfe0d9d53045b9ad7204aa58f98e9f09d23570cc3e8f90b967bd40674b64e",
         "src/transformation_portal/orchestrator/photographic_admission.py": "ec1493333b50f8f22e37c15e266a5b07a5eda39363a710d2a3915a50db5cf20d",
-        "tests/orchestrator/test_photographic_admission.py": "f02e7b48741a8df51f4ea9853ac8a94deb3aa3f347dc7487c3ea8688b9eaf69a"
+        "tests/orchestrator/test_photographic_admission.py": "f02e7b48741a8df51f4ea9853ac8a94deb3aa3f347dc7487c3ea8688b9eaf69a",
+        "tests/orchestrator/test_photographic_coalescing_authorization.py": "0494a2c41cf04ca4f047960459f9621525d4cf86e1c557b5a82a7431b43e5723"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",
