@@ -364,6 +364,49 @@ def test_authentication_unknown_job_and_no_implicit_approval(review_case):
     assert not case.assets
 
 
+def test_delivery_history_recovers_committed_export_without_catalogue_or_image_reads(review_case, monkeypatch):
+    from transformation_portal.orchestrator import photographic_review_service as service
+
+    case = review_case
+    assert _approve(case).status_code == 200
+    payload = {
+        "property_name": "History",
+        "presets": ["website"],
+        "approved_sha256": [case.sha],
+        "expected_version": 1,
+        "request_correlation_id": "original-attempt",
+    }
+    exported = case.client.post(case.base + "/delivery", json=payload)
+    assert exported.status_code == 200, exported.text
+
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("History must not load catalogue pixels")
+
+    monkeypatch.setattr(service, "load_image", forbidden)
+    found = case.client.get(case.base + "/deliveries?request_correlation_id=original-attempt")
+    assert found.status_code == 200, found.text
+    page = found.json()["data"]
+    assert page["state_version"] == 2 and page["snapshot_count"] == 1
+    row = page["items"][0]
+    assert row["id"] == exported.json()["data"]["id"]
+    assert row["request_fingerprint_sha256"] == exported.json()["data"]["request_fingerprint_sha256"]
+    assert row["intent"]["presets"][0]["name"] == "website"
+    assert row["approval_version"] == 1 and row["file_validation"] == "not_checked"
+    assert row["sources"][0]["sha256"] == case.sha
+    assert row["applied_derivatives_schema"] == "tp.photo.delivery_applied.v1"
+    assert row["applied_derivatives"][0]["operation"] == "render_sdr"
+    assert row["applied_derivatives"][0]["render"]["mode"] == "perceptual_srgb"
+    assert "storage_path" not in found.text and "private_original" not in found.text
+    assert found.headers["cache-control"] == "no-store"
+    assert (
+        case.client.get(case.other_base + "/deliveries").json()["data"]
+        == case.client.get(case.base + "/deliveries").json()["data"]
+    )
+    assert case.client.get(case.base + "/deliveries", headers={"x-api-key": "invalid"}).status_code == 401
+    assert case.client.get(case.base + "/deliveries?limit=65").status_code == 422
+    assert case.client.get(case.base + "/deliveries?cursor=invalid").status_code == 400
+
+
 @pytest.mark.parametrize(
     ("method", "suffix"),
     [
@@ -375,6 +418,7 @@ def test_authentication_unknown_job_and_no_implicit_approval(review_case):
         ("POST", "/lighting-groups"),
         ("POST", "/revisions"),
         ("POST", "/delivery"),
+        ("GET", "/deliveries"),
         ("GET", "/files/" + "0" * 64 + "/delivery.zip"),
     ],
 )

@@ -39,6 +39,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
   "TP_PORTAL_FASTVLM_CAPTIONING_ENABLED",
   "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT",
+  "TP_PHOTO_REVIEW_HISTORY_UI_ENABLED",
   "TP_PHOTO_REVIEW_RECORDED_UI_ENABLED"
 ];
 
@@ -195,6 +196,11 @@ function withTempEnvironment(overrides = {}) {
     process.env.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED = overrides.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED;
   } else {
     delete process.env.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED;
+  }
+
+  for (const key of ["TP_PHOTO_REVIEW_HISTORY_UI_ENABLED"]) {
+    if (typeof overrides[key] === "string") process.env[key] = overrides[key];
+    else delete process.env[key];
   }
 
   if (typeof overrides.TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT === "string") {
@@ -1895,6 +1901,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.stagedUploads, false);
       assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.features.fastVlmCaptioning, false);
+      assert.equal(body.features.photographicDeliveryHistory, false);
       assert.equal(body.features.photographicRecordedPresentation, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
@@ -4907,3 +4914,23 @@ test("tenant startup preflight rejects a missing or reused identity secret befor
     assert.match(result.stderr, /tenant identity configuration unavailable/);
   }
 });
+
+for (const [history, recorded] of [["0", "0"], ["1", "0"], ["0", "1"], ["1", "1"]]) {
+  test(`managed photographic UI rollouts are independent: history=${history}, recorded=${recorded}`, async () => {
+    const env = withTempEnvironment({ TP_PHOTO_REVIEW_HISTORY_UI_ENABLED: history, TP_PHOTO_REVIEW_RECORDED_UI_ENABLED: recorded });
+    try {
+      const sessions = await importFresh("../lib/sessions.js");
+      const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+      const session = await sessions.rotateAuthenticatedSession(await sessions.createAnonymousSession(), {
+        username: "admin", accessEmail: "admin@example.com", role: "admin"
+      });
+      const response = await GET(buildRequest("https://portal.example.com/portal/bootstrap", { method: "GET", headers: new Headers({
+        cookie: `__Host-tp_session=${session.id}`, "Cf-Access-Jwt-Assertion": createAccessJwt()
+      }) }));
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.features.photographicDeliveryHistory, history === "1");
+      assert.equal(body.features.photographicRecordedPresentation, recorded === "1");
+    } finally { env.cleanup(); }
+  });
+}

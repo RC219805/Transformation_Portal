@@ -5509,6 +5509,7 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
+            photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
             photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true
         }
     };

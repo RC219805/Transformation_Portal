@@ -58,6 +58,21 @@ def _reference(data=b"photograph"):
     }
 
 
+async def test_history_authorizes_same_job_scope_without_discovering_or_reading_sources(fake_app):
+    app, job, store, _ = fake_app
+    access = adapter.AppReviewAccess(app)
+    access._references = AsyncMock(side_effect=AssertionError("History must not discover image references"))
+    context = await access.authorize_history(_request(), job.id)
+    assert isinstance(context, ReviewContext) and context.references == []
+    assert context.actor["username"] == "api_key_operator"
+    access._references.assert_not_awaited()
+    app._get_job_artifact.assert_not_awaited()
+    store.open_bytes.assert_not_awaited()
+    app._has_valid_api_key = lambda _: False
+    denied = await access.authorize_history(_request(), job.id)
+    assert denied.status_code == 401
+
+
 @pytest.fixture
 def fake_app(tmp_path):
     data = b"photograph"

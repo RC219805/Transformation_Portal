@@ -10,6 +10,7 @@ from starlette.responses import Response
 
 from transformation_portal.api.v1.envelopes import ApiEnvelope
 from transformation_portal.api.v1.photographic_review import (
+    DeliveryHistoryPage,
     DeliveryRequest,
     LightingGroupsRequest,
     ReviewDecisionRequest,
@@ -35,10 +36,14 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         job_id: str,
         method: Callable[..., Awaitable[dict[str, Any] | Response]],
         *args: Any,
+        lightweight_authorization: bool = False,
         **kwargs: Any,
     ) -> Response:
         try:
-            context = await runtime.authorize(request, job_id)
+            authorize = (
+                runtime.authorize_history if lightweight_authorization and runtime.authorize_history else runtime.authorize
+            )
+            context = await authorize(request, job_id)
             if isinstance(context, Response):
                 return context
             result = await method(context, *args, **kwargs)
@@ -154,6 +159,24 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
     @versioned.post("/delivery", response_model=ApiEnvelope[dict])
     async def delivery(request: Request, job_id: str, payload: DeliveryRequest) -> Response:
         return await invoke(request, job_id, service.delivery, payload)
+
+    @versioned.get("/deliveries", response_model=ApiEnvelope[DeliveryHistoryPage])
+    async def deliveries(
+        request: Request,
+        job_id: str,
+        limit: int = Query(default=20, ge=1, le=64),
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+        request_correlation_id: str | None = Query(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$"),
+    ) -> Response:
+        return await invoke(
+            request,
+            job_id,
+            service.deliveries,
+            lightweight_authorization=True,
+            limit=limit,
+            cursor=cursor,
+            request_correlation_id=request_correlation_id,
+        )
 
     @versioned.get("/files/{identity}/{filename}")
     async def download(request: Request, job_id: str, identity: str, filename: str) -> Response:

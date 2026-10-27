@@ -53,6 +53,7 @@ Both versions use the existing `ApiEnvelope` with schema
 | `POST /lighting-groups` | Explicit group membership and reference identities |
 | `POST /revisions` | Preview or save a bounded explicit adjustment recipe |
 | `POST /delivery` | Export the explicitly approved selection |
+| `GET /deliveries` | Bounded committed delivery metadata and request reconciliation, without image discovery |
 | `GET /files/{identity}/{filename}` | Job-bound saved revision/delivery retrieval |
 
 Mutations carry `expected_version`. The store performs compare-and-swap against
@@ -494,3 +495,100 @@ review projection/event tables and requires a deliberate preservation decision.
 The source changes do not mutate old generations, advance model/runtime or
 AWS/GPU acceptance, or promote source tests and synthetic browser evidence to
 photographic production acceptance.
+
+## Committed delivery history and uncertain responses
+
+`GET /deliveries` uses the same authenticated job and tenant boundary as review,
+without discovering sources, decoding photographs, or checking stored delivery
+bytes. `limit` defaults to 20 and is bounded to 64. Follow the returned
+`next_cursor` for older entries in reverse committed append order. Its snapshot
+membership excludes later exports; current recorded approval observations may
+change between pages. Invalid or mismatched cursors fail closed; refresh history
+if its committed prefix changed. The existing 64-delivery creation cap and review
+projection/event size limits remain in force.
+
+History returns only explicit public identities, actor fields, creation time,
+expanded destination recipes, archive/file identities, and authenticated file
+URLs. Physical bindings, storage keys, raw receipts, inventories, and arbitrary
+saved fields are excluded. Older entries retain null request metadata. Approval
+at creation and current recorded approval are separate observations. Source and
+file validation are `not_checked`: a history row does not prove present file
+availability, intact source bytes, destination proof approval, or photographic
+production acceptance. Downloads retain their existing live identity, approval,
+authorization, and byte-integrity revalidation.
+
+An optional `request_correlation_id` on `POST /delivery` is 1–64 ASCII letters,
+digits, dots, underscores, colons, or hyphens. The server records it atomically
+with a `tp.photo.delivery_intent.v1` fingerprint and the original approval
+version. That fingerprint includes authenticated scope, original review version,
+ordered exact source and recorded presentation identities, effective labels, and
+ordered expanded export recipes. It does not make export admission idempotent.
+Use `GET /deliveries?request_correlation_id=<token>` to reconcile an uncertain
+response, never to authorize a retry.
+
+The portal freezes each submitted request and its original review version. A
+lost response enters `outcome_unknown`, then performs GET-only reconciliation.
+A single matching saved intent recovers its existing delivery. Ambiguous matches
+or an unchanged review version keep export blocked. A complete lookup with no
+match and a strictly newer review version proves that the original version can
+no longer commit; a new export still requires an explicit operator action after
+review. No automatic retry advances the frozen version. Bounded actor/tenant/job
+session metadata can recover the attempt across page reloads. History-enabled
+export requires the frozen attempt to be written and read back in its exact
+actor/job scope before POST; unavailable, full, or non-retaining session storage
+blocks submission with an actionable diagnostic. Storage failure never turns an
+unknown outcome into success or authorizes a retry.
+History itself remains available after reload without browser metadata.
+
+After resolving an original attempt, the portal keeps that exact frozen record
+until an authoritative catalogue GET reaches at least the reconciled review
+version. A failed or stale refresh enters `refresh_required` and keeps new exports
+blocked; manual reconciliation repeats GET requests without changing the original
+body or version. Unreadable or malformed recovery storage is distinct from an
+absent record: it cannot be overwritten or treated as permission to submit. Once
+storage recovers, reconcile its retained scoped attempt before another export.
+A local rate-limit cooldown is checked before creating or saving an attempt, so
+an unsent request creates no orphan recovery record. After the cooldown expires,
+the operator may explicitly submit a fresh export.
+A received HTTP 429 rejection compare-clears only the exact saved attempt and
+retains its cooldown; a failed or conflicting clear keeps export blocked. HTTP
+503 and transport failures remain uncertain and require GET-only reconciliation.
+An approved historical download is bound to its authenticated actor, tenant and
+job independently of the latest export selection; the server still revalidates
+its approval, source identity and bytes when it is downloaded.
+
+No additional database migration is required beyond
+`0008_photographic_review`. New entry/event metadata is additive and older
+readers preserve it. Deploy matching backend/frontdoor versions: an older strict
+POST request model rejects the new correlation field rather than silently
+stripping it. Postgres restart and object-store download acceptance remain
+separate from memory-mode and synthetic contract tests.
+
+History also exposes ordered public source summaries from historical approvals.
+For new exports, `applied_derivatives` is the bounded, allowlisted execution
+summary of actual per-source/per-derivative operations, distinct from the intent's
+requested destination presets. It records byte preservation, analytic extended
+sRGB transfer, an executed SDR render, or preservation of an already recorded
+display, including its actual render mode and presentation identity. Missing
+historical execution summaries remain null; history does not reconstruct them
+from filenames or pixel ranges.
+
+### Independent UI rollout and rollback
+
+Deploy the backend history API before enabling its dependent UI. The API remains
+available independently for authenticated inspection/recovery. Set
+`TP_PHOTO_REVIEW_HISTORY_UI_ENABLED=1` in the serving bootstrap environment to
+advertise `photographicDeliveryHistory`; it defaults to off. The recorded-view
+UI has its separate `TP_PHOTO_REVIEW_RECORDED_UI_ENABLED=1` /
+`photographicRecordedPresentation` switch, also off by default. The managed
+frontdoor owns its bootstrap environment; the backend's direct-debug bootstrap
+uses the same names. Admission controls remain independent of both UI switches.
+
+When history UI is off, the portal does not call the history API or submit the
+new correlation field, preserving the older export request contract. Turning
+history off does not remove saved deliveries or metadata. Reconcile any known
+unknown export before disabling it: an already retained unknown attempt stays
+blocked and can be recovered through the authenticated API or by re-enabling
+history. Rollback preserves all review/delivery state and uses matching
+frontdoor/backend versions; no retained source, derivative, or finalized package
+is deleted.

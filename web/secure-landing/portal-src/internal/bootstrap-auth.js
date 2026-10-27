@@ -11,6 +11,7 @@ export function defaultPortalBootstrapPayload() {
       stagedUploads: false,
       rumTelemetry: false,
       fastVlmCaptioning: false,
+      photographicDeliveryHistory: false,
       photographicRecordedPresentation: false
     }
   };

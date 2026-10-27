@@ -1,3 +1,5 @@
+import { photographicDeliveryAttempt, photographicDeliveryRecovered, photographicDeliveryRecoveryStorage } from "./photographic-delivery-history.js";
+
 const SHA256 = /^[a-f0-9]{64}$/;
 const DECISIONS = new Set(["selected", "needs_revision", "approved"]);
 const ROLES = Object.freeze({ original: "Original", final: "Final", previous_revision: "Previous revision", working_master: "Native working master" });
@@ -154,7 +156,18 @@ export function createPhotographicReview(host) {
   const sceneLabels = new Map();
   let deliverySources = [];
   let selectedPresets = new Set();
+  let deliveryAttempt = null;
+  let recoveryStorageBlocked = false;
+  let deliveryOutcome = "idle";
+  let deliveryHistory = [];
+  let deliveryCursor = null;
+  let historyRequest = 0;
+  let scopeGeneration = 0;
+  let recoveryStorage;
+  try { recoveryStorage = photographicDeliveryRecoveryStorage(Object.hasOwn(host, "sessionStorage") ? host.sessionStorage : globalThis.sessionStorage); }
+  catch { recoveryStorage = photographicDeliveryRecoveryStorage(null); }
   let nodes = {};
+  function deliveryHistoryEnabled() { return state.auth?.features?.photographicDeliveryHistory === true; }
 
   function el(tag, text = "", className = "", ui = "") {
     const element = doc.createElement(tag);
@@ -208,13 +221,17 @@ export function createPhotographicReview(host) {
     if (imageTimer) clearTimeout(imageTimer);
     finishImageDelay?.(); finishImageDelay = null; imageTimer = null;
   }
-  function checkBackoff() {
-    if (Date.now() < retryAt) throw new Error(`Rate limited. Retry after ${Math.ceil((retryAt - Date.now()) / 1000)} seconds; your selection and saved decisions are retained.`);
+  function checkBackoff(httpStatus = null) {
+    if (Date.now() < retryAt) {
+      const error = new Error(`Rate limited. Retry after ${Math.ceil((retryAt - Date.now()) / 1000)} seconds; your selection and saved decisions are retained.`);
+      if (httpStatus !== null) error.httpStatus = httpStatus;
+      throw error;
+    }
   }
   function checkRateLimit(response) {
     if (response.status !== 429) return;
     retryAt = Math.max(retryAt, Date.now() + photographicRetryAfterMs(response.headers.get("Retry-After")));
-    checkBackoff();
+    checkBackoff(response.status);
   }
   function identity(variant) { return variant?.source_identity_sha256 || variant?.sha256 || ""; }
   function recordedPresentationEnabled() { return state.auth?.features?.photographicRecordedPresentation === true; }
@@ -248,6 +265,8 @@ export function createPhotographicReview(host) {
     const controller = new AbortController();
     requests.add(controller);
     const requestJob = jobId;
+    const requestActor = actorScope;
+    const requestGeneration = scopeGeneration;
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
     try {
@@ -259,7 +278,7 @@ export function createPhotographicReview(host) {
       });
       checkRateLimit(response);
       const payload = await response.json();
-      if (requestJob !== jobId) throw new Error("Review selection changed.");
+      if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) throw new Error("Review selection changed.");
       if (!response.ok || payload.success === false || !payload.data) {
         const error = new Error(payload.error?.message || payload.detail || `Review request failed (${response.status}).`);
         error.code = payload.error?.code;
@@ -430,7 +449,15 @@ export function createPhotographicReview(host) {
     nodes.deliver.dataset.reviewMutation = "true";
     nodes.deliver.disabled = true;
     nodes.deliveryResult = el("div", "", "photo-review-help", "photographic-delivery-result");
-    section.append(field("Property name", nodes.property), nodes.presets, nodes.deliver, nodes.deliveryResult);
+    nodes.deliveryHistory = el("div", "", "photo-review-help", "photographic-delivery-history");
+    nodes.deliveryHistoryStatus = el("p", "", "photo-review-help", "photographic-delivery-history-status");
+    nodes.reconcileDelivery = button("Refresh delivery history / reconcile", "photographic-delivery-reconcile", () => void loadDeliveryHistory());
+    nodes.moreDeliveries = button("Load older deliveries", "photographic-delivery-history-more", () => void loadDeliveryHistory(true));
+    nodes.moreDeliveries.disabled = true;
+    nodes.deliveryHistoryControls = el("section", "", "hidden", "photographic-delivery-history-controls");
+    nodes.deliveryHistoryControls.append(el("h5", "Committed delivery history"), nodes.reconcileDelivery,
+      nodes.deliveryHistoryStatus, nodes.deliveryHistory, nodes.moreDeliveries);
+    section.append(field("Property name", nodes.property), nodes.presets, nodes.deliver, nodes.deliveryResult, nodes.deliveryHistoryControls);
     return section;
   }
 
@@ -479,14 +506,18 @@ export function createPhotographicReview(host) {
     resetRecipe();
   }
 
-  async function load(force = false) {
-    if (!jobId) return;
+  async function load(force = false, minimumVersion = null) {
+    if (!jobId) return false;
+    if (force) void loadDeliveryHistory();
     const expectedJob = jobId;
     const sequence = ++dataRequest;
     status("Loading photographic review…");
     try {
       const loaded = normalizedReview(await request("", null, 90000));
-      if (jobId !== expectedJob || sequence !== dataRequest) return;
+      if (jobId !== expectedJob || sequence !== dataRequest) return false;
+      if (minimumVersion !== null && (!Number.isInteger(loaded.state_version) || loaded.state_version < minimumVersion)) {
+        throw new Error("Current review metadata has not reached the reconciled version. Refresh review before another export.");
+      }
       data = loaded;
       if (deliverySources.some((source) => !data.scenes.some((scene) => scene.variants.some((variant) =>
         photographicDecisionMatches(source, variant) && decision(variant)?.status === "approved")))) {
@@ -495,15 +526,17 @@ export function createPhotographicReview(host) {
         deliverySources = [];
       }
       if (!currentVariant()) chooseVariants();
-      if (!data.scenes.length) { panel.classList.add("hidden"); return; }
+      if (!data.scenes.length) { panel.classList.toggle("hidden", !deliveryHistory.length); return true; }
       panel.classList.remove("hidden");
       render();
       status(force ? "Review refreshed from verified artifacts and saved decisions." : "Review loaded. A saved approval applies only to the exact SHA-256 displayed here.");
+      return true;
     } catch (error) {
-      if (expectedJob !== jobId || sequence !== dataRequest || error.name === "AbortError") return;
-      if (error.httpStatus === 404 || error.httpStatus === 422) { panel.classList.add("hidden"); return; }
+      if (expectedJob !== jobId || sequence !== dataRequest || error.name === "AbortError") return false;
+      if (error.httpStatus === 404 || error.httpStatus === 422) { panel.classList.toggle("hidden", !deliveryHistory.length); return false; }
       panel.classList.remove("hidden");
       status(error.message, true);
+      return false;
     }
   }
 
@@ -657,12 +690,13 @@ export function createPhotographicReview(host) {
     });
   }
   function approvedVariants() {
-    return data.scenes.flatMap((scene) => scene.variants.filter((variant) => variant.role !== "original"
+    return (data?.scenes || []).flatMap((scene) => scene.variants.filter((variant) => variant.role !== "original"
       && variant.artifact_path === deliverySelections.get(scene.scene_id) && decision(variant)?.status === "approved"));
   }
   function updateDeliveryButton() {
     const count = approvedVariants().length;
-    nodes.deliver.disabled = pending || !count || !selectedPresets.size;
+    nodes.deliver.disabled = pending || (deliveryHistoryEnabled() && recoveryStorageBlocked)
+      || ["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome) || !count || !selectedPresets.size;
     nodes.deliver.textContent = `Deliver approved set (${count})`;
   }
 
@@ -930,11 +964,12 @@ export function createPhotographicReview(host) {
     if (downloadObjectUrl) URL.revokeObjectURL(downloadObjectUrl);
     downloadObjectUrl = "";
   }
-  function downloadScope() { return JSON.stringify([jobId, actorScope, deliverySources]); }
-  function bindDownload(link, url, filename, sha = "") {
+  function downloadScope(history = false) { return JSON.stringify(history ? [jobId, actorScope, scopeGeneration] : [jobId, actorScope, scopeGeneration, deliverySources]); }
+  function bindDownload(link, url, filename, sha = "", history = false) {
     link.href = url; link.download = filename;
     if (state.auth?.mode !== "direct_debug") return;
-    const scope = downloadScope();
+    const currentScope = () => downloadScope(history);
+    const scope = currentScope();
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       clearDownload();
@@ -944,9 +979,9 @@ export function createPhotographicReview(host) {
       let writable = null;
       try {
         checkBackoff();
-        if (scope !== downloadScope() || !photographicAssetUrl(url, jobId)) throw new Error("Delivery selection changed. Create a current verified bundle.");
+        if (scope !== currentScope() || !photographicAssetUrl(url, jobId)) throw new Error("Delivery selection changed. Create a current verified bundle.");
         const handle = globalThis.showSaveFilePicker ? await globalThis.showSaveFilePicker({ suggestedName: filename }) : null;
-        if (scope !== downloadScope() || controller.signal.aborted) return;
+        if (scope !== currentScope() || controller.signal.aborted) return;
         status(`Downloading ${filename} through authenticated access…`);
         const response = await fetchImpl(url, { method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
           headers: _buildAuthHeaders({ Accept: "application/octet-stream" }, "GET") });
@@ -957,7 +992,7 @@ export function createPhotographicReview(host) {
         if (handle) {
           writable = await handle.createWritable();
           await response.body.pipeTo(writable, { signal: controller.signal, preventClose: true });
-          if (scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed during download; the file was not committed.");
+          if (scope !== currentScope() || controller.signal.aborted) throw new Error("Delivery changed during download; the file was not committed.");
           await writable.close(); writable = null;
           status(`Saved ${filename}.`);
         } else {
@@ -974,7 +1009,7 @@ export function createPhotographicReview(host) {
             if (size > length || size > limit) throw new Error("Download exceeded its bounded size; use the managed front door.");
             chunks.push(value);
           }
-          if (size !== length || scope !== downloadScope() || controller.signal.aborted) throw new Error("Delivery changed or its download was incomplete.");
+          if (size !== length || scope !== currentScope() || controller.signal.aborted) throw new Error("Delivery changed or its download was incomplete.");
           downloadObjectUrl = URL.createObjectURL(new Blob(chunks, { type: response.headers.get("Content-Type") || "application/octet-stream" }));
           const anchor = doc.createElement("a"); anchor.href = downloadObjectUrl; anchor.download = filename;
           doc.body.append(anchor); anchor.click(); anchor.remove();
@@ -986,7 +1021,7 @@ export function createPhotographicReview(host) {
         if (writable) await writable.abort().catch(() => {});
         if (downloadController === controller) {
           clearDownload();
-          if (scope === downloadScope()) status(error.name === "AbortError" ? "Download canceled." : error.message, true);
+          if (scope === currentScope()) status(error.name === "AbortError" ? "Download canceled." : error.message, true);
         }
       } finally {
         clearTimeout(timer); requests.delete(controller);
@@ -994,20 +1029,105 @@ export function createPhotographicReview(host) {
       }
     });
   }
-  async function deliver() {
-    clearDownload();
-    nodes.deliveryResult.replaceChildren();
-    let presets;
-    try { presets = deliveryPresets(); } catch (error) { status(error.message, true); return; }
-    const sources = approvedVariants().map((variant) => ({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant) }));
-    const sourceHashes = [...new Set(sources.map((variant) => variant.sha256))];
-    const scene_labels = Object.fromEntries(data.scenes.filter((scene) => scene.variants.some((variant) => sources.some((source) => source.artifact_path === variant.artifact_path)))
-      .map((scene) => [scene.scene_id, sceneLabels.get(scene.scene_id) || scene.label || scene.scene_id]));
-    const result = await mutate("/delivery", { property_name: nodes.property.value.trim(), presets, approved_sources: sources, approved_sha256: sourceHashes, scene_labels }, "Approved-set delivery verified and ready to download.", 300000);
-    if (!result) return;
+  function deliveryRecoveryScope() { return JSON.stringify([jobId, actorScope]); }
+
+  function saveDeliveryAttempt(attempt) {
+    const saved = recoveryStorage.set(deliveryRecoveryScope(), attempt, attempt === null ? deliveryAttempt : undefined);
+    if (saved) deliveryAttempt = attempt;
+    return saved;
+  }
+
+  function renderDeliveryHistory() {
+    nodes.deliveryHistory.replaceChildren();
+    if (deliveryHistory.length) panel.classList.remove("hidden");
+    for (const entry of deliveryHistory) {
+      const row = el("article", "", "photo-review-help", "photographic-delivery-history-entry");
+      row.dataset.deliveryId = String(entry.id || "");
+      row.append(el("p", `${entry.intent?.property_name || "Delivery"} · ${entry.created_at ? new Date(entry.created_at * 1000).toLocaleString() : "Time not recorded"}`),
+        el("p", `Approval at creation: ${entry.approval_at_creation || "unknown"}. Current recorded approval: ${entry.current_recorded_approval || "unknown"}. Source and file bytes have not been checked by history; downloads revalidate access, source identity, approval, and bytes.`));
+      if (entry.current_recorded_approval === "approved") {
+        for (const file of entry.files || []) {
+          const url = photographicAssetUrl(file.url, jobId);
+          if (!url || !SHA256.test(file.sha256 || "")) continue;
+          const link = el("a", `Download ${file.filename}`, "operator-action-btn operator-action-btn-secondary", "photographic-delivery-history-download");
+          bindDownload(link, url, file.filename, file.sha256, true);
+          row.append(link);
+        }
+      }
+      nodes.deliveryHistory.append(row);
+    }
+    nodes.moreDeliveries.disabled = !deliveryCursor;
+  }
+
+  async function loadDeliveryHistory(more = false) {
+    if (!jobId) return;
+    if (!deliveryHistoryEnabled()) {
+      if (deliveryAttempt) status("Delivery history UI is disabled. An earlier export remains unknown; re-enable history or reconcile through the authenticated API before another export.", true);
+      return;
+    }
+    const sequence = ++historyRequest;
+    const expectedScope = deliveryRecoveryScope();
+    const stored = recoveryStorage.inspect(expectedScope);
+    if (stored.status !== "available") recoveryStorageBlocked = true;
+    else if (stored.attempt && !deliveryAttempt) deliveryAttempt = stored.attempt;
+    if (deliveryAttempt) deliveryOutcome = "reconciling";
+    updateDeliveryButton();
+    nodes.deliveryHistoryStatus.textContent = "Loading committed delivery metadata…";
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (more && deliveryCursor) params.set("cursor", deliveryCursor);
+      const page = await request(`/deliveries?${params}`);
+      if (sequence !== historyRequest || expectedScope !== deliveryRecoveryScope()) return;
+      if (!Array.isArray(page.items)) throw new Error("Delivery history response is unavailable.");
+      if (stored.status === "available") recoveryStorageBlocked = false;
+      deliveryHistory = more ? [...deliveryHistory, ...page.items] : page.items;
+      deliveryCursor = page.next_cursor || null;
+      renderDeliveryHistory();
+      nodes.deliveryHistoryStatus.textContent = deliveryHistory.length ? "Committed history loaded. Approval observations are current; file availability is checked on download." : "No committed deliveries in this snapshot.";
+      if (recoveryStorageBlocked) nodes.deliveryHistoryStatus.textContent += " Session recovery storage is unavailable or invalid. Export remains blocked; restore storage and reconcile again.";
+      if (deliveryAttempt) {
+        const attempt = deliveryAttempt;
+        const recovered = await request(`/deliveries?${new URLSearchParams({ limit: "64", request_correlation_id: attempt.body.request_correlation_id })}`);
+        if (sequence !== historyRequest || expectedScope !== deliveryRecoveryScope() || attempt !== deliveryAttempt) return;
+        const matches = Array.isArray(recovered.items) ? recovered.items : [];
+        let resolvedMessage = "";
+        if (matches.length === 1 && photographicDeliveryRecovered(matches[0], attempt)) {
+          if (!deliveryHistory.some((entry) => entry.id === matches[0].id)) deliveryHistory.unshift(matches[0]);
+          renderDeliveryHistory();
+          resolvedMessage = "Recovered the committed delivery for the original request. No export was retried.";
+        } else if (!matches.length && recovered.next_cursor === null && Number.isInteger(recovered.state_version)
+          && recovered.state_version > attempt.body.expected_version) {
+          resolvedMessage = "No matching delivery committed at the original review version, which has now advanced. Inspect current review before explicitly creating a new export.";
+        } else {
+          deliveryOutcome = "outcome_unknown";
+          nodes.deliveryHistoryStatus.textContent = matches.length ? "Delivery correlation is ambiguous or differs from the frozen request. Export remains blocked; review the saved history." : "Export outcome is still unknown. Reconcile again; no automatic export retry will occur.";
+        }
+        if (resolvedMessage) {
+          nodes.deliveryHistoryStatus.textContent = `${resolvedMessage} Refreshing current review before another export…`;
+          const minimumVersion = Math.max(attempt.body.expected_version + 1, Number.isInteger(recovered.state_version) ? recovered.state_version : 0);
+          const refreshed = await load(false, minimumVersion);
+          if (sequence !== historyRequest || expectedScope !== deliveryRecoveryScope() || attempt !== deliveryAttempt) return;
+          if (refreshed && saveDeliveryAttempt(null)) {
+            deliveryOutcome = matches.length ? "committed" : "idle";
+            nodes.deliveryHistoryStatus.textContent = resolvedMessage;
+          } else {
+            if (refreshed) recoveryStorageBlocked = true;
+            deliveryOutcome = "refresh_required";
+            nodes.deliveryHistoryStatus.textContent = `${resolvedMessage} ${refreshed ? "Session recovery storage changed or is unavailable." : "Current review refresh failed."} Export remains blocked; refresh delivery history / reconcile to retry the GET.`;
+          }
+        }
+      }
+    } catch (error) {
+      if (sequence !== historyRequest || expectedScope !== deliveryRecoveryScope()) return;
+      if (deliveryAttempt) deliveryOutcome = "outcome_unknown";
+      nodes.deliveryHistoryStatus.textContent = `Delivery history unavailable: ${error.message}${deliveryAttempt ? " Original export outcome remains unknown; sign in or reconcile again before another export." : ""}`;
+    } finally { if (sequence === historyRequest && expectedScope === deliveryRecoveryScope()) updateDeliveryButton(); }
+  }
+
+  function renderCommittedDelivery(result, sources) {
     deliverySources = sources.map((source) => ({ ...source, status: "approved" }));
     const url = photographicAssetUrl(result.download_url, jobId);
-    if (!url || !SHA256.test(result.sha256 || "")) { status("Delivery response did not contain a verified job-bound download.", true); return; }
+    if (!url || !SHA256.test(result.sha256 || "")) throw new Error("Delivery response did not contain a verified job-bound download.");
     const link = el("a", `Download ${result.filename || "verified delivery ZIP"}`, "operator-action-btn operator-action-btn-primary", "photographic-delivery-download");
     bindDownload(link, url, result.filename || "delivery.zip", result.sha256);
     nodes.deliveryResult.append(link, el("p", `SHA-256 ${result.sha256} · ${result.size_bytes} bytes. Inventory and source-master links are retained inside the bundle.`));
@@ -1018,12 +1138,86 @@ export function createPhotographicReview(host) {
       bindDownload(companion, fileUrl, file.filename);
       nodes.deliveryResult.append(companion);
     }
-    if (createToast) createToast("Approved delivery is ready.", "success");
+  }
+
+  async function deliver() {
+    if (pending || !data) return;
+    if (deliveryHistoryEnabled() && recoveryStorageBlocked) {
+      status("Session recovery storage is unavailable or invalid. No export was submitted. Restore storage and reconcile delivery history first.", true);
+      return;
+    }
+    if (["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome)) return;
+    clearDownload();
+    nodes.deliveryResult.replaceChildren();
+    let presets;
+    try { presets = deliveryPresets(); } catch (error) { status(error.message, true); return; }
+    const sources = approvedVariants().map((variant) => ({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant) }));
+    const sourceHashes = [...new Set(sources.map((variant) => variant.sha256))];
+    const scene_labels = Object.fromEntries(data.scenes.filter((scene) => scene.variants.some((variant) => sources.some((source) => source.artifact_path === variant.artifact_path)))
+      .map((scene) => [scene.scene_id, sceneLabels.get(scene.scene_id) || scene.label || scene.scene_id]));
+    if (!deliveryHistoryEnabled()) {
+      const result = await mutate("/delivery", { property_name: nodes.property.value.trim(), presets,
+        approved_sources: sources, approved_sha256: sourceHashes, scene_labels }, "Approved-set delivery verified and ready to download.", 300000);
+      if (result) {
+        try { renderCommittedDelivery(result, sources); if (createToast) createToast("Approved delivery is ready.", "success"); }
+        catch (error) { status(error.message, true); }
+      }
+      return;
+    }
+    try { checkBackoff(); } catch (error) { status(error.message, true); return; }
+    const stored = recoveryStorage.inspect(deliveryRecoveryScope());
+    if (stored.status !== "available" || stored.attempt) {
+      recoveryStorageBlocked = true;
+      if (stored.attempt) { deliveryAttempt = stored.attempt; deliveryOutcome = "outcome_unknown"; }
+      status("Session recovery storage is unavailable or contains an earlier attempt. No export was submitted. Restore storage and reconcile delivery history first.", true);
+      updateDeliveryButton();
+      return;
+    }
+    const correlation = globalThis.crypto?.randomUUID?.();
+    if (!correlation) { status("A secure request correlation ID is unavailable; reload in a supported browser.", true); return; }
+    const body = { property_name: nodes.property.value.trim(), presets, approved_sources: sources, approved_sha256: sourceHashes, scene_labels,
+      expected_version: data.state_version, request_correlation_id: correlation };
+    const attempt = photographicDeliveryAttempt(body, approvedVariants(), data.presets);
+    const expectedScope = deliveryRecoveryScope();
+    const expectedGeneration = scopeGeneration;
+    if (!saveDeliveryAttempt(attempt)) {
+      deliveryOutcome = "idle";
+      status("Session recovery storage is unavailable or full. No export was submitted. Enable session storage or resolve retained attempts, then retry explicitly.", true);
+      return;
+    }
+    deliveryOutcome = "submitting";
+    setPending(true); updateDeliveryButton();
+    try {
+      const result = await request("/delivery", attempt.body, 300000);
+      if (expectedScope !== deliveryRecoveryScope() || expectedGeneration !== scopeGeneration || deliveryAttempt !== attempt) return;
+      renderCommittedDelivery(result, sources);
+      const cleared = saveDeliveryAttempt(null);
+      deliveryOutcome = cleared ? "committed" : "refresh_required";
+      if (!cleared) recoveryStorageBlocked = true;
+      if (Number.isInteger(result.state_version)) data.state_version = result.state_version;
+      status("Approved-set delivery verified and ready to download.");
+      if (createToast) createToast("Approved delivery is ready.", "success");
+      void load(); void loadDeliveryHistory();
+    } catch (error) {
+      if (expectedScope !== deliveryRecoveryScope() || expectedGeneration !== scopeGeneration || deliveryAttempt !== attempt) return;
+      if ([400, 422, 429].includes(error.httpStatus)) {
+        const cleared = saveDeliveryAttempt(null);
+        deliveryOutcome = cleared ? "idle" : "refresh_required";
+        if (!cleared) recoveryStorageBlocked = true;
+        status(`${error.message}${cleared ? "" : " The rejected export's recovery record could not be cleared safely. Export remains blocked; restore session storage and reconcile delivery history."}`, true);
+      }
+      else {
+        deliveryOutcome = "outcome_unknown";
+        status("Export outcome is unknown. Reconciling committed history; the original request will not be retried.", true);
+        await loadDeliveryHistory();
+      }
+    } finally { if (expectedScope === deliveryRecoveryScope() && expectedGeneration === scopeGeneration) { setPending(false); updateDeliveryButton(); } }
   }
 
   function show(job, artifact) {
     if (!els.artifactShellContent || !doc) return;
     mount();
+    nodes.deliveryHistoryControls.classList.toggle("hidden", !deliveryHistoryEnabled());
     const nextId = String(job?.id || "");
     const nextActorScope = JSON.stringify([state.auth?.mode, state.auth?.actor, state.auth?.tenant]);
     if (state.currentView && state.currentView !== "review") stopBlink();
@@ -1033,19 +1227,29 @@ export function createPhotographicReview(host) {
       requests.forEach((controller) => controller.abort()); requests.clear();
       stopBlink(); releaseImages(); imageRequest += 1;
       jobId = ""; inventoryKey = ""; data = null;
+      historyRequest += 1; deliveryAttempt = null; recoveryStorageBlocked = false; deliveryOutcome = "idle"; deliveryHistory = []; deliveryCursor = null;
+      scopeGeneration += 1;
       panel.classList.add("hidden"); return;
     }
-    const key = JSON.stringify([nextActorScope, nextId, (job.artifacts || []).map((item) => [item.path, item.sha256])]);
+    const key = JSON.stringify([nextActorScope, nextId, deliveryHistoryEnabled(), (job.artifacts || []).map((item) => [item.path, item.sha256])]);
     if (key === inventoryKey) return;
     inventoryKey = key;
     if (nextId !== jobId || nextActorScope !== actorScope) {
+      scopeGeneration += 1;
       requests.forEach((controller) => controller.abort()); requests.clear();
       stopBlink(); releaseImages(); imageRequest += 1;
       jobId = nextId; actorScope = nextActorScope; pending = false; presetEdits.clear(); deliverySelections.clear(); sceneLabels.clear(); deliverySources = []; retryAt = 0; data = null; primaryPath = ""; comparePath = ""; sceneId = "";
       selectedPresets = new Set(); resetPreview();
+      historyRequest += 1; deliveryHistory = []; deliveryCursor = null;
+      const stored = recoveryStorage.inspect(deliveryRecoveryScope());
+      deliveryAttempt = stored.attempt;
+      recoveryStorageBlocked = deliveryHistoryEnabled() && stored.status !== "available";
+      deliveryOutcome = deliveryAttempt ? "outcome_unknown" : "idle";
+      nodes.deliveryResult.replaceChildren(); renderDeliveryHistory();
     }
     panel.classList.remove("hidden");
     void load();
+    void loadDeliveryHistory();
   }
   doc?.addEventListener?.("visibilitychange", () => { if (doc.hidden) stopBlink(); });
   globalThis.addEventListener?.("pagehide", () => { requests.forEach((controller) => controller.abort()); releaseImages(); });
