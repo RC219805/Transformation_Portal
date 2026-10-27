@@ -1037,6 +1037,10 @@ export function createPhotographicReview(host) {
     return saved;
   }
 
+  function mergeDeliveryHistory(entries) {
+    return [...new Map(entries.map((entry) => [entry.id, entry])).values()];
+  }
+
   function renderDeliveryHistory() {
     nodes.deliveryHistory.replaceChildren();
     if (deliveryHistory.length) panel.classList.remove("hidden");
@@ -1080,7 +1084,7 @@ export function createPhotographicReview(host) {
       if (sequence !== historyRequest || expectedScope !== deliveryRecoveryScope()) return;
       if (!Array.isArray(page.items)) throw new Error("Delivery history response is unavailable.");
       if (stored.status === "available") recoveryStorageBlocked = false;
-      deliveryHistory = more ? [...deliveryHistory, ...page.items] : page.items;
+      deliveryHistory = mergeDeliveryHistory(more ? [...deliveryHistory, ...page.items] : page.items);
       deliveryCursor = page.next_cursor || null;
       renderDeliveryHistory();
       nodes.deliveryHistoryStatus.textContent = deliveryHistory.length ? "Committed history loaded. Approval observations are current; file availability is checked on download." : "No committed deliveries in this snapshot.";
@@ -1093,6 +1097,7 @@ export function createPhotographicReview(host) {
         let resolvedMessage = "";
         if (matches.length === 1 && photographicDeliveryRecovered(matches[0], attempt)) {
           if (!deliveryHistory.some((entry) => entry.id === matches[0].id)) deliveryHistory.unshift(matches[0]);
+          deliveryHistory = mergeDeliveryHistory([...deliveryHistory, matches[0]]);
           renderDeliveryHistory();
           resolvedMessage = "Recovered the committed delivery for the original request. No export was retried.";
         } else if (!matches.length && recovered.next_cursor === null && Number.isInteger(recovered.state_version)

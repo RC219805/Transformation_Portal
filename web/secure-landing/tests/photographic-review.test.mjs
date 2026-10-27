@@ -786,6 +786,91 @@ async function prepareExport(h) {
   const checkbox = h.root.find("photographic-preset"); checkbox.checked = true; await checkbox.trigger("change");
 }
 
+function historyEntry(id, currentApproval = "approved", filename = `${id}.zip`) {
+  return { id, current_recorded_approval: currentApproval, approval_at_creation: "recorded",
+    files: [{ filename, url: `/v1/jobs/job-one/photographic-review/files/${id}/${filename}`, sha256: SHA }] };
+}
+
+for (const [position, incomingApproval] of [["21st", "approved"], ["21st", "withdrawn"], ["visible", "approved"]]) {
+  test(`recovery of the ${position} delivery merges older pages once with current ${incomingApproval} metadata`, async (t) => {
+    const previous = globalThis.location; globalThis.location = { origin: "http://localhost" };
+    t.after(() => { globalThis.location = previous; });
+    const body = { property_name: "Retained property", expected_version: 1, request_correlation_id: "original-frozen-attempt",
+      presets: ["website"], approved_sources: [{ artifact_path: variant.artifact_path, sha256: SHA, source_identity_sha256: SHA }],
+      approved_sha256: [SHA], scene_labels: { "input-0000": "Living room" } };
+    const attempt = photographicDeliveryAttempt(body, [variant], [WEBSITE_PRESET]);
+    const scope = JSON.stringify(["job-one", JSON.stringify(["managed", null, null])]);
+    const values = new Map([["tp.photo.delivery_recovery.v1", JSON.stringify([{ scope, attempt }])]]);
+    const recovered = { ...recoveredDelivery(body), id: position === "21st" ? "delivery-1" : "delivery-11" };
+    const firstPage = Array.from({ length: 20 }, (_, index) => historyEntry(`delivery-${21 - index}`));
+    if (position === "visible") firstPage[10] = historyEntry(recovered.id, "withdrawn");
+    const older = historyEntry("delivery-1", incomingApproval, "latest-observation.zip");
+    const h = fixture({ sessionStorage: { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) },
+      extraFetch: (url) => {
+        if (url.endsWith("/photographic-review")) return reviewAfterRecovery(recovered, 22);
+        if (!url.includes("/deliveries?")) return null;
+        const params = new URL(url, "http://localhost").searchParams;
+        if (params.has("request_correlation_id")) return new Response(JSON.stringify({ success: true, data: {
+          state_version: 22, snapshot_count: 21, items: [recovered], next_cursor: null } }));
+        assert.ok(!params.has("cursor") || params.get("cursor") === "original-snapshot-page-2");
+        return new Response(JSON.stringify({ success: true, data: { state_version: params.has("cursor") ? 23 : 21,
+          snapshot_count: 21, items: params.has("cursor") ? [older] : firstPage,
+          next_cursor: params.has("cursor") ? null : "original-snapshot-page-2" } }));
+      } });
+    h.api.show(h.job, variant); await settle();
+    const history = h.root.find("photographic-delivery-history");
+    const expectedOrder = position === "21st" ? [recovered.id, ...firstPage.map((row) => row.id)] : firstPage.map((row) => row.id);
+    assert.deepEqual(history.children.map((row) => row.dataset.deliveryId), expectedOrder);
+    const recoveredRow = history.children.find((row) => row.dataset.deliveryId === recovered.id);
+    assert.match(recoveredRow.children[1].textContent, /Current recorded approval: approved/);
+    assert.match(recoveredRow.find("photographic-delivery-history-download").href, /committed\/recovered.zip$/);
+    assert.deepEqual(JSON.parse(values.get("tp.photo.delivery_recovery.v1")), []);
+    const checkbox = h.root.find("photographic-preset"); checkbox.checked = true; await checkbox.trigger("change");
+    assert.equal(h.root.find("photographic-deliver-approved").disabled, false, "GET recovery still releases only after current review refresh");
+    await h.root.find("photographic-delivery-history-more").trigger();
+    const ids = history.children.map((row) => row.dataset.deliveryId);
+    assert.equal(ids.length, 21);
+    assert.equal(new Set(ids).size, 21);
+    assert.deepEqual(ids, position === "21st" ? expectedOrder : [...expectedOrder, "delivery-1"]);
+    const oldRow = history.children.find((row) => row.dataset.deliveryId === "delivery-1");
+    assert.match(oldRow.children[1].textContent, new RegExp(`Current recorded approval: ${incomingApproval}`));
+    const links = history.children.flatMap((row) => row.find("photographic-delivery-history-download") || []);
+    assert.equal(links.length, incomingApproval === "approved" ? 21 : 20);
+    assert.equal(new Set(links.map((link) => link.href)).size, links.length);
+    if (incomingApproval === "approved") assert.match(oldRow.find("photographic-delivery-history-download").href, /latest-observation.zip$/);
+    assert.equal(h.root.find("photographic-delivery-history-more").disabled, true);
+    assert.equal(h.requests.some(({ options }) => options.method === "POST"), false);
+    assert.equal(attempt.body.expected_version, 1);
+    assert.deepEqual(attempt.body, body);
+  });
+}
+
+test("normal history pagination updates overlaps in place and a fresh first page replaces the previous snapshot", async (t) => {
+  const previous = globalThis.location; globalThis.location = { origin: "http://localhost" };
+  t.after(() => { globalThis.location = previous; });
+  const firstPage = Array.from({ length: 20 }, (_, index) => historyEntry(`delivery-${21 - index}`));
+  let refresh = false;
+  const h = fixture({ extraFetch: (url) => {
+    if (!url.includes("/deliveries?")) return null;
+    const older = new URL(url, "http://localhost").searchParams.has("cursor");
+    return new Response(JSON.stringify({ success: true, data: { state_version: 23, snapshot_count: refresh ? 1 : 21,
+      items: refresh ? [historyEntry("fresh-snapshot")] : older ? [historyEntry("delivery-2", "withdrawn"), historyEntry("delivery-1")] : firstPage,
+      next_cursor: refresh || older ? null : "page-2" } }));
+  } });
+  h.api.show(h.job, variant); await settle();
+  await h.root.find("photographic-delivery-history-more").trigger();
+  const history = h.root.find("photographic-delivery-history");
+  assert.deepEqual(history.children.map((row) => row.dataset.deliveryId), [...firstPage.map((row) => row.id), "delivery-1"]);
+  const withdrawn = history.children.find((row) => row.dataset.deliveryId === "delivery-2");
+  assert.match(withdrawn.children[1].textContent, /Current recorded approval: withdrawn/);
+  assert.equal(withdrawn.find("photographic-delivery-history-download"), undefined);
+  refresh = true;
+  await h.root.find("photographic-delivery-reconcile").trigger();
+  assert.deepEqual(history.children.map((row) => row.dataset.deliveryId), ["fresh-snapshot"]);
+  assert.equal(h.root.find("photographic-delivery-history-more").disabled, true);
+  assert.equal(h.requests.some(({ options }) => options.method === "POST"), false);
+});
+
 test("a lost export response refreshes review after GET recovery before the next explicit export", async (t) => {
   const previous = globalThis.location; globalThis.location = { origin: "http://localhost" };
   t.after(() => { globalThis.location = previous; });
