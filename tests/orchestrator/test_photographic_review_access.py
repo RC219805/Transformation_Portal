@@ -1044,6 +1044,108 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
     monkeypatch.setattr(adapter.AppReviewAccess, "_originals", AsyncMock(return_value=([], "original_unavailable")))
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("component_changed", [False, True])
+async def test_cold_service_resolves_saved_unapproved_native_group_scenes_and_revalidates_components(
+    fake_app, monkeypatch, enabled, component_changed
+):
+    from dataclasses import replace
+
+    from transformation_portal.api.v1.photographic_review import LightingGroupsRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import (
+        ReviewAdmissionConfig,
+        ReviewOverload,
+        current_review_lease,
+    )
+    from transformation_portal.orchestrator.photographic_review_access import ReviewInputError
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, _, _, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    for index in (1, 2):
+        for path, content in list(bodies.items()):
+            if "input-0000" not in path:
+                continue
+            second_path = path.replace("input-0000", f"input-{index:04}")
+            if path.endswith("photograph.json"):
+                descriptor = json.loads(content)
+                descriptor["input_id"] = f"input-{index:04}"
+                descriptor["delivery"]["path"] = f"input-{index:04}/delivery.tif"
+                content = canonicalize_json(descriptor)
+            bodies[second_path] = content
+            inventory.append({"path": second_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    access = adapter.AppReviewAccess(app)
+    context = await access.authorize(_request(), "job")
+    native = [ref for ref in context.references if ref["role"] == "working_master"]
+    members = [ref["source_identity_sha256"] for ref in native[:2]]
+    assert all(ref["sha256"] != identity for ref, identity in zip(native[:2], members))
+    payload = LightingGroupsRequest.model_validate(
+        {
+            "expected_version": 0,
+            "groups": [{"name": "Unapproved native group", "reference_sha256": members[0], "members": members}],
+        }
+    )
+    original_service = services.PhotographicReviewService(ReviewAdmissionConfig())
+    await original_service.groups(context, payload)
+    await original_service.close()
+    saved = await state_store.get("job", "local")
+    assert not saved["decisions"]
+    assert {row["scene"] for row in saved["cohesion"]["groups"][0]["images"]} == {"input-0000", "input-0001"}
+    if component_changed:
+        path = "v6/input-0001/photograph.json"
+        descriptor = json.loads(bodies[path])
+        descriptor["metadata_change"] = "new immutable descriptor identity"
+        bodies[path] = canonicalize_json(descriptor)
+        next(row for row in inventory if row["path"] == path).update(
+            sha256=hashlib.sha256(bodies[path]).hexdigest(), size_bytes=len(bodies[path])
+        )
+    cold_service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    assert not cold_service._scene_hints
+    context = await (
+        access.authorize_admission(_request(), "job") if enabled else access.authorize_catalogue(_request(), "job")
+    )
+    app._get_job_artifact.reset_mock()
+    real_discovery = context.discover_scene_references
+    observed = []
+
+    async def discover(scenes):
+        observed.append(set(scenes))
+        assert (current_review_lease.get() is not None) == enabled
+        return await real_discovery(scenes)
+
+    context = replace(context, discover_scene_references=discover)
+    try:
+        if enabled:
+            # A restart has no exact inspection-cost cache. Preserve the
+            # existing conservative cold bulk budget instead of expanding it.
+            with pytest.raises(ReviewOverload) as capacity:
+                await cold_service.execute(context, cold_service.groups, payload.model_copy(update={"expected_version": 1}))
+            assert capacity.value.status == 413 and capacity.value.reason == "operation_capacity_limit"
+            assert not observed and not app._get_job_artifact.await_args_list
+            assert (await state_store.get("job", "local"))["state_version"] == 1
+            return
+        if component_changed:
+            with pytest.raises(ReviewInputError, match="exact current artifact hashes"):
+                await cold_service.execute(context, cold_service.groups, payload.model_copy(update={"expected_version": 1}))
+            assert (await state_store.get("job", "local"))["state_version"] == 1
+        else:
+            result = await cold_service.execute(
+                context, cold_service.groups, payload.model_copy(update={"expected_version": 1})
+            )
+            assert result["state_version"] == 2
+        assert observed == [{"input-0000", "input-0001"}]
+        assert app._get_job_artifact.await_args_list
+        assert not any("input-0002" in call.args[1] for call in app._get_job_artifact.await_args_list)
+        assert not cold_service._scene_hints, "Saved metadata must resolve cold native members without warming a local cache"
+    finally:
+        await cold_service.close()
+
+
 @pytest.mark.parametrize("npy_version", [(1, 0), (2, 0)])
 @pytest.mark.parametrize("oversized", [False, True])
 async def test_native_alpha_spooling_matches_verified_geometry_budget(fake_app, monkeypatch, tmp_path, npy_version, oversized):
@@ -1901,6 +2003,74 @@ async def test_admission_authenticates_before_discovery_and_binds_manifest_ident
     job.artifacts["items"][0]["sha256"] = "f" * 64
     with pytest.raises(ReviewAccessError, match="bindings changed"):
         await context.revalidate()
+
+
+async def test_scene_index_uses_fifty_committed_scene_inventories_without_native_or_image_reads(fake_app):
+    app, job, store, _ = fake_app
+    inventory = []
+    for index in range(50):
+        for filename in ("delivery.tif", "master.npy", "photograph.json", "preview.png", "depth.tif"):
+            inventory.append({"path": f"v6/input-{index:04}/{filename}", "sha256": "a" * 64, "size_bytes": 100})
+    locator = SimpleNamespace(tenant_id="local", plan_digest="b" * 64, attempt_id="attempt-one")
+    records = SimpleNamespace(
+        get_locator=AsyncMock(return_value=locator),
+        committed_manifest=AsyncMock(return_value={"files": inventory}),
+    )
+    app._uses_dispatch_authority = lambda: True
+    app.get_operational_record_store = lambda: records
+    access = adapter.AppReviewAccess(app)
+    access._originals = AsyncMock(return_value=([], "immutable_original_binding_unavailable"))
+    access._native_reference = AsyncMock(side_effect=AssertionError("Index must not read native descriptors or ICC"))
+    access._read_indexed = AsyncMock(side_effect=AssertionError("Index must not read artifact bytes"))
+    access._fresh_indexed_identity = AsyncMock(side_effect=AssertionError("Index must not hash photographs"))
+    context = await access.authorize_catalogue(_request(), job.id)
+    assert isinstance(context, ReviewContext) and not context.references
+    index = await context.discover_scene_index()
+    assert len({row["scene_id"] for row in index}) == 50
+    assert sum(row.get("role") == "final" for row in index) == 50
+    assert sum(row.get("role") == "working_master" for row in index) == 50
+    access._native_reference.assert_not_awaited()
+    access._read_indexed.assert_not_awaited()
+    access._fresh_indexed_identity.assert_not_awaited()
+    store.open_bytes.assert_not_awaited()
+    app._get_job_artifact.assert_not_awaited()
+    access._native_reference.side_effect = None
+    access._native_reference.return_value = None
+    selected = await context.discover_scene_references({"input-0049"})
+    assert [row["scene_id"] for row in selected] == ["input-0049"]
+    access._native_reference.assert_awaited_once()
+    assert access._native_reference.await_args.args[2]["scene_id"] == "input-0049"
+    legacy = await access.authorize(_request(), job.id)
+    assert legacy.status_code == 409
+    assert json.loads(legacy.body)["error"]["code"] == "PAGED_CATALOGUE_REQUIRED"
+    access._native_reference.assert_awaited_once()
+    await context.revalidate()
+    inventory[-1]["sha256"] = "c" * 64
+    with pytest.raises(ReviewAccessError) as changed:
+        await context.revalidate()
+    assert changed.value.code == "CATALOGUE_CHANGED"
+    inventory[-1]["sha256"] = "a" * 64
+    locator.attempt_id = "attempt-two"
+    with pytest.raises(ReviewAccessError) as changed:
+        await context.revalidate()
+    assert changed.value.code == "CATALOGUE_CHANGED"
+
+
+async def test_scene_index_authentication_and_legacy_missing_identity_never_snapshot(fake_app):
+    app, job, store, _ = fake_app
+    access = adapter.AppReviewAccess(app)
+    access._fresh_indexed_identity = AsyncMock(side_effect=AssertionError("Navigation must not snapshot legacy images"))
+    job.artifacts["items"][0].pop("sha256")
+    context = await access.authorize_catalogue(_request(), job.id)
+    index = await context.discover_scene_index()
+    assert index[0]["sha256"] is None
+    store.open_bytes.assert_not_awaited()
+    app._has_valid_api_key = lambda _: False
+    denied = await access.authorize_catalogue(_request(), job.id)
+    assert denied.status_code == 401
+    with pytest.raises(ReviewAccessError):
+        await context.revalidate()
+    access._fresh_indexed_identity.assert_not_awaited()
 
 
 async def test_admission_invalid_credentials_never_discover_or_queue(fake_app, monkeypatch):

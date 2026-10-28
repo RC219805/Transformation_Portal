@@ -1,102 +1,17 @@
-import { photographicDeliveryAttempt, photographicDeliveryRecovered, photographicDeliveryRecoveryStorage } from "./photographic-delivery-history.js";
+import {
+  photographicVariantLabel, photographicProperties, photographicDecisionMatches, nativeCropGeometry,
+  photographicJobUrl, photographicAssetUrl, photographicRecipe, photographicRetryAfterMs, photographicPreviewMatches,
+  createPhotographicPagedCatalogue, photographicSelectionStorage,
+  photographicReviewAttribution, photographicPageReview,
+  photographicSourceIdentity as identity, photographicDeliveryFingerprint as deliveryFingerprint,
+  photographicDeliveryAttempt, photographicDeliveryRecovered, photographicDeliveryRecoveryStorage,
+} from "./photographic-review-support.js";
+export {
+  photographicVariantLabel, photographicProperties, photographicDecisionMatches, nativeCropGeometry,
+  photographicJobUrl, photographicAssetUrl, photographicRecipe, photographicRetryAfterMs, photographicPreviewMatches,
+} from "./photographic-review-support.js";
 
 const SHA256 = /^[a-f0-9]{64}$/;
-const DECISIONS = new Set(["selected", "needs_revision", "approved"]);
-const ROLES = Object.freeze({ original: "Original", final: "Final", previous_revision: "Previous revision", working_master: "Native working master" });
-
-export function photographicVariantLabel(variant) {
-  return `${ROLES[variant?.role] || "Revision"} · ${String(variant?.label || variant?.source_name || variant?.artifact_path || "Image")}${variant?.version ? ` · ${variant.version}` : ""}`;
-}
-
-export function photographicProperties(variant) {
-  const dimensions = Number.isInteger(variant?.width) && Number.isInteger(variant?.height)
-    ? `${variant.width} × ${variant.height} px` : "Dimensions not reported";
-  const depth = /^float(\d+)$/.exec(String(variant?.bit_depth || ""));
-  const precision = depth ? `${depth[1]}-bit float` : variant?.bit_depth ? `${variant.bit_depth}-bit` : "Precision not reported";
-  return [dimensions, precision,
-    variant?.color_profile || "Profile not reported", variant?.intended_use || "Intended use not reported"].join(" · ");
-}
-
-export function photographicDecisionMatches(decision, variant) {
-  return Boolean(variant && decision && DECISIONS.has(decision.status)
-    && decision.artifact_path === variant.artifact_path && SHA256.test(variant.sha256)
-    && decision.sha256 === variant.sha256
-    && (!variant.source_identity_sha256 || (decision.source_identity_sha256 || decision.sha256) === variant.source_identity_sha256));
-}
-
-export function nativeCropGeometry(variant, center = { x: 0.5, y: 0.5 }, size = 512) {
-  if (!Number.isInteger(variant?.width) || !Number.isInteger(variant?.height)
-    || variant.width < 1 || variant.height < 1) throw new Error("Native dimensions are unavailable.");
-  const edge = Math.max(1, Math.min(2048, Math.floor(Number(size) || 512)));
-  const width = Math.min(edge, variant.width);
-  const height = Math.min(edge, variant.height);
-  const bounded = (value) => Math.max(0, Math.min(1, Number.isFinite(Number(value)) ? Number(value) : 0.5));
-  return {
-    x: Math.max(0, Math.min(variant.width - width, Math.round(bounded(center.x) * variant.width - width / 2))),
-    y: Math.max(0, Math.min(variant.height - height, Math.round(bounded(center.y) * variant.height - height / 2))),
-    width, height,
-  };
-}
-
-export function photographicJobUrl(jobId, path = "") {
-  return `/v1/jobs/${encodeURIComponent(String(jobId || ""))}/photographic-review${path}`;
-}
-
-export function photographicAssetUrl(raw, jobId, origin = globalThis.location?.origin) {
-  try {
-    const url = new URL(String(raw || ""), origin);
-    const prefix = `/v1/jobs/${encodeURIComponent(String(jobId || ""))}/`;
-    return url.origin === origin && ["http:", "https:"].includes(url.protocol)
-      && url.pathname.startsWith(prefix) && !url.username && !url.password
-      ? `${url.pathname}${url.search}` : "";
-  } catch { return ""; }
-}
-
-export function photographicRecipe({ exposure = 0, warmth = 0, saturation = 1, materials = [] } = {}) {
-  const numeric = (value, min, max, label) => {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < min || number > max) throw new Error(`${label} is outside the supported range.`);
-    return Math.round(number * 10000) / 10000;
-  };
-  const balance = numeric(warmth, -0.15, 0.15, "Warmth");
-  const materialNames = new Set();
-  if (!Array.isArray(materials) || materials.length > 16) throw new Error("At most 16 material regions are supported.");
-  const regions = materials.map((material, index) => {
-    const name = String(material.name || "").trim();
-    if (!name || materialNames.has(name.toLowerCase())) throw new Error("Material regions require unique names.");
-    materialNames.add(name.toLowerCase());
-    const region = (material.region || []).map((value) => numeric(value, 0, 1, `Region ${index + 1}`));
-    if (region.length !== 4 || region[0] >= region[2] || region[1] >= region[3]) throw new Error("Material regions require a positive-area normalized rectangle.");
-    const regionWarmth = numeric(material.warmth || 0, -0.1, 0.1, "Material warmth");
-    return { name, region, exposure_stops: numeric(material.exposure_stops, -0.5, 0.5, "Material exposure"),
-      white_balance: [1 + regionWarmth, 1, 1 - regionWarmth], feather: numeric(material.feather, 0.005, 0.1, "Material feather") };
-  });
-  return {
-    exposure_stops: numeric(exposure, -1, 1, "Exposure"),
-    white_balance: [1 + balance, 1, 1 - balance],
-    saturation: numeric(saturation, 0.8, 1.2, "Saturation"),
-    materials: regions,
-  };
-}
-
-export function photographicRetryAfterMs(value, now = Date.now()) {
-  const seconds = Number(value);
-  if (value !== null && String(value).trim() && Number.isFinite(seconds)) return Math.max(1000, Math.ceil(seconds * 1000));
-  const date = Date.parse(String(value || ""));
-  return Number.isFinite(date) ? Math.max(1000, date - now) : 30000;
-}
-
-export function photographicPreviewMatches(receipt, variant, recipe, referenceSha = null) {
-  return Boolean(receipt && ["tp.photo.revision.v1", "tp.photo.revision.v2"].includes(receipt.schema) && variant
-    && receipt.source_master_sha256 === variant.sha256
-    && (!variant.source_identity_sha256 || (receipt.source_identity_sha256 || receipt.source_master_sha256) === variant.source_identity_sha256) && receipt.width === variant.width && receipt.height === variant.height
-    && receipt.output_bit_depth === 32 && receipt.review_status === "unreviewed" && receipt.approval_transferred === false
-    && (receipt.schema !== "tp.photo.revision.v2" || ((receipt.input_presentation_policy_sha256 || null) === (variant.presentation_policy_sha256 || null)
-      && receipt.output_presentation?.schema === "tp.photo.revision_presentation.v1"
-      && ["working_linear", "display_referred"].includes(receipt.output_presentation.stage)))
-    && (receipt.reference_sha256 || null) === (referenceSha || null)
-    && Object.entries(recipe).every(([key, value]) => JSON.stringify(receipt.recipe?.[key]) === JSON.stringify(value)));
-}
 
 function normalizedReview(data) {
   const scenes = Array.isArray(data?.scenes) ? data.scenes.map((scene) => ({
@@ -146,6 +61,7 @@ export function createPhotographicReview(host) {
   let finishImageDelay = null;
   let retryAt = 0;
   let pending = false;
+  let navigating = false;
   let blinkTimer = null;
   let blinkAlternate = false;
   let variantPreview = null;
@@ -167,7 +83,76 @@ export function createPhotographicReview(host) {
   try { recoveryStorage = photographicDeliveryRecoveryStorage(Object.hasOwn(host, "sessionStorage") ? host.sessionStorage : globalThis.sessionStorage); }
   catch { recoveryStorage = photographicDeliveryRecoveryStorage(null); }
   let nodes = {};
+  let pager = null;
+  let noteDirty = false;
+  let savedSelection = null;
+  let initialArtifactPath = "";
+  let activePagedCatalogue = null;
+  const inspectedScenes = new Map();
+  let recordedScenes = new Map();
+  const deliveryIdentities = new Map();
+  let selectionStorage;
+  try { selectionStorage = photographicSelectionStorage(Object.hasOwn(host, "sessionStorage") ? host.sessionStorage : globalThis.sessionStorage); }
+  catch { selectionStorage = photographicSelectionStorage(null); }
   function deliveryHistoryEnabled() { return state.auth?.features?.photographicDeliveryHistory === true; }
+  function pagedCatalogueEnabled() { return state.auth?.features?.photographicPagedCatalogue === true; }
+  function selection() { return { sceneId, label: currentScene()?.label || sceneId, primaryPath, comparePath, mode, inspection, presentationView, center: { ...center }, cropSize }; }
+  function rememberSelection() {
+    if (jobId && actorScope) selectionStorage.set(deliveryRecoveryScope(), selection());
+  }
+  function hasEdits() { return noteDirty || materialDrafts.length > 0 || Number(revisionDraft.exposure) !== 0 || Number(revisionDraft.warmth) !== 0 || Number(revisionDraft.saturation) !== 1; }
+  function notifySelection() {
+    if (!pagedCatalogueEnabled() || !currentVariant()) return;
+    host.onPhotographicSelection?.({ jobId, sceneId, actorScope, artifactPath: primaryPath, stateVersion: data.state_version,
+      catalogueIdentitySha256: data.catalogue_identity_sha256 || null, variant: { ...currentVariant() } });
+  }
+  function deliveryScenes() {
+    const scenes = new Map(recordedScenes);
+    for (const [id, entry] of inspectedScenes) if (entry.catalogue === data?.catalogue_identity_sha256 || !scenes.has(id)) scenes.set(id, entry.scene);
+    return [...scenes.values()];
+  }
+  function applyPagedDetail(loaded, { page, sceneChanged, requestedPath, discardEdits }) {
+    const previous = selection();
+    const projected = photographicPageReview(loaded, page);
+    data = normalizedReview(projected.review); recordedScenes = projected.recordedScenes;
+    for (const scene of recordedScenes.values()) {
+      if (!deliverySelections.has(scene.scene_id)) {
+        const source = scene.variants.find((row) => row.role === "final") || scene.variants[0];
+        deliverySelections.set(scene.scene_id, source.artifact_path); deliveryIdentities.set(scene.scene_id, deliveryFingerprint(source));
+      }
+    }
+    for (const scene of data.scenes) inspectedScenes.set(scene.scene_id, { scene, catalogue: data.catalogue_identity_sha256 });
+    sceneId = data.scenes[0]?.scene_id || "";
+    if (sceneChanged) { noteDirty = false; chooseVariants(); }
+    else if (discardEdits) { noteDirty = false; resetRecipe(); }
+    if (!currentVariant()) {
+      chooseVariants();
+      if (previous.sceneId === sceneId) { center = previous.center; mode = previous.mode; inspection = previous.inspection; presentationView = previous.presentationView; cropSize = previous.cropSize; }
+    }
+    if (savedSelection && savedSelection.sceneId === sceneId) {
+      const restore = savedSelection; savedSelection = null;
+      if (currentScene()?.variants.some((variant) => variant.artifact_path === restore.primaryPath)) primaryPath = restore.primaryPath;
+      if (!restore.comparePath || currentScene()?.variants.some((variant) => variant.artifact_path === restore.comparePath)) comparePath = restore.comparePath;
+      ({ mode, inspection, presentationView, center, cropSize } = restore);
+    }
+    if (requestedPath && currentScene()?.variants.some((variant) => variant.artifact_path === requestedPath)) primaryPath = requestedPath;
+    nodes.mode.value = mode; nodes.inspection.value = inspection; nodes.presentation.value = presentationView;
+    nodes.cropSize.value = String(cropSize); nodes.x.value = String(center.x * 100); nodes.y.value = String(center.y * 100);
+    if (deliverySources.some((source) => !data.decisions.some((row) => row.status === "approved" && photographicDecisionMatches(row, source)))) {
+      clearDownload(); deliverySources = []; nodes.deliveryResult.textContent = "A delivery approval changed. Recheck the selected versions and create a newly verified bundle.";
+    }
+    panel.classList.remove("hidden");
+    if (!data.scenes.length) {
+      nodes.figures.forEach(({ image, caption }) => { image.removeAttribute("src"); caption.textContent = ""; });
+      nodes.scene.replaceChildren(); nodes.primary.replaceChildren(); nodes.compare.replaceChildren(); nodes.note.value = "";
+      pager.renderCards(nodes.contact, ""); return;
+    }
+    render();
+  }
+  function selectScene(id) {
+    if (pagedCatalogueEnabled()) { void pager.choose(id); return; }
+    sceneId = id; chooseVariants(); render();
+  }
 
   function el(tag, text = "", className = "", ui = "") {
     const element = doc.createElement(tag);
@@ -233,7 +218,6 @@ export function createPhotographicReview(host) {
     retryAt = Math.max(retryAt, Date.now() + photographicRetryAfterMs(response.headers.get("Retry-After")));
     checkBackoff(response.status);
   }
-  function identity(variant) { return variant?.source_identity_sha256 || variant?.sha256 || ""; }
   function recordedPresentationEnabled() { return state.auth?.features?.photographicRecordedPresentation === true; }
   function presentationAware(variant) { return Array.isArray(variant?.presentation?.available_views) && variant.presentation.available_views.includes("clip_srgb"); }
   function viewFor(variant) {
@@ -250,9 +234,14 @@ export function createPhotographicReview(host) {
   function decision(variant) { return data?.decisions.find((item) => photographicDecisionMatches(item, variant)) || null; }
   function setPending(value) {
     pending = value;
-    panel?.querySelectorAll("[data-review-mutation]").forEach((control) => { control.disabled = value; });
-    if (nodes.commitRevision) nodes.commitRevision.disabled = value || !variantPreview;
-    nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = value || currentVariant()?.role === "original"; });
+    pager?.lock(value);
+    panel?.querySelectorAll("[data-review-mutation]").forEach((control) => { control.disabled = value || navigating; });
+    if (nodes.commitRevision) nodes.commitRevision.disabled = value || navigating || !variantPreview;
+    nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = value || navigating || currentVariant()?.role === "original"; });
+    if (nodes.note) nodes.note.disabled = navigating;
+    Object.values(nodes.revisionInputs || {}).forEach((control) => { control.disabled = navigating; });
+    nodes.materials?.querySelectorAll("input,button").forEach((control) => { control.disabled = navigating; });
+    if (nodes.addRegion) nodes.addRegion.disabled = navigating;
   }
   function resetPreview() {
     variantPreview = null;
@@ -276,6 +265,7 @@ export function createPhotographicReview(host) {
         headers: _buildAuthHeaders({ Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) }, method),
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
+      if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) throw new DOMException("Review selection changed.", "AbortError");
       checkRateLimit(response);
       const payload = await response.json();
       if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) throw new Error("Review selection changed.");
@@ -307,8 +297,12 @@ export function createPhotographicReview(host) {
     nodes.status.setAttribute("role", "status");
     nodes.status.setAttribute("aria-live", "polite");
     const refresh = button("Refresh review", "photographic-review-refresh", () => void load(true));
-    nodes.scene = select("photographic-scene", [], () => { sceneId = nodes.scene.value; chooseVariants(); render(); });
-    nodes.primary = select("photographic-primary", [], () => { primaryPath = nodes.primary.value; resetRecipe(); render(); });
+    nodes.scene = select("photographic-scene", [], () => { const target = nodes.scene.value; nodes.scene.value = sceneId; selectScene(target); });
+    nodes.primary = select("photographic-primary", [], () => {
+      const target = nodes.primary.value; nodes.primary.value = primaryPath;
+      const change = () => { primaryPath = target; noteDirty = false; resetRecipe(); render(); return true; };
+      if (pagedCatalogueEnabled()) void pager.navigate(change); else change();
+    });
     nodes.compare = select("photographic-comparison", [], () => { comparePath = nodes.compare.value; render(); });
     nodes.mode = select("photographic-comparison-mode", [["side_by_side", "Side by side"], ["wipe", "Wipe"], ["blink", "Blink"]], () => { mode = nodes.mode.value; stopBlink(); renderStage(); });
     nodes.inspection = select("photographic-inspection", [["fit", "Fit preview"], ["native", "Native 1:1 crop"]], () => { inspection = nodes.inspection.value; stopBlink(); void renderImages(); });
@@ -381,6 +375,7 @@ export function createPhotographicReview(host) {
     nodes.note = el("textarea", "", "photo-review-input", "photographic-decision-note");
     nodes.note.maxLength = 2000;
     nodes.note.rows = 2;
+    nodes.note.addEventListener("input", () => { noteDirty = nodes.note.value !== (decision(currentVariant())?.note || ""); });
     for (const [value, label] of [["selected", "Selected"], ["needs_revision", "Needs revision"], ["approved", "Approved"]]) {
       const control = button(label, `photographic-decision-${value}`, () => void saveDecision(value));
       control.dataset.reviewMutation = "true";
@@ -389,6 +384,7 @@ export function createPhotographicReview(host) {
     }
     nodes.decisions.append(nodes.decisionStatus, field("Review note", nodes.note));
     nodes.contact = el("div", "", "photo-review-contact", "photographic-contact-sheet");
+    nodes.contact.addEventListener("keydown", (event) => { if (pagedCatalogueEnabled()) pager.handleKeydown(event); });
     nodes.groups = el("div", "", "photo-review-controls", "photographic-lighting-groups");
     nodes.groupName = input("photographic-lighting-group", "text");
     nodes.groupName.maxLength = 80;
@@ -399,8 +395,11 @@ export function createPhotographicReview(host) {
     nodes.outliers = el("p", "", "photo-review-help", "photographic-quality-flags");
     const revisions = buildRevisionControls();
     const delivery = buildDeliveryControls();
+    pager = createPhotographicPagedCatalogue({ el, button, field, select, request, status, selection, hasEdits, apply: applyPagedDetail,
+      onLoading(value) { navigating = value; setPending(pending); updateDeliveryButton(); } });
+    pager.controls.hidden = !pagedCatalogueEnabled();
     panel.append(heading, controls, nodes.nativeControls, nodes.nativeNotice, nodes.stage, nodes.metadata, comparisonTools,
-      quality, nodes.decisions, el("h4", "Set coherence", "photo-review-subtitle"), nodes.contact, nodes.groups, nodes.outliers, revisions, delivery, nodes.status);
+      quality, nodes.decisions, el("h4", "Set coherence", "photo-review-subtitle"), pager.controls, nodes.contact, nodes.groups, nodes.outliers, revisions, delivery, nodes.status);
     if (els.artifactShellContent?.prepend) els.artifactShellContent.prepend(panel);
     else els.artifactShellContent?.append(panel);
   }
@@ -429,10 +428,12 @@ export function createPhotographicReview(host) {
     controls.append(nodes.previewRevision, nodes.commitRevision);
     nodes.materials = el("div", "", "photo-review-materials", "photographic-material-regions");
     const addRegion = button("Add local material region", "photographic-add-material", () => {
+      if (navigating) return;
       if (materialDrafts.length >= 16) { status("At most 16 local regions are supported.", true); return; }
       materialDrafts.push({ name: `Region ${materialDrafts.length + 1}`, region: [0.25, 0.25, 0.75, 0.75], exposure_stops: 0, warmth: 0, feather: 0.03 });
       resetPreview(); renderMaterials();
     });
+    nodes.addRegion = addRegion;
     section.append(controls, el("p", "Local material regions are explicit feathered rectangles, not automatic semantic masks. Keep adjustments subtle; overlapping exposure is checked by the renderer.", "photo-review-help"),
       addRegion, nodes.materials, nodes.variantPreview, nodes.revisionReceipt);
     return section;
@@ -445,6 +446,7 @@ export function createPhotographicReview(host) {
     nodes.property = input("photographic-property-name", "text", "Property");
     nodes.property.maxLength = 100;
     nodes.presets = el("div", "", "photo-review-controls", "photographic-delivery-presets");
+    nodes.deliverySelectionSummary = el("p", "", "photo-review-help", "photographic-delivery-selection-summary");
     nodes.deliver = button("Deliver approved set", "photographic-deliver-approved", () => void deliver());
     nodes.deliver.dataset.reviewMutation = "true";
     nodes.deliver.disabled = true;
@@ -457,7 +459,7 @@ export function createPhotographicReview(host) {
     nodes.deliveryHistoryControls = el("section", "", "hidden", "photographic-delivery-history-controls");
     nodes.deliveryHistoryControls.append(el("h5", "Committed delivery history"), nodes.reconcileDelivery,
       nodes.deliveryHistoryStatus, nodes.deliveryHistory, nodes.moreDeliveries);
-    section.append(field("Property name", nodes.property), nodes.presets, nodes.deliver, nodes.deliveryResult, nodes.deliveryHistoryControls);
+    section.append(field("Property name", nodes.property), nodes.presets, nodes.deliverySelectionSummary, nodes.deliver, nodes.deliveryResult, nodes.deliveryHistoryControls);
     return section;
   }
 
@@ -513,6 +515,15 @@ export function createPhotographicReview(host) {
     const sequence = ++dataRequest;
     status("Loading photographic review…");
     try {
+      if (pagedCatalogueEnabled()) {
+        const loaded = await pager.refresh(sceneId, { minimumVersion, artifactPath: initialArtifactPath });
+        if (loaded && minimumVersion !== null && (!Number.isInteger(data?.state_version) || data.state_version < minimumVersion)) throw new Error("Current review metadata has not reached the reconciled version. Refresh review before another export.");
+        if (loaded) initialArtifactPath = "";
+        if (loaded && jobId === expectedJob && sequence === dataRequest) status(force
+          ? "Review refreshed. Selected source verified; page cards show recorded metadata."
+          : "Review loaded. Selected source verified; page cards show recorded review status.");
+        return Boolean(loaded);
+      }
       const loaded = normalizedReview(await request("", null, 90000));
       if (jobId !== expectedJob || sequence !== dataRequest) return false;
       if (minimumVersion !== null && (!Number.isInteger(loaded.state_version) || loaded.state_version < minimumVersion)) {
@@ -548,7 +559,9 @@ export function createPhotographicReview(host) {
       choices.forEach(([key, label]) => { const option = el("option", label); option.value = key; control.append(option); });
       control.value = value;
     };
-    replaceOptions(nodes.scene, data.scenes.map((item) => [item.scene_id, item.label || item.scene_id]), sceneId);
+    const visibleScenes = pagedCatalogueEnabled() ? pager.page()?.scenes || [] : data.scenes;
+    replaceOptions(nodes.scene, [...(visibleScenes.some((item) => item.scene_id === sceneId) ? [] : [scene]), ...visibleScenes]
+      .map((item) => [item.scene_id, item.label || item.scene_id]), sceneId);
     replaceOptions(nodes.primary, scene.variants.map((variant) => [variant.artifact_path, photographicVariantLabel(variant)]), primaryPath);
     replaceOptions(nodes.compare, [["", "No comparison"], ...scene.variants.filter((variant) => variant.artifact_path !== primaryPath)
       .map((variant) => [variant.artifact_path, photographicVariantLabel(variant)])], comparePath === primaryPath ? "" : comparePath);
@@ -557,14 +570,18 @@ export function createPhotographicReview(host) {
     nodes.decisionStatus.textContent = currentVariant()?.role === "original"
       ? "Original inspection only. Select a final or revision to record an approval."
       : currentDecision
-      ? `${currentDecision.status === "needs_revision" ? "Needs revision" : currentDecision.status[0].toUpperCase() + currentDecision.status.slice(1)} · exact SHA-256 ${currentVariant().sha256}`
+      ? `${currentDecision.status === "needs_revision" ? "Needs revision" : currentDecision.status[0].toUpperCase() + currentDecision.status.slice(1)} · ${photographicReviewAttribution(currentDecision)} · exact SHA-256 ${currentVariant().sha256}`
       : `Unreviewed · exact SHA-256 ${currentVariant().sha256}`;
     nodes.decisions.querySelectorAll("[data-decision]").forEach((control) => control.setAttribute("aria-pressed", String(control.dataset.decision === currentDecision?.status)));
-    nodes.note.value = currentDecision?.note || "";
+    if (!noteDirty) nodes.note.value = currentDecision?.note || "";
     const group = data.groups.find((item) => item.members?.includes(identity(currentVariant())))
       || data.groups.find((item) => item.name === scene.lighting_group);
     nodes.groupName.value = group?.name || scene.lighting_group || "";
-    const referenceVariants = data.scenes.flatMap((item) => item.variants.filter((variant) => variant.role !== "original").map((variant) => ({ scene: item, variant })));
+    const referenceScenes = pagedCatalogueEnabled() ? [...inspectedScenes.values()].map((entry) => entry.scene) : data.scenes;
+    const referenceVariants = referenceScenes.flatMap((item) => item.variants.filter((variant) => variant.role !== "original").map((variant) => ({ scene: item, variant })));
+    if (pagedCatalogueEnabled() && (group?.reference_sha256 || scene.reference_sha256) && !referenceVariants.some(({ variant }) => identity(variant) === (group?.reference_sha256 || scene.reference_sha256))) {
+      referenceVariants.push({ scene: { label: "Recorded lighting reference" }, variant: { source_identity_sha256: group?.reference_sha256 || scene.reference_sha256, label: "Open its photograph to inspect", role: "reference" } });
+    }
     replaceOptions(nodes.reference, [["", "No reference selected"], ...referenceVariants.map(({ scene: item, variant }) => [identity(variant), `${item.label || item.scene_id} · ${photographicVariantLabel(variant)}`])], group?.reference_sha256 || scene.reference_sha256 || "");
     const cohesion = (data.cohesion?.groups || []).flatMap((group) => group.images || []).find((row) => (row.source_identity_sha256 || row.source_master_sha256) === identity(currentVariant()));
     nodes.outliers.textContent = (scene.quality_flags || scene.outlier_flags || cohesion?.flags || []).map((flag) => typeof flag === "string" ? flag : flag.message || flag.code || "").filter(Boolean).join(" · ")
@@ -575,15 +592,20 @@ export function createPhotographicReview(host) {
     setPending(pending);
     renderContactSheet();
     renderPresets();
+    rememberSelection(); notifySelection();
     void renderImages();
   }
 
   function renderContactSheet() {
+    if (pagedCatalogueEnabled()) {
+      pager.renderCards(nodes.contact, sceneId, (card) => appendDeliveryScene(card, currentScene()));
+      updateDeliveryButton(); return;
+    }
     nodes.contact.replaceChildren();
     data.scenes.forEach((scene) => {
       const variant = scene.variants.find((item) => item.role === "final") || scene.variants[0];
       const card = el("article", "", "photo-review-contact-item");
-      const control = button("", "photographic-contact-item", () => { sceneId = scene.scene_id; chooseVariants(); render(); });
+      const control = button("", "photographic-contact-item", () => selectScene(scene.scene_id));
       control.className = "photo-review-contact-select";
       control.setAttribute("aria-pressed", String(scene.scene_id === sceneId));
       const query = new URLSearchParams({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), max_edge: "256",
@@ -620,23 +642,34 @@ export function createPhotographicReview(host) {
       }
       control.append(el("span", scene.label || scene.scene_id), el("small", decision(variant)?.status?.replaceAll("_", " ") || "Unreviewed"));
       card.append(control);
+      appendDeliveryScene(card, scene);
+      nodes.contact.append(card);
+    });
+  }
+
+  function appendDeliveryScene(card, scene) {
+      if (!scene) return;
       const sceneLabel = input("photographic-scene-delivery-label", "text", sceneLabels.get(scene.scene_id) || scene.label || scene.scene_id);
       sceneLabel.maxLength = 80;
       sceneLabel.addEventListener("input", () => sceneLabels.set(scene.scene_id, sceneLabel.value));
       card.append(field("Delivery scene name", sceneLabel));
       const approved = scene.variants.filter((item) => item.role !== "original" && decision(item)?.status === "approved");
       if (approved.length) {
-        if (!deliverySelections.has(scene.scene_id) || (deliverySelections.get(scene.scene_id) && !approved.some((item) => item.artifact_path === deliverySelections.get(scene.scene_id)))) {
-          deliverySelections.set(scene.scene_id, (approved.find((item) => item.role === "final") || approved[0]).artifact_path);
+        if (!deliverySelections.has(scene.scene_id) || (!pagedCatalogueEnabled() && deliverySelections.get(scene.scene_id) && !approved.some((item) => item.artifact_path === deliverySelections.get(scene.scene_id)))) {
+          const source = approved.find((item) => item.role === "final") || approved[0];
+          deliverySelections.set(scene.scene_id, source.artifact_path); deliveryIdentities.set(scene.scene_id, deliveryFingerprint(source));
         }
-        const deliveryChoice = select("photographic-delivery-version", [["", "Exclude from delivery"], ...approved.map((item) => [item.artifact_path, photographicVariantLabel(item)])], () => {
-          deliverySelections.set(scene.scene_id, deliveryChoice.value); updateDeliveryButton();
+        const selected = deliverySelections.get(scene.scene_id);
+        const deliveryChoice = select("photographic-delivery-version", [["", "Exclude from delivery"], ...approved.map((item) => [item.artifact_path, photographicVariantLabel(item)]),
+          ...(selected && !approved.some((row) => row.artifact_path === selected) ? [[selected, "Earlier selected source · inspect before export"]] : [])], () => {
+          deliverySelections.set(scene.scene_id, deliveryChoice.value);
+          const source = approved.find((row) => row.artifact_path === deliveryChoice.value);
+          source ? deliveryIdentities.set(scene.scene_id, deliveryFingerprint(source)) : deliveryIdentities.delete(scene.scene_id);
+          updateDeliveryButton();
         });
         deliveryChoice.value = deliverySelections.get(scene.scene_id);
         card.append(field(`Approved delivery version · ${scene.label || scene.scene_id}`, deliveryChoice));
-      } else deliverySelections.delete(scene.scene_id);
-      nodes.contact.append(card);
-    });
+      } else if (!pagedCatalogueEnabled()) deliverySelections.delete(scene.scene_id);
   }
 
   function renderPresets() {
@@ -690,17 +723,25 @@ export function createPhotographicReview(host) {
     });
   }
   function approvedVariants() {
-    return (data?.scenes || []).flatMap((scene) => scene.variants.filter((variant) => variant.role !== "original"
-      && variant.artifact_path === deliverySelections.get(scene.scene_id) && decision(variant)?.status === "approved"));
+    const scenes = pagedCatalogueEnabled() ? deliveryScenes() : data?.scenes || [];
+    return scenes.flatMap((scene) => scene.variants.filter((variant) => variant.role !== "original"
+      && variant.artifact_path === deliverySelections.get(scene.scene_id) && decision(variant)?.status === "approved"
+      && (!pagedCatalogueEnabled() || deliveryIdentities.get(scene.scene_id) === deliveryFingerprint(variant))));
   }
   function updateDeliveryButton() {
     const count = approvedVariants().length;
-    nodes.deliver.disabled = pending || (deliveryHistoryEnabled() && recoveryStorageBlocked)
+    nodes.deliver.disabled = pending || navigating || (deliveryHistoryEnabled() && recoveryStorageBlocked)
       || ["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome) || !count || !selectedPresets.size;
     nodes.deliver.textContent = `Deliver approved set (${count})`;
+    if (nodes.deliverySelectionSummary) {
+      nodes.deliverySelectionSummary.hidden = !pagedCatalogueEnabled();
+      const selected = [...deliverySelections].filter(([, path]) => path);
+      nodes.deliverySelectionSummary.textContent = `${selected.length} selected across all pages (${count} currently recorded approved). ${selected.map(([id]) => sceneLabels.get(id) || recordedScenes.get(id)?.label || inspectedScenes.get(id)?.scene.label || id).join(", ")}. Every selected source is opened and revalidated before export.`;
+    }
   }
 
   function renderStage() {
+    rememberSelection();
     const primary = currentVariant();
     const comparison = currentVariant(comparePath);
     const aligned = primary && comparison && primary.width === comparison.width && primary.height === comparison.height;
@@ -752,6 +793,7 @@ export function createPhotographicReview(host) {
     const controller = new AbortController();
     const requestJob = jobId;
     const requestActor = actorScope;
+    const requestGeneration = scopeGeneration;
     requests.add(controller);
     if (!thumbnail) imageControllers.set(key, controller);
     const timer = setTimeout(() => controller.abort(), 30000);
@@ -760,6 +802,7 @@ export function createPhotographicReview(host) {
         const response = await fetchImpl(`${photographicJobUrl(requestJob, native ? "/native-crop" : "/render")}?${params}`, {
           headers: _buildAuthHeaders({ Accept: "image/png" }, "GET"), credentials: "same-origin", signal: controller.signal,
         });
+        if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) return null;
         checkRateLimit(response);
         if (!response.ok) throw new Error(`${native ? "Native crop" : "Fit preview"} unavailable (${response.status}); retained metadata remains available.`);
         if (!/^image\/png(?:;|$)/i.test(response.headers.get("Content-Type") || "")
@@ -770,7 +813,7 @@ export function createPhotographicReview(host) {
           || (native && (Number(response.headers.get("X-TP-Native-Width")) !== geometry.width
           || Number(response.headers.get("X-TP-Native-Height")) !== geometry.height))) throw new Error("Image source identity or native dimensions could not be verified.");
         const blob = await response.blob();
-        if (requestJob !== jobId || requestActor !== actorScope || controller.signal.aborted) return null;
+        if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration || controller.signal.aborted) return null;
         if (thumbnail && blob.size > 1024 * 1024) throw new Error("Thumbnail exceeds its display limit.");
         const entry = { url: URL.createObjectURL(blob), geometry, bytes: blob.size };
         if (thumbnail) return entry;
@@ -797,6 +840,7 @@ export function createPhotographicReview(host) {
   }
 
   async function renderImages() {
+    rememberSelection();
     if (!data || !currentVariant()) return;
     renderStage();
     const variants = [currentVariant(), currentVariant(comparePath)];
@@ -859,21 +903,25 @@ export function createPhotographicReview(host) {
   }
 
   async function mutate(path, body, success, timeout = 30000) {
-    if (pending || !data) return null;
+    if (pending || navigating || !data) return null;
     const expectedJob = jobId;
+    const expectedGeneration = scopeGeneration;
     setPending(true);
     try {
       const result = await request(path, { ...body, expected_version: data.state_version }, timeout);
-      if (jobId !== expectedJob) return null;
+      if (jobId !== expectedJob || scopeGeneration !== expectedGeneration) return null;
+      if (path === "/decisions") noteDirty = false;
+      if (path === "/revisions") resetRecipe();
       await load();
+      if (scopeGeneration !== expectedGeneration) return null;
       status(success);
       return result;
     } catch (error) {
-      if (jobId !== expectedJob) return null;
-      if (error.code === "REVIEW_CONFLICT") { resetPreview(); await load(true); status("Review changed elsewhere. Current decisions were reloaded; inspect them before retrying.", true); }
+      if (jobId !== expectedJob || scopeGeneration !== expectedGeneration) return null;
+      if (error.code === "REVIEW_CONFLICT") { resetPreview(); await load(true); if (scopeGeneration === expectedGeneration) status("Review changed elsewhere. Current decisions were reloaded; inspect them before retrying.", true); }
       else status(error.name === "AbortError" ? "Review request timed out. Refresh before retrying; it may have completed on the server." : error.message, true);
       return null;
-    } finally { if (jobId === expectedJob) { setPending(false); updateDeliveryButton(); } }
+    } finally { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { setPending(false); updateDeliveryButton(); } }
   }
 
   async function measureQuality() {
@@ -908,11 +956,12 @@ export function createPhotographicReview(host) {
 
   async function saveDecision(statusValue) {
     const variant = currentVariant();
+    const sourceSceneId = sceneId;
     if (!variant || variant.role === "original") return;
     const inspected = presentationAware(variant) && displayedInspectionKey === imageKey(variant, inspection === "native");
     const result = await mutate("/decisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), status: statusValue, note: nodes.note.value,
       ...(inspected ? { inspection_presentation: { view: viewFor(variant), policy_sha256: variant.presentation_policy_sha256 || null } } : {}) }, "Decision saved for this exact artifact hash; presentation evidence does not change its approval scope.");
-    if (result && statusValue === "approved") { deliverySelections.set(sceneId, variant.artifact_path); renderContactSheet(); updateDeliveryButton(); }
+    if (result && statusValue === "approved") { deliverySelections.set(sourceSceneId, variant.artifact_path); deliveryIdentities.set(sourceSceneId, deliveryFingerprint(variant)); renderContactSheet(); updateDeliveryButton(); }
   }
   async function saveLightingGroup() {
     const variant = currentVariant();
@@ -932,15 +981,16 @@ export function createPhotographicReview(host) {
     try { recipe = photographicRecipe({ ...revisionDraft, materials: materialDrafts }); } catch (error) { status(error.message, true); return; }
     const key = JSON.stringify([variant.artifact_path, variant.sha256, identity(variant), variant.presentation_policy_sha256 || null, recipe, nodes.reference.value]);
     const expectedJob = jobId;
+    const expectedGeneration = scopeGeneration;
     if (!previewOnly && variantPreview?.key !== key) { status("Render and inspect the current adjustments before creating a revision.", true); return; }
     if (previewOnly) {
-      if (pending) return;
+      if (pending || navigating) return;
       setPending(true);
       try {
         const result = await request("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
           ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
           reference_sha256: nodes.reference.value || null, expected_version: data.state_version, preview_only: true }, 90000);
-        if (currentVariant()?.artifact_path !== variant.artifact_path || key !== JSON.stringify([variant.artifact_path, currentVariant().sha256, identity(currentVariant()), currentVariant().presentation_policy_sha256 || null, photographicRecipe({ ...revisionDraft, materials: materialDrafts }), nodes.reference.value])) return;
+        if (scopeGeneration !== expectedGeneration || currentVariant()?.artifact_path !== variant.artifact_path || key !== JSON.stringify([variant.artifact_path, currentVariant().sha256, identity(currentVariant()), currentVariant().presentation_policy_sha256 || null, photographicRecipe({ ...revisionDraft, materials: materialDrafts }), nodes.reference.value])) return;
         if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result.preview_data_url || "")
           || !photographicPreviewMatches(result.receipt, variant, recipe, nodes.reference.value || null)) throw new Error("Rendered variant preview identity or recipe could not be verified.");
         variantPreview = { key, result };
@@ -948,8 +998,8 @@ export function createPhotographicReview(host) {
         nodes.variantPreview.classList.remove("hidden");
         nodes.revisionReceipt.textContent = `Rendered preview from master ${variant.sha256}. Reduced preview only; approval is required separately after the full revision is created.`;
         status("Rendered variant ready for visual inspection. Create revision preserves the existing image.");
-      } catch (error) { if (jobId === expectedJob) { resetPreview(); status(error.message, true); } }
-      finally { if (jobId === expectedJob) { setPending(false); nodes.commitRevision.disabled = !variantPreview; updateDeliveryButton(); } }
+      } catch (error) { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { resetPreview(); status(error.message, true); } }
+      finally { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { setPending(false); nodes.commitRevision.disabled = !variantPreview; updateDeliveryButton(); } }
     } else {
       const result = await mutate("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
         ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
@@ -985,6 +1035,7 @@ export function createPhotographicReview(host) {
         status(`Downloading ${filename} through authenticated access…`);
         const response = await fetchImpl(url, { method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
           headers: _buildAuthHeaders({ Accept: "application/octet-stream" }, "GET") });
+        if (scope !== currentScope() || controller.signal.aborted) return;
         checkRateLimit(response);
         const returnedSha = response.headers.get("X-TP-Artifact-SHA256");
         if (!response.ok || !SHA256.test(returnedSha || "") || (sha && returnedSha !== sha)) throw new Error("Verified download unavailable. Refresh review and check current approval.");
@@ -1146,19 +1197,45 @@ export function createPhotographicReview(host) {
   }
 
   async function deliver() {
-    if (pending || !data) return;
+    if (pending || navigating || !data) return;
     if (deliveryHistoryEnabled() && recoveryStorageBlocked) {
       status("Session recovery storage is unavailable or invalid. No export was submitted. Restore storage and reconcile delivery history first.", true);
       return;
     }
     if (["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome)) return;
+    if (pagedCatalogueEnabled()) {
+      const expectedScope = deliveryRecoveryScope();
+      setPending(true);
+      try {
+        if (!await load()) throw new Error("Refresh current review before exporting; no export was submitted.");
+        for (const [selectedScene, path] of deliverySelections) {
+          if (!path) continue;
+          const loaded = normalizedReview(await pager.getDetail(selectedScene));
+          if (expectedScope !== deliveryRecoveryScope()) return;
+          const scene = loaded.scenes[0], source = scene?.variants.find((item) => item.artifact_path === path);
+          if (!source || deliveryIdentities.get(selectedScene) !== deliveryFingerprint(source) || !loaded.decisions.some((item) => photographicDecisionMatches(item, source) && item.status === "approved")) {
+            throw new Error("A selected delivery source is no longer approved or available. Your selection is retained; inspect it before exporting.");
+          }
+          inspectedScenes.set(selectedScene, { scene, catalogue: loaded.catalogue_identity_sha256 });
+        }
+        if (!approvedVariants().length) throw new Error("Choose a currently approved delivery source before exporting.");
+      } catch (error) {
+        if (expectedScope === deliveryRecoveryScope()) {
+          if (error.code === "CATALOGUE_CHANGED") { await load(); status("Review changed while checking selected sources. Your selections were retained; inspect current review before exporting. No export was submitted.", true); }
+          else status(error.message, true);
+        }
+        return;
+      }
+      finally { if (expectedScope === deliveryRecoveryScope()) { setPending(false); updateDeliveryButton(); } }
+    }
     clearDownload();
     nodes.deliveryResult.replaceChildren();
     let presets;
     try { presets = deliveryPresets(); } catch (error) { status(error.message, true); return; }
     const sources = approvedVariants().map((variant) => ({ artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant) }));
     const sourceHashes = [...new Set(sources.map((variant) => variant.sha256))];
-    const scene_labels = Object.fromEntries(data.scenes.filter((scene) => scene.variants.some((variant) => sources.some((source) => source.artifact_path === variant.artifact_path)))
+    const sourceScenes = pagedCatalogueEnabled() ? deliveryScenes() : data.scenes;
+    const scene_labels = Object.fromEntries(sourceScenes.filter((scene) => scene.variants.some((variant) => sources.some((source) => source.artifact_path === variant.artifact_path)))
       .map((scene) => [scene.scene_id, sceneLabels.get(scene.scene_id) || scene.label || scene.scene_id]));
     if (!deliveryHistoryEnabled()) {
       const result = await mutate("/delivery", { property_name: nodes.property.value.trim(), presets,
@@ -1223,27 +1300,52 @@ export function createPhotographicReview(host) {
     if (!els.artifactShellContent || !doc) return;
     mount();
     nodes.deliveryHistoryControls.classList.toggle("hidden", !deliveryHistoryEnabled());
+    pager.controls.hidden = !pagedCatalogueEnabled();
     const nextId = String(job?.id || "");
     const nextActorScope = JSON.stringify([state.auth?.mode, state.auth?.actor, state.auth?.tenant]);
+    const nextPaged = pagedCatalogueEnabled();
+    if (jobId && nextId === jobId && nextActorScope === actorScope && activePagedCatalogue !== nextPaged) {
+      scopeGeneration += 1; dataRequest += 1;
+      requests.forEach((controller) => controller.abort()); requests.clear();
+      pager.reset(); nodes.contact.replaceChildren();
+    }
+    activePagedCatalogue = nextPaged;
     if (state.currentView && state.currentView !== "review") stopBlink();
     const photographic = /lux[-_]depth|photograph/i.test(String(job?.pipeline || job?.pipeline_name || ""))
       || (job?.artifacts || []).some((item) => /(^|\/)delivery\.tiff?$/.test(item.relative_path || item.path || ""));
     if (!nextId || !photographic) {
+      rememberSelection(); pager.reset();
       requests.forEach((controller) => controller.abort()); requests.clear();
       stopBlink(); releaseImages(); imageRequest += 1;
-      jobId = ""; inventoryKey = ""; data = null;
+      jobId = ""; inventoryKey = ""; data = null; inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); noteDirty = false;
       historyRequest += 1; deliveryAttempt = null; recoveryStorageBlocked = false; deliveryOutcome = "idle"; deliveryHistory = []; deliveryCursor = null;
       scopeGeneration += 1;
       panel.classList.add("hidden"); return;
     }
-    const key = JSON.stringify([nextActorScope, nextId, deliveryHistoryEnabled(), (job.artifacts || []).map((item) => [item.path, item.sha256])]);
-    if (key === inventoryKey) return;
+    const key = JSON.stringify([nextActorScope, nextId, deliveryHistoryEnabled(), pagedCatalogueEnabled(), (job.artifacts || []).map((item) => [item.path, item.sha256])]);
+    const requested = host.getPhotographicSelection?.(job);
+    if (key === inventoryKey) {
+      if (pagedCatalogueEnabled() && requested?.sceneId && requested.sceneId !== sceneId) void pager.locate(requested.sceneId, requested.artifactPath);
+      else if (pagedCatalogueEnabled() && requested?.artifactPath && requested.artifactPath !== primaryPath
+        && currentScene()?.variants.some((variant) => variant.artifact_path === requested.artifactPath)) {
+        void pager.navigate(() => { primaryPath = requested.artifactPath; noteDirty = false; resetRecipe(); render(); return true; });
+      }
+      else if (pagedCatalogueEnabled() && requested?.artifactPath && requested.artifactPath !== primaryPath) void pager.locate("", requested.artifactPath);
+      return;
+    }
     inventoryKey = key;
     if (nextId !== jobId || nextActorScope !== actorScope) {
+      rememberSelection(); pager.reset();
       scopeGeneration += 1;
       requests.forEach((controller) => controller.abort()); requests.clear();
       stopBlink(); releaseImages(); imageRequest += 1;
       jobId = nextId; actorScope = nextActorScope; pending = false; presetEdits.clear(); deliverySelections.clear(); sceneLabels.clear(); deliverySources = []; retryAt = 0; data = null; primaryPath = ""; comparePath = ""; sceneId = "";
+      inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); noteDirty = false;
+      nodes.figures.forEach(({ image, caption }) => { image.removeAttribute("src"); caption.textContent = ""; });
+      nodes.note.value = ""; nodes.contact.replaceChildren(); nodes.scene.replaceChildren(); nodes.primary.replaceChildren(); nodes.compare.replaceChildren();
+      savedSelection = selectionStorage.get(deliveryRecoveryScope());
+      initialArtifactPath = pagedCatalogueEnabled() ? requested?.artifactPath || "" : "";
+      if (pagedCatalogueEnabled()) sceneId = requested?.sceneId || (!initialArtifactPath ? savedSelection?.sceneId : "") || "";
       selectedPresets = new Set(); resetPreview();
       historyRequest += 1; deliveryHistory = []; deliveryCursor = null;
       const stored = recoveryStorage.inspect(deliveryRecoveryScope());
@@ -1257,6 +1359,6 @@ export function createPhotographicReview(host) {
     void loadDeliveryHistory();
   }
   doc?.addEventListener?.("visibilitychange", () => { if (doc.hidden) stopBlink(); });
-  globalThis.addEventListener?.("pagehide", () => { requests.forEach((controller) => controller.abort()); releaseImages(); });
+  globalThis.addEventListener?.("pagehide", () => { rememberSelection(); requests.forEach((controller) => controller.abort()); releaseImages(); });
   return { show, refresh: () => load(true) };
 }

@@ -37,6 +37,8 @@ class ReviewContext:
     discover_references: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None
     binding_identity: str | None = None
     publication_root: Path | None = None
+    discover_scene_index: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None
+    discover_scene_references: Callable[[set[str]], Awaitable[list[dict[str, Any]]]] | None = None
 
 
 @dataclass(frozen=True)
@@ -45,3 +47,4 @@ class ReviewRuntime:
     error_response: Callable[..., Response]
     authorize_history: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None
     authorize_admission: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None
+    authorize_catalogue: Callable[[Request, str], Awaitable[ReviewContext | Response]] | None = None

@@ -46,6 +46,8 @@ Both versions use the existing `ApiEnvelope` with schema
 | Route | Purpose |
 | --- | --- |
 | `GET` at the prefix | Current scenes, variants, properties, decisions, presets and review version |
+| `GET /scenes` | Metadata-only scene pages, recorded review filters and related artifact summaries |
+| `GET /scene` | Verified photographic detail for one selected scene |
 | `GET /render` | Bounded fit view, maximum edge 1,600 pixels |
 | `GET /native-crop` | Exact source-grid crop, each dimension at most 2,048 pixels |
 | `GET /quality` | Reference-relative advisory diagnostics |
@@ -61,6 +63,75 @@ the current review version and returns `409 REVIEW_CONFLICT` for stale writes.
 Reload and reassess the current selection before retrying. Canonical event
 bytes retain the authenticated actor, event kind, time and mutation details.
 Changing a filename, a browser selection or a metric value cannot confer approval.
+
+## Paged catalogue and review navigation
+
+The additive `tp.photo.scene_page.v1` catalogue supports up to 64 scenes. Use
+`GET /scenes?limit=8&status=all&sort=scene_id` under either API prefix. Page size
+defaults to eight and cannot exceed 16. Filters are `all`, `unreviewed`,
+`needs_revision` and `approved`; sorting is deterministic by `scene_id` or
+`label`, with scene identity breaking equal-label ties. Follow `next_cursor`
+with the same limit/filter/sort. The cursor binds the authenticated actor,
+tenant, job, committed inventory, saved review projection and process lifetime.
+It is signed, bounded and interchangeable across the v1/v2 aliases. A changed
+snapshot or backend restart returns `409 CATALOGUE_CHANGED`; discard the old
+pages and refresh. Invalid cursor bytes fail closed.
+
+This index uses committed inventories and saved projections, without reading
+image pixels, descriptors, ICC carriers or image headers. It stays outside
+scarce photographic I/O admission. Each summary explicitly reports
+`source_validation: not_checked`: its recorded decision is navigation metadata,
+not a fresh source approval or delivery authorization. Public relative artifact
+summaries distinguish masters, previews, depth and evidence; physical paths and
+storage keys remain private. Every request reauthenticates and rechecks job
+availability, including after a warm browser cache.
+
+Load `GET /scene?scene_id=<id>&catalogue_identity_sha256=<page-identity>` for the
+selected scene's `tp.photo.scene_detail.v1` response. This retains the rich
+variants, properties, presentation policies and current verified decisions of
+the original catalogue, restricted to one scene. It uses the existing atomic
+resource lease and verifies the selected components. Mutations and renders
+discover only their selected sources; approval, source identity, presentation
+and publication validation remain authoritative. The existing unpaged `GET`
+retains its 32-scene limit and response contract. Larger jobs return
+`PAGED_CATALOGUE_REQUIRED` there, with no truncation or eager decode.
+
+The workbench offers one card per scene, expandable related variants, filters,
+previous/next scene, Next unreviewed and deterministic page navigation. A decision
+shows its reviewer and date. Scene-card arrow keys move focus; native-view arrow
+keys retain their pixel-pan meaning. Unsaved notes or revision adjustments block
+navigation until explicitly discarded or saved. Selected scene/version,
+comparison, presentation and ROI survive reload within bounded actor/job-scoped
+session metadata. No images, API keys, storage locations or filesystem authority
+are persisted. The artifact rail follows the selected published scene, while a
+revision retains its own exact relative selector. A selected display or cached
+image never grants approval, and no bulk approval shortcut is added.
+
+The 64-scene contract also applies to approved-source selectors, labels and
+lighting-group membership. Six export presets, 64 delivery records, 128 saved
+revisions, the 2 MiB projection and 128 KiB event bounds remain unchanged. Delivery
+history can describe at most 448 applied derivatives (64 times six presets plus
+one native precision companion per source); this metadata ceiling does not grant memory or scratch.
+Every chosen source is freshly validated before export. Existing calculated
+memory, disk and publication-copy limits may still reject a large operation.
+
+Deploy the backend capability first, then independently set
+`TP_PHOTO_REVIEW_PAGED_UI_ENABLED=1` on the managed frontdoor (or backend for
+standalone direct-debug bootstrap). The default is off; recorded presentation,
+delivery history and admission retain their separate flags. Roll back the paged
+workbench by disabling this flag and reloading. Keep the additive read endpoints
+deployed for persisted jobs above 32 scenes; an older unpaged application cannot
+serve their full catalogue. No migration, retained-file rewrite or approval
+reset is required. No new backend pixel cache is introduced. The existing
+identity/policy/view/ROI-bound browser cache keeps its 12-entry/40 MiB limit and
+excludes mutable approval versions from pixel keys.
+
+The design deliberately rejects merely raising the eager catalogue ceiling or
+decoding every page: both retain the per-mutation full-set cost. Small selected
+detail calls preserve the established verification boundary without creating a
+second source authority. A 50-scene synthetic workflow proves navigation and
+resource behavior; it does not establish photographic improvement or production
+acceptance of a new photographic set.
 
 ## Inspect the actual version
 
@@ -560,11 +631,15 @@ asset/CSS evidence. The bounded Build feature exception is **15,500 raw bytes /
 4,500 gzip bytes**, accommodating profile controls, explicit V2 input-color
 selection, persistence/reconciliation and precision guidance. The local official
 Node 22.23.3 measurement is 15,366/4,351 bytes. Eager `portal.js` remains capped at
-421,000/104,500 (measured 420,950/104,287); existing Review JS remains capped at
-55,000/12,500 (41,836/12,342). The photographic Review assets have separate
-40,500/14,500 JS and 6,000/1,600 CSS limits, measured at 40,047/14,242 and
-4,500/1,261 respectively. This exception does not raise eager
-or existing Review budgets. The photographic allowance includes authenticated
+422,250/104,750; this is a scoped PR4 increase of 750/250 bytes for the
+actor/job-bound scene-to-rail selector and independent bootstrap feature. The
+selector preserves exact original/revision routes across normal job refreshes
+while keeping non-photographic route fallback unchanged. Existing Review JS remains capped at
+55,000/12,500. The photographic viewer retains its 54,400/18,400 JS and
+6,000/1,600 CSS limits. Shared model/recovery/navigation support is a separate
+deferred, manifest-backed asset capped at 20,000/7,500; the viewer import binds
+its exact content fingerprint. Existing Review and photographic-viewer budgets
+remain unchanged. The photographic allowance includes authenticated
 thumbnail fetches and bounded/streamed direct-debug downloads. Rebuild and validate current bytes rather than
 treat these dated measurements as performance acceptance.
 

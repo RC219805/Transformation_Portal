@@ -53,7 +53,26 @@ export function createDeferredReviewSurfaceApi(host) {
     _latestVisibleTransportWarning,
   } = host;
 
-  const photographicReview = createLazyPhotographicReview(host);
+  // The photograph's revision selector can differ from its published rail
+  // artifact. Keep both identities; never invent a downloadable job artifact.
+  const photographicReview = createLazyPhotographicReview({
+    ...host,
+    getPhotographicSelection(job) {
+      return { artifactPath: state.artifactUi?.selectedByJob?.[job?.id] || "" };
+    },
+    onPhotographicSelection({ jobId, sceneId, artifactPath, actorScope }) {
+      const job = _findJobById(jobId);
+      if (!job || jobId !== state.selectedJobId) return;
+      const artifacts = job.artifacts || [];
+      const source = artifacts.find((item) => _artifactRouteKey(item) === artifactPath)
+        || artifacts.find((item) => _artifactRouteKey(item).split("/").includes(sceneId));
+      state.artifactUi.photographicSelection = {
+        jobId, sceneId, artifactPath, railPath: source ? _artifactRouteKey(source) : "", actorScope
+      };
+      _rememberArtifactSelection(jobId, artifactPath);
+      renderArtifactPanel(false);
+    }
+  });
 
   function setTextContentIfChanged(element, value) {
     if (!element) return false;
@@ -1004,7 +1023,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
   }
 
-  function renderArtifactPanel() {
+  function renderArtifactPanel(syncPhotographic) {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
     if (jobsLoading) {
@@ -1023,7 +1042,7 @@ export function createDeferredReviewSurfaceApi(host) {
     els.artifactThumbnailRail.setAttribute("aria-label", "Artifact choices");
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-    photographicReview.show(selected, selected ? _selectedArtifactForJob(selected) : null);
+    if (syncPhotographic !== false) photographicReview.show(selected, selected ? _selectedArtifactForJob(selected) : null);
 
     if (!selected) {
       _resetArtifactActionButtons();

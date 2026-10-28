@@ -253,6 +253,32 @@
     outline-offset: 3px;
 }
 
+.photo-review-contact-select:focus-visible,
+.photo-review-artifact-summary summary:focus-visible {
+    outline: 2px solid var(--shell-accent, #0284c7);
+    outline-offset: 3px;
+}
+
+.photo-review-artifact-summary {
+    width: 100%;
+    min-width: 0;
+    color: var(--shell-muted);
+}
+
+.photo-review-artifact-summary summary {
+    cursor: pointer;
+    padding-block: 0.45rem;
+}
+
+[data-ui="photographic-page-status"] {
+    flex-basis: 100%;
+}
+
+[data-ui="photographic-paged-controls"][hidden],
+[data-ui="photographic-discard-navigation"][hidden] {
+    display: none;
+}
+
 .photo-review-metrics {
     width: 100%;
     text-align: left;

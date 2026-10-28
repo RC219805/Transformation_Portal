@@ -230,6 +230,7 @@ class AppReviewAccess:
             error_response=self.app._error_response,
             authorize_history=self.authorize_history,
             authorize_admission=self.authorize_admission,
+            authorize_catalogue=self.authorize_catalogue,
         )
 
     def _storage_job_id(self, job: Any) -> str:
@@ -334,7 +335,9 @@ class AppReviewAccess:
             )
         return result, None if result else "original_format_not_supported_for_review"
 
-    async def _references(self, request: Request, job: Any, tenant: Any) -> list[dict[str, Any]]:
+    async def _references(
+        self, request: Request, job: Any, tenant: Any, *, scene_ids: set[str] | None = None, index_only: bool = False
+    ) -> list[dict[str, Any]]:
         app = self.app
         if app._uses_dispatch_authority():
             records = app.get_operational_record_store()
@@ -358,13 +361,26 @@ class AppReviewAccess:
             if "source-v5" not in PurePosixPath(str(item.get("path") or item.get("relative_path"))).parts
         ]
         originals, unavailable = await self._originals(job, tenant)
+        if scene_ids is None and not index_only:
+            scenes = {ref["scene_id"] for ref in originals}
+            for item in items:
+                path = _safe_relative(item.get("path") or item.get("relative_path"))
+                match = _SCENE.search(path)
+                scenes.add(match.group(1) if match else PurePosixPath(path).stem)
+            if len(scenes) > 32:
+                raise ReviewAccessError(
+                    "This job requires paged photographic review; use /scenes and /scene",
+                    code="PAGED_CATALOGUE_REQUIRED",
+                )
         names = {item["scene_id"]: item["label"] for item in originals}
-        references = list(originals)
+        references = [ref for ref in originals if scene_ids is None or ref["scene_id"] in scene_ids]
         final_scenes: set[str] = set()
         for item in items:
             path = _safe_relative(item.get("path") or item.get("relative_path"))
             match = _SCENE.search(path)
             scene_id = match.group(1) if match else PurePosixPath(path).stem
+            if scene_ids is not None and scene_id not in scene_ids:
+                continue
             if scene_id in final_scenes:
                 raise ReviewAccessError("Photographic final selection is ambiguous", status=409, code="CONFLICT")
             final_scenes.add(scene_id)
@@ -380,19 +396,61 @@ class AppReviewAccess:
                 "kind": "indexed",
                 "identity_status": "retained_artifact_identity",
             }
-            if reference["sha256"] is None and not app._uses_dispatch_authority():
+            if reference["sha256"] is None and not app._uses_dispatch_authority() and not index_only:
                 identity = await self._fresh_indexed_identity(request, job, reference)
                 reference.update(identity)
                 reference["identity_status"] = "fresh_snapshot_not_native_acceptance"
-            _identity(reference, 1024**4)
+            if not index_only or reference["sha256"] is not None:
+                _identity(reference, 1024**4)
             reference["source_identity_sha256"] = reference["sha256"]
             if unavailable:
                 reference["original_unavailable_reason"] = unavailable
             references.append(reference)
             if app._uses_dispatch_authority():
-                native = await self._native_reference(request, job, reference, inventory)
-                if native is not None:
-                    references.append(native)
+                if index_only:
+                    parent = PurePosixPath(path).parent
+                    for component in inventory:
+                        component_path = _safe_relative(component.get("path") or component.get("relative_path"))
+                        if PurePosixPath(component_path) == parent / "master.npy":
+                            references.append(
+                                {
+                                    "artifact_path": component_path,
+                                    "scene_id": scene_id,
+                                    "label": names.get(scene_id, scene_id),
+                                    "role": "working_master",
+                                    "sha256": component.get("sha256"),
+                                    "size_bytes": component.get("size_bytes"),
+                                }
+                            )
+                else:
+                    native = await self._native_reference(request, job, reference, inventory)
+                    if native is not None:
+                        references.append(native)
+        if index_only:
+            known = {ref["scene_id"] for ref in references}
+            seen = {ref["artifact_path"] for ref in references}
+            for item in inventory:
+                path = _safe_relative(item.get("path") or item.get("relative_path"))
+                match = _SCENE.search(path)
+                if not match or match.group(1) not in known or path in seen:
+                    continue
+                name = PurePosixPath(path).name.lower()
+                role = (
+                    "depth"
+                    if "depth" in name
+                    else "preview" if any(word in name for word in ("preview", "proxy")) else "evidence"
+                )
+                references.append(
+                    {
+                        "artifact_path": path,
+                        "scene_id": match.group(1),
+                        "label": names.get(match.group(1), match.group(1)),
+                        "related_only": True,
+                        "summary_role": role,
+                        "sha256": item.get("sha256"),
+                        "size_bytes": item.get("size_bytes"),
+                    }
+                )
         return references
 
     async def _read_indexed(self, request: Request, job: Any, ref: dict, maximum_bytes: int) -> bytes:
@@ -537,9 +595,22 @@ class AppReviewAccess:
     async def authorize_admission(self, request: Request, job_id: str) -> ReviewContext | Response:
         return await self._authorize(request, job_id, include_references=False, admission=True)
 
+    async def authorize_catalogue(self, request: Request, job_id: str) -> ReviewContext | Response:
+        """Authorize cheap inventory navigation without image or companion reads."""
+        return await self._authorize(request, job_id, include_references=False, catalogue=True)
+
     async def _binding_identity(self, job: Any, tenant_id: str) -> str:
         if self.app._uses_dispatch_authority():
-            inventory = await self.app.get_operational_record_store().committed_manifest(job.id, tenant_id)
+            records = self.app.get_operational_record_store()
+            inventory = await records.committed_manifest(job.id, tenant_id)
+            locator = await records.get_locator(job.id)
+            inventory = {
+                "inventory": inventory,
+                "locator": {
+                    name: getattr(locator, name, None)
+                    for name in ("job_id", "attempt_id", "dispatch_id", "plan_digest", "tenant_id")
+                },
+            }
         else:
             inventory = job.artifacts
         # The inventory binds descriptor/receipt bytes, including their recorded
@@ -547,7 +618,7 @@ class AppReviewAccess:
         return hashlib.sha256(canonicalize_json(inventory or {})).hexdigest()
 
     async def _authorize(
-        self, request: Request, job_id: str, *, include_references: bool, admission: bool = False
+        self, request: Request, job_id: str, *, include_references: bool, admission: bool = False, catalogue: bool = False
     ) -> ReviewContext | Response:
         app = self.app
         try:
@@ -565,7 +636,7 @@ class AppReviewAccess:
                 # headers cannot manufacture a human identity for approvals.
                 actor = {"username": "api_key_operator", "role": "operator", "assurance": "backend_api_key"}
             references = await self._references(request, job, tenant) if include_references else []
-            binding_identity = await self._binding_identity(job, tenant_id) if admission else None
+            binding_identity = await self._binding_identity(job, tenant_id) if admission or catalogue else None
 
             async def revalidate() -> None:
                 await self._revalidate(request, job, tenant_id)
@@ -575,7 +646,10 @@ class AppReviewAccess:
                         isinstance(current, Response)
                         or await self._binding_identity(current[0], tenant_id) != binding_identity
                     ):
-                        raise ReviewAccessError("Photographic source bindings changed; reload before review")
+                        raise ReviewAccessError(
+                            "Photographic source bindings changed; reload before review",
+                            code="CATALOGUE_CHANGED" if catalogue else "ARTIFACT_CHANGED",
+                        )
 
             issued: set[str] = set()
 
@@ -595,6 +669,8 @@ class AppReviewAccess:
                 discover_references=lambda: self._references(request, job, tenant),
                 binding_identity=binding_identity,
                 publication_root=getattr(self.app._artifact_store(), "root_dir", None) if admission else None,
+                discover_scene_index=lambda: self._references(request, job, tenant, index_only=True),
+                discover_scene_references=lambda scenes: self._references(request, job, tenant, scene_ids=scenes),
             )
         except ReviewAccessError as exc:
             return app._error_response(exc.status, code=exc.code, message=str(exc), details={"job_id": job_id})

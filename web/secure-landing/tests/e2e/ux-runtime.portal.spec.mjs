@@ -162,6 +162,15 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-support\.js(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/javascript; charset=utf-8",
+      headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+      body: await readFile(path.join(PORTAL_ASSET_DIR, "portal-photographic-support.js")),
+    });
+  });
+
   await page.route("**/portal/bootstrap", async (route) => {
     runtime.bootstrapRequests += 1;
     if (options.bootstrapGate) await options.bootstrapGate;
@@ -189,6 +198,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
         fastVlmCaptioning: false,
         photographicRecordedPresentation: options.photographicRecordedPresentation === true,
         photographicDeliveryHistory: options.photographicDeliveryHistory === true,
+        photographicPagedCatalogue: options.photographicPagedCatalogue === true,
       },
     });
   });
@@ -3568,6 +3578,204 @@ async function photographicFixturePng(width, height) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+test("@portal-browser photographic paged catalogue traverses fifty scenes and preserves scoped keyboard and mobile review", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const jobId = "job-photographic-paged-catalogue";
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const catalogueIdentity = "c".repeat(64);
+  const scenes = Array.from({ length: 50 }, (_, index) => {
+    const sceneId = `input-${String(index).padStart(4, "0")}`;
+    const final = { role: "final", artifact_path: `${sceneId}/delivery.tif`, sha256: (index + 1).toString(16).padStart(64, "0"),
+      width: 8000, height: 5000, bit_depth: 16, color_profile: "sRGB", intended_use: "Photographic master" };
+    const original = { ...final, role: "original", artifact_path: `original/${sceneId}.tif`, sha256: (index + 101).toString(16).padStart(64, "0") };
+    return { scene_id: sceneId, label: `Room ${String(index + 1).padStart(2, "0")}`, variants: [final, original] };
+  });
+  const decisions = scenes.filter((_scene, index) => index % 3 !== 0).map((scene) => ({
+    scene_id: scene.scene_id, label: scene.label, role: "final", artifact_path: scene.variants[0].artifact_path,
+    sha256: scene.variants[0].sha256, source_identity_sha256: scene.variants[0].sha256,
+    status: Number(scene.scene_id.slice(-4)) % 3 === 1 ? "approved" : "needs_revision", note: "",
+    actor: { display_name: "Recorded reviewer" }, created_at: 1792886400,
+  }));
+  const publicState = { state_version: 4, groups: [], scope: "human_review_required",
+    native_display: "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
+    revision_constraints: { exposure_stops: [-1, 1], white_balance: [0.8, 1.25], saturation: [0.8, 1.2] },
+    presets: [{ schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg", long_edge: 2560,
+      jpeg_quality: 92, sharpen_amount: 0.2, intended_use: "Website delivery", render: "perceptual_srgb", shoulder: 0.8 }] };
+  const summary = (scene) => ({ scene_id: scene.scene_id, label: scene.label,
+    review_status: decisions.find((decision) => decision.scene_id === scene.scene_id)?.status || "unreviewed",
+    recorded_decision: decisions.find((decision) => decision.scene_id === scene.scene_id) || null,
+    source_validation: "not_checked", variant_count: scene.variants.length, variant_paths: scene.variants.map((variant) => variant.artifact_path), related_artifacts: [
+      { role: "master", artifact_path: scene.variants[0].artifact_path, sha256: scene.variants[0].sha256, size_bytes: 4096 },
+      { role: "depth", artifact_path: `${scene.scene_id}/depth.npy`, sha256: null, size_bytes: null },
+      { role: "evidence", artifact_path: `${scene.scene_id}/quality.json`, sha256: null, size_bytes: null },
+    ] });
+  const artifacts = scenes.map((scene) => ({ path: scene.variants[0].artifact_path, relative_path: scene.variants[0].artifact_path,
+    name: "delivery.tif", media_kind: "image", artifact_type: "image", previewable: false, browser_previewable: false,
+    content_type: "image/tiff", size_bytes: 4096, sha256: scene.variants[0].sha256,
+    url: `/v1/jobs/${jobId}/artifacts/${scene.variants[0].artifact_path}`,
+    display_hint: { role: "primary_preview", priority: 1200, label: `${scene.label} master` } }));
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: artifacts } };
+  const pageRequests = [], detailRequests = [], imageRequests = [], unexpectedRequests = [];
+  const pngs = new Map();
+  let failNextDetail = false;
+  await installHydratedPortalRoutes(page, { jobs: [job], photographicPagedCatalogue: true });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.route(`**${base}**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const params = url.searchParams;
+    if (request.method() === "GET" && url.pathname === `${base}/scenes`) {
+      pageRequests.push(Object.fromEntries(params));
+      const filter = params.get("status") || "all", sort = params.get("sort") || "scene_id";
+      const limit = Number(params.get("limit") || 8), offset = Number(params.get("cursor") || 0);
+      const filtered = scenes.map(summary).filter((scene) => filter === "all" || scene.review_status === filter)
+        .sort((left, right) => left[sort].localeCompare(right[sort]));
+      await fulfillJson(route, { success: true, data: { ...publicState, schema: "tp.photo.scene_page.v1",
+        catalogue_identity_sha256: catalogueIdentity, decisions, scenes: filtered.slice(offset, offset + limit),
+        total_scenes: scenes.length, total_filtered: filtered.length, limit, filter, sort,
+        next_cursor: offset + limit < filtered.length ? String(offset + limit) : null } });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname === `${base}/scene`) {
+      detailRequests.push(Object.fromEntries(params));
+      if (failNextDetail) {
+        failNextDetail = false;
+        await fulfillJson(route, { success: false, error: { code: "SCENE_UNAVAILABLE", message: "Injected scene detail unavailable." } }, 503);
+        return;
+      }
+      const scene = scenes.find((item) => item.scene_id === params.get("scene_id"));
+      expect(params.get("catalogue_identity_sha256")).toBe(catalogueIdentity);
+      expect(scene).toBeTruthy();
+      await fulfillJson(route, { success: true, data: { ...publicState, schema: "tp.photo.scene_detail.v1",
+        catalogue_identity_sha256: catalogueIdentity, scenes: [scene],
+        decisions: decisions.filter((decision) => decision.scene_id === scene.scene_id) } });
+      return;
+    }
+    if (request.method() === "GET" && ["/render", "/native-crop"].some((suffix) => url.pathname === `${base}${suffix}`)) {
+      imageRequests.push({ endpoint: url.pathname, ...Object.fromEntries(params) });
+      const native = url.pathname.endsWith("/native-crop");
+      const width = native ? Number(params.get("width")) : 320, height = native ? Number(params.get("height")) : 200;
+      const geometry = `${width}x${height}`;
+      if (!pngs.has(geometry)) pngs.set(geometry, await photographicFixturePng(width, height));
+      await route.fulfill({ status: 200, contentType: "image/png", body: pngs.get(geometry), headers: {
+        "Cache-Control": "no-store", "X-TP-Source-SHA256": params.get("sha256"),
+        "X-TP-Source-Identity-SHA256": params.get("source_identity_sha256"),
+        "X-TP-Presentation-View": params.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": "none",
+        "X-TP-Native-Width": String(width), "X-TP-Native-Height": String(height),
+      } });
+      return;
+    }
+    unexpectedRequests.push({ method: request.method(), pathname: url.pathname });
+    await fulfillJson(route, { success: false, error: { message: "Unbounded or unsupported photographic fixture request." } }, 404);
+  });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const workbench = page.locator('[data-ui="photographic-review"]');
+  const sceneSelect = page.locator('[data-ui="photographic-scene"]');
+  const primary = page.locator('[data-ui="photographic-primary"]');
+  const rail = page.locator("#artifactThumbnailRail");
+  const next = page.locator('[data-ui="photographic-scene-next"]');
+  const previous = page.locator('[data-ui="photographic-scene-previous"]');
+  await expect(workbench).toBeVisible();
+  await expect(primary).toHaveValue(scenes[0].variants[0].artifact_path);
+  expect(detailRequests.map((request) => request.scene_id)).toEqual([scenes[0].scene_id]);
+  expect(pageRequests[0]).toMatchObject({ limit: "8", status: "all", sort: "scene_id" });
+  await expect(page.locator('[data-ui="photographic-contact-item"]')).toHaveCount(8);
+  await expect(page.locator('[data-ui="photographic-contact-sheet"] img')).toHaveCount(0);
+  for (let index = 1; index < scenes.length; index += 1) {
+    await next.click();
+    await expect(sceneSelect).toHaveValue(scenes[index].scene_id);
+    await expect(primary).toHaveValue(scenes[index].variants[0].artifact_path);
+    expect(detailRequests.length).toBe(index + 1);
+    expect(detailRequests.at(-1).scene_id).toBe(scenes[index].scene_id);
+    await expect(rail.locator(`[data-artifact-path="${scenes[index].variants[0].artifact_path}"]`)).toHaveAttribute("aria-pressed", "true");
+    expect(await page.locator('[data-ui="photographic-contact-item"]').count()).toBeLessThanOrEqual(8);
+  }
+  expect(pageRequests.length).toBe(7);
+  expect(new Set(detailRequests.map((request) => request.scene_id)).size).toBe(50);
+  expect(imageRequests.some((request) => request.max_edge === "256")).toBe(false);
+  await expect(page.locator('[data-ui="photographic-page-status"]')).toContainText("50 of 50 photographs · page 7");
+  await expect(page.locator('[data-ui="photographic-related-artifacts"]').first()).toContainText("depth.npy");
+  await previous.focus();
+  await previous.press("ArrowLeft");
+  await expect(sceneSelect).toHaveValue("input-0048");
+  await previous.press("ArrowRight");
+  await expect(sceneSelect).toHaveValue("input-0049");
+  const note = page.locator('[data-ui="photographic-decision-note"]');
+  await note.fill("Unsaved browser review note");
+  await previous.click();
+  await expect(sceneSelect).toHaveValue("input-0049");
+  await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+  failNextDetail = true;
+  await page.locator('[data-ui="photographic-discard-navigation"]').click();
+  await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Injected scene detail unavailable");
+  await expect(note).toHaveValue("Unsaved browser review note");
+  await previous.click();
+  await page.locator('[data-ui="photographic-discard-navigation"]').click();
+  await expect(sceneSelect).toHaveValue("input-0048");
+  await expect(note).toHaveValue("");
+  await rail.locator('[data-artifact-path="input-0016/delivery.tif"]').click();
+  await expect(primary).toHaveValue("input-0016/delivery.tif");
+  await expect(rail.locator('[data-artifact-path="input-0016/delivery.tif"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/artifact=input-0016%2Fdelivery\.tif/);
+  const original = scenes[16].variants.find((variant) => variant.role === "original");
+  await primary.selectOption(original.artifact_path);
+  await expect(primary).toHaveValue(original.artifact_path);
+  await expect(rail.locator('[data-artifact-path="input-0016/delivery.tif"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/artifact=original%2Finput-0016\.tif/);
+  const refreshedMasterLabel = "Room 17 master refreshed";
+  artifacts[16].display_hint.label = refreshedMasterLabel;
+  const jobsPoll = page.waitForResponse((response) => new URL(response.url()).pathname === "/v1/jobs" && response.request().method() === "GET");
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await jobsPoll;
+  await expect(rail.locator('[data-artifact-path="input-0016/delivery.tif"]')).toContainText(refreshedMasterLabel);
+  await expect(rail.locator('[data-artifact-path="input-0016/delivery.tif"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(primary).toHaveValue(original.artifact_path);
+  await expect(page).toHaveURL(/artifact=original%2Finput-0016\.tif/);
+  await page.locator('[data-ui="photographic-scene-filter"]').selectOption("unreviewed");
+  await expect(primary).toHaveValue(original.artifact_path);
+  await expect(page.locator('[data-ui="photographic-page-status"]')).toContainText("17 of 50 photographs");
+  await page.locator('[data-ui="photographic-scene-sort"]').selectOption("label");
+  await expect.poll(() => pageRequests.at(-1)).toMatchObject({ status: "unreviewed", sort: "label" });
+  await page.locator('[data-ui="photographic-scene-filter"]').selectOption("all");
+  await page.locator('[data-ui="photographic-comparison"]').selectOption("input-0016/delivery.tif");
+  await page.locator('[data-ui="photographic-comparison-mode"]').selectOption("wipe");
+  await page.locator('[data-ui="photographic-inspection"]').selectOption("native");
+  await page.locator('[data-ui="photographic-crop-size"]').selectOption("256");
+  for (const [axis, value] of [["x", "70"], ["y", "30"]]) {
+    await page.locator(`[data-ui="photographic-crop-${axis}"]`).evaluate((control, nextValue) => {
+      control.value = nextValue; control.dispatchEvent(new Event("change", { bubbles: true }));
+    }, value);
+  }
+  await expect.poll(() => imageRequests.some((request) => request.endpoint.endsWith("/native-crop")
+    && request.artifact_path === original.artifact_path && request.x === String(Math.round(original.width * 0.7 - 128))
+    && request.y === String(Math.round(original.height * 0.3 - 128)) && request.width === "256")).toBe(true);
+  await expectNoHorizontalOverflow(page, "Paged photographic review desktop");
+  await expectNoWcagViolations(page, "Paged photographic review desktop");
+  await workbench.screenshot({ path: testInfo.outputPath("photographic-paged-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(workbench).toBeVisible();
+  await expect(primary).toHaveValue(original.artifact_path);
+  await expect(page).toHaveURL(/artifact=original%2Finput-0016\.tif/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator('[data-ui="photographic-comparison-stage"]')).toHaveAttribute("data-mode", "wipe");
+  await expect(page.locator('[data-ui="photographic-inspection"]')).toHaveValue("native");
+  await expect(page.locator('[data-ui="photographic-crop-size"]')).toHaveValue("256");
+  await expect(page.locator('[data-ui="photographic-crop-x"]')).toHaveValue("70");
+  await expect(page.locator('[data-ui="photographic-crop-y"]')).toHaveValue("30");
+  await expect.poll(() => page.locator('[data-ui="photographic-primary-image"]').evaluate((image) => [image.naturalWidth, image.naturalHeight])).toEqual([256, 256]);
+  await expect(rail.locator('[data-artifact-path="input-0016/delivery.tif"]')).toHaveAttribute("aria-pressed", "true");
+  await expectNoHorizontalOverflow(page, "Paged photographic review dark mobile");
+  await expectNoWcagViolations(page, "Paged photographic review dark mobile");
+  await workbench.screenshot({ path: testInfo.outputPath("photographic-paged-mobile-dark.png") });
+  expect(unexpectedRequests).toEqual([]);
+  await testInfo.attach("paged photographic request evidence", { contentType: "application/json", body: Buffer.from(JSON.stringify({
+    fixture: "synthetic_fifty_scenes", pageRequests, detailRequests, imageRequests, unexpectedRequests,
+  }, null, 2)) });
+});
+
 test("@portal-browser photographic native inspection, saved approval, revision and approved delivery use exact identities", async ({ page }) => {
   const jobId = "job-photographic-workbench";
   const base = `/v1/jobs/${jobId}/photographic-review`;
@@ -3661,10 +3869,10 @@ test("@portal-browser photographic native inspection, saved approval, revision a
   await page.locator('[data-ui="photographic-blink"]').click();
   await page.locator('[data-ui="photographic-decision-note"]').fill("Native window edges and ceiling cove checked.");
   await page.locator('[data-ui="photographic-decision-approved"]').click();
-  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${sha}`);
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toHaveText(`Approved · Reviewer not recorded · Date not recorded · exact SHA-256 ${sha}`);
   expect(posted.find((item) => item.pathname.endsWith("/decisions"))).toMatchObject({ csrf: "hydrated-ux-csrf", payload: { sha256: sha, artifact_path: deliveryPath, status: "approved" } });
   await page.reload();
-  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText(`Approved · exact SHA-256 ${sha}`);
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toHaveText(`Approved · Reviewer not recorded · Date not recorded · exact SHA-256 ${sha}`);
   await page.locator('[data-ui="photographic-revision-exposure"]').fill("-0.1");
   await expect(page.locator('[data-ui="photographic-create-revision"]')).toBeDisabled();
   await page.locator('[data-ui="photographic-preview-revision"]').click();

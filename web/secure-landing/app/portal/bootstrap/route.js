@@ -137,7 +137,8 @@ export async function GET(request) {
           rumTelemetry: resolveRumTelemetry(session),
           fastVlmCaptioning: resolveFastVlmCaptioning(session),
           photographicDeliveryHistory: String(process.env.TP_PHOTO_REVIEW_HISTORY_UI_ENABLED || "").trim() === "1",
-          photographicRecordedPresentation: String(process.env.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED || "").trim() === "1"
+          photographicRecordedPresentation: String(process.env.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED || "").trim() === "1",
+          photographicPagedCatalogue: String(process.env.TP_PHOTO_REVIEW_PAGED_UI_ENABLED || "").trim() === "1"
         }
       },
       {

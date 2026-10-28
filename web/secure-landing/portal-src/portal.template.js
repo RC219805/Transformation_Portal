@@ -122,6 +122,7 @@ let deferredReviewSurfaceLoadLastToastAt = 0;
 /* __PORTAL_INTERNALS__ */
 
 const portalInternals = __PortalInternal;
+const photographicSelectionFor = portalInternals.photographicSelectionFor;
 const isLuxPipeline = portalInternals.isLuxPipeline;
 const isPhotographyPipeline = portalInternals.isPhotographyPipeline;
 const photographyVersion = portalInternals.photographyVersion;
@@ -1074,7 +1075,8 @@ function _activeRouteContext(jobId = '') {
         };
     }
     const selectedArtifact = _selectedArtifactForJob(selected);
-    const artifactPath = _normalizeArtifactRoutePath(_artifactRouteKey(selectedArtifact));
+    const artifactPath = photographicSelectionFor(state, selected, fallbackArtifactPath)?.artifactPath
+        || _normalizeArtifactRoutePath(_artifactRouteKey(selectedArtifact));
     const compareCandidate = findCompareArtifact(
         selectedArtifact,
         rankArtifactsForDisplay(Array.isArray(selected.artifacts) ? selected.artifacts : [])
@@ -4850,7 +4852,8 @@ function _defaultPortalBootstrap() {
             stagedUploads: false,
             rumTelemetry: false,
             fastVlmCaptioning: false,
-            photographicRecordedPresentation: false
+            photographicRecordedPresentation: false,
+            photographicPagedCatalogue: false
         }
     };
 }
@@ -5510,7 +5513,8 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
-            photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true
+            photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true,
+            photographicPagedCatalogue: bootstrap.features?.photographicPagedCatalogue === true
         }
     };
     // The logout button is rendered with the `hidden` attribute and only
@@ -6451,12 +6455,13 @@ function _selectedArtifactForJob(job) {
     const normalizedJobId = _normalizeSelectedJobId(job.id);
     const ranked = rankArtifactsForDisplay(job.artifacts);
     const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[normalizedJobId]);
-    const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === selectedPath);
+    const photograph = photographicSelectionFor(state, job, selectedPath);
+    const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === (photograph?.railPath || selectedPath));
     if (selectedPath && !selected) {
         delete state.artifactUi.compareByJob[normalizedJobId];
     }
     const hero = selected || ranked[0] || null;
-    if (hero) {
+    if (hero && (!selectedPath || !photograph)) {
         state.artifactUi.selectedByJob[normalizedJobId] = _artifactRouteKey(hero);
     }
     return hero;
