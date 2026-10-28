@@ -927,6 +927,69 @@ test("delivery includes recorded approvals across pages and revalidates every se
   assert.match(h.root.find("photographic-review-status").textContent, /no longer approved|currently approved/i);
 });
 
+test("a retained delivery choice whose approval was revoked can be explicitly excluded before exporting the remaining page", async (t) => {
+  const previousLocation = globalThis.location;
+  globalThis.location = { origin: "http://localhost" };
+  t.after(() => { if (previousLocation === undefined) delete globalThis.location; else globalThis.location = previousLocation; });
+  const h = fixture({ sceneCount: 10, extraFetch: (request, { server }) => request.path.endsWith("/delivery")
+    ? json({ state_version: server.stateVersion, download_url: "/v1/jobs/job-one/photographic-review/files/export/photos.zip",
+      filename: "photos.zip", sha256: "e".repeat(64), size_bytes: 1234 }) : null });
+  h.server.decisions = [h.scenes[0], h.scenes[9]].map((scene) => ({ scene_id: scene.scene_id, label: scene.label, role: "final",
+    artifact_path: scene.variants[0].artifact_path, sha256: scene.variants[0].sha256,
+    source_identity_sha256: scene.variants[0].sha256, status: "approved", note: "" }));
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(2 currently recorded approved\)/);
+  h.server.decisions[0].status = "needs_revision";
+  h.server.stateVersion += 1; h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
+  await h.api.refresh(); await settle();
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(1 currently recorded approved\)/, "Revocation must retain the operator's exact selection until explicit exclusion");
+  assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(requested(h, "/delivery").length, 0, "Revocation blocks export until the operator resolves the retained choice");
+  const choice = h.root.find("photographic-delivery-version");
+  assert.ok(choice, "Every retained choice needs an exclusion control even with no approved variants");
+  assert.equal(choice.value, "input-0000/delivery.tif");
+  assert.equal(choice.options.some((option) => option.value === ""), true);
+  choice.value = ""; await choice.trigger("change");
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages \(1 currently recorded approved\)/);
+  assert.equal(requested(h, "/delivery").length, 0, "Explicit exclusion changes only the local delivery selection");
+  await h.root.find("photographic-page-next").trigger();
+  await h.root.find("photographic-scene-next").trigger();
+  assert.equal(selected(h), "input-0009");
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages/);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(requested(h, "/delivery").length, 1);
+  const body = JSON.parse(requested(h, "/delivery")[0].options.body);
+  assert.deepEqual(body.approved_sources.map((source) => source.artifact_path), ["input-0009/delivery.tif"]);
+  assert.deepEqual(body.approved_sha256, [h.scenes[9].variants[0].sha256]);
+});
+
+test("flag-off review still clears revoked delivery choices automatically", async (t) => {
+  const previousLocation = globalThis.location;
+  globalThis.location = { origin: "http://localhost" };
+  t.after(() => { if (previousLocation === undefined) delete globalThis.location; else globalThis.location = previousLocation; });
+  const h = fixture({ paged: false, sceneCount: 2, extraFetch: (request, { server }) => request.path.endsWith("/delivery")
+    ? json({ state_version: server.stateVersion, download_url: "/v1/jobs/job-one/photographic-review/files/export/photos.zip",
+      filename: "photos.zip", sha256: "e".repeat(64), size_bytes: 1234 }) : null });
+  h.server.decisions = h.scenes.map((scene) => ({ scene_id: scene.scene_id, role: "final", status: "approved", note: "",
+    artifact_path: scene.variants[0].artifact_path, sha256: scene.variants[0].sha256, source_identity_sha256: scene.variants[0].sha256 }));
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  assert.equal(h.root.findAll("photographic-delivery-version").length, 2);
+  h.server.decisions[0].status = "needs_revision"; h.server.stateVersion += 1;
+  await h.api.refresh(); await settle();
+  assert.deepEqual(h.root.findAll("photographic-delivery-version").map((control) => control.value), ["input-0001/delivery.tif"], "Legacy review must not retain an exclusion control for the revoked source");
+  assert.equal(h.root.find("photographic-delivery-selection-summary").hidden, true);
+  const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
+  assert.equal(requested(h, "/delivery").length, 0);
+  await h.root.find("photographic-deliver-approved").trigger();
+  assert.equal(requested(h, "/delivery").length, 1);
+  assert.deepEqual(JSON.parse(requested(h, "/delivery")[0].options.body).approved_sources.map((source) => source.artifact_path), ["input-0001/delivery.tif"]);
+  assert.equal(requested(h, "/scenes").length, 0);
+});
+
 test("recorded lighting references remain selectable without opening their unrelated rich scene", async (t) => {
   const h = fixture();
   h.server.groups = [{ name: "Interiors", reference_sha256: h.scenes[40].variants[0].sha256,

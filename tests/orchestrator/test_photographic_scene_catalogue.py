@@ -432,6 +432,64 @@ async def test_selected_mutations_preserve_all_current_decisions_without_reading
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["scene-limit", "missing-lease"])
+async def test_native_group_fallback_requires_bounded_candidates_and_an_admitted_owner(scene_case, failure):
+    case = scene_case
+    index = [
+        {**case.refs[0], "scene_id": f"input-{number:04}", "role": "working_master", "source_identity_sha256": None}
+        for number in range(65 if failure == "scene-limit" else 1)
+    ]
+    discover = AsyncMock(return_value=[])
+    context = replace(case.context, discover_scene_index=AsyncMock(return_value=index), discover_scene_references=discover)
+    service = PhotographicReviewService(ReviewAdmissionConfig(enabled=failure == "missing-lease"))
+    payload = LightingGroupsRequest.model_validate(
+        {"expected_version": 0, "groups": [{"name": "Bounded", "reference_sha256": "c" * 64, "members": ["c" * 64]}]}
+    )
+    try:
+        if failure == "scene-limit":
+            with pytest.raises(ReviewInputError, match="bounded to 64 scenes"):
+                await service._discover_selected(context, "groups", (payload,))
+        else:
+            from transformation_portal.orchestrator.photographic_admission import ReviewOverload
+
+            with pytest.raises(ReviewOverload) as capacity:
+                await service._discover_selected(context, "groups", (payload,))
+            assert capacity.value.status == 413 and capacity.value.reason == "operation_capacity_limit"
+        discover.assert_awaited_once_with(set())
+        assert not case.reads
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_native_group_fallback_rejects_ambiguous_composite_identity_before_any_image_work(scene_case):
+    case = scene_case
+    identity = "c" * 64
+    native = [{**ref, "role": "working_master", "source_identity_sha256": identity} for ref in case.refs[:2]]
+    index = [{**ref, "source_identity_sha256": None} for ref in native]
+    discover = AsyncMock(side_effect=lambda scenes: [ref for ref in native if ref["scene_id"] in scenes])
+    context = replace(case.context, discover_scene_index=AsyncMock(return_value=index), discover_scene_references=discover)
+    service = PhotographicReviewService()
+    try:
+        with pytest.raises(ReviewInputError, match="exact current artifact hashes"):
+            await service.execute(
+                context,
+                service.groups,
+                LightingGroupsRequest.model_validate(
+                    {
+                        "expected_version": 0,
+                        "groups": [{"name": "Ambiguous", "reference_sha256": identity, "members": [identity]}],
+                    }
+                ),
+            )
+        assert [call.args[0] for call in discover.await_args_list] == [set(), {"input-0000"}, {"input-0001"}]
+        assert not case.reads
+        assert (await case.store.get(context.job_id, context.tenant_id))["state_version"] == 0
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
 async def test_saved_native_scene_hints_cannot_discover_scenes_outside_current_authorized_index(scene_case):
     case = scene_case
     state = empty_state()

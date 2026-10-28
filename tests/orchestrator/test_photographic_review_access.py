@@ -1045,7 +1045,143 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
-@pytest.mark.parametrize("change,status", [(None, 200), ("revoked", 401), ("inventory", 400), ("descriptor", 409)])
+@pytest.mark.parametrize("enabled,loss", [(False, "restart"), (True, "eviction"), (True, "restart")])
+@pytest.mark.parametrize("change", [None, "identity", "descriptor", "revoked", "revoked-during-scan"])
+async def test_first_native_lighting_group_survives_lost_scene_hints_within_existing_admission(
+    fake_app, monkeypatch, version, enabled, loss, change
+):
+    from contextlib import AsyncExitStack
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes import photographic_review as routes
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1" if enabled else "0")
+    app, job, artifact_store, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    for index in (1, 2):
+        for path, content in list(bodies.items()):
+            if "input-0000" not in path:
+                continue
+            other_path = path.replace("input-0000", f"input-{index:04}")
+            if path.endswith("photograph.json"):
+                descriptor = json.loads(content)
+                descriptor["input_id"] = f"input-{index:04}"
+                descriptor["delivery"]["path"] = f"input-{index:04}/delivery.tif"
+                content = canonicalize_json(descriptor)
+            bodies[other_path] = content
+            inventory.append({"path": other_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store, instances, observations = MemoryReviewStore(), [], []
+    scanning = False
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+
+    class ObservedService(services.PhotographicReviewService):
+        def __init__(self):
+            super().__init__()
+            instances.append(self)
+
+    monkeypatch.setattr(routes, "PhotographicReviewService", ObservedService)
+
+    def stream(_job, path, **_kwargs):
+        lease = current_review_lease.get()
+        assert (lease is not None) == enabled
+        claims = None
+        if lease is not None:
+            assert not lease.released and lease.cost.io_slots > 0
+            assert lease.cost.memory_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            assert lease.cost.scratch_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            claims = (lease.cost.memory_bytes, lease.cost.scratch_bytes, lease.cost.io_slots, lease.cost.decode_slots)
+        observations.append((path, lease, claims))
+        if scanning and change == "revoked-during-scan" and path == "v6/input-0000/photograph.json":
+            app._has_valid_api_key = lambda _: False
+        return StreamingResponse(_chunks(bodies[path]))
+
+    app._get_job_artifact.side_effect = stream
+    base = f"/{version}/jobs/{job.id}/photographic-review"
+    async with AsyncExitStack() as stack:
+
+        async def client_for_new_service():
+            api = FastAPI()
+            api.include_router(routes.create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+            await stack.enter_async_context(api.router.lifespan_context(api))
+            return await stack.enter_async_context(AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver"))
+
+        client = await client_for_new_service()
+        catalogue = await client.get(base)
+        assert catalogue.status_code == 200, catalogue.text
+        scene = next(row for row in catalogue.json()["data"]["scenes"] if row["scene_id"] == "input-0001")
+        native = next(row for row in scene["variants"] if row["role"] == "working_master")
+        identity = native["source_identity_sha256"]
+        if loss == "restart":
+            await instances[-1].close()
+            client = await client_for_new_service()
+            assert not instances[-1]._inspection_costs
+        else:
+            instances[-1]._scene_hints.clear()
+            assert instances[-1]._inspection_costs
+        assert not instances[-1]._scene_hints
+        saved = await state_store.get(job.id, "local")
+        assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"] and not saved.get("cohesion")
+        descriptor_path = "v6/input-0001/photograph.json"
+        if change == "identity":
+            descriptor = json.loads(bodies[descriptor_path])
+            descriptor["metadata_change"] = "new native closure"
+            bodies[descriptor_path] = canonicalize_json(descriptor)
+            next(row for row in inventory if row["path"] == descriptor_path).update(
+                sha256=hashlib.sha256(bodies[descriptor_path]).hexdigest(), size_bytes=len(bodies[descriptor_path])
+            )
+        elif change == "descriptor":
+            bodies[descriptor_path] += b" "
+        elif change == "revoked":
+            app._has_valid_api_key = lambda _: False
+        observations.clear()
+        scanning = True
+        response = await client.post(
+            base + "/lighting-groups",
+            json={"expected_version": 0, "groups": [{"name": "Native", "reference_sha256": identity, "members": [identity]}]},
+        )
+        capacity_blocked = enabled and (loss == "restart" or change == "identity")
+        if change == "revoked":
+            expected_status = 401
+        elif capacity_blocked:
+            expected_status = 413
+        elif change == "revoked-during-scan":
+            expected_status = 401
+        elif change == "descriptor":
+            expected_status = 409
+        elif change == "identity":
+            expected_status = 400
+        else:
+            expected_status = 200
+        assert response.status_code == expected_status, response.text
+        saved = await state_store.get(job.id, "local")
+        if expected_status == 200:
+            assert saved["state_version"] == 1 and saved["groups"][0]["members"] == [identity]
+            paths = [path for path, _lease, _claims in observations]
+            assert "v6/input-0000/photograph.json" in paths and descriptor_path in paths
+            assert "v6/input-0001/master.npy" in paths
+            assert not any(path.endswith("delivery.tif") or path == "v6/input-0000/master.npy" for path in paths)
+            assert all(path.endswith("photograph.json") for path in paths if "input-0002" in path)
+        else:
+            assert saved["state_version"] == 0 and not saved["groups"]
+            assert all(path.endswith("photograph.json") for path, _lease, _claims in observations)
+            if change == "revoked" or capacity_blocked:
+                assert observations == []
+        assert len({id(lease) for _path, lease, _claims in observations}) <= 1
+        assert len({claims for _path, _lease, claims in observations}) <= 1
+        assert all(lease is None or lease.released for _path, lease, _claims in observations)
+        assert instances[-1].admission.snapshot()["active"] == 0
+        artifact_store.write_immutable_file.assert_not_awaited()
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("change,status", [(None, 200), ("revoked", 401), ("inventory", 409), ("descriptor", 409)])
 async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
     fake_app, monkeypatch, version, change, status
 ):
@@ -1095,8 +1231,10 @@ async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
     assert response.status_code == status, response.text
     if change is not None:
         assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"]
-        if change != "descriptor":
+        if change == "revoked":
             app._get_job_artifact.assert_not_awaited()
+        else:
+            assert all(call.args[1].endswith("photograph.json") for call in app._get_job_artifact.await_args_list)
     else:
         assert saved["state_version"] == 1 and not saved["decisions"]
         assert saved["groups"][0]["members"] == [identity]
@@ -1449,9 +1587,15 @@ async def test_cold_service_resolves_saved_unapproved_native_group_scenes_and_re
                 context, cold_service.groups, payload.model_copy(update={"expected_version": 1})
             )
             assert result["state_version"] == 2
-        assert observed == [{"input-0000", "input-0001"}]
+        assert observed == (
+            [{"input-0000", "input-0001"}, {"input-0002"}] if component_changed else [{"input-0000", "input-0001"}]
+        )
         assert app._get_job_artifact.await_args_list
-        assert not any("input-0002" in call.args[1] for call in app._get_job_artifact.await_args_list)
+        assert all(
+            call.args[1].endswith("photograph.json")
+            for call in app._get_job_artifact.await_args_list
+            if "input-0002" in call.args[1]
+        )
         assert not cold_service._scene_hints, "Saved metadata must resolve cold native members without warming a local cache"
     finally:
         await cold_service.close()

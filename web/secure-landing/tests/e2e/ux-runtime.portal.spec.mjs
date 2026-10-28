@@ -3595,7 +3595,7 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
       sha256: scene.variants[0].sha256, url: `/v1/jobs/${jobId}/artifacts/${scene.variants[0].artifact_path}`,
       display_hint: { role: "primary_preview", priority: 1200, label: `${scene.label} master` },
     })) } };
-  const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], detailRequests: [], mutations: [], decisionGate: null, unexpectedRequests: [] };
+  const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], detailRequests: [], mutations: [], deliveries: [], decisionGate: null, unexpectedRequests: [] };
   const snapshots = new Map();
   const snapshot = () => ({ state_version: server.readVersion, catalogue_identity_sha256: server.readVersion.toString(16).padStart(64, "0"),
     decisions: server.readVersion >= server.committedVersion ? server.decisions.map((row) => ({ ...row })) : [],
@@ -3646,9 +3646,17 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
       if (server.decisionGate) { const gate = server.decisionGate; server.decisionGate = null; await gate; }
       expect(payload.expected_version).toBe(server.committedVersion);
       const scene = scenes.find((row) => row.variants[0].artifact_path === payload.artifact_path);
-      server.decisions = [{ ...payload, scene_id: scene.scene_id, label: scene.label, role: "final" }];
+      server.decisions = [...server.decisions.filter((row) => row.artifact_path !== payload.artifact_path),
+        { ...payload, scene_id: scene.scene_id, label: scene.label, role: "final" }];
       server.committedVersion += 1;
       await fulfillJson(route, { success: true, data: { state_version: server.committedVersion } });
+      return;
+    }
+    if (request.method() === "POST" && url.pathname === `${base}/delivery`) {
+      const payload = request.postDataJSON(); server.deliveries.push(payload);
+      expect(payload.expected_version).toBe(server.committedVersion);
+      await fulfillJson(route, { success: true, data: { state_version: server.committedVersion,
+        download_url: `${base}/files/remaining/approved.zip`, filename: "approved.zip", sha256: "9".repeat(64), size_bytes: 4096, inventory: [] } });
       return;
     }
     server.unexpectedRequests.push({ method: request.method(), pathname: url.pathname });
@@ -4144,6 +4152,51 @@ test("@portal-browser photographic refresh waits for mutation reconciliation and
   await expect(decision).toContainText("Needs revision");
   expect(server.mutations).toHaveLength(2);
   expect(server.mutations[1].expected_version).toBe(2);
+  expect(server.unexpectedRequests).toEqual([]);
+});
+
+test("@portal-browser photographic revoked delivery choice requires explicit exclusion before exporting the remaining approval", async ({ page }) => {
+  const jobId = "job-photographic-revoked-delivery";
+  const server = await installPagedPhotographicStateRoutes(page, jobId);
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const scene = page.locator('[data-ui="photographic-scene"]');
+  const decision = page.locator('[data-ui="photographic-decision-status"]');
+  const status = page.locator('[data-ui="photographic-review-status"]');
+  const deliveryChoice = page.locator('[data-ui="photographic-delivery-version"]');
+  const summary = page.locator('[data-ui="photographic-delivery-selection-summary"]');
+  const deliver = page.locator('[data-ui="photographic-deliver-approved"]');
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue("input-0000/delivery.tif");
+  await page.locator('[data-ui="photographic-preset"][value="website"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Explicit exclusion fixture");
+  server.readVersion = 2;
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(decision).toContainText("Approved");
+  await scene.selectOption("input-0001");
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue("input-0001/delivery.tif");
+  server.readVersion = 3;
+  await page.locator('[data-ui="photographic-decision-approved"]').click();
+  await expect(decision).toContainText("Approved");
+  await expect(summary).toContainText("2 selected across all pages (2 currently recorded approved)");
+  server.decisions = server.decisions.map((row) => row.scene_id === "input-0000" ? { ...row, status: "needs_revision" } : row);
+  server.committedVersion = 4; server.readVersion = 4;
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(summary).toContainText("2 selected across all pages (1 currently recorded approved)");
+  await deliver.click();
+  await expect(status).toContainText("A selected delivery source is no longer approved or available. Your selection is retained");
+  expect(server.deliveries).toEqual([]);
+  await expect(summary).toContainText("2 selected across all pages");
+  await scene.selectOption("input-0000");
+  await expect(decision).toContainText("Needs revision");
+  await expect(deliveryChoice).toHaveValue("input-0000/delivery.tif");
+  await expect(deliveryChoice.locator('option[value=""]')).toHaveText("Exclude from delivery");
+  await deliveryChoice.selectOption("");
+  await expect(summary).toContainText("1 selected across all pages (1 currently recorded approved)");
+  await deliver.click();
+  await expect(page.locator('[data-ui="photographic-delivery-download"]')).toHaveAttribute("href", `/v1/jobs/${jobId}/photographic-review/files/remaining/approved.zip`);
+  expect(server.deliveries).toHaveLength(1);
+  expect(server.deliveries[0].approved_sources).toEqual([{ artifact_path: "input-0001/delivery.tif", sha256: "2".repeat(64), source_identity_sha256: "2".repeat(64) }]);
+  expect(server.deliveries[0].approved_sha256).toEqual(["2".repeat(64)]);
+  expect(server.mutations).toHaveLength(2);
   expect(server.unexpectedRequests).toEqual([]);
 });
 

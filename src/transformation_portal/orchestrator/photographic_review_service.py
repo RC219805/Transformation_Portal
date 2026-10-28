@@ -56,7 +56,12 @@ from transformation_portal.orchestrator.photographic_admission import (
 )
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewContext, ReviewInputError
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict, get_review_store
-from transformation_portal.orchestrator.photographic_scene_catalogue import catalogue_changed, scene_page, scene_snapshot
+from transformation_portal.orchestrator.photographic_scene_catalogue import (
+    SCENE_LIMIT,
+    catalogue_changed,
+    scene_page,
+    scene_snapshot,
+)
 
 if TYPE_CHECKING:
     from transformation_portal.photographic_delivery import DeliveryImage, ExportPreset, PresentationPolicy
@@ -840,6 +845,38 @@ class PhotographicReviewService:
                 if hint is not None and hint in authorized_scenes:
                     selected.add(hint)
         references = await context.discover_scene_references(selected)
+        if operation == "groups":
+            missing = identities - {source_identity(ref) for ref in references}
+            if missing:
+                native_scenes = sorted({ref["scene_id"] for ref in index if ref.get("role") == "working_master"} - selected)
+                if len(native_scenes) > SCENE_LIMIT:
+                    raise ReviewInputError("Photographic scene navigation is bounded to 64 scenes")
+                # Hints optimize lookup only. Cold cost inspection still uses
+                # the existing complete-vector gate, which may reject with 413.
+                # A granted source snapshot covers sequential descriptor/ICC
+                # reads; never acquire or expand a lease during this fallback.
+                lease = current_review_lease.get()
+                if self.admission.config.enabled and (
+                    lease is None
+                    or lease.released
+                    or lease.cost.memory_bytes < MAX_IMAGE_BYTES
+                    or lease.cost.scratch_bytes < MAX_IMAGE_BYTES
+                    or lease.cost.io_slots < 1
+                ):
+                    raise ReviewOverload("operation_capacity_limit", status=413)
+                for candidate_scene in native_scenes:
+                    await self.revalidate(context)
+                    if lease is not None:
+                        lease.check_scratch(MAX_IMAGE_BYTES)
+                    async with self.expensive:
+                        candidates = await context.discover_scene_references({candidate_scene})
+                    # Retain every requested match so groups still rejects an
+                    # ambiguous identity instead of choosing its first source.
+                    matches = [
+                        ref for ref in candidates if ref.get("role") == "working_master" and source_identity(ref) in identities
+                    ]
+                    references.extend(matches)
+                    del candidates, matches
         await self.revalidate(context)
         return replace(context, references=references)
 

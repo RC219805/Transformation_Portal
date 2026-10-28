@@ -657,14 +657,14 @@ export function createPhotographicReview(host) {
       sceneLabel.addEventListener("input", () => sceneLabels.set(scene.scene_id, sceneLabel.value));
       card.append(field("Delivery scene name", sceneLabel));
       const approved = scene.variants.filter((item) => item.role !== "original" && decision(item)?.status === "approved");
-      if (approved.length) {
-        if (!deliverySelections.has(scene.scene_id) || (!pagedCatalogueEnabled() && deliverySelections.get(scene.scene_id) && !approved.some((item) => item.artifact_path === deliverySelections.get(scene.scene_id)))) {
+      if (approved.length || (pagedCatalogueEnabled() && deliverySelections.get(scene.scene_id))) {
+        if (approved.length && (!deliverySelections.has(scene.scene_id) || (!pagedCatalogueEnabled() && deliverySelections.get(scene.scene_id) && !approved.some((item) => item.artifact_path === deliverySelections.get(scene.scene_id))))) {
           const source = approved.find((item) => item.role === "final") || approved[0];
           deliverySelections.set(scene.scene_id, source.artifact_path); deliveryIdentities.set(scene.scene_id, deliveryFingerprint(source));
         }
         const selected = deliverySelections.get(scene.scene_id);
         const deliveryChoice = select("photographic-delivery-version", [["", "Exclude from delivery"], ...approved.map((item) => [item.artifact_path, photographicVariantLabel(item)]),
-          ...(selected && !approved.some((row) => row.artifact_path === selected) ? [[selected, "Earlier selected source · inspect before export"]] : [])], () => {
+          ...(selected && !approved.some((row) => row.artifact_path === selected) ? [[selected, "Earlier source · inspect before export"]] : [])], () => {
           deliverySelections.set(scene.scene_id, deliveryChoice.value);
           const source = approved.find((row) => row.artifact_path === deliveryChoice.value);
           source ? deliveryIdentities.set(scene.scene_id, deliveryFingerprint(source)) : deliveryIdentities.delete(scene.scene_id);
