@@ -20,7 +20,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field, replace
-from functools import partial
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -391,10 +390,27 @@ class PhotographicAdmissionController:
             self._executor = ThreadPoolExecutor(
                 max_workers=max(self.config.decode_slots, self.config.io_slots), thread_name_prefix="tp-photo"
             )
-        context = copy_context()
-        return await asyncio.get_running_loop().run_in_executor(
-            self._executor, partial(context.run, operation, *args, **kwargs)
-        )
+        inputs = [(copy_context(), operation, args, kwargs)]
+        outcome: list[_Result] = []
+
+        def invoke_owned() -> None:
+            context, call, positional, named = inputs.pop()
+            try:
+                outcome.append(context.run(call, *positional, **named))
+            finally:
+                # The executor can retain its WorkItem after signalling the
+                # Future. Its callable must no longer own input buffers then.
+                del context, call, positional, named
+
+        del operation, args, kwargs
+        try:
+            await drain_owned(asyncio.get_running_loop().run_in_executor(self._executor, invoke_owned))
+            # The WorkItem returns None. Detach its actual result from the
+            # shared box before the caller can release its reservation.
+            return outcome.pop()
+        finally:
+            inputs.clear()
+            outcome.clear()
 
     async def close(self) -> None:
         """Stop admission, fail waiters, drain owners, then stop the bounded pool."""
