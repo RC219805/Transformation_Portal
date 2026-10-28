@@ -636,7 +636,11 @@ class AppReviewAccess:
                 # headers cannot manufacture a human identity for approvals.
                 actor = {"username": "api_key_operator", "role": "operator", "assurance": "backend_api_key"}
             references = await self._references(request, job, tenant) if include_references else []
-            binding_identity = await self._binding_identity(job, tenant_id) if admission or catalogue else None
+            # Legacy catalogue inspections and lazy mutations must share the
+            # same inventory scope for their native composite-identity hints.
+            binding_identity = (
+                await self._binding_identity(job, tenant_id) if include_references or admission or catalogue else None
+            )
 
             async def revalidate() -> None:
                 await self._revalidate(request, job, tenant_id)

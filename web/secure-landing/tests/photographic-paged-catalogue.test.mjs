@@ -10,8 +10,9 @@ const WEBSITE_PRESET = { schema: "tp.photo.export_preset.v1", name: "website", f
   long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, render: "perceptual_srgb", shoulder: 0.8 };
 
 class Element {
-  constructor(tag) {
+  constructor(tag, ownerDocument) {
     this.tagName = tag;
+    this.ownerDocument = ownerDocument;
     this.children = []; this.dataset = {}; this.attributes = {}; this.listeners = {};
     this.className = ""; this.textContent = ""; this.value = ""; this.style = { setProperty() {} };
     this.classList = {
@@ -22,8 +23,18 @@ class Element {
     };
   }
   get options() { return this.children; }
+  get disabled() { return this._disabled || false; }
+  set disabled(value) {
+    this._disabled = Boolean(value);
+    if (this._disabled && this.ownerDocument?.activeElement === this) this.ownerDocument.activeElement = this.ownerDocument.body;
+  }
   append(...items) { this.children.push(...items); }
-  replaceChildren(...items) { this.children = [...items]; }
+  replaceChildren(...items) {
+    if (this.ownerDocument && this.ownerDocument.activeElement !== this && this.contains(this.ownerDocument.activeElement)) this.ownerDocument.activeElement = this.ownerDocument.body;
+    this.children = [...items];
+  }
+  contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
+  focus() { this.ownerDocument.activeElement = this; }
   setAttribute(key, value) { this.attributes[key] = String(value); }
   removeAttribute(key) { delete this.attributes[key]; if (key === "src") this.src = ""; }
   remove() { this.removed = true; }
@@ -61,6 +72,8 @@ function fixture({ sceneCount = 50, paged = true, actor = "actor-one", jobId = "
   extraFetch, restoredSelection = null } = {}) {
   const root = new Element("main");
   const body = new Element("body");
+  const document = { body, activeElement: body, createElement: (tag) => new Element(tag, document) };
+  root.ownerDocument = document; body.ownerDocument = document;
   const state = { auth: { mode: "managed", actor: { username: actor }, tenant: "tenant-one", features: { photographicPagedCatalogue: paged } } };
   const requests = [];
   const selections = [];
@@ -128,13 +141,13 @@ function fixture({ sceneCount = 50, paged = true, actor = "actor-one", jobId = "
     throw new Error(`Unexpected photographic request: ${url}`);
   };
   const recovery = sessionStorage === undefined ? storageFixture().storage : sessionStorage;
-  const api = createPhotographicReview({ state, els: { artifactShellContent: root }, document: { body, createElement: (tag) => new Element(tag) },
+  const api = createPhotographicReview({ state, els: { artifactShellContent: root }, document,
     fetchImpl, renderDebounceMs: 0, sessionStorage: recovery,
     _buildAuthHeaders: (headers, method) => ({ ...headers, ...(method === "POST" ? { "X-CSRF-Token": "fixture-csrf" } : { "x-api-key": "fixture-key" }) }),
     onPhotographicSelection: (selection) => selections.push(selection), getPhotographicSelection: () => restoredSelection,
   });
   const job = { id: jobId, pipeline: "lux-depth", artifacts: scenes.map((scene) => ({ ...scene.variants[0], path: scene.variants[0].artifact_path })) };
-  return { root, state, requests, selections, scenes, server, api, job, page, detail };
+  return { root, document, state, requests, selections, scenes, server, api, job, page, detail };
 }
 
 function requested(h, suffix) { return h.requests.filter((request) => request.path.endsWith(suffix)); }
@@ -368,6 +381,41 @@ test("explicitly discarding for a status filter clears draft edits even when sel
   assert.equal(selected(h), "input-0003", "A completed explicit discard cannot leave a false unsaved blocker");
 });
 
+for (const operation of ["decision", "refresh"]) {
+  test(`discard navigation preserves its pending action while a ${operation} is in progress`, async (t) => {
+    let finish, delay = false;
+    const h = fixture({ extraFetch: (request) => {
+      if (!delay || !request.path.endsWith(operation === "decision" ? "/decisions" : "/scenes")) return null;
+      delay = false;
+      return new Promise((resolve) => { finish = () => resolve(error("UNAVAILABLE", "Injected request unavailable.", 503)); });
+    } });
+    t.after(() => { finish?.(); h.api.show(null, null); });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    const note = h.root.find("photographic-decision-note"); note.value = "Retain this draft"; await note.trigger("input");
+    await h.root.find("photographic-scene-next").trigger();
+    const discard = h.root.find("photographic-discard-navigation");
+    assert.equal(discard.hidden, false);
+    delay = true;
+    const pending = operation === "decision" ? h.root.find("photographic-decision-approved").trigger() : h.api.refresh();
+    await settle();
+    assert.ok(finish);
+    const before = h.requests.length;
+    const disabled = discard.disabled;
+    await discard.trigger();
+    assert.equal(h.requests.length, before, "Even a directly dispatched event cannot start competing navigation");
+    assert.equal(discard.hidden, false, "A blocked discard must retain its pending action");
+    assert.equal(disabled, true, "Discard follows the active mutation or navigation lock");
+    assert.equal(selected(h), "input-0000");
+    assert.equal(note.value, "Retain this draft");
+    finish(); await pending; await settle();
+    assert.equal(discard.disabled, false);
+    await discard.trigger();
+    assert.equal(selected(h), "input-0001", "The explicit pending navigation remains available after the lock clears");
+    assert.equal(note.value, "");
+    assert.equal(requested(h, "/decisions").length, operation === "decision" ? 1 : 0);
+  });
+}
+
 test("a navigation that finds no unreviewed scene preserves its specific result message", async (t) => {
   const h = fixture({ sceneCount: 1 });
   h.server.decisions = [{ scene_id: h.scenes[0].scene_id, label: h.scenes[0].label, role: "final", status: "approved", note: "",
@@ -435,7 +483,10 @@ for (const role of ["original", "previous_revision"]) {
   test(`host scene navigation retains the exact ${role} artifact path`, async (t) => {
     const artifactPath = role === "original" ? "original/input-0031/source.tif" : "revisions/input-0031/prior.tif";
     const h = fixture({ restoredSelection: { jobId: "job-one", sceneId: "input-0031", artifactPath } });
-    if (role === "previous_revision") h.scenes[31].variants.push({ ...h.scenes[31].variants[0], role, artifact_path: artifactPath, sha256: "f".repeat(64) });
+    const revisionPath = "revisions/input-0031/prior.tif", workingPath = "working/input-0031/master.npy";
+    h.scenes[31].variants.push(
+      { ...h.scenes[31].variants[0], role: "previous_revision", artifact_path: revisionPath, sha256: "f".repeat(64) },
+      { ...h.scenes[31].variants[0], role: "working_master", artifact_path: workingPath, sha256: "e".repeat(64) });
     if (role === "original") {
       const row = h.page(new URLSearchParams("limit=8&cursor=24")).scenes.find((scene) => scene.scene_id === "input-0031");
       assert.equal(row.related_artifacts.some((artifact) => artifact.artifact_path === artifactPath), false, "Originals are absent from related-artifact hints in the backend DTO");
@@ -447,8 +498,9 @@ for (const role of ["original", "previous_revision"]) {
     assert.equal(selected(h), "input-0031");
     assert.equal(h.root.find("photographic-primary").value, artifactPath);
     assert.equal(h.selections.at(-1).artifactPath, artifactPath);
-    assert.equal(h.selections.at(-1).variant.role, role);
-    assert.equal(h.selections.at(-1).variant.artifact_path, artifactPath);
+    assert.deepEqual(h.selections.at(-1).railPaths, [h.scenes[31].variants[0].artifact_path, revisionPath]);
+    assert.equal(h.selections.at(-1).railPaths.includes(h.scenes[31].variants[1].artifact_path), false, "Original inspection does not bind a published rail artifact");
+    assert.equal(h.selections.at(-1).railPaths.includes(workingPath), false, "Working masters do not bind published rail artifacts");
     assert.deepEqual(requested(h, "/scene").map((request) => request.params.get("scene_id")), ["input-0031"]);
   });
 }
@@ -500,6 +552,50 @@ test("metadata navigation is keyboard accessible without taking arrow keys from 
   await controls.trigger("keydown", { key: "ArrowLeft", target: controls });
   assert.equal(selected(h), "input-0000");
 });
+
+test("focused photograph cards retain consecutive arrow navigation across both page boundaries", async (t) => {
+  const h = fixture();
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const contact = h.root.find("photographic-contact-sheet");
+  h.root.find("photographic-contact-item").focus();
+  for (const [key, indexes] of [["ArrowRight", [1, 2, 3, 4, 5, 6, 7, 8, 9]], ["ArrowLeft", [8, 7, 6]]]) {
+    for (const index of indexes) {
+      await contact.trigger("keydown", { key, target: h.document.activeElement });
+      assert.equal(selected(h), h.scenes[index].scene_id);
+      assert.ok(h.document.activeElement === h.root.findAll("photographic-contact-item").find((control) => control.attributes["aria-pressed"] === "true"), "The selected card must own focus after every arrow transition");
+    }
+  }
+  const next = h.root.find("photographic-scene-next"); next.focus(); await next.trigger();
+  assert.equal(h.document.activeElement, next, "Rendering cards must retain focus on a persistent navigation control");
+  const primary = h.root.find("photographic-primary"); primary.focus(); await h.api.refresh();
+  assert.equal(h.document.activeElement, primary, "Rendering cards must retain focus on a persistent input");
+});
+
+for (const moveFocus of [false, true]) {
+  test(`delayed photograph navigation ${moveFocus ? "preserves another input's focus" : "restores its disabled navigation control's focus"}`, async (t) => {
+    let finish, delay = false;
+    const h = fixture({ extraFetch: (request, response) => {
+      if (!delay || !request.path.endsWith("/scene")) return null;
+      delay = false;
+      return new Promise((resolve) => { finish = () => resolve(json(response.detail(request.params.get("scene_id")))); });
+    } });
+    t.after(() => { finish?.(); h.api.show(null, null); });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    await h.root.find("photographic-page-next").trigger();
+    const previous = h.root.find("photographic-scene-previous"), primary = h.root.find("photographic-primary");
+    previous.focus(); delay = true; await previous.trigger();
+    assert.ok(finish);
+    assert.equal(previous.disabled, true);
+    assert.equal(h.document.activeElement, h.document.body, "Disabling a focused native control moves focus to the document");
+    assert.equal(selected(h), "input-0008");
+    if (moveFocus) primary.focus();
+    finish(); await settle();
+    assert.equal(selected(h), "input-0007");
+    assert.equal(previous.disabled, false);
+    assert.ok(h.document.activeElement === (moveFocus ? primary : previous), "Navigation restores only focus lost to its own disabled control");
+  });
+}
 
 test("saving an exact decision refreshes cursor metadata and preserves the selected photograph", async (t) => {
   const h = fixture();

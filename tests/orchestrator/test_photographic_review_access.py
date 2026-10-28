@@ -1044,6 +1044,66 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
     monkeypatch.setattr(adapter.AppReviewAccess, "_originals", AsyncMock(return_value=([], "original_unavailable")))
 
 
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("change,status", [(None, 200), ("revoked", 401), ("inventory", 400), ("descriptor", 409)])
+async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
+    fake_app, monkeypatch, version, change, status
+):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes.photographic_review import create_photographic_review_router
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "0")
+    app, job, _, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    api = FastAPI()
+    api.include_router(create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+    base = f"/{version}/jobs/{job.id}/photographic-review"
+    async with api.router.lifespan_context(api):
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver") as client:
+            catalogue = await client.get(base)
+            assert catalogue.status_code == 200, catalogue.text
+            scene = catalogue.json()["data"]["scenes"][0]
+            native = next(row for row in scene["variants"] if row["role"] == "working_master")
+            identity = native["source_identity_sha256"]
+            assert identity != native["sha256"]
+            saved = await state_store.get(job.id, "local")
+            assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"]
+            assert saved.get("cohesion") is None
+            app._get_job_artifact.reset_mock()
+            if change == "revoked":
+                app._has_valid_api_key = lambda _: False
+            elif change == "inventory":
+                next(row for row in inventory if row["path"].endswith("photograph.json"))["sha256"] = "f" * 64
+            elif change == "descriptor":
+                bodies["v6/input-0000/photograph.json"] += b" "
+            response = await client.post(
+                base + "/lighting-groups",
+                json={
+                    "expected_version": 0,
+                    "groups": [{"name": "Unapproved native", "reference_sha256": identity, "members": [identity]}],
+                },
+            )
+    saved = await state_store.get(job.id, "local")
+    assert response.status_code == status, response.text
+    if change is not None:
+        assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"]
+        if change != "descriptor":
+            app._get_job_artifact.assert_not_awaited()
+    else:
+        assert saved["state_version"] == 1 and not saved["decisions"]
+        assert saved["groups"][0]["members"] == [identity]
+        assert saved["cohesion"]["groups"][0]["images"][0]["scene"] == "input-0000"
+        app._get_job_artifact.assert_awaited()
+
+
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("component_changed", [False, True])
 async def test_cold_service_resolves_saved_unapproved_native_group_scenes_and_revalidates_components(

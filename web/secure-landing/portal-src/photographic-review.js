@@ -104,7 +104,7 @@ export function createPhotographicReview(host) {
   function notifySelection() {
     if (!pagedCatalogueEnabled() || !currentVariant()) return;
     host.onPhotographicSelection?.({ jobId, sceneId, actorScope, artifactPath: primaryPath, stateVersion: data.state_version,
-      catalogueIdentitySha256: data.catalogue_identity_sha256 || null, variant: { ...currentVariant() } });
+      catalogueIdentitySha256: data.catalogue_identity_sha256 || null, railPaths: currentScene().railPaths });
   }
   function deliveryScenes() {
     const scenes = new Map(recordedScenes);

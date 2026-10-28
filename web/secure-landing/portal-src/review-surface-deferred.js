@@ -60,12 +60,12 @@ export function createDeferredReviewSurfaceApi(host) {
     getPhotographicSelection(job) {
       return { artifactPath: state.artifactUi?.selectedByJob?.[job?.id] || "" };
     },
-    onPhotographicSelection({ jobId, sceneId, artifactPath, actorScope }) {
+    onPhotographicSelection({ jobId, sceneId, artifactPath, actorScope, railPaths }) {
       const job = _findJobById(jobId);
       if (!job || jobId !== state.selectedJobId) return;
       const artifacts = job.artifacts || [];
       const source = artifacts.find((item) => _artifactRouteKey(item) === artifactPath)
-        || artifacts.find((item) => _artifactRouteKey(item).split("/").includes(sceneId));
+        || rankArtifactsForDisplay(artifacts).find((item) => railPaths.includes(_artifactRouteKey(item)));
       state.artifactUi.photographicSelection = {
         jobId, sceneId, artifactPath, railPath: source ? _artifactRouteKey(source) : "", actorScope
       };

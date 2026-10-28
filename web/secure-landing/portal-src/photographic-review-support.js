@@ -123,7 +123,9 @@ export function photographicPageReview(loaded, page) {
     if (!recordedScenes.has(row.scene_id)) recordedScenes.set(row.scene_id, { scene_id: row.scene_id, label: row.label || row.scene_id, variants: [] });
     recordedScenes.get(row.scene_id).variants.push({ ...row, role: row.role || "previous_revision" });
   }
-  return { review: { ...loaded, decisions: [...(page.decisions || []).filter((row) => !paths.has(row.artifact_path)), ...(loaded.decisions || [])] }, recordedScenes };
+  const scenes = (loaded.scenes || []).map((scene) => ({ ...scene,
+    railPaths: scene.variants.filter((variant) => ["final", "previous_revision"].includes(variant.role)).map((variant) => variant.artifact_path) }));
+  return { review: { ...loaded, scenes, decisions: [...(page.decisions || []).filter((row) => !paths.has(row.artifact_path)), ...(loaded.decisions || [])] }, recordedScenes };
 }
 
 // Persist selectors and view settings only. The server still authorizes every
@@ -185,6 +187,7 @@ export function createPhotographicPagedCatalogue(host) {
   const nextScene = button("Next photograph", "photographic-scene-next", () => void navigate(() => advance(1)));
   const nextUnreviewed = button("Next unreviewed", "photographic-next-unreviewed", () => void navigate(() => unreviewed()));
   const discard = button("Discard unsaved edits and continue", "photographic-discard-navigation", () => {
+    if (busy || locked) return;
     const action = pendingNavigation; pendingNavigation = null; discard.hidden = true;
     if (action) void run(async () => { discarding = true; try { return await action(); } finally { discarding = false; } });
   });
@@ -203,14 +206,14 @@ export function createPhotographicPagedCatalogue(host) {
     previousPage.disabled = busy || locked || !previous.length; nextPage.disabled = busy || locked || !page?.next_cursor;
     previousScene.disabled = busy || locked || !page?.total_filtered || (selectedIndex === 0 && !previous.length);
     nextScene.disabled = busy || locked || !page?.total_filtered || (selectedIndex === page.scenes.length - 1 && !page.next_cursor);
-    nextUnreviewed.disabled = busy || locked; filterControl.disabled = busy || locked; sortControl.disabled = busy || locked;
+    nextUnreviewed.disabled = busy || locked; filterControl.disabled = busy || locked; sortControl.disabled = busy || locked; discard.disabled = busy || locked;
     pageStatus.dataset.state = busy ? "loading" : page ? "ready" : "empty";
     pageStatus.textContent = busy ? "Loading photograph metadata…" : page
       ? `${page.total_filtered} of ${page.total_scenes} photographs · page ${previous.length + 1}. Recorded review status; source bytes are checked when opened or exported.` : "No photograph metadata loaded.";
   }
   async function run(action) {
     if (busy) return false;
-    const expected = generation;
+    const expected = generation, focused = controls.ownerDocument?.activeElement;
     busy = true; host.onLoading?.(true); renderState();
     try {
       const result = await action();
@@ -218,7 +221,10 @@ export function createPhotographicPagedCatalogue(host) {
       return result;
     }
     catch (error) { if (generation === expected && error.name !== "AbortError") status(error.message, true); return false; }
-    finally { if (generation === expected) { busy = false; host.onLoading?.(false); renderState(); } }
+    finally { if (generation === expected) {
+      busy = false; host.onLoading?.(false); renderState();
+      if (controls.contains(focused) && !focused.disabled && focused.ownerDocument.activeElement === focused.ownerDocument.body) focused.focus();
+    } }
   }
   async function navigate(action) {
     if (busy || locked) return false;
@@ -340,6 +346,8 @@ export function createPhotographicPagedCatalogue(host) {
     });
   }
   function renderCards(container, selectedId, selectedCard) {
+    const focused = container.ownerDocument?.activeElement;
+    const restoreFocus = focused?.dataset?.ui === "photographic-contact-item" && container.contains(focused);
     container.replaceChildren();
     for (const scene of page?.scenes || []) {
       const card = el("article", "", "photo-review-contact-item"); card.dataset.sceneId = scene.scene_id;
@@ -357,6 +365,7 @@ export function createPhotographicPagedCatalogue(host) {
       disclosure.append(el("p", "Recorded metadata only. Opening a photograph or exporting revalidates its source.", "photo-review-help"));
       card.append(disclosure); if (scene.scene_id === selectedId) selectedCard?.(card, scene);
       container.append(card);
+      if (restoreFocus && scene.scene_id === selectedId) control.focus();
     }
     renderState();
   }
