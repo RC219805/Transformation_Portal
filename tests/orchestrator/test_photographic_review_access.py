@@ -1044,6 +1044,563 @@ def _install_native_inventory(app, monkeypatch, bodies, inventory):
     monkeypatch.setattr(adapter.AppReviewAccess, "_originals", AsyncMock(return_value=([], "original_unavailable")))
 
 
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("enabled,loss", [(False, "restart"), (True, "eviction"), (True, "restart")])
+@pytest.mark.parametrize("change", [None, "identity", "descriptor", "revoked", "revoked-during-scan"])
+async def test_first_native_lighting_group_survives_lost_scene_hints_within_existing_admission(
+    fake_app, monkeypatch, version, enabled, loss, change
+):
+    from contextlib import AsyncExitStack
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes import photographic_review as routes
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1" if enabled else "0")
+    app, job, artifact_store, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    for index in (1, 2):
+        for path, content in list(bodies.items()):
+            if "input-0000" not in path:
+                continue
+            other_path = path.replace("input-0000", f"input-{index:04}")
+            if path.endswith("photograph.json"):
+                descriptor = json.loads(content)
+                descriptor["input_id"] = f"input-{index:04}"
+                descriptor["delivery"]["path"] = f"input-{index:04}/delivery.tif"
+                content = canonicalize_json(descriptor)
+            bodies[other_path] = content
+            inventory.append({"path": other_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store, instances, observations = MemoryReviewStore(), [], []
+    scanning = False
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+
+    class ObservedService(services.PhotographicReviewService):
+        def __init__(self):
+            super().__init__()
+            instances.append(self)
+
+    monkeypatch.setattr(routes, "PhotographicReviewService", ObservedService)
+
+    def stream(_job, path, **_kwargs):
+        lease = current_review_lease.get()
+        assert (lease is not None) == enabled
+        claims = None
+        if lease is not None:
+            assert not lease.released and lease.cost.io_slots > 0
+            assert lease.cost.memory_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            assert lease.cost.scratch_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            claims = (lease.cost.memory_bytes, lease.cost.scratch_bytes, lease.cost.io_slots, lease.cost.decode_slots)
+        observations.append((path, lease, claims))
+        if scanning and change == "revoked-during-scan" and path == "v6/input-0000/photograph.json":
+            app._has_valid_api_key = lambda _: False
+        return StreamingResponse(_chunks(bodies[path]))
+
+    app._get_job_artifact.side_effect = stream
+    base = f"/{version}/jobs/{job.id}/photographic-review"
+    async with AsyncExitStack() as stack:
+
+        async def client_for_new_service():
+            api = FastAPI()
+            api.include_router(routes.create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+            await stack.enter_async_context(api.router.lifespan_context(api))
+            return await stack.enter_async_context(AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver"))
+
+        client = await client_for_new_service()
+        catalogue = await client.get(base)
+        assert catalogue.status_code == 200, catalogue.text
+        scene = next(row for row in catalogue.json()["data"]["scenes"] if row["scene_id"] == "input-0001")
+        native = next(row for row in scene["variants"] if row["role"] == "working_master")
+        identity = native["source_identity_sha256"]
+        if loss == "restart":
+            await instances[-1].close()
+            client = await client_for_new_service()
+            assert not instances[-1]._inspection_costs
+        else:
+            instances[-1]._scene_hints.clear()
+            assert instances[-1]._inspection_costs
+        assert not instances[-1]._scene_hints
+        saved = await state_store.get(job.id, "local")
+        assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"] and not saved.get("cohesion")
+        descriptor_path = "v6/input-0001/photograph.json"
+        if change == "identity":
+            descriptor = json.loads(bodies[descriptor_path])
+            descriptor["metadata_change"] = "new native closure"
+            bodies[descriptor_path] = canonicalize_json(descriptor)
+            next(row for row in inventory if row["path"] == descriptor_path).update(
+                sha256=hashlib.sha256(bodies[descriptor_path]).hexdigest(), size_bytes=len(bodies[descriptor_path])
+            )
+        elif change == "descriptor":
+            bodies[descriptor_path] += b" "
+        elif change == "revoked":
+            app._has_valid_api_key = lambda _: False
+        observations.clear()
+        scanning = True
+        response = await client.post(
+            base + "/lighting-groups",
+            json={"expected_version": 0, "groups": [{"name": "Native", "reference_sha256": identity, "members": [identity]}]},
+        )
+        capacity_blocked = enabled and (loss == "restart" or change == "identity")
+        if change == "revoked":
+            expected_status = 401
+        elif capacity_blocked:
+            expected_status = 413
+        elif change == "revoked-during-scan":
+            expected_status = 401
+        elif change == "descriptor":
+            expected_status = 409
+        elif change == "identity":
+            expected_status = 400
+        else:
+            expected_status = 200
+        assert response.status_code == expected_status, response.text
+        saved = await state_store.get(job.id, "local")
+        if expected_status == 200:
+            assert saved["state_version"] == 1 and saved["groups"][0]["members"] == [identity]
+            paths = [path for path, _lease, _claims in observations]
+            assert "v6/input-0000/photograph.json" in paths and descriptor_path in paths
+            assert "v6/input-0001/master.npy" in paths
+            assert not any(path.endswith("delivery.tif") or path == "v6/input-0000/master.npy" for path in paths)
+            assert all(path.endswith("photograph.json") for path in paths if "input-0002" in path)
+        else:
+            assert saved["state_version"] == 0 and not saved["groups"]
+            assert all(path.endswith("photograph.json") for path, _lease, _claims in observations)
+            if change == "revoked" or capacity_blocked:
+                assert observations == []
+        assert len({id(lease) for _path, lease, _claims in observations}) <= 1
+        assert len({claims for _path, _lease, claims in observations}) <= 1
+        assert all(lease is None or lease.released for _path, lease, _claims in observations)
+        assert instances[-1].admission.snapshot()["active"] == 0
+        artifact_store.write_immutable_file.assert_not_awaited()
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("change,status", [(None, 200), ("revoked", 401), ("inventory", 409), ("descriptor", 409)])
+async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
+    fake_app, monkeypatch, version, change, status
+):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes.photographic_review import create_photographic_review_router
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "0")
+    app, job, _, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    api = FastAPI()
+    api.include_router(create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+    base = f"/{version}/jobs/{job.id}/photographic-review"
+    async with api.router.lifespan_context(api):
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver") as client:
+            catalogue = await client.get(base)
+            assert catalogue.status_code == 200, catalogue.text
+            scene = catalogue.json()["data"]["scenes"][0]
+            native = next(row for row in scene["variants"] if row["role"] == "working_master")
+            identity = native["source_identity_sha256"]
+            assert identity != native["sha256"]
+            saved = await state_store.get(job.id, "local")
+            assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"]
+            assert saved.get("cohesion") is None
+            app._get_job_artifact.reset_mock()
+            if change == "revoked":
+                app._has_valid_api_key = lambda _: False
+            elif change == "inventory":
+                next(row for row in inventory if row["path"].endswith("photograph.json"))["sha256"] = "f" * 64
+            elif change == "descriptor":
+                bodies["v6/input-0000/photograph.json"] += b" "
+            response = await client.post(
+                base + "/lighting-groups",
+                json={
+                    "expected_version": 0,
+                    "groups": [{"name": "Unapproved native", "reference_sha256": identity, "members": [identity]}],
+                },
+            )
+    saved = await state_store.get(job.id, "local")
+    assert response.status_code == status, response.text
+    if change is not None:
+        assert saved["state_version"] == 0 and not saved["decisions"] and not saved["groups"]
+        if change == "revoked":
+            app._get_job_artifact.assert_not_awaited()
+        else:
+            assert all(call.args[1].endswith("photograph.json") for call in app._get_job_artifact.await_args_list)
+    else:
+        assert saved["state_version"] == 1 and not saved["decisions"]
+        assert saved["groups"][0]["members"] == [identity]
+        assert saved["cohesion"]["groups"][0]["images"][0]["scene"] == "input-0000"
+        app._get_job_artifact.assert_awaited()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("status", ["approved", "needs_revision"])
+async def test_unknown_legacy_hash_keeps_recorded_page_status_without_authorizing_changed_bytes(
+    fake_app, monkeypatch, enabled, status
+):
+    from transformation_portal.api.v1.photographic_review import DeliveryRequest, ReviewDecisionRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig
+    from transformation_portal.orchestrator.photographic_review_access import ReviewInputError
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, job, _, _ = fake_app
+    bodies, _, _ = _native_inventory(False, False)
+    photograph = bodies["v6/input-0000/delivery.tif"]
+    sha = hashlib.sha256(photograph).hexdigest()
+    path, scene_id = "room_enhanced.tif", "room_enhanced"
+    job.artifacts = {"items": [{"path": path, "sha256": None, "size_bytes": len(photograph)}]}
+    app._get_job_artifact.side_effect = lambda *_args, **_kwargs: StreamingResponse(_chunks(photograph))
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    access = adapter.AppReviewAccess(app)
+    authorize = access.authorize_admission if enabled else access.authorize_catalogue
+    service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    try:
+        await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=path, sha256=sha, status=status, expected_version=0),
+        )
+        app._get_job_artifact.reset_mock()
+        page = await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status)
+        assert page["total_filtered"] == 1
+        scene = page["scenes"][0]
+        assert scene["scene_id"] == scene_id and scene["review_status"] == status
+        assert scene["recorded_decision"]["artifact_path"] == path and scene["recorded_decision"]["sha256"] == sha
+        assert scene["source_validation"] == "not_checked"
+        assert not (await service.scenes(await access.authorize_catalogue(_request(), job.id), status="unreviewed"))["scenes"]
+        app._get_job_artifact.assert_not_awaited()
+        photograph = photograph[:-1] + bytes([photograph[-1] ^ 1])
+        recorded = await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status)
+        assert recorded["scenes"][0]["review_status"] == status
+        assert recorded["scenes"][0]["source_validation"] == "not_checked"
+        app._get_job_artifact.assert_not_awaited()
+        detail = await service.execute(
+            await authorize(_request(), job.id), service.scene_detail, scene_id, page["catalogue_identity_sha256"]
+        )
+        assert detail["decisions"] == [] and detail["scenes"][0]["decision"] is None
+        if status == "approved":
+            with pytest.raises(ReviewInputError, match="explicit current approval"):
+                await service.execute(
+                    await authorize(_request(), job.id),
+                    service.delivery,
+                    DeliveryRequest(
+                        property_name="Legacy source",
+                        presets=["website"],
+                        approved_sha256=[sha],
+                        expected_version=1,
+                    ),
+                )
+        assert (await state_store.get(job.id, "local"))["state_version"] == 1
+        job.artifacts["items"][0]["sha256"] = "f" * 64
+        app._get_job_artifact.reset_mock()
+        changed = await service.scenes(await access.authorize_catalogue(_request(), job.id))
+        assert changed["scenes"][0]["review_status"] == "unreviewed"
+        assert changed["scenes"][0]["recorded_decision"] is None
+        assert changed["scenes"][0]["source_validation"] == "not_checked"
+        assert not (await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status))["scenes"]
+        app._get_job_artifact.assert_not_awaited()
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("change", [None, "bytes", "removed"])
+async def test_mutation_projection_fresh_hashes_only_saved_unknown_legacy_identities(fake_app, monkeypatch, enabled, change):
+    from dataclasses import replace
+
+    from transformation_portal.api.v1.photographic_review import ReviewDecisionRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig, current_review_lease
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, job, _, _ = fake_app
+    native_bodies, _, _ = _native_inventory(False, False)
+    photograph = native_bodies["v6/input-0000/delivery.tif"]
+    sha = hashlib.sha256(photograph).hexdigest()
+    left, selected, unrelated = "room_a_enhanced.tif", "room_b_enhanced.tif", "room_c_enhanced.tif"
+    bodies = {path: photograph for path in (left, selected, unrelated)}
+    job.artifacts = {
+        "items": [
+            {"path": path, "sha256": sha if path == selected else None, "size_bytes": len(photograph)} for path in bodies
+        ]
+    }
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    observations = []
+
+    def stream(_job, path, **_kwargs):
+        lease = current_review_lease.get()
+        assert (lease is not None) == enabled
+        claims = None
+        if lease is not None:
+            assert not lease.released and lease.cost.io_slots > 0
+            assert lease.cost.memory_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            assert lease.cost.scratch_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            claims = (lease.cost.memory_bytes, lease.cost.scratch_bytes, lease.cost.io_slots, lease.cost.decode_slots)
+        observations.append((path, lease, claims))
+        return StreamingResponse(_chunks(bodies[path]))
+
+    app._get_job_artifact.side_effect = stream
+    access = adapter.AppReviewAccess(app)
+    service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    authorize = access.authorize_admission if enabled else access.authorize_catalogue
+    try:
+        await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=left, sha256=sha, status="approved", expected_version=0),
+        )
+        if change == "bytes":
+            bodies[left] = photograph[:-1] + bytes([photograph[-1] ^ 1])
+        elif change == "removed":
+            job.artifacts["items"] = [row for row in job.artifacts["items"] if row["path"] != left]
+        observations.clear()
+        context = await authorize(_request(), job.id)
+        materialize = context.materialize
+        execution_sources = []
+
+        async def materialize_selected(ref, destination, maximum):
+            execution_sources.append(ref["artifact_path"])
+            return await materialize(ref, destination, maximum)
+
+        result = await service.execute(
+            replace(context, materialize=materialize_selected),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=selected, sha256=sha, status="approved", expected_version=1),
+        )
+        assert {row["artifact_path"] for row in result["decisions"]} == ({left, selected} if change is None else {selected})
+        saved = await state_store.get(job.id, "local")
+        assert len(saved["decisions"]) == 2 and saved["decisions"][0]["sha256"] == sha
+        assert execution_sources == [selected], "Projection hashing must not inspect or decode the unrelated source"
+        paths = [path for path, _lease, _claims in observations]
+        assert paths.count(selected) == 1 and paths.count(left) == (0 if change == "removed" else 1)
+        assert unrelated not in paths
+        assert len({id(lease) for _path, lease, _claims in observations}) == 1
+        assert len({claims for _path, _lease, claims in observations}) == 1, "Projection must not expand its reserved claims"
+        assert all(lease is None or lease.released for _path, lease, _claims in observations)
+        assert service.admission.snapshot()["active"] == 0
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("change", [None, "descriptor", "removed"])
+async def test_mutation_decision_projection_revalidates_only_saved_native_closures(fake_app, monkeypatch, enabled, change):
+    from transformation_portal.api.v1.photographic_review import ReviewDecisionRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig, current_review_lease
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, job, _, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    for index in (1, 2):
+        for path, content in list(bodies.items()):
+            if "input-0000" not in path:
+                continue
+            other_path = path.replace("input-0000", f"input-{index:04}")
+            if path.endswith("photograph.json"):
+                descriptor = json.loads(content)
+                descriptor["input_id"] = f"input-{index:04}"
+                descriptor["delivery"]["path"] = f"input-{index:04}/delivery.tif"
+                content = canonicalize_json(descriptor)
+            bodies[other_path] = content
+            inventory.append({"path": other_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    observations = []
+
+    def stream(_job, path, **_kwargs):
+        lease = current_review_lease.get()
+        assert (lease is not None) == enabled
+        if lease is not None:
+            assert lease.cost.memory_bytes > 0 and lease.cost.io_slots > 0 and not lease.released
+        observations.append((path, lease))
+        return StreamingResponse(_chunks(bodies[path]))
+
+    app._get_job_artifact.side_effect = stream
+    access = adapter.AppReviewAccess(app)
+    service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    authorize = access.authorize_admission if enabled else access.authorize_catalogue
+    master = next(row for row in inventory if row["path"] == "v6/input-0000/master.npy")
+    descriptor = next(row for row in inventory if row["path"] == "v6/input-0000/photograph.json")
+    identity = hashlib.sha256(
+        canonicalize_json(
+            {
+                "schema": "tp.photo.source_identity.v1",
+                "master_sha256": master["sha256"],
+                "descriptor_sha256": descriptor["sha256"],
+                "alpha_sha256": None,
+                "source_icc_sha256": None,
+            }
+        )
+    ).hexdigest()
+    try:
+        await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(
+                artifact_path=master["path"],
+                sha256=master["sha256"],
+                source_identity_sha256=identity,
+                status="approved",
+                expected_version=0,
+            ),
+        )
+        if change == "descriptor":
+            changed = json.loads(bodies[descriptor["path"]])
+            changed["metadata_change"] = "new native composite authority"
+            bodies[descriptor["path"]] = canonicalize_json(changed)
+            descriptor.update(
+                sha256=hashlib.sha256(bodies[descriptor["path"]]).hexdigest(), size_bytes=len(bodies[descriptor["path"]])
+            )
+        elif change == "removed":
+            inventory.remove(master)
+        observations.clear()
+        selected = next(row for row in inventory if row["path"] == "v6/input-0001/delivery.tif")
+        result = await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(
+                artifact_path=selected["path"], sha256=selected["sha256"], status="approved", expected_version=1
+            ),
+        )
+        expected = {selected["path"], master["path"]} if change is None else {selected["path"]}
+        assert {row["artifact_path"] for row in result["decisions"]} == expected
+        assert len((await state_store.get(job.id, "local"))["decisions"]) == 2
+        paths = [path for path, _lease in observations]
+        assert selected["path"] in paths
+        assert (descriptor["path"] in paths) == (change != "removed")
+        assert master["path"] not in paths and "v6/input-0000/delivery.tif" not in paths
+        assert not any("input-0002" in path for path in paths)
+        assert service.admission.snapshot()["active"] == 0
+        assert all(lease is None or lease.released for _path, lease in observations)
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("component_changed", [False, True])
+async def test_cold_service_resolves_saved_unapproved_native_group_scenes_and_revalidates_components(
+    fake_app, monkeypatch, enabled, component_changed
+):
+    from dataclasses import replace
+
+    from transformation_portal.api.v1.photographic_review import LightingGroupsRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import (
+        ReviewAdmissionConfig,
+        ReviewOverload,
+        current_review_lease,
+    )
+    from transformation_portal.orchestrator.photographic_review_access import ReviewInputError
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, _, _, _ = fake_app
+    bodies, inventory, _ = _native_inventory(False, False)
+    for index in (1, 2):
+        for path, content in list(bodies.items()):
+            if "input-0000" not in path:
+                continue
+            second_path = path.replace("input-0000", f"input-{index:04}")
+            if path.endswith("photograph.json"):
+                descriptor = json.loads(content)
+                descriptor["input_id"] = f"input-{index:04}"
+                descriptor["delivery"]["path"] = f"input-{index:04}/delivery.tif"
+                content = canonicalize_json(descriptor)
+            bodies[second_path] = content
+            inventory.append({"path": second_path, "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)})
+    _install_native_inventory(app, monkeypatch, bodies, inventory)
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    access = adapter.AppReviewAccess(app)
+    context = await access.authorize(_request(), "job")
+    native = [ref for ref in context.references if ref["role"] == "working_master"]
+    members = [ref["source_identity_sha256"] for ref in native[:2]]
+    assert all(ref["sha256"] != identity for ref, identity in zip(native[:2], members))
+    payload = LightingGroupsRequest.model_validate(
+        {
+            "expected_version": 0,
+            "groups": [{"name": "Unapproved native group", "reference_sha256": members[0], "members": members}],
+        }
+    )
+    original_service = services.PhotographicReviewService(ReviewAdmissionConfig())
+    await original_service.groups(context, payload)
+    await original_service.close()
+    saved = await state_store.get("job", "local")
+    assert not saved["decisions"]
+    assert {row["scene"] for row in saved["cohesion"]["groups"][0]["images"]} == {"input-0000", "input-0001"}
+    if component_changed:
+        path = "v6/input-0001/photograph.json"
+        descriptor = json.loads(bodies[path])
+        descriptor["metadata_change"] = "new immutable descriptor identity"
+        bodies[path] = canonicalize_json(descriptor)
+        next(row for row in inventory if row["path"] == path).update(
+            sha256=hashlib.sha256(bodies[path]).hexdigest(), size_bytes=len(bodies[path])
+        )
+    cold_service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    assert not cold_service._scene_hints
+    context = await (
+        access.authorize_admission(_request(), "job") if enabled else access.authorize_catalogue(_request(), "job")
+    )
+    app._get_job_artifact.reset_mock()
+    real_discovery = context.discover_scene_references
+    observed = []
+
+    async def discover(scenes):
+        observed.append(set(scenes))
+        assert (current_review_lease.get() is not None) == enabled
+        return await real_discovery(scenes)
+
+    context = replace(context, discover_scene_references=discover)
+    try:
+        if enabled:
+            # A restart has no exact inspection-cost cache. Preserve the
+            # existing conservative cold bulk budget instead of expanding it.
+            with pytest.raises(ReviewOverload) as capacity:
+                await cold_service.execute(context, cold_service.groups, payload.model_copy(update={"expected_version": 1}))
+            assert capacity.value.status == 413 and capacity.value.reason == "operation_capacity_limit"
+            assert not observed and not app._get_job_artifact.await_args_list
+            assert (await state_store.get("job", "local"))["state_version"] == 1
+            return
+        if component_changed:
+            with pytest.raises(ReviewInputError, match="exact current artifact hashes"):
+                await cold_service.execute(context, cold_service.groups, payload.model_copy(update={"expected_version": 1}))
+            assert (await state_store.get("job", "local"))["state_version"] == 1
+        else:
+            result = await cold_service.execute(
+                context, cold_service.groups, payload.model_copy(update={"expected_version": 1})
+            )
+            assert result["state_version"] == 2
+        assert observed == (
+            [{"input-0000", "input-0001"}, {"input-0002"}] if component_changed else [{"input-0000", "input-0001"}]
+        )
+        assert app._get_job_artifact.await_args_list
+        assert all(
+            call.args[1].endswith("photograph.json")
+            for call in app._get_job_artifact.await_args_list
+            if "input-0002" in call.args[1]
+        )
+        assert not cold_service._scene_hints, "Saved metadata must resolve cold native members without warming a local cache"
+    finally:
+        await cold_service.close()
+
+
 @pytest.mark.parametrize("npy_version", [(1, 0), (2, 0)])
 @pytest.mark.parametrize("oversized", [False, True])
 async def test_native_alpha_spooling_matches_verified_geometry_budget(fake_app, monkeypatch, tmp_path, npy_version, oversized):
@@ -1901,6 +2458,114 @@ async def test_admission_authenticates_before_discovery_and_binds_manifest_ident
     job.artifacts["items"][0]["sha256"] = "f" * 64
     with pytest.raises(ReviewAccessError, match="bindings changed"):
         await context.revalidate()
+
+
+async def test_scene_index_uses_fifty_committed_scene_inventories_without_native_or_image_reads(fake_app):
+    app, job, store, _ = fake_app
+    inventory = []
+    for index in range(50):
+        for filename in ("delivery.tif", "master.npy", "photograph.json", "preview.png", "depth.tif"):
+            inventory.append({"path": f"v6/input-{index:04}/{filename}", "sha256": "a" * 64, "size_bytes": 100})
+    locator = SimpleNamespace(tenant_id="local", plan_digest="b" * 64, attempt_id="attempt-one")
+    records = SimpleNamespace(
+        get_locator=AsyncMock(return_value=locator),
+        committed_manifest=AsyncMock(return_value={"files": inventory}),
+    )
+    app._uses_dispatch_authority = lambda: True
+    app.get_operational_record_store = lambda: records
+    access = adapter.AppReviewAccess(app)
+    access._originals = AsyncMock(return_value=([], "immutable_original_binding_unavailable"))
+    access._native_reference = AsyncMock(side_effect=AssertionError("Index must not read native descriptors or ICC"))
+    access._read_indexed = AsyncMock(side_effect=AssertionError("Index must not read artifact bytes"))
+    access._fresh_indexed_identity = AsyncMock(side_effect=AssertionError("Index must not hash photographs"))
+    context = await access.authorize_catalogue(_request(), job.id)
+    assert isinstance(context, ReviewContext) and not context.references
+    index = await context.discover_scene_index()
+    assert len({row["scene_id"] for row in index}) == 50
+    assert sum(row.get("role") == "final" for row in index) == 50
+    assert sum(row.get("role") == "working_master" for row in index) == 50
+    access._native_reference.assert_not_awaited()
+    access._read_indexed.assert_not_awaited()
+    access._fresh_indexed_identity.assert_not_awaited()
+    store.open_bytes.assert_not_awaited()
+    app._get_job_artifact.assert_not_awaited()
+    access._native_reference.side_effect = None
+    access._native_reference.return_value = None
+    selected = await context.discover_scene_references({"input-0049"})
+    assert [row["scene_id"] for row in selected] == ["input-0049"]
+    access._native_reference.assert_awaited_once()
+    assert access._native_reference.await_args.args[2]["scene_id"] == "input-0049"
+    legacy = await access.authorize(_request(), job.id)
+    assert legacy.status_code == 409
+    assert json.loads(legacy.body)["error"]["code"] == "PAGED_CATALOGUE_REQUIRED"
+    access._native_reference.assert_awaited_once()
+    await context.revalidate()
+    inventory[-1]["sha256"] = "c" * 64
+    with pytest.raises(ReviewAccessError) as changed:
+        await context.revalidate()
+    assert changed.value.code == "CATALOGUE_CHANGED"
+    inventory[-1]["sha256"] = "a" * 64
+    locator.attempt_id = "attempt-two"
+    with pytest.raises(ReviewAccessError) as changed:
+        await context.revalidate()
+    assert changed.value.code == "CATALOGUE_CHANGED"
+
+
+async def test_scene_index_authentication_and_legacy_missing_identity_never_snapshot(fake_app):
+    app, job, store, _ = fake_app
+    access = adapter.AppReviewAccess(app)
+    access._fresh_indexed_identity = AsyncMock(side_effect=AssertionError("Navigation must not snapshot legacy images"))
+    job.artifacts["items"][0].pop("sha256")
+    context = await access.authorize_catalogue(_request(), job.id)
+    index = await context.discover_scene_index()
+    assert index[0]["sha256"] is None
+    store.open_bytes.assert_not_awaited()
+    app._has_valid_api_key = lambda _: False
+    denied = await access.authorize_catalogue(_request(), job.id)
+    assert denied.status_code == 401
+    with pytest.raises(ReviewAccessError):
+        await context.revalidate()
+    access._fresh_indexed_identity.assert_not_awaited()
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_paged_scene_opens_long_flat_legacy_filename_with_artifact_selector_bound(fake_app, monkeypatch, version):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from transformation_portal.api.routes.photographic_review import create_photographic_review_router
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "0")
+    app, job, _, _ = fake_app
+    bodies, _, _ = _native_inventory(False, False)
+    photograph = bodies["v6/input-0000/delivery.tif"]
+    scene_id = "room-" + "a" * 180 + "-enhanced"
+    path = scene_id + ".tif"
+    job.artifacts = {
+        "items": [{"path": path, "sha256": hashlib.sha256(photograph).hexdigest(), "size_bytes": len(photograph)}]
+    }
+    app._get_job_artifact.side_effect = lambda *_args, **_kwargs: StreamingResponse(_chunks(photograph))
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    api = FastAPI()
+    api.include_router(create_photographic_review_router(adapter.AppReviewAccess(app).runtime()))
+    base = f"/{version}/jobs/{job.id}/photographic-review"
+    async with api.router.lifespan_context(api):
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://testserver") as client:
+            page = await client.get(base + "/scenes")
+            assert page.status_code == 200, page.text
+            metadata = page.json()["data"]
+            assert metadata["scenes"][0]["scene_id"] == scene_id
+            app._get_job_artifact.assert_not_awaited()
+            params = {"scene_id": scene_id, "catalogue_identity_sha256": metadata["catalogue_identity_sha256"]}
+            detail = await client.get(base + "/scene", params=params)
+            assert detail.status_code == 200, detail.text
+            assert detail.json()["data"]["scenes"][0]["variants"][0]["artifact_path"] == path
+            app._get_job_artifact.assert_awaited()
+            assert (await client.get(base + "/scene", params={**params, "scene_id": "a" * 1024})).status_code == 404
+            assert (await client.get(base + "/scene", params={**params, "scene_id": "a" * 1025})).status_code == 422
 
 
 async def test_admission_invalid_credentials_never_discover_or_queue(fake_app, monkeypatch):

@@ -118,7 +118,8 @@ def applied_derivatives(inventory: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             ).model_dump(mode="json", by_alias=True)
         )
-    if len(result) > 224:
+    # Six requested presets plus one precision companion for each of 64 sources.
+    if len(result) > 448:
         raise ValueError("Applied delivery evidence exceeds its source/preset bound")
     return result
 

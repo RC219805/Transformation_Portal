@@ -196,6 +196,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["fastVlmCaptioning"] is False
     assert body["features"]["photographicDeliveryHistory"] is False
     assert body["features"]["photographicRecordedPresentation"] is False
+    assert body["features"]["photographicPagedCatalogue"] is False
 
 
 @pytest.mark.parametrize("value,enabled", [("0", False), ("1", True), ("invalid", False)])
@@ -216,6 +217,17 @@ def test_photographic_ui_rollouts_are_independent_and_default_off(client, monkey
     features = client.get("/portal/bootstrap").json()["features"]
     assert features["photographicDeliveryHistory"] is (history == "1")
     assert features["photographicRecordedPresentation"] is (recorded == "1")
+
+
+@pytest.mark.parametrize("value,enabled", [("0", False), ("1", True), ("invalid", False)])
+def test_paged_photographic_rollout_is_independent(client, monkeypatch, value, enabled):
+    monkeypatch.setenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", value)
+    monkeypatch.setenv("TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "0")
+    monkeypatch.setenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0")
+    features = client.get("/portal/bootstrap").json()["features"]
+    assert features["photographicPagedCatalogue"] is enabled
+    assert features["photographicDeliveryHistory"] is False
+    assert features["photographicRecordedPresentation"] is False
 
 
 def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(

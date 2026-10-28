@@ -14,6 +14,7 @@ import inspect
 import io
 import logging
 import math
+import secrets
 import shutil
 import tempfile
 import time
@@ -55,6 +56,12 @@ from transformation_portal.orchestrator.photographic_admission import (
 )
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewContext, ReviewInputError
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict, get_review_store
+from transformation_portal.orchestrator.photographic_scene_catalogue import (
+    SCENE_LIMIT,
+    catalogue_changed,
+    scene_page,
+    scene_snapshot,
+)
 
 if TYPE_CHECKING:
     from transformation_portal.photographic_delivery import DeliveryImage, ExportPreset, PresentationPolicy
@@ -62,8 +69,8 @@ if TYPE_CHECKING:
 JsonObject = dict[str, Any]
 ReviewChange = Callable[[JsonObject], JsonObject]
 NativeCrop = tuple[int, int, int, int]
-# Fit one tenant's complete current catalogue: 32 scenes with original/native/
-# final sources plus the 128-revision limit, without retaining pixel buffers.
+# Planning metadata has independent bounded eviction; scene navigation does not
+# require every source inspection to remain cached, and never caches pixels.
 _INSPECTION_CACHE_LIMIT = 1024
 _TENANT_INSPECTION_CACHE_LIMIT = 256
 InspectionKey = tuple[str, str, str, str, str, str]
@@ -574,14 +581,25 @@ class PhotographicReviewService:
         # Planning metadata only: never image bytes, approvals or completed
         # render results. The service/router lifecycle owns this bounded LRU.
         self._inspection_costs: OrderedDict[InspectionKey, JsonObject] = OrderedDict()
+        # Composite hashes can hint a lighting member's scene; they grant no
+        # source access and never replace exact resolution or materialization.
+        self._scene_hints: OrderedDict[tuple[str, str, str | None, str], str] = OrderedDict()
+        self._cursor_secret = secrets.token_bytes(32)
+        self._cursor_session = uuid.uuid4().hex
 
     async def close(self) -> None:
         try:
             await self.admission.close()
         finally:
             self._inspection_costs.clear()
+            self._scene_hints.clear()
 
     def _remember_inspection(self, context: ReviewContext, ref: JsonObject, inspection: JsonObject) -> None:
+        identity = source_identity(ref)
+        if identity is not None and isinstance(ref.get("scene_id"), str):
+            self._scene_hints[context.tenant_id, context.job_id, context.binding_identity, identity] = ref["scene_id"]
+            while len(self._scene_hints) > _INSPECTION_CACHE_LIMIT:
+                self._scene_hints.popitem(last=False)
         if not self.admission.config.enabled or not context.binding_identity:
             return
         width, height, alpha = (inspection.get(name) for name in ("width", "height", "alpha"))
@@ -646,6 +664,8 @@ class PhotographicReviewService:
     async def execute(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Authorize before queueing; reserve once through all IO and publication."""
         if not self.admission.config.enabled:
+            if context.discover_scene_references is not None and method.__name__ != "catalogue":
+                context = await self._discover_selected(context, method.__name__, args)
             return await method(context, *args, **kwargs)
         operation = method.__name__
         ticket = await self.admission.begin_request(context.tenant_id)
@@ -708,8 +728,7 @@ class PhotographicReviewService:
             # decode. Complete output-space preflight follows resolved geometry.
             lease.check_scratch(min(lease.cost.scratch_bytes, 2 * 1024**3), preparing=True)
             await self.revalidate(context)
-            if context.discover_references is not None:
-                context = replace(context, references=await context.discover_references())
+            context = await self._discover_selected(context, operation, args)
             if method.__name__ == "catalogue" and token is not None:
                 # Discovery and each image take separate complete turns. A
                 # catalogue may not monopolize the protected inspection slot.
@@ -764,6 +783,150 @@ class PhotographicReviewService:
             if not transferred:
                 await lease.release()
 
+    async def _discover_selected(self, context: ReviewContext, operation: str, args: tuple[Any, ...]) -> ReviewContext:
+        """Use metadata solely to narrow discovery; resolved sources still revalidate."""
+        if context.discover_scene_references is None or operation == "catalogue":
+            if context.discover_references is not None:
+                return replace(context, references=await context.discover_references())
+            return context
+        state = await self.state(context)
+        if operation == "scene_detail":
+            index = await self._scene_index(context)
+            identity, scenes = scene_snapshot(context, index, state)
+            if identity != args[1]:
+                raise catalogue_changed()
+            if args[0] not in {row["scene_id"] for row in scenes}:
+                raise ReviewAccessError("Photographic scene not found", status=404, code="NOT_FOUND")
+            selected = {args[0]}
+        else:
+            index = await self._scene_index(context)
+            refs = [*index, *revision_refs(state)]
+            paths: set[str] = set()
+            identities: set[str] = set()
+            if operation in {"render", "quality"} and len(args) >= 2:
+                paths.add(args[0])
+                if operation == "quality" and len(args) >= 4:
+                    paths.add(args[2])
+            elif operation in {"decision", "revision"} and args:
+                paths.add(args[0].artifact_path)
+                if operation == "revision" and args[0].reference_sha256:
+                    identities.add(args[0].reference_sha256)
+            elif operation == "groups" and args:
+                identities.update(identity for group in args[0].groups for identity in group.members)
+            elif operation == "delivery" and args:
+                paths.update(item.artifact_path for item in args[0].approved_sources or [])
+                if not args[0].approved_sources:
+                    identities.update(args[0].approved_sha256)
+            elif operation == "download" and args:
+                entries = [row for row in state.get("deliveries", []) if row["id"] == args[0]]
+                paths.update(row["artifact_path"] for entry in entries for row in entry.get("approvals", []))
+            for row in state.get("decisions", []):
+                if row["sha256"] in identities or row.get("source_identity_sha256") in identities:
+                    paths.add(row["artifact_path"])
+            selected = {
+                ref["scene_id"]
+                for ref in refs
+                if ref["artifact_path"] in paths or ref.get("sha256") in identities or source_identity(ref) in identities
+            }
+            authorized_scenes = {ref["scene_id"] for ref in index}
+            # Saved cohesion rows survive service restarts and retain the scene
+            # of unapproved native group members. They are discovery hints only;
+            # current native closure resolution and verified reads still apply.
+            cohesion = state.get("cohesion")
+            if isinstance(cohesion, dict) and cohesion.get("schema") == "tp.photo.cohesion_diagnostics.v1":
+                for group in cohesion.get("groups", []):
+                    selected.update(
+                        row["scene"]
+                        for row in group.get("images", [])
+                        if row.get("source_identity_sha256") in identities and row.get("scene") in authorized_scenes
+                    )
+            for identity in identities:
+                hint = self._scene_hints.get((context.tenant_id, context.job_id, context.binding_identity, identity))
+                if hint is not None and hint in authorized_scenes:
+                    selected.add(hint)
+        references = await context.discover_scene_references(selected)
+        if operation == "groups":
+            missing = identities - {source_identity(ref) for ref in references}
+            if missing:
+                native_scenes = sorted({ref["scene_id"] for ref in index if ref.get("role") == "working_master"} - selected)
+                if len(native_scenes) > SCENE_LIMIT:
+                    raise ReviewInputError("Photographic scene navigation is bounded to 64 scenes")
+                # Hints optimize lookup only. Cold cost inspection still uses
+                # the existing complete-vector gate, which may reject with 413.
+                # A granted source snapshot covers sequential descriptor/ICC
+                # reads; never acquire or expand a lease during this fallback.
+                lease = current_review_lease.get()
+                if self.admission.config.enabled and (
+                    lease is None
+                    or lease.released
+                    or lease.cost.memory_bytes < MAX_IMAGE_BYTES
+                    or lease.cost.scratch_bytes < MAX_IMAGE_BYTES
+                    or lease.cost.io_slots < 1
+                ):
+                    raise ReviewOverload("operation_capacity_limit", status=413)
+                for candidate_scene in native_scenes:
+                    await self.revalidate(context)
+                    if lease is not None:
+                        lease.check_scratch(MAX_IMAGE_BYTES)
+                    async with self.expensive:
+                        candidates = await context.discover_scene_references({candidate_scene})
+                    # Retain every requested match so groups still rejects an
+                    # ambiguous identity instead of choosing its first source.
+                    matches = [
+                        ref for ref in candidates if ref.get("role") == "working_master" and source_identity(ref) in identities
+                    ]
+                    references.extend(matches)
+                    del candidates, matches
+        await self.revalidate(context)
+        return replace(context, references=references)
+
+    async def _scene_index(self, context: ReviewContext) -> list[JsonObject]:
+        if context.discover_scene_index is not None:
+            return await context.discover_scene_index()
+        return context.references
+
+    async def _decision_projection_context(self, context: ReviewContext, state: JsonObject) -> ReviewContext:
+        """Keep mutation decisions complete without widening execution sources."""
+        if context.discover_scene_index is None:
+            return context
+        await self.revalidate(context)
+        index = [ref for ref in await self._scene_index(context) if not ref.get("related_only")]
+        # Metadata-only native rows cannot establish composite source authority.
+        references = {
+            ref["artifact_path"]: {**ref, "source_identity_sha256": None} if ref.get("role") == "working_master" else ref
+            for ref in index
+        }
+        selected_paths = set()
+        for ref in context.references:
+            indexed = references.get(ref["artifact_path"])
+            if indexed is not None and indexed.get("sha256") in {None, ref.get("sha256")}:
+                references[ref["artifact_path"]] = ref
+                selected_paths.add(ref["artifact_path"])
+        # Indexed final hashes and committed revision authorities need no IO.
+        # Saved native or unfingerprinted legacy decisions need current source
+        # identities. Resolve one scene's bounded companions or streamed hash
+        # under the lease before mutate() releases it, without image decoding.
+        unresolved_scenes = {
+            ref["scene_id"]
+            for ref in index
+            if (ref.get("sha256") is None or ref.get("role") == "working_master")
+            and ref["artifact_path"] not in selected_paths
+            and any(
+                row["artifact_path"] == ref["artifact_path"] and ref.get("sha256") in {None, row["sha256"]}
+                for row in state["decisions"]
+            )
+        }
+        if context.discover_scene_references is not None:
+            for scene_id in sorted(unresolved_scenes):
+                async with self.expensive:
+                    resolved = await context.discover_scene_references({scene_id})
+                for ref in resolved:
+                    indexed = references.get(ref["artifact_path"])
+                    if indexed is not None and indexed.get("sha256") in {None, ref.get("sha256")}:
+                        references[ref["artifact_path"]] = ref
+        await self.revalidate(context)
+        return replace(context, references=list(references.values()))
+
     @staticmethod
     def _validate_admission_request(state: JsonObject, operation: str, args: tuple[Any, ...]) -> None:
         """Reject cheap stale/approval errors before estimating expensive work.
@@ -804,7 +967,7 @@ class PhotographicReviewService:
         inspections: list[JsonObject] | None,
     ) -> ReviewCost:
         """Freeze geometry-derived temporary and publication filesystem claims."""
-        cost = operation_cost(operation, self.admission.config, inspections)
+        cost = operation_cost("catalogue" if operation == "scene_detail" else operation, self.admission.config, inspections)
         rows = inspections or [{"width": 8000, "height": 5000, "alpha": True}]
 
         def source_bound(row: JsonObject) -> JsonObject:
@@ -918,6 +1081,9 @@ class PhotographicReviewService:
 
     @asynccontextmanager
     async def _catalogue_turn(self, context: ReviewContext) -> AsyncIterator[None]:
+        if current_review_lease.get() is not None:
+            yield
+            return
         if not self.admission.config.enabled:
             async with self.expensive:
                 yield
@@ -958,15 +1124,65 @@ class PhotographicReviewService:
         if context.revalidate is not None:
             await context.revalidate()
 
-    async def catalogue(self, context: ReviewContext) -> JsonObject:
+    async def scenes(
+        self, context: ReviewContext, *, limit: int = 8, status: str = "all", sort: str = "scene_id", cursor: str | None = None
+    ) -> JsonObject:
+        from transformation_portal.photographic_delivery import destination_presets
+
+        await self.revalidate(context)
+        state = await self.state(context)
+        index = await self._scene_index(context)
+        result = scene_page(
+            context,
+            index,
+            state,
+            self._cursor_secret,
+            self._cursor_session,
+            limit=limit,
+            status=status,
+            sort=sort,
+            cursor=cursor,
+        )
+        await self.revalidate(context)
+        if await self.state(context) != state:
+            raise catalogue_changed()
+        return {
+            **result,
+            "presets": [preset.to_payload() for preset in destination_presets()],
+            "scope": "human_review_required",
+            "native_display": "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
+            "revision_constraints": {"exposure_stops": [-1, 1], "white_balance": [0.8, 1.25], "saturation": [0.8, 1.2]},
+        }
+
+    async def scene_detail(self, context: ReviewContext, scene_id: str, catalogue_identity_sha256: str) -> JsonObject:
+        state = await self.state(context)
+        identity, scenes = scene_snapshot(context, await self._scene_index(context), state)
+        if identity != catalogue_identity_sha256:
+            raise catalogue_changed()
+        if scene_id not in {row["scene_id"] for row in scenes}:
+            raise ReviewAccessError("Photographic scene not found", status=404, code="NOT_FOUND")
+        result = await self.catalogue(context, _scene_ids={scene_id})
+        current_identity, _ = scene_snapshot(context, await self._scene_index(context), await self.state(context))
+        if current_identity != identity:
+            raise catalogue_changed()
+        return {**result, "schema": "tp.photo.scene_detail.v1", "catalogue_identity_sha256": identity}
+
+    async def catalogue(self, context: ReviewContext, *, _scene_ids: set[str] | None = None) -> JsonObject:
         from transformation_portal.photographic_delivery import destination_presets
 
         state = await self.state(context)
         scenes: dict[str, JsonObject] = {}
-        for ref in [*context.references, *revision_refs(state)]:
+        references = [
+            ref for ref in [*context.references, *revision_refs(state)] if _scene_ids is None or ref["scene_id"] in _scene_ids
+        ]
+        if _scene_ids is None and len({ref["scene_id"] for ref in references}) > 32:
+            raise ReviewAccessError(
+                "This job requires paged photographic review; use /scenes and /scene",
+                status=409,
+                code="PAGED_CATALOGUE_REQUIRED",
+            )
+        for ref in references:
             async with self._catalogue_turn(context):
-                if len(scenes) >= 32 and ref["scene_id"] not in scenes:
-                    raise ReviewInputError("Photographic review is bounded to 32 scenes")
                 image = await load_image(context, ref)
                 try:
                     metadata = await _owned_thread(_metadata, image)
@@ -1140,7 +1356,8 @@ class PhotographicReviewService:
             ]
             return current
 
-        return public_state(await self.mutate(context, payload.expected_version, change, "decision", decision), context)
+        projection = await self._decision_projection_context(context, state)
+        return public_state(await self.mutate(context, payload.expected_version, change, "decision", decision), projection)
 
     async def groups(self, context: ReviewContext, payload: LightingGroupsRequest) -> JsonObject:
         from transformation_portal.photographic_delivery import cohesion_diagnostics
@@ -1168,11 +1385,12 @@ class PhotographicReviewService:
             current["groups"], current["cohesion"] = groups, diagnostics
             return current
 
+        projection = await self._decision_projection_context(context, state)
         return public_state(
             await self.mutate(
                 context, payload.expected_version, change, "lighting_groups", {"groups": groups, "diagnostics": diagnostics}
             ),
-            context,
+            projection,
         )
 
     async def quality(
@@ -1257,6 +1475,7 @@ class PhotographicReviewService:
             return {"preview_data_url": preview, "receipt": result["receipt"], "state_version": state["state_version"]}
         if len(state["revisions"]) >= 128:
             raise ReviewInputError("Review is bounded to 128 revisions per job")
+        projection = await self._decision_projection_context(context, state)
         identity = uuid.uuid4().hex
         storage = f"photographic-review/{identity}/master.tif"
         variant: JsonObject = {
@@ -1293,7 +1512,7 @@ class PhotographicReviewService:
             del result["source_bytes"], result["preview_bytes"]
             updated = await self.mutate(context, payload.expected_version, change, "revision", entry)
         return {
-            **public_state(updated, context),
+            **public_state(updated, projection),
             "revision": {
                 "id": identity,
                 "artifact_path": variant["artifact_path"],

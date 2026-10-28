@@ -86,6 +86,8 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/v1/jobs/{job_id}/cancel"): "jobs",
     ("GET", "/v1/jobs/{job_id}/events"): "jobs",
     ("GET", "/v1/jobs/{job_id}/photographic-review"): "jobs",
+    ("GET", "/v1/jobs/{job_id}/photographic-review/scenes"): "jobs",
+    ("GET", "/v1/jobs/{job_id}/photographic-review/scene"): "jobs",
     ("POST", "/v1/jobs/{job_id}/photographic-review/decisions"): "jobs",
     # History happy path/auth/version parity: tests/orchestrator/test_photographic_review_http.py::
     # test_delivery_history_recovers_committed_export_without_catalogue_or_image_reads.
@@ -111,6 +113,8 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/v2/jobs/{job_id}/cancel"): "jobs",
     ("GET", "/v2/jobs/{job_id}/events"): "jobs",
     ("GET", "/v2/jobs/{job_id}/photographic-review"): "jobs",
+    ("GET", "/v2/jobs/{job_id}/photographic-review/scenes"): "jobs",
+    ("GET", "/v2/jobs/{job_id}/photographic-review/scene"): "jobs",
     ("POST", "/v2/jobs/{job_id}/photographic-review/decisions"): "jobs",
     ("GET", "/v2/jobs/{job_id}/photographic-review/deliveries"): "jobs",
     ("POST", "/v2/jobs/{job_id}/photographic-review/delivery"): "jobs",

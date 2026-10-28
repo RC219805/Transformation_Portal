@@ -17,6 +17,8 @@ from transformation_portal.api.v1.photographic_review import (
     LightingGroupsRequest,
     ReviewDecisionRequest,
     RevisionRequest,
+    SceneDetail,
+    ScenePage,
 )
 from transformation_portal.orchestrator.photographic_admission import ReviewOverload
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewInputError, ReviewRuntime
@@ -53,11 +55,18 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
         try:
             authorize = runtime.authorize
             if lightweight_authorization:
-                authorize = runtime.authorize_history or authorize
+                if method == service.scenes:
+                    if runtime.authorize_catalogue is None:
+                        raise RuntimeError("Scene navigation requires a lightweight authenticated catalogue adapter")
+                    authorize = runtime.authorize_catalogue
+                else:
+                    authorize = runtime.authorize_history or authorize
             elif service.admission.config.enabled:
                 if runtime.authorize_admission is None:
                     raise RuntimeError("Photographic admission requires a lightweight authenticated adapter")
                 authorize = runtime.authorize_admission
+            elif method != service.catalogue and runtime.authorize_catalogue is not None:
+                authorize = runtime.authorize_catalogue
             if service.admission.config.enabled and not lightweight_authorization:
                 async with service.admission.authorization():
                     context = await authorize(request, job_id)
@@ -109,6 +118,35 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
     @versioned.get("", response_model=ApiEnvelope[dict])
     async def catalogue(request: Request, job_id: str) -> Response:
         return await invoke(request, job_id, service.catalogue)
+
+    @versioned.get("/scenes", response_model=ApiEnvelope[ScenePage])
+    async def scenes(
+        request: Request,
+        job_id: str,
+        limit: int = Query(default=8, ge=1, le=16),
+        status: Literal["all", "unreviewed", "needs_revision", "approved"] = "all",
+        sort: Literal["scene_id", "label"] = "scene_id",
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> Response:
+        return await invoke(
+            request,
+            job_id,
+            service.scenes,
+            lightweight_authorization=True,
+            limit=limit,
+            status=status,
+            sort=sort,
+            cursor=cursor,
+        )
+
+    @versioned.get("/scene", response_model=ApiEnvelope[SceneDetail])
+    async def scene(
+        request: Request,
+        job_id: str,
+        scene_id: Annotated[str, Query(min_length=1, max_length=1024)],
+        catalogue_identity_sha256: HashQuery,
+    ) -> Response:
+        return await invoke(request, job_id, service.scene_detail, scene_id, catalogue_identity_sha256)
 
     @versioned.get("/render")
     async def render(

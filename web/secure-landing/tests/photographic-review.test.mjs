@@ -488,10 +488,12 @@ test("rapid native pan is debounced into one request per distinct selected image
   h.api.show(h.job, variant); await settle();
   await new Promise((resolve) => setTimeout(resolve, 25)); await settle();
   const inspection = h.root.find("photographic-inspection");
-  inspection.value = "native"; await inspection.trigger("change");
-  await h.root.find("photographic-pan-right").trigger();
-  await h.root.find("photographic-pan-right").trigger();
-  await h.root.find("photographic-pan-right").trigger();
+  // Emit the rapid burst within one turn. The fixture's async trigger yields
+  // repeatedly and can cross the debounce deadline under concurrent CI load.
+  const event = { preventDefault() {}, key: "" };
+  inspection.value = "native"; inspection.listeners.change(event);
+  const pan = h.root.find("photographic-pan-right");
+  for (let count = 0; count < 3; count += 1) pan.listeners.click(event);
   await new Promise((resolve) => setTimeout(resolve, 25)); await settle();
   const crops = h.requests.filter((request) => request.url.includes("/native-crop?"));
   assert.equal(crops.length, 2);

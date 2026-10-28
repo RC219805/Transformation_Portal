@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +15,7 @@ const PORTAL_TEMPLATE_PATH = path.resolve(FRONTDOOR_ROOT, "portal-src", "portal.
 const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "internal", "index.js");
 const PORTAL_REVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "review-surface-deferred.js");
 const PORTAL_PHOTOGRAPHIC_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "photographic-review.js");
+const PORTAL_PHOTOGRAPHIC_SUPPORT_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "photographic-review-support.js");
 const PORTAL_OPERATE_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "operate-surface-deferred.js");
 const PORTAL_BUILD_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "build-surface-deferred.js");
 const PORTAL_PROFILE_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "profile-surface-deferred.js");
@@ -21,6 +23,7 @@ const PORTAL_OVERVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src",
 const PORTAL_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.js");
 const PORTAL_REVIEW_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
 const PORTAL_PHOTOGRAPHIC_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-photographic.js");
+const PORTAL_PHOTOGRAPHIC_SUPPORT_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-photographic-support.js");
 const PORTAL_PHOTOGRAPHIC_CSS_SOURCE = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles", "photographic-review.css");
 const PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-photographic.css");
 const PORTAL_OPERATE_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-operate.js");
@@ -162,6 +165,7 @@ async function bundleText(entryPoint, options = {}) {
     metafile: Boolean(options.metafile),
     minify: Boolean(options.minify),
     platform: "browser",
+    plugins: options.plugins || [],
     target: ["es2022"],
     write: false
   };
@@ -192,6 +196,7 @@ const emitMetafile = process.argv.includes("--emit-metafile");
 const METAFILE_DIR = path.resolve(FRONTDOOR_ROOT, ".metafiles");
 const PORTAL_METAFILE_PATH = path.resolve(METAFILE_DIR, "portal-bundle.json");
 const PHOTOGRAPHIC_METAFILE_PATH = path.resolve(METAFILE_DIR, "photographic-review-bundle.json");
+const PHOTOGRAPHIC_SUPPORT_METAFILE_PATH = path.resolve(METAFILE_DIR, "photographic-support-bundle.json");
 const REVIEW_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "review-surface-bundle.json");
 const OPERATE_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "operate-surface-bundle.json");
 const BUILD_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "build-surface-bundle.json");
@@ -252,9 +257,25 @@ const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY,
   minifySyntax: true,
   minifyWhitespace: true
 });
-const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
+const photographicSupportBuild = await bundleText(PORTAL_PHOTOGRAPHIC_SUPPORT_ENTRY, {
   format: "esm", keepNames: true, metafile: emitMetafile,
   minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+// Bind the dependent module to its exact bytes, including across deployments.
+// It is requested only when the photographic viewer itself is opened.
+const photographicSupportText = `${photographicSupportBuild.text.trim()}\n`;
+const photographicSupportHash = createHash("sha256").update(photographicSupportText).digest("hex").slice(0, 12);
+const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
+  format: "esm", keepNames: true, metafile: emitMetafile,
+  minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true,
+  plugins: [{
+    name: "photographic-support-asset",
+    setup(buildApi) {
+      buildApi.onResolve({ filter: /^\.\/photographic-review-support\.js$/ }, () => ({
+        path: `./portal-photographic-support.js?v=${photographicSupportHash}`, external: true
+      }));
+    }
+  }]
 });
 const deferredOperateSurfaceBuild = await bundleText(PORTAL_OPERATE_SURFACE_ENTRY, {
   format: "esm",
@@ -289,6 +310,7 @@ if (emitMetafile) {
     writeFileSync(PORTAL_METAFILE_PATH, JSON.stringify(internalBuild.metafile, null, 2), "utf-8");
   }
   if (deferredReviewSurfaceBuild.metafile) {
+    writeFileSync(PHOTOGRAPHIC_SUPPORT_METAFILE_PATH, JSON.stringify(photographicSupportBuild.metafile, null, 2), "utf-8");
     writeFileSync(PHOTOGRAPHIC_METAFILE_PATH, JSON.stringify(photographicReviewBuild.metafile, null, 2), "utf-8");
     writeFileSync(REVIEW_SURFACE_METAFILE_PATH, JSON.stringify(deferredReviewSurfaceBuild.metafile, null, 2), "utf-8");
   }
@@ -329,6 +351,7 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
 const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBuild.text.trim()}\n`);
 const photographicChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_ASSET_PATH, `${photographicReviewBuild.text.trim()}\n`);
+const photographicSupportChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_SUPPORT_ASSET_PATH, photographicSupportText);
 const photographicCssChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, await renderPhotographicCssAsset());
 const operateSurfaceChanged = writeIfChanged(PORTAL_OPERATE_SURFACE_ASSET_PATH, `${deferredOperateSurfaceBuild.text.trim()}\n`);
 const buildSurfaceChanged = writeIfChanged(PORTAL_BUILD_SURFACE_ASSET_PATH, `${deferredBuildSurfaceBuild.text.trim()}\n`);
@@ -341,6 +364,7 @@ const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PAT
 const portalStats = statSync(PORTAL_ASSET_PATH);
 const reviewSurfaceStats = statSync(PORTAL_REVIEW_SURFACE_ASSET_PATH);
 const photographicStats = statSync(PORTAL_PHOTOGRAPHIC_ASSET_PATH);
+const photographicSupportStats = statSync(PORTAL_PHOTOGRAPHIC_SUPPORT_ASSET_PATH);
 const operateSurfaceStats = statSync(PORTAL_OPERATE_SURFACE_ASSET_PATH);
 const buildSurfaceStats = statSync(PORTAL_BUILD_SURFACE_ASSET_PATH);
 const profileSurfaceStats = statSync(PORTAL_PROFILE_SURFACE_ASSET_PATH);
@@ -354,6 +378,7 @@ console.log(
 );
 console.log(`photographic review CSS ${photographicCssChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)}`);
 console.log(`photographic review bundle ${photographicChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_ASSET_PATH)} (${photographicStats.size} bytes)`);
+console.log(`photographic support bundle ${photographicSupportChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_SUPPORT_ASSET_PATH)} (${photographicSupportStats.size} bytes)`);
 console.log(
   `operate surface bundle ${operateSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_OPERATE_SURFACE_ASSET_PATH)} (${operateSurfaceStats.size} bytes)`
 );

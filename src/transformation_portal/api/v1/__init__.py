@@ -32,6 +32,7 @@ from transformation_portal.api.v1.jobs import (
     JobStatusData,
     JobStatusEnvelope,
 )
+from transformation_portal.api.v1.photographic_review import SceneArtifactSummary, SceneDetail, ScenePage, SceneSummary
 from transformation_portal.api.v1.schemas import SchemaName
 from transformation_portal.api.v1.telemetry import (
     PortalEventData,
@@ -80,6 +81,10 @@ __all__ = [
     "ReadinessServer",
     "ReadyResponse",
     "SchemaName",
+    "SceneArtifactSummary",
+    "SceneDetail",
+    "ScenePage",
+    "SceneSummary",
     "UploadArtifacts",
     "UploadStagingData",
     "UploadStagingEnvelope",

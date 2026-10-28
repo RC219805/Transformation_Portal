@@ -40,7 +40,8 @@ const ENV_KEYS = [
   "TP_PORTAL_FASTVLM_CAPTIONING_ENABLED",
   "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT",
   "TP_PHOTO_REVIEW_HISTORY_UI_ENABLED",
-  "TP_PHOTO_REVIEW_RECORDED_UI_ENABLED"
+  "TP_PHOTO_REVIEW_RECORDED_UI_ENABLED",
+  "TP_PHOTO_REVIEW_PAGED_UI_ENABLED"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -156,6 +157,7 @@ function withTempEnvironment(overrides = {}) {
   }
 
   process.env.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED = String(overrides.TP_PHOTO_REVIEW_RECORDED_UI_ENABLED || "0");
+  process.env.TP_PHOTO_REVIEW_PAGED_UI_ENABLED = String(overrides.TP_PHOTO_REVIEW_PAGED_UI_ENABLED || "0");
   if (typeof overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED === "string") {
     process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED = overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED;
   } else {
@@ -3028,6 +3030,7 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "brand/dna-symbol-dark.svg",
     "brand/dna-symbol-light.svg",
     "portal-photographic.js",
+    "portal-photographic-support.js",
     "portal-photographic.css"
   ]);
 });
@@ -4915,9 +4918,9 @@ test("tenant startup preflight rejects a missing or reused identity secret befor
   }
 });
 
-for (const [history, recorded] of [["0", "0"], ["1", "0"], ["0", "1"], ["1", "1"]]) {
-  test(`managed photographic UI rollouts are independent: history=${history}, recorded=${recorded}`, async () => {
-    const env = withTempEnvironment({ TP_PHOTO_REVIEW_HISTORY_UI_ENABLED: history, TP_PHOTO_REVIEW_RECORDED_UI_ENABLED: recorded });
+for (const [history, recorded, paged] of [["0", "0", "0"], ["1", "0", "0"], ["0", "1", "0"], ["1", "1", "0"], ["0", "0", "1"], ["1", "1", "1"], ["0", "0", "invalid"]]) {
+  test(`managed photographic UI rollouts are independent: history=${history}, recorded=${recorded}, paged=${paged}`, async () => {
+    const env = withTempEnvironment({ TP_PHOTO_REVIEW_HISTORY_UI_ENABLED: history, TP_PHOTO_REVIEW_RECORDED_UI_ENABLED: recorded, TP_PHOTO_REVIEW_PAGED_UI_ENABLED: paged });
     try {
       const sessions = await importFresh("../lib/sessions.js");
       const { GET } = await importFresh("../app/portal/bootstrap/route.js");
@@ -4931,6 +4934,7 @@ for (const [history, recorded] of [["0", "0"], ["1", "0"], ["0", "1"], ["1", "1"
       const body = await response.json();
       assert.equal(body.features.photographicDeliveryHistory, history === "1");
       assert.equal(body.features.photographicRecordedPresentation, recorded === "1");
+      assert.equal(body.features.photographicPagedCatalogue, paged === "1");
     } finally { env.cleanup(); }
   });
 }

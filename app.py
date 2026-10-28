@@ -9482,6 +9482,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "fastVlmCaptioning": _portal_fastvlm_captioning_enabled(actor),
                 "photographicDeliveryHistory": os.getenv("TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "0").strip() == "1",
                 "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
+                "photographicPagedCatalogue": os.getenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", "0").strip() == "1",
             },
         },
         headers={"Cache-Control": "no-store"},

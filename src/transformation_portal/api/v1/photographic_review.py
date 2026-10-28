@@ -33,11 +33,11 @@ class LightingGroup(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(min_length=1, max_length=120)
     reference_sha256: Digest
-    members: list[Digest] = Field(min_length=1, max_length=32)
+    members: list[Digest] = Field(min_length=1, max_length=64)
 
 
 class LightingGroupsRequest(ReviewMutation):
-    groups: list[LightingGroup] = Field(min_length=1, max_length=32)
+    groups: list[LightingGroup] = Field(min_length=1, max_length=64)
 
 
 class RevisionRequest(ReviewMutation):
@@ -62,11 +62,11 @@ class DeliveryRequest(ReviewMutation):
     request_correlation_id: CorrelationId | None = None
     property_name: str = Field(min_length=1, max_length=120)
     presets: list[str | dict[str, Any]] = Field(min_length=1, max_length=6)
-    approved_sha256: list[Digest] = Field(default_factory=list, max_length=32)
-    approved_sources: list[ApprovedSource] | None = Field(default=None, min_length=1, max_length=32)
+    approved_sha256: list[Digest] = Field(default_factory=list, max_length=64)
+    approved_sources: list[ApprovedSource] | None = Field(default=None, min_length=1, max_length=64)
     scene_labels: dict[
         Annotated[str, Field(min_length=1, max_length=120)], Annotated[str, Field(min_length=1, max_length=120)]
-    ] = Field(default_factory=dict, max_length=32)
+    ] = Field(default_factory=dict, max_length=64)
 
     @model_validator(mode="after")
     def require_approved_selection(self) -> Self:
@@ -101,8 +101,8 @@ class DeliveryHistoryPreset(BaseModel):
 class DeliveryHistoryIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     property_name: str = Field(min_length=1, max_length=120)
-    sources: list[DeliveryHistorySource] = Field(min_length=1, max_length=32)
-    scene_labels: dict[str, str] = Field(max_length=32)
+    sources: list[DeliveryHistorySource] = Field(min_length=1, max_length=64)
+    scene_labels: dict[str, str] = Field(max_length=64)
     presets: list[DeliveryHistoryPreset] = Field(min_length=1, max_length=6)
 
 
@@ -157,9 +157,9 @@ class DeliveryHistoryEntry(BaseModel):
     request_fingerprint_schema: Literal["tp.photo.delivery_intent.v1"] | None = None
     request_fingerprint_sha256: Digest | None = None
     intent: DeliveryHistoryIntent | None = None
-    sources: list[DeliveryHistorySource] = Field(max_length=32)
+    sources: list[DeliveryHistorySource] = Field(max_length=64)
     applied_derivatives_schema: Literal["tp.photo.delivery_applied.v1"] | None = None
-    applied_derivatives: list[DeliveryHistoryDerivative] | None = Field(default=None, max_length=224)
+    applied_derivatives: list[DeliveryHistoryDerivative] | None = Field(default=None, max_length=448)
     approval_at_creation: Literal["recorded", "unknown"]
     current_recorded_approval: Literal["approved", "withdrawn", "unknown"]
     source_validation: Literal["not_checked"] = "not_checked"
@@ -173,3 +173,60 @@ class DeliveryHistoryPage(BaseModel):
     snapshot_count: int = Field(ge=0, le=64)
     items: list[DeliveryHistoryEntry] = Field(max_length=64)
     next_cursor: str | None
+
+
+class SceneArtifactSummary(BaseModel):
+    """A public inventory hint, without source-validation or download authority."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    artifact_path: ArtifactPath
+    role: Literal["master", "preview", "depth", "evidence"]
+    sha256: Digest | None
+    size_bytes: int | None = Field(ge=1)
+
+
+class SceneSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    scene_id: str
+    label: str
+    review_status: Literal["unreviewed", "needs_revision", "approved"]
+    recorded_decision: dict[str, Any] | None
+    source_validation: Literal["not_checked"]
+    variant_count: int = Field(ge=0, le=132)
+    variant_paths: list[ArtifactPath] = Field(default_factory=list, max_length=132)
+    related_artifacts: list[SceneArtifactSummary]
+
+
+class ScenePage(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    schema_name: Literal["tp.photo.scene_page.v1"] = Field(alias="schema")
+    state_version: int = Field(ge=0)
+    catalogue_identity_sha256: Digest
+    scenes: list[SceneSummary] = Field(max_length=16)
+    next_cursor: str | None
+    total_scenes: int = Field(ge=0, le=64)
+    total_filtered: int = Field(ge=0, le=64)
+    limit: int = Field(ge=1, le=16)
+    filter: Literal["all", "unreviewed", "needs_revision", "approved"]
+    sort: Literal["scene_id", "label"]
+    decisions: list[dict[str, Any]]
+    groups: list[dict[str, Any]]
+    presets: list[dict[str, Any]]
+    scope: Literal["human_review_required"]
+    native_display: str
+    revision_constraints: dict[str, Any]
+
+
+class SceneDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    schema_name: Literal["tp.photo.scene_detail.v1"] = Field(alias="schema")
+    catalogue_identity_sha256: Digest
+    state_version: int = Field(ge=0)
+    scenes: list[dict[str, Any]] = Field(min_length=1, max_length=1)
+    decisions: list[dict[str, Any]]
+    groups: list[dict[str, Any]]
+    cohesion: dict[str, Any] | None = None
+    presets: list[dict[str, Any]]
+    scope: Literal["human_review_required"]
+    native_display: str
+    revision_constraints: dict[str, Any]

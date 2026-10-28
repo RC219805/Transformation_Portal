@@ -224,3 +224,35 @@ def test_applied_derivative_summary_records_actual_render_separately_from_reques
     assert summary["operation"] == ("preserve_recorded_display" if preserve else "render_sdr")
     assert summary["presentation_policy_sha256"] == "c" * 64
     assert "/secret" not in str(summary)
+
+
+@pytest.mark.parametrize("count", [384, 448, 449])
+def test_applied_derivative_bound_covers_sixty_four_scenes_and_six_presets(count):
+    recipe = ExportPreset.from_payload("website").to_payload()
+    row = {
+        "source_master_sha256": SHA,
+        "source_identity_sha256": SHA,
+        "sha256": "b" * 64,
+        "preset": "website",
+        "width": 64,
+        "height": 32,
+        "bit_depth": 8,
+        "color_domain": "display_encoded_srgb",
+        "recipe": recipe,
+        "render": {"schema": "tp.lux.sdr_render_receipt.v1", "recipe": {"mode": "soft_srgb", "shoulder": 0.85}},
+    }
+    if count > 448:
+        with pytest.raises(ValueError, match="source/preset bound"):
+            applied_derivatives({"files": [row] * count})
+    else:
+        derivatives = applied_derivatives({"files": [row] * count})
+        assert len(derivatives) == count
+        state = _state(1)
+        state["deliveries"][0].update(
+            applied_derivatives_schema="tp.photo.delivery_applied.v1", applied_derivatives=derivatives
+        )
+        assert len(history_page(_context(), state)["items"][0]["applied_derivatives"]) == count
+        if count == 448:
+            state["deliveries"][0]["applied_derivatives"].append(derivatives[0])
+            with pytest.raises(ValueError, match="at most 448"):
+                history_page(_context(), state)

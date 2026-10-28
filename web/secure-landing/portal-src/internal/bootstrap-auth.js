@@ -12,7 +12,8 @@ export function defaultPortalBootstrapPayload() {
       rumTelemetry: false,
       fastVlmCaptioning: false,
       photographicDeliveryHistory: false,
-      photographicRecordedPresentation: false
+      photographicRecordedPresentation: false,
+      photographicPagedCatalogue: false
     }
   };
 }
