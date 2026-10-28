@@ -551,6 +551,89 @@ async def test_failed_render_response_drops_nested_encoded_output_before_lease_r
     await settle_private_render(case, case.start(), case.outcome)
 
 
+@pytest.mark.parametrize("outcome", ["response_failure", "failure", "cancel_success", "cancel_failure"])
+async def test_completed_executor_work_item_cannot_retain_buffers_after_refund(private_render_case, monkeypatch, outcome):
+    from concurrent.futures import thread
+
+    case = private_render_case
+    case.outcome = outcome
+    completed, finish = threading.Event(), threading.Event()
+    run = thread._WorkItem.run
+
+    def retain_completed_item(item):
+        run(item)
+        if threading.current_thread().name.startswith("tp-photo") and case.display_started.is_set():
+            completed.set()
+            assert finish.wait(5)
+
+    monkeypatch.setattr(thread._WorkItem, "run", retain_completed_item)
+    if outcome == "response_failure":
+
+        def fail_response(*_args, **_kwargs):
+            raise ReviewInputError("controlled display response failure")
+
+        monkeypatch.setattr(review, "Response", fail_response)
+    try:
+        await settle_private_render(case, case.start(), outcome)
+        assert await asyncio.to_thread(completed.wait, 2), "the executor item must remain alive after its Future completes"
+        assert not finish.is_set()
+    finally:
+        finish.set()
+
+
+async def test_direct_queued_worker_drains_repeated_cancellation_before_dropping_inputs(monkeypatch):
+    controller = admission.PhotographicAdmissionController(ReviewAdmissionConfig(enabled=True))
+    started = [threading.Event(), threading.Event()]
+    finish, invoked = threading.Event(), threading.Event()
+    submitted = asyncio.Event()
+
+    def occupy(index):
+        started[index].set()
+        assert finish.wait(5)
+
+    blockers = [asyncio.create_task(controller.run_blocking(occupy, index)) for index in range(2)]
+    queued = None
+    try:
+        for event in started:
+            assert await asyncio.to_thread(event.wait, 2)
+        pool = controller._executor
+        assert pool is not None
+        submit = pool.submit
+
+        def observe_submission(*args, **kwargs):
+            future = submit(*args, **kwargs)
+            submitted.set()
+            return future
+
+        monkeypatch.setattr(pool, "submit", observe_submission)
+        values = np.zeros(8 * 1024**2, dtype=np.uint8)
+        source = weakref.ref(values)
+
+        def operation(value):
+            invoked.set()
+            assert value is source()
+            return value
+
+        queued = asyncio.create_task(controller.run_blocking(operation, values))
+        del values
+        await asyncio.wait_for(submitted.wait(), 2)
+        for _ in range(3):
+            queued.cancel()
+            await asyncio.sleep(0)
+        assert not queued.done() and not invoked.is_set()
+        assert source() is not None, "queued work must keep its input until the real worker consumes it"
+        finish.set()
+        await asyncio.gather(*blockers)
+        with pytest.raises(asyncio.CancelledError):
+            await queued
+        assert invoked.is_set(), "cancellation must not abandon a queued owned worker"
+        assert source() is None, "discarded worker output must die before cancellation returns"
+    finally:
+        finish.set()
+        await asyncio.gather(*blockers, *(() if queued is None else (queued,)), return_exceptions=True)
+        await controller.close()
+
+
 @pytest.mark.parametrize("auth_status", [401, 403])
 @pytest.mark.parametrize("outcome", ["failure", "cancel_success", "cancel_failure"])
 async def test_private_render_fallback_drops_nested_source_before_lease_release(private_render_case, auth_status, outcome):
