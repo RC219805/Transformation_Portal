@@ -3578,6 +3578,75 @@ async function photographicFixturePng(width, height) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+async function installPagedPhotographicStateRoutes(page, jobId) {
+  const base = `/v1/jobs/${jobId}/photographic-review`;
+  const scenes = [0, 1].map((index) => {
+    const sceneId = `input-000${index}`;
+    return { scene_id: sceneId, label: `Room ${index + 1}`, variants: [{ role: "final", artifact_path: `${sceneId}/delivery.tif`,
+      sha256: String(index + 1).repeat(64), width: 80, height: 60, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic master" }] };
+  });
+  const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
+    created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: scenes.map((scene) => ({
+      path: scene.variants[0].artifact_path, relative_path: scene.variants[0].artifact_path, name: "delivery.tif", media_kind: "image",
+      artifact_type: "image", previewable: false, browser_previewable: false, content_type: "image/tiff", size_bytes: 4096,
+      sha256: scene.variants[0].sha256, url: `/v1/jobs/${jobId}/artifacts/${scene.variants[0].artifact_path}`,
+      display_hint: { role: "primary_preview", priority: 1200, label: `${scene.label} master` },
+    })) } };
+  const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], mutations: [], decisionGate: null, unexpectedRequests: [] };
+  const snapshots = new Map();
+  const snapshot = () => ({ state_version: server.readVersion, catalogue_identity_sha256: server.readVersion.toString(16).padStart(64, "0"),
+    decisions: server.readVersion >= server.committedVersion ? server.decisions.map((row) => ({ ...row })) : [],
+    scenes: [...server.scenes], groups: [], presets: [{ schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg",
+      long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, intended_use: "Website delivery", render: "perceptual_srgb", shoulder: 0.8 }], scope: "human_review_required",
+    native_display: "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
+    revision_constraints: { exposure_stops: [-1, 1], white_balance: [0.8, 1.25], saturation: [0.8, 1.2] } });
+  const png = await photographicFixturePng(80, 60);
+  await installHydratedPortalRoutes(page, { jobs: [job], photographicPagedCatalogue: true });
+  await page.route(`**${base}**`, async (route) => {
+    const request = route.request(), url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === `${base}/scenes`) {
+      const current = snapshot();
+      server.pageRequests.push(current.state_version); snapshots.set(current.catalogue_identity_sha256, current);
+      await fulfillJson(route, { success: true, data: { ...current, schema: "tp.photo.scene_page.v1",
+        scenes: current.scenes.map((scene) => ({ scene_id: scene.scene_id, label: scene.label,
+          review_status: current.decisions.find((row) => row.scene_id === scene.scene_id)?.status || "unreviewed",
+          recorded_decision: current.decisions.find((row) => row.scene_id === scene.scene_id) || null,
+          source_validation: "not_checked", variant_count: scene.variants.length, variant_paths: scene.variants.map((row) => row.artifact_path),
+          related_artifacts: [{ role: "master", artifact_path: scene.variants[0].artifact_path, sha256: scene.variants[0].sha256, size_bytes: 4096 }],
+        })), total_scenes: current.scenes.length, total_filtered: current.scenes.length, limit: 8, filter: "all", sort: "scene_id", next_cursor: null } });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname === `${base}/scene`) {
+      const current = snapshots.get(url.searchParams.get("catalogue_identity_sha256"));
+      const scene = current?.scenes.find((row) => row.scene_id === url.searchParams.get("scene_id"));
+      expect(scene).toBeTruthy();
+      await fulfillJson(route, { success: true, data: { ...current, schema: "tp.photo.scene_detail.v1", scenes: [scene] } });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname === `${base}/render`) {
+      await route.fulfill({ status: 200, contentType: "image/png", body: png, headers: {
+        "Cache-Control": "no-store", "X-TP-Source-SHA256": url.searchParams.get("sha256"),
+        "X-TP-Source-Identity-SHA256": url.searchParams.get("source_identity_sha256"),
+        "X-TP-Presentation-View": url.searchParams.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": "none",
+      } });
+      return;
+    }
+    if (request.method() === "POST" && url.pathname === `${base}/decisions`) {
+      const payload = request.postDataJSON(); server.mutations.push(payload);
+      if (server.decisionGate) { const gate = server.decisionGate; server.decisionGate = null; await gate; }
+      expect(payload.expected_version).toBe(server.committedVersion);
+      const scene = scenes.find((row) => row.variants[0].artifact_path === payload.artifact_path);
+      server.decisions = [{ ...payload, scene_id: scene.scene_id, label: scene.label, role: "final" }];
+      server.committedVersion += 1;
+      await fulfillJson(route, { success: true, data: { state_version: server.committedVersion } });
+      return;
+    }
+    server.unexpectedRequests.push({ method: request.method(), pathname: url.pathname });
+    await fulfillJson(route, { success: false, error: { message: "Unsupported paged photographic state fixture request." } }, 404);
+  });
+  return server;
+}
+
 test("@portal-browser photographic paged catalogue traverses fifty scenes and preserves scoped keyboard and mobile review", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const jobId = "job-photographic-paged-catalogue";
@@ -3910,6 +3979,83 @@ for (const scenario of [
     expect(unexpectedRequests).toEqual([]);
   });
 }
+
+test("@portal-browser photographic refresh preserves disappearing scene drafts until explicit discard", async ({ page }) => {
+  const jobId = "job-photographic-refresh-draft";
+  const server = await installPagedPhotographicStateRoutes(page, jobId);
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const scene = page.locator('[data-ui="photographic-scene"]');
+  const primary = page.locator('[data-ui="photographic-primary"]');
+  const note = page.locator('[data-ui="photographic-decision-note"]');
+  const exposure = page.locator('[data-ui="photographic-revision-exposure"]');
+  const discard = page.locator('[data-ui="photographic-discard-navigation"]');
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  await note.fill("Keep this unsaved note attached to Room 1.");
+  await exposure.fill("-0.2");
+  server.scenes = server.scenes.slice(1); server.readVersion = 2;
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(discard).toBeVisible();
+  await expect(scene).toHaveValue("input-0000");
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  await expect(note).toHaveValue("Keep this unsaved note attached to Room 1.");
+  await expect(exposure).toHaveValue("-0.2");
+  await expect(page.locator("#downloadArtifactBtn")).toHaveAttribute("data-url", `/v1/jobs/${jobId}/artifacts/input-0000/delivery.tif`);
+  await discard.click();
+  await expect(scene).toHaveValue("input-0001");
+  await expect(primary).toHaveValue("input-0001/delivery.tif");
+  await expect(note).toHaveValue("");
+  await expect(exposure).toHaveValue("0");
+  await expect(discard).toBeHidden();
+  await expect(page.locator('[data-ui="photographic-page-status"]')).toContainText("1 of 1 photographs");
+  expect(server.mutations).toEqual([]);
+  expect(server.unexpectedRequests).toEqual([]);
+});
+
+test("@portal-browser photographic refresh waits for mutation reconciliation and rejects older metadata", async ({ page }) => {
+  const jobId = "job-photographic-refresh-version";
+  const server = await installPagedPhotographicStateRoutes(page, jobId);
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const refresh = page.locator('[data-ui="photographic-review-refresh"]');
+  const approve = page.locator('[data-ui="photographic-decision-approved"]');
+  const previewRevision = page.locator('[data-ui="photographic-preview-revision"]');
+  const createRevision = page.locator('[data-ui="photographic-create-revision"]');
+  const deliver = page.locator('[data-ui="photographic-deliver-approved"]');
+  const decision = page.locator('[data-ui="photographic-decision-status"]');
+  const status = page.locator('[data-ui="photographic-review-status"]');
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue("input-0000/delivery.tif");
+  await page.locator('[data-ui="photographic-preset"][value="website"]').check();
+  await page.locator('[data-ui="photographic-property-name"]').fill("Synthetic refresh fixture");
+  await expect(previewRevision).toBeEnabled();
+  let releaseDecision;
+  server.decisionGate = new Promise((resolve) => { releaseDecision = resolve; });
+  await approve.click();
+  await expect(approve).toBeDisabled();
+  await expect(refresh).toBeDisabled();
+  expect(server.pageRequests).toEqual([1]);
+  releaseDecision();
+  await expect(status).toHaveText("Change saved. Refresh review before continuing.");
+  await expect(status).not.toContainText("Decision saved");
+  await expect(decision).toContainText("Unreviewed");
+  await expect(approve).toBeDisabled();
+  await expect(previewRevision).toBeDisabled();
+  await expect(createRevision).toBeDisabled();
+  await expect(deliver).toBeDisabled();
+  await expect(refresh).toBeEnabled();
+  expect(server.mutations).toHaveLength(1);
+  expect(server.mutations[0].expected_version).toBe(1);
+  server.readVersion = 2;
+  await refresh.click();
+  await expect(decision).toContainText("Approved");
+  await expect(approve).toBeEnabled();
+  await expect(previewRevision).toBeEnabled();
+  await expect(deliver).toBeEnabled();
+  server.readVersion = 3;
+  await page.locator('[data-ui="photographic-decision-needs_revision"]').click();
+  await expect(decision).toContainText("Needs revision");
+  expect(server.mutations).toHaveLength(2);
+  expect(server.mutations[1].expected_version).toBe(2);
+  expect(server.unexpectedRequests).toEqual([]);
+});
 
 test("@portal-browser photographic native inspection, saved approval, revision and approved delivery use exact identities", async ({ page }) => {
   const jobId = "job-photographic-workbench";

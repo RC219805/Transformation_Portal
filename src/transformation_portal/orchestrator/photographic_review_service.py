@@ -848,6 +848,48 @@ class PhotographicReviewService:
             return await context.discover_scene_index()
         return context.references
 
+    async def _decision_projection_context(self, context: ReviewContext, state: JsonObject) -> ReviewContext:
+        """Keep mutation decisions complete without widening execution sources."""
+        if context.discover_scene_index is None:
+            return context
+        await self.revalidate(context)
+        index = [ref for ref in await self._scene_index(context) if not ref.get("related_only")]
+        # Metadata-only native rows cannot establish composite source authority.
+        references = {
+            ref["artifact_path"]: {**ref, "source_identity_sha256": None} if ref.get("role") == "working_master" else ref
+            for ref in index
+        }
+        selected_paths = set()
+        for ref in context.references:
+            indexed = references.get(ref["artifact_path"])
+            if indexed is not None and indexed.get("sha256") in {None, ref.get("sha256")}:
+                references[ref["artifact_path"]] = ref
+                selected_paths.add(ref["artifact_path"])
+        # Indexed final hashes and committed revision authorities need no IO.
+        # Only saved native decisions need their current composite closure;
+        # resolve one scene's bounded descriptor/ICC at a time under the lease,
+        # before mutate() releases expensive resources. Never decode its image.
+        native_scenes = {
+            ref["scene_id"]
+            for ref in index
+            if ref.get("role") == "working_master"
+            and ref["artifact_path"] not in selected_paths
+            and any(
+                row["artifact_path"] == ref["artifact_path"] and row["sha256"] == ref.get("sha256")
+                for row in state["decisions"]
+            )
+        }
+        if context.discover_scene_references is not None:
+            for scene_id in sorted(native_scenes):
+                async with self.expensive:
+                    resolved = await context.discover_scene_references({scene_id})
+                for ref in resolved:
+                    indexed = references.get(ref["artifact_path"])
+                    if indexed is not None and indexed.get("sha256") == ref.get("sha256"):
+                        references[ref["artifact_path"]] = ref
+        await self.revalidate(context)
+        return replace(context, references=list(references.values()))
+
     @staticmethod
     def _validate_admission_request(state: JsonObject, operation: str, args: tuple[Any, ...]) -> None:
         """Reject cheap stale/approval errors before estimating expensive work.
@@ -1277,7 +1319,8 @@ class PhotographicReviewService:
             ]
             return current
 
-        return public_state(await self.mutate(context, payload.expected_version, change, "decision", decision), context)
+        projection = await self._decision_projection_context(context, state)
+        return public_state(await self.mutate(context, payload.expected_version, change, "decision", decision), projection)
 
     async def groups(self, context: ReviewContext, payload: LightingGroupsRequest) -> JsonObject:
         from transformation_portal.photographic_delivery import cohesion_diagnostics
@@ -1305,11 +1348,12 @@ class PhotographicReviewService:
             current["groups"], current["cohesion"] = groups, diagnostics
             return current
 
+        projection = await self._decision_projection_context(context, state)
         return public_state(
             await self.mutate(
                 context, payload.expected_version, change, "lighting_groups", {"groups": groups, "diagnostics": diagnostics}
             ),
-            context,
+            projection,
         )
 
     async def quality(
@@ -1394,6 +1438,7 @@ class PhotographicReviewService:
             return {"preview_data_url": preview, "receipt": result["receipt"], "state_version": state["state_version"]}
         if len(state["revisions"]) >= 128:
             raise ReviewInputError("Review is bounded to 128 revisions per job")
+        projection = await self._decision_projection_context(context, state)
         identity = uuid.uuid4().hex
         storage = f"photographic-review/{identity}/master.tif"
         variant: JsonObject = {
@@ -1430,7 +1475,7 @@ class PhotographicReviewService:
             del result["source_bytes"], result["preview_bytes"]
             updated = await self.mutate(context, payload.expected_version, change, "revision", entry)
         return {
-            **public_state(updated, context),
+            **public_state(updated, projection),
             "revision": {
                 "id": identity,
                 "artifact_path": variant["artifact_path"],

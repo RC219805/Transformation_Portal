@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createPhotographicReview } from "../portal-src/photographic-review.js";
-import { photographicSelectionStorage } from "../portal-src/photographic-review-support.js";
+import { createPhotographicPagedCatalogue, photographicSelectionStorage } from "../portal-src/photographic-review-support.js";
 
 const CATALOGUE_SHA = "c".repeat(64);
 const NEXT_CATALOGUE_SHA = "d".repeat(64);
@@ -380,6 +380,100 @@ test("explicitly discarding for a status filter clears draft edits even when sel
   await h.root.find("photographic-scene-next").trigger();
   assert.equal(selected(h), "input-0003", "A completed explicit discard cannot leave a false unsaved blocker");
 });
+
+test("refresh preserves a missing photograph's draft until its replacement is explicitly accepted", async (t) => {
+  const h = fixture({ sceneCount: 2 });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const note = h.root.find("photographic-decision-note"), exposure = h.root.find("photographic-revision-exposure");
+  note.value = "Retain the missing photograph's review"; await note.trigger("input");
+  exposure.value = "0.15"; await exposure.trigger("input");
+  h.scenes.shift();
+  await h.api.refresh(); await settle();
+  assert.equal(selected(h), "input-0000");
+  assert.equal(note.value, "Retain the missing photograph's review");
+  assert.equal(exposure.value, "0.15");
+  assert.equal(h.root.find("photographic-discard-navigation").hidden, false);
+  await h.root.find("photographic-discard-navigation").trigger();
+  assert.equal(selected(h), "input-0001");
+  assert.equal(note.value, "");
+  assert.equal(exposure.value, "0");
+  assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
+});
+
+test("manual refresh cannot read pre-save metadata while a decision owns review", async (t) => {
+  let finish;
+  const h = fixture({ extraFetch: (request) => request.path.endsWith("/decisions")
+    ? new Promise((resolve) => { finish = () => resolve(error("UNAVAILABLE", "Injected save unavailable.", 503)); }) : null });
+  t.after(() => { finish?.(); h.api.show(null, null); });
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  await h.root.find("photographic-decision-approved").trigger();
+  const before = h.requests.length, refresh = h.root.find("photographic-review-refresh");
+  await refresh.trigger();
+  assert.equal(h.requests.length, before, "A directly dispatched manual refresh must respect mutation ownership");
+  assert.equal(refresh.disabled, true);
+  finish(); await settle();
+  assert.equal(refresh.disabled, false);
+});
+
+test("failed committed-version reconciliation blocks stale mutations until a current manual refresh succeeds", async (t) => {
+  let first = true;
+  const h = fixture({ extraFetch: (request) => {
+    if (!first || !request.path.endsWith("/decisions")) return null;
+    first = false; return json({ saved: true, state_version: 5 });
+  } });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const approve = h.root.find("photographic-decision-approved"), refresh = h.root.find("photographic-review-refresh");
+  await approve.trigger();
+  assert.equal(requested(h, "/decisions").length, 1);
+  assert.equal(approve.disabled, true, "A committed receipt cannot authorize mutations against older review metadata");
+  assert.equal(refresh.disabled, false, "Manual refresh remains available for recovery");
+  await approve.trigger();
+  assert.equal(requested(h, "/decisions").length, 1, "A direct event cannot post the stale expected_version");
+  await refresh.trigger();
+  assert.equal(approve.disabled, true, "Manual refresh must inherit the committed version floor");
+  h.server.stateVersion = 5; h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
+  const source = h.scenes[0].variants[0];
+  h.server.decisions.push({ scene_id: h.scenes[0].scene_id, artifact_path: source.artifact_path, sha256: source.sha256,
+    source_identity_sha256: source.sha256, status: "approved", note: "" });
+  await refresh.trigger();
+  assert.equal(approve.disabled, false);
+  assert.match(h.root.find("photographic-decision-status").textContent, /Approved/);
+  await approve.trigger();
+  assert.equal(requested(h, "/decisions").length, 2);
+  assert.equal(JSON.parse(requested(h, "/decisions")[1].options.body).expected_version, 5);
+});
+
+for (const reset of [false, true]) {
+  test(`mutation reconciliation ${reset ? "cannot cross a reset while awaiting old refresh" : "fetches committed metadata after an older refresh settles"}`, async () => {
+    const h = fixture({ sceneCount: 1 }), applied = [], requests = [];
+    const node = (tag, text = "", className = "", ui = "") => {
+      const element = new Element(tag); element.textContent = text; element.className = className; element.dataset.ui = ui; return element;
+    };
+    let finish, hold = false;
+    const pager = createPhotographicPagedCatalogue({ el: node, button: (text, ui, handler) => {
+      const control = node("button", text, "", ui); control.addEventListener("click", handler); return control;
+    }, field: (_label, control) => control, select: (ui) => node("select", "", "", ui), status() {}, hasEdits: () => false,
+    selection: () => ({ sceneId: "input-0000" }), apply: (loaded) => applied.push(loaded.state_version), request: async (path) => {
+      const url = new URL(path, "http://localhost"); requests.push(url.pathname);
+      const result = structuredClone(url.pathname === "/scenes" ? h.page(url.searchParams) : h.detail("input-0000"));
+      if (hold && url.pathname === "/scene") {
+        hold = false; return new Promise((resolve) => { finish = () => resolve(result); });
+      }
+      return result;
+    } });
+    await pager.refresh("input-0000");
+    hold = true; const older = pager.refresh("input-0000"); await settle();
+    pager.lock(true); h.server.stateVersion = 5; h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
+    const fresh = pager.refresh("input-0000", { reconcile: true, minimumVersion: 5 }); await settle();
+    if (reset) pager.reset();
+    finish(); await older; const reconciled = await fresh;
+    assert.equal(reconciled, !reset);
+    assert.equal(requests.filter((path) => path === "/scenes").length, reset ? 2 : 3, "Reconciliation requires its own read in the original scope");
+    assert.equal(applied.at(-1), reset ? 4 : 5);
+  });
+}
 
 for (const operation of ["decision", "refresh"]) {
   test(`discard navigation preserves its pending action while a ${operation} is in progress`, async (t) => {
@@ -885,7 +979,7 @@ for (const endpoint of ["/decisions", "/revisions"]) {
     const control = endpoint === "/decisions" ? "photographic-decision-approved" : "photographic-preview-revision";
     const finish = (index) => {
       const request = pending[index];
-      request.resolve(json(endpoint === "/decisions" ? { saved: true } : {
+      request.resolve(json(endpoint === "/decisions" ? { saved: true, state_version: h.server.stateVersion } : {
         preview_data_url: "data:image/png;base64,cG5n", receipt: { schema: "tp.photo.revision.v1",
           source_master_sha256: request.body.sha256, width: 8000, height: 6000, output_bit_depth: 32,
           review_status: "unreviewed", approval_transferred: false, reference_sha256: null, recipe: request.body.recipe },

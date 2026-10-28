@@ -165,7 +165,7 @@ export function photographicSelectionStorage(storage) {
 
 export function createPhotographicPagedCatalogue(host) {
   const { el, button, field, select, request, status, selection, apply, hasEdits } = host;
-  let page = null, previous = [], cursor = null, filter = "all", sort = "scene_id", generation = 0, busy = false, locked = false;
+  let page = null, previous = [], cursor = null, filter = "all", sort = "scene_id", generation = 0, busy = false, locked = false, requiredVersion = 0;
   let pendingNavigation = null;
   let discarding = false;
   let refreshPromise = null;
@@ -206,7 +206,7 @@ export function createPhotographicPagedCatalogue(host) {
     previousPage.disabled = busy || locked || !previous.length; nextPage.disabled = busy || locked || !page?.next_cursor;
     previousScene.disabled = busy || locked || !page?.total_filtered || (selectedIndex === 0 && !previous.length);
     nextScene.disabled = busy || locked || !page?.total_filtered || (selectedIndex === page.scenes.length - 1 && !page.next_cursor);
-    nextUnreviewed.disabled = busy || locked; filterControl.disabled = busy || locked; sortControl.disabled = busy || locked; discard.disabled = busy || locked;
+    nextUnreviewed.disabled = filterControl.disabled = sortControl.disabled = discard.disabled = busy || locked;
     pageStatus.dataset.state = busy ? "loading" : page ? "ready" : "empty";
     pageStatus.textContent = busy ? "Loading photograph metadata…" : page
       ? `${page.total_filtered} of ${page.total_scenes} photographs · page ${previous.length + 1}. Recorded review status; source bytes are checked when opened or exported.` : "No photograph metadata loaded.";
@@ -226,13 +226,16 @@ export function createPhotographicPagedCatalogue(host) {
       if (controls.contains(focused) && !focused.disabled && focused.ownerDocument.activeElement === focused.ownerDocument.body) focused.focus();
     } }
   }
-  async function navigate(action) {
-    if (busy || locked) return false;
-    if (hasEdits()) {
+  function retainEdits(action) {
+    if (hasEdits() && !discarding) {
       pendingNavigation = action; discard.hidden = false;
       status("Unsaved review note or revision adjustments are retained. Save them, or explicitly discard them to continue.", true);
-      return false;
+      return true;
     }
+    return false;
+  }
+  async function navigate(action) {
+    if (busy || locked || retainEdits(action)) return false;
     return run(action);
   }
   async function getPage(nextCursor = null, nextFilter = filter, nextSort = sort) {
@@ -259,8 +262,10 @@ export function createPhotographicPagedCatalogue(host) {
   }
   async function commit(nextPage, nextCursor, nextPrevious, id, nextFilter = filter, nextSort = sort, requestedPath = "") {
     const expected = generation;
+    if (selection().sceneId && selection().sceneId !== id && retainEdits(() => refresh(id, { filter: nextFilter, sort: nextSort, artifactPath: requestedPath }))) return false;
     const detail = id ? await getDetail(id, nextPage.catalogue_identity_sha256) : null;
     if (generation !== expected) return false;
+    if (nextPage.state_version < requiredVersion) throw new Error("Review has not reached the reconciled version. Refresh before continuing.");
     if (detail && detail.state_version !== nextPage.state_version) throw new Error("Photograph detail and page versions differ. Refresh review.");
     page = nextPage; cursor = nextCursor; previous = nextPrevious; filter = nextFilter; sort = nextSort;
     pendingNavigation = null; discard.hidden = true;
@@ -285,7 +290,6 @@ export function createPhotographicPagedCatalogue(host) {
       }
       id = result.scenes.find(matches)?.scene_id || "";
     }
-    if (options.minimumVersion !== null && options.minimumVersion !== undefined && result.state_version < options.minimumVersion) throw new Error("Current review metadata has not reached the reconciled version. Refresh review before another export.");
     if (generation !== expected) return false;
     return commit(result, nextCursor, stack, id || result.scenes[0]?.scene_id || "", nextFilter, nextSort, requestedPath);
   }
@@ -370,17 +374,21 @@ export function createPhotographicPagedCatalogue(host) {
     renderState();
   }
   renderState();
-  return { controls, renderCards, navigate, handleKeydown, refresh: (id, options) => {
-      if (busy && !refreshPromise) { status("Photograph navigation is in progress. Refresh after it completes."); return Promise.resolve(false); }
+  return { controls, renderCards, navigate, handleKeydown, refresh: async (id, options) => {
+      const expected = generation;
+      if (locked && !options?.reconcile) return false;
+      requiredVersion = Math.max(requiredVersion, options?.minimumVersion || 0);
+      if (options?.reconcile) await refreshPromise;
+      if (expected !== generation) return false;
+      if (busy && !refreshPromise) { status("Review is busy. Refresh after it completes."); return false; }
       if (!refreshPromise) {
-        const expected = generation;
         refreshPromise = run(() => recover(() => refresh(id, options))).finally(() => { if (generation === expected) refreshPromise = null; });
       }
       return refreshPromise;
     },
     locate: (id, artifactPath) => navigate(() => recover(() => refresh(id, { artifactPath, filter: "all" }))),
     choose: (id, requestedPath) => navigate(() => choose(id, requestedPath)), getDetail: (id) => page ? getDetail(id, page.catalogue_identity_sha256) : Promise.reject(new Error("Refresh the photograph catalogue before export.")),
-    page: () => page, lock(value) { locked = value; renderState(); }, reset() { generation += 1; page = null; previous = []; cursor = null; filter = "all"; sort = "scene_id"; busy = false; locked = false; host.onLoading?.(false); refreshPromise = null; pendingNavigation = null; discard.hidden = true; details.clear(); renderState(); } };
+    page: () => page, current: () => page?.state_version >= requiredVersion, lock(value) { locked = value; renderState(); }, reset() { generation += 1; page = null; previous = []; cursor = null; filter = "all"; sort = "scene_id"; busy = false; host.onLoading?.(false); locked = false; requiredVersion = 0; refreshPromise = null; pendingNavigation = null; discard.hidden = true; details.clear(); renderState(); } };
 }
 
 export { photographicDeliveryAttempt, photographicDeliveryRecovered, photographicDeliveryRecoveryStorage } from "./photographic-delivery-history.js";

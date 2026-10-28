@@ -326,6 +326,112 @@ async def test_render_revision_groups_and_delivery_discover_only_explicitly_sele
 
 
 @pytest.mark.asyncio
+async def test_mutation_projection_never_treats_native_inventory_hash_as_composite_authority(scene_case):
+    case = scene_case
+    native, selected = case.refs[:2]
+    state = empty_state()
+    state["decisions"] = [{"artifact_path": native["artifact_path"], "sha256": native["sha256"], "status": "approved"}]
+    case.store.states[case.context.job_id, case.context.tenant_id] = state
+    index = [{**native, "role": "working_master"}, *case.refs[1:]]
+    context = replace(
+        case.context,
+        discover_scene_index=AsyncMock(return_value=index),
+        discover_scene_references=AsyncMock(
+            side_effect=lambda scenes: [ref for ref in case.refs[1:] if ref["scene_id"] in scenes]
+        ),
+    )
+    service = PhotographicReviewService()
+    try:
+        result = await service.execute(
+            context,
+            service.decision,
+            ReviewDecisionRequest(
+                artifact_path=selected["artifact_path"], sha256=selected["sha256"], status="approved", expected_version=0
+            ),
+        )
+        assert [row["artifact_path"] for row in result["decisions"]] == [selected["artifact_path"]]
+        assert case.reads == [selected["scene_id"]]
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_mutation_projection_keeps_selected_fresh_legacy_identity_without_promoting_unknown_other_sources(scene_case):
+    case = scene_case
+    selected = case.refs[0]
+    index = [{**ref, "sha256": None, "source_identity_sha256": None} for ref in case.refs]
+    context = replace(case.context, discover_scene_index=AsyncMock(return_value=index))
+    service = PhotographicReviewService()
+    try:
+        result = await service.execute(
+            context,
+            service.decision,
+            ReviewDecisionRequest(
+                artifact_path=selected["artifact_path"], sha256=selected["sha256"], status="approved", expected_version=0
+            ),
+        )
+        assert [row["artifact_path"] for row in result["decisions"]] == [selected["artifact_path"]]
+        assert case.selections == [{selected["scene_id"]}] and case.reads == [selected["scene_id"]]
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["decision", "groups", "revision"])
+@pytest.mark.parametrize("stale", ["changed", "removed"])
+async def test_selected_mutations_preserve_all_current_decisions_without_reading_unselected_images(
+    scene_case, operation, stale
+):
+    case = scene_case
+    service = PhotographicReviewService()
+    left, selected, outdated = case.refs[:3]
+    try:
+        for version, ref in enumerate((left, selected, outdated)):
+            await service.execute(
+                case.context,
+                service.decision,
+                ReviewDecisionRequest(
+                    artifact_path=ref["artifact_path"], sha256=ref["sha256"], status="approved", expected_version=version
+                ),
+            )
+        if stale == "changed":
+            outdated["sha256"] = outdated["source_identity_sha256"] = "f" * 64
+        else:
+            case.refs.remove(outdated)
+        case.reads.clear()
+        case.selections.clear()
+        if operation == "decision":
+            payload = ReviewDecisionRequest(
+                artifact_path=selected["artifact_path"], sha256=selected["sha256"], status="approved", expected_version=3
+            )
+        elif operation == "groups":
+            payload = LightingGroupsRequest.model_validate(
+                {
+                    "expected_version": 3,
+                    "groups": [{"name": "Selected", "reference_sha256": selected["sha256"], "members": [selected["sha256"]]}],
+                }
+            )
+        else:
+            payload = RevisionRequest(
+                artifact_path=selected["artifact_path"],
+                sha256=selected["sha256"],
+                scene_id=selected["scene_id"],
+                expected_version=3,
+                recipe={"exposure_stops": -0.1},
+                preview_only=False,
+            )
+        result = await service.execute(case.context, getattr(service, operation), payload)
+        assert result["state_version"] == 4
+        assert {row["artifact_path"] for row in result["decisions"]} == {left["artifact_path"], selected["artifact_path"]}
+        assert len((await case.store.get(case.context.job_id, case.context.tenant_id))["decisions"]) == 3
+        assert case.selections == [{selected["scene_id"]}]
+        assert set(case.reads) == {selected["scene_id"]}
+        case.context.discover_references.assert_not_awaited()
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
 async def test_saved_native_scene_hints_cannot_discover_scenes_outside_current_authorized_index(scene_case):
     case = scene_case
     state = empty_state()

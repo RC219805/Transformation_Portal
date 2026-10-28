@@ -143,7 +143,7 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
     async def scene(
         request: Request,
         job_id: str,
-        scene_id: Annotated[str, Query(min_length=1, max_length=120)],
+        scene_id: Annotated[str, Query(min_length=1, max_length=1024)],
         catalogue_identity_sha256: HashQuery,
     ) -> Response:
         return await invoke(request, job_id, service.scene_detail, scene_id, catalogue_identity_sha256)

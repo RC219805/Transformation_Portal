@@ -232,12 +232,15 @@ export function createPhotographicReview(host) {
   function currentScene() { return data?.scenes.find((scene) => scene.scene_id === sceneId) || null; }
   function currentVariant(path = primaryPath) { return currentScene()?.variants.find((variant) => variant.artifact_path === path) || null; }
   function decision(variant) { return data?.decisions.find((item) => photographicDecisionMatches(item, variant)) || null; }
+  function mutationBlocked() { return pending || navigating || (pagedCatalogueEnabled() && !pager.current()); }
   function setPending(value) {
     pending = value;
     pager?.lock(value);
-    panel?.querySelectorAll("[data-review-mutation]").forEach((control) => { control.disabled = value || navigating; });
-    if (nodes.commitRevision) nodes.commitRevision.disabled = value || navigating || !variantPreview;
-    nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = value || navigating || currentVariant()?.role === "original"; });
+    const blocked = mutationBlocked();
+    panel?.querySelectorAll("[data-review-mutation]").forEach((control) => { control.disabled = blocked; });
+    if (nodes.refresh) nodes.refresh.disabled = value || navigating;
+    if (nodes.commitRevision) nodes.commitRevision.disabled = blocked || !variantPreview;
+    nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = blocked || currentVariant()?.role === "original"; });
     if (nodes.note) nodes.note.disabled = navigating;
     Object.values(nodes.revisionInputs || {}).forEach((control) => { control.disabled = navigating; });
     nodes.materials?.querySelectorAll("input,button").forEach((control) => { control.disabled = navigating; });
@@ -297,6 +300,7 @@ export function createPhotographicReview(host) {
     nodes.status.setAttribute("role", "status");
     nodes.status.setAttribute("aria-live", "polite");
     const refresh = button("Refresh review", "photographic-review-refresh", () => void load(true));
+    nodes.refresh = refresh;
     nodes.scene = select("photographic-scene", [], () => { const target = nodes.scene.value; nodes.scene.value = sceneId; selectScene(target); });
     nodes.primary = select("photographic-primary", [], () => {
       const target = nodes.primary.value; nodes.primary.value = primaryPath;
@@ -516,8 +520,7 @@ export function createPhotographicReview(host) {
     status("Loading photographic review…");
     try {
       if (pagedCatalogueEnabled()) {
-        const loaded = await pager.refresh(sceneId, { minimumVersion, artifactPath: initialArtifactPath });
-        if (loaded && minimumVersion !== null && (!Number.isInteger(data?.state_version) || data.state_version < minimumVersion)) throw new Error("Current review metadata has not reached the reconciled version. Refresh review before another export.");
+        const loaded = await pager.refresh(sceneId, { minimumVersion, reconcile: minimumVersion !== null, artifactPath: initialArtifactPath });
         if (loaded) initialArtifactPath = "";
         if (loaded && jobId === expectedJob && sequence === dataRequest) status(force
           ? "Review refreshed. Selected source verified; page cards show recorded metadata."
@@ -527,7 +530,7 @@ export function createPhotographicReview(host) {
       const loaded = normalizedReview(await request("", null, 90000));
       if (jobId !== expectedJob || sequence !== dataRequest) return false;
       if (minimumVersion !== null && (!Number.isInteger(loaded.state_version) || loaded.state_version < minimumVersion)) {
-        throw new Error("Current review metadata has not reached the reconciled version. Refresh review before another export.");
+        throw new Error("Review has not reached the reconciled version. Refresh before continuing.");
       }
       data = loaded;
       if (deliverySources.some((source) => !data.scenes.some((scene) => scene.variants.some((variant) =>
@@ -730,7 +733,7 @@ export function createPhotographicReview(host) {
   }
   function updateDeliveryButton() {
     const count = approvedVariants().length;
-    nodes.deliver.disabled = pending || navigating || (deliveryHistoryEnabled() && recoveryStorageBlocked)
+    nodes.deliver.disabled = mutationBlocked() || (deliveryHistoryEnabled() && recoveryStorageBlocked)
       || ["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome) || !count || !selectedPresets.size;
     nodes.deliver.textContent = `Deliver approved set (${count})`;
     if (nodes.deliverySelectionSummary) {
@@ -903,7 +906,7 @@ export function createPhotographicReview(host) {
   }
 
   async function mutate(path, body, success, timeout = 30000) {
-    if (pending || navigating || !data) return null;
+    if (mutationBlocked() || !data) return null;
     const expectedJob = jobId;
     const expectedGeneration = scopeGeneration;
     setPending(true);
@@ -912,13 +915,13 @@ export function createPhotographicReview(host) {
       if (jobId !== expectedJob || scopeGeneration !== expectedGeneration) return null;
       if (path === "/decisions") noteDirty = false;
       if (path === "/revisions") resetRecipe();
-      await load();
+      if (!await load(false, result.state_version)) throw new Error("Change saved. Refresh review before continuing.");
       if (scopeGeneration !== expectedGeneration) return null;
       status(success);
       return result;
     } catch (error) {
       if (jobId !== expectedJob || scopeGeneration !== expectedGeneration) return null;
-      if (error.code === "REVIEW_CONFLICT") { resetPreview(); await load(true); if (scopeGeneration === expectedGeneration) status("Review changed elsewhere. Current decisions were reloaded; inspect them before retrying.", true); }
+      if (error.code === "REVIEW_CONFLICT") { resetPreview(); await load(true, 0); if (scopeGeneration === expectedGeneration) status("Review changed elsewhere. Current decisions were reloaded; inspect them before retrying.", true); }
       else status(error.name === "AbortError" ? "Review request timed out. Refresh before retrying; it may have completed on the server." : error.message, true);
       return null;
     } finally { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { setPending(false); updateDeliveryButton(); } }
@@ -984,7 +987,7 @@ export function createPhotographicReview(host) {
     const expectedGeneration = scopeGeneration;
     if (!previewOnly && variantPreview?.key !== key) { status("Render and inspect the current adjustments before creating a revision.", true); return; }
     if (previewOnly) {
-      if (pending || navigating) return;
+      if (mutationBlocked()) return;
       setPending(true);
       try {
         const result = await request("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
@@ -999,7 +1002,7 @@ export function createPhotographicReview(host) {
         nodes.revisionReceipt.textContent = `Rendered preview from master ${variant.sha256}. Reduced preview only; approval is required separately after the full revision is created.`;
         status("Rendered variant ready for visual inspection. Create revision preserves the existing image.");
       } catch (error) { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { resetPreview(); status(error.message, true); } }
-      finally { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { setPending(false); nodes.commitRevision.disabled = !variantPreview; updateDeliveryButton(); } }
+      finally { if (jobId === expectedJob && scopeGeneration === expectedGeneration) { setPending(false); updateDeliveryButton(); } }
     } else {
       const result = await mutate("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
         ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
@@ -1197,7 +1200,7 @@ export function createPhotographicReview(host) {
   }
 
   async function deliver() {
-    if (pending || navigating || !data) return;
+    if (mutationBlocked() || !data) return;
     if (deliveryHistoryEnabled() && recoveryStorageBlocked) {
       status("Session recovery storage is unavailable or invalid. No export was submitted. Restore storage and reconcile delivery history first.", true);
       return;
@@ -1207,7 +1210,7 @@ export function createPhotographicReview(host) {
       const expectedScope = deliveryRecoveryScope();
       setPending(true);
       try {
-        if (!await load()) throw new Error("Refresh current review before exporting; no export was submitted.");
+        if (!await load(false, 0)) throw new Error("Refresh current review before exporting; no export was submitted.");
         for (const [selectedScene, path] of deliverySelections) {
           if (!path) continue;
           const loaded = normalizedReview(await pager.getDetail(selectedScene));
