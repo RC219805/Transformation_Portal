@@ -3579,13 +3579,13 @@ async function photographicFixturePng(width, height) {
 }
 
 async function installPagedPhotographicStateRoutes(page, jobId, {
-  sceneIds = ["input-0000", "input-0001"], flatFilenames = false, workingMaster = false,
+  sceneIds = ["input-0000", "input-0001"], labels = [], flatFilenames = false, workingMaster = false,
 } = {}) {
   const base = `/v1/jobs/${jobId}/photographic-review`;
   const scenes = sceneIds.map((sceneId, index) => {
     const final = { role: "final", artifact_path: flatFilenames ? `${sceneId}.tif` : `${sceneId}/delivery.tif`,
       sha256: String(index + 1).repeat(64), width: 80, height: 60, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic master" };
-    return { scene_id: sceneId, label: `Room ${index + 1}`, variants: [final, ...(workingMaster
+    return { scene_id: sceneId, label: labels[index] || `Room ${index + 1}`, variants: [final, ...(workingMaster
       ? [{ ...final, role: "working_master", artifact_path: `${sceneId}/working-linear.tif`, sha256: "a".repeat(64), bit_depth: 32 }] : [])] };
   });
   const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
@@ -3609,14 +3609,20 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
     const request = route.request(), url = new URL(request.url());
     if (request.method() === "GET" && url.pathname === `${base}/scenes`) {
       const current = snapshot();
+      const filter = url.searchParams.get("status") || "all", sort = url.searchParams.get("sort") === "label" ? "label" : "scene_id";
+      // UTF-8 byte order matches code-point order for these valid scalar strings.
+      const filtered = current.scenes.filter((scene) => filter === "all"
+        || (current.decisions.find((row) => row.scene_id === scene.scene_id)?.status || "unreviewed") === filter)
+        .sort((left, right) => Buffer.compare(Buffer.from(left[sort]), Buffer.from(right[sort]))
+          || Buffer.compare(Buffer.from(left.scene_id), Buffer.from(right.scene_id)));
       server.pageRequests.push(current.state_version); snapshots.set(current.catalogue_identity_sha256, current);
       await fulfillJson(route, { success: true, data: { ...current, schema: "tp.photo.scene_page.v1",
-        scenes: current.scenes.map((scene) => ({ scene_id: scene.scene_id, label: scene.label,
+        scenes: filtered.map((scene) => ({ scene_id: scene.scene_id, label: scene.label,
           review_status: current.decisions.find((row) => row.scene_id === scene.scene_id)?.status || "unreviewed",
           recorded_decision: current.decisions.find((row) => row.scene_id === scene.scene_id) || null,
           source_validation: "not_checked", variant_count: scene.variants.length, variant_paths: scene.variants.map((row) => row.artifact_path),
           related_artifacts: [{ role: "master", artifact_path: scene.variants[0].artifact_path, sha256: scene.variants[0].sha256, size_bytes: 4096 }],
-        })), total_scenes: current.scenes.length, total_filtered: current.scenes.length, limit: 8, filter: "all", sort: "scene_id", next_cursor: null } });
+        })), total_scenes: current.scenes.length, total_filtered: filtered.length, limit: 8, filter, sort, next_cursor: null } });
       return;
     }
     if (request.method() === "GET" && url.pathname === `${base}/scene`) {
@@ -3983,6 +3989,27 @@ for (const scenario of [
     expect(unexpectedRequests).toEqual([]);
   });
 }
+
+test("@portal-browser photographic Next unreviewed follows Unicode label order and wraps", async ({ page }) => {
+  const jobId = "job-photographic-unicode-order";
+  const server = await installPagedPhotographicStateRoutes(page, jobId, { labels: ["１ Kitchen", "🏠 Exterior"] });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const scene = page.locator('[data-ui="photographic-scene"]');
+  const primary = page.locator('[data-ui="photographic-primary"]');
+  const nextUnreviewed = page.locator('[data-ui="photographic-next-unreviewed"]');
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  await page.locator('[data-ui="photographic-scene-sort"]').selectOption("label");
+  await expect(nextUnreviewed).toBeEnabled();
+  await expect(page.locator('[data-ui="photographic-contact-item"]')).toHaveText([/１ Kitchen/, /🏠 Exterior/]);
+  await nextUnreviewed.click();
+  await expect(scene).toHaveValue("input-0001");
+  await expect(primary).toHaveValue("input-0001/delivery.tif");
+  await nextUnreviewed.click();
+  await expect(scene).toHaveValue("input-0000");
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  expect(server.mutations).toEqual([]);
+  expect(server.unexpectedRequests).toEqual([]);
+});
 
 for (const [name, sceneId] of [["percent", "room_100%_enhanced"], ["colon", "room:west_enhanced"]]) {
 test(`@portal-browser photographic literal ${name} filename preserves raw scene selection through refresh and reload`, async ({ page }) => {

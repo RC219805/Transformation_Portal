@@ -1105,6 +1105,79 @@ async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
 
 
 @pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("status", ["approved", "needs_revision"])
+async def test_unknown_legacy_hash_keeps_recorded_page_status_without_authorizing_changed_bytes(
+    fake_app, monkeypatch, enabled, status
+):
+    from transformation_portal.api.v1.photographic_review import DeliveryRequest, ReviewDecisionRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig
+    from transformation_portal.orchestrator.photographic_review_access import ReviewInputError
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, job, _, _ = fake_app
+    bodies, _, _ = _native_inventory(False, False)
+    photograph = bodies["v6/input-0000/delivery.tif"]
+    sha = hashlib.sha256(photograph).hexdigest()
+    path, scene_id = "room_enhanced.tif", "room_enhanced"
+    job.artifacts = {"items": [{"path": path, "sha256": None, "size_bytes": len(photograph)}]}
+    app._get_job_artifact.side_effect = lambda *_args, **_kwargs: StreamingResponse(_chunks(photograph))
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    access = adapter.AppReviewAccess(app)
+    authorize = access.authorize_admission if enabled else access.authorize_catalogue
+    service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    try:
+        await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=path, sha256=sha, status=status, expected_version=0),
+        )
+        app._get_job_artifact.reset_mock()
+        page = await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status)
+        assert page["total_filtered"] == 1
+        scene = page["scenes"][0]
+        assert scene["scene_id"] == scene_id and scene["review_status"] == status
+        assert scene["recorded_decision"]["artifact_path"] == path and scene["recorded_decision"]["sha256"] == sha
+        assert scene["source_validation"] == "not_checked"
+        assert not (await service.scenes(await access.authorize_catalogue(_request(), job.id), status="unreviewed"))["scenes"]
+        app._get_job_artifact.assert_not_awaited()
+        photograph = photograph[:-1] + bytes([photograph[-1] ^ 1])
+        recorded = await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status)
+        assert recorded["scenes"][0]["review_status"] == status
+        assert recorded["scenes"][0]["source_validation"] == "not_checked"
+        app._get_job_artifact.assert_not_awaited()
+        detail = await service.execute(
+            await authorize(_request(), job.id), service.scene_detail, scene_id, page["catalogue_identity_sha256"]
+        )
+        assert detail["decisions"] == [] and detail["scenes"][0]["decision"] is None
+        if status == "approved":
+            with pytest.raises(ReviewInputError, match="explicit current approval"):
+                await service.execute(
+                    await authorize(_request(), job.id),
+                    service.delivery,
+                    DeliveryRequest(
+                        property_name="Legacy source",
+                        presets=["website"],
+                        approved_sha256=[sha],
+                        expected_version=1,
+                    ),
+                )
+        assert (await state_store.get(job.id, "local"))["state_version"] == 1
+        job.artifacts["items"][0]["sha256"] = "f" * 64
+        app._get_job_artifact.reset_mock()
+        changed = await service.scenes(await access.authorize_catalogue(_request(), job.id))
+        assert changed["scenes"][0]["review_status"] == "unreviewed"
+        assert changed["scenes"][0]["recorded_decision"] is None
+        assert changed["scenes"][0]["source_validation"] == "not_checked"
+        assert not (await service.scenes(await access.authorize_catalogue(_request(), job.id), status=status))["scenes"]
+        app._get_job_artifact.assert_not_awaited()
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("change", [None, "bytes", "removed"])
 async def test_mutation_projection_fresh_hashes_only_saved_unknown_legacy_identities(fake_app, monkeypatch, enabled, change):
     from dataclasses import replace

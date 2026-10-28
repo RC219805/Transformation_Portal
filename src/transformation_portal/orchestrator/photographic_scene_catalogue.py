@@ -68,10 +68,14 @@ def scene_snapshot(context: ReviewContext, references: list[JsonObject], state: 
         variants = [ref for ref in refs if ref["scene_id"] == scene_id and not ref.get("related_only")]
         revised = [ref for ref in revisions if ref["scene_id"] == scene_id]
         candidates = revised[-1:] or [ref for ref in variants if ref.get("role") != "original"]
+        # Unknown legacy hashes retain recorded review, never source validation.
         decisions = [
             row
             for row in state.get("decisions", [])
-            if any(ref["artifact_path"] == row["artifact_path"] and ref.get("sha256") == row["sha256"] for ref in candidates)
+            if any(
+                ref["artifact_path"] == row["artifact_path"] and ref.get("sha256") in {None, row["sha256"]}
+                for ref in candidates
+            )
         ]
         if decisions:
             decision = max(decisions, key=lambda row: row.get("created_at", 0))

@@ -206,7 +206,7 @@ export function createPhotographicPagedCatalogue(host) {
     nextUnreviewed.disabled = filterControl.disabled = sortControl.disabled = discard.disabled = busy || locked;
     pageStatus.dataset.state = busy ? "loading" : page ? "ready" : "empty";
     pageStatus.textContent = busy ? "Loading photograph metadata…" : page
-      ? `${page.total_filtered} of ${page.total_scenes} photographs · page ${previous.length + 1}. Recorded review status; source bytes are checked when opened or exported.` : "No photograph metadata loaded.";
+      ? `${page.total_filtered} of ${page.total_scenes} photographs · page ${previous.length + 1}. Recorded status; sources are checked when opened or exported.` : "No photograph metadata loaded.";
   }
   async function run(action) {
     if (busy) return false;
@@ -241,7 +241,7 @@ export function createPhotographicPagedCatalogue(host) {
     const result = await request(`/scenes?${query}`);
     if (result.schema !== "tp.photo.scene_page.v1" || !SHA256.test(result.catalogue_identity_sha256 || "")
       || !Array.isArray(result.scenes) || result.scenes.length > 16 || !Number.isInteger(result.state_version)
-      || result.scenes.some((row) => !relative(row.scene_id) || !row.scene_id)) throw new Error("Photograph page could not be verified. Refresh review.");
+      || result.scenes.some((row) => !relative(row.scene_id) || !row.scene_id)) throw new Error("Photograph page verification failed. Refresh review.");
     return result;
   }
   function getDetail(id, identity) {
@@ -250,7 +250,7 @@ export function createPhotographicPagedCatalogue(host) {
       const loading = request(`/scene?${new URLSearchParams({ scene_id: id, catalogue_identity_sha256: identity })}`)
         .then((result) => {
           if (result.schema !== "tp.photo.scene_detail.v1" || result.catalogue_identity_sha256 !== identity
-            || result.scenes?.length !== 1 || result.scenes[0].scene_id !== id) throw new Error("Photograph detail does not match the selected catalogue. Refresh review.");
+            || result.scenes?.length !== 1 || result.scenes[0].scene_id !== id) throw new Error("Photograph detail and catalogue differ. Refresh review.");
           return result;
         }).finally(() => details.delete(key));
       details.set(key, loading);
@@ -261,7 +261,7 @@ export function createPhotographicPagedCatalogue(host) {
     const expected = generation;
     const detail = id ? await getDetail(id, nextPage.catalogue_identity_sha256) : null;
     if (generation !== expected) return false;
-    if (nextPage.state_version < requiredVersion) throw new Error("Review has not reached the reconciled version. Refresh before continuing.");
+    if (nextPage.state_version < requiredVersion) throw new Error("Review is stale. Refresh review.");
     if (detail && detail.state_version !== nextPage.state_version) throw new Error("Photograph detail and page versions differ. Refresh review.");
     const selected = selection();
     if (selected.sceneId && (selected.sceneId !== id || (selected.primaryPath && !detail?.scenes[0].variants.some((variant) => variant.artifact_path === selected.primaryPath)))
@@ -298,7 +298,7 @@ export function createPhotographicPagedCatalogue(host) {
       if (error.code !== "CATALOGUE_CHANGED") throw error;
       const selected = selection().sceneId;
       await refresh(selected);
-      status("The photograph catalogue changed. Current metadata was reloaded and your selection was retained; no change was replayed.", true);
+      status("Photograph catalogue changed. Metadata reloaded; selection retained. No change was replayed.", true);
       return false;
     }
   }
@@ -331,11 +331,21 @@ export function createPhotographicPagedCatalogue(host) {
     }
     return turnPage(direction);
   }
+  function compareText(left, right) {
+    const a = Array.from(left), b = Array.from(right);
+    for (let index = 0; index < a.length && index < b.length; index += 1) {
+      const order = a[index].codePointAt(0) - b[index].codePointAt(0);
+      if (order) return order;
+    }
+    return a.length - b.length;
+  }
   async function unreviewed() {
     return recover(async () => {
       const selected = selection();
-      const afterSelection = (row) => row[sort] > (sort === "label" ? selected.label : selected.sceneId)
-        || (row[sort] === (sort === "label" ? selected.label : selected.sceneId) && row.scene_id > selected.sceneId);
+      const afterSelection = (row) => {
+        const order = compareText(row[sort], sort === "label" ? selected.label : selected.sceneId);
+        return order > 0 || (!order && compareText(row.scene_id, selected.sceneId) > 0);
+      };
       let result = await getPage(null, "unreviewed"), nextCursor = null;
       const stack = [], first = result;
       let target = result.scenes.find(afterSelection);
@@ -365,7 +375,7 @@ export function createPhotographicPagedCatalogue(host) {
         const items = (scene.related_artifacts || []).filter((row) => row.role === role && relative(row.artifact_path));
         disclosure.append(el("p", `${role}: ${items.length ? items.map((row) => row.artifact_path).join(", ") : "Not recorded"}`, "photo-review-help"));
       }
-      disclosure.append(el("p", "Recorded metadata only. Opening a photograph or exporting revalidates its source.", "photo-review-help"));
+      disclosure.append(el("p", "Recorded metadata; sources are checked when opened or exported.", "photo-review-help"));
       card.append(disclosure); if (scene.scene_id === selectedId) selectedCard?.(card, scene);
       container.append(card);
       if (restoreFocus && scene.scene_id === selectedId) control.focus();
@@ -379,7 +389,7 @@ export function createPhotographicPagedCatalogue(host) {
       requiredVersion = Math.max(requiredVersion, options?.minimumVersion || 0);
       if (options?.reconcile) await refreshPromise;
       if (expected !== generation) return false;
-      if (busy && !refreshPromise) { status("Review is busy. Refresh after it completes."); return false; }
+      if (busy && !refreshPromise) { status("Review is busy. Refresh when ready."); return false; }
       if (!refreshPromise) {
         refreshPromise = run(() => recover(() => refresh(id, options))).finally(() => { if (generation === expected) refreshPromise = null; });
       }

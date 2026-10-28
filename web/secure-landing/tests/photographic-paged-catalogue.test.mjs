@@ -94,8 +94,10 @@ function fixture({ sceneCount = 50, paged = true, actor = "actor-one", jobId = "
   });
   const page = (params) => {
     const filter = params.get("status") || "all";
+    const compare = (left, right) => Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+    const key = params.get("sort") || "scene_id";
     const filtered = scenes.map(summary).filter((scene) => filter === "all" || scene.review_status === filter)
-      .sort((left, right) => left[params.get("sort") || "scene_id"].localeCompare(right[params.get("sort") || "scene_id"]));
+      .sort((left, right) => compare(left[key], right[key]) || compare(left.scene_id, right.scene_id));
     const offset = Number(params.get("cursor") || 0);
     const limit = Number(params.get("limit") || PAGE_SIZE);
     return { schema: "tp.photo.scene_page.v1", catalogue_identity_sha256: server.catalogueIdentitySha256,
@@ -178,6 +180,35 @@ test("next unreviewed follows the selected name sort across pages", async (t) =>
   await h.root.find("photographic-next-unreviewed").trigger();
   assert.equal(selected(h), h.scenes[45].scene_id);
 });
+
+for (const tieBreak of [false, true]) {
+  test(`next unreviewed follows server code-point ${tieBreak ? "scene ID tie-break" : "label"} order and wraps across pages`, async (t) => {
+    const h = fixture({ sceneCount: 10 });
+    h.server.decisions = [];
+    h.scenes.forEach((scene, index) => { scene.label = tieBreak ? "Same room" : `A Room ${index}`; });
+    if (tieBreak) {
+      for (const [index, id] of [[8, "１-room"], [9, "🏠-room"]]) {
+        h.scenes[index].scene_id = id;
+        h.scenes[index].variants[0].artifact_path = `${id}/delivery.tif`;
+      }
+    } else {
+      h.scenes[8].label = "１ Kitchen"; h.scenes[9].label = "🏠 Exterior";
+    }
+    t.after(() => h.api.show(null, null));
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    await h.root.find("photographic-page-next").trigger();
+    const sort = h.root.find("photographic-scene-sort"); sort.value = "label"; await sort.trigger("change");
+    assert.equal(selected(h), h.scenes[8].scene_id);
+    const before = requested(h, "/scene").length;
+    await h.root.find("photographic-next-unreviewed").trigger();
+    assert.equal(selected(h), h.scenes[9].scene_id, "Astral text follows fullwidth text in Python's code-point order");
+    assert.match(h.root.find("photographic-page-status").textContent, /page 2/);
+    await h.root.find("photographic-next-unreviewed").trigger();
+    assert.equal(selected(h), h.scenes[0].scene_id, "The last server-ordered photograph wraps to the first page");
+    assert.match(h.root.find("photographic-page-status").textContent, /page 1/);
+    assert.equal(requested(h, "/scene").length, before + 2, "Search opens only each selected rich scene");
+  });
+}
 
 test("a same-inventory rail selection locates a relative artifact without a scene identifier", async (t) => {
   const restoredSelection = { sceneId: "input-0000", artifactPath: "input-0000/delivery.tif" };
