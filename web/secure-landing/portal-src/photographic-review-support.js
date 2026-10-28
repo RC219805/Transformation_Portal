@@ -102,8 +102,8 @@ export function photographicPreviewMatches(receipt, variant, recipe, referenceSh
 const REVIEW_SELECTION_KEY = "tp.photo.review_selection.v1";
 const relative = (value) => {
   if (typeof value !== "string" || value.length > 1024) return false;
-  return !value.startsWith("/") && !/[\\:\x00-\x1f\x7f]/.test(value)
-    && !value.split("/").some((part) => part === ".." || part === ".");
+  return !value.startsWith("/") && !/[\\\x00-\x1f\x7f]/.test(value)
+    && !value.split("/").some((part) => !part || part === ".." || part === ".");
 };
 
 export function photographicReviewAttribution(recorded) {

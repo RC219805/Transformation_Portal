@@ -3984,9 +3984,10 @@ for (const scenario of [
   });
 }
 
-test("@portal-browser photographic literal percent filename preserves raw scene selection through refresh and reload", async ({ page }) => {
-  const jobId = "job-photographic-percent-filename";
-  const sceneId = "room_100%_enhanced", artifactPath = `${sceneId}.tif`;
+for (const [name, sceneId] of [["percent", "room_100%_enhanced"], ["colon", "room:west_enhanced"]]) {
+test(`@portal-browser photographic literal ${name} filename preserves raw scene selection through refresh and reload`, async ({ page }) => {
+  const jobId = `job-photographic-${name}-filename`;
+  const artifactPath = `${sceneId}.tif`;
   const server = await installPagedPhotographicStateRoutes(page, jobId, { sceneIds: [sceneId], flatFilenames: true });
   await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}&artifact=${encodeURIComponent(artifactPath)}`);
   const scene = page.locator('[data-ui="photographic-scene"]');
@@ -4006,6 +4007,7 @@ test("@portal-browser photographic literal percent filename preserves raw scene 
   expect(server.detailRequests).toEqual([sceneId, sceneId, sceneId]);
   expect(server.unexpectedRequests).toEqual([]);
 });
+}
 
 test("@portal-browser photographic refresh retains removed native version drafts until explicit discard", async ({ page }) => {
   const jobId = "job-photographic-refresh-native-version";

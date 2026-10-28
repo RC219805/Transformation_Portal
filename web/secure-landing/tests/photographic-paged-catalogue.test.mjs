@@ -197,20 +197,20 @@ test("a same-inventory rail selection locates a relative artifact without a scen
 test("selection recovery validates raw selectors without interpreting filename percent escapes", () => {
   const storage = storageFixture();
   const selections = photographicSelectionStorage(storage.storage);
-  for (const path of ["/etc/passwd", "input/../private", "https://other.example/a", "a\\b", "input/\x00secret", "input/./secret"]) {
+  for (const path of ["/etc/passwd", "input/../private", "https://other.example/a", "a\\b", "input/\x00secret", "input/./secret", "input//secret"]) {
     selections.set("scope", { sceneId: "input-0000", primaryPath: path, comparePath: path, apiKey: "should-never-persist" });
     const restored = selections.get("scope");
     assert.equal(restored.primaryPath, ""); assert.equal(restored.comparePath, "");
     assert.equal([...storage.values.values()].some((raw) => raw.includes("should-never-persist")), false);
   }
-  for (const path of ["room_100%_enhanced.tif", "input/%2e%2e/private", "a%5cb", "input/%00secret"]) {
+  for (const path of ["room_100%_enhanced.tif", "room:west_enhanced.tif", "input/%2e%2e/private", "a%5cb", "input/%00secret"]) {
     selections.set("scope", { sceneId: path, primaryPath: path, comparePath: path });
     const restored = selections.get("scope");
     assert.equal(restored.sceneId, path); assert.equal(restored.primaryPath, path); assert.equal(restored.comparePath, path);
   }
 });
 
-for (const sceneId of ["room_100%_enhanced.tif", "room_%00_enhanced.tif"]) {
+for (const sceneId of ["room_100%_enhanced.tif", "room_%00_enhanced.tif", "room:west_enhanced.tif"]) {
   test(`raw photograph filename ${sceneId} loads without a second URI decode`, async (t) => {
     const h = fixture({ sceneCount: 1 });
     h.scenes[0].scene_id = sceneId;
@@ -222,7 +222,7 @@ for (const sceneId of ["room_100%_enhanced.tif", "room_%00_enhanced.tif"]) {
     assert.equal(h.root.find("photographic-primary").value, sceneId);
     assert.equal(requested(h, "/scene").at(-1).params.get("scene_id"), sceneId);
     assert.equal(h.selections.at(-1).artifactPath, sceneId);
-    assert.match(requested(h, "/scene").at(-1).url, /%25/);
+    assert.ok(requested(h, "/scene").at(-1).url.includes(new URLSearchParams({ scene_id: sceneId }).toString()));
   });
 }
 
