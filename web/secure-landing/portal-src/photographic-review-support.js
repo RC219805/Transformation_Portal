@@ -102,11 +102,8 @@ export function photographicPreviewMatches(receipt, variant, recipe, referenceSh
 const REVIEW_SELECTION_KEY = "tp.photo.review_selection.v1";
 const relative = (value) => {
   if (typeof value !== "string" || value.length > 1024) return false;
-  try {
-    const decoded = decodeURIComponent(value);
-    return !decoded.startsWith("/") && !/[\\:\x00-\x1f\x7f]/.test(decoded)
-      && !decoded.split("/").some((part) => part === ".." || part === ".");
-  } catch { return false; }
+  return !value.startsWith("/") && !/[\\:\x00-\x1f\x7f]/.test(value)
+    && !value.split("/").some((part) => part === ".." || part === ".");
 };
 
 export function photographicReviewAttribution(recorded) {
@@ -229,7 +226,7 @@ export function createPhotographicPagedCatalogue(host) {
   function retainEdits(action) {
     if (hasEdits() && !discarding) {
       pendingNavigation = action; discard.hidden = false;
-      status("Unsaved review note or revision adjustments are retained. Save them, or explicitly discard them to continue.", true);
+      status("Unsaved edits are retained. Save or explicitly discard them to continue.", true);
       return true;
     }
     return false;
@@ -262,11 +259,13 @@ export function createPhotographicPagedCatalogue(host) {
   }
   async function commit(nextPage, nextCursor, nextPrevious, id, nextFilter = filter, nextSort = sort, requestedPath = "") {
     const expected = generation;
-    if (selection().sceneId && selection().sceneId !== id && retainEdits(() => refresh(id, { filter: nextFilter, sort: nextSort, artifactPath: requestedPath }))) return false;
     const detail = id ? await getDetail(id, nextPage.catalogue_identity_sha256) : null;
     if (generation !== expected) return false;
     if (nextPage.state_version < requiredVersion) throw new Error("Review has not reached the reconciled version. Refresh before continuing.");
     if (detail && detail.state_version !== nextPage.state_version) throw new Error("Photograph detail and page versions differ. Refresh review.");
+    const selected = selection();
+    if (selected.sceneId && (selected.sceneId !== id || (selected.primaryPath && !detail?.scenes[0].variants.some((variant) => variant.artifact_path === selected.primaryPath)))
+      && retainEdits(() => refresh(id, { filter: nextFilter, sort: nextSort, artifactPath: requestedPath }))) return false;
     page = nextPage; cursor = nextCursor; previous = nextPrevious; filter = nextFilter; sort = nextSort;
     pendingNavigation = null; discard.hidden = true;
     apply(detail || { ...page, scenes: [] }, { page, sceneChanged: selection().sceneId !== id, requestedPath, discardEdits: discarding });

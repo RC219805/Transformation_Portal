@@ -3578,12 +3578,15 @@ async function photographicFixturePng(width, height) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
 }
 
-async function installPagedPhotographicStateRoutes(page, jobId) {
+async function installPagedPhotographicStateRoutes(page, jobId, {
+  sceneIds = ["input-0000", "input-0001"], flatFilenames = false, workingMaster = false,
+} = {}) {
   const base = `/v1/jobs/${jobId}/photographic-review`;
-  const scenes = [0, 1].map((index) => {
-    const sceneId = `input-000${index}`;
-    return { scene_id: sceneId, label: `Room ${index + 1}`, variants: [{ role: "final", artifact_path: `${sceneId}/delivery.tif`,
-      sha256: String(index + 1).repeat(64), width: 80, height: 60, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic master" }] };
+  const scenes = sceneIds.map((sceneId, index) => {
+    const final = { role: "final", artifact_path: flatFilenames ? `${sceneId}.tif` : `${sceneId}/delivery.tif`,
+      sha256: String(index + 1).repeat(64), width: 80, height: 60, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic master" };
+    return { scene_id: sceneId, label: `Room ${index + 1}`, variants: [final, ...(workingMaster
+      ? [{ ...final, role: "working_master", artifact_path: `${sceneId}/working-linear.tif`, sha256: "a".repeat(64), bit_depth: 32 }] : [])] };
   });
   const job = { id: jobId, pipeline: "lux-depth", state: "succeeded", progress: 100,
     created_at: "2026-10-25T01:00:00Z", finished_at: "2026-10-25T01:01:00Z", artifacts: { items: scenes.map((scene) => ({
@@ -3592,7 +3595,7 @@ async function installPagedPhotographicStateRoutes(page, jobId) {
       sha256: scene.variants[0].sha256, url: `/v1/jobs/${jobId}/artifacts/${scene.variants[0].artifact_path}`,
       display_hint: { role: "primary_preview", priority: 1200, label: `${scene.label} master` },
     })) } };
-  const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], mutations: [], decisionGate: null, unexpectedRequests: [] };
+  const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], detailRequests: [], mutations: [], decisionGate: null, unexpectedRequests: [] };
   const snapshots = new Map();
   const snapshot = () => ({ state_version: server.readVersion, catalogue_identity_sha256: server.readVersion.toString(16).padStart(64, "0"),
     decisions: server.readVersion >= server.committedVersion ? server.decisions.map((row) => ({ ...row })) : [],
@@ -3617,6 +3620,7 @@ async function installPagedPhotographicStateRoutes(page, jobId) {
       return;
     }
     if (request.method() === "GET" && url.pathname === `${base}/scene`) {
+      server.detailRequests.push(url.searchParams.get("scene_id"));
       const current = snapshots.get(url.searchParams.get("catalogue_identity_sha256"));
       const scene = current?.scenes.find((row) => row.scene_id === url.searchParams.get("scene_id"));
       expect(scene).toBeTruthy();
@@ -3979,6 +3983,63 @@ for (const scenario of [
     expect(unexpectedRequests).toEqual([]);
   });
 }
+
+test("@portal-browser photographic literal percent filename preserves raw scene selection through refresh and reload", async ({ page }) => {
+  const jobId = "job-photographic-percent-filename";
+  const sceneId = "room_100%_enhanced", artifactPath = `${sceneId}.tif`;
+  const server = await installPagedPhotographicStateRoutes(page, jobId, { sceneIds: [sceneId], flatFilenames: true });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}&artifact=${encodeURIComponent(artifactPath)}`);
+  const scene = page.locator('[data-ui="photographic-scene"]');
+  const primary = page.locator('[data-ui="photographic-primary"]');
+  const assertRawSelection = async () => {
+    await expect(scene).toHaveValue(sceneId);
+    await expect(primary).toHaveValue(artifactPath);
+    await expect.poll(() => new URL(page.url()).searchParams.get("artifact")).toBe(artifactPath);
+    await expect.poll(() => page.locator('[data-ui="photographic-primary-image"]').evaluate((image) => image.naturalWidth)).toBe(80);
+  };
+  await assertRawSelection();
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(page.locator('[data-ui="photographic-review-status"]')).toContainText("Review refreshed.");
+  await assertRawSelection();
+  await page.reload();
+  await assertRawSelection();
+  expect(server.detailRequests).toEqual([sceneId, sceneId, sceneId]);
+  expect(server.unexpectedRequests).toEqual([]);
+});
+
+test("@portal-browser photographic refresh retains removed native version drafts until explicit discard", async ({ page }) => {
+  const jobId = "job-photographic-refresh-native-version";
+  const server = await installPagedPhotographicStateRoutes(page, jobId, { workingMaster: true });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const scene = page.locator('[data-ui="photographic-scene"]');
+  const primary = page.locator('[data-ui="photographic-primary"]');
+  const note = page.locator('[data-ui="photographic-decision-note"]');
+  const exposure = page.locator('[data-ui="photographic-revision-exposure"]');
+  const discard = page.locator('[data-ui="photographic-discard-navigation"]');
+  const nativePath = "input-0000/working-linear.tif";
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  await primary.selectOption(nativePath);
+  await note.fill("Keep this draft attached to the native working version.");
+  await exposure.fill("-0.2");
+  server.scenes[0] = { ...server.scenes[0], variants: server.scenes[0].variants.filter((variant) => variant.role !== "working_master") };
+  server.readVersion = 2;
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(discard).toBeVisible();
+  await expect(scene).toHaveValue("input-0000");
+  await expect(primary).toHaveValue(nativePath);
+  await expect(note).toHaveValue("Keep this draft attached to the native working version.");
+  await expect(exposure).toHaveValue("-0.2");
+  await expect.poll(() => new URL(page.url()).searchParams.get("artifact")).toBe(nativePath);
+  await discard.click();
+  await expect(scene).toHaveValue("input-0000");
+  await expect(primary).toHaveValue("input-0000/delivery.tif");
+  await expect(primary.locator(`option[value="${nativePath}"]`)).toHaveCount(0);
+  await expect(note).toHaveValue("");
+  await expect(exposure).toHaveValue("0");
+  await expect(discard).toBeHidden();
+  expect(server.mutations).toEqual([]);
+  expect(server.unexpectedRequests).toEqual([]);
+});
 
 test("@portal-browser photographic refresh preserves disappearing scene drafts until explicit discard", async ({ page }) => {
   const jobId = "job-photographic-refresh-draft";

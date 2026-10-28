@@ -194,16 +194,37 @@ test("a same-inventory rail selection locates a relative artifact without a scen
   assert.equal(h.root.find("photographic-contact-sheet").findAll("photographic-contact-item").some((node) => node.attributes["aria-pressed"] === "true"), true);
 });
 
-test("selection recovery rejects encoded traversal and absolute selectors without persisting credentials", () => {
+test("selection recovery validates raw selectors without interpreting filename percent escapes", () => {
   const storage = storageFixture();
   const selections = photographicSelectionStorage(storage.storage);
-  for (const path of ["%2fetc/passwd", "input/%2e%2e/private", "https%3a%2f%2fother.example/a", "a%5cb", "input/%00secret"]) {
+  for (const path of ["/etc/passwd", "input/../private", "https://other.example/a", "a\\b", "input/\x00secret", "input/./secret"]) {
     selections.set("scope", { sceneId: "input-0000", primaryPath: path, comparePath: path, apiKey: "should-never-persist" });
     const restored = selections.get("scope");
     assert.equal(restored.primaryPath, ""); assert.equal(restored.comparePath, "");
     assert.equal([...storage.values.values()].some((raw) => raw.includes("should-never-persist")), false);
   }
+  for (const path of ["room_100%_enhanced.tif", "input/%2e%2e/private", "a%5cb", "input/%00secret"]) {
+    selections.set("scope", { sceneId: path, primaryPath: path, comparePath: path });
+    const restored = selections.get("scope");
+    assert.equal(restored.sceneId, path); assert.equal(restored.primaryPath, path); assert.equal(restored.comparePath, path);
+  }
 });
+
+for (const sceneId of ["room_100%_enhanced.tif", "room_%00_enhanced.tif"]) {
+  test(`raw photograph filename ${sceneId} loads without a second URI decode`, async (t) => {
+    const h = fixture({ sceneCount: 1 });
+    h.scenes[0].scene_id = sceneId;
+    h.scenes[0].variants[0].artifact_path = sceneId;
+    h.scenes[0].variants[1].artifact_path = `original/${sceneId}`;
+    t.after(() => h.api.show(null, null));
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    assert.equal(selected(h), sceneId);
+    assert.equal(h.root.find("photographic-primary").value, sceneId);
+    assert.equal(requested(h, "/scene").at(-1).params.get("scene_id"), sceneId);
+    assert.equal(h.selections.at(-1).artifactPath, sceneId);
+    assert.match(requested(h, "/scene").at(-1).url, /%25/);
+  });
+}
 
 test("paged catalogue rollout defaults to the existing photographic review contract", async (t) => {
   const h = fixture({ paged: false });
@@ -398,6 +419,30 @@ test("refresh preserves a missing photograph's draft until its replacement is ex
   assert.equal(selected(h), "input-0001");
   assert.equal(note.value, "");
   assert.equal(exposure.value, "0");
+  assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
+});
+
+test("refresh preserves a removed native version's draft when the same photograph still has a delivery TIFF", async (t) => {
+  const h = fixture({ sceneCount: 1 });
+  const nativePath = "working/input-0000/native.npy";
+  h.scenes[0].variants.push({ ...h.scenes[0].variants[0], role: "working_master", artifact_path: nativePath, sha256: "e".repeat(64) });
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const primary = h.root.find("photographic-primary"); primary.value = nativePath; await primary.trigger("change");
+  const note = h.root.find("photographic-decision-note"), exposure = h.root.find("photographic-revision-exposure");
+  note.value = "Retain this native version's draft"; await note.trigger("input");
+  exposure.value = "0.15"; await exposure.trigger("input");
+  h.scenes[0].variants = h.scenes[0].variants.filter((variant) => variant.artifact_path !== nativePath);
+  await h.api.refresh(); await settle();
+  assert.equal(selected(h), "input-0000");
+  assert.equal(primary.value, nativePath);
+  assert.equal(note.value, "Retain this native version's draft");
+  assert.equal(exposure.value, "0.15");
+  assert.equal(h.root.find("photographic-discard-navigation").hidden, false);
+  await h.root.find("photographic-discard-navigation").trigger();
+  assert.equal(selected(h), "input-0000");
+  assert.equal(primary.value, "input-0000/delivery.tif");
+  assert.equal(note.value, ""); assert.equal(exposure.value, "0");
   assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
 });
 

@@ -1105,6 +1105,87 @@ async def test_legacy_catalogue_resolves_first_unapproved_native_lighting_group(
 
 
 @pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("change", [None, "bytes", "removed"])
+async def test_mutation_projection_fresh_hashes_only_saved_unknown_legacy_identities(fake_app, monkeypatch, enabled, change):
+    from dataclasses import replace
+
+    from transformation_portal.api.v1.photographic_review import ReviewDecisionRequest
+    from transformation_portal.orchestrator import photographic_review_service as services
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig, current_review_lease
+    from transformation_portal.orchestrator.photographic_review_store import MemoryReviewStore
+
+    app, job, _, _ = fake_app
+    native_bodies, _, _ = _native_inventory(False, False)
+    photograph = native_bodies["v6/input-0000/delivery.tif"]
+    sha = hashlib.sha256(photograph).hexdigest()
+    left, selected, unrelated = "room_a_enhanced.tif", "room_b_enhanced.tif", "room_c_enhanced.tif"
+    bodies = {path: photograph for path in (left, selected, unrelated)}
+    job.artifacts = {
+        "items": [
+            {"path": path, "sha256": sha if path == selected else None, "size_bytes": len(photograph)} for path in bodies
+        ]
+    }
+    state_store = MemoryReviewStore()
+    monkeypatch.setattr(services, "get_review_store", lambda: state_store)
+    monkeypatch.setattr(adapter, "get_review_store", lambda: state_store)
+    observations = []
+
+    def stream(_job, path, **_kwargs):
+        lease = current_review_lease.get()
+        assert (lease is not None) == enabled
+        claims = None
+        if lease is not None:
+            assert not lease.released and lease.cost.io_slots > 0
+            assert lease.cost.memory_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            assert lease.cost.scratch_bytes >= adapter.MAX_REVIEW_IMAGE_BYTES
+            claims = (lease.cost.memory_bytes, lease.cost.scratch_bytes, lease.cost.io_slots, lease.cost.decode_slots)
+        observations.append((path, lease, claims))
+        return StreamingResponse(_chunks(bodies[path]))
+
+    app._get_job_artifact.side_effect = stream
+    access = adapter.AppReviewAccess(app)
+    service = services.PhotographicReviewService(ReviewAdmissionConfig(enabled=enabled))
+    authorize = access.authorize_admission if enabled else access.authorize_catalogue
+    try:
+        await service.execute(
+            await authorize(_request(), job.id),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=left, sha256=sha, status="approved", expected_version=0),
+        )
+        if change == "bytes":
+            bodies[left] = photograph[:-1] + bytes([photograph[-1] ^ 1])
+        elif change == "removed":
+            job.artifacts["items"] = [row for row in job.artifacts["items"] if row["path"] != left]
+        observations.clear()
+        context = await authorize(_request(), job.id)
+        materialize = context.materialize
+        execution_sources = []
+
+        async def materialize_selected(ref, destination, maximum):
+            execution_sources.append(ref["artifact_path"])
+            return await materialize(ref, destination, maximum)
+
+        result = await service.execute(
+            replace(context, materialize=materialize_selected),
+            service.decision,
+            ReviewDecisionRequest(artifact_path=selected, sha256=sha, status="approved", expected_version=1),
+        )
+        assert {row["artifact_path"] for row in result["decisions"]} == ({left, selected} if change is None else {selected})
+        saved = await state_store.get(job.id, "local")
+        assert len(saved["decisions"]) == 2 and saved["decisions"][0]["sha256"] == sha
+        assert execution_sources == [selected], "Projection hashing must not inspect or decode the unrelated source"
+        paths = [path for path, _lease, _claims in observations]
+        assert paths.count(selected) == 1 and paths.count(left) == (0 if change == "removed" else 1)
+        assert unrelated not in paths
+        assert len({id(lease) for _path, lease, _claims in observations}) == 1
+        assert len({claims for _path, _lease, claims in observations}) == 1, "Projection must not expand its reserved claims"
+        assert all(lease is None or lease.released for _path, lease, _claims in observations)
+        assert service.admission.snapshot()["active"] == 0
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("change", [None, "descriptor", "removed"])
 async def test_mutation_decision_projection_revalidates_only_saved_native_closures(fake_app, monkeypatch, enabled, change):
     from transformation_portal.api.v1.photographic_review import ReviewDecisionRequest

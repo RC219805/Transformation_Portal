@@ -866,26 +866,26 @@ class PhotographicReviewService:
                 references[ref["artifact_path"]] = ref
                 selected_paths.add(ref["artifact_path"])
         # Indexed final hashes and committed revision authorities need no IO.
-        # Only saved native decisions need their current composite closure;
-        # resolve one scene's bounded descriptor/ICC at a time under the lease,
-        # before mutate() releases expensive resources. Never decode its image.
-        native_scenes = {
+        # Saved native or unfingerprinted legacy decisions need current source
+        # identities. Resolve one scene's bounded companions or streamed hash
+        # under the lease before mutate() releases it, without image decoding.
+        unresolved_scenes = {
             ref["scene_id"]
             for ref in index
-            if ref.get("role") == "working_master"
+            if (ref.get("sha256") is None or ref.get("role") == "working_master")
             and ref["artifact_path"] not in selected_paths
             and any(
-                row["artifact_path"] == ref["artifact_path"] and row["sha256"] == ref.get("sha256")
+                row["artifact_path"] == ref["artifact_path"] and ref.get("sha256") in {None, row["sha256"]}
                 for row in state["decisions"]
             )
         }
         if context.discover_scene_references is not None:
-            for scene_id in sorted(native_scenes):
+            for scene_id in sorted(unresolved_scenes):
                 async with self.expensive:
                     resolved = await context.discover_scene_references({scene_id})
                 for ref in resolved:
                     indexed = references.get(ref["artifact_path"])
-                    if indexed is not None and indexed.get("sha256") == ref.get("sha256"):
+                    if indexed is not None and indexed.get("sha256") in {None, ref.get("sha256")}:
                         references[ref["artifact_path"]] = ref
         await self.revalidate(context)
         return replace(context, references=list(references.values()))
