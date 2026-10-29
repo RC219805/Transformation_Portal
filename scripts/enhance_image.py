@@ -27,6 +27,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from transformation_portal.lux_depth_v3.geometry import validate_geometry_recipe
+
 # Import V2 enhancement implementation
 from transformation_portal.lux_depth_v3.v2_enhance import (
     V2EnhancementError,
@@ -147,6 +149,16 @@ def parse_arguments() -> argparse.Namespace:
 
     parser.add_argument("input_path", type=Path, help="Input image path")
     parser.add_argument("--depth-dir", type=Path, default=None, help="Directory containing depth maps")
+    parser.add_argument(
+        "--geometry-recipe",
+        choices=("legacy_encoded_crop_stretch_v1", "normalized_crop_support_v1"),
+        default="legacy_encoded_crop_stretch_v1",
+        help="Versioned source/model/V2 geometry policy",
+    )
+    parser.add_argument("--geometry-handoff", type=Path, default=None, help="Verified corrected-geometry execution receipt")
+    parser.add_argument(
+        "--depth-map", type=Path, default=None, help="Exact normalized-relative float32 NPY for corrected geometry"
+    )
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for enhanced images and reports")
 
     parser.add_argument("--preset", default="default", help="Enhancement preset (default: %(default)s)")
@@ -285,6 +297,9 @@ def run_v2_enhancement(
     masks_file: Path | None = None,
     asset_key: str | None = None,
     input_color: str = "auto",
+    geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
+    geometry_handoff_path: Path | None = None,
+    depth_map_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -309,6 +324,7 @@ def run_v2_enhancement(
         ValueError: If validation fails
         V2EnhancementError: If enhancement fails
     """
+    validate_geometry_recipe(geometry_recipe)
     input_path = validate_input_path(input_path)
     depth_dir = validate_depth_dir(depth_dir)
     output_dir = validate_output_dir(output_dir)
@@ -342,8 +358,12 @@ def run_v2_enhancement(
     # Find depth map if depth_dir provided
     # Use canonical asset key for depth lookup to align with orchestrator naming
     # Validate asset_key to prevent path traversal (important for direct CLI invocation)
-    depth_map_path = None
-    if depth_dir:
+    corrected_geometry = geometry_recipe == "normalized_crop_support_v1"
+    if corrected_geometry and (depth_dir is not None or depth_map_path is None or geometry_handoff_path is None):
+        raise ValueError("Corrected V2 requires explicit geometry/depth artifacts and forbids depth discovery")
+    if not corrected_geometry and (depth_map_path is not None or geometry_handoff_path is not None):
+        raise ValueError("Explicit geometry artifacts require the corrected recipe")
+    if depth_dir and not corrected_geometry:
         depth_map_path = find_depth_map(depth_dir, lookup_key)
         if depth_map_path:
             logger.info("Using depth map: %s", depth_map_path.name)
@@ -351,7 +371,12 @@ def run_v2_enhancement(
             logger.warning("No depth map found in %s for %s", depth_dir, lookup_key)
 
     # Load material masks if masks_file provided (Materials V3 integration)
-    material_masks = load_material_masks(masks_file) if masks_file else None
+    material_masks = load_material_masks(masks_file) if masks_file and not corrected_geometry else None
+    geometry_kwargs: dict[str, Any] = (
+        {"geometry_recipe": geometry_recipe, "geometry_handoff_path": geometry_handoff_path, "masks_file": masks_file}
+        if corrected_geometry
+        else {}
+    )
 
     # Run enhancement
     report = enhance_image(
@@ -364,6 +389,7 @@ def run_v2_enhancement(
         allow_8bit_output=allow_8bit,
         output_bit_depth=output_bit_depth,
         input_color=input_color,
+        **geometry_kwargs,
     )
 
     # Add upscaler info to report (currently unused but maintained for compatibility)
@@ -429,6 +455,9 @@ def main() -> int:
             input_color=args.input_color,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
             asset_key=resolved_asset_key,
+            geometry_recipe=args.geometry_recipe,
+            geometry_handoff_path=args.geometry_handoff,
+            depth_map_path=args.depth_map,
         )
 
         if report_path:

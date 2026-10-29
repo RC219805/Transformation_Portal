@@ -141,6 +141,7 @@ def atomic_write_depth_u16_png_with_stats(
     method: str = "u16",
     debug_verify: bool = False,
     compute_encoded_unique_values: bool = False,
+    support_mask: np.ndarray | None = None,
     **kwargs: Any,
 ) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
@@ -155,6 +156,8 @@ def atomic_write_depth_u16_png_with_stats(
         debug_verify: Whether to verify write integrity by reading back
         compute_encoded_unique_values: Whether to compute exact u16 cardinality.
             This scans the encoded image and is intended for APEX audit paths.
+        support_mask: Optional exact boolean HW photographic support. Excluded
+            samples do not affect normalization and encode as the zero sentinel.
         **kwargs: Additional arguments (reserved for future use)
 
     Returns:
@@ -182,7 +185,17 @@ def atomic_write_depth_u16_png_with_stats(
     if method != "u16":
         raise ValueError("Unsupported depth quantization" f" method: {method!r}." " Only 'u16' is supported.")
 
-    finite_depth = _finite_float_array(depth_map)
+    normalization_input = depth_map
+    if support_mask is not None:
+        if (
+            not isinstance(support_mask, np.ndarray)
+            or support_mask.dtype != np.bool_
+            or support_mask.ndim != 2
+            or support_mask.shape != depth_map.shape
+        ):
+            raise ValueError("Depth support must be an exact boolean HW mask matching the depth grid")
+        normalization_input = np.where(support_mask, depth_map, np.nan)
+    finite_depth = _finite_float_array(normalization_input)
 
     # 1. Calculate statistics on original data
     stats = DepthWriteStats(
@@ -196,8 +209,10 @@ def atomic_write_depth_u16_png_with_stats(
     )
 
     # 2. Normalize to 16-bit (0-65535)
-    depth_normalized, normalization_stats = normalize_depth_for_u16_png(depth_map)
+    depth_normalized, normalization_stats = normalize_depth_for_u16_png(normalization_input)
     depth_u16 = np.rint(depth_normalized * 65535.0).astype(np.uint16)
+    if support_mask is not None:
+        depth_u16[~support_mask] = 0
     stats = DepthWriteStats(
         min=stats.min,
         max=stats.max,

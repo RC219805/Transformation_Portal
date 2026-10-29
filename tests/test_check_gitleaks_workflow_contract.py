@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,13 @@ description = "Ignore byte-verified documentation catalog source SHA256 values"
 condition = "AND"
 regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
 regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX}''']
+paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
+
+[[rules.allowlists]]
+description = "Ignore one public source SHA256 split across a scanner chunk boundary"
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX}''']
 paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
 """
 
@@ -220,6 +228,15 @@ def test_wrong_match_regex_is_reported() -> None:
     assert "generic-api-key allowlist must match only the generated auth failure false-positive branch" in errors
 
 
+@pytest.mark.parametrize("rules", [None, 1, {}, "generic-api-key"])
+def test_non_list_rule_inventory_fails_closed(rules: object) -> None:
+    config = tomllib.loads(valid_config_text())
+    config["rules"] = rules
+    assert "gitleaks config must define exactly one generic-api-key rule extension" in gitleaks_contract._validate_config(
+        config
+    )
+
+
 @pytest.mark.parametrize("prefix", ["", "\n"])
 @pytest.mark.parametrize("suffix", ["", ","])
 def test_catalog_source_hash_allowlist_matches_only_a_complete_source_binding(prefix: str, suffix: str) -> None:
@@ -277,7 +294,7 @@ def test_catalog_source_hash_exception_cannot_be_widened(mutation: str) -> None:
     elif mutation == "line":
         config = config.replace(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, r"[0-9a-f]{64}")
     else:
-        index = config.rindex('condition = "AND"')
+        index = config.index('condition = "AND"', config.index('description = "Ignore byte-verified documentation'))
         config = config[:index] + config[index:].replace('condition = "AND"', 'condition = "OR"', 1)
     errors = gitleaks_contract.validate_gitleaks_contract(config, valid_ci_workflow_text(), valid_firewall_workflow_text())
     assert errors
@@ -285,3 +302,64 @@ def test_catalog_source_hash_exception_cannot_be_widened(mutation: str) -> None:
         assert "generic-api-key allowlists must require AND semantics" in errors
     else:
         assert "generic-api-key allowlist must match only documentation catalog source SHA256 lines" in errors
+
+
+def test_chunk_exception_digest_is_the_public_catalog_source_hash() -> None:
+    source = PROJECT_ROOT / "src/transformation_portal/portal/photographic_review_access.py"
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    assert gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX == f"^{digest}$"
+
+
+@pytest.mark.parametrize(
+    "path,mutation,expected",
+    [
+        ("docs/governance/documentation_catalog.json", "exact", True),
+        ("docs/governance/documentation_catalog.json", "nearby_hex", False),
+        ("docs/governance/documentation_catalog.json", "prefix", False),
+        ("docs/governance/documentation_catalog.json", "suffix", False),
+        ("docs/governance/documentation_catalog.json", "other_secret", False),
+        ("docs/governance/documentation_catalog_copy.json", "exact", False),
+        ("docs/governance/credentials.json", "exact", False),
+        ("tests/docs/governance/documentation_catalog.json", "exact", False),
+        ("docs/governance/documentation_catalog.json.backup", "exact", False),
+    ],
+)
+def test_chunk_exception_matches_only_exact_public_digest_and_catalog(path: str, mutation: str, expected: bool) -> None:
+    config = tomllib.loads((PROJECT_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = next(rule for rule in config["rules"] if rule["id"] == "generic-api-key")
+    allowlist = next(item for item in rule["allowlists"] if item["regexTarget"] == "secret")
+    digest = gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX[1:-1]
+    if mutation == "nearby_hex":
+        digest = ("0" if digest[0] != "0" else "1") + digest[1:]
+    elif mutation == "prefix":
+        digest = "a" + digest
+    elif mutation == "suffix":
+        digest += "a"
+    elif mutation == "other_secret":
+        digest = hashlib.sha256(b"unrelated credential fixture").hexdigest()
+    assert allowlist["condition"] == "AND"
+    matches = any(re.search(pattern, path) for pattern in allowlist["paths"]) and any(
+        re.fullmatch(pattern, digest) for pattern in allowlist["regexes"]
+    )
+    assert bool(matches) is expected
+
+
+@pytest.mark.parametrize("mutation", ["digest", "path", "target", "condition", "rule"])
+def test_chunk_exception_cannot_be_widened_or_applied_to_another_rule(mutation: str) -> None:
+    config = valid_config_text()
+    index = config.index('description = "Ignore one public source SHA256')
+    prefix, chunk = config[:index], config[index:]
+    if mutation == "digest":
+        chunk = chunk.replace(gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX, "[0-9a-f]{64}")
+    elif mutation == "path":
+        chunk = chunk.replace(gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX, "docs/governance/.*")
+    elif mutation == "target":
+        chunk = chunk.replace('regexTarget = "secret"', 'regexTarget = "line"')
+    elif mutation == "condition":
+        chunk = chunk.replace('condition = "AND"', 'condition = "OR"')
+    else:
+        prefix = prefix.replace('id = "generic-api-key"', 'id = "unrelated-secret-rule"')
+    errors = gitleaks_contract.validate_gitleaks_contract(
+        prefix + chunk, valid_ci_workflow_text(), valid_firewall_workflow_text()
+    )
+    assert errors

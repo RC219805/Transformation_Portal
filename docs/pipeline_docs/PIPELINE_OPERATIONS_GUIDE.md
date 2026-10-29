@@ -122,6 +122,18 @@ For research-only models, follow the license-acknowledgement flows in
 [LUX_DEPTH_V3_CLI_GUIDE.md](../cli/LUX_DEPTH_V3_CLI_GUIDE.md). Do not replace
 the governed selector with an unpinned model path in production guidance.
 
+The APEX example retains `legacy_encoded_crop_stretch_v1` and V2 processing
+`1.2.0`. To evaluate corrected geometry, explicitly select
+`--geometry-recipe normalized_crop_support_v1` in a separate output namespace;
+its V2 processing contract is `1.3.0`. PBR must be off, and RAW, reconstruction
+and spatial linear ingest are unsupported. Corrected MaterialsV3 requires
+opaque 8-bit sources. Native depth and masks use verified support rather than
+stretching cropped pixels. Standalone V2 additionally requires an explicit
+geometry receipt and exact depth artifact. Follow the
+[versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
+for those bindings and rollback; synthetic checks do not authorize automatic
+adoption or establish photographic production acceptance.
+
 ## TIFF Batch Workflow
 
 Use `luxury-tiff-batch` for high-fidelity TIFF directory processing:

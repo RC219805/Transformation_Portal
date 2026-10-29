@@ -13,6 +13,7 @@ from transformation_portal.depth.models import depth_anything_v2 as da2_module
 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 from transformation_portal.depth.utils.cache import DepthCache
 from transformation_portal.lux_depth_v3 import inference as inference_module
+from transformation_portal.lux_depth_v3.config import DA3Config
 
 pytestmark = pytest.mark.unit
 
@@ -51,6 +52,7 @@ def adapter(request, monkeypatch):
         result.device = "cpu"
     else:
         result = inference_module.DA3InferenceEngine.__new__(inference_module.DA3InferenceEngine)
+        result.config = DA3Config()
         monkeypatch.setitem(
             sys.modules,
             "depth_anything_3.api",

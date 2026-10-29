@@ -707,14 +707,14 @@ def _stage_configuration(
             }
         )
     elif stage == "v2":
-        from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+        from .v2_presets import V2_COLOR_CONTRACT, processing_version_for_geometry
 
         base.update(
             {
                 "preset": str(config.v2_preset),
                 "input_color": config.v2_input_color,
                 "color_contract": V2_COLOR_CONTRACT,
-                "processing_version": V2_PROCESSING_VERSION,
+                "processing_version": processing_version_for_geometry(config.geometry_recipe),
                 "materials_color_handoff": "validated_srgb" if config.enable_materials_v3 else "none",
                 "device": str(config.v2_device),
                 "upscaler_backend": str(config.v2_upscaler_backend),
@@ -770,6 +770,14 @@ def _stage_configuration(
                 },
             }
         )
+    if stage in {"preprocess", "depth", "materials_v3", "v2"}:
+        from .geometry import CORRECTED_MODEL_MAX_LONG_EDGE, LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+
+        validate_geometry_recipe(config.geometry_recipe)
+        if config.geometry_recipe != LEGACY_GEOMETRY_RECIPE:
+            base["geometry_recipe"] = config.geometry_recipe
+            if stage == "preprocess":
+                base["model_max_long_edge"] = CORRECTED_MODEL_MAX_LONG_EDGE
     return base
 
 
@@ -882,6 +890,18 @@ def _native_plan(
 def _prepare_working_config(config: EnhanceConfig) -> EnhanceConfig:
     if config.execution_plan_authority is not None or config.execution_plan_canonical_bytes is not None:
         raise ExecutionPlanError("Cannot prepare a new plan from a config that already carries execution authority")
+    from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+
+    try:
+        recipe = validate_geometry_recipe(config.geometry_recipe)
+    except ValueError as exc:
+        raise ExecutionPlanError(str(exc)) from exc
+    if recipe != LEGACY_GEOMETRY_RECIPE:
+        unsupported = [
+            name for name in ("generate_pbr", "enable_reconstruction", "spatial_ai_linear_ingest") if getattr(config, name)
+        ]
+        if unsupported:
+            raise ExecutionPlanError("Corrected geometry does not support " + ", ".join(unsupported))
     working = copy.deepcopy(config)
     working.execution_plan_authority = None
     working.execution_plan_canonical_bytes = None
@@ -1045,6 +1065,13 @@ def prepare_lux_execution(
     """Resolve once and freeze a native execution-complete Lux plan."""
 
     root, resolved_inputs, relative_inputs = _resolve_input_selection(input_root, input_files)
+    from ..core.raw_formats import RAW_EXTENSIONS
+    from .geometry import NORMALIZED_GEOMETRY_RECIPE
+
+    if config.geometry_recipe == NORMALIZED_GEOMETRY_RECIPE and any(
+        path.suffix.lower() in RAW_EXTENSIONS for path in resolved_inputs
+    ):
+        raise LuxExecutionPlanAuthorityError("Corrected geometry has no RAW original-raster mapping")
     working = _prepare_working_config(config)
 
     explicit_backend = normalize_backend_id(working.depth_backend) is not None
@@ -1289,6 +1316,7 @@ def runtime_config_from_execution_plan(
         "preset_requested": plan.preset_requested,
         "depth_device": depth_device,
         "depth_quantization": depth["quantization"],
+        "geometry_recipe": preprocess.get("geometry_recipe", "legacy_encoded_crop_stretch_v1"),
         "depth_postprocessing": postprocessing,
         "force_depth": depth["force"],
         "non_commercial_ok": acknowledgements.non_commercial_ok,

@@ -63,16 +63,30 @@ and non-finite numbers.
 V3 V2 finishing now carries configuration schema `tp.stage.config.lux.v2.v2`
 under the existing `tp.stage.lux.v2.v1` registry identity. Its closed config
 binds `input_color`, `color_contract=encoded_srgb_v1`, and
-`processing_version=1.2.0` alongside the finishing controls. The outer plan V1
+`processing_version=1.2.0` for the historical default alongside the finishing
+controls. The outer plan V1
 contract also carries Materials configuration `tp.stage.config.lux.materials_v3.v2`
 under its existing registry identity. It binds that same source policy and
 color/processing contract for the geometry-preserving encoded-sRGB Materials
 proxy; the V2 node explicitly records its validated-sRGB internal handoff.
-Depth/segmentation model preprocessing remains unchanged, while legacy Stage A reuse
+Default depth/segmentation model preprocessing remains unchanged, while legacy Stage A reuse
 invalidates when its retained Materials artifacts change. The plan V1
 contract remains unchanged. Older processing contracts require their matching
 environment; current validation does not silently reinterpret them. See the
 [photographic color contract](PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
+
+Opt-in `geometry_recipe=normalized_crop_support_v1` is closed across the
+preprocess, depth, Materials and V2 nodes and pairs with processing version
+`1.3.0`. It binds a source-normalized crop/support transform and explicit
+verified V2 handoff. Its preprocess configuration fixes
+`model_max_long_edge=504`: reduce larger inputs before crop/pad without
+upscaling smaller images, then bind DA3 inference to the exact recorded grid.
+Omitted or explicit historical geometry keeps the existing
+plan bytes and cache fingerprints. Unknown or mixed recipes, mismatched
+versions, corrected RAW inputs and unsupported PBR/reconstruction modes fail
+validation. This additive configuration does not change the outer V1 schema
+identity or registry IDs. See the
+[versioned geometry contract](PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe).
 
 Native preparation and carried-plan input binding both reject paths that
 collide after Unicode NFC normalization and case folding. This keeps a

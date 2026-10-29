@@ -37,6 +37,7 @@ class EnhancementStage(Stage):
         output_dtype: Optional[np.dtype] = None,
         tone_low_tex_strength: float = 0.6,
         tone_depth_smoothing: bool = True,
+        geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
     ):
         """
         Initialize enhancement stage.
@@ -63,6 +64,13 @@ class EnhancementStage(Stage):
         self.output_dtype = output_dtype if output_dtype is not None else np.dtype("uint8")
         self.tone_low_tex_strength = float(np.clip(tone_low_tex_strength, 0.0, 1.0))
         self.tone_depth_smoothing = bool(tone_depth_smoothing)
+        self.geometry_recipe = geometry_recipe
+        self._uses_corrected_geometry()
+
+    def _uses_corrected_geometry(self) -> bool:
+        from transformation_portal.lux_depth_v3.geometry import NORMALIZED_GEOMETRY_RECIPE, validate_geometry_recipe
+
+        return validate_geometry_recipe(self.geometry_recipe) == NORMALIZED_GEOMETRY_RECIPE
 
     def get_dependencies(self) -> list:
         """Depends on depth and materials for best results."""
@@ -84,6 +92,7 @@ class EnhancementStage(Stage):
         """
         import time
 
+        corrected_geometry = self._uses_corrected_geometry()
         # Get inputs
         image = context.get_artifact("image")
         if image is None:
@@ -95,17 +104,39 @@ class EnhancementStage(Stage):
             )
 
         depth_map = context.get_artifact("depth_map")
-        material_masks = self._normalize_material_masks(
-            context.get_artifact("material_masks", {}),
-            image,
-        )
+        geometry = None
+        if corrected_geometry:
+            from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs
+
+            geometry = context.get_artifact("geometry_handoff")
+            if not isinstance(geometry, GeometryBoundInputs):
+                raise ValueError("Corrected enhancement requires a verified geometry handoff")
+            material_masks = context.get_artifact("material_masks", {})
+            geometry.validate_stage(image, depth_map, material_masks)
+            # Material edits can depend on earlier edits' image statistics.
+            # Their execution order must agree with the canonical cache input.
+            material_masks = dict(sorted(material_masks.items()))
+        else:
+            material_masks = self._normalize_material_masks(context.get_artifact("material_masks", {}), image)
         material_masks_supplied_count = len(material_masks)
         v2_material_adjustments_applied = self._v2_material_adjustments_would_apply(material_masks)
 
         start = time.time()
 
         # Apply enhancements
-        enhanced_image = self._enhance_image(image, depth_map, material_masks)
+        enhanced_image = self._enhance_image(
+            image,
+            depth_map,
+            material_masks,
+            **({"support_mask": geometry.allowed_pixels()} if geometry is not None else {}),
+        )
+        if geometry is not None:
+            # Support and partial/transparent alpha protect the complete edit,
+            # including global clarity and material operations, not just depth.
+            allowed = geometry.allowed_pixels()
+            maximum = float(np.iinfo(enhanced_image.dtype).max)
+            preserved = np.rint(np.clip(image, 0, 1) * maximum).astype(enhanced_image.dtype)
+            enhanced_image[~allowed] = preserved[~allowed]
 
         duration_ms = (time.time() - start) * 1000
 
@@ -184,10 +215,43 @@ class EnhancementStage(Stage):
 
     def get_cache_key(self, context: StageContext) -> str:
         """Generate cache key based on all inputs."""
+        corrected_geometry = self._uses_corrected_geometry()
         # Get input image
         image = context.get_artifact("image")
         if image is None:
+            if corrected_geometry:
+                raise ValueError("Corrected enhancement requires its verified photographic image before cache lookup")
             return "no_image"
+
+        if corrected_geometry:
+            from transformation_portal.ingest.canonical_json import canonicalize_json
+            from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs, array_identity
+
+            geometry = context.get_artifact("geometry_handoff")
+            if not isinstance(geometry, GeometryBoundInputs):
+                raise ValueError("Corrected enhancement requires a verified geometry handoff")
+            geometry.validate_stage(image, context.get_artifact("depth_map"), context.get_artifact("material_masks", {}))
+            payload = {
+                "recipe": self.geometry_recipe,
+                "handoff_identity_sha256": geometry.identity_sha256,
+                "image": array_identity(image),
+                "depth_map": array_identity(geometry.depth_map),
+                "support": array_identity(geometry.support),
+                "material_masks": {name: array_identity(mask) for name, mask in sorted(geometry.masks.items())},
+                "material_execution_order": "sorted_name_v1",
+                "alpha": None if geometry.alpha is None else array_identity(geometry.alpha),
+                "stage_version": self.version,
+                "output_dtype": np.dtype(self.output_dtype).str,
+                "strengths": [self.enhancement_strength, self.clarity_strength, self.material_strength],
+                "tone_low_tex_strength": self.tone_low_tex_strength,
+                "tone_depth_smoothing": self.tone_depth_smoothing,
+            }
+            return "enhance_geometry_" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
+        return self._legacy_cache_key(context)
+
+    def _legacy_cache_key(self, context: StageContext) -> str:
+        """Keep historical key bytes unchanged for the legacy recipe."""
+        image = context.get_artifact("image")
 
         # Hash image
         image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
@@ -241,6 +305,8 @@ class EnhancementStage(Stage):
         image: np.ndarray,
         depth_map: np.ndarray | None,
         material_masks: Dict[str, np.ndarray],
+        *,
+        support_mask: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Apply material-aware enhancements.
@@ -268,7 +334,9 @@ class EnhancementStage(Stage):
             enhanced = enhanced / 255.0
 
         # Apply global tone mapping
-        enhanced = self._apply_tone_mapping(enhanced, depth_map)
+        enhanced = self._apply_tone_mapping(
+            enhanced, depth_map, **({"support_mask": support_mask} if support_mask is not None else {})
+        )
 
         # Apply clarity enhancement
         if self.clarity_strength > 0:
@@ -291,7 +359,9 @@ class EnhancementStage(Stage):
 
         return enhanced
 
-    def _apply_tone_mapping(self, image: np.ndarray, depth_map: np.ndarray | None) -> np.ndarray:
+    def _apply_tone_mapping(
+        self, image: np.ndarray, depth_map: np.ndarray | None, *, support_mask: np.ndarray | None = None
+    ) -> np.ndarray:
         """Apply depth-aware tone mapping.
 
         CRITICAL: Depth maps from Depth Pro use normalized depth representation:
@@ -317,6 +387,13 @@ class EnhancementStage(Stage):
             return image
 
         image_height, image_width = image.shape[:2]
+        if support_mask is not None:
+            if support_mask.dtype != np.bool_ or support_mask.shape != (image_height, image_width):
+                raise ValueError("Tone support must be an exact native boolean mask")
+            if depth_map.shape != support_mask.shape or not np.isfinite(depth_map[support_mask]).all():
+                raise ValueError("Supported tone depth must be finite on the exact native grid")
+            if not support_mask.any():
+                return image
         if depth_map.shape != (image_height, image_width):
             self.logger.warning(
                 "Depth map shape %s does not match image shape %s; resizing depth map for tone mapping",
@@ -328,7 +405,7 @@ class EnhancementStage(Stage):
         # Percentiles are computed on the RAW depth map so the decision about
         # "near vs. far" stays aligned with the scene, not with our smoothing
         # kernel.
-        depth_p75 = float(np.percentile(depth_map, 75))
+        depth_p75 = float(np.percentile(depth_map if support_mask is None else depth_map[support_mask], 75))
         center_point = depth_p75
 
         # Decouple depth high-frequencies from per-pixel luminance.
@@ -340,7 +417,11 @@ class EnhancementStage(Stage):
         # pass the depth map before it feeds the curve; the global tonal
         # intent (near vs. far) is preserved because the low-pass kernel is
         # much smaller than scene-scale depth variation.
-        depth_for_tone = self._lowpass_depth_for_tone(depth_map) if self.tone_depth_smoothing else depth_map
+        depth_for_tone = (
+            self._lowpass_depth_for_tone(depth_map, **({"support_mask": support_mask} if support_mask is not None else {}))
+            if self.tone_depth_smoothing
+            else depth_map
+        )
 
         depth_normalized = (depth_for_tone - center_point) / (1.0 - center_point + 1e-6)
         depth_normalized = np.clip(depth_normalized, -1.0, 1.0)
@@ -391,10 +472,12 @@ class EnhancementStage(Stage):
 
         # Apply adjustment (broadcast to RGB)
         result = image * adjustment[:, :, np.newaxis]
+        if support_mask is not None:
+            result = np.where(support_mask[..., None], result, image)
 
         return np.clip(result, 0, 1)
 
-    def _lowpass_depth_for_tone(self, depth_map: np.ndarray) -> np.ndarray:
+    def _lowpass_depth_for_tone(self, depth_map: np.ndarray, *, support_mask: np.ndarray | None = None) -> np.ndarray:
         """Low-pass the depth map before it drives per-pixel luminance.
 
         The smoothing scale still tracks image size so we suppress pixel-scale
@@ -406,6 +489,12 @@ class EnhancementStage(Stage):
 
         h, w = depth_map.shape[:2]
         sigma = float(np.clip(max(h, w) / 1024.0, 2.0, 8.0))
+        if support_mask is not None:
+            weights = gaussian_filter(support_mask.astype(np.float32), sigma=sigma)
+            numerator = gaussian_filter(np.where(support_mask, depth_map, 0).astype(np.float32), sigma=sigma)
+            smoothed = np.zeros(depth_map.shape, np.float32)
+            np.divide(numerator, weights, out=smoothed, where=weights > 0)
+            return smoothed
         return gaussian_filter(depth_map.astype(np.float32, copy=False), sigma=sigma)
 
     @staticmethod
@@ -430,7 +519,7 @@ class EnhancementStage(Stage):
         max_side = max(h, w)
         resized_proxy = False
         proxy_scale = 1.0
-        luma_proxy = luma
+        luma_proxy: np.ndarray = luma
         if max_side > _LOW_TEXTURE_PROXY_MAX_SIDE:
             import cv2
 

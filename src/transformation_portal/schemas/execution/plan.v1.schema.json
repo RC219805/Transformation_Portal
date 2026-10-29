@@ -1113,6 +1113,8 @@
       "properties": {
         "schema": { "const": "tp.stage.config.lux.preprocess.v1" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
+        "geometry_recipe": { "const": "normalized_crop_support_v1" },
+        "model_max_long_edge": { "type": "integer", "const": 504 },
         "verify_images": { "type": "boolean" },
         "raw_ingest_mode": { "enum": ["auto", "force_rawpy", "force_preview"] },
         "raw_wb_mode": { "$ref": "#/$defs/shortString" },
@@ -1125,6 +1127,11 @@
         "max_gpu_workers": { "type": "integer", "minimum": 0, "maximum": 8 }
       },
       "allOf": [
+        {
+          "if": { "required": ["geometry_recipe"] },
+          "then": { "required": ["model_max_long_edge"] },
+          "else": { "not": { "required": ["model_max_long_edge"] } }
+        },
         {
           "if": {
             "properties": { "configuration_completeness": { "const": "execution_complete" } }
@@ -1160,6 +1167,7 @@
       "properties": {
         "schema": { "const": "tp.stage.config.lux.depth.v1" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
+        "geometry_recipe": { "const": "normalized_crop_support_v1" },
         "planned_backend": { "$ref": "#/$defs/backendId" },
         "candidate_fallback_chain": {
           "type": "array",
@@ -1315,9 +1323,10 @@
       "properties": {
         "schema": { "const": "tp.stage.config.lux.materials_v3.v2" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
+        "geometry_recipe": { "const": "normalized_crop_support_v1" },
         "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
         "color_contract": { "const": "encoded_srgb_v1" },
-        "processing_version": { "const": "1.2.0" },
+        "processing_version": { "enum": ["1.2.0", "1.3.0"] },
         "apply_pixel_ops": { "type": "boolean" },
         "pixel_ops_strict_policy_version": { "$ref": "#/$defs/shortString" },
         "enable_material_segmentation": { "type": "boolean" },
@@ -1374,6 +1383,11 @@
         "output_bit_depth": { "enum": [8, 16] }
       },
       "allOf": [
+        {
+          "if": { "required": ["geometry_recipe"] },
+          "then": { "properties": { "processing_version": { "const": "1.3.0" } } },
+          "else": { "properties": { "processing_version": { "const": "1.2.0" } } }
+        },
         {
           "if": {
             "properties": { "configuration_completeness": { "const": "execution_complete" } }
@@ -1479,10 +1493,11 @@
       "properties": {
         "schema": { "const": "tp.stage.config.lux.v2.v2" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
+        "geometry_recipe": { "const": "normalized_crop_support_v1" },
         "preset": { "$ref": "#/$defs/shortString" },
         "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
         "color_contract": { "const": "encoded_srgb_v1" },
-        "processing_version": { "const": "1.2.0" },
+        "processing_version": { "enum": ["1.2.0", "1.3.0"] },
         "materials_color_handoff": { "enum": ["none", "validated_srgb"] },
         "device": { "type": "string", "minLength": 1, "maxLength": 128 },
         "upscaler_backend": { "$ref": "#/$defs/shortString" },
@@ -1494,6 +1509,11 @@
         "keep_intermediate": { "type": "boolean" }
       },
       "allOf": [
+        {
+          "if": { "required": ["geometry_recipe"] },
+          "then": { "properties": { "processing_version": { "const": "1.3.0" } } },
+          "else": { "properties": { "processing_version": { "const": "1.2.0" } } }
+        },
         {
           "if": {
             "properties": { "configuration_completeness": { "const": "execution_complete" } }

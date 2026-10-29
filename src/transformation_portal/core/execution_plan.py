@@ -24,6 +24,7 @@ from ..stage_graph.registry import (
     get_output_definition,
     get_stage_definition,
 )
+from .raw_formats import RAW_EXTENSIONS
 
 EXECUTION_PLAN_SCHEMA = "tp.execution.plan.v1"
 EXECUTION_PLAN_SCHEMA_RESOURCE = "plan.v1.schema.json"
@@ -719,6 +720,45 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
             raise ExecutionPlanError("A Lux execution plan must contain exactly one depth node")
         if stage_registry_ids.count(StageRegistryIdentifier.LUX_OUTPUT.value) != 1:
             raise ExecutionPlanError("A Lux execution plan must contain exactly one output node")
+
+    geometry_stages = {
+        StageRegistryIdentifier.LUX_PREPROCESS.value,
+        StageRegistryIdentifier.LUX_DEPTH.value,
+        StageRegistryIdentifier.LUX_MATERIALS_V3.value,
+        StageRegistryIdentifier.LUX_V2.value,
+    }
+    geometry_nodes = [node for node in nodes if node["stage_registry_id"] in geometry_stages]
+    corrected_geometry = any("geometry_recipe" in node["configuration"] for node in geometry_nodes)
+    if corrected_geometry:
+        if payload["configuration_completeness"] != EXECUTION_COMPLETE or any(
+            node["configuration"].get("geometry_recipe") != "normalized_crop_support_v1" for node in geometry_nodes
+        ):
+            raise ExecutionPlanError("Corrected geometry requires one coherent execution-complete recipe across Lux stages")
+        preprocess_nodes = [
+            node for node in geometry_nodes if node["stage_registry_id"] == StageRegistryIdentifier.LUX_PREPROCESS.value
+        ]
+        if len(preprocess_nodes) != 1:
+            raise ExecutionPlanError("Corrected geometry requires one bounded preprocessing stage")
+        model_max_long_edge = preprocess_nodes[0]["configuration"].get("model_max_long_edge")
+        if type(model_max_long_edge) is not int or model_max_long_edge != 504:
+            raise ExecutionPlanError("Corrected geometry requires an exact model_max_long_edge of 504")
+        if any(PurePosixPath(item["path"]).suffix.lower() in RAW_EXTENSIONS for item in payload["input_selection"]["files"]):
+            raise ExecutionPlanError("Corrected geometry has no RAW original-raster mapping")
+        if any(
+            node["stage_registry_id"]
+            in {StageRegistryIdentifier.LUX_PBR.value, StageRegistryIdentifier.LUX_RECONSTRUCTION.value}
+            for node in nodes
+        ):
+            raise ExecutionPlanError("Corrected geometry does not support PBR or reconstruction stages")
+    for node in geometry_nodes:
+        if node["stage_registry_id"] in {
+            StageRegistryIdentifier.LUX_MATERIALS_V3.value,
+            StageRegistryIdentifier.LUX_V2.value,
+        }:
+            version = node["configuration"].get("processing_version")
+            expected_version = "1.3.0" if corrected_geometry else "1.2.0"
+            if version is not None and version != expected_version:
+                raise ExecutionPlanError("Lux geometry recipe and V2 processing version disagree")
 
     requested_declarations: set[str] = set()
     output_ids: set[str] = set()

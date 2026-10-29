@@ -15,8 +15,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
+from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+
 V2_COLOR_CONTRACT = "encoded_srgb_v1"
 V2_PROCESSING_VERSION = "1.2.0"
+V2_NORMALIZED_PROCESSING_VERSION = "1.3.0"
+
+
+def processing_version_for_geometry(recipe: str = LEGACY_GEOMETRY_RECIPE) -> str:
+    """Select the explicit V2 processing contract without promoting its default."""
+    validate_geometry_recipe(recipe)
+    return V2_PROCESSING_VERSION if recipe == LEGACY_GEOMETRY_RECIPE else V2_NORMALIZED_PROCESSING_VERSION
 
 
 @dataclass

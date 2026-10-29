@@ -30,6 +30,7 @@ import logging
 import shutil
 import struct
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -39,7 +40,7 @@ from PIL import Image, ImageOps, PngImagePlugin
 from ..core.image_artifact import ImageMaster
 from ..stage_graph.stage import StageContext, StageStatus
 from ..stage_graph.stages.enhancement import EnhancementStage
-from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION, V2EnhancementConfig
+from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION, V2EnhancementConfig, processing_version_for_geometry
 
 logger = logging.getLogger(__name__)
 
@@ -810,6 +811,9 @@ def enhance_image(
     allow_8bit_output: bool = False,
     output_bit_depth: Optional[int] = None,
     input_color: str = "auto",
+    geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
+    geometry_handoff_path: Optional[Path] = None,
+    masks_file: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
@@ -850,6 +854,14 @@ def enhance_image(
         FileNotFoundError: If input image not found
     """
     start_time = time.perf_counter()
+    processing_version = processing_version_for_geometry(geometry_recipe)
+    corrected_geometry = geometry_recipe == "normalized_crop_support_v1"
+    if corrected_geometry and (geometry_handoff_path is None or depth_map_path is None):
+        raise V2EnhancementError("Corrected V2 processing requires explicit geometry handoff and depth artifacts")
+    if not corrected_geometry and (geometry_handoff_path is not None or masks_file is not None):
+        raise V2EnhancementError("Geometry handoff artifacts require the corrected recipe")
+    if corrected_geometry and material_masks is not None:
+        raise V2EnhancementError("Corrected V2 masks must come from the verified handoff, not bare arrays")
 
     # Validate input
     input_path = Path(input_path)
@@ -859,6 +871,8 @@ def enhance_image(
     # Use default config if not provided
     if config is None:
         config = V2EnhancementConfig()
+    if corrected_geometry:
+        config = replace(config, version=processing_version)
 
     logger.info(f"V2 Enhancement: {input_path.name} with preset '{config.preset}'")
 
@@ -873,7 +887,7 @@ def enhance_image(
     # Without an explicit encoding contract, retain the historical exact-copy
     # passthrough. An explicit depth must flow through the canonical encoder so
     # the emitted bytes, suffix, and manifest all agree.
-    if passthrough_requested and output_bit_depth is None:
+    if passthrough_requested and output_bit_depth is None and not corrected_geometry:
         logger.info("Preset 'none' - skipping enhancement (passthrough)")
         # True passthrough: preserve metadata and pixel data exactly (no re-encoding)
         output_path = Path(output_path)
@@ -908,10 +922,49 @@ def enhance_image(
         logger.info("Preset 'none' - skipping adjustments and applying requested output encoding")
 
     try:
+        geometry = None
+        source_snapshot = None
+        master = None
         # Load input image with bit-depth preservation
         allow_8bit_load = output_bit_depth == 8 or (output_bit_depth is None and allow_8bit_output)
         try:
-            image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_load)
+            if corrected_geometry:
+                from .geometry_handoff import load_geometry_handoff, snapshot_geometry_artifact
+
+                if geometry_handoff_path is None or depth_map_path is None:
+                    raise V2EnhancementError("Corrected V2 requires explicit geometry handoff and depth artifacts")
+                # Color pixels, metadata, alpha and source identity all derive
+                # from the same bounded byte snapshot in this versioned path.
+                source_snapshot = snapshot_geometry_artifact(input_path, 2 * 1024**3)
+                master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
+                if master.source_bit_depth not in {8, 16}:
+                    raise V2EnhancementError("Corrected V2 supports bounded 8/16-bit SDR sources only")
+                input_bits = master.source_bit_depth
+                # Keep one photographic float working buffer. Source precision
+                # controls encoding; an unused integer RGB proxy would only
+                # duplicate this full-resolution allocation.
+                image = bounded_encoded_srgb(master)
+                with Image.open(io.BytesIO(source_snapshot)) as header:
+                    orientation = header.getexif().get(274, 1)
+                    metadata = {
+                        "icc_profile": master.source_icc,
+                        "exif": _normalized_exif_after_orientation(header, orientation != 1),
+                        "exif_orientation": orientation,
+                        "exif_orientation_applied": orientation != 1,
+                        "exif_preservation_mode": "normalized" if orientation != 1 else "full",
+                        "load_backend": "verified_byte_snapshot",
+                    }
+                geometry = load_geometry_handoff(
+                    geometry_handoff_path,
+                    input_bytes=source_snapshot,
+                    depth_map_path=depth_map_path,
+                    masks_file=masks_file,
+                    recipe=geometry_recipe,
+                )
+                if master.shape != geometry.native_shape:
+                    raise V2EnhancementError("Photographic source differs from the bound native geometry")
+            else:
+                image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_load)
         except (OSError, V2EnhancementError) as load_error:
             # Pillow cannot open ordinary RGB float TIFFs. Diagnose the native
             # header without attempting a lower-precision fallback or masking
@@ -928,16 +981,18 @@ def enhance_image(
                             "V3 finishing supports at most 16-bit integer masters; use Unified/V5/V6 to retain float precision"
                         ) from load_error
             raise
-        input_dtype = str(image.dtype)
+        input_dtype = str(np.dtype(np.uint16 if input_bits == 16 else np.uint8)) if corrected_geometry else str(image.dtype)
         # Pixel processing has one explicit color domain. Preserve the source
         # precision through the existing V4/V5 photographic color authority;
         # an ICC is a transform, never a label copied onto unrelated pixels.
         from transformation_portal.core.image_artifact import metadata_payload
         from transformation_portal.lux_depth_v4.photography import output_srgb_icc
 
-        source_snapshot = input_path.read_bytes()
-        master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
-        prepared_pixels = bounded_encoded_srgb(master)
+        if source_snapshot is None:
+            source_snapshot = input_path.read_bytes()
+        if master is None:
+            master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
+        prepared_pixels = image if corrected_geometry else bounded_encoded_srgb(master)
         color_preparation = metadata_payload(master.metadata["color_preparation"])
         icc_profile = metadata.get("icc_profile")
         source_icc_profile = icc_profile
@@ -966,7 +1021,7 @@ def enhance_image(
             target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
         else:
-            target_dtype = np.dtype(image.dtype)
+            target_dtype = np.dtype(input_dtype) if corrected_geometry else np.dtype(image.dtype)
             target_bits = input_bits
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
@@ -998,7 +1053,13 @@ def enhance_image(
         # depth-aware tone mapping when a depth map is present. To disable depth effects,
         # simply don't provide a depth map or use preset="none".
         depth_map = None
-        if not passthrough_requested and depth_map_path and depth_map_path.exists():
+        if geometry is not None:
+            geometry = geometry.with_image(image, master.alpha)
+            depth_map = geometry.depth_map
+            # Preserve the optional-mask contract: an empty verified inventory
+            # is not a Materials run and must retain the plain V2 output label.
+            material_masks = dict(geometry.masks) or None
+        elif not passthrough_requested and depth_map_path and depth_map_path.exists():
             depth_map = load_depth_map(depth_map_path)
             logger.debug(f"Loaded depth map: {depth_map.shape}")
         elif not passthrough_requested and depth_map_path:
@@ -1015,10 +1076,11 @@ def enhance_image(
                 enhancement_strength=config.enhancement_strength,
                 clarity_strength=config.clarity_strength,
                 material_strength=config.material_strength,
-                version=config.version,
+                version=processing_version if corrected_geometry else config.version,
                 output_dtype=target_dtype,  # Use consistent target dtype
                 tone_low_tex_strength=getattr(config, "tone_low_tex_strength", 0.6),
                 tone_depth_smoothing=getattr(config, "tone_depth_smoothing", True),
+                **({"geometry_recipe": geometry_recipe} if corrected_geometry else {}),
             )
 
             # Create minimal context for stage execution
@@ -1030,6 +1092,8 @@ def enhance_image(
 
             if material_masks:
                 context.set_artifact("material_masks", material_masks)
+            if geometry is not None:
+                context.set_artifact("geometry_handoff", geometry)
 
             # Execute enhancement
             logger.debug("Executing EnhancementStage...")
@@ -1084,6 +1148,8 @@ def enhance_image(
                 if alpha_channel is not None:
                     logger.debug("Restoring alpha channel to 16-bit RGBA image")
                     # Check dimensions
+                    if corrected_geometry and alpha_channel.shape[:2] != enhanced_image.shape[:2]:
+                        raise V2EnhancementError("Corrected geometry forbids resizing photographic alpha")
                     if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
                         logger.warning(
                             f"Alpha dimension mismatch: alpha={alpha_channel.shape[:2]} "
@@ -1139,6 +1205,8 @@ def enhance_image(
             if alpha_channel is not None:
                 logger.debug("Restoring alpha channel to enhanced RGB image")
                 # Check dimensions
+                if corrected_geometry and alpha_channel.shape[:2] != enhanced_image.shape[:2]:
+                    raise V2EnhancementError("Corrected geometry forbids resizing photographic alpha")
                 if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
                     from PIL import Image as PILImage
 
@@ -1211,7 +1279,21 @@ def enhance_image(
         return {
             "status": "success",
             "implementation": "v2_enhance",
-            "processing_version": V2_PROCESSING_VERSION,
+            "processing_version": processing_version,
+            **(
+                {
+                    "geometry": {
+                        "recipe": geometry_recipe,
+                        "handoff_identity_sha256": geometry.identity_sha256,
+                        "handoff": metadata_payload(geometry.handoff),
+                        "source_sha256": geometry.source_sha256,
+                        "v2_input_sha256": geometry.v2_input_sha256,
+                        "shape": list(geometry.native_shape),
+                    }
+                }
+                if geometry is not None
+                else {}
+            ),
             "color": {
                 "contract": V2_COLOR_CONTRACT,
                 "input_policy": input_color,

@@ -14,6 +14,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple, cast
 
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
+from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
 from .security import HashMode
 
 if TYPE_CHECKING:
@@ -167,6 +168,11 @@ class DA3Config:
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,
     )
+    # Appended so historical positional DA3Config callers keep their meaning.
+    geometry_recipe: str = LEGACY_GEOMETRY_RECIPE
+
+    def __post_init__(self) -> None:
+        validate_geometry_recipe(self.geometry_recipe)
 
     @classmethod
     def from_preset(cls, preset: Preset) -> DA3Config:
@@ -583,9 +589,18 @@ class EnhanceConfig:
     # backend factories forward this immutable carrier to subprocess workers;
     # a plan object without its exact bytes is not execution authority.
     execution_plan_canonical_bytes: Optional[bytes] = None
+    # Appended to preserve positional compatibility of the historical config.
+    geometry_recipe: str = LEGACY_GEOMETRY_RECIPE
 
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
+        validate_geometry_recipe(self.geometry_recipe)
+        if self.geometry_recipe != LEGACY_GEOMETRY_RECIPE:
+            unsupported = [
+                name for name in ("generate_pbr", "enable_reconstruction", "spatial_ai_linear_ingest") if getattr(self, name)
+            ]
+            if unsupported:
+                raise ValueError("Corrected geometry does not support " + ", ".join(unsupported))
         if not isinstance(self.v2_input_color, str) or self.v2_input_color not in {
             "auto",
             "auto_assume_srgb",

@@ -576,6 +576,15 @@ def resolve_preset(
         return DA3Config(model_variant=model), model
 
 
+def _geometry_projection(config: EnhanceConfig) -> Dict[str, str]:
+    """Carry only explicitly selected successor semantics in historical payloads."""
+    from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+
+    recipe = config.geometry_recipe
+    validate_geometry_recipe(recipe)
+    return {} if recipe == LEGACY_GEOMETRY_RECIPE else {"geometry_recipe": recipe}
+
+
 def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]:
     """Build Materials V3 fingerprint payload for cache validation.
 
@@ -616,13 +625,14 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
 
         effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
 
-    from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+    from .v2_presets import V2_COLOR_CONTRACT, processing_version_for_geometry
 
     return {
         "enable_materials_v3": bool(config.enable_materials_v3),
+        **_geometry_projection(config),
         "input_color": config.v2_input_color if config.enable_materials_v3 else None,
         "color_contract": V2_COLOR_CONTRACT if config.enable_materials_v3 else None,
-        "processing_version": V2_PROCESSING_VERSION if config.enable_materials_v3 else None,
+        "processing_version": processing_version_for_geometry(config.geometry_recipe) if config.enable_materials_v3 else None,
         "apply_pixel_ops": bool(config.apply_pixel_ops),
         # APEX Materials V3 strict-gate policy version. Bumped when the gate's
         # blocker semantics change so cache replays don't serve verdicts under
@@ -782,6 +792,7 @@ def build_depth_cache_payload(
         "depth_pro_python_executable": config.depth_pro_python_executable,
         "raw_python_executable": effective_raw_python,
         "da3_python_executable": effective_da3_python,
+        **_geometry_projection(config),
     }
 
 
@@ -848,7 +859,7 @@ def compute_config_fingerprint(
         effective_da3_python = resolve_effective_da3_python_executable(config)
         effective_raw_python = resolve_effective_raw_python_executable(config)
 
-    from .v2_presets import V2_COLOR_CONTRACT, V2_PROCESSING_VERSION
+    from .v2_presets import V2_COLOR_CONTRACT, processing_version_for_geometry
 
     return ConfigFingerprint(
         model_variant=resolved_model_identity_for_backend(
@@ -856,13 +867,14 @@ def compute_config_fingerprint(
             mv,
             resolved_model_contract=resolved_model_contract,
         ),
+        geometry_recipe=_geometry_projection(config).get("geometry_recipe"),
         depth_quantization=config.depth_quantization,
         depth_device=config.depth_device,
         preset=config.preset.value if config.preset else None,
         v2_preset=config.v2_preset,
         v2_input_color=config.v2_input_color,
         v2_color_contract=V2_COLOR_CONTRACT,
-        v2_processing_version=V2_PROCESSING_VERSION,
+        v2_processing_version=processing_version_for_geometry(config.geometry_recipe),
         v2_device=config.v2_device,
         v2_upscaler_backend=config.v2_upscaler_backend,
         depth_backend=config.depth_backend,
@@ -928,6 +940,7 @@ def build_run_card_config_fingerprint(
 
     payload = {
         "model_variant": base.model_variant,
+        **_geometry_projection(config),
         "depth_quantization": base.depth_quantization,
         "depth_device": base.depth_device,
         "preset": base.preset,

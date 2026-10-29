@@ -38,6 +38,7 @@ EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
     r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
     r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
 )
+EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^aca4a3389349350d0bb65b71e1bf2d000a3d102be0944813801c48c209e2ea2a$"
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -99,19 +100,21 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         if path_patterns != [EXPECTED_ARTIFACT_PATH_REGEX]:
             errors.append("gitleaks global allowlist must be scoped only to ignored generated artifact directories")
 
-    matching_rules = [
-        rule for rule in config.get("rules", []) if isinstance(rule, dict) and rule.get("id") == EXPECTED_RULE_ID
-    ]
+    rules = config.get("rules", [])
+    if not isinstance(rules, list):
+        return errors + ["gitleaks config must define exactly one generic-api-key rule extension"]
+    matching_rules = [rule for rule in rules if isinstance(rule, dict) and rule.get("id") == EXPECTED_RULE_ID]
     if len(matching_rules) != 1:
         return errors + ["gitleaks config must define exactly one generic-api-key rule extension"]
 
     allowlists = matching_rules[0].get("allowlists", [])
-    if not isinstance(allowlists, list) or len(allowlists) != 3:
-        return errors + ["generic-api-key rule extension must define exactly three narrow allowlists"]
+    if not isinstance(allowlists, list) or len(allowlists) != 4:
+        return errors + ["generic-api-key rule extension must define exactly four narrow allowlists"]
 
     auth_allowlist_found = False
     sam2_allowlist_found = False
     catalog_allowlist_found = False
+    catalog_chunk_allowlist_found = False
     for allowlist in allowlists:
         if not isinstance(allowlist, dict):
             return errors + ["generic-api-key allowlists must be TOML tables"]
@@ -119,19 +122,25 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         if allowlist.get("condition") != "AND":
             errors.append("generic-api-key allowlists must require AND semantics")
 
-        if allowlist.get("regexTarget") != EXPECTED_REGEX_TARGET:
-            errors.append("generic-api-key allowlists must target source lines")
-
         path_patterns = allowlist.get("paths", [])
         match_patterns = allowlist.get("regexes", [])
+        expected_regex_target = EXPECTED_REGEX_TARGET
         if path_patterns == [EXPECTED_PATH_REGEX] and match_patterns == [EXPECTED_MATCH_REGEX]:
             auth_allowlist_found = True
         elif path_patterns == EXPECTED_SAM2_TILING_PATH_REGEXES and match_patterns == [EXPECTED_SAM2_TILING_MATCH_REGEX]:
             sam2_allowlist_found = True
         elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_SOURCE_HASH_REGEX]:
             catalog_allowlist_found = True
+        elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX]:
+            catalog_chunk_allowlist_found = True
+            expected_regex_target = "secret"
         else:
             errors.append("generic-api-key allowlists must be scoped only to approved false-positive patterns")
+        if allowlist.get("regexTarget") != expected_regex_target:
+            if expected_regex_target == "secret":
+                errors.append("documentation catalog chunk allowlist must target only its exact public source digest")
+            else:
+                errors.append("generic-api-key allowlists must target source lines")
 
     if not auth_allowlist_found:
         errors.append("generic-api-key allowlist must match only the generated auth failure false-positive branch")
@@ -139,6 +148,8 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         errors.append("generic-api-key allowlist must match only the SAM2 tiling flag false positive")
     if not catalog_allowlist_found:
         errors.append("generic-api-key allowlist must match only documentation catalog source SHA256 lines")
+    if not catalog_chunk_allowlist_found:
+        errors.append("generic-api-key allowlist must match only the exact public catalog chunk source SHA256")
 
     return errors
 

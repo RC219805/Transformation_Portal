@@ -137,7 +137,8 @@
         },
         "v2_input_color": {"enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb", null]},
         "v2_color_contract": {"enum": ["encoded_srgb_v1", null]},
-        "v2_processing_version": {"enum": ["1.2.0", null]},
+        "v2_processing_version": {"enum": ["1.2.0", "1.3.0", null]},
+        "geometry_recipe": {"const": "normalized_crop_support_v1"},
         "v2_device": {
           "type": [
             "string",
@@ -271,6 +272,16 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       },
+      "allOf": [
+        {
+          "if": {"required": ["geometry_recipe"]},
+          "then": {
+            "required": ["v2_processing_version"],
+            "properties": {"v2_processing_version": {"const": "1.3.0"}}
+          },
+          "else": {"properties": {"v2_processing_version": {"enum": ["1.2.0", null]}}}
+        }
+      ],
       "additionalProperties": false
     },
     "backend_selection": {
