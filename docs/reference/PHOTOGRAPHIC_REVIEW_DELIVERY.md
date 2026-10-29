@@ -13,7 +13,7 @@ not require AWS or GPU validation.
 
 See the [photographic geometry and orientation audit](PHOTOGRAPHIC_GEOMETRY_AUDIT.md)
 for canonical coordinate mappings, identity boundaries, synthetic regression
-scope and the separately versioned legacy V3/V2 geometry blockers.
+scope, historical V3/V2 blockers and the explicitly versioned corrected recipe.
 
 ## Managed access and deployment
 
@@ -321,7 +321,14 @@ canonical precision contract. Use the retained array for float retouch exports,
 not a promoted 16-bit delivery TIFF. Container promotion restores neither lost
 precision nor values already clipped during an earlier render.
 
-V3 V2 finishing uses processing version `1.2.0`, contract `encoded_srgb_v1`.
+Default V3 V2 finishing uses processing version `1.2.0`, contract `encoded_srgb_v1`.
+Opt-in `--geometry-recipe normalized_crop_support_v1` pairs with version
+`1.3.0`, normalizes orientation once, preserves crop support and requires a
+source-bound depth/mask handoff. Corrected Materials V3 accepts only opaque
+8-bit sources; RAW, PBR, reconstruction and spatial linear ingest fail closed.
+Historical plan/cache identities and retained files remain unchanged. See the
+[versioned geometry contract](PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
+for its precision, cache and acceptance limits.
 `--v2-input-color` and managed `v2_input_color` accept `auto`,
 `auto_assume_srgb`, `srgb`, or `linear_srgb`. Standalone
 `scripts/enhance_image.py` uses `--input-color` with the same policies.
@@ -340,7 +347,9 @@ same recorded sRGB assumption or explicit encoding assertion as untagged
 PNG/TIFF; unsupported BMP calibration or malformed color data fails closed.
 When Materials V3 is enabled, the source policy also governs its existing
 proxy. The validated source transform converts that proxy to bounded encoded
-sRGB without changing depth/segmentation model preprocessing or proxy geometry. Its internal
+sRGB using the selected geometry recipe. The default retains historical
+depth/segmentation preprocessing; the corrected recipe records normalized
+orientation and native crop support. Its internal
 TIFF/PNG carries the resulting sRGB profile, and V2 validates that encoding with
 `auto` rather than reapplying an original linear-source assertion. The source
 preparation and proxy precision limits are recorded in segmentation metadata.

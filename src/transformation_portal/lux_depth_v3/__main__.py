@@ -498,6 +498,15 @@ def main(
         "--v2-input-color",
         help="V2 source color: auto, auto_assume_srgb, srgb, or linear_srgb. Auto rejects ambiguous untagged PNG/TIFF.",
     ),
+    geometry_recipe: str = typer.Option(
+        "legacy_encoded_crop_stretch_v1",
+        "--geometry-recipe",
+        help=(
+            "Geometry: legacy_encoded_crop_stretch_v1 (default) or opt-in normalized_crop_support_v1. "
+            "The normalized recipe requires verified depth/mask support; RAW, PBR, reconstruction "
+            "and spatial linear ingest are unsupported."
+        ),
+    ),
     # Emit Options (Deliverables)
     output_bit_depth: Optional[int] = typer.Option(
         None,
@@ -1068,6 +1077,7 @@ def main(
         enable_v2=enable_v2_bool,
         v2_preset=v2_preset_value,
         v2_input_color=v2_input_color,
+        geometry_recipe=geometry_recipe,
         generate_pbr=enable_pbr,
         save_float_depth=enable_save_float_depth,
         quality_tier=quality_tier,

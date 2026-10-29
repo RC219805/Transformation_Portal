@@ -97,6 +97,9 @@ class V2Runner:
         asset_key: Optional[str] = None,
         output_bit_depth: Optional[int] = None,
         input_color: str = "auto",
+        geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
+        geometry_handoff_path: Optional[Path] = None,
+        depth_map_path: Optional[Path] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -240,6 +243,25 @@ class V2Runner:
             if isinstance(output_bit_depth, bool) or not isinstance(output_bit_depth, int) or output_bit_depth not in {8, 16}:
                 raise ValueError("output_bit_depth must be 8 or 16")
             cmd.extend(["--output-bit-depth", str(output_bit_depth)])
+
+        from .v2_presets import processing_version_for_geometry
+
+        processing_version_for_geometry(geometry_recipe)
+        if geometry_recipe == "normalized_crop_support_v1":
+            if geometry_handoff_path is None or depth_map_path is None or depth_dir is not None:
+                raise ValueError("Corrected V2 requires explicit geometry/depth artifacts and forbids depth discovery")
+            cmd.extend(
+                [
+                    "--geometry-recipe",
+                    geometry_recipe,
+                    "--geometry-handoff",
+                    str(geometry_handoff_path),
+                    "--depth-map",
+                    str(depth_map_path),
+                ]
+            )
+        elif geometry_handoff_path is not None or depth_map_path is not None:
+            raise ValueError("Explicit geometry artifacts require the corrected recipe")
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 

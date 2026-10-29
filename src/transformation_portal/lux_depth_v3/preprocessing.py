@@ -20,12 +20,15 @@ import stat
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union, cast
 
 import numpy as np
 from PIL import Image
 
 from .raw_loader import RAW_EXTENSIONS, is_raw_file
+
+if TYPE_CHECKING:
+    from .geometry import GeometryPreprocessResult
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +214,131 @@ def preprocess_image_snapshot(
     opened_file_stat_validator: Optional[Callable[[os.stat_result], None]] = None,
     verify_snapshot: bool = False,
 ) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
+    """Decode an exact source-byte snapshot using the historical geometry."""
+    return _preprocess_image_snapshot(
+        image_path,
+        target_size,
+        raw_config,
+        opened_file_stat_validator=opened_file_stat_validator,
+        verify_snapshot=verify_snapshot,
+    )
+
+
+def preprocess_geometry_snapshot(
+    image_path: Union[str, Path],
+    target_size: Optional[int] = None,
+    raw_config: Optional[Any] = None,
+    *,
+    opened_file_stat_validator: Optional[Callable[[os.stat_result], None]] = None,
+    verify_snapshot: bool = False,
+) -> GeometryPreprocessResult:
+    """Normalize one immutable ordinary-image snapshot with recorded support.
+
+    RAW has no encoded-to-canonical raster authority in this recipe. Model RGB
+    remains an 8-bit proxy; the original file remains V2's precision authority.
+    """
+    from PIL import ImageOps
+
+    from .geometry import GeometryPreprocessResult, GeometryTransform
+
+    if is_raw_file(Path(image_path)):
+        raise ValueError("Corrected geometry has no RAW original-raster mapping")
+    captured: list[GeometryPreprocessResult] = []
+
+    def decode(snapshot: Any, source_sha256: str) -> tuple[np.ndarray, tuple[int, int]]:
+        snapshot.seek(0)
+        signature = snapshot.read(4)
+        snapshot.seek(0)
+        source_bits = 8
+        if signature in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}:
+            import tifffile
+
+            from ..lux_depth_v4.photography import _orient, _validate_tiff_page
+
+            with tifffile.TiffFile(snapshot, name="immutable-snapshot.tif") as tif:
+                page = tif.pages[0]
+                if not isinstance(page, tifffile.TiffPage):
+                    raise ValueError("Corrected TIFF geometry requires one complete image page")
+                _validate_tiff_page(tif, page)
+                encoded_shape = (int(page.imagelength), int(page.imagewidth))
+                orientation_tag = page.tags.get(274)
+                if orientation_tag is not None and (
+                    orientation_tag.dtype != tifffile.DATATYPE.SHORT or orientation_tag.count != 1
+                ):
+                    raise ValueError("TIFF orientation requires one unsigned SHORT value")
+                orientation = orientation_tag.value if orientation_tag else 1
+                transform = GeometryTransform(source_sha256, encoded_shape, orientation, target_size)
+                pixels = page.asarray()
+                if pixels.dtype not in {np.dtype("uint8"), np.dtype("uint16")}:
+                    raise ValueError("Corrected TIFF geometry requires ordinary 8/16-bit SDR samples")
+                source_bits = pixels.dtype.itemsize * 8
+                pixels = _orient(pixels, orientation)
+                pixels = (pixels.astype(np.float64) * (255.0 / np.iinfo(pixels.dtype).max)).round().astype(np.uint8)
+                if pixels.ndim == 2:
+                    pixels = np.repeat(pixels[..., None], 3, axis=2)
+                if pixels.shape[2] == 2:
+                    pixels = np.concatenate((np.repeat(pixels[..., :1], 3, axis=2), pixels[..., 1:2]), axis=2)
+                rgb, alpha = pixels[..., :3], pixels[..., 3] if pixels.shape[2] == 4 else None
+        else:
+            if signature == b"\x89PNG":
+                header = snapshot.read(29)
+                if len(header) != 29 or header[12:16] != b"IHDR" or header[24] not in {8, 16}:
+                    raise ValueError("Corrected PNG geometry requires ordinary 8/16-bit samples")
+                source_bits = header[24]
+                snapshot.seek(0)
+            with Image.open(snapshot) as image:
+                orientation = image.getexif().get(274, 1)
+                transform = GeometryTransform(source_sha256, (image.height, image.width), orientation, target_size)
+                # TIFF is decoded independently above because Pillow may apply
+                # its orientation during load. Ordinary PNG/JPEG is explicit.
+                if source_bits == 16:
+                    from ..lux_depth_v4.photography import _orient, _png_precision_runtime
+
+                    snapshot.seek(0)
+                    samples = _png_precision_runtime().png_decode(snapshot.read())
+                    if samples.dtype != np.uint16 or samples.shape[:2] != transform.encoded_shape:
+                        raise ValueError("PNG precision decoder disagrees with declared geometry")
+                    pixels = _orient(samples, transform.orientation)
+                    pixels = np.rint(pixels.astype(np.float64) / 257).astype(np.uint8)
+                    if pixels.ndim == 2:
+                        pixels = np.repeat(pixels[..., None], 3, axis=2)
+                    if pixels.shape[2] == 2:
+                        pixels = np.concatenate((np.repeat(pixels[..., :1], 3, axis=2), pixels[..., 1:2]), axis=2)
+                    rgb, alpha = pixels[..., :3], pixels[..., 3] if pixels.shape[2] == 4 else None
+                else:
+                    normalized = ImageOps.exif_transpose(image)
+                    has_alpha = "A" in normalized.getbands() or "transparency" in normalized.info
+                    alpha = np.asarray(normalized.convert("RGBA").getchannel("A"), dtype=np.uint8) if has_alpha else None
+                    rgb = np.array(normalized.convert("RGB"), dtype=np.uint8, copy=True)
+        with Image.fromarray(rgb) as canonical:
+            resized = _resize_keep_aspect(canonical, target_size) if target_size is not None else canonical
+            model = _enforce_dimension_multiple(np.asarray(resized, dtype=np.float32) / 255.0, DIMENSION_MULTIPLE)
+        result = GeometryPreprocessResult(model, rgb, alpha, transform, source_bits)
+        captured.append(result)
+        return result.pixels, transform.normalized_shape
+
+    _preprocess_image_snapshot(
+        image_path,
+        target_size,
+        raw_config,
+        opened_file_stat_validator=opened_file_stat_validator,
+        verify_snapshot=verify_snapshot,
+        standard_decoder=decode,
+    )
+    if len(captured) != 1:
+        raise ValueError("Corrected geometry snapshot was not decoded exactly once")
+    return captured[0]
+
+
+def _preprocess_image_snapshot(
+    image_path: Union[str, Path],
+    target_size: Optional[int] = None,
+    raw_config: Optional[Any] = None,
+    *,
+    opened_file_stat_validator: Optional[Callable[[os.stat_result], None]] = None,
+    verify_snapshot: bool = False,
+    standard_decoder: Optional[Callable[[Any, str], tuple[np.ndarray, tuple[int, int]]]] = None,
+) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
     """Decode one immutable source-byte snapshot and return its SHA-256.
 
     Inputs are opened without following a final symlink when the platform
@@ -349,16 +477,21 @@ def preprocess_image_snapshot(
                     with Image.open(snapshot) as verified_image:
                         verified_image.verify()
                     snapshot.seek(0)
-                with Image.open(snapshot) as image:
-                    image.load()
-                    rgb = np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
+                if standard_decoder is not None:
+                    snapshot.seek(0)
+                    processed, original_shape = standard_decoder(snapshot, digest.hexdigest())
+                else:
+                    with Image.open(snapshot) as image:
+                        image.load()
+                        rgb = np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
             except Exception as exc:
                 raise ValueError(f"Image file corrupt or invalid: {path}") from exc
             final_stat = os.fstat(source.fileno())
             if _stable_identity(final_stat) != _stable_identity(source_stat):
                 raise ValueError(f"Image input changed while its byte snapshot was decoded: {path}")
 
-    processed, original_shape = preprocess_image(rgb, target_size=target_size, raw_config=raw_config)
+    if standard_decoder is None:
+        processed, original_shape = preprocess_image(rgb, target_size=target_size, raw_config=raw_config)
     return processed, original_shape, digest.hexdigest()
 
 

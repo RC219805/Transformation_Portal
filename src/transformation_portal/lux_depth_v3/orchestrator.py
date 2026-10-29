@@ -675,6 +675,7 @@ class EnhanceOrchestrator:
         _log_dependency_status()
 
         self.config = config
+        self._uses_corrected_geometry()
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
         self._prepared_input_ids_by_path: Dict[Path, str] = {}
@@ -3493,6 +3494,8 @@ class EnhanceOrchestrator:
             True if depth step can be skipped,
                 False otherwise
         """
+        if self._uses_corrected_geometry():
+            return False
         if self._prepared_execution is not None:
             return (
                 self._prepared_depth_reuse_snapshot(
@@ -3642,6 +3645,8 @@ class EnhanceOrchestrator:
             True if V2 stage can be skipped,
                 False otherwise
         """
+        if self._uses_corrected_geometry():
+            return False
         if self._prepared_execution is not None:
             if not v2_report_path or not depth_was_skipped or prepared_reuse is None:
                 return False
@@ -3730,6 +3735,21 @@ class EnhanceOrchestrator:
             logger.debug(f"V2 skip check failed: {e}")
             return False
 
+    def _uses_corrected_geometry(self) -> bool:
+        from .geometry import LEGACY_GEOMETRY_RECIPE, NORMALIZED_GEOMETRY_RECIPE, validate_geometry_recipe
+
+        corrected = (
+            validate_geometry_recipe(getattr(self.config, "geometry_recipe", LEGACY_GEOMETRY_RECIPE))
+            == NORMALIZED_GEOMETRY_RECIPE
+        )
+        if corrected and any(
+            getattr(self.config, name, False) for name in ("generate_pbr", "enable_reconstruction", "spatial_ai_linear_ingest")
+        ):
+            raise LuxExecutionPlanAuthorityError(
+                "Corrected geometry does not support PBR, reconstruction or spatial linear ingest"
+            )
+        return corrected
+
     def _compute_depth_stage(
         self,
         image_input: ImageInput,
@@ -3782,6 +3802,12 @@ class EnhanceOrchestrator:
         active_backend_metadata = self._backend_metadata
         self._active_selected_attempt_index = None
         skip_depth = self._authorize_legacy_depth_resume(skip_depth)
+        corrected_geometry = self._uses_corrected_geometry()
+        # The first corrected recipe reuses identity-v3 model results, but not
+        # historical published artifacts lacking a verified support handoff.
+        if corrected_geometry:
+            skip_depth = False
+        geometry_result = None
 
         if not skip_depth:
             # Lazy preprocessing: Only validate
@@ -3792,7 +3818,30 @@ class EnhanceOrchestrator:
             verify_strict = getattr(self.config, "verify_images", False)
             image_sha256: Optional[str] = None
             prepared_snapshot_required = self._prepared_execution is not None
-            if prepared_snapshot_required:
+            if corrected_geometry:
+                from .preprocessing import preprocess_geometry_snapshot
+
+                geometry_result = preprocess_geometry_snapshot(
+                    image_input.path, raw_config=self.config, verify_snapshot=verify_strict
+                )
+                validated_path = image_input.path
+                preprocessed_array = geometry_result.pixels
+                original_shape = geometry_result.transform.normalized_shape
+                image_sha256 = geometry_result.transform.source_sha256
+                if prepared_input_sha256 is not None and image_sha256 != prepared_input_sha256:
+                    raise LuxExecutionPlanAuthorityError("Corrected source snapshot differs from prepared bytes")
+                if prepared_input_dimensions is not None and geometry_result.transform.encoded_shape != (
+                    prepared_input_dimensions[1],
+                    prepared_input_dimensions[0],
+                ):
+                    raise LuxExecutionPlanAuthorityError("Corrected encoded dimensions differ from the reserved envelope")
+                if self.materials_v3_engine is not None and (
+                    geometry_result.alpha is not None or geometry_result.source_bit_depth != 8
+                ):
+                    raise LuxExecutionPlanAuthorityError(
+                        "Corrected Materials V3 supports opaque 8-bit sources only; native precision requires Materials V4"
+                    )
+            elif prepared_snapshot_required:
                 validated_path = image_input.path
                 preprocessed_array, original_shape, decoded_sha256 = preprocess_image_snapshot(
                     validated_path,
@@ -4079,6 +4128,12 @@ class EnhanceOrchestrator:
                             dtype=np.float32,
                         )
                         current_shape = _shape_2d(native_depth_map)
+                        if geometry_result is not None and (
+                            current_shape != geometry_result.transform.model_shape or not np.isfinite(native_depth_map).all()
+                        ):
+                            raise LuxExecutionPlanAuthorityError(
+                                "Corrected backend/cache depth does not match its exact finite model grid"
+                            )
 
                         result_metadata = dict(
                             getattr(
@@ -4163,7 +4218,13 @@ class EnhanceOrchestrator:
                                 )
 
                         artifact_depth_map = native_depth_map
-                        if current_shape != original_shape:
+                        if geometry_result is not None:
+                            artifact_depth_map, _ = geometry_result.transform.restore_numeric(native_depth_map)
+                            if hasattr(result_candidate, "depth_map"):
+                                result_candidate.depth_map = artifact_depth_map
+                            else:
+                                object.__setattr__(result_candidate, "depth", artifact_depth_map)
+                        elif current_shape != original_shape:
                             from PIL import Image as PILImage
 
                             logger.debug(
@@ -4341,16 +4402,38 @@ class EnhanceOrchestrator:
                         depth_map=depth_map,
                         output_key=output_key,
                         artifact_shape=_shape_2d(result.depth),
+                        **({"geometry_result": geometry_result} if geometry_result is not None else {}),
                     )
 
                 # 3. Write quantized depth (PNG 16-bit)
+                png_depth = result.depth
+                if geometry_result is not None:
+                    # Percentile normalization observes only real photographic
+                    # support. The writer encodes unsupported locations as 0.
+                    png_depth = np.where(geometry_result.transform.support(), result.depth, np.nan)
                 _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
                     depth_path,
-                    result.depth,
+                    png_depth,
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
                     compute_encoded_unique_values=self._is_apex_tier(),
+                    **({"support_mask": geometry_result.transform.support()} if geometry_result is not None else {}),
                 )
+                produced_depth_sha256 = None
+                if geometry_result is not None:
+                    from .depth_writer import normalize_depth_for_u16_png, read_depth_u16_png_bytes
+                    from .geometry_handoff import snapshot_geometry_artifact
+
+                    produced_depth_bytes = snapshot_geometry_artifact(depth_path, math.prod(original_shape) * 2 + 1024**2)
+                    normalized_expected, _ = normalize_depth_for_u16_png(png_depth)
+                    expected_u16 = np.rint(normalized_expected * 65535.0).astype(np.uint16)
+                    expected_u16[~geometry_result.transform.support()] = 0
+                    encoded_expected = expected_u16.astype(np.float32) / 65535.0
+                    if not np.array_equal(read_depth_u16_png_bytes(produced_depth_bytes), encoded_expected):
+                        raise LuxExecutionPlanAuthorityError(
+                            "Published depth bytes differ from the source-bound producer result"
+                        )
+                    produced_depth_sha256 = hashlib.sha256(produced_depth_bytes).hexdigest()
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled
                 if getattr(self.config, "save_float_depth", False):
@@ -4425,6 +4508,13 @@ class EnhanceOrchestrator:
                     ),
                     "attempts": depth_attempts,
                 }
+                if geometry_result is not None:
+                    stats["geometry"] = geometry_result.transform.to_payload()
+                    stats["depth_png_sha256"] = produced_depth_sha256
+                    stats["geometry_support_sha256"] = hashlib.sha256(
+                        geometry_result.transform.support().tobytes()
+                    ).hexdigest()
+                    stats["depth_png_normalization_scope"] = "photographic_support"
                 if depth_validity_metrics:
                     stats["apex_depth_validity"] = depth_validity_metrics
                     shape_context = depth_validity_metrics.get("shape_context")
@@ -4943,6 +5033,7 @@ class EnhanceOrchestrator:
         depth_map: np.ndarray,
         output_key: Path,
         artifact_shape: Optional[tuple[int, int]] = None,
+        geometry_result: Optional[Any] = None,
     ) -> tuple[Optional[dict], float, Optional[Path]]:
         """Run Materials V3 stage and persist artifacts."""
         if not self.materials_v3_engine:
@@ -4963,9 +5054,27 @@ class EnhanceOrchestrator:
             from .v2_enhance import prepare_materials_srgb_proxy
 
             raw_contract = raw_ingest_summary(self.config) if is_raw_file(source_path) else None
+            source_bytes = None
+            if geometry_result is not None:
+                from .geometry_handoff import snapshot_geometry_artifact
+
+                source_bytes = snapshot_geometry_artifact(source_path, 2 * 1024**3)
+                transform = geometry_result.transform
+                if hashlib.sha256(source_bytes).hexdigest() != transform.source_sha256:
+                    raise LuxExecutionPlanAuthorityError("Materials source changed after geometry preparation")
+                if artifact_shape != transform.normalized_shape or _shape_2d(preprocessed_array) != transform.model_shape:
+                    raise LuxExecutionPlanAuthorityError("Materials geometry differs from the frozen source/model frame")
+                if not np.array_equal(preprocessed_array, geometry_result.pixels):
+                    raise LuxExecutionPlanAuthorityError("Materials model pixels differ from the frozen source snapshot")
+                if _shape_2d(depth_map) != transform.model_shape or not np.isfinite(depth_map).all():
+                    raise LuxExecutionPlanAuthorityError("Materials depth differs from the exact finite model grid")
+                if geometry_result.alpha is not None or geometry_result.source_bit_depth != 8:
+                    raise LuxExecutionPlanAuthorityError("Corrected Materials requires an opaque 8-bit source")
+            elif raw_contract is None:
+                source_bytes = source_path.read_bytes()
             materials_array, color_preparation = prepare_materials_srgb_proxy(
                 preprocessed_array,
-                source=None if raw_contract is not None else source_path.read_bytes(),
+                source=source_bytes,
                 source_name=source_path.name,
                 input_color=self.config.v2_input_color,
                 raw_contract=raw_contract,
@@ -5016,7 +5125,36 @@ class EnhanceOrchestrator:
                 materials_v3_result.setdefault("materials_v3_metadata", {}).setdefault("segmentation_metadata", {})[
                     "color_preparation"
                 ] = color_preparation
-                if artifact_shape is not None:
+                if geometry_result is not None:
+                    transform = geometry_result.transform
+                    if artifact_shape != transform.normalized_shape or _shape_2d(preprocessed_array) != transform.model_shape:
+                        raise LuxExecutionPlanAuthorityError("Materials geometry differs from the frozen source/model frame")
+                    material_masks = materials_v3_result.get("material_masks", {})
+                    if not isinstance(material_masks, dict):
+                        raise LuxExecutionPlanAuthorityError("Corrected Materials masks require a verified named inventory")
+                    materials_v3_result["material_masks"] = {
+                        name: transform.restore_mask(mask) for name, mask in material_masks.items()
+                    }
+                    enhanced = materials_v3_result.get("enhanced_image")
+                    if enhanced is not None:
+                        enhanced = np.asarray(enhanced, dtype=np.float32)
+                        if enhanced.shape != (*transform.model_shape, 3) or not np.isfinite(enhanced).all():
+                            raise LuxExecutionPlanAuthorityError("Corrected Materials pixels differ from the exact model grid")
+                        # Lift the edit delta, keeping removed borders equal to
+                        # the original canonical source instead of stretching.
+                        native_source, _ = prepare_materials_srgb_proxy(
+                            geometry_result.canonical_rgb.astype(np.float32) / 255.0,
+                            source=source_bytes,
+                            source_name=source_path.name,
+                            input_color=self.config.v2_input_color,
+                        )
+                        delta = enhanced - materials_array
+                        lifted = np.stack([transform.restore_numeric(delta[..., channel])[0] for channel in range(3)], axis=2)
+                        materials_v3_result["enhanced_image"] = np.where(
+                            transform.support()[..., None], np.clip(native_source + lifted, 0, 1), native_source
+                        )
+                    materials_v3_result["materials_v3_metadata"]["segmentation_metadata"]["geometry"] = transform.to_payload()
+                elif artifact_shape is not None:
                     materials_v3_result = self._align_materials_v3_handoff_payload(
                         materials_v3_result,
                         artifact_shape=artifact_shape,
@@ -5154,6 +5292,27 @@ class EnhanceOrchestrator:
                         "Materials V3 did not" " return enhanced_image" ", using original" " image",
                     )
 
+                if geometry_result is not None and enhanced_image_path is not None:
+                    from .geometry_handoff import snapshot_geometry_artifact
+
+                    carrier_bytes = snapshot_geometry_artifact(enhanced_image_path, 2 * 1024**3)
+                    if self.config.output_bit_depth == 16:
+                        with tifffile.TiffFile(io.BytesIO(carrier_bytes)) as carrier:
+                            carrier_pixels = carrier.asarray()
+                        expected_carrier = enhanced_uint16
+                    else:
+                        with PILImage.open(io.BytesIO(carrier_bytes)) as carrier:
+                            carrier_pixels = np.asarray(carrier).copy()
+                        expected_carrier = enhanced_uint8
+                    if not np.array_equal(carrier_pixels, expected_carrier):
+                        raise LuxExecutionPlanAuthorityError(
+                            "Published Materials carrier differs from its source-bound pixels"
+                        )
+                    materials_v3_result["geometry_carrier_sha256"] = hashlib.sha256(carrier_bytes).hexdigest()
+                    materials_v3_result["materials_v3_metadata"]["segmentation_metadata"]["geometry_carrier_sha256"] = (
+                        materials_v3_result["geometry_carrier_sha256"]
+                    )
+
                 n_applied = len(
                     materials_v3_result.get(
                         "materials_v3_pixel_ops",
@@ -5171,7 +5330,11 @@ class EnhanceOrchestrator:
         except ApexStrictGateError:
             # Hard-fail in apex strict mode.
             raise
+        except LuxExecutionPlanAuthorityError:
+            raise
         except Exception as e:
+            if geometry_result is not None:
+                raise LuxExecutionPlanAuthorityError("Corrected Materials handoff failed closed") from e
             if self._is_apex_materials_gate_enabled():
                 raise ApexStrictGateError(
                     "APEX_MATERIALS_STAGE_FAILED",
@@ -5235,6 +5398,9 @@ class EnhanceOrchestrator:
                 materials_v3_runtime_s,
                 enhanced_image_path,
             )
+
+        if self._uses_corrected_geometry():
+            raise LuxExecutionPlanAuthorityError("Corrected APEX requires a complete fresh source-bound Materials handoff")
 
         logger.info(
             "APEX strict mode: depth"
@@ -5679,6 +5845,10 @@ class EnhanceOrchestrator:
         materials_v3_result: Optional[dict] = None,
         materials_input_path: Optional[Path] = None,
         prepared_reuse: Optional[_PreparedReuseSnapshot] = None,
+        geometry_transform: Optional[Mapping[str, Any]] = None,
+        source_image_input: Optional[ImageInput] = None,
+        depth_artifact_sha256: Optional[str] = None,
+        geometry_input_sha256: Optional[str] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -5742,22 +5912,98 @@ class EnhanceOrchestrator:
         from .materials_v3 import authorized_v2_material_masks
 
         masks_path: Optional[Path] = None
+        geometry_paths: list[Path] = []
+        geometry_payload: Optional[dict[str, Any]] = None
+        geometry_kwargs: dict[str, Any] = {}
         cleanup_temp_masks = False
+        authorized_masks: Dict[str, np.ndarray] = {}
+        expected_mask_arrays: dict[str, Any] = {}
         if isinstance(materials_v3_result, dict):
             masks = materials_v3_result.get("material_masks")
             if not isinstance(masks, dict):
                 masks = self._load_persisted_material_masks_for_v2(materials_v3_result)
             authorized_masks = authorized_v2_material_masks(masks, materials_v3_result, self.config)
             if authorized_masks:
+                if self._uses_corrected_geometry():
+                    from .geometry_handoff import array_identity
+
+                    expected_mask_arrays = {name: array_identity(mask) for name, mask in sorted(authorized_masks.items())}
                 masks_path = self._serialize_material_masks(authorized_masks, output_key, self.output_root / "temp")
                 cleanup_temp_masks = masks_path is not None
+                if self._uses_corrected_geometry() and masks_path is None:
+                    raise LuxExecutionPlanAuthorityError(
+                        "Corrected V2 cannot omit authorized masks after serialization failure"
+                    )
 
         # V2 runner: Execute subprocess with optional masks
         # depth_dir=None triggers independent depth generation in V2
         try:
+            if self._uses_corrected_geometry():
+                from .depth_writer import read_depth_u16_png_bytes
+                from .geometry import NORMALIZED_GEOMETRY_RECIPE, GeometryTransform
+                from .geometry_handoff import snapshot_geometry_artifact, write_geometry_handoff
+
+                if depth_path is None or geometry_transform is None or depth_artifact_sha256 is None:
+                    raise LuxExecutionPlanAuthorityError("Corrected V2 requires produced source-bound depth geometry")
+                transform = GeometryTransform.from_payload(geometry_transform)
+                source_path = (source_image_input or image_input).path
+                source_bytes = snapshot_geometry_artifact(source_path, 2 * 1024**3)
+                if hashlib.sha256(source_bytes).hexdigest() != transform.source_sha256:
+                    raise LuxExecutionPlanAuthorityError("V2 original source differs from the depth geometry authority")
+                depth_bytes = snapshot_geometry_artifact(depth_path, math.prod(transform.normalized_shape) * 2 + 1024**2)
+                if hashlib.sha256(depth_bytes).hexdigest() != depth_artifact_sha256:
+                    raise LuxExecutionPlanAuthorityError("V2 depth bytes differ from the Stage A producer identity")
+                depth_view = read_depth_u16_png_bytes(depth_bytes)
+                if depth_view.shape != transform.normalized_shape:
+                    raise LuxExecutionPlanAuthorityError("V2 depth dimensions differ from the source-bound native frame")
+                depth_view = np.where(transform.support(), depth_view, 0).astype(np.float32)
+                temp_dir = self.output_root / "temp"
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(
+                    prefix="geometry-depth-", suffix=".npy", dir=temp_dir, delete=False
+                ) as handle:
+                    explicit_depth_path = Path(handle.name)
+                    geometry_paths.append(explicit_depth_path)
+                    np.save(handle, depth_view, allow_pickle=False)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                handoff_path = explicit_depth_path.with_suffix(".geometry.json")
+                geometry_paths.append(handoff_path)
+                geometry_payload = write_geometry_handoff(
+                    handoff_path,
+                    recipe=NORMALIZED_GEOMETRY_RECIPE,
+                    source_sha256=transform.source_sha256,
+                    v2_input_path=image_input.path,
+                    plan_fingerprint_sha256=(
+                        self._prepared_execution.plan_fingerprint_sha256 if self._prepared_execution is not None else None
+                    ),
+                    transform=transform,
+                    depth_map_path=explicit_depth_path,
+                    masks_file=masks_path,
+                    depth_normalization={
+                        "mode": "published_u16_preview_v1",
+                        "source_png_sha256": hashlib.sha256(depth_bytes).hexdigest(),
+                    },
+                )
+                if canonicalize_json(geometry_payload["masks"]["arrays"]) != canonicalize_json(expected_mask_arrays):
+                    raise LuxExecutionPlanAuthorityError("V2 serialized masks differ from the authorized producer arrays")
+                expected_v2_sha256 = geometry_input_sha256 if materials_input_path is not None else transform.source_sha256
+                if expected_v2_sha256 is None or geometry_payload["v2_input_sha256"] != expected_v2_sha256:
+                    raise LuxExecutionPlanAuthorityError(
+                        "V2 input bytes differ from the source or Materials producer identity"
+                    )
+                geometry_kwargs = {
+                    "geometry_recipe": NORMALIZED_GEOMETRY_RECIPE,
+                    "geometry_handoff_path": handoff_path,
+                    "depth_map_path": explicit_depth_path,
+                }
             v2_result = self.v2_runner.run(
                 input_path=image_input.path,
-                depth_dir=(self.depth_dir if (depth_path and depth_path.exists()) else None),
+                depth_dir=(
+                    None
+                    if geometry_payload is not None
+                    else (self.depth_dir if (depth_path and depth_path.exists()) else None)
+                ),
                 output_dir=self.v2_dir,
                 preset=(self.config.v2_preset or "default"),
                 device=self.config.v2_device,
@@ -5773,9 +6019,19 @@ class EnhanceOrchestrator:
                 # encoding. Reapplying the original source assertion (e.g.
                 # linear_srgb) would reinterpret these already encoded pixels.
                 input_color=("auto" if materials_input_path is not None else self.config.v2_input_color),
+                **geometry_kwargs,
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_status = self._normalize_v2_status(v2_result.get("status"))
+            if geometry_payload is not None and v2_status == "ok":
+                report_geometry = v2_result.get("geometry")
+                if (
+                    not isinstance(report_geometry, dict)
+                    or report_geometry.get("handoff_identity_sha256") != geometry_payload["identity_sha256"]
+                    or canonicalize_json(report_geometry.get("handoff")) != canonicalize_json(geometry_payload)
+                    or v2_result.get("processing_version") != "1.3.0"
+                ):
+                    raise LuxExecutionPlanAuthorityError("V2 did not return the exact verified geometry execution receipt")
             if v2_status != "ok":
                 # A failed fresh invocation may observe files left by an
                 # earlier run.  Keep diagnostics, but do not let stale output
@@ -5803,6 +6059,9 @@ class EnhanceOrchestrator:
             return v2_result, v2_runtime_s, v2_report_path
 
         finally:
+            if not getattr(self.config, "keep_intermediates", False):
+                for path in geometry_paths:
+                    path.unlink(missing_ok=True)
             # Clean up temporary mask file
             if cleanup_temp_masks and masks_path and masks_path.exists():
                 try:
@@ -6334,7 +6593,7 @@ class EnhanceOrchestrator:
                 )
             )
 
-        if self._prepared_execution is not None and not self.config.force_depth:
+        if self._prepared_execution is not None and not self.config.force_depth and not self._uses_corrected_geometry():
             prepared_reuse = self._prepared_depth_reuse_snapshot(
                 depth_path,
                 manifest_path,
@@ -6467,6 +6726,18 @@ class EnhanceOrchestrator:
             materials_v3_result=materials_v3_result,
         )
 
+        v2_geometry_kwargs: dict[str, Any] = {}
+        if self._uses_corrected_geometry() and self.config.enable_v2:
+            if depth_metadata is None or not isinstance(depth_metadata.stats, dict):
+                raise LuxExecutionPlanAuthorityError("Corrected V2 has no produced depth authority")
+            v2_geometry_kwargs = {
+                "geometry_transform": depth_metadata.stats.get("geometry"),
+                "depth_artifact_sha256": depth_metadata.stats.get("depth_png_sha256"),
+                "source_image_input": processing_image_input,
+                "geometry_input_sha256": (
+                    materials_v3_result.get("geometry_carrier_sha256") if isinstance(materials_v3_result, dict) else None
+                ),
+            }
         with self._prepared_snapshot_access(prepared_input_snapshot):
             v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
                 image_input=(ImageInput(path=v2_input_path) if enhanced_image_path else processing_image_input),
@@ -6478,6 +6749,7 @@ class EnhanceOrchestrator:
                 materials_v3_result=materials_v3_result,
                 materials_input_path=enhanced_image_path,
                 prepared_reuse=prepared_reuse,
+                **v2_geometry_kwargs,
             )
         v2_result_status = self._normalize_v2_status(v2_result.get("status"))
         v2_output_path = v2_result.get("output") if v2_result_status == "ok" else None
@@ -9387,7 +9659,7 @@ class EnhanceOrchestrator:
         include_proofs: bool,
     ) -> Dict[str, Any]:
         """Build the replay-oriented effective config surface for the run card."""
-        fingerprint = asdict(self.compute_config_fingerprint())
+        fingerprint = self.compute_config_fingerprint().to_payload()
         fingerprint["run_card_version"] = run_card_version
         fingerprint["run_card_include_proofs"] = bool(include_proofs)
         fingerprint["emit_run_card"] = bool(getattr(self.config, "emit_run_card", False))
@@ -10070,6 +10342,8 @@ class EnhanceOrchestrator:
                     "v2_device": obj.v2_device,
                     "v2_upscaler_backend": obj.v2_upscaler_backend,
                 }
+                if obj.geometry_recipe is not None:
+                    fingerprint_payload["geometry_recipe"] = obj.geometry_recipe
                 canonical_json = json.dumps(
                     fingerprint_payload,
                     sort_keys=True,

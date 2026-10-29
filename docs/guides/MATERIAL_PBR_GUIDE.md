@@ -100,6 +100,15 @@ matching output profile; float/extended sources require Unified/V5/V6. See the
 This command finishes an image; use the `MaterialBackend` API above to generate
 six PBR maps. See [CLI Reference](../cli/CLI_REFERENCE.md) for pipeline routing.
 
+That V2 example retains the legacy geometry recipe and processing `1.2.0`.
+The separate `--geometry-recipe normalized_crop_support_v1` opt-in uses
+processing `1.3.0` and requires explicit `--geometry-handoff` and `--depth-map`
+artifacts; it does not discover depth through `--depth-dir`. Corrected V3
+Materials supports opaque 8-bit sources only, and the corrected recipe rejects
+PBR, RAW, reconstruction and spatial linear ingest. The material-generation API
+above is unchanged. See the [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe);
+the opt-in supplies no automatic photographic or production acceptance.
+
 ## Explicit Generation Configuration
 
 The material API accepts `MaterialGenerationConfig` independently of V2 presets:

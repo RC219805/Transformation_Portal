@@ -330,12 +330,23 @@ class ConfigFingerprint:
     emit_master16: InitVar[Optional[bool]] = None
     emit_upscaled16: InitVar[Optional[bool]] = None
     enable_v2: Optional[bool] = None
+    geometry_recipe: Optional[str] = None
 
     def __post_init__(
         self,
         emit_master16: Optional[bool],
         emit_upscaled16: Optional[bool],
     ) -> None:
+        if self.geometry_recipe is not None:
+            from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+
+            validate_geometry_recipe(self.geometry_recipe)
+            if self.geometry_recipe == LEGACY_GEOMETRY_RECIPE:
+                self.geometry_recipe = None
+        if self.geometry_recipe is not None and self.v2_processing_version not in {None, "1.3.0"}:
+            raise ValueError("Corrected geometry requires V2 processing version 1.3.0")
+        if self.geometry_recipe is None and self.v2_processing_version == "1.3.0":
+            raise ValueError("V2 processing version 1.3.0 requires corrected geometry")
         explicit = self.output_bit_depth is not None
         if self.output_bit_depth is not None and (
             isinstance(self.output_bit_depth, bool) or not isinstance(self.output_bit_depth, int)
@@ -358,6 +369,7 @@ class ConfigFingerprint:
         """
         return ConfigFingerprint(
             model_variant=self.model_variant,
+            geometry_recipe=self.geometry_recipe,
             depth_quantization=self.depth_quantization,
             depth_device=self.depth_device,
             preset=self.preset,
@@ -381,6 +393,7 @@ class ConfigFingerprint:
         """Return fingerprint with only V2-related fields."""
         return ConfigFingerprint(
             model_variant="",
+            geometry_recipe=self.geometry_recipe,
             depth_quantization="",
             depth_device="",
             preset=None,
@@ -403,9 +416,16 @@ class ConfigFingerprint:
             enable_v2=self.enable_v2,
         )
 
+    def to_payload(self) -> Dict[str, Any]:
+        """Preserve historical fingerprint bytes when no corrected recipe is selected."""
+        payload = asdict(self)
+        if self.geometry_recipe is None:
+            payload.pop("geometry_recipe")
+        return payload
+
     def to_sha256(self) -> str:
         """Compute SHA256 hash of fingerprint for caching keys."""
-        payload = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        payload = json.dumps(self.to_payload(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -506,7 +526,9 @@ class CombinedManifest:
                     # Already a dict, no need to convert
                     data[field_name] = field_value
                 else:
-                    data[field_name] = asdict(field_value)
+                    data[field_name] = (
+                        field_value.to_payload() if isinstance(field_value, ConfigFingerprint) else asdict(field_value)
+                    )
 
         # Include timestamp fields
         if self.start_time:
@@ -610,7 +632,9 @@ class CombinedManifest:
                 if field_name in ["pbr_assets", "environment", "licensing"]:
                     data[field_name] = field_value
                 else:
-                    data[field_name] = asdict(field_value)
+                    data[field_name] = (
+                        field_value.to_payload() if isinstance(field_value, ConfigFingerprint) else asdict(field_value)
+                    )
 
         # Include timestamp fields
         if self.start_time:

@@ -129,6 +129,15 @@ explicit segmentation flags satisfy admission; they do not prove runtime
 readiness or photographic acceptance. See the
 [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md).
 
+The example uses the legacy/default geometry recipe. The separate
+`--geometry-recipe normalized_crop_support_v1` opt-in does not accept RAW, PBR,
+reconstruction or spatial linear ingest. Ordinary 8/16-bit source precision
+remains distinct from its bounded 8-bit model proxy; corrected MaterialsV3
+requires opaque 8-bit sources, while depth plus V2 retains supported 16-bit
+source authority. The [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
+records the exact bounds, source/depth/mask bindings and independent acceptance
+gates. These restrictions do not change the legacy formats table.
+
 ### TIFF Batch Processing
 
 ```bash

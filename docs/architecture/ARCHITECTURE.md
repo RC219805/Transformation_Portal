@@ -138,6 +138,12 @@ execution use the same canonical bytes; direct cache-enabled callers construct
 `EnhanceOrchestrator.from_prepared(...)`. Legacy `structural_legacy` projections
 are parse-only. See [Execution Plan V1](../reference/EXECUTION_PLAN_V1.md).
 
+V3's optional `normalized_crop_support_v1` geometry recipe remains within that
+V1 plan contract. It binds normalized source coordinates and explicit native
+depth/mask support; it does not activate a new executor or change the legacy
+default. See the [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
+for its processing identities, unsupported flows and separate acceptance gates.
+
 Plan schema versions and product versions are separate contracts:
 
 | Plan schema | Explicit consumer | Authority and activation |

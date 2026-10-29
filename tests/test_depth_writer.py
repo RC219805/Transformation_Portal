@@ -371,3 +371,53 @@ def test_exact_byte_depth_decoder_bounds_declared_pixels_before_decode(tmp_path:
 
     with pytest.raises(IOError, match="decoded pixels exceed the bounded limit"):
         read_depth_u16_png_bytes(bytes(payload))
+
+
+def test_explicit_support_excludes_extreme_values_and_encodes_unknown_pixels_as_zero(tmp_path: Path) -> None:
+    depth = np.linspace(-10, 10, 31 * 45, dtype=np.float32).reshape(31, 45)
+    support = np.zeros(depth.shape, bool)
+    support[1:29, 1:43] = True
+    depth[~support] = 1_000_000
+    original = depth.copy()
+    expected = np.zeros(depth.shape, np.float32)
+    # Match the documented float32 preview arithmetic rather than silently
+    # promoting NumPy's percentile scalars into a float64 rendering path.
+    low, high = (float(value) for value in np.percentile(depth[support], [1, 99]))
+    expected[support] = np.rint(np.clip((depth[support] - low) / (high - low), 0, 1) * 65535).astype(np.float32) / 65535
+
+    path, _, stats = atomic_write_depth_u16_png_with_stats(tmp_path / "supported.png", depth, support_mask=support)
+
+    actual = read_depth_u16_png(path)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(depth, original)
+    assert not actual[~support].any()
+    assert stats.normalization["source_max"] == float(depth[support].max())
+    assert stats.normalization["source_min"] == float(depth[support].min())
+
+
+@pytest.mark.parametrize("support", [np.zeros((4, 5), np.float32), np.ones((3, 5), bool), [[True] * 5] * 4])
+def test_support_requires_exact_boolean_geometry_before_publication(tmp_path: Path, support) -> None:
+    path = tmp_path / "invalid-support.png"
+    with pytest.raises(ValueError, match="exact boolean HW"):
+        atomic_write_depth_u16_png_with_stats(path, np.ones((4, 5), np.float32), support_mask=support)
+    assert not path.exists()
+
+
+def test_all_unsupported_depth_encodes_zero_without_invented_coverage(tmp_path: Path) -> None:
+    depth = np.linspace(-100, 100, 20, dtype=np.float32).reshape(4, 5)
+    path, _, stats = atomic_write_depth_u16_png_with_stats(
+        tmp_path / "unsupported.png", depth, support_mask=np.zeros(depth.shape, bool)
+    )
+    np.testing.assert_array_equal(read_depth_u16_png(path), np.zeros(depth.shape, np.float32))
+    assert stats.normalization["mode"] == "no_finite_values"
+
+
+def test_omitted_support_retains_legacy_bytes_and_statistics(tmp_path: Path) -> None:
+    depth = np.linspace(-10, 10, 20, dtype=np.float32).reshape(4, 5)
+    first, _, first_stats = atomic_write_depth_u16_png_with_stats(tmp_path / "legacy.png", depth)
+    second, _, second_stats = atomic_write_depth_u16_png_with_stats(tmp_path / "explicit-none.png", depth, support_mask=None)
+    full, _, full_stats = atomic_write_depth_u16_png_with_stats(
+        tmp_path / "full-support.png", depth, support_mask=np.ones(depth.shape, bool)
+    )
+    assert first.read_bytes() == second.read_bytes() == full.read_bytes()
+    assert first_stats == second_stats == full_stats

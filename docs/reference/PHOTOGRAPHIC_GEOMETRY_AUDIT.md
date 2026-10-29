@@ -1,11 +1,11 @@
 # Photographic geometry and orientation audit
 
 This ledger records the coordinate authority used by the canonical photographic
-path and the separate limitations reproduced in legacy V3/V2. It is the PR6
-geometry audit, not a new processing recipe or native editing engine. The
-review baseline is `0a374b0624069fe322d8cbd1e24c1480d9fdfc4d`, with the
-additive coordinate helpers and synthetic regressions reviewed alongside this
-document. The documentation catalog binds the exact reviewed source bytes.
+path and the separate limitations reproduced in legacy V3/V2. The original PR6
+audit baseline is `0a374b0624069fe322d8cbd1e24c1480d9fdfc4d`. The additive
+versioned correction described below starts from
+`5e5ef3f09039bc31352b31ff16d6bdad54ace4aa`; the historical recipe remains the
+default. The documentation catalog binds the exact reviewed source bytes.
 
 No model inference, runtime reinstall, retained photograph modification or
 AWS/GPU validation is needed for these contracts. Synthetic coordinates and
@@ -140,13 +140,94 @@ Legacy V3/V2 has a separate, reproduced coordinate contract:
 | V3 preprocessing center-crops to multiples of 14; Stage A subsequently stretches that cropped depth over the full encoded source extent | Production Stage A with a controlled coordinate backend: stored `31×45` source → `28×42` crop → `31×45` depth; removed border samples are not recovered | Explicit crop/support transform, compatible output semantics, cache/plan identity changes and representative photographic validation |
 | Historical V2 accepts bare depth/mask arrays | [`V2 enhance_image`](../../src/transformation_portal/lux_depth_v3/v2_enhance.py) hands arrays to [`EnhancementStage`](../../src/transformation_portal/stage_graph/stages/enhancement.py), which resizes mismatched depth and drops malformed/mismatched masks; the array carries no source/frame authority | An explicit verified geometry handoff before new native editing; matching dimensions are insufficient |
 
-These are blockers to treating legacy outputs as a fully verified canonical
-geometry handoff. They are not silently corrected by this audit. Existing V2
-processing version `1.2.0`, execution-plan configurations and historical cache
-semantics remain unchanged. The witnesses intentionally preserve that behavior
-until a migration supplies the required version identity and validation.
-Source review approval does not waive that future migration or photographic
-acceptance.
+These are blockers to treating historical outputs as a verified geometry
+handoff. Existing V2 processing version `1.2.0`, default execution-plan bytes
+and historical cache semantics remain unchanged. The legacy witnesses preserve
+that behavior independently of the opt-in correction below. Source review
+approval does not waive photographic acceptance of a different recipe.
+
+## Versioned corrected recipe
+
+V3 adds explicit `--geometry-recipe normalized_crop_support_v1`. The default
+`legacy_encoded_crop_stretch_v1` retains the historical `1.2.0` V2 processing
+contract. The corrected recipe pairs with processing version `1.3.0` and is
+bound consistently into preprocessing, depth, Materials and V2 execution-plan
+nodes, run cards and depth-cache fingerprints. Omitted and explicitly selected
+legacy recipes retain the same serialized identities. The outer execution-plan
+V1 and stage registry identities remain stable; mixed or unknown recipes and
+versions fail validation.
+
+The corrected path normalizes all eight EXIF orientations once from the same
+immutable source snapshot used for hashing and decode. RGB and straight alpha
+receive the same permutation. Its closed `tp.lux.geometry.v1` transform records
+the source SHA-256, encoded and normalized dimensions, target reduction,
+resized/model dimensions, center-crop origin and edge padding. It retains the
+existing Lanczos long-edge reduction and multiple-of-14 crop/model preparation;
+it changes how that recorded geometry is restored, without inventing coverage
+for removed borders.
+
+Numeric restoration removes padding, places cropped samples in the resized
+canvas, then uses support-weighted bilinear restoration and nearest-neighbor
+native support. Discrete masks use nearest-neighbor restoration. Model output
+must match the exact recorded model grid and contain finite float32 values.
+Unsupported depth is zero with a separate boolean support mask. The published
+uint16 preview normalizes only supported samples and encodes unsupported pixels
+as zero, including when supported model values are negative. This preview is
+relative depth, not metric evidence.
+
+The corrected Stage A → V2 boundary requires a closed
+`tp.lux.geometry_handoff.v1` receipt. It binds the original source, actual V2
+input bytes, transform, plan fingerprint when prepared, depth file and array,
+derived native support and ordered mask array identities. Source and produced
+depth hashes are rechecked before receipt creation; serialized masks must
+match the authorized producer arrays. An enabled Materials carrier must match
+its recorded producer hash. Receipt fields contain no physical paths. V2
+revalidates the exact snapshot and every bound array before editing, rejects
+unknown fields or mismatched geometry, and echoes the full receipt and its
+identity in its report. V2 receives a float32 derivative of the verified
+published uint16 depth preview, with that normalization recorded explicitly;
+the original model-depth cache is a separate authority.
+
+The same native support and opaque-alpha guard covers all V2 operations,
+including global tone, clarity and material changes. Unsupported borders and
+partially transparent pixels retain their source RGB; alpha remains separate.
+Corrected depth percentiles exclude protected samples, and depth smoothing
+normalizes by the valid support rather than bleeding unknown zero sentinels
+into supported tonal decisions.
+Corrected Materials V3 first restores its model-grid RGB delta and masks into
+the normalized source frame. It accepts only opaque 8-bit sources, because the
+legacy Materials carrier cannot preserve 16-bit or alpha precision. Corrected
+depth-only and V2 paths support bounded 8/16-bit ordinary-image inputs. RAW,
+PBR generation, reconstruction and spatial linear ingest are unsupported with
+this recipe and fail closed before execution. These restrictions do not change
+historical admission.
+
+For an ordinary-image directory, inspect the corrected plan without inference:
+
+```bash
+./.venv/bin/lux-depth-v3 --input-dir /path/to/ordinary-images \
+  --output-dir /path/to/new-geometry-corrected-output \
+  --geometry-recipe normalized_crop_support_v1 --plan
+```
+
+Use a fresh output namespace for an explicitly authorized real run. Corrected
+published-artifact resume is initially disabled: each invocation republishes
+and verifies its handoff. A complete governed identity-v3 depth-cache hit may
+reuse model output, with the new recipe in its identity; it still creates fresh
+publication evidence. Legacy cache entries and retained generations are not
+rewritten or admitted as corrected artifacts. Rollback selects the legacy
+recipe for new runs and keeps already recorded recipes and their matching
+verification environment.
+
+Synthetic regressions include independent coordinate/interpolation oracles,
+all eight orientations, 16-bit and alpha cases, source/depth/mask/carrier
+replacement, real V2 subprocess execution and cache-hit republication. They
+establish engineering geometry and handoff consistency. They do not establish
+model accuracy, native Materials precision beyond the stated carrier contract,
+photographic improvement or acceptance of corrected real-reference outputs.
+Existing preservation acceptance applies to its recorded retained-output
+comparison, not this new recipe. New inference, retained-data rewrites and
+AWS/GPU validation are not part of this implementation.
 
 ## Regression and release gates
 
@@ -170,6 +251,15 @@ operation paths with a controlled model/runtime boundary:
 - [`test_geometry_legacy_boundary.py`](../../tests/lux_depth_v3/test_geometry_legacy_boundary.py):
   production legacy preprocessing, EXIF/V2 discrepancy and Stage A crop/stretch
   witnesses. Controlled depth scalars are not model accuracy evidence.
+- [`test_geometry_corrected_boundary.py`](../../tests/lux_depth_v3/test_geometry_corrected_boundary.py),
+  [`test_geometry_hardening.py`](../../tests/lux_depth_v3/test_geometry_hardening.py)
+  and [`test_geometry_versioning.py`](../../tests/lux_depth_v3/test_geometry_versioning.py):
+  independent corrected restoration, immutable snapshots, malformed authority,
+  closed versions and byte-identical historical planning.
+- [`test_geometry_orchestrator_handoff.py`](../../tests/lux_depth_v3/test_geometry_orchestrator_handoff.py)
+  and [`test_v2_geometry_handoff.py`](../../tests/test_v2_geometry_handoff.py):
+  real Stage A → V2 subprocess handoff, producer replacement rejection,
+  support/alpha guards, cache-hit republication and strict receipt validation.
 
 Run the focused regressions together with the existing geometry, color and
 native-master contracts:
@@ -181,6 +271,11 @@ native-master contracts:
   tests/lux_depth_v5/test_geometry_roundtrip.py \
   tests/materials_v4/test_geometry_alignment.py \
   tests/lux_depth_v3/test_geometry_legacy_boundary.py \
+  tests/lux_depth_v3/test_geometry_corrected_boundary.py \
+  tests/lux_depth_v3/test_geometry_hardening.py \
+  tests/lux_depth_v3/test_geometry_versioning.py \
+  tests/lux_depth_v3/test_geometry_orchestrator_handoff.py \
+  tests/test_v2_geometry_handoff.py \
   tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q
 ```
 
@@ -199,6 +294,6 @@ agreement, a successful model-boundary fixture or a source approval. Future
 native-precision editing remains gated on verified frame authority and explicit
 scoped photographic acceptance; AWS/GPU validation stays on hold.
 
-Rollback removes the additive helpers and audit regressions without a storage
-migration. No stored recipe, decision, approval or retained file is rewritten,
-and the existing processing and replay identities remain valid.
+No storage migration is required. No stored recipe, decision, approval or
+retained file is rewritten, and historical processing and replay identities
+remain valid in their matching environment.
