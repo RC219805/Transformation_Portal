@@ -79,9 +79,40 @@ def _run(source, depth, masks, handoff, tmp_path, **kwargs):
     )
 
 
+def _track_single_corrected_float_preparation(monkeypatch):
+    import transformation_portal.lux_depth_v3.v2_enhance as module
+
+    original_convert = module.bounded_encoded_srgb
+    original_rint = np.rint
+    original_compute = EnhancementStage.compute
+    conversions = []
+    stage_started = False
+
+    def convert(master):
+        pixels = original_convert(master)
+        conversions.append(master.source_bit_depth)
+        return pixels
+
+    def rint(values, *args, **kwargs):
+        if conversions and not stage_started and isinstance(values, np.ndarray) and values.ndim == 3:
+            pytest.fail("Corrected V2 allocated a discarded integer RGB proxy before enhancement")
+        return original_rint(values, *args, **kwargs)
+
+    def compute(stage, context):
+        nonlocal stage_started
+        stage_started = True
+        return original_compute(stage, context)
+
+    monkeypatch.setattr(module, "bounded_encoded_srgb", convert)
+    monkeypatch.setattr(np, "rint", rint)
+    monkeypatch.setattr(EnhancementStage, "compute", compute)
+    return conversions
+
+
 @pytest.mark.parametrize("orientation", range(1, 9))
 def test_corrected_v2_protects_full_pipeline_support_and_alpha(tmp_path, monkeypatch, orientation):
     source, depth, masks, handoff, transform, payload = _handoff(tmp_path, orientation, alpha=True)
+    conversions = _track_single_corrected_float_preparation(monkeypatch)
 
     def forbidden(*_args, **_kwargs):
         pytest.fail("Corrected V2 entered a legacy resize, drop-mask or second source-load fallback")
@@ -107,6 +138,8 @@ def test_corrected_v2_protects_full_pipeline_support_and_alpha(tmp_path, monkeyp
     assert report["geometry"]["handoff"] == payload
     assert report["geometry"]["source_sha256"] == transform.source_sha256
     assert report["geometry"]["shape"] == list(transform.normalized_shape)
+    assert conversions == [8]
+    assert report["bit_depth"]["input_dtype"] == "uint8"
 
 
 @pytest.mark.parametrize("mutation", ["source", "depth", "masks", "receipt", "missing_depth", "missing_masks"])
@@ -205,8 +238,34 @@ def test_corrected_passthrough_still_validates_exact_handoff(tmp_path):
     assert report["depth_consumed"] is False
 
 
+@pytest.mark.parametrize("with_masks", [False, True])
+@pytest.mark.parametrize("bit_depth", [8, 16])
+@pytest.mark.parametrize("preset", ["default", "none"])
+def test_corrected_output_label_matches_verified_mask_inventory(tmp_path, with_masks, bit_depth, preset):
+    source, depth, masks, handoff, _, payload = _handoff(tmp_path, masks=with_masks)
+    report = enhance_image(
+        source,
+        tmp_path / "final_materials_v3_enhanced.png",
+        depth_map_path=depth,
+        geometry_recipe=CORRECTED_GEOMETRY_RECIPE,
+        geometry_handoff_path=handoff,
+        masks_file=masks,
+        input_color="srgb",
+        output_bit_depth=bit_depth,
+        config=V2EnhancementConfig.from_preset(preset),
+    )
+    label = "materials_v3_enhanced" if with_masks else "v2_enhanced"
+    extension = "tif" if bit_depth == 16 else "png"
+    assert Path(report["output"]).name == f"final_{label}.{extension}"
+    assert Path(report["output"]).is_file()
+    assert report["geometry"]["handoff_identity_sha256"] == payload["identity_sha256"]
+    assert report["processing_version"] == "1.3.0"
+    if preset != "none":
+        assert report["enhancement_metadata"]["material_masks_supplied"] is with_masks
+
+
 @pytest.mark.parametrize("orientation", [6, 7])
-def test_corrected_native_16bit_tiff_preserves_protected_samples_and_alpha(tmp_path, orientation):
+def test_corrected_native_16bit_tiff_preserves_protected_samples_and_alpha(tmp_path, monkeypatch, orientation):
     import tifffile
 
     rows, columns = np.indices((31, 45))
@@ -235,6 +294,7 @@ def test_corrected_native_16bit_tiff_preserves_protected_samples_and_alpha(tmp_p
         transform=transform,
         depth_map_path=depth_path,
     )
+    conversions = _track_single_corrected_float_preparation(monkeypatch)
     report = enhance_image(
         source,
         tmp_path / "output.tif",
@@ -258,6 +318,8 @@ def test_corrected_native_16bit_tiff_preserves_protected_samples_and_alpha(tmp_p
     np.testing.assert_array_equal(actual[..., 0][protected], expected_red[protected])
     np.testing.assert_array_equal(actual[..., 3], expected_alpha)
     assert report["bit_depth"]["output_bits_per_sample"] == 16
+    assert report["bit_depth"]["input_dtype"] == "uint16"
+    assert conversions == [16]
 
 
 def test_recipe_requires_explicit_geometry_and_rejects_bare_masks(tmp_path):
@@ -285,10 +347,11 @@ def test_corrected_source_metadata_and_pixels_share_one_byte_snapshot(tmp_path, 
     assert report["io"]["load_backend"] == "verified_byte_snapshot"
 
 
-def test_corrected_v2_runner_roundtrip_uses_explicit_depth_and_receipt(tmp_path):
+@pytest.mark.parametrize("with_masks", [False, True])
+def test_corrected_v2_runner_roundtrip_uses_explicit_depth_and_receipt(tmp_path, with_masks):
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
-    source, depth, masks, handoff, _, payload = _handoff(tmp_path, 2)
+    source, depth, masks, handoff, _, payload = _handoff(tmp_path, 2, masks=with_masks)
     result = V2Runner().run(
         input_path=source,
         depth_dir=None,
@@ -307,6 +370,8 @@ def test_corrected_v2_runner_roundtrip_uses_explicit_depth_and_receipt(tmp_path)
     assert Path(result["output"]).is_file()
     assert Path(result["report_path"]).is_file()
     assert result["depth"]["resolved_path"] == str(depth)
+    label = "materials_v3_enhanced" if with_masks else "v2_enhanced"
+    assert Path(result["output"]).name == f"unrelated-to-depth-filename_{label}.png"
 
 
 def test_corrected_runner_forbids_filename_discovery(tmp_path):

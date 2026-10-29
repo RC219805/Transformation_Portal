@@ -217,6 +217,12 @@ PBR generation, reconstruction and spatial linear ingest are unsupported with
 this recipe and fail closed before execution. These restrictions do not change
 historical admission.
 
+Corrected model preparation quantizes 16-bit samples with exact integer
+arithmetic and retains 8-bit samples directly, avoiding native float64
+conversion buffers. Corrected V2 prepares its photographic color pixels once
+and does not materialize a discarded integer RGB image. Its emitted filename
+retains the V2 label when the verified material-mask inventory is empty.
+
 For an ordinary-image directory, inspect the corrected plan without inference:
 
 ```bash
@@ -278,6 +284,9 @@ operation paths with a controlled model/runtime boundary:
 - [`test_da3_geometry_invocation.py`](../../tests/lux_depth_v3/test_da3_geometry_invocation.py):
   bounded no-upscale model preparation, exact DA3 resolution arguments and
   local/canonical/subprocess recipe propagation without model inference.
+- [`test_geometry_proxy_allocation.py`](../../tests/lux_depth_v3/test_geometry_proxy_allocation.py):
+  exhaustive 16-bit quantization equivalence, direct 8-bit reuse and unchanged
+  orientation, alpha, source binding and model pixels without float64 proxies.
 - [`test_v2_geometry_cache_and_entrypoint.py`](../../tests/test_v2_geometry_cache_and_entrypoint.py):
   actual shared-cache separation, validation before cache access or side
   effects, and unchanged historical keys and child output.
@@ -297,6 +306,7 @@ native-master contracts:
   tests/lux_depth_v3/test_geometry_versioning.py \
   tests/lux_depth_v3/test_geometry_orchestrator_handoff.py \
   tests/lux_depth_v3/test_da3_geometry_invocation.py \
+  tests/lux_depth_v3/test_geometry_proxy_allocation.py \
   tests/test_v2_geometry_handoff.py \
   tests/test_v2_geometry_cache_and_entrypoint.py \
   tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q

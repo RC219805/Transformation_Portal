@@ -940,9 +940,10 @@ def enhance_image(
                 if master.source_bit_depth not in {8, 16}:
                     raise V2EnhancementError("Corrected V2 supports bounded 8/16-bit SDR sources only")
                 input_bits = master.source_bit_depth
-                image = np.rint(bounded_encoded_srgb(master) * ((1 << input_bits) - 1)).astype(
-                    np.uint16 if input_bits == 16 else np.uint8
-                )
+                # Keep one photographic float working buffer. Source precision
+                # controls encoding; an unused integer RGB proxy would only
+                # duplicate this full-resolution allocation.
+                image = bounded_encoded_srgb(master)
                 with Image.open(io.BytesIO(source_snapshot)) as header:
                     orientation = header.getexif().get(274, 1)
                     metadata = {
@@ -980,7 +981,7 @@ def enhance_image(
                             "V3 finishing supports at most 16-bit integer masters; use Unified/V5/V6 to retain float precision"
                         ) from load_error
             raise
-        input_dtype = str(image.dtype)
+        input_dtype = str(np.dtype(np.uint16 if input_bits == 16 else np.uint8)) if corrected_geometry else str(image.dtype)
         # Pixel processing has one explicit color domain. Preserve the source
         # precision through the existing V4/V5 photographic color authority;
         # an ICC is a transform, never a label copied onto unrelated pixels.
@@ -991,7 +992,7 @@ def enhance_image(
             source_snapshot = input_path.read_bytes()
         if master is None:
             master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
-        prepared_pixels = bounded_encoded_srgb(master)
+        prepared_pixels = image if corrected_geometry else bounded_encoded_srgb(master)
         color_preparation = metadata_payload(master.metadata["color_preparation"])
         icc_profile = metadata.get("icc_profile")
         source_icc_profile = icc_profile
@@ -1020,7 +1021,7 @@ def enhance_image(
             target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
         else:
-            target_dtype = np.dtype(image.dtype)
+            target_dtype = np.dtype(input_dtype) if corrected_geometry else np.dtype(image.dtype)
             target_bits = input_bits
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
@@ -1055,7 +1056,9 @@ def enhance_image(
         if geometry is not None:
             geometry = geometry.with_image(image, master.alpha)
             depth_map = geometry.depth_map
-            material_masks = dict(geometry.masks)
+            # Preserve the optional-mask contract: an empty verified inventory
+            # is not a Materials run and must retain the plain V2 output label.
+            material_masks = dict(geometry.masks) or None
         elif not passthrough_requested and depth_map_path and depth_map_path.exists():
             depth_map = load_depth_map(depth_map_path)
             logger.debug(f"Loaded depth map: {depth_map.shape}")

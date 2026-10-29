@@ -224,6 +224,20 @@ def preprocess_image_snapshot(
     )
 
 
+def _geometry_proxy_uint8(pixels: np.ndarray) -> np.ndarray:
+    """Quantize an SDR model proxy without native floating-point buffers."""
+    if pixels.dtype == np.uint8:
+        return pixels
+    if pixels.dtype != np.uint16:
+        raise ValueError("Corrected geometry proxies require uint8 or uint16 samples")
+    # No uint16 sample is exactly halfway between two 8-bit codes because 257
+    # is odd. This integer rounding matches both historical float formulas.
+    quantized = pixels.astype(np.uint32)
+    quantized += 128
+    quantized //= 257
+    return quantized.astype(np.uint8)
+
+
 def preprocess_geometry_snapshot(
     image_path: Union[str, Path],
     target_size: Optional[int] = None,
@@ -283,7 +297,7 @@ def preprocess_geometry_snapshot(
                     raise ValueError("Corrected TIFF geometry requires ordinary 8/16-bit SDR samples")
                 source_bits = pixels.dtype.itemsize * 8
                 pixels = _orient(pixels, orientation)
-                pixels = (pixels.astype(np.float64) * (255.0 / np.iinfo(pixels.dtype).max)).round().astype(np.uint8)
+                pixels = _geometry_proxy_uint8(pixels)
                 if pixels.ndim == 2:
                     pixels = np.repeat(pixels[..., None], 3, axis=2)
                 if pixels.shape[2] == 2:
@@ -309,7 +323,7 @@ def preprocess_geometry_snapshot(
                     if samples.dtype != np.uint16 or samples.shape[:2] != transform.encoded_shape:
                         raise ValueError("PNG precision decoder disagrees with declared geometry")
                     pixels = _orient(samples, transform.orientation)
-                    pixels = np.rint(pixels.astype(np.float64) / 257).astype(np.uint8)
+                    pixels = _geometry_proxy_uint8(pixels)
                     if pixels.ndim == 2:
                         pixels = np.repeat(pixels[..., None], 3, axis=2)
                     if pixels.shape[2] == 2:
