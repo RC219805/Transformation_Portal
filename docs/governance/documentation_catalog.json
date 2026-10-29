@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "bbf2c12f1c9b670cbfc2ce7288e3eb36a424daa4",
+      "source_commit": "3b09604a461e7fc75307afe1c7e9f9853941eef3",
       "content_sha256": "83d0eb0d66b1fd06dd8bc69aa8cca28f9d0b05230438f406c41d9ff1888ee552",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
@@ -15211,7 +15211,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "bbf2c12f1c9b670cbfc2ce7288e3eb36a424daa4",
+      "source_commit": "3b09604a461e7fc75307afe1c7e9f9853941eef3",
       "content_sha256": "a901d48771bb5aa3995424a0a10d02c1d39a2aac0480a487e80ffd45067c39f7",
       "source_references": [
         "app.py",
