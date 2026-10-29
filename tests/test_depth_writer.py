@@ -11,7 +11,6 @@ import pytest
 from transformation_portal.lux_depth_v3.depth_writer import (
     HAS_CV2,
     MAX_DEPTH_PNG_DECODED_PIXELS,
-    DepthWriteStats,
     atomic_write_depth_u16_png_with_stats,
     read_depth_u16_png,
     read_depth_u16_png_bytes,

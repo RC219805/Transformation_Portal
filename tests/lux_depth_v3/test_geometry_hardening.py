@@ -110,7 +110,7 @@ def test_tiff_float_orientation_is_rejected_instead_of_coerced(tmp_path, orienta
 @pytest.mark.parametrize("restore", ["restore_numeric", "restore_mask"])
 def test_finite_float64_model_overflow_cannot_create_nonfinite_float32_evidence(restore):
     transform = GeometryTransform("a" * 64, (14, 14), 1)
-    values = np.full((14, 14), np.finfo(np.float64).max)
+    values = np.full((14, 14), 1e100, dtype=np.float64)
     with pytest.raises(ValueError, match="finite float32"):
         getattr(transform, restore)(values)
 

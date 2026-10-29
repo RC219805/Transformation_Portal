@@ -34,8 +34,8 @@ from transformation_portal.lux_depth_v3.v2_presets import processing_version_for
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture
-def prepared_pair(tmp_path):
+@pytest.fixture(name="prepared_pair")
+def _prepared_pair(tmp_path):
     root = tmp_path / "inputs"
     root.mkdir()
     source = root / "scene.jpg"
