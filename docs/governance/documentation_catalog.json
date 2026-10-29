@@ -9169,7 +9169,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "6850e740a095b2bd5fa23e27a3aabd73f37cd212",
+      "source_commit": "3d031e1602f34b7d822d1465fcee7b7005799270",
       "content_sha256": "51e79f99d1d028d29e061d351c29e2d2966252212ce644730e7ef05ecb0e8ab6",
       "source_references": [
         "src/transformation_portal/spatial_ai/materials/material_backend.py",
@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "6850e740a095b2bd5fa23e27a3aabd73f37cd212",
+      "source_commit": "3d031e1602f34b7d822d1465fcee7b7005799270",
       "content_sha256": "499dab0ebc2c5b0dd6c2607b802ea6d4626eff9551f65859710f624ec3aa6455",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
