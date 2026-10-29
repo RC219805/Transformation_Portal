@@ -89,6 +89,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Acknowledge non-commercial registry-selected models for subprocess execution.",
     )
     parser.add_argument(
+        "--geometry-recipe",
+        help="Versioned model-grid recipe for noncanonical inference; canonical plans carry their own authority.",
+    )
+    parser.add_argument(
         "--execution-plan-stdin",
         action="store_true",
         help="Read one canonical tp.execution.plan.v1 object from stdin.",
@@ -172,6 +176,7 @@ def _validate_execution_mode(parser: argparse.ArgumentParser, args: argparse.Nam
             ("--model-key", args.model_key),
             ("--model-revision", args.model_revision),
             ("--device", args.device),
+            ("--geometry-recipe", args.geometry_recipe),
         ):
             if value is not None:
                 mixed_flags.append(option)
@@ -272,11 +277,24 @@ def _build_inference_engine(
     use_coreml: bool,
     non_commercial_ok: bool,
     canonical_authority: _CanonicalWorkerAuthority | None,
+    geometry_recipe: str | None = None,
 ) -> Any:
     """Construct the lazy DA3 engine without materializing model tensors."""
 
     from ...lux_depth_v3.config import DA3Config, DeviceConfig
+    from ...lux_depth_v3.geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
     from ...lux_depth_v3.inference import DA3InferenceEngine
+
+    if canonical_authority is not None:
+        if geometry_recipe is not None:
+            raise ValueError("Canonical DA3 geometry must come only from its execution plan")
+        from ...lux_depth_v3.execution_lifecycle import runtime_config_from_execution_plan
+
+        geometry_recipe = runtime_config_from_execution_plan(
+            canonical_authority.plan, candidate_authority=canonical_authority.candidate
+        ).geometry_recipe
+    else:
+        geometry_recipe = validate_geometry_recipe(LEGACY_GEOMETRY_RECIPE if geometry_recipe is None else geometry_recipe)
 
     model_variant = _resolve_model_variant(model_variant_name)
     config = DA3Config(
@@ -286,6 +304,7 @@ def _build_inference_engine(
         model_revision=model_revision,
         resolved_model_contract=(canonical_authority.resolved_model_contract if canonical_authority is not None else None),
         device=DeviceConfig(device=device, use_coreml=use_coreml),
+        geometry_recipe=geometry_recipe,
     )
     return DA3InferenceEngine(
         config=config,
@@ -430,6 +449,7 @@ def _run_inference(
     expected_runtime_identity_sha256: str | None = None,
     runtime_verification_token_path: Path | None = None,
     runtime_verification_token_sha256: str | None = None,
+    geometry_recipe: str | None = None,
 ) -> int:
     """Run DA3 inference and persist structured outputs."""
     verification_token = None
@@ -474,6 +494,7 @@ def _run_inference(
         use_coreml=use_coreml,
         non_commercial_ok=non_commercial_ok,
         canonical_authority=canonical_authority,
+        geometry_recipe=geometry_recipe,
     )
 
     expected_engine_runtime: tuple[str, str] | None = None
@@ -618,6 +639,7 @@ def main(argv: list[str] | None = None) -> int:
             use_coreml=use_coreml,
             non_commercial_ok=non_commercial_ok,
             canonical_authority=canonical_authority,
+            geometry_recipe=args.geometry_recipe,
         )
         evidence, prepared, verification_token = _prepare_worker_runtime_identity(
             engine=engine,
@@ -654,6 +676,7 @@ def main(argv: list[str] | None = None) -> int:
         use_coreml=use_coreml,
         non_commercial_ok=non_commercial_ok,
         canonical_authority=canonical_authority,
+        geometry_recipe=args.geometry_recipe,
         expected_runtime_identity_sha256=(
             str(args.expected_runtime_identity_sha256) if args.expected_runtime_identity_sha256 else None
         ),

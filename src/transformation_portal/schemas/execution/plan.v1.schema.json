@@ -1114,6 +1114,7 @@
         "schema": { "const": "tp.stage.config.lux.preprocess.v1" },
         "configuration_completeness": { "$ref": "#/$defs/configurationCompleteness" },
         "geometry_recipe": { "const": "normalized_crop_support_v1" },
+        "model_max_long_edge": { "type": "integer", "const": 504 },
         "verify_images": { "type": "boolean" },
         "raw_ingest_mode": { "enum": ["auto", "force_rawpy", "force_preview"] },
         "raw_wb_mode": { "$ref": "#/$defs/shortString" },
@@ -1126,6 +1127,11 @@
         "max_gpu_workers": { "type": "integer", "minimum": 0, "maximum": 8 }
       },
       "allOf": [
+        {
+          "if": { "required": ["geometry_recipe"] },
+          "then": { "required": ["model_max_long_edge"] },
+          "else": { "not": { "required": ["model_max_long_edge"] } }
+        },
         {
           "if": {
             "properties": { "configuration_completeness": { "const": "execution_complete" } }

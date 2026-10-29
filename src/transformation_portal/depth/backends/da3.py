@@ -1209,6 +1209,11 @@ class DA3Backend:
                     command.append("--non-commercial-ok")
                 if self._apple_coreml_opt_in_enabled():
                     command.append("--use-coreml")
+                from ...lux_depth_v3.geometry import LEGACY_GEOMETRY_RECIPE
+
+                geometry_recipe = getattr(self._config, "geometry_recipe", LEGACY_GEOMETRY_RECIPE)
+                if geometry_recipe != LEGACY_GEOMETRY_RECIPE:
+                    command.extend(["--geometry-recipe", geometry_recipe])
             if self._prepared_cache_runtime_identity is not None:
                 from ...ingest.canonical_json import canonicalize_json
 
@@ -1456,6 +1461,7 @@ class DA3Backend:
             resolved_model_contract=self._resolved_model_contract,
             model_revision=self._resolved_model_contract.revision,
             device=device_config,
+            geometry_recipe=getattr(self._config, "geometry_recipe", "legacy_encoded_crop_stretch_v1"),
         )
 
         self._engine = DA3InferenceEngine(

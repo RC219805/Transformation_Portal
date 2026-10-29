@@ -168,6 +168,11 @@ class DA3Config:
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,
     )
+    # Appended so historical positional DA3Config callers keep their meaning.
+    geometry_recipe: str = LEGACY_GEOMETRY_RECIPE
+
+    def __post_init__(self) -> None:
+        validate_geometry_recipe(self.geometry_recipe)
 
     @classmethod
     def from_preset(cls, preset: Preset) -> DA3Config:

@@ -32,6 +32,7 @@ from transformation_portal.core.security.model_lock import is_model_lock_strict_
 
 # noqa: F401 - Used in docstring examples
 from .config import DA3Config, ModelVariant  # noqa: F401
+from .geometry import CORRECTED_MODEL_MAX_LONG_EDGE, NORMALIZED_GEOMETRY_RECIPE, validate_geometry_recipe
 from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract, validate_authoritative_model_contract
 from .raw_loader import is_raw_file
 
@@ -677,6 +678,23 @@ class DA3InferenceEngine:
             "Expected np.ndarray, PIL.Image," " Path, str, or ImageInput," f" got {type(image)}",
         )
 
+    def _validate_inference_geometry(self, image: Union[np.ndarray, Image.Image]) -> bool:
+        """Reject invalid corrected model grids before optional model loading."""
+        corrected_geometry = validate_geometry_recipe(self.config.geometry_recipe) == NORMALIZED_GEOMETRY_RECIPE
+        if not corrected_geometry:
+            return False
+        if isinstance(image, Image.Image):
+            size = image.size
+        elif isinstance(image, np.ndarray):
+            if image.ndim not in {2, 3} or (image.ndim == 3 and image.shape[2] not in {3, 4}):
+                raise ValueError("Corrected DA3 input must contain one grayscale, RGB, or RGBA model grid")
+            size = (image.shape[1], image.shape[0])
+        else:
+            raise TypeError(f"Expected numpy array or PIL.Image, got {type(image)}")
+        if max(size) > CORRECTED_MODEL_MAX_LONG_EDGE or any(side < 14 or side % 14 for side in size):
+            raise ValueError("Corrected DA3 input must match its bounded multiple-of-14 recorded model grid")
+        return True
+
     def infer(self, image: Union[np.ndarray, "Image.Image"]) -> DepthResult:
         """Run depth inference on an image.
 
@@ -695,6 +713,10 @@ class DA3InferenceEngine:
             TypeError: If image type is not supported.
             ValueError: If array shape or dtype is invalid.
         """
+        # Corrected input geometry is already frozen by preprocessing. Validate
+        # it before the lazy loader can allocate model tensors or fetch assets.
+        # Legacy inputs retain their historical loader/normalization order.
+        self._validate_inference_geometry(image)
         # Lazy load model on first inference
         if not self._model_loaded:
             self._load_model()
@@ -876,6 +898,7 @@ class DA3InferenceEngine:
         Returns:
             Dictionary with depth map and metadata
         """
+        corrected_geometry = self._validate_inference_geometry(image)
         _ensure_optional_runtime_imports()
         if not TORCH_AVAILABLE:
             raise ImportError("torch required for PyTorch inference")
@@ -891,9 +914,17 @@ class DA3InferenceEngine:
         if is_da3_model:
             # DA3 models use inference() method with list of images
             assert self.model is not None
-            prediction = self.model.inference(  # type: ignore[union-attr]
-                [image],
-            )
+            if corrected_geometry:
+                # The recorded grid is already bounded and divisible by 14.
+                # Explicit DA3 preprocessing is consequently an identity,
+                # rather than its hidden default long-edge resize to 504.
+                prediction = self.model.inference(  # type: ignore[union-attr]
+                    [image], process_res=max(image.size), process_res_method="upper_bound_resize"
+                )
+            else:
+                prediction = self.model.inference(  # type: ignore[union-attr]
+                    [image],
+                )
             # DA3 returns Prediction object with .depth attribute (1, H, W)
             depth_raw = prediction.depth[0]  # Remove batch dimension
 
@@ -917,6 +948,9 @@ class DA3InferenceEngine:
                 raise ValueError("predicted_depth must contain one HxW depth map")
         else:
             raise RuntimeError("Model is not callable")
+
+        if corrected_geometry and (np.shape(depth_raw) != (image.height, image.width) or not np.isfinite(depth_raw).all()):
+            raise ValueError("Corrected DA3 prediction differs from its exact finite recorded model grid")
 
         # Normalize to [0, 1]
         depth_min = depth_raw.min()

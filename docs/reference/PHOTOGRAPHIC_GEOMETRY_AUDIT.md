@@ -161,10 +161,15 @@ The corrected path normalizes all eight EXIF orientations once from the same
 immutable source snapshot used for hashing and decode. RGB and straight alpha
 receive the same permutation. Its closed `tp.lux.geometry.v1` transform records
 the source SHA-256, encoded and normalized dimensions, target reduction,
-resized/model dimensions, center-crop origin and edge padding. It retains the
-existing Lanczos long-edge reduction and multiple-of-14 crop/model preparation;
-it changes how that recorded geometry is restored, without inventing coverage
-for removed borders.
+resized/model dimensions, center-crop origin and edge padding. The corrected
+recipe fixes `model_max_long_edge=504` in the preprocessing plan. It reduces
+larger inputs with Lanczos before the multiple-of-14 crop/pad and never
+upscales smaller photographs. Corrected DA3 inference explicitly uses the
+recorded bounded grid with `process_res=max(model_grid)` and
+`process_res_method=upper_bound_resize`; it rejects a changed output grid rather
+than hiding an additional internal resize. This keeps inference bounded near
+DA3's historical default resolution, rather than sending native multi-megapixel
+frames to the model. Restoration does not invent coverage for removed borders.
 
 Numeric restoration removes padding, places cropped samples in the resized
 canvas, then uses support-weighted bilinear restoration and nearest-neighbor
@@ -260,6 +265,9 @@ operation paths with a controlled model/runtime boundary:
   and [`test_v2_geometry_handoff.py`](../../tests/test_v2_geometry_handoff.py):
   real Stage A → V2 subprocess handoff, producer replacement rejection,
   support/alpha guards, cache-hit republication and strict receipt validation.
+- [`test_da3_geometry_invocation.py`](../../tests/lux_depth_v3/test_da3_geometry_invocation.py):
+  bounded no-upscale model preparation, exact DA3 resolution arguments and
+  local/canonical/subprocess recipe propagation without model inference.
 
 Run the focused regressions together with the existing geometry, color and
 native-master contracts:
@@ -275,6 +283,7 @@ native-master contracts:
   tests/lux_depth_v3/test_geometry_hardening.py \
   tests/lux_depth_v3/test_geometry_versioning.py \
   tests/lux_depth_v3/test_geometry_orchestrator_handoff.py \
+  tests/lux_depth_v3/test_da3_geometry_invocation.py \
   tests/test_v2_geometry_handoff.py \
   tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q
 ```

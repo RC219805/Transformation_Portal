@@ -734,6 +734,14 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
             node["configuration"].get("geometry_recipe") != "normalized_crop_support_v1" for node in geometry_nodes
         ):
             raise ExecutionPlanError("Corrected geometry requires one coherent execution-complete recipe across Lux stages")
+        preprocess_nodes = [
+            node for node in geometry_nodes if node["stage_registry_id"] == StageRegistryIdentifier.LUX_PREPROCESS.value
+        ]
+        if len(preprocess_nodes) != 1:
+            raise ExecutionPlanError("Corrected geometry requires one bounded preprocessing stage")
+        model_max_long_edge = preprocess_nodes[0]["configuration"].get("model_max_long_edge")
+        if type(model_max_long_edge) is not int or model_max_long_edge != 504:
+            raise ExecutionPlanError("Corrected geometry requires an exact model_max_long_edge of 504")
         if any(PurePosixPath(item["path"]).suffix.lower() in RAW_EXTENSIONS for item in payload["input_selection"]["files"]):
             raise ExecutionPlanError("Corrected geometry has no RAW original-raster mapping")
         if any(

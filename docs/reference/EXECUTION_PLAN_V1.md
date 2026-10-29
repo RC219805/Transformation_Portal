@@ -78,7 +78,10 @@ environment; current validation does not silently reinterpret them. See the
 Opt-in `geometry_recipe=normalized_crop_support_v1` is closed across the
 preprocess, depth, Materials and V2 nodes and pairs with processing version
 `1.3.0`. It binds a source-normalized crop/support transform and explicit
-verified V2 handoff. Omitted or explicit historical geometry keeps the existing
+verified V2 handoff. Its preprocess configuration fixes
+`model_max_long_edge=504`: reduce larger inputs before crop/pad without
+upscaling smaller images, then bind DA3 inference to the exact recorded grid.
+Omitted or explicit historical geometry keeps the existing
 plan bytes and cache fingerprints. Unknown or mixed recipes, mismatched
 versions, corrected RAW inputs and unsupported PBR/reconstruction modes fail
 validation. This additive configuration does not change the outer V1 schema

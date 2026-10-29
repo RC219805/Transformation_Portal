@@ -20,6 +20,9 @@ from ..ingest.canonical_json import dumps_json
 LEGACY_GEOMETRY_RECIPE = "legacy_encoded_crop_stretch_v1"
 NORMALIZED_GEOMETRY_RECIPE = "normalized_crop_support_v1"
 CORRECTED_GEOMETRY_RECIPE = NORMALIZED_GEOMETRY_RECIPE
+# Match DA3's historical default budget while making its model-grid resize
+# explicit and source-bound in the corrected recipe.
+CORRECTED_MODEL_MAX_LONG_EDGE = 504
 
 
 def validate_geometry_recipe(value: str) -> str:

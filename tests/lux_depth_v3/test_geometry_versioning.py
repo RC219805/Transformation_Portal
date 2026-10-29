@@ -27,7 +27,11 @@ from transformation_portal.lux_depth_v3.execution_lifecycle import (
     prepare_lux_execution,
     runtime_config_from_execution_plan,
 )
-from transformation_portal.lux_depth_v3.geometry import LEGACY_GEOMETRY_RECIPE, NORMALIZED_GEOMETRY_RECIPE
+from transformation_portal.lux_depth_v3.geometry import (
+    CORRECTED_MODEL_MAX_LONG_EDGE,
+    LEGACY_GEOMETRY_RECIPE,
+    NORMALIZED_GEOMETRY_RECIPE,
+)
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, ConfigFingerprint
 from transformation_portal.lux_depth_v3.v2_presets import processing_version_for_geometry
 
@@ -190,6 +194,10 @@ def test_corrected_plan_carries_coherent_recipe_and_runtime_projection(prepared_
         assert relevant <= configurations.keys()
         for name in relevant:
             assert configurations[name].get("geometry_recipe") == recipe
+        if recipe is None:
+            assert "model_max_long_edge" not in configurations["lux.preprocess"]
+        else:
+            assert configurations["lux.preprocess"]["model_max_long_edge"] == CORRECTED_MODEL_MAX_LONG_EDGE == 504
         version = "1.2.0" if recipe is None else "1.3.0"
         assert configurations["lux.materials_v3"]["processing_version"] == version
         assert configurations["lux.v2"]["processing_version"] == version
@@ -210,10 +218,53 @@ def test_mixed_stage_geometry_is_rejected_even_with_fresh_plan_fingerprint(prepa
     payload = prepared_pair[1].plan.to_payload()
     node = next(node for node in payload["nodes"] if node["id"] == node_id)
     node["configuration"].pop("geometry_recipe")
+    if node_id == "lux.preprocess":
+        node["configuration"].pop("model_max_long_edge")
     if node_id in {"lux.materials_v3", "lux.v2"}:
         node["configuration"]["processing_version"] = "1.2.0"
     with pytest.raises(ExecutionPlanError, match="coherent"):
         CanonicalExecutionPlan.from_payload(with_execution_plan_fingerprint(payload))
+
+
+@pytest.mark.parametrize("limit", [None, True, 503, 505, 2044, 504.0, "504"])
+def test_carried_corrected_plan_rejects_changed_model_budget_even_after_refingerprinting(prepared_pair, limit):
+    payload = prepared_pair[1].plan.to_payload()
+    configuration = next(node for node in payload["nodes"] if node["id"] == "lux.preprocess")["configuration"]
+    configuration["model_max_long_edge"] = limit
+    with pytest.raises(ExecutionPlanError):
+        CanonicalExecutionPlan.from_payload(with_execution_plan_fingerprint(payload))
+
+
+def test_carried_corrected_plan_cannot_omit_its_fixed_model_budget(prepared_pair):
+    payload = prepared_pair[1].plan.to_payload()
+    configuration = next(node for node in payload["nodes"] if node["id"] == "lux.preprocess")["configuration"]
+    configuration.pop("model_max_long_edge")
+    with pytest.raises(ExecutionPlanError):
+        CanonicalExecutionPlan.from_payload(with_execution_plan_fingerprint(payload))
+
+
+def test_legacy_plan_cannot_acquire_corrected_model_budget(prepared_pair):
+    payload = prepared_pair[0].plan.to_payload()
+    configuration = next(node for node in payload["nodes"] if node["id"] == "lux.preprocess")["configuration"]
+    configuration["model_max_long_edge"] = CORRECTED_MODEL_MAX_LONG_EDGE
+    with pytest.raises(ExecutionPlanError):
+        CanonicalExecutionPlan.from_payload(with_execution_plan_fingerprint(payload))
+
+
+def test_omitted_and_explicit_legacy_geometry_keep_exact_plan_bytes(prepared_pair):
+    legacy = prepared_pair[0]
+    config = EnhanceConfig(
+        model_key="da3-metric",
+        enable_materials_v3=True,
+        enable_v2=True,
+        enable_parallel_processing=False,
+        max_workers=1,
+        max_gpu_workers=0,
+        geometry_recipe=LEGACY_GEOMETRY_RECIPE,
+    )
+    explicit_legacy = prepare_lux_execution(config, legacy.input_root, legacy.input_files)
+    assert explicit_legacy.canonical_plan_bytes == legacy.canonical_plan_bytes
+    assert explicit_legacy.plan_fingerprint_sha256 == legacy.plan_fingerprint_sha256
 
 
 @pytest.mark.parametrize("node_id", ["lux.materials_v3", "lux.v2"])
@@ -244,10 +295,12 @@ def test_run_card_schema_requires_corrected_recipe_with_processing_version(schem
 
 
 def test_cli_advertises_explicit_geometry_recipe_without_changing_default():
+    import click
     from typer.testing import CliRunner
 
     from transformation_portal.lux_depth_v3.__main__ import app
 
     result = CliRunner().invoke(app, ["--help"], color=False)
     assert result.exit_code == 0
-    assert "--geometry-recipe" in result.output
+    # Rich can force terminal styling from CI despite color=False.
+    assert "--geometry-recipe" in click.unstyle(result.output)

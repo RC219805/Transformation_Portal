@@ -771,11 +771,13 @@ def _stage_configuration(
             }
         )
     if stage in {"preprocess", "depth", "materials_v3", "v2"}:
-        from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
+        from .geometry import CORRECTED_MODEL_MAX_LONG_EDGE, LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
 
         validate_geometry_recipe(config.geometry_recipe)
         if config.geometry_recipe != LEGACY_GEOMETRY_RECIPE:
             base["geometry_recipe"] = config.geometry_recipe
+            if stage == "preprocess":
+                base["model_max_long_edge"] = CORRECTED_MODEL_MAX_LONG_EDGE
     return base
 
 

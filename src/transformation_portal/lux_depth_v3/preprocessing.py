@@ -236,16 +236,26 @@ def preprocess_geometry_snapshot(
 
     RAW has no encoded-to-canonical raster authority in this recipe. Model RGB
     remains an 8-bit proxy; the original file remains V2's precision authority.
+    Its longest edge is capped at DA3's historical 504-pixel model budget,
+    without upscaling smaller photographs, before the recorded crop/pad.
     """
     from PIL import ImageOps
 
-    from .geometry import GeometryPreprocessResult, GeometryTransform
+    from .geometry import CORRECTED_MODEL_MAX_LONG_EDGE, GeometryPreprocessResult, GeometryTransform
 
     if is_raw_file(Path(image_path)):
         raise ValueError("Corrected geometry has no RAW original-raster mapping")
+    if target_size is not None and (type(target_size) is not int or target_size < 1):
+        raise ValueError("target_size must be a positive integer or null")
     captured: list[GeometryPreprocessResult] = []
 
     def decode(snapshot: Any, source_sha256: str) -> tuple[np.ndarray, tuple[int, int]]:
+        def bounded_transform(encoded_shape: tuple[int, int], orientation: int) -> GeometryTransform:
+            effective_target = min(CORRECTED_MODEL_MAX_LONG_EDGE, max(encoded_shape))
+            if target_size is not None:
+                effective_target = min(effective_target, target_size)
+            return GeometryTransform(source_sha256, encoded_shape, orientation, effective_target)
+
         snapshot.seek(0)
         signature = snapshot.read(4)
         snapshot.seek(0)
@@ -267,7 +277,7 @@ def preprocess_geometry_snapshot(
                 ):
                     raise ValueError("TIFF orientation requires one unsigned SHORT value")
                 orientation = orientation_tag.value if orientation_tag else 1
-                transform = GeometryTransform(source_sha256, encoded_shape, orientation, target_size)
+                transform = bounded_transform(encoded_shape, orientation)
                 pixels = page.asarray()
                 if pixels.dtype not in {np.dtype("uint8"), np.dtype("uint16")}:
                     raise ValueError("Corrected TIFF geometry requires ordinary 8/16-bit SDR samples")
@@ -288,7 +298,7 @@ def preprocess_geometry_snapshot(
                 snapshot.seek(0)
             with Image.open(snapshot) as image:
                 orientation = image.getexif().get(274, 1)
-                transform = GeometryTransform(source_sha256, (image.height, image.width), orientation, target_size)
+                transform = bounded_transform((image.height, image.width), orientation)
                 # TIFF is decoded independently above because Pillow may apply
                 # its orientation during load. Ordinary PNG/JPEG is explicit.
                 if source_bits == 16:
@@ -311,7 +321,8 @@ def preprocess_geometry_snapshot(
                     alpha = np.asarray(normalized.convert("RGBA").getchannel("A"), dtype=np.uint8) if has_alpha else None
                     rgb = np.array(normalized.convert("RGB"), dtype=np.uint8, copy=True)
         with Image.fromarray(rgb) as canonical:
-            resized = _resize_keep_aspect(canonical, target_size) if target_size is not None else canonical
+            assert transform.target_size is not None
+            resized = _resize_keep_aspect(canonical, transform.target_size)
             model = _enforce_dimension_multiple(np.asarray(resized, dtype=np.float32) / 255.0, DIMENSION_MULTIPLE)
         result = GeometryPreprocessResult(model, rgb, alpha, transform, source_bits)
         captured.append(result)
