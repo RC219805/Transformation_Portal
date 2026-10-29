@@ -4286,7 +4286,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "235ac9dace3579ba0a2e9e7552bb06e757288d74",
+      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
       "content_sha256": "02451b901838ec1ca0a18d9dfc05bc85c624c9956b61e14b6f374fc9d1963c19",
       "source_references": [
         "app.py",
@@ -4860,7 +4860,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "235ac9dace3579ba0a2e9e7552bb06e757288d74",
+      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
       "content_sha256": "71fa63f4f654afa8aa2bd1e0ce856b2643dbdb98d83628a7cad84bf0117414e2",
       "source_references": [
         "app.py",
@@ -14631,7 +14631,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "235ac9dace3579ba0a2e9e7552bb06e757288d74",
+      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
       "content_sha256": "bd4210044b84574e5d281b6bacaa976f434ad5c22a6415c48369cc09656b4c56",
       "source_references": [],
       "source_sha256": {},
@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "235ac9dace3579ba0a2e9e7552bb06e757288d74",
+      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
       "content_sha256": "ca4a78edffd2b62f7729670276c37f1da54ba27eaa9a6457792ed30bc7246853",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
@@ -15209,7 +15209,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "235ac9dace3579ba0a2e9e7552bb06e757288d74",
+      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
       "content_sha256": "a901d48771bb5aa3995424a0a10d02c1d39a2aac0480a487e80ffd45067c39f7",
       "source_references": [
         "app.py",
