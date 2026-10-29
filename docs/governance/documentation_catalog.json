@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "f02610cace8f78a17ac56bf9c38aaee3a3be9f64",
+      "source_commit": "410110b65d214f8f0007e80a7c4f5358ef9e9786",
       "content_sha256": "f2d728e7f7277ccb4d95cebd1f0a0a6d0d7803eb7912d62ae043355a425da53f",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
