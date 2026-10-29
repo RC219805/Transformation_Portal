@@ -37,7 +37,7 @@ import weakref
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
