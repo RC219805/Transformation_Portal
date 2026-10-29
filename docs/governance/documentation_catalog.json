@@ -4286,7 +4286,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "02451b901838ec1ca0a18d9dfc05bc85c624c9956b61e14b6f374fc9d1963c19",
       "source_references": [
         "app.py",
@@ -4860,7 +4860,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "71fa63f4f654afa8aa2bd1e0ce856b2643dbdb98d83628a7cad84bf0117414e2",
       "source_references": [
         "app.py",
@@ -6320,7 +6320,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "7588a79766d1a64835b207308355f5d93e69789f89f8db1732fcdbbfd612663e",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -9169,7 +9169,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "51e79f99d1d028d29e061d351c29e2d2966252212ce644730e7ef05ecb0e8ab6",
       "source_references": [
         "src/transformation_portal/spatial_ai/materials/material_backend.py",
@@ -9835,7 +9835,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "c9ea836dd74e8c7058582d8c11bded5f431d8053cf0c0d064352cbf9fe8175f0",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -13130,7 +13130,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "82ae17a513a438f3c88e9d063fbb0cfa902442fccf4058c43085fe2d9bd90d01",
       "source_references": [
         "src/transformation_portal/lux_depth_v3/__main__.py",
@@ -14631,7 +14631,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "1b999042b54d73c543c2279432503cfb8a291868d97cd3675697a3f1d3167803",
       "source_references": [],
       "source_sha256": {},
@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "2bd02e1f7f1540ec23c5140385712f2144a6e2c4248852a6aacc3d3b9a2a32ac",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
@@ -15199,7 +15199,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "a901d48771bb5aa3995424a0a10d02c1d39a2aac0480a487e80ffd45067c39f7",
       "source_references": [
         "app.py",
@@ -16165,7 +16165,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "0c28eb76b6156d04b5c1998defc37b862d37e2fae1c608bdea8894c4648210a1",
       "source_references": [],
       "source_sha256": {},
@@ -16181,7 +16181,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "5e5ef3f09039bc31352b31ff16d6bdad54ace4aa",
+      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
       "content_sha256": "da424a25b091cbbe2b5cb8e0fbe319e62458b0c0c6345b3ff0ea4d3e2288bfbd",
       "source_references": [],
       "source_sha256": {},
