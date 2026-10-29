@@ -113,6 +113,9 @@ class EnhancementStage(Stage):
                 raise ValueError("Corrected enhancement requires a verified geometry handoff")
             material_masks = context.get_artifact("material_masks", {})
             geometry.validate_stage(image, depth_map, material_masks)
+            # Material edits can depend on earlier edits' image statistics.
+            # Their execution order must agree with the canonical cache input.
+            material_masks = dict(sorted(material_masks.items()))
         else:
             material_masks = self._normalize_material_masks(context.get_artifact("material_masks", {}), image)
         material_masks_supplied_count = len(material_masks)
@@ -235,6 +238,7 @@ class EnhancementStage(Stage):
                 "depth_map": array_identity(geometry.depth_map),
                 "support": array_identity(geometry.support),
                 "material_masks": {name: array_identity(mask) for name, mask in sorted(geometry.masks.items())},
+                "material_execution_order": "sorted_name_v1",
                 "alpha": None if geometry.alpha is None else array_identity(geometry.alpha),
                 "stage_version": self.version,
                 "output_dtype": np.dtype(self.output_dtype).str,

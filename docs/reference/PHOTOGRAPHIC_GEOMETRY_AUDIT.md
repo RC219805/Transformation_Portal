@@ -196,6 +196,9 @@ the original model-depth cache is a separate authority.
 Corrected enhancement cache keys bind the actual image, depth, support, named
 masks and alpha arrays as well as the handoff identity and effective settings.
 A caller-supplied identity cannot substitute for those array identities.
+Corrected material edits execute in sorted name order; the cache records
+`sorted_name_v1` semantics so earlier order-dependent experimental entries are
+not reused. Historical material ordering and cache keys remain unchanged.
 Missing or invalid geometry fails before a cache read. Programmatic V2 entry
 points validate the closed recipe before path discovery, output creation or
 processing; unknown values cannot silently select historical processing.

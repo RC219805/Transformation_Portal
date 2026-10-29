@@ -90,6 +90,85 @@ def test_corrected_named_mask_identity_is_order_independent_but_name_sensitive(t
     assert stage.get_cache_key(first) != stage.get_cache_key(renamed)
 
 
+def _material_order_context(cache_dir, *, reverse=False):
+    image = np.full((14, 14, 3), 0.51, np.float32)
+    depth = np.zeros((14, 14), np.float32)
+    support = np.ones((14, 14), bool)
+    wood = np.zeros((14, 14), np.float32)
+    wood[:, :7] = 1
+    metal = np.zeros((14, 14), np.float32)
+    metal[:, 7:] = 1
+    masks = {"metal": metal, "wood": wood} if reverse else {"wood": wood, "metal": metal}
+    bound = GeometryBoundInputs("a" * 64, "b" * 64, "c" * 64, (14, 14), depth, support, masks).with_image(image)
+    return StageContext(
+        artifacts={
+            "image": bound.image,
+            "depth_map": bound.depth_map,
+            "material_masks": dict(bound.masks),
+            "geometry_handoff": bound,
+        },
+        cache_dir=cache_dir,
+    )
+
+
+def _material_order_stage(recipe=NORMALIZED_GEOMETRY_RECIPE):
+    return EnhancementStage(
+        enhancement_strength=0,
+        clarity_strength=0,
+        material_strength=1,
+        geometry_recipe=recipe,
+        version="1.3.0",
+    )
+
+
+def test_corrected_nonempty_material_order_matches_compute_and_shared_cache(tmp_path):
+    first = _material_order_context(tmp_path / "cache")
+    reordered = _material_order_context(tmp_path / "cache", reverse=True)
+    stage = _material_order_stage()
+    assert list(first.get_artifact("material_masks")) != list(reordered.get_artifact("material_masks"))
+    expected = stage.compute(first).artifacts["enhanced_image"]
+    np.testing.assert_array_equal(expected, stage.compute(reordered).artifacts["enhanced_image"])
+    assert expected[0, 10, 0] == 130
+    assert stage.get_cache_key(first) == stage.get_cache_key(reordered)
+
+    initial = stage.execute(first)
+    repeat = stage.execute(reordered)
+    assert initial.status == StageStatus.COMPLETED and not initial.cache_hit
+    assert repeat.status == StageStatus.CACHED and repeat.cache_hit
+    np.testing.assert_array_equal(initial.artifacts["enhanced_image"], expected)
+    np.testing.assert_array_equal(repeat.artifacts["enhanced_image"], expected)
+
+
+def test_legacy_nonempty_material_execution_retains_insertion_order(tmp_path):
+    first = _material_order_context(tmp_path / "cache")
+    reordered = _material_order_context(tmp_path / "cache", reverse=True)
+    stage = _material_order_stage(LEGACY_GEOMETRY_RECIPE)
+    initial = stage.compute(first).artifacts["enhanced_image"]
+    reverse = stage.compute(reordered).artifacts["enhanced_image"]
+    assert np.count_nonzero(np.any(initial != reverse, axis=-1)) == 98
+    assert initial[0, 10, 0] == 129
+    assert reverse[0, 10, 0] == 130
+
+
+def test_corrected_canonical_material_order_does_not_reuse_pre_fix_cache(tmp_path):
+    context = _material_order_context(tmp_path / "cache")
+    # Captured from f02610ca before execution order was canonicalized. Those
+    # experimental cache bytes can contain the insertion-ordered result.
+    old_key = "enhance_geometry_e6620d4e8e6315b1f082da9532e572fae3e0395d4fed159cff5dc0ff8a6acb4d"
+    stage = _material_order_stage()
+    stale = _material_order_stage(LEGACY_GEOMETRY_RECIPE).compute(context)
+    assert stale.artifacts["enhanced_image"][0, 10, 0] == 129
+    stage._save_to_cache(stale, old_key, context.cache_dir)
+    assert (context.cache_dir / f"{old_key}.json").is_file()
+
+    result = stage.execute(context)
+    assert result.status == StageStatus.COMPLETED and not result.cache_hit
+    assert result.cache_key != old_key
+    assert result.artifacts["enhanced_image"][0, 10, 0] == 130
+    np.testing.assert_array_equal(result.artifacts["enhanced_image"], stage.compute(context).artifacts["enhanced_image"])
+    assert (context.cache_dir / f"{old_key}.json").is_file()
+
+
 def test_legacy_cache_key_preserves_historical_bytes():
     image = np.full((14, 14, 3), 0.5, np.float32)
     depth = np.indices((14, 14))[1].astype(np.float32) / 13

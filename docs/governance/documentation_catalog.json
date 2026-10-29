@@ -15098,8 +15098,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "3d031e1602f34b7d822d1465fcee7b7005799270",
-      "content_sha256": "499dab0ebc2c5b0dd6c2607b802ea6d4626eff9551f65859710f624ec3aa6455",
+      "source_commit": "f02610cace8f78a17ac56bf9c38aaee3a3be9f64",
+      "content_sha256": "f2d728e7f7277ccb4d95cebd1f0a0a6d0d7803eb7912d62ae043355a425da53f",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
         "src/transformation_portal/core/depth_evidence.py",
@@ -15162,7 +15162,7 @@
         "src/transformation_portal/lux_depth_v3/preprocessing.py": "c5d764d6182c2d5e55add29ca2a230c7849deab30d38a24ce59d13041ed34181",
         "src/transformation_portal/lux_depth_v3/orchestrator.py": "3f5a767905f8e0ef21339eb339d243c8277ab895f2c1a37020ab55b8f5b0911c",
         "src/transformation_portal/lux_depth_v3/v2_enhance.py": "f4974561d75a767f7a507454e9b384364e227eea6d2602da00c06edc3893e1af",
-        "src/transformation_portal/stage_graph/stages/enhancement.py": "d5b62528ea407cc4641ab6366905d293fe39c28413064a80b649893c1238a386",
+        "src/transformation_portal/stage_graph/stages/enhancement.py": "808cd85d992473346712d795229fa41d6438cd870e0739e0ed554e892315e800",
         "src/transformation_portal/photographic_delivery/native.py": "762269365a5244e764d71155b84ce19d2422908cf36e78ad864e70462999e188",
         "src/transformation_portal/photographic_delivery/exports.py": "a08f5a735a9715a26078e24e9436d94c0a21fb28a9d960e03e080cba29c38eab",
         "src/transformation_portal/core/photographic_export.py": "5f5133187c14e0b94397ff475671a2b490199af29d02383c1ca368ab793c851f",
@@ -15192,7 +15192,7 @@
         "src/transformation_portal/depth/backends/da3.py": "f093d67d7ad884e6649ec817c810d5cb2bf087764e17bf225cae65baf0008171",
         "src/transformation_portal/depth/backends/da3_worker.py": "9bd0b3378b3d81f13b60cb5340110d28a56a7198fd81d581561a12637326f2fd",
         "tests/lux_depth_v3/test_da3_geometry_invocation.py": "532a797aa2bd94218a05bddcc1fc85ecb0bf46bb2a99edbab9f499b36b50ac7b",
-        "tests/test_v2_geometry_cache_and_entrypoint.py": "dbe886e1ce442bf7ee799e235c86626b4a4f1a2800749b8e8a4821c851d0b2e1"
+        "tests/test_v2_geometry_cache_and_entrypoint.py": "efac863ddf2203c1514e620380211fca3fe0550186ac1951801a5b4aba11ee59"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/core/test_proxy_coordinates.py tests/lux_depth_v3/test_geometry_legacy_boundary.py tests/lux_depth_v5/test_geometry_roundtrip.py tests/materials_v4/test_geometry_alignment.py tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q",
