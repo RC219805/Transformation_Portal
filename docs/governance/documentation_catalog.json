@@ -9169,7 +9169,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
+      "source_commit": "6850e740a095b2bd5fa23e27a3aabd73f37cd212",
       "content_sha256": "51e79f99d1d028d29e061d351c29e2d2966252212ce644730e7ef05ecb0e8ab6",
       "source_references": [
         "src/transformation_portal/spatial_ai/materials/material_backend.py",
@@ -9180,7 +9180,7 @@
       "source_sha256": {
         "src/transformation_portal/spatial_ai/materials/material_backend.py": "52ea135d9acfa6026d256d48e8b92082c80bd053138e18b27cf2f23adce0140e",
         "src/transformation_portal/lux_depth_v3/v2_presets.py": "aff1911e48fcff3b755d2f793bae026c81b92c0350431c80eaae3c62586e24c1",
-        "scripts/enhance_image.py": "509cdec9b0fef3897135a5c1166c7db8ed43467bab6536555da4898f2ebd49f0",
+        "scripts/enhance_image.py": "92f60e6e7397ef5fccf5bd82e5a96ea371a6e986faee3540ef89a2bdcd54bd95",
         "tests/test_documentation_operator_examples.py": "421a061763dd56320660a83cc4b1999f97e284ee29ff76d894ed1de495c5522d"
       },
       "validation_commands": [
@@ -15098,8 +15098,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1d5a9552003cbadebc8c41202edf989a2b0153fd",
-      "content_sha256": "ca4a78edffd2b62f7729670276c37f1da54ba27eaa9a6457792ed30bc7246853",
+      "source_commit": "6850e740a095b2bd5fa23e27a3aabd73f37cd212",
+      "content_sha256": "499dab0ebc2c5b0dd6c2607b802ea6d4626eff9551f65859710f624ec3aa6455",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
         "src/transformation_portal/core/depth_evidence.py",
@@ -15144,7 +15144,8 @@
         "src/transformation_portal/lux_depth_v3/inference.py",
         "src/transformation_portal/depth/backends/da3.py",
         "src/transformation_portal/depth/backends/da3_worker.py",
-        "tests/lux_depth_v3/test_da3_geometry_invocation.py"
+        "tests/lux_depth_v3/test_da3_geometry_invocation.py",
+        "tests/test_v2_geometry_cache_and_entrypoint.py"
       ],
       "source_sha256": {
         "src/transformation_portal/core/image_artifact.py": "d90f847b6c3ad663d7d92e83d4ddf778772acafffa33437deaf6e0f1c0219e56",
@@ -15161,7 +15162,7 @@
         "src/transformation_portal/lux_depth_v3/preprocessing.py": "c5d764d6182c2d5e55add29ca2a230c7849deab30d38a24ce59d13041ed34181",
         "src/transformation_portal/lux_depth_v3/orchestrator.py": "3f5a767905f8e0ef21339eb339d243c8277ab895f2c1a37020ab55b8f5b0911c",
         "src/transformation_portal/lux_depth_v3/v2_enhance.py": "f4974561d75a767f7a507454e9b384364e227eea6d2602da00c06edc3893e1af",
-        "src/transformation_portal/stage_graph/stages/enhancement.py": "4e00684003bac3e73f46ca172ac6c8e5751d1b991ce9b6028169d70ef357f3d7",
+        "src/transformation_portal/stage_graph/stages/enhancement.py": "d5b62528ea407cc4641ab6366905d293fe39c28413064a80b649893c1238a386",
         "src/transformation_portal/photographic_delivery/native.py": "762269365a5244e764d71155b84ce19d2422908cf36e78ad864e70462999e188",
         "src/transformation_portal/photographic_delivery/exports.py": "a08f5a735a9715a26078e24e9436d94c0a21fb28a9d960e03e080cba29c38eab",
         "src/transformation_portal/core/photographic_export.py": "5f5133187c14e0b94397ff475671a2b490199af29d02383c1ca368ab793c851f",
@@ -15179,7 +15180,7 @@
         "src/transformation_portal/lux_depth_v3/manifest.py": "e81c9efd1513119d600826cdfa44351aeb6e3fe78be4c49329535bf53092947e",
         "src/transformation_portal/core/execution_plan.py": "4c7f2de51998f92f32b7f93192a27b6ca64a9ea5b87c11ce091fb84195427303",
         "src/transformation_portal/schemas/execution/plan.v1.schema.json": "ba7995bbd5fc68e7ab5ac4616e75982cc848b993965d5727c6995c26c65f5e77",
-        "scripts/enhance_image.py": "509cdec9b0fef3897135a5c1166c7db8ed43467bab6536555da4898f2ebd49f0",
+        "scripts/enhance_image.py": "92f60e6e7397ef5fccf5bd82e5a96ea371a6e986faee3540ef89a2bdcd54bd95",
         "tests/lux_depth_v3/test_geometry_corrected_boundary.py": "903b026b597b06308033c59a425e2e077b54859684d9b8979ab4c9976eebc0b6",
         "tests/lux_depth_v3/test_geometry_hardening.py": "1dc08705e78cb650e0a2d29bb4a4a03c4dfe52302993f12ae352e5a60529af3b",
         "tests/lux_depth_v3/test_geometry_versioning.py": "fba1b3a1657f7b8bd4f29b69a035a645983168dc218e8803cc6d997c407355af",
@@ -15190,7 +15191,8 @@
         "src/transformation_portal/lux_depth_v3/inference.py": "0bc9b973c43a65033faf5aabfe6befdb71d4e4be4f9fbbc1b618428ccf2e4838",
         "src/transformation_portal/depth/backends/da3.py": "f093d67d7ad884e6649ec817c810d5cb2bf087764e17bf225cae65baf0008171",
         "src/transformation_portal/depth/backends/da3_worker.py": "9bd0b3378b3d81f13b60cb5340110d28a56a7198fd81d581561a12637326f2fd",
-        "tests/lux_depth_v3/test_da3_geometry_invocation.py": "532a797aa2bd94218a05bddcc1fc85ecb0bf46bb2a99edbab9f499b36b50ac7b"
+        "tests/lux_depth_v3/test_da3_geometry_invocation.py": "532a797aa2bd94218a05bddcc1fc85ecb0bf46bb2a99edbab9f499b36b50ac7b",
+        "tests/test_v2_geometry_cache_and_entrypoint.py": "dbe886e1ce442bf7ee799e235c86626b4a4f1a2800749b8e8a4821c851d0b2e1"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/core/test_proxy_coordinates.py tests/lux_depth_v3/test_geometry_legacy_boundary.py tests/lux_depth_v5/test_geometry_roundtrip.py tests/materials_v4/test_geometry_alignment.py tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q",

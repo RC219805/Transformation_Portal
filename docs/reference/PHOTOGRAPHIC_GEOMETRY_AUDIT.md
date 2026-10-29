@@ -193,6 +193,13 @@ identity in its report. V2 receives a float32 derivative of the verified
 published uint16 depth preview, with that normalization recorded explicitly;
 the original model-depth cache is a separate authority.
 
+Corrected enhancement cache keys bind the actual image, depth, support, named
+masks and alpha arrays as well as the handoff identity and effective settings.
+A caller-supplied identity cannot substitute for those array identities.
+Missing or invalid geometry fails before a cache read. Programmatic V2 entry
+points validate the closed recipe before path discovery, output creation or
+processing; unknown values cannot silently select historical processing.
+
 The same native support and opaque-alpha guard covers all V2 operations,
 including global tone, clarity and material changes. Unsupported borders and
 partially transparent pixels retain their source RGB; alpha remains separate.
@@ -268,6 +275,9 @@ operation paths with a controlled model/runtime boundary:
 - [`test_da3_geometry_invocation.py`](../../tests/lux_depth_v3/test_da3_geometry_invocation.py):
   bounded no-upscale model preparation, exact DA3 resolution arguments and
   local/canonical/subprocess recipe propagation without model inference.
+- [`test_v2_geometry_cache_and_entrypoint.py`](../../tests/test_v2_geometry_cache_and_entrypoint.py):
+  actual shared-cache separation, validation before cache access or side
+  effects, and unchanged historical keys and child output.
 
 Run the focused regressions together with the existing geometry, color and
 native-master contracts:
@@ -285,6 +295,7 @@ native-master contracts:
   tests/lux_depth_v3/test_geometry_orchestrator_handoff.py \
   tests/lux_depth_v3/test_da3_geometry_invocation.py \
   tests/test_v2_geometry_handoff.py \
+  tests/test_v2_geometry_cache_and_entrypoint.py \
   tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q
 ```
 

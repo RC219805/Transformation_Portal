@@ -27,6 +27,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from transformation_portal.lux_depth_v3.geometry import validate_geometry_recipe
+
 # Import V2 enhancement implementation
 from transformation_portal.lux_depth_v3.v2_enhance import (
     V2EnhancementError,
@@ -322,6 +324,7 @@ def run_v2_enhancement(
         ValueError: If validation fails
         V2EnhancementError: If enhancement fails
     """
+    validate_geometry_recipe(geometry_recipe)
     input_path = validate_input_path(input_path)
     depth_dir = validate_depth_dir(depth_dir)
     output_dir = validate_output_dir(output_dir)
@@ -369,6 +372,11 @@ def run_v2_enhancement(
 
     # Load material masks if masks_file provided (Materials V3 integration)
     material_masks = load_material_masks(masks_file) if masks_file and not corrected_geometry else None
+    geometry_kwargs: dict[str, Any] = (
+        {"geometry_recipe": geometry_recipe, "geometry_handoff_path": geometry_handoff_path, "masks_file": masks_file}
+        if corrected_geometry
+        else {}
+    )
 
     # Run enhancement
     report = enhance_image(
@@ -381,11 +389,7 @@ def run_v2_enhancement(
         allow_8bit_output=allow_8bit,
         output_bit_depth=output_bit_depth,
         input_color=input_color,
-        **(
-            {"geometry_recipe": geometry_recipe, "geometry_handoff_path": geometry_handoff_path, "masks_file": masks_file}
-            if corrected_geometry
-            else {}
-        ),
+        **geometry_kwargs,
     )
 
     # Add upscaler info to report (currently unused but maintained for compatibility)

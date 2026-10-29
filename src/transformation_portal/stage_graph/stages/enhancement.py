@@ -64,9 +64,13 @@ class EnhancementStage(Stage):
         self.output_dtype = output_dtype if output_dtype is not None else np.dtype("uint8")
         self.tone_low_tex_strength = float(np.clip(tone_low_tex_strength, 0.0, 1.0))
         self.tone_depth_smoothing = bool(tone_depth_smoothing)
-        if geometry_recipe not in {"legacy_encoded_crop_stretch_v1", "normalized_crop_support_v1"}:
-            raise ValueError("Unsupported enhancement geometry recipe")
         self.geometry_recipe = geometry_recipe
+        self._uses_corrected_geometry()
+
+    def _uses_corrected_geometry(self) -> bool:
+        from transformation_portal.lux_depth_v3.geometry import NORMALIZED_GEOMETRY_RECIPE, validate_geometry_recipe
+
+        return validate_geometry_recipe(self.geometry_recipe) == NORMALIZED_GEOMETRY_RECIPE
 
     def get_dependencies(self) -> list:
         """Depends on depth and materials for best results."""
@@ -88,6 +92,7 @@ class EnhancementStage(Stage):
         """
         import time
 
+        corrected_geometry = self._uses_corrected_geometry()
         # Get inputs
         image = context.get_artifact("image")
         if image is None:
@@ -100,7 +105,7 @@ class EnhancementStage(Stage):
 
         depth_map = context.get_artifact("depth_map")
         geometry = None
-        if self.geometry_recipe == "normalized_crop_support_v1":
+        if corrected_geometry:
             from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs
 
             geometry = context.get_artifact("geometry_handoff")
@@ -207,12 +212,15 @@ class EnhancementStage(Stage):
 
     def get_cache_key(self, context: StageContext) -> str:
         """Generate cache key based on all inputs."""
+        corrected_geometry = self._uses_corrected_geometry()
         # Get input image
         image = context.get_artifact("image")
         if image is None:
+            if corrected_geometry:
+                raise ValueError("Corrected enhancement requires its verified photographic image before cache lookup")
             return "no_image"
 
-        if self.geometry_recipe == "normalized_crop_support_v1":
+        if corrected_geometry:
             from transformation_portal.ingest.canonical_json import canonicalize_json
             from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs, array_identity
 
@@ -224,6 +232,9 @@ class EnhancementStage(Stage):
                 "recipe": self.geometry_recipe,
                 "handoff_identity_sha256": geometry.identity_sha256,
                 "image": array_identity(image),
+                "depth_map": array_identity(geometry.depth_map),
+                "support": array_identity(geometry.support),
+                "material_masks": {name: array_identity(mask) for name, mask in sorted(geometry.masks.items())},
                 "alpha": None if geometry.alpha is None else array_identity(geometry.alpha),
                 "stage_version": self.version,
                 "output_dtype": np.dtype(self.output_dtype).str,
