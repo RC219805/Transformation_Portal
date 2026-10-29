@@ -37,3 +37,12 @@ regexTarget = "line"
 # The catalog checker independently compares these source bindings with file bytes.
 regexes = ['''^\n?        "(?:\.github|src|tests|scripts|web|config|schemas|requirements|policy)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$''']
 paths = ['''^docs/governance/documentation_catalog\.json$''']
+
+[[rules.allowlists]]
+description = "Ignore one public source SHA256 split across a scanner chunk boundary"
+condition = "AND"
+regexTarget = "secret"
+# v8.21.x can start a catalog chunk mid-line, hiding the structured source key.
+# This exact public source digest remains byte-verified by the catalog checker.
+regexes = ['''^aca4a3389349350d0bb65b71e1bf2d000a3d102be0944813801c48c209e2ea2a$''']
+paths = ['''^docs/governance/documentation_catalog\.json$''']
