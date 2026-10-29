@@ -11,6 +11,10 @@ outputs outside Git, for example in ignored `.runtime/` directories. Preserve
 existing finalized deliveries when evaluating a new set. This workflow does
 not require AWS or GPU validation.
 
+See the [photographic geometry and orientation audit](PHOTOGRAPHIC_GEOMETRY_AUDIT.md)
+for canonical coordinate mappings, identity boundaries, synthetic regression
+scope and the separately versioned legacy V3/V2 geometry blockers.
+
 ## Managed access and deployment
 
 Use the authenticated [managed front door](../guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md).

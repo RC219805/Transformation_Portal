@@ -8,8 +8,10 @@ cannot undo the read-only flag and mutate authorizing content.
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from dataclasses import dataclass, field
+from numbers import Real
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -146,6 +148,75 @@ class ProxyTransform:
             raise ValueError("Proxy padding cannot remove pixels")
         if any(p % 14 for p in self.padded_shape):
             raise ValueError("Proxy padded dimensions must be multiples of 14")
+
+    @staticmethod
+    def _bounds(shape: tuple[int, int]) -> tuple[float, float, float, float]:
+        return -0.5, -0.5, shape[1] - 0.5, shape[0] - 0.5
+
+    @property
+    def native_bounds(self) -> tuple[float, float, float, float]:
+        """Half-open native pixel-edge bounds as left, top, right, bottom."""
+        return self._bounds(self.original_shape)
+
+    @property
+    def content_bounds(self) -> tuple[float, float, float, float]:
+        """Half-open resized-content bounds, excluding model-only padding."""
+        return self._bounds(self.resized_shape)
+
+    @property
+    def padded_bounds(self) -> tuple[float, float, float, float]:
+        """Half-open model-input bounds; padding has no distinct native inverse."""
+        return self._bounds(self.padded_shape)
+
+    @staticmethod
+    def _checked_point(x: float, y: float, bounds: tuple[float, float, float, float]) -> tuple[float, float]:
+        if any(isinstance(value, bool) or not isinstance(value, Real) for value in (x, y)):
+            raise ValueError("Pixel coordinates must be finite real numbers")
+        try:
+            x, y = float(x), float(y)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("Pixel coordinates must be finite real numbers") from exc
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Pixel coordinates must be finite real numbers")
+        left, top, right, bottom = bounds
+        if not left <= x < right or not top <= y < bottom:
+            raise ValueError("Pixel coordinates are outside the photographic content bounds")
+        return x, y
+
+    @staticmethod
+    def _map_axis(value: float, source_length: int, target_length: int) -> float:
+        if source_length == target_length:
+            return value
+        mapped = (value + 0.5) * target_length / source_length - 0.5
+        # A valid point immediately below an edge can round onto that excluded
+        # edge. Keep its result representable inside the destination domain;
+        # invalid input points have already failed rather than being clamped.
+        return min(max(mapped, -0.5), math.nextafter(target_length - 0.5, -math.inf))
+
+    def native_to_proxy(self, x: float, y: float) -> tuple[float, float]:
+        """Map native (column, row) pixel centers into unpadded proxy content.
+
+        The two effective scale ratios use the recorded rounded dimensions.
+        Bottom/right edge padding introduces no offset. This maps coordinates;
+        it does not resample photographic pixels or change serialized identity.
+        """
+        x, y = self._checked_point(x, y, self.native_bounds)
+        return (
+            self._map_axis(x, self.original_shape[1], self.resized_shape[1]),
+            self._map_axis(y, self.original_shape[0], self.resized_shape[0]),
+        )
+
+    def proxy_to_native(self, x: float, y: float) -> tuple[float, float]:
+        """Invert content coordinates, rejecting padding rather than clamping.
+
+        This is a coordinate inverse only. It cannot recover image information
+        lost through resampling, quantization or duplicated padding samples.
+        """
+        x, y = self._checked_point(x, y, self.content_bounds)
+        return (
+            self._map_axis(x, self.resized_shape[1], self.original_shape[1]),
+            self._map_axis(y, self.resized_shape[0], self.original_shape[0]),
+        )
 
     def to_payload(self) -> dict[str, Any]:
         return {
