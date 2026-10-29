@@ -15098,7 +15098,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "ea80cdcea16739d6da18fed39eaced58162eec5e",
+      "source_commit": "6f30c035f7da7517dfc6d8078b9f58afea06aff9",
       "content_sha256": "2bd02e1f7f1540ec23c5140385712f2144a6e2c4248852a6aacc3d3b9a2a32ac",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
@@ -15176,11 +15176,11 @@
         "src/transformation_portal/schemas/execution/plan.v1.schema.json": "522ec5d2d97051953d228c21762709c2bbe4fa54ad8635fc4a57779d5bd1a3c1",
         "scripts/enhance_image.py": "509cdec9b0fef3897135a5c1166c7db8ed43467bab6536555da4898f2ebd49f0",
         "tests/lux_depth_v3/test_geometry_corrected_boundary.py": "903b026b597b06308033c59a425e2e077b54859684d9b8979ab4c9976eebc0b6",
-        "tests/lux_depth_v3/test_geometry_hardening.py": "de9e3ef797b85767e7a2a18016d28311d2d5e2eecaec03eff51818d70bdc0fa2",
-        "tests/lux_depth_v3/test_geometry_versioning.py": "b51236bd69df5a5694399f747e0d50d3d88241c8a47d359f7c9ef8aa4d65a624",
+        "tests/lux_depth_v3/test_geometry_hardening.py": "1dc08705e78cb650e0a2d29bb4a4a03c4dfe52302993f12ae352e5a60529af3b",
+        "tests/lux_depth_v3/test_geometry_versioning.py": "5a650f54bb1378657ee1adc69b0fb92175e732693f49e0dc257805fc7922acf3",
         "tests/lux_depth_v3/test_geometry_orchestrator_handoff.py": "cb026ef6a4e9e445b3abc914d206f0baec162605c7a23352b24e4e4440d96edc",
         "tests/test_v2_geometry_handoff.py": "3e0ba226b6fca424793368160d522a4b19d04f0a62579d94d6075ac749969dc3",
-        "tests/test_depth_writer.py": "3f9ecb6127a183064c8a8e2a46204a1e21b199e69e124b3bfa9569846be19cca"
+        "tests/test_depth_writer.py": "847cef9ca6ddc2788e47ffb07ce8b2304c96ee942831e97483f67ca2bb428210"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/core/test_proxy_coordinates.py tests/lux_depth_v3/test_geometry_legacy_boundary.py tests/lux_depth_v5/test_geometry_roundtrip.py tests/materials_v4/test_geometry_alignment.py tests/test_v2_color_contract.py tests/test_photographic_native_master.py -q",
