@@ -263,14 +263,14 @@ class EnhancementStage(Stage):
         from transformation_portal.core.image_artifact import ImageMaster
         from transformation_portal.ingest.canonical_json import canonicalize_json
         from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs
-        from transformation_portal.lux_depth_v3.native_materials import revalidate_native_materials
+        from transformation_portal.lux_depth_v3.native_materials import revalidate_native_materials, validate_native_materials
 
         if not self._uses_corrected_geometry() or self.version != "1.4.0":
             raise ValueError("Native Materials requires its versioned corrected enhancement stage")
         if not isinstance(native, dict) or set(native) != {"binding", "receipt", "master"}:
             raise ValueError("Native Materials enhancement requires its complete native context")
         binding, receipt, master = native["binding"], native["receipt"], native["master"]
-        revalidate_native_materials(binding)
+        validate_native_materials(binding)
         geometry = context.get_artifact("geometry_handoff")
         if not isinstance(master, ImageMaster) or not isinstance(geometry, GeometryBoundInputs):
             raise ValueError("Native Materials enhancement requires its exact master and native geometry")
@@ -315,6 +315,7 @@ class EnhancementStage(Stage):
             )
         ):
             raise ValueError("Native Materials execution receipt differs from its frozen policy and actual plan")
+        revalidate_native_materials(binding, source_path=sources[0]["path"])
         return {"binding_sha256": binding["binding_sha256"], "execution_receipt": receipt}
 
     def _legacy_cache_key(self, context: StageContext) -> str:

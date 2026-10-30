@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from dataclasses import replace
 
 import numpy as np
@@ -11,6 +12,7 @@ import pytest
 import tifffile
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.lux_depth_v3 import native_materials as native_module
 from transformation_portal.lux_depth_v3.geometry import GeometryTransform
 from transformation_portal.lux_depth_v3.geometry_handoff import load_geometry_handoff, write_geometry_handoff
 from transformation_portal.lux_depth_v3.native_materials import (
@@ -18,7 +20,7 @@ from transformation_portal.lux_depth_v3.native_materials import (
     freeze_native_materials,
     native_materials_binding_hash,
 )
-from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image
+from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image, load_native_materials_binding
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig, processing_version_for_geometry
 from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 from transformation_portal.lux_depth_v4.photography import decode_master, linear_to_srgb
@@ -122,6 +124,99 @@ def _run(case, tmp_path, **kwargs):
         native_materials_source=source.name,
         **kwargs,
     )
+
+
+def _with_unselected_sources(case, *, count=1):
+    source, master, _, binding, binding_path, _, _, _ = case
+    material_root = source.parent.parent / "materials"
+    manifest = material_root / "manifest.json"
+    payload = json.loads(manifest.read_bytes())
+    files = [source]
+    for index in range(count):
+        other = source.with_name(f"unselected-{index}.tif")
+        other.write_bytes(source.read_bytes())
+        files.append(other)
+        evidence = MaterialEvidence(
+            master.source_sha256,
+            master.shape,
+            (RegionEvidence("other", "water", np.full(master.shape, 1 / (index + 3), np.float32), semantic_confidence=0.99),),
+        )
+        evidence_path = material_root / f"unselected-{index}-evidence.json"
+        write_evidence(evidence, evidence_path)
+        payload["inputs"].append(
+            {
+                "path": other.name,
+                "source_sha256": master.source_sha256,
+                "evidence_path": evidence_path.name,
+                "evidence_sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+                "shape": list(master.shape),
+            }
+        )
+    manifest.write_bytes(canonicalize_json(payload))
+    binding = freeze_native_materials(manifest, material_root / "policy.json", source.parent, files, "srgb")
+    binding_path.write_bytes(canonicalize_json(binding))
+    return (*case[:3], binding, *case[4:])
+
+
+@pytest.mark.parametrize("unselected_count", [1, 4])
+def test_per_image_native_loads_only_selected_bundle_at_loader_stage_and_cache(tmp_path, monkeypatch, unselected_count):
+    case = _with_unselected_sources(_case(tmp_path), count=unselected_count)
+    selected_path = case[0].name
+    selected_evidence = case[3]["sources"][0]["evidence"]["path"]
+    original_load = native_module.load_bound_evidence
+    observed = []
+
+    def selected_only(root, record, limits):
+        observed.append(record["path"])
+        assert record["path"] == selected_evidence, "Per-image processing decoded unrelated native masks"
+        return original_load(root, record, limits)
+
+    monkeypatch.setattr(native_module, "load_bound_evidence", selected_only)
+    load_native_materials_binding(case[4], source_path=selected_path)
+    assert observed == [selected_evidence]
+    _run(case, tmp_path)
+    assert observed == [selected_evidence] * 3
+    context = _cache_context(case, case[3])
+    stage = EnhancementStage(version="1.4.0", geometry_recipe="normalized_crop_support_v1")
+    stage.get_cache_key(context)
+    stage.compute(context)
+    assert observed == [selected_evidence] * 6
+
+
+def test_multisource_native_child_requires_selector_before_decoding_any_bundle(tmp_path, monkeypatch):
+    case = _with_unselected_sources(_case(tmp_path))
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Ambiguous child selection reached a numeric mask bundle")
+
+    monkeypatch.setattr(native_module, "load_bound_evidence", forbidden)
+    with pytest.raises(V2EnhancementError, match="explicit source selector"):
+        load_native_materials_binding(case[4])
+
+
+def test_native_child_subprocess_never_decodes_unselected_bundle(tmp_path, monkeypatch):
+    case = _with_unselected_sources(_case(tmp_path, strength=0))
+    source, _, _, binding, binding_path, _, depth_path, handoff = case
+    unselected_bundle = source.parent.parent / "materials" / binding["sources"][1]["evidence"]["path"]
+    unselected_manifest = json.loads(unselected_bundle.read_bytes())
+    unselected_mask = unselected_bundle.parent / unselected_manifest["regions"][0]["mask"]["path"]
+    unselected_mask.write_bytes(b"Unselected mask must never be decoded by this child")
+    runner = V2Runner()
+    monkeypatch.setenv("PYTHONPATH", str(runner.repo_root / "src"))
+    result = runner.run(
+        input_path=source,
+        depth_dir=None,
+        output_dir=tmp_path / "selected-child",
+        preset="none",
+        input_color="srgb",
+        geometry_recipe="normalized_crop_support_v1",
+        geometry_handoff_path=handoff,
+        depth_map_path=depth_path,
+        native_materials_binding_path=binding_path,
+        native_materials_source=source.name,
+    )
+    np.testing.assert_array_equal(tifffile.imread(result["output"]), tifffile.imread(source))
+    assert result["native_materials"]["selected_source_path"] == source.name
 
 
 @pytest.mark.parametrize("orientation", range(1, 9))

@@ -280,6 +280,9 @@ an intentional final encoding, never an internal editing buffer.
 
 The frozen binding includes exact source/native-master/evidence identities,
 complete response policy, operation versions and allocation budgets. Native
+masks are fully checked once at batch admission; per-image boundaries recheck
+only the selected bundle while retaining shared manifest and binding checks.
+This avoids repeatedly decoding unrelated native masks across the batch. Native
 masks intersect verified crop support without creating semantic confidence.
 Uncalibrated inference remains abstained. Straight alpha is preserved exactly;
 fully transparent RGB and unsupported borders are protected, while partially

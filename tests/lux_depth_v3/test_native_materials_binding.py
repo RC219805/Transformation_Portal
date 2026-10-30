@@ -299,3 +299,115 @@ def test_unsupported_precision_or_allocation_fails_before_native_decode(prepared
     root = Path(binding["evidence_root"])
     with pytest.raises(ValueError, match="integer 8/16|allocation exceeds"):
         native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "linear_srgb")
+
+
+def _native_batch(prepared_native, tmp_path, count=4):
+    """Build real independent evidence bundles under one frozen batch manifest."""
+    original_path, _, _, original = prepared_native
+    original_root = Path(original["evidence_root"])
+    inputs = tmp_path / "batch-inputs"
+    evidence_root = tmp_path / "batch-evidence"
+    inputs.mkdir()
+    evidence_root.mkdir()
+    records = []
+    selected = []
+    for index in range(count):
+        scene = f"scene-{index}"
+        source = inputs / scene / original_path.name
+        source.parent.mkdir()
+        source.write_bytes(original_path.read_bytes())
+        selected.append(source)
+        shutil.copytree(original_root, evidence_root / scene)
+        records.append(
+            {
+                "path": source.relative_to(inputs).as_posix(),
+                "source_sha256": original["sources"][0]["sha256"],
+                "evidence_path": f"{scene}/evidence.json",
+                "evidence_sha256": original["sources"][0]["evidence"]["sha256"],
+                "shape": original["sources"][0]["shape"],
+            }
+        )
+    manifest = evidence_root / "materials.json"
+    manifest.write_text(json.dumps({"schema": "tp.lux.materials_manifest.v1", "inputs": records}))
+    policy = evidence_root / "policy.json"
+    policy.write_bytes((original_root / "policy.json").read_bytes())
+    binding = native.freeze_native_materials(manifest, policy, inputs, selected, original["input_color"])
+    return inputs, binding
+
+
+@pytest.mark.parametrize("count", [2, 5])
+def test_batch_admission_and_selected_revalidation_decode_linear_evidence_count(prepared_native, tmp_path, monkeypatch, count):
+    inputs, binding = _native_batch(prepared_native, tmp_path, count=count)
+    loaded = []
+    original_load = native.load_bound_evidence
+
+    def counted(root, record, limits):
+        loaded.append(record["path"])
+        return original_load(root, record, limits)
+
+    monkeypatch.setattr(native, "load_bound_evidence", counted)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    expected = [source["evidence"]["path"] for source in binding["sources"]]
+    assert loaded == expected
+    for source in binding["sources"]:
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=source["path"])
+    assert loaded == expected + expected
+    assert len(loaded) == 2 * count
+
+
+@pytest.mark.parametrize("index", range(4))
+@pytest.mark.parametrize("drift", ["source", "evidence", "mask"])
+def test_every_selected_source_rechecks_original_and_numeric_bytes(prepared_native, tmp_path, index, drift):
+    inputs, binding = _native_batch(prepared_native, tmp_path)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    source = binding["sources"][index]
+    evidence_path = Path(binding["evidence_root"]) / source["evidence"]["path"]
+    target = {
+        "source": inputs / source["path"],
+        "evidence": evidence_path,
+        "mask": next(evidence_path.parent.glob("mask-*.npy")),
+    }[drift]
+    data = target.read_bytes()
+    target.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=source["path"])
+
+
+@pytest.mark.parametrize("drift", ["source", "mask"])
+def test_unselected_drift_is_rejected_when_that_source_becomes_selected(prepared_native, tmp_path, drift):
+    inputs, binding = _native_batch(prepared_native, tmp_path)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    first, last = binding["sources"][0], binding["sources"][-1]
+    evidence_path = Path(binding["evidence_root"]) / last["evidence"]["path"]
+    target = inputs / last["path"] if drift == "source" else next(evidence_path.parent.glob("mask-*.npy"))
+    data = target.read_bytes()
+    target.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    native.revalidate_native_materials(binding, input_root=inputs, source_path=first["path"])
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=last["path"])
+
+
+@pytest.mark.parametrize("selector", ["missing.tif", "../native.tif", "", "/native.tif"])
+def test_invalid_selected_path_fails_before_evidence_decode(prepared_native, monkeypatch, selector):
+    _, _, _, binding = prepared_native
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Invalid selected path reached numeric evidence decoding")
+
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, source_path=selector)
+
+
+def test_selected_revalidation_still_checks_complete_manifest_source_map(prepared_native, tmp_path, monkeypatch):
+    _, original = _native_batch(prepared_native, tmp_path)
+    binding = copy.deepcopy(original)
+    binding["sources"][-1].update(evidence=None, mask_bytes=0)
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Inconsistent complete source map reached numeric evidence decoding")
+
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="manifest source map"):
+        native.revalidate_native_materials(binding, source_path=binding["sources"][0]["path"])

@@ -339,12 +339,25 @@ def freeze_native_materials(
     return binding
 
 
-def revalidate_native_materials(binding: Mapping[str, Any], input_root: Path | None = None) -> None:
-    """Rebind exact manifest, evidence and optional original source snapshots."""
+def revalidate_native_materials(
+    binding: Mapping[str, Any], input_root: Path | None = None, *, source_path: str | None = None
+) -> None:
+    """Rebind all sources at admission, or one selected source before its work.
+
+    Every call validates the complete closed binding and manifest source map.
+    Per-image checks decode only that image's evidence; initial whole-batch
+    admission never substitutes for revalidating the selected numeric bytes.
+    """
     binding = _binding_snapshot(binding)
+    sources = binding["sources"]
+    if source_path is not None:
+        selected_path = _portable_path(source_path)
+        sources = [source for source in sources if source["path"] == selected_path]
+        if len(sources) != 1:
+            raise ValueError("Native Materials revalidation requires exactly one frozen source path")
     root = _manifest_unchanged(binding)
     input_directory = directory_path(input_root) if input_root is not None else None
-    for source in binding["sources"]:
+    for source in sources:
         if input_directory is not None:
             _, observed = snapshot(
                 input_directory,

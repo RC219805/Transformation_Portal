@@ -340,7 +340,7 @@ def run_v2_enhancement(
         processing_version_for_geometry(geometry_recipe, native_materials=True)
         if geometry_handoff_path is None or depth_map_path is None or depth_dir is not None or masks_file is not None:
             raise ValueError("Native Materials requires exact geometry/depth artifacts and no legacy masks")
-        binding = load_native_materials_binding(native_materials_binding_path)
+        binding = load_native_materials_binding(native_materials_binding_path, source_path=native_materials_source)
         if binding["input_color"] != input_color:
             raise ValueError("Native Materials color policy differs from its frozen binding")
     elif native_materials_source is not None:

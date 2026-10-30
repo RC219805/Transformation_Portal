@@ -52,7 +52,7 @@ class V2EnhancementError(Exception):
     pass
 
 
-def load_native_materials_binding(path: Path) -> dict[str, Any]:
+def load_native_materials_binding(path: Path, *, source_path: str | None = None) -> dict[str, Any]:
     """Read bounded private execution authority without following symlinks."""
     from .geometry_handoff import snapshot_geometry_artifact
     from .native_materials import MAX_NATIVE_MATERIALS_BINDING_BYTES, revalidate_native_materials, validate_native_materials
@@ -68,7 +68,11 @@ def load_native_materials_binding(path: Path) -> dict[str, Any]:
     raw = snapshot_geometry_artifact(Path(path), MAX_NATIVE_MATERIALS_BINDING_BYTES)
     binding = json.loads(raw, object_pairs_hook=unique_object)
     validate_native_materials(binding)
-    revalidate_native_materials(binding)
+    if source_path is None:
+        if len(binding["sources"]) != 1:
+            raise V2EnhancementError("Native Materials child requires an explicit source selector for multiple sources")
+        source_path = binding["sources"][0]["path"]
+    revalidate_native_materials(binding, source_path=source_path)
     return binding
 
 
@@ -891,7 +895,9 @@ def enhance_image(
     if native_materials and masks_file is not None:
         raise V2EnhancementError("Native Materials cannot compose legacy material-mask adjustments")
     native_binding = (
-        load_native_materials_binding(native_materials_binding_path) if native_materials_binding_path is not None else None
+        load_native_materials_binding(native_materials_binding_path, source_path=native_materials_source)
+        if native_materials_binding_path is not None
+        else None
     )
     if native_binding is not None and native_binding["input_color"] != input_color:
         raise V2EnhancementError("Native Materials color policy differs from its frozen binding")

@@ -6089,7 +6089,7 @@ class EnhanceOrchestrator:
                 if native_binding is not None:
                     from .native_materials import revalidate_native_materials
 
-                    revalidate_native_materials(native_binding)
+                    revalidate_native_materials(native_binding, source_path=native_materials_source)
                     with tempfile.NamedTemporaryFile(
                         prefix="native-materials-", suffix=".json", dir=temp_dir, delete=False
                     ) as handle:
