@@ -507,6 +507,16 @@ def main(
             "and spatial linear ingest are unsupported."
         ),
     ),
+    native_materials_manifest: Optional[Path] = typer.Option(
+        None,
+        "--native-materials-manifest",
+        help="Opt-in source-bound MaterialsV4 evidence for native 8/16-bit SDR finishing; requires corrected geometry.",
+    ),
+    native_materials_policy: Optional[Path] = typer.Option(
+        None,
+        "--native-materials-policy",
+        help="Complete MaterialsV4 response policy; requires native manifest.",
+    ),
     # Emit Options (Deliverables)
     output_bit_depth: Optional[int] = typer.Option(
         None,
@@ -1078,6 +1088,8 @@ def main(
         v2_preset=v2_preset_value,
         v2_input_color=v2_input_color,
         geometry_recipe=geometry_recipe,
+        native_materials_manifest=native_materials_manifest,
+        native_materials_policy=native_materials_policy,
         generate_pbr=enable_pbr,
         save_float_depth=enable_save_float_depth,
         quality_tier=quality_tier,

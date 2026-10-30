@@ -157,6 +157,12 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--geometry-handoff", type=Path, default=None, help="Verified corrected-geometry execution receipt")
     parser.add_argument(
+        "--native-materials-binding", type=Path, default=None, help="Frozen native SDR Materials execution binding"
+    )
+    parser.add_argument(
+        "--native-materials-source", default=None, help="Exact original relative source selector from the frozen binding"
+    )
+    parser.add_argument(
         "--depth-map", type=Path, default=None, help="Exact normalized-relative float32 NPY for corrected geometry"
     )
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for enhanced images and reports")
@@ -300,6 +306,8 @@ def run_v2_enhancement(
     geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
     geometry_handoff_path: Path | None = None,
     depth_map_path: Path | None = None,
+    native_materials_binding_path: Path | None = None,
+    native_materials_source: str | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -325,9 +333,26 @@ def run_v2_enhancement(
         V2EnhancementError: If enhancement fails
     """
     validate_geometry_recipe(geometry_recipe)
+    if native_materials_binding_path is not None:
+        from transformation_portal.lux_depth_v3.v2_enhance import load_native_materials_binding
+        from transformation_portal.lux_depth_v3.v2_presets import processing_version_for_geometry
+
+        processing_version_for_geometry(geometry_recipe, native_materials=True)
+        if geometry_handoff_path is None or depth_map_path is None or depth_dir is not None or masks_file is not None:
+            raise ValueError("Native Materials requires exact geometry/depth artifacts and no legacy masks")
+        binding = load_native_materials_binding(native_materials_binding_path)
+        if binding["input_color"] != input_color:
+            raise ValueError("Native Materials color policy differs from its frozen binding")
+    elif native_materials_source is not None:
+        raise ValueError("Native Materials source selection requires its frozen binding")
     input_path = validate_input_path(input_path)
     depth_dir = validate_depth_dir(depth_dir)
-    output_dir = validate_output_dir(output_dir)
+    if native_materials_binding_path is None:
+        output_dir = validate_output_dir(output_dir)
+    else:
+        output_dir = _resolve_path(output_dir)
+        if output_dir.exists() and not output_dir.is_dir():
+            raise ValueError(f"Output dir path exists but is not a directory: {output_dir}")
 
     # Build emitted artifact path from canonical identity rather than source suffix.
     lookup_key = resolve_asset_key(asset_key, input_path.stem)
@@ -377,6 +402,10 @@ def run_v2_enhancement(
         if corrected_geometry
         else {}
     )
+    if native_materials_binding_path is not None:
+        geometry_kwargs.update(
+            native_materials_binding_path=native_materials_binding_path, native_materials_source=native_materials_source
+        )
 
     # Run enhancement
     report = enhance_image(
@@ -428,9 +457,14 @@ def main() -> int:
     # Validate asset_key to prevent path traversal (important for direct CLI invocation)
     resolved_asset_key = resolve_asset_key(args.asset_key, Path(args.input_path).stem)
 
-    # Always create output dir early so we can write an error report if needed
+    # Preserve legacy error reports; native authority validates before creating
+    # an output namespace and reports failures through the process diagnostics.
     try:
-        out_dir = validate_output_dir(args.output_dir)
+        out_dir = (
+            validate_output_dir(args.output_dir)
+            if args.native_materials_binding is None and args.native_materials_source is None
+            else None
+        )
     except Exception:
         # If output dir can't be created, we can't report there
         out_dir = None
@@ -458,7 +492,12 @@ def main() -> int:
             geometry_recipe=args.geometry_recipe,
             geometry_handoff_path=args.geometry_handoff,
             depth_map_path=args.depth_map,
+            native_materials_binding_path=args.native_materials_binding,
+            native_materials_source=args.native_materials_source,
         )
+
+        if args.native_materials_binding is not None:
+            report_path = safe_join_under(validate_output_dir(args.output_dir), f"{resolved_asset_key}_report.json")
 
         if report_path:
             logger.info("Writing report: %s", report_path)

@@ -14,6 +14,13 @@ acceptance remain pending. The
 [forensic analysis](../analysis/MATERIALS_V3_FORENSIC_AND_V4_SUCCESSOR_2026-09-20.md)
 records the reasons for this successor.
 
+The same native compositor is available to corrected V3/V2 CLI finishing through
+the explicit [native SDR Materials recipe](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing).
+That lane uses the supplied-evidence manifest and complete policy described
+below, preserves original 8/16-bit native pixels through floating-point edits,
+and selects its own V2 processing identity. It does not change the legacy
+MaterialsV3 path, grant calibration trust or enable managed admission.
+
 The additive `materials-v4` command is registered in
 [pyproject.toml](../../pyproject.toml). The
 [implementation validation report](../analysis/MATERIALS_V4_IMPLEMENTATION_2026-09-20.md)

@@ -138,6 +138,11 @@ source authority. The [versioned geometry correction](../reference/PHOTOGRAPHIC_
 records the exact bounds, source/depth/mask bindings and independent acceptance
 gates. These restrictions do not change the legacy formats table.
 
+The distinct [native SDR Materials recipe](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing)
+reuses MaterialsV4 for original 8/16-bit JPEG/PNG/TIFF pixels and straight alpha,
+with explicit supplied evidence/policy and V2 `1.4.0`. It retains bounded SDR,
+source/geometry and resource checks; float/HDR and RAW remain outside its scope.
+
 ### TIFF Batch Processing
 
 ```bash

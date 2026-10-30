@@ -102,12 +102,17 @@ six PBR maps. See [CLI Reference](../cli/CLI_REFERENCE.md) for pipeline routing.
 
 That V2 example retains the legacy geometry recipe and processing `1.2.0`.
 The separate `--geometry-recipe normalized_crop_support_v1` opt-in uses
-processing `1.3.0` and requires explicit `--geometry-handoff` and `--depth-map`
+processing `1.3.0` without native Materials and requires explicit `--geometry-handoff` and `--depth-map`
 artifacts; it does not discover depth through `--depth-dir`. Corrected V3
 Materials supports opaque 8-bit sources only, and the corrected recipe rejects
 PBR, RAW, reconstruction and spatial linear ingest. The material-generation API
 above is unchanged. See the [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe);
 the opt-in supplies no automatic photographic or production acceptance.
+
+The separate [native SDR Materials recipe](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing)
+uses explicit MaterialsV4 evidence/policy and V2 `1.4.0` to edit original 8/16-bit
+native pixels with straight alpha. It does not relax the legacy MaterialsV3
+carrier restriction or change PBR generation.
 
 ## Explicit Generation Configuration
 

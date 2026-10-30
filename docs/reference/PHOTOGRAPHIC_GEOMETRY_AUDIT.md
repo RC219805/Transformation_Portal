@@ -250,6 +250,57 @@ Existing preservation acceptance applies to its recorded retained-output
 comparison, not this new recipe. New inference, retained-data rewrites and
 AWS/GPU validation are not part of this implementation.
 
+## Native SDR Materials finishing
+
+The separate opt-in `native_sdr_v1` Materials recipe closes the native-pixel
+boundary for V3/V2 CLI finishing. It reuses MaterialsV4's existing compositor
+on the original orientation-normalized floating-point master; it never lifts
+an enhanced model-proxy image or writes a quantized intermediate carrier.
+The legacy MaterialsV3 path and corrected geometry without this selection
+retain their previous `1.2.0` and `1.3.0` semantics.
+
+Use the existing MaterialsV4 supplied-evidence import and complete policy
+workflow in the [Materials guide](../guides/MATERIALS_V4.md), then plan with:
+
+```bash
+PYTHONPATH=src ./.venv/bin/lux-depth-v3 \
+  --input-dir "$PRIVATE_INPUT_ROOT" --output-dir "$PRIVATE_OUTPUT_ROOT" \
+  --geometry-recipe normalized_crop_support_v1 \
+  --native-materials-manifest "$MATERIALS_WORK_ROOT/supplied-bundle/lux-materials.json" \
+  --native-materials-policy "$MATERIALS_WORK_ROOT/policy.json" \
+  --v2-input-color "$INPUT_COLOR" --output-bit-depth 16 --plan
+```
+
+This selects V2 processing `1.4.0`. Both manifest and complete policy are
+required; the legacy MaterialsV3 stage must be disabled. JPEG/PNG/TIFF
+integer 8/16-bit bounded SDR sources are supported. RAW, float/HDR, ambiguous
+geometry, PBR and reconstruction remain rejected. Final output encoding is
+explicit: select 16-bit TIFF to retain integer-source precision; 8-bit PNG is
+an intentional final encoding, never an internal editing buffer.
+
+The frozen binding includes exact source/native-master/evidence identities,
+complete response policy, operation versions and allocation budgets. Native
+masks intersect verified crop support without creating semantic confidence.
+Uncalibrated inference remains abstained. Straight alpha is preserved exactly;
+fully transparent RGB and unsupported borders are protected, while partially
+transparent RGB follows the existing straight-alpha MaterialsV4 operation.
+Any response leaving bounded SDR fails; there is no hidden intermediate clip.
+The V2 report records source/effective evidence, native input/output identities
+and actual execution, and the cache binds that computed receipt.
+
+Admission uses a fixed 12 GiB analytical working-allocation ceiling, 256 bytes
+per native pixel, four mask copies, two encoded-source snapshots and the
+policy's bounded tile scratch inside that ceiling. Oversized operations fail before
+native allocation; they are never silently reduced. This is a conservative
+software allocation contract, not measured whole-host RSS or permission for
+parallel native jobs. The existing 67,108,864-pixel geometry cap also applies.
+
+The slice is CLI engineering capability. Managed native-Materials admission,
+actual runtime/whole-host resource qualification, retained-photo pilot and
+Richard's native photographic acceptance remain separate release gates.
+Rollback omits the native manifest/policy for new requests and retains matching
+readers for existing versioned reports; it never rewrites retained generations.
+
 ## Regression and release gates
 
 The focused synthetic evidence exercises real production decode, planning,

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
 import shutil
 import struct
@@ -49,6 +50,26 @@ class V2EnhancementError(Exception):
     """Raised when V2 enhancement operation fails."""
 
     pass
+
+
+def load_native_materials_binding(path: Path) -> dict[str, Any]:
+    """Read bounded private execution authority without following symlinks."""
+    from .geometry_handoff import snapshot_geometry_artifact
+    from .native_materials import MAX_NATIVE_MATERIALS_BINDING_BYTES, revalidate_native_materials, validate_native_materials
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise V2EnhancementError("Native Materials binding contains duplicate JSON fields")
+            result[key] = value
+        return result
+
+    raw = snapshot_geometry_artifact(Path(path), MAX_NATIVE_MATERIALS_BINDING_BYTES)
+    binding = json.loads(raw, object_pairs_hook=unique_object)
+    validate_native_materials(binding)
+    revalidate_native_materials(binding)
+    return binding
 
 
 def _legacy_container_snapshot(source: bytes, image: Image.Image) -> bytes:
@@ -814,6 +835,8 @@ def enhance_image(
     geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
     geometry_handoff_path: Optional[Path] = None,
     masks_file: Optional[Path] = None,
+    native_materials_binding_path: Optional[Path] = None,
+    native_materials_source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
@@ -854,7 +877,8 @@ def enhance_image(
         FileNotFoundError: If input image not found
     """
     start_time = time.perf_counter()
-    processing_version = processing_version_for_geometry(geometry_recipe)
+    native_materials = native_materials_binding_path is not None
+    processing_version = processing_version_for_geometry(geometry_recipe, native_materials=native_materials)
     corrected_geometry = geometry_recipe == "normalized_crop_support_v1"
     if corrected_geometry and (geometry_handoff_path is None or depth_map_path is None):
         raise V2EnhancementError("Corrected V2 processing requires explicit geometry handoff and depth artifacts")
@@ -862,6 +886,15 @@ def enhance_image(
         raise V2EnhancementError("Geometry handoff artifacts require the corrected recipe")
     if corrected_geometry and material_masks is not None:
         raise V2EnhancementError("Corrected V2 masks must come from the verified handoff, not bare arrays")
+    if native_materials_source is not None and not native_materials:
+        raise V2EnhancementError("Native Materials source selection requires its frozen binding")
+    if native_materials and masks_file is not None:
+        raise V2EnhancementError("Native Materials cannot compose legacy material-mask adjustments")
+    native_binding = (
+        load_native_materials_binding(native_materials_binding_path) if native_materials_binding_path is not None else None
+    )
+    if native_binding is not None and native_binding["input_color"] != input_color:
+        raise V2EnhancementError("Native Materials color policy differs from its frozen binding")
 
     # Validate input
     input_path = Path(input_path)
@@ -923,6 +956,7 @@ def enhance_image(
 
     try:
         geometry = None
+        native_receipt = None
         source_snapshot = None
         master = None
         # Load input image with bit-depth preservation
@@ -943,7 +977,6 @@ def enhance_image(
                 # Keep one photographic float working buffer. Source precision
                 # controls encoding; an unused integer RGB proxy would only
                 # duplicate this full-resolution allocation.
-                image = bounded_encoded_srgb(master)
                 with Image.open(io.BytesIO(source_snapshot)) as header:
                     orientation = header.getexif().get(274, 1)
                     metadata = {
@@ -963,6 +996,17 @@ def enhance_image(
                 )
                 if master.shape != geometry.native_shape:
                     raise V2EnhancementError("Photographic source differs from the bound native geometry")
+                if native_binding is not None:
+                    from .native_materials import apply_native_materials
+
+                    if geometry.source_sha256 != master.source_sha256 or geometry.v2_input_sha256 != master.source_sha256:
+                        raise V2EnhancementError("Native Materials requires the exact original photographic source")
+                    if geometry.masks:
+                        raise V2EnhancementError("Native Materials forbids a legacy mask inventory")
+                    master, native_receipt = apply_native_materials(
+                        master, native_binding, source_path=native_materials_source, support=geometry.support
+                    )
+                image = bounded_encoded_srgb(master)
             else:
                 image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_load)
         except (OSError, V2EnhancementError) as load_error:
@@ -1094,6 +1138,10 @@ def enhance_image(
                 context.set_artifact("material_masks", material_masks)
             if geometry is not None:
                 context.set_artifact("geometry_handoff", geometry)
+            if native_receipt is not None:
+                context.set_artifact(
+                    "native_materials", {"binding": native_binding, "receipt": native_receipt, "master": master}
+                )
 
             # Execute enhancement
             logger.debug("Executing EnhancementStage...")
@@ -1280,6 +1328,7 @@ def enhance_image(
             "status": "success",
             "implementation": "v2_enhance",
             "processing_version": processing_version,
+            **({"native_materials": native_receipt} if native_receipt is not None else {}),
             **(
                 {
                     "geometry": {

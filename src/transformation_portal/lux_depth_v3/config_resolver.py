@@ -874,7 +874,12 @@ def compute_config_fingerprint(
         v2_preset=config.v2_preset,
         v2_input_color=config.v2_input_color,
         v2_color_contract=V2_COLOR_CONTRACT,
-        v2_processing_version=processing_version_for_geometry(config.geometry_recipe),
+        v2_processing_version=processing_version_for_geometry(
+            config.geometry_recipe, native_materials=config.native_materials_binding is not None
+        ),
+        native_materials_sha256=(
+            config.native_materials_binding["binding_sha256"] if config.native_materials_binding is not None else None
+        ),
         v2_device=config.v2_device,
         v2_upscaler_backend=config.v2_upscaler_backend,
         depth_backend=config.depth_backend,
@@ -948,6 +953,7 @@ def build_run_card_config_fingerprint(
         "v2_input_color": base.v2_input_color,
         "v2_color_contract": base.v2_color_contract,
         "v2_processing_version": base.v2_processing_version,
+        **({"native_materials_sha256": base.native_materials_sha256} if base.native_materials_sha256 is not None else {}),
         "v2_device": base.v2_device,
         "v2_upscaler_backend": base.v2_upscaler_backend,
         "output_bit_depth": base.output_bit_depth,

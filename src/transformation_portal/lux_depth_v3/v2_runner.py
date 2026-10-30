@@ -100,6 +100,8 @@ class V2Runner:
         geometry_recipe: str = "legacy_encoded_crop_stretch_v1",
         geometry_handoff_path: Optional[Path] = None,
         depth_map_path: Optional[Path] = None,
+        native_materials_binding_path: Optional[Path] = None,
+        native_materials_source: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -194,8 +196,23 @@ class V2Runner:
                 validated_log_file = normalize_lexical_path(log_file)
                 logger.debug(f"Log file outside repo root (allowed): {validated_log_file}")
 
+        # Native execution authority must fail before creating an output namespace.
+        if native_materials_binding_path is not None:
+            from .v2_enhance import load_native_materials_binding
+            from .v2_presets import processing_version_for_geometry
+
+            processing_version_for_geometry(geometry_recipe, native_materials=True)
+            if geometry_handoff_path is None or depth_map_path is None or depth_dir is not None or masks_file is not None:
+                raise ValueError("Native Materials requires exact geometry/depth artifacts and no legacy masks")
+            binding = load_native_materials_binding(native_materials_binding_path)
+            if binding["input_color"] != input_color:
+                raise ValueError("Native Materials color policy differs from its frozen binding")
+        elif native_materials_source is not None:
+            raise ValueError("Native Materials source selection requires its frozen binding")
+
         # Ensure output directory exists
-        validated_output.mkdir(parents=True, exist_ok=True)
+        if native_materials_binding_path is None:
+            validated_output.mkdir(parents=True, exist_ok=True)
 
         # Validate asset_key if provided (must be stem-like, not path-like)
         # Intentionally check for both / and \ on all platforms to prevent
@@ -246,7 +263,7 @@ class V2Runner:
 
         from .v2_presets import processing_version_for_geometry
 
-        processing_version_for_geometry(geometry_recipe)
+        processing_version_for_geometry(geometry_recipe, native_materials=native_materials_binding_path is not None)
         if geometry_recipe == "normalized_crop_support_v1":
             if geometry_handoff_path is None or depth_map_path is None or depth_dir is not None:
                 raise ValueError("Corrected V2 requires explicit geometry/depth artifacts and forbids depth discovery")
@@ -262,6 +279,10 @@ class V2Runner:
             )
         elif geometry_handoff_path is not None or depth_map_path is not None:
             raise ValueError("Explicit geometry artifacts require the corrected recipe")
+        if native_materials_binding_path is not None:
+            cmd.extend(["--native-materials-binding", str(native_materials_binding_path)])
+            if native_materials_source is not None:
+                cmd.append(f"--native-materials-source={native_materials_source}")
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 

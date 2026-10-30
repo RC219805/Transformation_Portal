@@ -125,7 +125,7 @@ the governed selector with an unpinned model path in production guidance.
 The APEX example retains `legacy_encoded_crop_stretch_v1` and V2 processing
 `1.2.0`. To evaluate corrected geometry, explicitly select
 `--geometry-recipe normalized_crop_support_v1` in a separate output namespace;
-its V2 processing contract is `1.3.0`. PBR must be off, and RAW, reconstruction
+its V2 processing contract without native Materials is `1.3.0`. PBR must be off, and RAW, reconstruction
 and spatial linear ingest are unsupported. Corrected MaterialsV3 requires
 opaque 8-bit sources. Native depth and masks use verified support rather than
 stretching cropped pixels. Standalone V2 additionally requires an explicit
@@ -133,6 +133,12 @@ geometry receipt and exact depth artifact. Follow the
 [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
 for those bindings and rollback; synthetic checks do not authorize automatic
 adoption or establish photographic production acceptance.
+
+For native SDR material edits, explicitly select the
+[native MaterialsV4 evidence/policy recipe](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing).
+Its V2 `1.4.0` path preserves original 8/16-bit native precision and straight
+alpha through floating-point edits. Keep MaterialsV3 off and output attempts
+separate; the new lane is not automatically enabled in managed admission.
 
 ## TIFF Batch Workflow
 

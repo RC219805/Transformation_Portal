@@ -331,6 +331,7 @@ class ConfigFingerprint:
     emit_upscaled16: InitVar[Optional[bool]] = None
     enable_v2: Optional[bool] = None
     geometry_recipe: Optional[str] = None
+    native_materials_sha256: Optional[str] = None
 
     def __post_init__(
         self,
@@ -343,10 +344,18 @@ class ConfigFingerprint:
             validate_geometry_recipe(self.geometry_recipe)
             if self.geometry_recipe == LEGACY_GEOMETRY_RECIPE:
                 self.geometry_recipe = None
-        if self.geometry_recipe is not None and self.v2_processing_version not in {None, "1.3.0"}:
-            raise ValueError("Corrected geometry requires V2 processing version 1.3.0")
-        if self.geometry_recipe is None and self.v2_processing_version == "1.3.0":
-            raise ValueError("V2 processing version 1.3.0 requires corrected geometry")
+        if self.native_materials_sha256 is not None:
+            from transformation_portal.core.image_artifact import validate_source_sha256
+
+            validate_source_sha256(self.native_materials_sha256)
+            if self.geometry_recipe is None or self.v2_processing_version != "1.4.0":
+                raise ValueError("Native Materials requires corrected geometry and V2 processing version 1.4.0")
+        elif self.v2_processing_version == "1.4.0":
+            raise ValueError("V2 processing version 1.4.0 requires native Materials identity")
+        if self.geometry_recipe is not None and self.v2_processing_version not in {None, "1.3.0", "1.4.0"}:
+            raise ValueError("Corrected geometry requires its versioned V2 processing semantics")
+        if self.geometry_recipe is None and self.v2_processing_version in {"1.3.0", "1.4.0"}:
+            raise ValueError("Corrected V2 processing requires corrected geometry")
         explicit = self.output_bit_depth is not None
         if self.output_bit_depth is not None and (
             isinstance(self.output_bit_depth, bool) or not isinstance(self.output_bit_depth, int)
@@ -401,6 +410,7 @@ class ConfigFingerprint:
             v2_input_color=self.v2_input_color,
             v2_color_contract=self.v2_color_contract,
             v2_processing_version=self.v2_processing_version,
+            native_materials_sha256=self.native_materials_sha256,
             v2_device=self.v2_device,
             v2_upscaler_backend=self.v2_upscaler_backend,
             depth_backend=None,
@@ -421,6 +431,8 @@ class ConfigFingerprint:
         payload = asdict(self)
         if self.geometry_recipe is None:
             payload.pop("geometry_recipe")
+        if self.native_materials_sha256 is None:
+            payload.pop("native_materials_sha256")
         return payload
 
     def to_sha256(self) -> str:
