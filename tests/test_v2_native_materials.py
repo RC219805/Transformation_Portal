@@ -306,6 +306,82 @@ def test_native_real_decoder_receives_exact_admitted_pixel_limit(tmp_path, monke
     np.testing.assert_array_equal(tifffile.imread(report["output"]), expected)
 
 
+@pytest.fixture
+def native_cli():
+    from tests.test_v2_geometry_cache_and_entrypoint import _script
+
+    return _script()
+
+
+def _run_native_cli(module, case, output, **kwargs):
+    return module.run_v2_enhancement(
+        input_path=case[0],
+        depth_dir=None,
+        output_dir=output,
+        preset="none",
+        device="cpu",
+        upscaler="default",
+        input_color="srgb",
+        geometry_recipe="normalized_crop_support_v1",
+        geometry_handoff_path=case[7],
+        depth_map_path=case[6],
+        native_materials_binding_path=case[4],
+        native_materials_source=case[0].name,
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize(
+    "allow_8bit,output_bit_depth,expected_bits", [(False, None, 16), (True, None, 8), (False, 8, 8), (True, 16, 16)]
+)
+def test_native_cli_depth_uses_frozen_precision_without_source_inference(
+    tmp_path, monkeypatch, native_cli, allow_8bit, output_bit_depth, expected_bits
+):
+    from PIL import Image
+
+    case = _case(tmp_path, strength=0)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Native output naming inspected a mutable source before frozen verification")
+
+    monkeypatch.setattr(native_cli, "infer_v2_output_bit_depth", forbidden)
+    report = _run_native_cli(
+        native_cli, case, tmp_path / "cli-output", allow_8bit=allow_8bit, output_bit_depth=output_bit_depth
+    )
+    assert report["bit_depth"]["output_bits_per_sample"] == expected_bits
+    original = tifffile.imread(case[0])
+    if expected_bits == 16:
+        actual = tifffile.imread(report["output"])
+        np.testing.assert_array_equal(actual, original)
+    else:
+        with Image.open(report["output"]) as image:
+            actual = np.asarray(image)
+        np.testing.assert_array_equal(actual, np.rint(original.astype(np.float64) / 257).astype(np.uint8))
+    assert actual.shape == original.shape
+
+
+def test_native_cli_replaced_source_never_opens_image_before_frozen_snapshot(tmp_path, monkeypatch, native_cli):
+    import io
+
+    from PIL import Image
+
+    case = _case(tmp_path, strength=0)
+    replacement = io.BytesIO()
+    Image.new("RGB", (16, 16), (1, 2, 3)).save(replacement, format="ICO", sizes=[(16, 16)])
+    case[0].write_bytes(replacement.getvalue())
+    attempted_opens = []
+
+    def forbidden(*args, **_kwargs):
+        attempted_opens.append(args)
+        raise AssertionError("Unverified replacement reached an image plugin")
+
+    monkeypatch.setattr(Image, "open", forbidden)
+    with pytest.raises((ValueError, V2EnhancementError), match="Native Materials"):
+        _run_native_cli(native_cli, case, tmp_path / "forbidden")
+    assert attempted_opens == []
+    assert not (tmp_path / "forbidden").exists()
+
+
 def test_native_stage_and_additional_v2_adjustments_preserve_protected_native_samples(tmp_path):
     case = _case(tmp_path)
     source, master, _, binding, binding_path, transform, depth_path, handoff = case

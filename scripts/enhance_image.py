@@ -333,7 +333,9 @@ def run_v2_enhancement(
         V2EnhancementError: If enhancement fails
     """
     validate_geometry_recipe(geometry_recipe)
+    native_source = None
     if native_materials_binding_path is not None:
+        from transformation_portal.lux_depth_v3.native_materials import selected_native_materials_source
         from transformation_portal.lux_depth_v3.v2_enhance import load_native_materials_binding
         from transformation_portal.lux_depth_v3.v2_presets import processing_version_for_geometry
 
@@ -343,6 +345,7 @@ def run_v2_enhancement(
         binding = load_native_materials_binding(native_materials_binding_path, source_path=native_materials_source)
         if binding["input_color"] != input_color:
             raise ValueError("Native Materials color policy differs from its frozen binding")
+        native_source = selected_native_materials_source(binding, source_path=native_materials_source)
     elif native_materials_source is not None:
         raise ValueError("Native Materials source selection requires its frozen binding")
     input_path = validate_input_path(input_path)
@@ -356,10 +359,15 @@ def run_v2_enhancement(
 
     # Build emitted artifact path from canonical identity rather than source suffix.
     lookup_key = resolve_asset_key(asset_key, input_path.stem)
-    candidate_bit_depth = output_bit_depth or infer_v2_output_bit_depth(
-        input_path,
-        allow_8bit_output=allow_8bit,
-    )
+    if native_source is not None:
+        # Frozen native precision determines naming. Inspecting the mutable
+        # source here could dispatch an eager decoder before byte verification.
+        candidate_bit_depth = output_bit_depth or (8 if allow_8bit else native_source["source_bit_depth"])
+    else:
+        candidate_bit_depth = output_bit_depth or infer_v2_output_bit_depth(
+            input_path,
+            allow_8bit_output=allow_8bit,
+        )
     output_path = resolve_v2_emitted_artifact_path(
         safe_join_under(output_dir, lookup_key),
         bit_depth=candidate_bit_depth,
