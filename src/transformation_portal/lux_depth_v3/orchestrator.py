@@ -2300,12 +2300,21 @@ class EnhanceOrchestrator:
         if plan_input is None:
             raise LuxExecutionPlanAuthorityError("Prepared input ID is absent from the carried plan")
 
+        native_source = None
+        native_binding = self._validate_native_materials_authority()
+        if native_binding is not None:
+            from .native_materials import selected_native_materials_source
+
+            native_source = selected_native_materials_source(native_binding, source_path=plan_input.path)
         descriptor = self._open_prepared_input_descriptor(image_input.path)
         owns_snapshot_root = snapshot_root is None
         snapshot_dir: Optional[Path] = None
         snapshot_path: Optional[Path] = None
         snapshot_created = False
         try:
+            source_stat = os.fstat(descriptor)
+            if native_source is not None and source_stat.st_size != native_source["size_bytes"]:
+                raise LuxExecutionPlanAuthorityError("Native Materials source size changed before its prepared snapshot")
             snapshot_dir = (
                 Path(tempfile.mkdtemp(prefix="tp-prepared-input-")) if snapshot_root is None else Path(snapshot_root)
             )
@@ -2313,7 +2322,6 @@ class EnhanceOrchestrator:
             snapshot_path = snapshot_dir.joinpath(*PurePosixPath(plan_input.path).parts)
             snapshot_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             digest = hashlib.sha256()
-            source_stat = os.fstat(descriptor)
             output_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
             output_descriptor = os.open(snapshot_path, output_flags, 0o600)
             snapshot_created = True
@@ -2335,6 +2343,10 @@ class EnhanceOrchestrator:
                         destination.flush()
                         os.fsync(destination.fileno())
                     final_source_stat = os.fstat(source.fileno())
+                if native_source is not None and digest.hexdigest() != native_source["sha256"]:
+                    raise LuxExecutionPlanAuthorityError(
+                        "Native Materials source SHA-256 changed before its prepared snapshot"
+                    )
                 if (
                     not os.path.samestat(source_stat, final_source_stat)
                     or source_stat.st_size != final_source_stat.st_size
@@ -3887,8 +3899,29 @@ class EnhanceOrchestrator:
             if corrected_geometry:
                 from .preprocessing import preprocess_geometry_snapshot
 
+                selected_source: Optional[dict[str, Any]] = None
+                native_snapshot_limits: dict[str, Any] = {}
+                if native_binding is not None:
+                    from .native_materials import selected_native_materials_source
+
+                    prepared_native = self._prepared_execution
+                    if prepared_native is None:  # pragma: no cover - checked by native authority validation
+                        raise LuxExecutionPlanAuthorityError("Native Materials requires its prepared source authority")
+                    original_source = (source_image_input or image_input).path
+                    try:
+                        selected_path = original_source.relative_to(prepared_native.input_root).as_posix()
+                    except ValueError as exc:
+                        raise LuxExecutionPlanAuthorityError(
+                            "Native Materials source is outside its frozen selection"
+                        ) from exc
+                    selected_source = selected_native_materials_source(native_binding, source_path=selected_path)
+                    native_snapshot_limits = {
+                        "expected_source_sha256": selected_source["sha256"],
+                        "max_source_bytes": selected_source["size_bytes"],
+                        "max_native_pixels": math.prod(selected_source["shape"]),
+                    }
                 geometry_result = preprocess_geometry_snapshot(
-                    image_input.path, raw_config=self.config, verify_snapshot=verify_strict
+                    image_input.path, raw_config=self.config, verify_snapshot=verify_strict, **native_snapshot_limits
                 )
                 validated_path = image_input.path
                 preprocessed_array = geometry_result.pixels
@@ -3907,21 +3940,8 @@ class EnhanceOrchestrator:
                     raise LuxExecutionPlanAuthorityError(
                         "Corrected Materials V3 supports opaque 8-bit sources only; native precision requires Materials V4"
                     )
-                if native_binding is not None:
-                    prepared_native = self._prepared_execution
-                    if prepared_native is None:  # pragma: no cover - checked by native authority validation
-                        raise LuxExecutionPlanAuthorityError("Native Materials requires its prepared source authority")
-                    original_source = (source_image_input or image_input).path
-                    try:
-                        selected_path = original_source.relative_to(prepared_native.input_root).as_posix()
-                    except ValueError as exc:
-                        raise LuxExecutionPlanAuthorityError(
-                            "Native Materials source is outside its frozen selection"
-                        ) from exc
-                    selected_source = next(
-                        (source for source in native_binding["sources"] if source["path"] == selected_path), None
-                    )
-                    if selected_source is None or (
+                if selected_source is not None:
+                    if (
                         selected_source["sha256"] != geometry_result.transform.source_sha256
                         or tuple(selected_source["shape"]) != geometry_result.transform.normalized_shape
                         or selected_source["source_bit_depth"] != geometry_result.source_bit_depth

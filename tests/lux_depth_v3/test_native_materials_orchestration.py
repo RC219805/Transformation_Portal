@@ -14,6 +14,7 @@ from tests.lux_depth_v3.test_native_materials_binding import prepared_native
 from tests.test_provenance import mock_exiftool_json_output
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 pytestmark = pytest.mark.unit
@@ -276,16 +277,99 @@ def test_native_provenance_fixture_retains_real_source_hash_and_sidecar_without_
     assert restored.ingest_context.config_fingerprint == "sha256:" + binding["binding_sha256"]
 
 
-def test_source_changed_after_parent_construction_fails_before_depth_compute(prepared_native, tmp_path, monkeypatch):
+@pytest.mark.parametrize("drift", ["same_size", "larger", "enlarged_header"])
+def test_source_changed_after_parent_construction_fails_before_decode_or_depth(prepared_native, tmp_path, monkeypatch, drift):
+    from transformation_portal.lux_depth_v3 import preprocessing
+
     source, _, parent = _native_parent(prepared_native, tmp_path, monkeypatch)
     original_output = _output_snapshot(parent.output_root)
     data = source.read_bytes()
-    source.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    if drift == "larger":
+        source.write_bytes(data + b"growth beyond frozen source bytes")
+    elif drift == "enlarged_header":
+        with tifffile.TiffFile(source, mode="r+b") as changed:
+            changed.pages[0].tags[256].overwrite(8192)
+    else:
+        source.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
 
     def forbidden(*_args, **_kwargs):
-        pytest.fail("A source outside the frozen native selection reached the model")
+        pytest.fail("A source outside the frozen native selection reached image decoding or the model")
 
     monkeypatch.setattr(parent.depth_backend, "compute", forbidden)
-    with pytest.raises(ValueError, match="source changed before depth"):
+    monkeypatch.setattr(preprocessing.Image, "open", forbidden)
+    monkeypatch.setattr(tifffile.TiffPage, "asarray", forbidden)
+    with pytest.raises(ValueError, match="frozen source"):
         _depth_stage(parent, source)
     assert _output_snapshot(parent.output_root) == original_output
+
+
+@pytest.mark.parametrize("drift", ["same_size", "larger"])
+def test_native_prepared_source_copy_is_bounded_before_decode(prepared_native, tmp_path, monkeypatch, drift):
+    source, _, parent = _native_parent(prepared_native, tmp_path, monkeypatch)
+    data = source.read_bytes()
+    source.write_bytes(data + b"growth" if drift == "larger" else data[:-1] + bytes([data[-1] ^ 1]))
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed native source reached decoding")
+
+    monkeypatch.setattr(tifffile.TiffPage, "asarray", forbidden)
+    with pytest.raises(ValueError, match="source (size|SHA-256) changed"):
+        parent._materialize_prepared_input_snapshot(ImageInput(source))
+
+
+@pytest.mark.parametrize("suffix", ["tif", "png"])
+def test_geometry_frozen_pixel_budget_rejects_before_any_raster_decode(tmp_path, monkeypatch, suffix):
+    import hashlib
+
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.preprocessing import preprocess_geometry_snapshot
+
+    source = tmp_path / f"bounded.{suffix}"
+    if suffix == "tif":
+        tifffile.imwrite(source, np.full((31, 45, 3), 70, np.uint8), photometric="rgb", metadata=None)
+    else:
+        Image.new("RGB", (45, 31), (70, 90, 110)).save(source)
+    data = source.read_bytes()
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Over-budget native geometry reached its raster decoder")
+
+    monkeypatch.setattr(tifffile.TiffPage, "asarray", forbidden)
+    monkeypatch.setattr(Image.Image, "load", forbidden)
+    with pytest.raises(ValueError) as failure:
+        preprocess_geometry_snapshot(
+            source,
+            expected_source_sha256=hashlib.sha256(data).hexdigest(),
+            max_source_bytes=len(data),
+            max_native_pixels=31 * 45 - 1,
+        )
+    assert "frozen native pixel budget" in str(failure.value.__cause__)
+
+
+def test_geometry_snapshot_growth_is_rejected_before_spool_or_decode(prepared_native, monkeypatch):
+    import hashlib
+
+    from transformation_portal.lux_depth_v3 import preprocessing
+
+    source, _, _, _ = prepared_native
+    data = source.read_bytes()
+
+    def grow_after_open(_stat):
+        with source.open("ab") as changed:
+            changed.write(b"source grew after its frozen descriptor stat")
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("A growing source reached its raster decoder")
+
+    monkeypatch.setattr(preprocessing.Image, "open", forbidden)
+    monkeypatch.setattr(tifffile.TiffPage, "asarray", forbidden)
+    with pytest.raises(ValueError, match="grew beyond its frozen source byte budget"):
+        preprocessing.preprocess_geometry_snapshot(
+            source,
+            opened_file_stat_validator=grow_after_open,
+            expected_source_sha256=hashlib.sha256(data).hexdigest(),
+            max_source_bytes=len(data),
+            max_native_pixels=31 * 45,
+            verify_snapshot=True,
+        )

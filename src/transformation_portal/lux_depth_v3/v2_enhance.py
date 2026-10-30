@@ -28,6 +28,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 import shutil
 import struct
 import time
@@ -138,7 +139,9 @@ def _legacy_container_snapshot(source: bytes, image: Image.Image) -> bytes:
     return buffer.getvalue()
 
 
-def decode_v2_source(source: bytes, *, source_name: str, input_color: str = "auto") -> ImageMaster:
+def decode_v2_source(
+    source: bytes, *, source_name: str, input_color: str = "auto", max_pixels: int = 100_000_000
+) -> ImageMaster:
     """Use photographic color authority for every supported legacy V3 format."""
     from transformation_portal.core.image_artifact import ImageMaster, metadata_payload
     from transformation_portal.lux_depth_v4.photography import decode_master
@@ -152,7 +155,7 @@ def decode_v2_source(source: bytes, *, source_name: str, input_color: str = "aut
                 source = _legacy_container_snapshot(source, image)
             elif image.format == "PNG" and image.mode == "P":
                 source = _expand_palette_png_snapshot(source)
-    master = decode_master(source, source_name=source_name, input_color=input_color)
+    master = decode_master(source, source_name=source_name, input_color=input_color, max_pixels=max_pixels)
     if source is original:
         return master
     metadata = metadata_payload(master.metadata)
@@ -975,8 +978,21 @@ def enhance_image(
                     raise V2EnhancementError("Corrected V2 requires explicit geometry handoff and depth artifacts")
                 # Color pixels, metadata, alpha and source identity all derive
                 # from the same bounded byte snapshot in this versioned path.
-                source_snapshot = snapshot_geometry_artifact(input_path, 2 * 1024**3)
-                master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
+                if native_binding is not None:
+                    from .native_materials import snapshot_native_materials_source
+
+                    source_snapshot, native_source = snapshot_native_materials_source(
+                        input_path, native_binding, source_path=native_materials_source
+                    )
+                    master = decode_v2_source(
+                        source_snapshot,
+                        source_name=input_path.name,
+                        input_color=input_color,
+                        max_pixels=math.prod(native_source["shape"]),
+                    )
+                else:
+                    source_snapshot = snapshot_geometry_artifact(input_path, 2 * 1024**3)
+                    master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
                 if master.source_bit_depth not in {8, 16}:
                     raise V2EnhancementError("Corrected V2 supports bounded 8/16-bit SDR sources only")
                 input_bits = master.source_bit_depth

@@ -30,6 +30,8 @@ from transformation_portal.materials_v4.contracts import MaterialEvidence, Mater
 from transformation_portal.materials_v4.engine import ResponsePolicy, apply_response, plan_response
 from transformation_portal.materials_v4.operations import operation_contract_hash
 
+from .geometry_handoff import snapshot_geometry_artifact
+
 NATIVE_MATERIALS_SCHEMA = "tp.lux.native_materials.v1"
 NATIVE_MATERIALS_RECIPE = "native_sdr_v1"
 MAX_NATIVE_MATERIALS_BINDING_BYTES = MAX_PLAN_BODY_BYTES
@@ -388,6 +390,37 @@ def _binding_snapshot(binding: Mapping[str, Any]) -> dict[str, Any]:
     detached = decode_bounded_json_object(canonicalize_json(dict(binding)))
     validate_native_materials(detached)
     return detached
+
+
+def selected_native_materials_source(binding: Mapping[str, Any], *, source_path: str | None = None) -> dict[str, Any]:
+    """Select detached frozen source authority without opening or decoding files."""
+    frozen = _binding_snapshot(binding)
+    sources = frozen["sources"]
+    if source_path is not None:
+        selected_path = _portable_path(source_path)
+        sources = [source for source in sources if source["path"] == selected_path]
+    if len(sources) != 1:
+        raise ValueError("Native Materials requires exactly one frozen source; select an explicit original relative path")
+    return sources[0]
+
+
+def snapshot_native_materials_source(
+    path: Path, binding: Mapping[str, Any], *, source_path: str | None = None
+) -> tuple[bytes, dict[str, Any]]:
+    """Verify bounded source bytes before any photographic pixel allocation.
+
+    The caller must decode these same immutable bytes under the selected native
+    pixel bound. A changed file never acquires allocation authority merely by
+    retaining a familiar path, byte count or photographic header.
+    """
+    source = selected_native_materials_source(binding, source_path=source_path)
+    try:
+        data = snapshot_geometry_artifact(Path(path), source["size_bytes"])
+    except (OSError, ValueError) as exc:
+        raise ValueError("Native Materials source snapshot is not its bounded frozen regular file") from exc
+    if len(data) != source["size_bytes"] or hashlib.sha256(data).hexdigest() != source["sha256"]:
+        raise ValueError("Native Materials source bytes changed from the frozen selection")
+    return data, source
 
 
 def apply_native_materials(

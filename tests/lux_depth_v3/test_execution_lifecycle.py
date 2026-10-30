@@ -174,6 +174,7 @@ def test_prepared_snapshot_setup_failure_closes_source_and_cleans_private_root(
     prepared = prepare_lux_execution(_synthetic_config(), root, [image])
     orchestrator = object.__new__(EnhanceOrchestrator)
     orchestrator._prepared_execution = prepared
+    orchestrator.config = prepared.runtime_config
     descriptor = os.open(image, os.O_RDONLY)
     monkeypatch.setattr(orchestrator, "_open_prepared_input_descriptor", lambda _path: descriptor)
     failure = OSError(errno.ENOSPC, "simulated snapshot setup failure")
@@ -232,6 +233,7 @@ def test_prepared_snapshot_creation_failure_preserves_existing_destination(tmp_p
     prepared = prepare_lux_execution(_synthetic_config(), root, [image])
     orchestrator = object.__new__(EnhanceOrchestrator)
     orchestrator._prepared_execution = prepared
+    orchestrator.config = prepared.runtime_config
     descriptor = os.open(image, os.O_RDONLY)
     orchestrator._open_prepared_input_descriptor = lambda _path: descriptor
     snapshot_root = tmp_path / "snapshots"

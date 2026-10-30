@@ -13,6 +13,7 @@ import tifffile
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3 import native_materials as native_module
+from transformation_portal.lux_depth_v3 import v2_enhance as v2_module
 from transformation_portal.lux_depth_v3.geometry import GeometryTransform
 from transformation_portal.lux_depth_v3.geometry_handoff import load_geometry_handoff, write_geometry_handoff
 from transformation_portal.lux_depth_v3.native_materials import (
@@ -254,6 +255,55 @@ def test_zero_native_strength_preserves_every_16bit_code_without_proxy_quantizat
     np.testing.assert_array_equal(tifffile.imread(report["output"]), original)
     assert report["native_materials"]["execution"]["changed_pixels"] == 0
     assert len(np.unique(original[..., 0])) == 65536
+
+
+@pytest.mark.parametrize("mutation", ["same_size_bytes", "larger_file", "larger_geometry"])
+def test_native_source_drift_fails_before_photographic_decode_or_output(tmp_path, monkeypatch, mutation):
+    case = _case(tmp_path)
+    source = case[0]
+    original_size = source.stat().st_size
+    if mutation == "same_size_bytes":
+        data = bytearray(source.read_bytes())
+        data[-1] ^= 1
+        source.write_bytes(data)
+        assert source.stat().st_size == original_size
+    elif mutation == "larger_file":
+        source.write_bytes(source.read_bytes() + b"unadmitted data")
+        assert source.stat().st_size > original_size
+    else:
+        # Alter only the native dimensions in the TIFF header, keeping its
+        # encoded extent unchanged. Neither new geometry nor bytes are admitted.
+        with tifffile.TiffFile(source, mode="r+") as image:
+            image.pages[0].tags[256].overwrite(4500)
+            image.pages[0].tags[257].overwrite(3100)
+        assert source.stat().st_size == original_size
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed source reached photographic pixel decoding before frozen byte verification")
+
+    monkeypatch.setattr(v2_module, "decode_v2_source", forbidden)
+    with pytest.raises((ValueError, V2EnhancementError), match="Native Materials"):
+        _run(case, tmp_path / "forbidden")
+    assert not (tmp_path / "forbidden").exists()
+
+
+@pytest.mark.parametrize("full_ramp", [False, True])
+def test_native_real_decoder_receives_exact_admitted_pixel_limit(tmp_path, monkeypatch, full_ramp):
+    from transformation_portal.lux_depth_v4 import photography
+
+    case = _case(tmp_path, strength=0, orientation=6, full_ramp=full_ramp)
+    original_decoder = photography.decode_master
+    limits = []
+
+    def bounded_decoder(source, **kwargs):
+        limits.append(kwargs["max_pixels"])
+        return original_decoder(source, **kwargs)
+
+    monkeypatch.setattr(photography, "decode_master", bounded_decoder)
+    report = _run(case, tmp_path)
+    assert limits == [int(np.prod(case[3]["sources"][0]["shape"]))]
+    expected = np.rot90(tifffile.imread(case[0]), -1)
+    np.testing.assert_array_equal(tifffile.imread(report["output"]), expected)
 
 
 def test_native_stage_and_additional_v2_adjustments_preserve_protected_native_samples(tmp_path):

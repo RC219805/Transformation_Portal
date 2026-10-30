@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 import shutil
+import struct
 from dataclasses import replace
 from pathlib import Path
 
@@ -411,3 +412,90 @@ def test_selected_revalidation_still_checks_complete_manifest_source_map(prepare
     monkeypatch.setattr(native, "load_bound_evidence", forbidden)
     with pytest.raises(ValueError, match="manifest source map"):
         native.revalidate_native_materials(binding, source_path=binding["sources"][0]["path"])
+
+
+def test_selected_source_authority_is_static_and_detached(prepared_native, monkeypatch):
+    _, _, _, binding = prepared_native
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Static source selection opened evidence or decoded photographic pixels")
+
+    for name in ("snapshot", "snapshot_geometry_artifact", "decode_master", "load_bound_evidence"):
+        monkeypatch.setattr(native, name, forbidden)
+    selected = native.selected_native_materials_source(binding)
+    assert selected == binding["sources"][0]
+    selected["shape"][0] += 1
+    assert selected != binding["sources"][0]
+
+
+def test_source_snapshot_reuses_verified_bytes_and_exact_frozen_byte_bound(prepared_native, monkeypatch):
+    path, _, _, binding = prepared_native
+    expected = path.read_bytes()
+    observed_limits = []
+    original = native.snapshot_geometry_artifact
+
+    def bounded_snapshot(path, maximum):
+        observed_limits.append(maximum)
+        return original(path, maximum)
+
+    monkeypatch.setattr(native, "snapshot_geometry_artifact", bounded_snapshot)
+    data, selected = native.snapshot_native_materials_source(path, binding)
+    assert data == expected and isinstance(data, bytes)
+    assert observed_limits == [binding["sources"][0]["size_bytes"]]
+    assert selected == binding["sources"][0]
+    path.write_bytes(b"changed after immutable snapshot")
+    assert data == expected
+
+
+def test_same_size_expanding_tiff_header_fails_before_pixel_decode(prepared_native, monkeypatch):
+    path, _, _, binding = prepared_native
+    data = bytearray(path.read_bytes())
+    with tifffile.TiffFile(path) as image:
+        for name in ("ImageWidth", "ImageLength"):
+            tag = image.pages[0].tags[name]
+            encoded = struct.pack(image.byteorder + ("H" if tag.dtype == 3 else "I"), 8192)
+            data[tag.valueoffset : tag.valueoffset + len(encoded)] = encoded
+    assert len(data) == binding["sources"][0]["size_bytes"]
+    path.write_bytes(data)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed expanding source reached photographic pixel decoding")
+
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="source bytes changed"):
+        native.snapshot_native_materials_source(path, binding)
+
+
+@pytest.mark.parametrize("drift", ["oversized", "undersized", "symlink"])
+def test_changed_source_cannot_expand_or_redirect_its_snapshot(prepared_native, monkeypatch, tmp_path, drift):
+    path, _, _, binding = prepared_native
+    data = path.read_bytes()
+    if drift == "oversized":
+        path.write_bytes(data + b"oversized")
+    elif drift == "undersized":
+        path.write_bytes(data[:-1])
+    else:
+        linked = tmp_path / "linked-source.tif"
+        linked.symlink_to(path)
+        path = linked
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed source snapshot reached photographic decoding or mask allocation")
+
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="source snapshot|source bytes changed"):
+        native.snapshot_native_materials_source(path, binding)
+
+
+@pytest.mark.parametrize("selector", [None, "missing.tif", "../native.tif", "/native.tif"])
+def test_source_snapshot_requires_unambiguous_original_selection(prepared_native, tmp_path, monkeypatch, selector):
+    inputs, binding = _native_batch(prepared_native, tmp_path, count=2)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Ambiguous or invalid selection opened photographic source bytes")
+
+    monkeypatch.setattr(native, "snapshot_geometry_artifact", forbidden)
+    with pytest.raises(ValueError):
+        native.snapshot_native_materials_source(inputs / binding["sources"][0]["path"], binding, source_path=selector)

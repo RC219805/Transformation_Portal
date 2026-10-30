@@ -294,7 +294,10 @@ and actual execution, and the cache binds that computed receipt.
 Admission uses a fixed 12 GiB analytical working-allocation ceiling, 256 bytes
 per native pixel, four mask copies, two encoded-source snapshots and the
 policy's bounded tile scratch inside that ceiling. Oversized operations fail before
-native allocation; they are never silently reduced. This is a conservative
+native allocation; they are never silently reduced. Parent preprocessing and V2
+verify the frozen byte count and SHA-256 before decoding the same immutable
+snapshot, then enforce its admitted native pixel limit before raster allocation.
+Prepared source copies also retain the frozen byte ceiling. This is a conservative
 software allocation contract, not measured whole-host RSS or permission for
 parallel native jobs. The existing 67,108,864-pixel geometry cap also applies.
 
