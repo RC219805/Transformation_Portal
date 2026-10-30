@@ -93,6 +93,7 @@ class EnhancementStage(Stage):
         import time
 
         corrected_geometry = self._uses_corrected_geometry()
+        self._native_materials_identity(context)
         # Get inputs
         image = context.get_artifact("image")
         if image is None:
@@ -216,6 +217,7 @@ class EnhancementStage(Stage):
     def get_cache_key(self, context: StageContext) -> str:
         """Generate cache key based on all inputs."""
         corrected_geometry = self._uses_corrected_geometry()
+        native_materials = self._native_materials_identity(context)
         # Get input image
         image = context.get_artifact("image")
         if image is None:
@@ -246,8 +248,75 @@ class EnhancementStage(Stage):
                 "tone_low_tex_strength": self.tone_low_tex_strength,
                 "tone_depth_smoothing": self.tone_depth_smoothing,
             }
+            if native_materials is not None:
+                payload["native_materials"] = native_materials
             return "enhance_geometry_" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
         return self._legacy_cache_key(context)
+
+    def _native_materials_identity(self, context: StageContext) -> dict | None:
+        """Bind validated native execution meaning and its actual output master."""
+        native = context.get_artifact("native_materials")
+        if native is None:
+            if self.version == "1.4.0":
+                raise ValueError("Native Materials enhancement requires its validated execution receipt")
+            return None
+        from transformation_portal.core.image_artifact import ImageMaster
+        from transformation_portal.ingest.canonical_json import canonicalize_json
+        from transformation_portal.lux_depth_v3.geometry_handoff import GeometryBoundInputs
+        from transformation_portal.lux_depth_v3.native_materials import revalidate_native_materials, validate_native_materials
+
+        if not self._uses_corrected_geometry() or self.version != "1.4.0":
+            raise ValueError("Native Materials requires its versioned corrected enhancement stage")
+        if not isinstance(native, dict) or set(native) != {"binding", "receipt", "master"}:
+            raise ValueError("Native Materials enhancement requires its complete native context")
+        binding, receipt, master = native["binding"], native["receipt"], native["master"]
+        validate_native_materials(binding)
+        geometry = context.get_artifact("geometry_handoff")
+        if not isinstance(master, ImageMaster) or not isinstance(geometry, GeometryBoundInputs):
+            raise ValueError("Native Materials enhancement requires its exact master and native geometry")
+        sources = (
+            [source for source in binding["sources"] if source["path"] == receipt.get("selected_source_path")]
+            if isinstance(receipt, dict)
+            else []
+        )
+        if len(sources) != 1 or (
+            sources[0]["sha256"] != master.source_sha256
+            or sources[0]["source_bit_depth"] != master.source_bit_depth
+            or sources[0]["master_sha256"] != receipt.get("input_master_sha256")
+        ):
+            raise ValueError("Native Materials receipt differs from its selected frozen source")
+        if not isinstance(receipt, dict) or (
+            receipt.get("schema") != "tp.lux.native_materials.execution.v1"
+            or receipt.get("recipe") != "native_sdr_v1"
+            or receipt.get("binding_sha256") != binding["binding_sha256"]
+            or receipt.get("source_sha256") != master.source_sha256
+            or master.source_sha256 != geometry.source_sha256
+            or receipt.get("output_master_sha256") != master.content_hash()
+            or receipt.get("support_sha256") != hashlib.sha256(geometry.support.tobytes(order="C")).hexdigest()
+        ):
+            raise ValueError("Native Materials receipt differs from its actual native execution")
+        execution = receipt.get("execution")
+        response_plan = execution.get("response_plan") if isinstance(execution, dict) else None
+        if (
+            not isinstance(execution, dict)
+            or not isinstance(response_plan, dict)
+            or (
+                execution.get("schema") != "tp.materials.execution.v1"
+                or execution.get("input_master_sha256") != receipt["input_master_sha256"]
+                or execution.get("output_master_sha256") != receipt["output_master_sha256"]
+                or execution.get("evidence_sha256") != receipt.get("effective_evidence_sha256")
+                or execution.get("operations_sha256") != binding["operations_sha256"]
+                or execution.get("plan_sha256") != hashlib.sha256(canonicalize_json(response_plan)).hexdigest()
+                or response_plan.get("source_sha256") != master.source_sha256
+                or response_plan.get("master_sha256") != receipt["input_master_sha256"]
+                or response_plan.get("evidence_sha256") != receipt.get("effective_evidence_sha256")
+                or response_plan.get("operations_sha256") != binding["operations_sha256"]
+                or response_plan.get("policy") != binding["policy"]
+            )
+        ):
+            raise ValueError("Native Materials execution receipt differs from its frozen policy and actual plan")
+        revalidate_native_materials(binding, source_path=sources[0]["path"])
+        return {"binding_sha256": binding["binding_sha256"], "execution_receipt": receipt}
 
     def _legacy_cache_key(self, context: StageContext) -> str:
         """Keep historical key bytes unchanged for the legacy recipe."""

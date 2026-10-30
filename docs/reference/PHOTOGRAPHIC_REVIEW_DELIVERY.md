@@ -323,12 +323,20 @@ precision nor values already clipped during an earlier render.
 
 Default V3 V2 finishing uses processing version `1.2.0`, contract `encoded_srgb_v1`.
 Opt-in `--geometry-recipe normalized_crop_support_v1` pairs with version
-`1.3.0`, normalizes orientation once, preserves crop support and requires a
+`1.3.0` without native Materials, normalizes orientation once, preserves crop support and requires a
 source-bound depth/mask handoff. Corrected Materials V3 accepts only opaque
 8-bit sources; RAW, PBR, reconstruction and spatial linear ingest fail closed.
 Historical plan/cache identities and retained files remain unchanged. See the
 [versioned geometry contract](PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
 for its precision, cache and acceptance limits.
+
+The separate CLI native Materials selection binds explicit MaterialsV4 evidence
+and a complete response policy under `native_sdr_v1` / V2 `1.4.0`. It edits the
+original bounded 8/16-bit native master before encoded-domain finishing, with
+no quantized image carrier. This does not change Review approval scopes,
+enable managed native-Materials admission or establish photographic acceptance.
+See the [native SDR Materials contract](PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing).
+
 `--v2-input-color` and managed `v2_input_color` accept `auto`,
 `auto_assume_srgb`, `srgb`, or `linear_srgb`. Standalone
 `scripts/enhance_image.py` uses `--input-color` with the same policies.

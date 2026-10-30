@@ -729,6 +729,36 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
     }
     geometry_nodes = [node for node in nodes if node["stage_registry_id"] in geometry_stages]
     corrected_geometry = any("geometry_recipe" in node["configuration"] for node in geometry_nodes)
+    native_materials_nodes = [node for node in nodes if "native_materials" in node["configuration"]]
+    native_materials = bool(native_materials_nodes)
+    if native_materials:
+        from ..lux_depth_v3.native_materials import validate_native_materials
+
+        if (
+            payload["configuration_completeness"] != EXECUTION_COMPLETE
+            or not corrected_geometry
+            or len(native_materials_nodes) != 1
+            or native_materials_nodes[0]["stage_registry_id"] != StageRegistryIdentifier.LUX_V2.value
+            or stage_registry_ids.count(StageRegistryIdentifier.LUX_V2.value) != 1
+        ):
+            raise ExecutionPlanError("Native Materials requires one corrected execution-complete V2 stage")
+        if StageRegistryIdentifier.LUX_MATERIALS_V3.value in stage_registry_ids:
+            raise ExecutionPlanError("Native Materials cannot be combined with the legacy Materials V3 stage")
+        native_configuration = native_materials_nodes[0]["configuration"]
+        binding = native_configuration["native_materials"]
+        try:
+            validate_native_materials(binding)
+        except (TypeError, ValueError) as exc:
+            raise ExecutionPlanError(f"Invalid Native Materials binding: {exc}") from exc
+        selected_paths = [item["path"] for item in payload["input_selection"]["files"]]
+        if [item["path"] for item in binding["sources"]] != selected_paths:
+            raise ExecutionPlanError("Native Materials sources must exactly match the ordered input selection")
+        if (
+            native_configuration.get("input_color") != binding["input_color"]
+            or native_configuration.get("materials_color_handoff") != "none"
+            or native_configuration.get("materials_mask_handoff") != "none"
+        ):
+            raise ExecutionPlanError("Native Materials color and mask authority must match its isolated V2 stage")
     if corrected_geometry:
         if payload["configuration_completeness"] != EXECUTION_COMPLETE or any(
             node["configuration"].get("geometry_recipe") != "normalized_crop_support_v1" for node in geometry_nodes
@@ -756,7 +786,7 @@ def _validate_plan_semantics(payload: Mapping[str, Any]) -> None:
             StageRegistryIdentifier.LUX_V2.value,
         }:
             version = node["configuration"].get("processing_version")
-            expected_version = "1.3.0" if corrected_geometry else "1.2.0"
+            expected_version = "1.4.0" if native_materials else "1.3.0" if corrected_geometry else "1.2.0"
             if version is not None and version != expected_version:
                 raise ExecutionPlanError("Lux geometry recipe and V2 processing version disagree")
 

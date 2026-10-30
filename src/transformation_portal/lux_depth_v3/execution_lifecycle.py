@@ -714,7 +714,9 @@ def _stage_configuration(
                 "preset": str(config.v2_preset),
                 "input_color": config.v2_input_color,
                 "color_contract": V2_COLOR_CONTRACT,
-                "processing_version": processing_version_for_geometry(config.geometry_recipe),
+                "processing_version": processing_version_for_geometry(
+                    config.geometry_recipe, native_materials=config.native_materials_binding is not None
+                ),
                 "materials_color_handoff": "validated_srgb" if config.enable_materials_v3 else "none",
                 "device": str(config.v2_device),
                 "upscaler_backend": str(config.v2_upscaler_backend),
@@ -728,6 +730,11 @@ def _stage_configuration(
                     else "optional" if config.enable_materials_v3 else "none"
                 ),
                 "keep_intermediate": bool(config.keep_intermediates),
+                **(
+                    {"native_materials": copy.deepcopy(config.native_materials_binding)}
+                    if config.native_materials_binding is not None
+                    else {}
+                ),
             }
         )
     elif stage == "reconstruction":
@@ -890,12 +897,22 @@ def _native_plan(
 def _prepare_working_config(config: EnhanceConfig) -> EnhanceConfig:
     if config.execution_plan_authority is not None or config.execution_plan_canonical_bytes is not None:
         raise ExecutionPlanError("Cannot prepare a new plan from a config that already carries execution authority")
+    if config.native_materials_binding is not None:
+        raise LuxExecutionPlanAuthorityError("Prepare native Materials from explicit selectors, not a prebuilt binding")
+    if (config.native_materials_manifest is None) != (config.native_materials_policy is None):
+        raise LuxExecutionPlanAuthorityError(
+            "Native Materials requires paired explicit manifest and complete policy selectors"
+        )
     from .geometry import LEGACY_GEOMETRY_RECIPE, validate_geometry_recipe
 
     try:
         recipe = validate_geometry_recipe(config.geometry_recipe)
     except ValueError as exc:
         raise ExecutionPlanError(str(exc)) from exc
+    if config.native_materials_manifest is not None and (
+        recipe == LEGACY_GEOMETRY_RECIPE or not config.enable_v2 or config.v2_preset is None or config.enable_materials_v3
+    ):
+        raise LuxExecutionPlanAuthorityError("Native Materials requires corrected geometry and isolated enabled V2 finishing")
     if recipe != LEGACY_GEOMETRY_RECIPE:
         unsupported = [
             name for name in ("generate_pbr", "enable_reconstruction", "spatial_ai_linear_ingest") if getattr(config, name)
@@ -1073,6 +1090,21 @@ def prepare_lux_execution(
     ):
         raise LuxExecutionPlanAuthorityError("Corrected geometry has no RAW original-raster mapping")
     working = _prepare_working_config(config)
+
+    if working.native_materials_manifest is not None:
+        from .native_materials import freeze_native_materials
+
+        if working.native_materials_policy is None:
+            raise LuxExecutionPlanAuthorityError("Native Materials requires an explicit complete response policy")
+        working.native_materials_binding = freeze_native_materials(
+            working.native_materials_manifest,
+            working.native_materials_policy,
+            root,
+            resolved_inputs,
+            working.v2_input_color,
+        )
+        working.native_materials_manifest = None
+        working.native_materials_policy = None
 
     explicit_backend = normalize_backend_id(working.depth_backend) is not None
     planned_backend = resolve_requested_backend(working.depth_backend, working)
@@ -1378,6 +1410,7 @@ def runtime_config_from_execution_plan(
         "v2_device": v2["device"] if v2 is not None else "cpu",
         "v2_upscaler_backend": v2["upscaler_backend"] if v2 is not None else "default",
         "force_v2": v2["force"] if v2 is not None else False,
+        "native_materials_binding": copy.deepcopy(v2.get("native_materials")) if v2 is not None else None,
         "enable_materials_v3": materials is not None,
         "enable_reconstruction": reconstruction is not None,
         "resolved_invocation": _ExecutionPlanModelCarrier(runtime_model),

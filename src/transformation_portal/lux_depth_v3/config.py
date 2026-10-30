@@ -11,6 +11,7 @@ import importlib.util
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple, cast
 
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
@@ -592,9 +593,33 @@ class EnhanceConfig:
     # Appended to preserve positional compatibility of the historical config.
     geometry_recipe: str = LEGACY_GEOMETRY_RECIPE
 
+    # Preparation replaces local selectors with the complete V2-node binding.
+    # Historical payloads omit this opt-in finishing contract entirely.
+    native_materials_manifest: Optional[Path] = None
+    native_materials_policy: Optional[Path] = None
+    native_materials_binding: Optional[dict] = None
+
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
         validate_geometry_recipe(self.geometry_recipe)
+        native_requested = self.native_materials_manifest is not None or self.native_materials_binding is not None
+        if self.native_materials_policy is not None and not native_requested:
+            raise ValueError("Native Materials policy requires an explicit manifest")
+        if self.native_materials_manifest is not None and self.native_materials_policy is None:
+            raise ValueError("Native Materials requires an explicit complete response policy")
+        if self.native_materials_binding is not None and (
+            self.native_materials_manifest is not None or self.native_materials_policy is not None
+        ):
+            raise ValueError("Frozen native Materials cannot retain mutable input selectors")
+        if native_requested:
+            if self.geometry_recipe != "normalized_crop_support_v1" or not self.enable_v2 or self.v2_preset is None:
+                raise ValueError("Native Materials requires corrected geometry and enabled V2 finishing")
+            if self.enable_materials_v3:
+                raise ValueError("Native Materials cannot share a legacy MaterialsV3 stage")
+            if self.native_materials_binding is not None:
+                from .native_materials import validate_native_materials
+
+                validate_native_materials(self.native_materials_binding)
         if self.geometry_recipe != LEGACY_GEOMETRY_RECIPE:
             unsupported = [
                 name for name in ("generate_pbr", "enable_reconstruction", "spatial_ai_linear_ingest") if getattr(self, name)

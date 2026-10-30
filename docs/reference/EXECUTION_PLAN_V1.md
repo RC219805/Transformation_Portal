@@ -88,6 +88,20 @@ validation. This additive configuration does not change the outer V1 schema
 identity or registry IDs. See the
 [versioned geometry contract](PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe).
 
+The optional V2-node `native_materials` binding selects `native_sdr_v1` and
+processing version `1.4.0`. It requires corrected geometry and explicit complete
+MaterialsV4 evidence/policy, and cannot coexist with the legacy MaterialsV3
+stage. It freezes source bytes, native master identity, orientation-normalized
+geometry, precision/alpha, evidence manifests and numeric masks, policy,
+operation contract and conservative allocation ceilings. The local evidence-root
+locator is carried separately from the binding's portable content digest.
+Preparation and parent admission revalidate evidence before backend/output
+creation; the child independently verifies the selected native source before
+edits. No generated model observation is relabeled as trusted semantic evidence.
+Native floating-point edits precede the existing encoded-sRGB V2 processing;
+only final output encoding quantizes pixels. Without this optional binding,
+historical `1.2.0` and corrected `1.3.0` payloads retain their identities.
+
 Native preparation and carried-plan input binding both reject paths that
 collide after Unicode NFC normalization and case folding. This keeps a
 consumed plan's selection valid on the same portable filesystems as a native

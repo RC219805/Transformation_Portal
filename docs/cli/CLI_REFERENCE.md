@@ -221,12 +221,18 @@ Current option groups include:
   [photographic color and precision contract](../reference/PHOTOGRAPHIC_REVIEW_DELIVERY.md#processing-profiles-and-explicit-color).
 - Geometry: `--geometry-recipe normalized_crop_support_v1` explicitly selects
   normalized coordinates and verified depth/mask support with V2 processing
-  `1.3.0`. Omission retains `legacy_encoded_crop_stretch_v1` and V2 `1.2.0`.
+  `1.3.0` without native Materials. Omission retains
+  `legacy_encoded_crop_stretch_v1` and V2 `1.2.0`.
   The corrected recipe rejects RAW, PBR, reconstruction and spatial linear
   ingest; corrected MaterialsV3 accepts opaque 8-bit sources only. See the
   [versioned geometry correction](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#versioned-corrected-recipe)
   for explicit receipt requirements and acceptance limits. It is not adopted
   automatically by existing invocations or treated as production acceptance.
+- Native Materials: corrected geometry plus `--native-materials-manifest` and
+  `--native-materials-policy` selects `native_sdr_v1` / V2 `1.4.0`. This separate
+  MaterialsV4 path edits original 8/16-bit SDR pixels and straight alpha without
+  an intermediate image carrier. It cannot coexist with MaterialsV3. See the
+  [native SDR contract](../reference/PHOTOGRAPHIC_GEOMETRY_AUDIT.md#native-sdr-materials-finishing).
 - Safety and execution: `--strict-inputs`, `--verify-images`,
   `--allow-semantic-fallback`, `--max-workers`, `--max-gpu-workers`,
   `--overwrite`, and `--force-depth`.

@@ -1,0 +1,588 @@
+"""Native Materials authority retains source precision, geometry and abstention."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import io
+import json
+import shutil
+import struct
+import zlib
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import pytest
+import tifffile
+from PIL import IcoImagePlugin, Image, PngImagePlugin
+
+from transformation_portal.lux_depth_v3 import native_materials as native
+from transformation_portal.lux_depth_v4.photography import decode_master
+from transformation_portal.materials_v4.artifacts import write_evidence
+from transformation_portal.materials_v4.contracts import MaterialEvidence, RegionEvidence
+from transformation_portal.materials_v4.engine import MaterialOperation, ResponsePolicy
+
+pytestmark = pytest.mark.unit
+
+
+@pytest.fixture
+def prepared_native(tmp_path):
+    return _prepare_native(tmp_path)
+
+
+def _prepare_native(tmp_path, *, bits=16, orientation=1, alpha=False):
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    path = inputs / "native.tif"
+    rows, columns = np.indices((31, 45))
+    samples = np.stack((30000 + columns, 31000 + rows, 32000 + rows + columns), axis=-1).astype(np.uint16)
+    if bits == 8:
+        samples = (samples // 257).astype(np.uint8)
+    if alpha:
+        opacity = np.full(samples.shape[:2], np.iinfo(samples.dtype).max, samples.dtype)
+        opacity[5:9, 11:17] = 0
+        opacity[15:19, 21:27] //= 2
+        samples = np.concatenate((samples, opacity[..., None]), axis=2)
+    tifffile.imwrite(
+        path,
+        samples,
+        photometric="rgb",
+        metadata=None,
+        extrasamples="unassalpha" if alpha else None,
+        extratags=[(274, "H", 1, orientation, False)],
+    )
+    master = decode_master(path.read_bytes(), source_name=path.name, input_color="linear_srgb")
+    masks = tmp_path / "materials"
+    masks.mkdir()
+    mask = np.zeros(master.shape, np.float32)
+    mask[3:25, 7:31] = 1
+    evidence = MaterialEvidence(
+        master.source_sha256,
+        master.shape,
+        (RegionEvidence("water", "water", mask, semantic_confidence=0.99),),
+    )
+    write_evidence(evidence, masks / "evidence.json")
+    manifest = masks / "materials.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": "tp.lux.materials_manifest.v1",
+                "inputs": [
+                    {
+                        "path": path.name,
+                        "source_sha256": master.source_sha256,
+                        "evidence_path": "evidence.json",
+                        "evidence_sha256": hashlib.sha256((masks / "evidence.json").read_bytes()).hexdigest(),
+                        "shape": list(master.shape),
+                    }
+                ],
+            }
+        )
+    )
+    policy = ResponsePolicy(operations=(MaterialOperation("water", "linear_gain_v1", 0.0001),), min_coverage_px=1)
+    policy_path = masks / "policy.json"
+    policy_path.write_text(json.dumps(policy.to_payload()))
+    binding = native.freeze_native_materials(manifest, policy_path, inputs, [path], "linear_srgb")
+    return path, master, mask, binding
+
+
+def test_native_response_preserves_sub_eight_bit_gradient_and_support(prepared_native):
+    _, master, mask, binding = prepared_native
+    support = np.ones(master.shape, bool)
+    support[:, 24:] = False
+    result, receipt = native.apply_native_materials(master, binding, support=support)
+    allowed = (mask > 0) & support
+    np.testing.assert_array_equal(result.pixels[~allowed], master.pixels[~allowed])
+    delta = result.pixels[allowed] - master.pixels[allowed]
+    assert 0 < float(delta.min()) < float(delta.max()) < 1 / 255
+    assert len(np.unique(result.pixels[5, 7:24, 0])) == 17
+    assert result.pixels.dtype == np.float32 and result.shape == master.shape
+    assert result.source_bit_depth == 16
+    assert receipt["source_evidence_sha256"] != receipt["effective_evidence_sha256"]
+    assert receipt["execution"]["protected_changed_pixels"] == 0
+    assert receipt["precision_recovery"] is False
+
+
+def test_evidence_location_is_portable_but_every_numeric_byte_is_bound(prepared_native, tmp_path):
+    _, master, _, binding = prepared_native
+    destination = tmp_path / "relocated"
+    shutil.copytree(binding["evidence_root"], destination)
+    moved = {**binding, "evidence_root": str(destination)}
+    assert native.native_materials_binding_hash(moved) == binding["binding_sha256"]
+    native.revalidate_native_materials(moved)
+    first = native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))[0]
+    second = native.apply_native_materials(master, moved, support=np.ones(master.shape, bool))[0]
+    np.testing.assert_array_equal(first.pixels, second.pixels)
+
+
+@pytest.mark.parametrize("mutation", ["schema", "recipe", "digest", "unknown", "limits", "path", "source_bits"])
+def test_closed_binding_rejects_tampering(prepared_native, mutation):
+    _, _, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    if mutation == "schema":
+        binding["schema"] = "tp.lux.native_materials.v0"
+    elif mutation == "recipe":
+        binding["recipe"] = "automatic"
+    elif mutation == "digest":
+        binding["binding_sha256"] = "a" * 64
+    elif mutation == "unknown":
+        binding["trust_all"] = True
+    elif mutation == "limits":
+        binding["limits"]["max_working_bytes"] *= 2
+    elif mutation == "path":
+        binding["sources"][0]["path"] = "../native.tif"
+    elif mutation == "source_bits":
+        binding["sources"][0]["source_bit_depth"] = 32
+    with pytest.raises(ValueError):
+        native.validate_native_materials(binding)
+
+
+def test_changed_source_fails_before_execution(prepared_native):
+    path, _, _, binding = prepared_native
+    changed = bytearray(path.read_bytes())
+    changed[-1] ^= 1
+    path.write_bytes(changed)
+    with pytest.raises(ValueError, match="source changed"):
+        native.revalidate_native_materials(binding, input_root=path.parent)
+
+
+def test_changed_mask_fails_before_native_operation(prepared_native, monkeypatch):
+    _, master, _, binding = prepared_native
+    evidence_root = Path(binding["evidence_root"])
+    masks = list(evidence_root.glob("*.npy"))
+    assert masks
+    changed = bytearray(masks[0].read_bytes())
+    changed[-1] ^= 1
+    masks[0].write_bytes(changed)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed evidence reached a native operation")
+
+    monkeypatch.setattr(native, "apply_response", forbidden)
+    with pytest.raises(ValueError, match="Mask file changed"):
+        native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+
+
+@pytest.mark.parametrize("mutation", ["source", "frame", "support_dtype", "support_frame"])
+def test_source_and_support_frame_are_explicit(prepared_native, mutation):
+    _, master, _, binding = prepared_native
+    support = np.ones(master.shape, bool)
+    if mutation == "source":
+        master = replace(master, source_sha256="b" * 64)
+    elif mutation == "frame":
+        master = replace(master, pixels=master.pixels.transpose(1, 0, 2))
+    elif mutation == "support_dtype":
+        support = support.astype(np.float32)
+    else:
+        support = support.T
+    with pytest.raises(ValueError, match="source/frame|geometry support"):
+        native.apply_native_materials(master, binding, support=support)
+
+
+def test_duplicate_identical_sources_require_original_relative_selector(prepared_native):
+    _, master, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    binding["sources"].append({**copy.deepcopy(binding["sources"][0]), "path": "second/native.tif"})
+    manifest_path = Path(binding["evidence_root"]) / binding["manifest"]["path"]
+    payload = json.loads(manifest_path.read_bytes())
+    payload["inputs"].append({**payload["inputs"][0], "path": "second/native.tif"})
+    manifest_bytes = json.dumps(payload).encode()
+    manifest_path.write_bytes(manifest_bytes)
+    binding["manifest"].update(sha256=hashlib.sha256(manifest_bytes).hexdigest(), size_bytes=len(manifest_bytes))
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+    with pytest.raises(ValueError, match="exactly one"):
+        native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+    _, receipt = native.apply_native_materials(master, binding, "second/native.tif", np.ones(master.shape, bool))
+    assert receipt["selected_source_path"] == "second/native.tif"
+
+
+def test_low_memory_is_rejected_before_kernel_or_mask_decode(prepared_native, monkeypatch):
+    _, master, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    binding["sources"][0]["size_bytes"] = binding["limits"]["max_input_bytes"]
+    binding["sources"][0]["shape"] = [8192, 8192]
+    binding["sources"][0]["evidence"]["shape"] = [8192, 8192]
+    binding["sources"][0]["mask_bytes"] = 8192 * 8192 * 4
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Over-budget operation allocated masks or executed")
+
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    monkeypatch.setattr(native, "apply_response", forbidden)
+    with pytest.raises(ValueError, match="allocation exceeds"):
+        native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+
+
+def test_native_response_cannot_silently_clip_out_of_sdr(prepared_native, monkeypatch):
+    _, master, _, binding = prepared_native
+
+    def extended_result(master, _evidence, _plan):
+        return replace(master, pixels=np.full_like(master.pixels, 1.01)), {}
+
+    monkeypatch.setattr(native, "apply_response", extended_result)
+    with pytest.raises(ValueError, match="bounded SDR"):
+        native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+
+
+def test_untrusted_inferred_observations_are_not_promoted(prepared_native, monkeypatch):
+    _, master, _, binding = prepared_native
+    original_load = native.load_bound_evidence
+
+    def inferred(*args, **kwargs):
+        evidence = original_load(*args, **kwargs)
+        return replace(evidence, regions=tuple(replace(region, provenance="inferred") for region in evidence.regions))
+
+    monkeypatch.setattr(native, "load_bound_evidence", inferred)
+    result, receipt = native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+    np.testing.assert_array_equal(result.pixels, master.pixels)
+    assert receipt["execution"]["regions"][0]["reason"] == "untrusted_inference"
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+@pytest.mark.parametrize("orientation", range(1, 9))
+def test_native_orientation_and_straight_alpha_are_preserved(tmp_path, bits, orientation):
+    _, master, mask, binding = _prepare_native(tmp_path, bits=bits, orientation=orientation, alpha=True)
+    result, receipt = native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+    assert binding["sources"][0]["shape"] == list(master.shape)
+    assert binding["sources"][0]["source_bit_depth"] == bits
+    assert binding["sources"][0]["alpha"] is True
+    protected = (master.alpha == 0) | (mask == 0)
+    np.testing.assert_array_equal(result.pixels[protected], master.pixels[protected])
+    np.testing.assert_array_equal(result.alpha, master.alpha)
+    assert receipt["alpha_mode"] == "straight"
+
+
+def test_modified_native_baseline_cannot_claim_original_source_identity(prepared_native):
+    _, master, _, binding = prepared_native
+    changed = replace(master, pixels=master.pixels + np.float32(0.0001))
+    with pytest.raises(ValueError, match="exactly one matching"):
+        native.apply_native_materials(changed, binding, support=np.ones(master.shape, bool))
+
+
+def test_forged_omission_cannot_erase_evidence_listed_in_frozen_manifest(prepared_native):
+    _, master, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    binding["sources"][0].update(evidence=None, mask_bytes=0)
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+    with pytest.raises(ValueError, match="manifest source map"):
+        native.apply_native_materials(master, binding, support=np.ones(master.shape, bool))
+
+
+def test_frozen_tile_scratch_is_included_inside_total_allocation(prepared_native):
+    _, _, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    binding["policy"]["max_working_bytes"] = binding["limits"]["max_working_bytes"]
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+    with pytest.raises(ValueError, match="allocation exceeds"):
+        native.validate_native_materials(binding)
+
+
+def test_insufficient_tile_policy_is_rejected_before_execution(prepared_native):
+    _, _, _, original = prepared_native
+    binding = copy.deepcopy(original)
+    binding["policy"]["max_working_bytes"] = 1
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+    with pytest.raises(ValueError, match="tile scratch exceeds"):
+        native.validate_native_materials(binding)
+
+
+@pytest.mark.parametrize("mutation", ["float", "allocation"])
+def test_unsupported_precision_or_allocation_fails_before_native_decode(prepared_native, monkeypatch, mutation):
+    path, _, _, binding = prepared_native
+    if mutation == "float":
+        tifffile.imwrite(path, np.full((31, 45, 3), 0.5, np.float32), photometric="rgb", metadata=None)
+    else:
+        monkeypatch.setattr(native, "_header", lambda *_args, **_kwargs: ((8192, 8192), 16, False))
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unsupported source allocated native photographic pixels")
+
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    root = Path(binding["evidence_root"])
+    with pytest.raises(ValueError, match="integer 8/16|allocation exceeds"):
+        native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "linear_srgb")
+
+
+def _native_batch(prepared_native, tmp_path, count=4):
+    """Build real independent evidence bundles under one frozen batch manifest."""
+    original_path, _, _, original = prepared_native
+    original_root = Path(original["evidence_root"])
+    inputs = tmp_path / "batch-inputs"
+    evidence_root = tmp_path / "batch-evidence"
+    inputs.mkdir()
+    evidence_root.mkdir()
+    records = []
+    selected = []
+    for index in range(count):
+        scene = f"scene-{index}"
+        source = inputs / scene / original_path.name
+        source.parent.mkdir()
+        source.write_bytes(original_path.read_bytes())
+        selected.append(source)
+        shutil.copytree(original_root, evidence_root / scene)
+        records.append(
+            {
+                "path": source.relative_to(inputs).as_posix(),
+                "source_sha256": original["sources"][0]["sha256"],
+                "evidence_path": f"{scene}/evidence.json",
+                "evidence_sha256": original["sources"][0]["evidence"]["sha256"],
+                "shape": original["sources"][0]["shape"],
+            }
+        )
+    manifest = evidence_root / "materials.json"
+    manifest.write_text(json.dumps({"schema": "tp.lux.materials_manifest.v1", "inputs": records}))
+    policy = evidence_root / "policy.json"
+    policy.write_bytes((original_root / "policy.json").read_bytes())
+    binding = native.freeze_native_materials(manifest, policy, inputs, selected, original["input_color"])
+    return inputs, binding
+
+
+@pytest.mark.parametrize("count", [2, 5])
+def test_batch_admission_and_selected_revalidation_decode_linear_evidence_count(prepared_native, tmp_path, monkeypatch, count):
+    inputs, binding = _native_batch(prepared_native, tmp_path, count=count)
+    loaded = []
+    original_load = native.load_bound_evidence
+
+    def counted(root, record, limits):
+        loaded.append(record["path"])
+        return original_load(root, record, limits)
+
+    monkeypatch.setattr(native, "load_bound_evidence", counted)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    expected = [source["evidence"]["path"] for source in binding["sources"]]
+    assert loaded == expected
+    for source in binding["sources"]:
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=source["path"])
+    assert loaded == expected + expected
+    assert len(loaded) == 2 * count
+
+
+@pytest.mark.parametrize("index", range(4))
+@pytest.mark.parametrize("drift", ["source", "evidence", "mask"])
+def test_every_selected_source_rechecks_original_and_numeric_bytes(prepared_native, tmp_path, index, drift):
+    inputs, binding = _native_batch(prepared_native, tmp_path)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    source = binding["sources"][index]
+    evidence_path = Path(binding["evidence_root"]) / source["evidence"]["path"]
+    target = {
+        "source": inputs / source["path"],
+        "evidence": evidence_path,
+        "mask": next(evidence_path.parent.glob("mask-*.npy")),
+    }[drift]
+    data = target.read_bytes()
+    target.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=source["path"])
+
+
+@pytest.mark.parametrize("drift", ["source", "mask"])
+def test_unselected_drift_is_rejected_when_that_source_becomes_selected(prepared_native, tmp_path, drift):
+    inputs, binding = _native_batch(prepared_native, tmp_path)
+    native.revalidate_native_materials(binding, input_root=inputs)
+    first, last = binding["sources"][0], binding["sources"][-1]
+    evidence_path = Path(binding["evidence_root"]) / last["evidence"]["path"]
+    target = inputs / last["path"] if drift == "source" else next(evidence_path.parent.glob("mask-*.npy"))
+    data = target.read_bytes()
+    target.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    native.revalidate_native_materials(binding, input_root=inputs, source_path=first["path"])
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, input_root=inputs, source_path=last["path"])
+
+
+@pytest.mark.parametrize("selector", ["missing.tif", "../native.tif", "", "/native.tif"])
+def test_invalid_selected_path_fails_before_evidence_decode(prepared_native, monkeypatch, selector):
+    _, _, _, binding = prepared_native
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Invalid selected path reached numeric evidence decoding")
+
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError):
+        native.revalidate_native_materials(binding, source_path=selector)
+
+
+def test_selected_revalidation_still_checks_complete_manifest_source_map(prepared_native, tmp_path, monkeypatch):
+    _, original = _native_batch(prepared_native, tmp_path)
+    binding = copy.deepcopy(original)
+    binding["sources"][-1].update(evidence=None, mask_bytes=0)
+    binding["binding_sha256"] = native.native_materials_binding_hash(binding)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Inconsistent complete source map reached numeric evidence decoding")
+
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="manifest source map"):
+        native.revalidate_native_materials(binding, source_path=binding["sources"][0]["path"])
+
+
+def test_selected_source_authority_is_static_and_detached(prepared_native, monkeypatch):
+    _, _, _, binding = prepared_native
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Static source selection opened evidence or decoded photographic pixels")
+
+    for name in ("snapshot", "snapshot_geometry_artifact", "decode_master", "load_bound_evidence"):
+        monkeypatch.setattr(native, name, forbidden)
+    selected = native.selected_native_materials_source(binding)
+    assert selected == binding["sources"][0]
+    selected["shape"][0] += 1
+    assert selected != binding["sources"][0]
+
+
+def test_source_snapshot_reuses_verified_bytes_and_exact_frozen_byte_bound(prepared_native, monkeypatch):
+    path, _, _, binding = prepared_native
+    expected = path.read_bytes()
+    observed_limits = []
+    original = native.snapshot_geometry_artifact
+
+    def bounded_snapshot(path, maximum):
+        observed_limits.append(maximum)
+        return original(path, maximum)
+
+    monkeypatch.setattr(native, "snapshot_geometry_artifact", bounded_snapshot)
+    data, selected = native.snapshot_native_materials_source(path, binding)
+    assert data == expected and isinstance(data, bytes)
+    assert observed_limits == [binding["sources"][0]["size_bytes"]]
+    assert selected == binding["sources"][0]
+    path.write_bytes(b"changed after immutable snapshot")
+    assert data == expected
+
+
+def test_same_size_expanding_tiff_header_fails_before_pixel_decode(prepared_native, monkeypatch):
+    path, _, _, binding = prepared_native
+    data = bytearray(path.read_bytes())
+    with tifffile.TiffFile(path) as image:
+        for name in ("ImageWidth", "ImageLength"):
+            tag = image.pages[0].tags[name]
+            encoded = struct.pack(image.byteorder + ("H" if tag.dtype == 3 else "I"), 8192)
+            data[tag.valueoffset : tag.valueoffset + len(encoded)] = encoded
+    assert len(data) == binding["sources"][0]["size_bytes"]
+    path.write_bytes(data)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed expanding source reached photographic pixel decoding")
+
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="source bytes changed"):
+        native.snapshot_native_materials_source(path, binding)
+
+
+@pytest.mark.parametrize("drift", ["oversized", "undersized", "symlink"])
+def test_changed_source_cannot_expand_or_redirect_its_snapshot(prepared_native, monkeypatch, tmp_path, drift):
+    path, _, _, binding = prepared_native
+    data = path.read_bytes()
+    if drift == "oversized":
+        path.write_bytes(data + b"oversized")
+    elif drift == "undersized":
+        path.write_bytes(data[:-1])
+    else:
+        linked = tmp_path / "linked-source.tif"
+        linked.symlink_to(path)
+        path = linked
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Changed source snapshot reached photographic decoding or mask allocation")
+
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    monkeypatch.setattr(native, "load_bound_evidence", forbidden)
+    with pytest.raises(ValueError, match="source snapshot|source bytes changed"):
+        native.snapshot_native_materials_source(path, binding)
+
+
+@pytest.mark.parametrize("selector", [None, "missing.tif", "../native.tif", "/native.tif"])
+def test_source_snapshot_requires_unambiguous_original_selection(prepared_native, tmp_path, monkeypatch, selector):
+    inputs, binding = _native_batch(prepared_native, tmp_path, count=2)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Ambiguous or invalid selection opened photographic source bytes")
+
+    monkeypatch.setattr(native, "snapshot_geometry_artifact", forbidden)
+    with pytest.raises(ValueError):
+        native.snapshot_native_materials_source(inputs / binding["sources"][0]["path"], binding, source_path=selector)
+
+
+def _png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
+def _late_exif_png(*, orientation=6, hdr=False):
+    stream = io.BytesIO()
+    Image.new("RGB", (45, 31), (70, 90, 110)).save(stream, format="PNG")
+    source = stream.getvalue()
+    exif = Image.Exif()
+    exif[274] = orientation
+    exif[34665] = {40961: 1}
+    if hdr:
+        source = source[:33] + _png_chunk(b"mDCV", bytes(24)) + source[33:]
+    return source[:-12] + _png_chunk(b"eXIf", exif.tobytes()[6:]) + source[-12:]
+
+
+@pytest.mark.parametrize("orientation", range(1, 9))
+def test_png_native_header_preserves_late_orientation_and_color_without_raster(orientation, monkeypatch):
+    data = _late_exif_png(orientation=orientation)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Native PNG header/color inspection decoded photographic pixels")
+
+    monkeypatch.setattr(Image.Image, "load", forbidden)
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    shape, bits, alpha = native._header(data, "late.png", input_color="auto")
+    assert shape == ((45, 31) if orientation >= 5 else (31, 45))
+    assert bits == 8 and alpha is False
+    preparation = native.validate_input_color_metadata(
+        io.BytesIO(data), source_name="late.png", input_color="auto", max_pixels=31 * 45
+    )
+    assert preparation["resolution"] == "exif_srgb"
+
+
+@pytest.mark.parametrize("failure", ["pixels", "allocation"])
+def test_png_header_rejects_unadmitted_native_allocation_without_raster(prepared_native, tmp_path, monkeypatch, failure):
+    _, _, _, binding = prepared_native
+    source = bytearray(_late_exif_png())
+    side = 8193 if failure == "pixels" else 8192
+    source[16:24] = struct.pack(">II", side, side)
+    source[29:33] = struct.pack(">I", zlib.crc32(source[12:29]))
+    path = tmp_path / "inputs" / "large.png"
+    path.write_bytes(source)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unadmitted native PNG geometry reached photographic raster allocation")
+
+    monkeypatch.setattr(Image.Image, "load", forbidden)
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    root = Path(binding["evidence_root"])
+    with pytest.raises(ValueError, match="pixel budget|allocation exceeds"):
+        native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "auto")
+
+
+def test_png_native_header_observes_actual_requested_color_policy(monkeypatch):
+    data = _late_exif_png(hdr=True)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Native PNG policy inspection decoded photographic pixels")
+
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    with pytest.raises(ValueError, match="Unsupported PNG HDR"):
+        native._header(data, "photo.png", input_color="auto")
+    assert native._header(data, "photo.png", input_color="srgb") == ((45, 31), 8, False)
+
+
+def test_unsupported_header_plugin_cannot_allocate_before_native_admission(prepared_native, tmp_path, monkeypatch):
+    _, _, _, binding = prepared_native
+    stream = io.BytesIO()
+    Image.new("RGB", (16, 16), (70, 90, 110)).save(stream, format="ICO", sizes=[(16, 16)])
+    path = tmp_path / "inputs" / "disguised.jpg"
+    path.write_bytes(stream.getvalue())
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unsupported image plugin reached raster allocation before native admission")
+
+    monkeypatch.setattr(IcoImagePlugin.IcoImageFile, "load", forbidden)
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    root = Path(binding["evidence_root"])
+    with pytest.raises(ValueError, match="supports JPEG/PNG/TIFF"):
+        native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "srgb")

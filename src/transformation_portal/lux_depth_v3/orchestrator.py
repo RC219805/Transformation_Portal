@@ -657,7 +657,16 @@ class EnhanceOrchestrator:
                 )
             config = projected_config
             self._prepared_execution = prepared
+            if config.native_materials_binding is not None:
+                from .native_materials import revalidate_native_materials
+
+                revalidate_native_materials(config.native_materials_binding, input_root=prepared.input_root)
         else:
+            if any(
+                getattr(config, name) is not None
+                for name in ("native_materials_binding", "native_materials_manifest", "native_materials_policy")
+            ):
+                raise LuxExecutionPlanAuthorityError("Native Materials requires the prepared canonical execution path")
             if config.execution_plan_authority is not None or config.execution_plan_canonical_bytes is not None:
                 raise LuxExecutionPlanAuthorityError(
                     "A config carrying execution-plan authority must be constructed with from_prepared"
@@ -675,6 +684,7 @@ class EnhanceOrchestrator:
         _log_dependency_status()
 
         self.config = config
+        self._validate_native_materials_authority()
         self._uses_corrected_geometry()
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
@@ -1875,7 +1885,10 @@ class EnhanceOrchestrator:
             if include_run_card_auxiliaries:
                 add_rewrite_spec(
                     result.get("v2_report_path"),
-                    scalar_keys=("output", "depth_map"),
+                    # Corrected geometry consumes an ephemeral, source-bound
+                    # NPY input. Its receipt records exact bytes and arrays;
+                    # it is not a published output to remap as a carrier.
+                    scalar_keys=("output",) if self._uses_corrected_geometry() else ("output", "depth_map"),
                     sequence_keys=("output_paths",),
                 )
             if include_run_card_auxiliaries or "reconstruction_bundle" in requested_kinds:
@@ -2287,12 +2300,21 @@ class EnhanceOrchestrator:
         if plan_input is None:
             raise LuxExecutionPlanAuthorityError("Prepared input ID is absent from the carried plan")
 
+        native_source = None
+        native_binding = self._validate_native_materials_authority()
+        if native_binding is not None:
+            from .native_materials import selected_native_materials_source
+
+            native_source = selected_native_materials_source(native_binding, source_path=plan_input.path)
         descriptor = self._open_prepared_input_descriptor(image_input.path)
         owns_snapshot_root = snapshot_root is None
         snapshot_dir: Optional[Path] = None
         snapshot_path: Optional[Path] = None
         snapshot_created = False
         try:
+            source_stat = os.fstat(descriptor)
+            if native_source is not None and source_stat.st_size != native_source["size_bytes"]:
+                raise LuxExecutionPlanAuthorityError("Native Materials source size changed before its prepared snapshot")
             snapshot_dir = (
                 Path(tempfile.mkdtemp(prefix="tp-prepared-input-")) if snapshot_root is None else Path(snapshot_root)
             )
@@ -2300,7 +2322,6 @@ class EnhanceOrchestrator:
             snapshot_path = snapshot_dir.joinpath(*PurePosixPath(plan_input.path).parts)
             snapshot_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             digest = hashlib.sha256()
-            source_stat = os.fstat(descriptor)
             output_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
             output_descriptor = os.open(snapshot_path, output_flags, 0o600)
             snapshot_created = True
@@ -2322,6 +2343,10 @@ class EnhanceOrchestrator:
                         destination.flush()
                         os.fsync(destination.fileno())
                     final_source_stat = os.fstat(source.fileno())
+                if native_source is not None and digest.hexdigest() != native_source["sha256"]:
+                    raise LuxExecutionPlanAuthorityError(
+                        "Native Materials source SHA-256 changed before its prepared snapshot"
+                    )
                 if (
                     not os.path.samestat(source_stat, final_source_stat)
                     or source_stat.st_size != final_source_stat.st_size
@@ -2972,6 +2997,7 @@ class EnhanceOrchestrator:
 
         Delegates to config_resolver.compute_config_fingerprint().
         """
+        self._validate_native_materials_authority()
         return compute_config_fingerprint(
             self.config,
             self._model_variant,
@@ -2994,6 +3020,7 @@ class EnhanceOrchestrator:
 
         Delegates to config_resolver.build_orchestrator_run_card_config_fingerprint().
         """
+        self._validate_native_materials_authority()
         return build_orchestrator_run_card_config_fingerprint(
             self.config,
             self._model_variant,
@@ -3735,6 +3762,56 @@ class EnhanceOrchestrator:
             logger.debug(f"V2 skip check failed: {e}")
             return False
 
+    def _validate_native_materials_authority(self) -> Optional[dict[str, Any]]:
+        """Keep native execution and audit identity bound to its frozen V2 node.
+
+        Runtime configuration remains mutable for historical callers. It cannot
+        replace, remove or introduce native edit authority after preparation.
+        Return a detached plan-derived binding so a later caller mutation cannot
+        change the policy serialized for the child process.
+        """
+        if any(
+            getattr(self.config, name, None) is not None for name in ("native_materials_manifest", "native_materials_policy")
+        ):
+            raise LuxExecutionPlanAuthorityError("Native Materials runtime cannot retain mutable selectors")
+        selected_binding = getattr(self.config, "native_materials_binding", None)
+        prepared = getattr(self, "_prepared_execution", None)
+        v2_node = (
+            next(
+                (node for node in prepared.plan.nodes if node.stage_registry_id is StageRegistryIdentifier.LUX_V2),
+                None,
+            )
+            if prepared is not None
+            else None
+        )
+        recorded_binding = v2_node.configuration.get("native_materials") if v2_node is not None else None
+        if recorded_binding is None and selected_binding is None:
+            return None
+        if recorded_binding is None or selected_binding is None or v2_node is None:
+            raise LuxExecutionPlanAuthorityError("Native Materials binding differs from the authoritative V2 plan")
+        v2_configuration = v2_node.to_payload()["configuration"]
+        expected_binding = v2_configuration["native_materials"]
+        try:
+            binding_matches = canonicalize_json(selected_binding) == canonicalize_json(expected_binding)
+        except (TypeError, ValueError, UnicodeError) as exc:
+            raise LuxExecutionPlanAuthorityError("Native Materials binding is not canonical plan authority") from exc
+        if not binding_matches:
+            raise LuxExecutionPlanAuthorityError("Native Materials binding differs from the authoritative V2 plan")
+        expected_settings = {
+            "geometry_recipe": v2_configuration["geometry_recipe"],
+            "v2_input_color": v2_configuration["input_color"],
+            "enable_v2": True,
+            "enable_materials_v3": False,
+            "v2_preset": v2_configuration["preset"],
+            "output_bit_depth": v2_configuration["output_bit_depth"],
+        }
+        if any(
+            type(getattr(self.config, name, None)) is not type(value) or getattr(self.config, name, None) != value
+            for name, value in expected_settings.items()
+        ):
+            raise LuxExecutionPlanAuthorityError("Native Materials runtime settings differ from the authoritative V2 plan")
+        return expected_binding
+
     def _uses_corrected_geometry(self) -> bool:
         from .geometry import LEGACY_GEOMETRY_RECIPE, NORMALIZED_GEOMETRY_RECIPE, validate_geometry_recipe
 
@@ -3791,6 +3868,7 @@ class EnhanceOrchestrator:
                 backend_selection_metadata,
                 depth_attempts)
         """
+        native_binding = self._validate_native_materials_authority()
         depth_runtime_s = 0.0
         depth_metadata = None
         pbr_assets = None
@@ -3821,8 +3899,29 @@ class EnhanceOrchestrator:
             if corrected_geometry:
                 from .preprocessing import preprocess_geometry_snapshot
 
+                selected_source: Optional[dict[str, Any]] = None
+                native_snapshot_limits: dict[str, Any] = {}
+                if native_binding is not None:
+                    from .native_materials import selected_native_materials_source
+
+                    prepared_native = self._prepared_execution
+                    if prepared_native is None:  # pragma: no cover - checked by native authority validation
+                        raise LuxExecutionPlanAuthorityError("Native Materials requires its prepared source authority")
+                    original_source = (source_image_input or image_input).path
+                    try:
+                        selected_path = original_source.relative_to(prepared_native.input_root).as_posix()
+                    except ValueError as exc:
+                        raise LuxExecutionPlanAuthorityError(
+                            "Native Materials source is outside its frozen selection"
+                        ) from exc
+                    selected_source = selected_native_materials_source(native_binding, source_path=selected_path)
+                    native_snapshot_limits = {
+                        "expected_source_sha256": selected_source["sha256"],
+                        "max_source_bytes": selected_source["size_bytes"],
+                        "max_native_pixels": math.prod(selected_source["shape"]),
+                    }
                 geometry_result = preprocess_geometry_snapshot(
-                    image_input.path, raw_config=self.config, verify_snapshot=verify_strict
+                    image_input.path, raw_config=self.config, verify_snapshot=verify_strict, **native_snapshot_limits
                 )
                 validated_path = image_input.path
                 preprocessed_array = geometry_result.pixels
@@ -3841,6 +3940,14 @@ class EnhanceOrchestrator:
                     raise LuxExecutionPlanAuthorityError(
                         "Corrected Materials V3 supports opaque 8-bit sources only; native precision requires Materials V4"
                     )
+                if selected_source is not None:
+                    if (
+                        selected_source["sha256"] != geometry_result.transform.source_sha256
+                        or tuple(selected_source["shape"]) != geometry_result.transform.normalized_shape
+                        or selected_source["source_bit_depth"] != geometry_result.source_bit_depth
+                        or selected_source["alpha"] != (geometry_result.alpha is not None)
+                    ):
+                        raise LuxExecutionPlanAuthorityError("Native Materials source changed before depth execution")
             elif prepared_snapshot_required:
                 validated_path = image_input.path
                 preprocessed_array, original_shape, decoded_sha256 = preprocess_image_snapshot(
@@ -5849,6 +5956,7 @@ class EnhanceOrchestrator:
         source_image_input: Optional[ImageInput] = None,
         depth_artifact_sha256: Optional[str] = None,
         geometry_input_sha256: Optional[str] = None,
+        native_materials_source: Optional[str] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -5867,6 +5975,7 @@ class EnhanceOrchestrator:
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
         """
+        native_binding = self._validate_native_materials_authority()
         # Skip V2 stage if disabled or runner not initialized
         if self.v2_runner is None or not self.config.enable_v2:
             logger.info("V2 stage disabled, skipping enhancement")
@@ -5997,6 +6106,21 @@ class EnhanceOrchestrator:
                     "geometry_handoff_path": handoff_path,
                     "depth_map_path": explicit_depth_path,
                 }
+                if native_binding is not None:
+                    from .native_materials import revalidate_native_materials
+
+                    revalidate_native_materials(native_binding, source_path=native_materials_source)
+                    with tempfile.NamedTemporaryFile(
+                        prefix="native-materials-", suffix=".json", dir=temp_dir, delete=False
+                    ) as handle:
+                        native_binding_path = Path(handle.name)
+                        geometry_paths.append(native_binding_path)
+                        handle.write(canonicalize_json(native_binding))
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    geometry_kwargs["native_materials_binding_path"] = native_binding_path
+                    geometry_kwargs["native_materials_source"] = native_materials_source
+            self._validate_native_materials_authority()
             v2_result = self.v2_runner.run(
                 input_path=image_input.path,
                 depth_dir=(
@@ -6021,6 +6145,7 @@ class EnhanceOrchestrator:
                 input_color=("auto" if materials_input_path is not None else self.config.v2_input_color),
                 **geometry_kwargs,
             )
+            self._validate_native_materials_authority()
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_status = self._normalize_v2_status(v2_result.get("status"))
             if geometry_payload is not None and v2_status == "ok":
@@ -6029,9 +6154,18 @@ class EnhanceOrchestrator:
                     not isinstance(report_geometry, dict)
                     or report_geometry.get("handoff_identity_sha256") != geometry_payload["identity_sha256"]
                     or canonicalize_json(report_geometry.get("handoff")) != canonicalize_json(geometry_payload)
-                    or v2_result.get("processing_version") != "1.3.0"
+                    or v2_result.get("processing_version") != ("1.4.0" if native_binding is not None else "1.3.0")
                 ):
                     raise LuxExecutionPlanAuthorityError("V2 did not return the exact verified geometry execution receipt")
+                if native_binding is not None:
+                    native_receipt = v2_result.get("native_materials")
+                    if (
+                        not isinstance(native_receipt, dict)
+                        or native_receipt.get("binding_sha256") != native_binding["binding_sha256"]
+                        or native_receipt.get("source_sha256") != transform.source_sha256
+                        or native_receipt.get("selected_source_path") != native_materials_source
+                    ):
+                        raise LuxExecutionPlanAuthorityError("V2 did not return the selected native Materials receipt")
             if v2_status != "ok":
                 # A failed fresh invocation may observe files left by an
                 # earlier run.  Keep diagnostics, but do not let stale output
@@ -6454,7 +6588,7 @@ class EnhanceOrchestrator:
         manifests bind to batch and execution-evidence sidecars that do not
         exist until the whole batch is finalized.
         """
-
+        self._validate_native_materials_authority()
         if self._prepared_execution is not None:
             raise LuxExecutionPlanAuthorityError(
                 "Prepared execution requires enhance_batch so batch and execution evidence remain authoritative"
@@ -6472,7 +6606,7 @@ class EnhanceOrchestrator:
         _precomputed_paths: Optional[Dict[str, Path]] = None,
     ) -> Dict[str, Any]:
         """Enhance one batch-authorized image with a single source snapshot."""
-
+        self._validate_native_materials_authority()
         if self._prepared_execution is not None and self._active_prepared_batch_token is None:
             raise LuxExecutionPlanAuthorityError("Prepared image execution is not owned by an active batch")
 
@@ -6531,6 +6665,7 @@ class EnhanceOrchestrator:
         Returns:
             Dictionary with processing status and output paths
         """
+        self._validate_native_materials_authority()
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
         pipeline_start_monotonic = time.perf_counter()
@@ -6738,6 +6873,12 @@ class EnhanceOrchestrator:
                     materials_v3_result.get("geometry_carrier_sha256") if isinstance(materials_v3_result, dict) else None
                 ),
             }
+            if self.config.native_materials_binding is not None:
+                if self._prepared_execution is None:
+                    raise LuxExecutionPlanAuthorityError("Native Materials source selection requires a canonical plan")
+                v2_geometry_kwargs["native_materials_source"] = image_input.path.relative_to(
+                    self._prepared_execution.input_root
+                ).as_posix()
         with self._prepared_snapshot_access(prepared_input_snapshot):
             v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
                 image_input=(ImageInput(path=v2_input_path) if enhanced_image_path else processing_image_input),
@@ -7949,6 +8090,7 @@ class EnhanceOrchestrator:
         Returns:
             List of processing results
         """
+        self._validate_native_materials_authority()
         if self._prepared_execution is not None and self._active_prepared_batch_token is None:
             raise LuxExecutionPlanAuthorityError(
                 "Prepared parallel execution requires enhance_batch so final evidence is emitted"
@@ -8051,7 +8193,7 @@ class EnhanceOrchestrator:
         input_files: Optional[List[Path]] = None,
     ) -> List[Dict[str, Any]]:
         """Execute one complete batch and clear all batch-scoped authority."""
-
+        self._validate_native_materials_authority()
         if self._active_prepared_batch_token is not None:
             raise LuxExecutionPlanAuthorityError("An execution batch is already active on this orchestrator")
         batch_token = object()
@@ -10344,6 +10486,8 @@ class EnhanceOrchestrator:
                 }
                 if obj.geometry_recipe is not None:
                     fingerprint_payload["geometry_recipe"] = obj.geometry_recipe
+                if obj.native_materials_sha256 is not None:
+                    fingerprint_payload["native_materials_sha256"] = obj.native_materials_sha256
                 canonical_json = json.dumps(
                     fingerprint_payload,
                     sort_keys=True,

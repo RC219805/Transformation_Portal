@@ -1486,6 +1486,319 @@
         }
       ]
     },
+    "nativeMaterialsPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations",
+        "min_confidence",
+        "min_coverage_px",
+        "support_threshold",
+        "allow_supplied_confidence",
+        "trusted_calibration_sha256",
+        "color_space",
+        "conflict_rule",
+        "max_abs_delta",
+        "tile_size",
+        "halo",
+        "max_working_bytes",
+        "protected_master_samples"
+      ],
+      "properties": {
+        "operations": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "operation_id",
+              "strength"
+            ],
+            "properties": {
+              "label": {
+                "enum": [
+                  "glass",
+                  "water",
+                  "stone",
+                  "foliage",
+                  "sky"
+                ]
+              },
+              "operation_id": {
+                "enum": [
+                  "linear_gain_v1",
+                  "luminance_detail_gain_v1",
+                  "luminance_detail_attenuation_v1"
+                ]
+              },
+              "strength": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_coverage_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "support_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "allow_supplied_confidence": {
+          "type": "boolean"
+        },
+        "trusted_calibration_sha256": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "color_space": {
+          "const": "linear_srgb"
+        },
+        "conflict_rule": {
+          "const": "protect_all_positive_overlaps"
+        },
+        "max_abs_delta": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25
+        },
+        "tile_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "halo": {
+          "const": 1
+        },
+        "max_working_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "protected_master_samples": {
+          "const": "outside_unit_rgb_or_zero_alpha"
+        }
+      }
+    },
+    "nativeMaterialsEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "content_sha256",
+        "source_sha256",
+        "shape"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "shape": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "nativeMaterialsBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "recipe",
+        "input_color",
+        "evidence_root",
+        "manifest",
+        "policy",
+        "operations_sha256",
+        "limits",
+        "sources",
+        "binding_sha256"
+      ],
+      "properties": {
+        "schema": {
+          "const": "tp.lux.native_materials.v1"
+        },
+        "recipe": {
+          "const": "native_sdr_v1"
+        },
+        "input_color": {
+          "enum": [
+            "auto",
+            "auto_assume_srgb",
+            "srgb",
+            "linear_srgb"
+          ]
+        },
+        "evidence_root": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            }
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/nativeMaterialsPolicy"
+        },
+        "operations_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_pixels",
+            "max_input_bytes",
+            "max_working_bytes"
+          ],
+          "properties": {
+            "max_pixels": {
+              "const": 67108864
+            },
+            "max_input_bytes": {
+              "const": 2147483648
+            },
+            "max_working_bytes": {
+              "const": 12884901888
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256",
+              "master_sha256",
+              "size_bytes",
+              "shape",
+              "source_bit_depth",
+              "alpha",
+              "mask_bytes",
+              "evidence"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "master_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483648
+              },
+              "shape": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 67108864
+                }
+              },
+              "source_bit_depth": {
+                "type": "integer",
+                "enum": [
+                  8,
+                  16
+                ]
+              },
+              "alpha": {
+                "type": "boolean"
+              },
+              "mask_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 512000000
+              },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/nativeMaterialsEvidence"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "binding_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
     "v2Configuration": {
       "type": "object",
       "additionalProperties": false,
@@ -1497,7 +1810,8 @@
         "preset": { "$ref": "#/$defs/shortString" },
         "input_color": { "enum": ["auto", "auto_assume_srgb", "srgb", "linear_srgb"] },
         "color_contract": { "const": "encoded_srgb_v1" },
-        "processing_version": { "enum": ["1.2.0", "1.3.0"] },
+        "processing_version": { "enum": ["1.2.0", "1.3.0", "1.4.0"] },
+        "native_materials": { "$ref": "#/$defs/nativeMaterialsBinding" },
         "materials_color_handoff": { "enum": ["none", "validated_srgb"] },
         "device": { "type": "string", "minLength": 1, "maxLength": 128 },
         "upscaler_backend": { "$ref": "#/$defs/shortString" },
@@ -1510,9 +1824,21 @@
       },
       "allOf": [
         {
-          "if": { "required": ["geometry_recipe"] },
-          "then": { "properties": { "processing_version": { "const": "1.3.0" } } },
-          "else": { "properties": { "processing_version": { "const": "1.2.0" } } }
+          "if": { "required": ["native_materials"] },
+          "then": {
+            "required": ["geometry_recipe", "processing_version"],
+            "properties": {
+              "configuration_completeness": { "const": "execution_complete" },
+              "processing_version": { "const": "1.4.0" },
+              "materials_color_handoff": { "const": "none" },
+              "materials_mask_handoff": { "const": "none" }
+            }
+          },
+          "else": {
+            "if": { "required": ["geometry_recipe"] },
+            "then": { "properties": { "processing_version": { "const": "1.3.0" } } },
+            "else": { "properties": { "processing_version": { "const": "1.2.0" } } }
+          }
         },
         {
           "if": {

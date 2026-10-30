@@ -245,6 +245,9 @@ def preprocess_geometry_snapshot(
     *,
     opened_file_stat_validator: Optional[Callable[[os.stat_result], None]] = None,
     verify_snapshot: bool = False,
+    expected_source_sha256: Optional[str] = None,
+    max_source_bytes: Optional[int] = None,
+    max_native_pixels: Optional[int] = None,
 ) -> GeometryPreprocessResult:
     """Normalize one immutable ordinary-image snapshot with recorded support.
 
@@ -261,10 +264,17 @@ def preprocess_geometry_snapshot(
         raise ValueError("Corrected geometry has no RAW original-raster mapping")
     if target_size is not None and (type(target_size) is not int or target_size < 1):
         raise ValueError("target_size must be a positive integer or null")
+    if max_native_pixels is not None and (type(max_native_pixels) is not int or not 0 < max_native_pixels <= 67_108_864):
+        raise ValueError("max_native_pixels must be a positive bounded exact integer or null")
     captured: list[GeometryPreprocessResult] = []
+
+    def check_native_pixel_budget(encoded_shape: tuple[int, int]) -> None:
+        if max_native_pixels is not None and encoded_shape[0] * encoded_shape[1] > max_native_pixels:
+            raise ValueError("Image geometry exceeds its frozen native pixel budget")
 
     def decode(snapshot: Any, source_sha256: str) -> tuple[np.ndarray, tuple[int, int]]:
         def bounded_transform(encoded_shape: tuple[int, int], orientation: int) -> GeometryTransform:
+            check_native_pixel_budget(encoded_shape)
             effective_target = min(CORRECTED_MODEL_MAX_LONG_EDGE, max(encoded_shape))
             if target_size is not None:
                 effective_target = min(effective_target, target_size)
@@ -311,6 +321,9 @@ def preprocess_geometry_snapshot(
                 source_bits = header[24]
                 snapshot.seek(0)
             with Image.open(snapshot) as image:
+                # Some formats load pixels while retrieving late EXIF tags.
+                # Enforce frozen geometry before asking metadata to decode.
+                check_native_pixel_budget((image.height, image.width))
                 orientation = image.getexif().get(274, 1)
                 transform = bounded_transform((image.height, image.width), orientation)
                 # TIFF is decoded independently above because Pillow may apply
@@ -349,6 +362,8 @@ def preprocess_geometry_snapshot(
         opened_file_stat_validator=opened_file_stat_validator,
         verify_snapshot=verify_snapshot,
         standard_decoder=decode,
+        expected_source_sha256=expected_source_sha256,
+        max_source_bytes=max_source_bytes,
     )
     if len(captured) != 1:
         raise ValueError("Corrected geometry snapshot was not decoded exactly once")
@@ -363,6 +378,8 @@ def _preprocess_image_snapshot(
     opened_file_stat_validator: Optional[Callable[[os.stat_result], None]] = None,
     verify_snapshot: bool = False,
     standard_decoder: Optional[Callable[[Any, str], tuple[np.ndarray, tuple[int, int]]]] = None,
+    expected_source_sha256: Optional[str] = None,
+    max_source_bytes: Optional[int] = None,
 ) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
     """Decode one immutable source-byte snapshot and return its SHA-256.
 
@@ -374,9 +391,17 @@ def _preprocess_image_snapshot(
     therefore describe the exact same source bytes even if the source path is
     replaced after it is opened. ``opened_file_stat_validator`` is invoked
     before any source bytes are read. ``verify_snapshot`` runs PIL's strict
-    verifier for standard images against the same immutable snapshot.
+    verifier for standard images against the same immutable snapshot. Optional
+    frozen byte and digest constraints are checked before any verifier or
+    decoder sees the snapshot, including before growing its spool.
     """
 
+    if expected_source_sha256 is not None:
+        from ..core.image_artifact import validate_source_sha256
+
+        validate_source_sha256(expected_source_sha256)
+    if max_source_bytes is not None and (type(max_source_bytes) is not int or max_source_bytes < 1):
+        raise ValueError("max_source_bytes must be a positive exact integer or null")
     path = Path(image_path)
     extension = path.suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
@@ -384,6 +409,8 @@ def _preprocess_image_snapshot(
     path_stat = path.lstat()
     if not stat.S_ISREG(path_stat.st_mode):
         raise ValueError(f"Image input must be a regular non-symlink file: {path}")
+    if max_source_bytes is not None and path_stat.st_size > max_source_bytes:
+        raise ValueError(f"Image input exceeds its frozen source byte budget: {path}")
 
     open_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
     open_flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -397,6 +424,8 @@ def _preprocess_image_snapshot(
         source_stat = os.fstat(descriptor)
         if not stat.S_ISREG(source_stat.st_mode):
             raise ValueError(f"Image input is not a regular file: {path}")
+        if max_source_bytes is not None and source_stat.st_size > max_source_bytes:
+            raise ValueError(f"Image input exceeds its frozen source byte budget: {path}")
 
         def _stable_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
             return (
@@ -426,15 +455,20 @@ def _preprocess_image_snapshot(
     def copy_source(snapshot: Any) -> None:
         nonlocal copied
         while True:
-            chunk = source.read(1024 * 1024)
+            read_size = 1024 * 1024 if max_source_bytes is None else min(1024 * 1024, max_source_bytes - copied + 1)
+            chunk = source.read(read_size)
             if not chunk:
                 break
+            if max_source_bytes is not None and copied + len(chunk) > max_source_bytes:
+                raise ValueError(f"Image input grew beyond its frozen source byte budget: {path}")
             snapshot.write(chunk)
             digest.update(chunk)
             copied += len(chunk)
         copied_stat = os.fstat(source.fileno())
         if copied != source_stat.st_size or _stable_identity(copied_stat) != _stable_identity(source_stat):
             raise ValueError(f"Image input changed while its byte snapshot was captured: {path}")
+        if expected_source_sha256 is not None and digest.hexdigest() != expected_source_sha256:
+            raise ValueError(f"Image input SHA-256 differs from its frozen source identity: {path}")
 
     with source:
         if is_raw_file(path):
