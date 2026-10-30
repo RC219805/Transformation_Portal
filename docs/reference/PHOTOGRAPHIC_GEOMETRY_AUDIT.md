@@ -297,7 +297,9 @@ policy's bounded tile scratch inside that ceiling. Oversized operations fail bef
 native allocation; they are never silently reduced. Parent preprocessing and V2
 verify the frozen byte count and SHA-256 before decoding the same immutable
 snapshot, then enforce its admitted native pixel limit before raster allocation.
-Prepared source copies also retain the frozen byte ceiling. This is a conservative
+Planning scans PNG color/late-EXIF chunks without decoding IDAT and restricts
+Pillow header dispatch to supported JPEG/PNG formats. Prepared source copies
+also retain the frozen byte ceiling. This is a conservative
 software allocation contract, not measured whole-host RSS or permission for
 parallel native jobs. The existing 67,108,864-pixel geometry cap also applies.
 

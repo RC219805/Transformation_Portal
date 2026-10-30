@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
 import shutil
 import struct
+import zlib
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pytest
 import tifffile
+from PIL import IcoImagePlugin, Image, PngImagePlugin
 
 from transformation_portal.lux_depth_v3 import native_materials as native
 from transformation_portal.lux_depth_v4.photography import decode_master
@@ -291,7 +294,7 @@ def test_unsupported_precision_or_allocation_fails_before_native_decode(prepared
     if mutation == "float":
         tifffile.imwrite(path, np.full((31, 45, 3), 0.5, np.float32), photometric="rgb", metadata=None)
     else:
-        monkeypatch.setattr(native, "_header", lambda *_args: ((8192, 8192), 16, False))
+        monkeypatch.setattr(native, "_header", lambda *_args, **_kwargs: ((8192, 8192), 16, False))
 
     def forbidden(*_args, **_kwargs):
         pytest.fail("Unsupported source allocated native photographic pixels")
@@ -499,3 +502,87 @@ def test_source_snapshot_requires_unambiguous_original_selection(prepared_native
     monkeypatch.setattr(native, "snapshot_geometry_artifact", forbidden)
     with pytest.raises(ValueError):
         native.snapshot_native_materials_source(inputs / binding["sources"][0]["path"], binding, source_path=selector)
+
+
+def _png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
+def _late_exif_png(*, orientation=6, hdr=False):
+    stream = io.BytesIO()
+    Image.new("RGB", (45, 31), (70, 90, 110)).save(stream, format="PNG")
+    source = stream.getvalue()
+    exif = Image.Exif()
+    exif[274] = orientation
+    exif[34665] = {40961: 1}
+    if hdr:
+        source = source[:33] + _png_chunk(b"mDCV", bytes(24)) + source[33:]
+    return source[:-12] + _png_chunk(b"eXIf", exif.tobytes()[6:]) + source[-12:]
+
+
+@pytest.mark.parametrize("orientation", range(1, 9))
+def test_png_native_header_preserves_late_orientation_and_color_without_raster(orientation, monkeypatch):
+    data = _late_exif_png(orientation=orientation)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Native PNG header/color inspection decoded photographic pixels")
+
+    monkeypatch.setattr(Image.Image, "load", forbidden)
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    shape, bits, alpha = native._header(data, "late.png", input_color="auto")
+    assert shape == ((45, 31) if orientation >= 5 else (31, 45))
+    assert bits == 8 and alpha is False
+    preparation = native.validate_input_color_metadata(
+        io.BytesIO(data), source_name="late.png", input_color="auto", max_pixels=31 * 45
+    )
+    assert preparation["resolution"] == "exif_srgb"
+
+
+@pytest.mark.parametrize("failure", ["pixels", "allocation"])
+def test_png_header_rejects_unadmitted_native_allocation_without_raster(prepared_native, tmp_path, monkeypatch, failure):
+    _, _, _, binding = prepared_native
+    source = bytearray(_late_exif_png())
+    side = 8193 if failure == "pixels" else 8192
+    source[16:24] = struct.pack(">II", side, side)
+    source[29:33] = struct.pack(">I", zlib.crc32(source[12:29]))
+    path = tmp_path / "inputs" / "large.png"
+    path.write_bytes(source)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unadmitted native PNG geometry reached photographic raster allocation")
+
+    monkeypatch.setattr(Image.Image, "load", forbidden)
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    root = Path(binding["evidence_root"])
+    with pytest.raises(ValueError, match="pixel budget|allocation exceeds"):
+        native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "auto")
+
+
+def test_png_native_header_observes_actual_requested_color_policy(monkeypatch):
+    data = _late_exif_png(hdr=True)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Native PNG policy inspection decoded photographic pixels")
+
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", forbidden)
+    with pytest.raises(ValueError, match="Unsupported PNG HDR"):
+        native._header(data, "photo.png", input_color="auto")
+    assert native._header(data, "photo.png", input_color="srgb") == ((45, 31), 8, False)
+
+
+def test_unsupported_header_plugin_cannot_allocate_before_native_admission(prepared_native, tmp_path, monkeypatch):
+    _, _, _, binding = prepared_native
+    stream = io.BytesIO()
+    Image.new("RGB", (16, 16), (70, 90, 110)).save(stream, format="ICO", sizes=[(16, 16)])
+    path = tmp_path / "inputs" / "disguised.jpg"
+    path.write_bytes(stream.getvalue())
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unsupported image plugin reached raster allocation before native admission")
+
+    monkeypatch.setattr(IcoImagePlugin.IcoImageFile, "load", forbidden)
+    monkeypatch.setattr(native, "decode_master", forbidden)
+    root = Path(binding["evidence_root"])
+    with pytest.raises(ValueError, match="supports JPEG/PNG/TIFF"):
+        native.freeze_native_materials(root / "materials.json", root / "policy.json", path.parent, [path], "srgb")

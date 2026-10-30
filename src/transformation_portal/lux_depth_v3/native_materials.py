@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from transformation_portal.core.execution_plan import MAX_PLAN_BODY_BYTES, decode_bounded_json_object
 from transformation_portal.core.image_artifact import ImageMaster, immutable_array
@@ -187,7 +187,7 @@ def validate_native_materials(binding: Mapping[str, Any]) -> None:
         raise ValueError("Native Materials binding exceeds its serialized byte budget")
 
 
-def _header(source: bytes, name: str) -> tuple[tuple[int, int], int, bool]:
+def _header(source: bytes, name: str, *, input_color: str = "auto") -> tuple[tuple[int, int], int, bool]:
     """Inspect native precision and normalized geometry before allocating arrays."""
     if source[:4] in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}:
         import tifffile
@@ -203,14 +203,28 @@ def _header(source: bytes, name: str) -> tuple[tuple[int, int], int, bool]:
             orientation = page.tags[274].value if 274 in page.tags else 1
             alpha = bool(page.extrasamples)
     else:
-        with Image.open(io.BytesIO(source)) as image:
+        stream = io.BytesIO(source)
+        try:
+            opened = Image.open(stream, formats=("JPEG", "PNG"))
+        except UnidentifiedImageError as exc:
+            raise ValueError("Native Materials supports JPEG/PNG/TIFF SDR sources only") from exc
+        with opened as image:
             if image.format not in {"JPEG", "PNG"}:
                 raise ValueError("Native Materials supports JPEG/PNG/TIFF SDR sources only")
             shape = (image.height, image.width)
-            bits = source[24] if image.format == "PNG" and len(source) >= 26 else 8
+            if image.format == "PNG":
+                from transformation_portal.lux_depth_v4.photography import _png_color_metadata
+
+                # PNG's getexif override loads the raster to seek late eXIf.
+                # The shared scanner skips IDAT, validates color metadata and
+                # returns the base EXIF reader without allocating image pixels.
+                exif, metadata = _png_color_metadata(stream, image, input_color=input_color)
+                bits = metadata["bit_depth"]
+            else:
+                exif, bits = image.getexif(), 8
             if bits not in {8, 16}:
                 raise ValueError("Native Materials requires integer 8/16-bit SDR source samples")
-            orientation = image.getexif().get(274, 1)
+            orientation = exif.get(274, 1)
             alpha = "A" in image.mode or "transparency" in image.info
     if isinstance(orientation, bool) or not isinstance(orientation, Integral):
         raise ValueError("Native Materials source orientation must be an exact EXIF orientation")
@@ -285,7 +299,7 @@ def freeze_native_materials(
             data, source = snapshot(root, path, maximum_bytes=NATIVE_MATERIALS_LIMITS["max_input_bytes"])
             if Path(source["path"]).suffix.lower() not in _SOURCE_SUFFIXES:
                 raise ValueError("Native Materials supports JPEG/PNG/TIFF SDR sources only")
-            shape, bits, alpha = _header(data, source["path"])
+            shape, bits, alpha = _header(data, source["path"], input_color=input_color)
             record = {
                 **source,
                 "shape": list(shape),
