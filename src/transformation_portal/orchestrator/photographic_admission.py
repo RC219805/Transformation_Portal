@@ -120,13 +120,23 @@ class ReviewCost:
     interactive: bool = True
     max_pixels: int = 40_000_000
     filesystems: tuple[tuple[Path, int], ...] = ()
+    native_materials_regions: int = 0
 
     def __post_init__(self) -> None:
         if type(self.interactive) is not bool or any(
             type(value) is not int or value < 0
-            for value in (self.memory_bytes, self.scratch_bytes, self.decode_slots, self.io_slots, self.max_pixels)
+            for value in (
+                self.memory_bytes,
+                self.scratch_bytes,
+                self.decode_slots,
+                self.io_slots,
+                self.max_pixels,
+                self.native_materials_regions,
+            )
         ):
             raise ValueError("Photographic costs require nonnegative integer reservations")
+        if self.native_materials_regions > 4:
+            raise ValueError("Native Materials reservations support at most four regions")
         if self.filesystems and (
             sum(size for _, size in self.filesystems) != self.scratch_bytes
             or any(type(size) is not int or size < 0 or not root.is_absolute() for root, size in self.filesystems)
@@ -161,7 +171,11 @@ def effective_interactive_reserve(config: ReviewAdmissionConfig) -> int:
 
 
 def operation_cost(
-    operation: str, config: ReviewAdmissionConfig, inspections: list[dict[str, Any]] | None = None
+    operation: str,
+    config: ReviewAdmissionConfig,
+    inspections: list[dict[str, Any]] | None = None,
+    *,
+    native_materials_regions: int | None = None,
 ) -> ReviewCost:
     """Reserve max(analytical allocation bound, 1.5 * observed peak).
 
@@ -170,6 +184,10 @@ def operation_cost(
     decoding. Missing/unknown fields choose the conservative profile; they do
     not infer a processing stage from pixel values or names.
     """
+    if native_materials_regions is not None and (
+        operation != "revision" or type(native_materials_regions) is not int or not 1 <= native_materials_regions <= 4
+    ):
+        raise ValueError("Native Materials costs require one to four validated regions for a revision")
     if operation == "download":
         return ReviewCost(256 * MIB, 0, decode_slots=0, interactive=False)
     if operation not in {"render", "decision", "catalogue", "revision", "delivery", "quality", "groups"}:
@@ -191,6 +209,13 @@ def operation_cost(
     snapshots = 2 * (512 * MIB + 18 * MIB) + 256 * MIB
     coefficients = {"metadata": 64, "render": 64, "revision": 144, "delivery": 128, "quality": 192, "groups": 128}
     analytical = pixels * coefficients[profile] + snapshots
+    if native_materials_regions is not None:
+        # The native compositor's complete conservative allocation includes
+        # 256 bytes/pixel, four copies of each full-resolution float32 mask,
+        # two bounded encoded-source snapshots and its fixed tile scratch.
+        # Keep the existing snapshot/preview/encoding overhead and measured
+        # revision floor; these are allocation bounds, not native RSS probes.
+        analytical = max(analytical, pixels * (256 + native_materials_regions * 4 * 4) + snapshots + 128 * MIB)
     observations = _MEASURED_40MP.get(profile)
     measured = 0
     if observations is not None:
@@ -202,6 +227,7 @@ def operation_cost(
         0,  # The service supplies geometry-derived filesystem claims, never a lane-sized placeholder.
         interactive=interactive,
         max_pixels=pixels,
+        native_materials_regions=native_materials_regions or 0,
     )
 
 
@@ -384,6 +410,10 @@ class PhotographicAdmissionController:
         self._interactive_grants = 0
         self._groups: dict[tuple[Any, ...], _RenderGroup] = {}
         self._statistics: dict[str, int | float] = {"admitted": 0, "rejected": 0, "wait_seconds": 0.0, "coalesced": 0}
+
+    def owns_lease(self, lease: ReviewLease) -> bool:
+        """Recognize only live accounting reservations issued by this controller."""
+        return lease.controller is self and not lease.released and lease in self._active
 
     async def run_blocking(self, operation: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Result:
         if self._executor is None:

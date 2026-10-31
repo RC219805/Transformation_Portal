@@ -61,6 +61,10 @@
       "max_bytes": 20000,
       "max_gzip_bytes": 7500
     },
+    "portal-photographic-editor.js": {
+      "max_bytes": 10000,
+      "max_gzip_bytes": 4000
+    },
     "portal-photographic.css": {
       "max_bytes": 6000,
       "max_gzip_bytes": 1600

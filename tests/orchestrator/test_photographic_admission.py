@@ -513,6 +513,262 @@ async def test_cost_profiles_use_geometry_and_failed_alpha_export_is_not_zero_co
     assert operation_cost("render", config, [{"width": 1, "height": 1, "alpha": "unknown"}]).max_pixels == 40_000_000
 
 
+@pytest.mark.parametrize("regions", [1, 4])
+async def test_native_materials_allocation_keeps_complete_mask_and_measured_revision_bounds(regions):
+    config = configuration()
+    inspection = [{"width": 4000, "height": 2500, "alpha": False}]
+    cost = operation_cost("revision", config, inspection, native_materials_regions=regions)
+    # Full float32 masks are allocated even for small human rectangles. The
+    # engine accounts for four copies per region, not only selected pixels.
+    minimum = 10_000_000 * (256 + regions * 16) + 2 * 512 * 1024**2 + 128 * 1024**2
+    assert cost.memory_bytes >= minimum
+    assert cost.memory_bytes >= operation_cost("revision", config, inspection).memory_bytes
+    assert cost.max_pixels == 10_000_000 and not cost.interactive
+    assert cost.decode_slots == cost.io_slots == 1
+    assert cost.memory_bytes + PhotographicAdmissionController(config).interactive_reserve <= 12 * GIB
+    with pytest.raises(ReviewOverload) as caught:
+        await PhotographicAdmissionController(config).acquire(
+            "tenant", operation_cost("revision", config, native_materials_regions=regions)
+        )
+    assert caught.value.status == 413
+
+
+@pytest.mark.parametrize("regions", [0, 5, True, 1.0, "1"])
+async def test_native_materials_cost_requires_a_bounded_explicit_region_count(regions):
+    with pytest.raises(ValueError, match="validated regions"):
+        operation_cost("revision", configuration(), native_materials_regions=regions)
+
+
+async def test_native_materials_region_count_changes_full_mask_cost_and_invalid_geometry_stays_conservative():
+    config = configuration()
+    inspection = [{"width": 4000, "height": 2500, "alpha": False}]
+    one = operation_cost("revision", config, inspection, native_materials_regions=1)
+    four = operation_cost("revision", config, inspection, native_materials_regions=4)
+    assert four.memory_bytes - one.memory_bytes >= 10_000_000 * 16 * 3 - 1024**2
+    for invalid in [None, [{"width": 1, "height": 1, "alpha": "unknown"}], [{"width": 1.0, "height": 1, "alpha": False}]]:
+        assert operation_cost("revision", config, invalid, native_materials_regions=1).max_pixels == 40_000_000
+    with pytest.raises(ValueError, match="validated regions"):
+        operation_cost("render", config, inspection, native_materials_regions=1)
+
+
+def native_revision_payload(*, preview_only=True, regions=1):
+    from transformation_portal.api.v1.photographic_review import RevisionRequest
+
+    return RevisionRequest(
+        artifact_path="final.tif",
+        sha256="a" * 64,
+        source_identity_sha256="a" * 64,
+        scene_id="scene",
+        expected_version=0,
+        recipe={
+            "schema": "tp.photo.materials_recipe.v1",
+            "input_stage": "display_referred",
+            "regions": [
+                {"id": f"region-{index}", "label": "stone", "region": [0.1, 0.1, 0.9, 0.9], "strength": 0.03}
+                for index in range(regions)
+            ],
+        },
+        preview_only=preview_only,
+    )
+
+
+def native_revision_state(payload, *, inspection=None):
+    return {
+        "state_version": 0,
+        "decisions": (
+            [
+                {
+                    "artifact_path": payload.artifact_path,
+                    "sha256": payload.sha256,
+                    "source_identity_sha256": payload.source_identity_sha256,
+                    "status": "selected",
+                    "inspection": inspection,
+                }
+            ]
+            if inspection is not None
+            else []
+        ),
+        "revisions": [],
+        "groups": [],
+    }
+
+
+@pytest.mark.parametrize("known_geometry", [False, True])
+async def test_native_materials_over_capacity_rejects_before_discovery_or_decode(monkeypatch, known_geometry):
+    from transformation_portal.orchestrator import photographic_review_service as module
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED", "1")
+    config = configuration(memory_bytes=8 * GIB, bulk_memory_bytes=2 * GIB) if known_geometry else configuration()
+    service = PhotographicReviewService(config)
+    payload = native_revision_payload()
+    inspection = {"width": 4000, "height": 2500, "alpha": False} if known_geometry else None
+    state = native_revision_state(payload, inspection=inspection)
+    monkeypatch.setattr(service, "state", AsyncMock(return_value=state))
+    load = AsyncMock(side_effect=AssertionError("capacity rejection must precede decoding"))
+    monkeypatch.setattr(module, "load_image", load)
+    discover = AsyncMock(side_effect=AssertionError("capacity rejection must precede source discovery"))
+    case = context(discover=discover)
+    try:
+        with pytest.raises(ReviewOverload) as caught:
+            await service.execute(case, service.revision, payload)
+        assert caught.value.status == 413 and caught.value.reason == "operation_capacity_limit"
+        discover.assert_not_awaited()
+        load.assert_not_awaited()
+        case.materialize.assert_not_awaited()
+        case.publish.assert_not_awaited()
+        assert state["state_version"] == 0 and not state["revisions"]
+        assert service.admission.snapshot()["active"] == service.admission.snapshot()["queued"] == 0
+        assert service.admission.snapshot()["outstanding"] == 0
+    finally:
+        await service.close()
+
+
+async def test_native_worker_preserves_same_tenant_inspection_and_holds_full_lease_through_repeat_cancel(monkeypatch):
+    from transformation_portal.orchestrator import photographic_admission as admission
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED", "1")
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * GIB))
+    service = PhotographicReviewService(configuration())
+    payload = native_revision_payload(regions=4)
+    inspection = {"width": 4000, "height": 2500, "alpha": False}
+    state = native_revision_state(payload, inspection=inspection)
+    monkeypatch.setattr(service, "state", AsyncMock(return_value=state))
+    started, release, stopped = threading.Event(), threading.Event(), threading.Event()
+    expected = service._resource_cost(context(), state, "revision", (payload,), [inspection])
+
+    async def revision(_context, _payload):
+        def worker():
+            started.set()
+            try:
+                assert release.wait(5)
+                return "native-finished"
+            finally:
+                stopped.set()
+
+        return await _owned_thread(worker)
+
+    async def render(_context, *_args):
+        assert service.admission.snapshot()["active"] == 2
+        assert service.admission.snapshot()["memory_reserved_bytes"] <= 12 * GIB
+        return await _owned_thread(lambda: "inspection-finished")
+
+    task = asyncio.create_task(service.execute(context(), revision, payload))
+    try:
+        assert await asyncio.to_thread(started.wait, 2)
+        assert service.admission.snapshot()["memory_reserved_bytes"] == expected.memory_bytes
+        assert service.admission.snapshot()["scratch_reserved_bytes"] == expected.scratch_bytes
+        assert await service.execute(context(), render, "other.tif", "b" * 64) == "inspection-finished"
+        task.cancel()
+        await tick()
+        task.cancel()
+        await tick()
+        assert not task.done() and not stopped.is_set()
+        held = service.admission.snapshot()
+        assert held["active"] == 1
+        assert held["memory_reserved_bytes"] == expected.memory_bytes
+        assert held["scratch_reserved_bytes"] == expected.scratch_bytes
+        assert service.admission._active[0].cost.decode_slots == service.admission._active[0].cost.io_slots == 1
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert stopped.is_set()
+        assert service.admission.snapshot()["active"] == service.admission.snapshot()["outstanding"] == 0
+    finally:
+        release.set()
+        await asyncio.gather(task, return_exceptions=True)
+        await service.close()
+
+
+async def test_native_cost_uses_server_geometry_and_full_masks_independently_of_rectangle_area():
+    service = PhotographicReviewService(configuration())
+    payload = native_revision_payload()
+    inspection = {"width": 4000, "height": 2500, "alpha": False}
+    state = native_revision_state(payload, inspection=inspection)
+    small_region = payload.model_copy(deep=True)
+    small_region.recipe["regions"][0]["region"] = [0.1, 0.1, 0.101, 0.101]
+    try:
+        full = service._resource_cost(context(), state, "revision", (payload,), [inspection])
+        tiny = service._resource_cost(context(), state, "revision", (small_region,), [inspection])
+        assert full == tiny and tiny.max_pixels == 10_000_000
+        for name in ["width", "height", "mask_bytes", "memory_bytes", "max_working_bytes"]:
+            forged = payload.model_copy(deep=True)
+            forged.recipe[name] = 1
+            with pytest.raises(ValueError):
+                service._resource_cost(context(), state, "revision", (forged,), [inspection])
+        unknown = service._resource_cost(context(), state, "revision", (payload,), None)
+        assert unknown.max_pixels == 40_000_000 and unknown.memory_bytes > full.memory_bytes
+    finally:
+        await service.close()
+
+
+async def test_native_revision_scratch_claims_all_products_and_checks_publication_before_work(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
+    from transformation_portal.orchestrator import photographic_admission as admission
+    from transformation_portal.photographic_delivery.materials import (
+        MAX_MATERIALS_DESCRIPTOR_BYTES,
+        MAX_MATERIALS_OVERLAY_BYTES,
+    )
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED", "1")
+    publication_root = tmp_path / "publication"
+    publication_root.mkdir()
+    original_stat = Path.stat
+
+    def filesystem_stat(path, *args, **kwargs):
+        info = original_stat(path, *args, **kwargs)
+        return SimpleNamespace(st_dev=999999) if path == publication_root else info
+
+    monkeypatch.setattr(Path, "stat", filesystem_stat)
+    monkeypatch.setattr(
+        admission.shutil, "disk_usage", lambda path: SimpleNamespace(free=0 if path == publication_root else 100 * GIB)
+    )
+    case = replace(context(), publication_root=publication_root)
+    service = PhotographicReviewService(configuration())
+    preview = native_revision_payload()
+    save = preview.model_copy(update={"preview_only": False})
+    inspection = {"width": 96, "height": 64, "alpha": False}
+    state = native_revision_state(preview, inspection=inspection)
+    monkeypatch.setattr(service, "state", AsyncMock(return_value=state))
+    preview_cost = service._resource_cost(case, state, "revision", (preview,), [inspection])
+    save_cost = service._resource_cost(case, state, "revision", (save,), [inspection])
+    products = 96 * 64 * 8 + 65536 + MAX_PREVIEW_BYTES + MAX_MATERIALS_OVERLAY_BYTES + MAX_MATERIALS_DESCRIPTOR_BYTES
+    called = []
+
+    async def revision(_context, _payload):
+        called.append(_payload)
+        return "preview"
+
+    try:
+        assert preview_cost.memory_bytes == save_cost.memory_bytes
+        assert save_cost.scratch_bytes - preview_cost.scratch_bytes == products * 4
+        assert dict(save_cost.filesystems)[publication_root] == products * 2
+        assert publication_root not in dict(preview_cost.filesystems)
+        assert await service.execute(case, revision, preview) == "preview"
+        with pytest.raises(ReviewOverload) as caught:
+            await service.execute(case, revision, save)
+        assert caught.value.reason == "scratch_unavailable" and called == [preview]
+        case.materialize.assert_not_awaited()
+        case.publish.assert_not_awaited()
+        assert service.admission.snapshot()["active"] == service.admission.snapshot()["outstanding"] == 0
+    finally:
+        await service.close()
+
+
+async def test_native_diagnostic_download_reserves_parent_snapshot_and_exact_product_size():
+    service = PhotographicReviewService(configuration())
+    state = {"revisions": [{"id": "native-revision", "native_products": [{"filename": "overlay.png", "size_bytes": 12345}]}]}
+    try:
+        cost = service._resource_cost(context(), state, "download", ("native-revision", "overlay.png"), None)
+        ordinary = service._resource_cost(context(), {}, "download", ("other", "overlay.png"), None)
+        assert cost.scratch_bytes >= 512 * 1024**2 + 12345 + 256 * 1024**2
+        assert cost.scratch_bytes < ordinary.scratch_bytes
+        assert cost.decode_slots == 0 and cost.memory_bytes == 256 * 1024**2
+    finally:
+        await service.close()
+
+
 async def test_admitted_header_geometry_is_checked_before_decode(monkeypatch, tmp_path):
     from transformation_portal.orchestrator import photographic_review_service as service_module
 

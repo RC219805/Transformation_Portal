@@ -3031,6 +3031,7 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "brand/dna-symbol-light.svg",
     "portal-photographic.js",
     "portal-photographic-support.js",
+    "portal-photographic-editor.js",
     "portal-photographic.css"
   ]);
 });

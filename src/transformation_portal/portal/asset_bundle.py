@@ -124,6 +124,7 @@ PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "portal-review.js",
     "portal-photographic.js",
     "portal-photographic-support.js",
+    "portal-photographic-editor.js",
     "portal-photographic.css",
     "portal-review.css",
     "portal-operate.js",

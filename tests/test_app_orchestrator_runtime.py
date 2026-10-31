@@ -1111,6 +1111,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
         "portal-photographic.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.js",
         "portal-photographic-support.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-support.js",
+        "portal-photographic-editor.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-editor.js",
         "portal-photographic.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.css",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         # Surface-split deferred bundles. Operate, Build, and Profile are real
@@ -1131,6 +1132,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-review.js": "text/javascript; charset=utf-8",
         "portal-photographic.js": "text/javascript; charset=utf-8",
         "portal-photographic-support.js": "text/javascript; charset=utf-8",
+        "portal-photographic-editor.js": "text/javascript; charset=utf-8",
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
@@ -1154,6 +1156,15 @@ def test_photographic_support_import_binds_manifest_backed_bytes() -> None:
     assert f"./portal-photographic-support.js?v={fingerprint}" in viewer
     assert "photographic-review-support.js" not in viewer
     assert "portal-photographic-support.js" not in orchestrator_app.PORTAL_ASSET_PATHS["portal.js"].read_text()
+
+
+def test_photographic_editor_import_binds_deferred_manifest_bytes() -> None:
+    editor = orchestrator_app.PORTAL_ASSET_PATHS["portal-photographic-editor.js"]
+    fingerprint = hashlib.sha256(editor.read_bytes()).hexdigest()[:12]
+    viewer = orchestrator_app.PORTAL_ASSET_PATHS["portal-photographic.js"].read_text()
+    assert f"./portal-photographic-editor.js?v={fingerprint}" in viewer
+    for entry in ("portal.js", "portal-review.js"):
+        assert "portal-photographic-editor.js" not in orchestrator_app.PORTAL_ASSET_PATHS[entry].read_text()
 
 
 def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
@@ -1194,6 +1205,7 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
     assert normalized_asset_urls == manifest_asset_urls - {
         "/portal/assets/shared-ui-tokens.css",
         "/portal/assets/portal-photographic-support.js",
+        "/portal/assets/portal-photographic-editor.js",
     }
     for asset_url in bundled_asset_urls:
         asset_name = _portal_asset_name(asset_url)

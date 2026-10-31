@@ -14,6 +14,7 @@ import inspect
 import io
 import logging
 import math
+import os
 import secrets
 import shutil
 import tempfile
@@ -233,6 +234,7 @@ def revision_refs(state: JsonObject) -> list[JsonObject]:
 
     result = []
     for entry in state["revisions"]:
+        native_revision_products(entry)
         ref = deepcopy(entry["variant"])
         ref.pop("presentation_policy", None)
         ref.pop("presentation_policy_sha256", None)
@@ -241,6 +243,69 @@ def revision_refs(state: JsonObject) -> list[JsonObject]:
             ref.update(presentation_policy=policy.to_payload(), presentation_policy_sha256=policy.sha256)
         result.append(ref)
     return result
+
+
+def native_revision_products(entry: JsonObject) -> list[JsonObject]:
+    """Bind retained diagnostic access to the exact committed native receipt."""
+    from transformation_portal.photographic_delivery.materials import (
+        MATERIALS_REVISION_SCHEMA,
+        validate_materials_revision_receipt,
+    )
+
+    receipt = entry.get("receipt")
+    if "native_products" not in entry and not (
+        isinstance(receipt, dict) and receipt.get("schema") == MATERIALS_REVISION_SCHEMA
+    ):
+        return []
+    try:
+        if not isinstance(receipt, dict):
+            raise ValueError("Native revision requires a recorded receipt")
+        variant = entry["variant"]
+        validate_materials_revision_receipt(receipt, variant["sha256"])
+        identity = entry["id"]
+        if not isinstance(identity, str) or uuid.UUID(identity).hex != identity:
+            raise ValueError("Invalid native revision identity")
+        prefix = f"photographic-review/{identity}/"
+        if variant["storage_path"] != prefix + "master.tif" or variant["artifact_path"] != f"revisions/{identity}/master.tif":
+            raise ValueError("Native revision artifact differs from its publication")
+        products = entry["native_products"]
+        if not isinstance(products, list) or len(products) != 3:
+            raise ValueError("Native revision requires complete diagnostic products")
+        projected = []
+        for product in products:
+            if (
+                not isinstance(product, dict)
+                or set(product)
+                != {
+                    "filename",
+                    "sha256",
+                    "size_bytes",
+                    "content_type",
+                    "kind",
+                    "storage_path",
+                }
+                or product["kind"] != "review_asset"
+                or product["storage_path"] != prefix + product["filename"]
+            ):
+                raise ValueError("Native diagnostic reference is not a closed publication")
+            projected.append({key: product[key] for key in ("filename", "sha256", "size_bytes", "content_type")})
+        if sorted(projected, key=lambda row: row["filename"]) != sorted(
+            receipt["diagnostics"], key=lambda row: row["filename"]
+        ):
+            raise ValueError("Native diagnostic references differ from their receipt")
+        source = entry["native_source"]
+        if (
+            not isinstance(source, dict)
+            or set(source) != {"artifact_path", "sha256", "source_identity_sha256"}
+            or (
+                source["sha256"] != receipt["source_master_sha256"]
+                or source["source_identity_sha256"] != receipt["source_identity_sha256"]
+            )
+        ):
+            raise ValueError("Native source reference differs from its receipt")
+        return products
+    except (KeyError, TypeError, ValueError, AttributeError) as error:
+        raise ReviewAccessError("Native Materials revision authority changed; reload before inspection") from error
 
 
 def presentation_policy(ref: JsonObject) -> PresentationPolicy | None:
@@ -594,6 +659,70 @@ class PhotographicReviewService:
             self._inspection_costs.clear()
             self._scene_hints.clear()
 
+    def _native_materials_enabled(self) -> bool:
+        return self.admission.config.enabled and os.getenv("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED", "0") == "1"
+
+    def _revision_constraints(self) -> JsonObject:
+        from transformation_portal.photographic_delivery.materials import (
+            MATERIAL_LABELS,
+            MATERIALS_RECIPE_SCHEMA,
+            MAX_MATERIAL_REGIONS,
+        )
+
+        return {
+            "exposure_stops": [-1, 1],
+            "white_balance": [0.8, 1.25],
+            "saturation": [0.8, 1.2],
+            "native_materials": {
+                "enabled": self._native_materials_enabled(),
+                "recipe_schema": MATERIALS_RECIPE_SCHEMA,
+                "labels": sorted(MATERIAL_LABELS),
+                "max_regions": MAX_MATERIAL_REGIONS,
+            },
+        }
+
+    def _validate_native_revision(self, payload: RevisionRequest) -> bool:
+        from transformation_portal.photographic_delivery.materials import MATERIALS_RECIPE_SCHEMA, MaterialsRecipe
+
+        if payload.recipe.get("schema") != MATERIALS_RECIPE_SCHEMA:
+            return False
+        if not self._native_materials_enabled():
+            raise ReviewAccessError(
+                "Native Materials revisions require enabled bounded photographic admission",
+                status=503,
+                code="FEATURE_DISABLED",
+            )
+        if payload.reference_sha256 is not None:
+            raise ReviewInputError("Native Materials revisions do not accept a lighting reference")
+        MaterialsRecipe.from_payload(payload.recipe)
+        return True
+
+    def _require_native_materials_lease(self, context: ReviewContext, state: JsonObject, payload: RevisionRequest) -> None:
+        lease = current_review_lease.get()
+        if (
+            lease is None
+            or not self.admission.owns_lease(lease)
+            or lease.tenant_id != context.tenant_id
+            or lease.future_scratch_finished
+            or lease.cost.interactive
+        ):
+            raise ReviewOverload("native_materials_reservation_required")
+        inspections = self._admission_inspections(context, state, "revision", (payload,), {})
+        required = self._resource_cost(context, state, "revision", (payload,), inspections)
+        fields = ("memory_bytes", "scratch_bytes", "decode_slots", "io_slots", "max_pixels", "native_materials_regions")
+        if any(getattr(lease.cost, field) < getattr(required, field) for field in fields):
+            raise ReviewOverload("native_materials_reservation_incomplete")
+        available: dict[int, int] = {}
+        for root, size in lease.claims():
+            device = root.stat().st_dev
+            available[device] = available.get(device, 0) + size
+        needed: dict[int, int] = {}
+        for root, size in required.filesystems:
+            device = root.stat().st_dev
+            needed[device] = needed.get(device, 0) + size
+        if any(available.get(device, 0) < size for device, size in needed.items()):
+            raise ReviewOverload("native_materials_reservation_filesystem_changed")
+
     def _remember_inspection(self, context: ReviewContext, ref: JsonObject, inspection: JsonObject) -> None:
         identity = source_identity(ref)
         if identity is not None and isinstance(ref.get("scene_id"), str):
@@ -663,6 +792,8 @@ class PhotographicReviewService:
 
     async def execute(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Authorize before queueing; reserve once through all IO and publication."""
+        if method == self.revision and args:
+            self._validate_native_revision(args[0])
         if not self.admission.config.enabled:
             if context.discover_scene_references is not None and method.__name__ != "catalogue":
                 context = await self._discover_selected(context, method.__name__, args)
@@ -820,6 +951,8 @@ class PhotographicReviewService:
             elif operation == "download" and args:
                 entries = [row for row in state.get("deliveries", []) if row["id"] == args[0]]
                 paths.update(row["artifact_path"] for entry in entries for row in entry.get("approvals", []))
+                revisions = [row for row in state.get("revisions", []) if row["id"] == args[0]]
+                paths.update(row["native_source"]["artifact_path"] for row in revisions if row.get("native_products"))
             for row in state.get("decisions", []):
                 if row["sha256"] in identities or row.get("source_identity_sha256") in identities:
                     paths.add(row["artifact_path"])
@@ -967,7 +1100,17 @@ class PhotographicReviewService:
         inspections: list[JsonObject] | None,
     ) -> ReviewCost:
         """Freeze geometry-derived temporary and publication filesystem claims."""
-        cost = operation_cost("catalogue" if operation == "scene_detail" else operation, self.admission.config, inspections)
+        native_regions = None
+        if operation == "revision" and args and args[0].recipe.get("schema") == "tp.photo.materials_recipe.v1":
+            from transformation_portal.photographic_delivery.materials import MaterialsRecipe
+
+            native_regions = len(MaterialsRecipe.from_payload(args[0].recipe).regions)
+        cost = operation_cost(
+            "catalogue" if operation == "scene_detail" else operation,
+            self.admission.config,
+            inspections,
+            native_materials_regions=native_regions,
+        )
         rows = inspections or [{"width": 8000, "height": 5000, "alpha": True}]
 
         def source_bound(row: JsonObject) -> JsonObject:
@@ -1009,7 +1152,25 @@ class PhotographicReviewService:
         elif operation == "revision" and (not args or not args[0].preview_only):
             # Previews encode in memory and return before any product file or
             # publication is written. Their full source scratch stays reserved.
-            product = cost.max_pixels * 16 + 65536
+            if native_regions is not None:
+                from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
+                from transformation_portal.photographic_delivery.materials import (
+                    MAX_MATERIALS_DESCRIPTOR_BYTES,
+                    MAX_MATERIALS_OVERLAY_BYTES,
+                )
+
+                # Native uint16 RGB/alpha TIFF, matching preview, frozen-mask
+                # overlay and complete descriptor all publish in one revision.
+                # Account for both private and verified publication copies.
+                product = (
+                    cost.max_pixels * 8
+                    + 65536
+                    + MAX_PREVIEW_BYTES
+                    + MAX_MATERIALS_OVERLAY_BYTES
+                    + MAX_MATERIALS_DESCRIPTOR_BYTES
+                )
+            else:
+                product = cost.max_pixels * 16 + 65536
             workspace += product * 2
             publication_bytes = product * 2
         elif operation == "groups":
@@ -1024,8 +1185,18 @@ class PhotographicReviewService:
                 for entry in delivery["files"]
                 if entry["filename"] == filename
             ]
+            native_files = [
+                entry
+                for revision in state.get("revisions", [])
+                if revision["id"] == identity
+                for entry in revision.get("native_products", [])
+                if entry["filename"] == filename
+            ]
+            files.extend(native_files)
             size = files[0]["size_bytes"] if len(files) == 1 else MAX_BUNDLE_BYTES
-            workspace = max(size, source) + 256 * 1024**2
+            # Native diagnostics retain a separately verified parent snapshot
+            # through product retrieval; both private files coexist.
+            workspace = (source + size if native_files else max(size, source)) + 256 * 1024**2
         temporary = Path(tempfile.gettempdir()).resolve()
         claims = [(temporary, workspace)]
         if publication_bytes:
@@ -1151,7 +1322,7 @@ class PhotographicReviewService:
             "presets": [preset.to_payload() for preset in destination_presets()],
             "scope": "human_review_required",
             "native_display": "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
-            "revision_constraints": {"exposure_stops": [-1, 1], "white_balance": [0.8, 1.25], "saturation": [0.8, 1.2]},
+            "revision_constraints": self._revision_constraints(),
         }
 
     async def scene_detail(self, context: ReviewContext, scene_id: str, catalogue_identity_sha256: str) -> JsonObject:
@@ -1220,6 +1391,7 @@ class PhotographicReviewService:
                             "native_crop_url": base_url(context) + "/native-crop",
                             "presentation": presentation_metadata(ref),
                             "presentation_policy_sha256": ref.get("presentation_policy_sha256"),
+                            **self._revision_diagnostics(context, state, ref["artifact_path"]),
                         }
                     )
                 finally:
@@ -1256,7 +1428,28 @@ class PhotographicReviewService:
             "presets": [p.to_payload() for p in destination_presets()],
             "scope": "human_review_required",
             "native_display": "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
-            "revision_constraints": {"exposure_stops": [-1, 1], "white_balance": [0.8, 1.25], "saturation": [0.8, 1.2]},
+            "revision_constraints": self._revision_constraints(),
+        }
+
+    @staticmethod
+    def _revision_diagnostics(context: ReviewContext, state: JsonObject, artifact_path: str) -> JsonObject:
+        entry = next((row for row in state["revisions"] if row["variant"]["artifact_path"] == artifact_path), None)
+        if entry is None:
+            return {}
+        products = native_revision_products(entry)
+        if not products:
+            return {}
+        return {
+            "diagnostics": [
+                {
+                    "filename": product["filename"],
+                    "sha256": product["sha256"],
+                    "size_bytes": product["size_bytes"],
+                    "content_type": product["content_type"],
+                    "url": base_url(context) + f"/files/{entry['id']}/{quote(product['filename'])}",
+                }
+                for product in products
+            ]
         }
 
     async def render(
@@ -1444,7 +1637,11 @@ class PhotographicReviewService:
 
     async def revision(self, context: ReviewContext, payload: RevisionRequest) -> JsonObject:
         from transformation_portal.photographic_delivery import RevisionRecipe, create_revision
+        from transformation_portal.photographic_delivery.materials import MaterialsRecipe, create_materials_revision
 
+        native_materials = self._validate_native_revision(payload)
+        if native_materials and current_review_lease.get() is None:
+            raise ReviewOverload("native_materials_reservation_required")
         state = await self.state(context)
         if payload.expected_version != state["state_version"]:
             raise ReviewConflict("Review changed; reload before creating a revision")
@@ -1453,7 +1650,14 @@ class PhotographicReviewService:
         )
         if payload.scene_id != ref["scene_id"]:
             raise ReviewInputError("Revision scene must match its exact source artifact")
-        recipe = RevisionRecipe.from_payload(payload.recipe)
+        if native_materials and source_identity(ref) != ref["sha256"]:
+            raise ReviewInputError("Native Materials revisions require a retained SDR raster source")
+        native_recipe: MaterialsRecipe | None = None
+        legacy_recipe: RevisionRecipe | None = None
+        if native_materials:
+            native_recipe = MaterialsRecipe.from_payload(payload.recipe)
+        else:
+            legacy_recipe = RevisionRecipe.from_payload(payload.recipe)
         policy = presentation_policy(ref)
         if "presentation_policy_sha256" in payload.model_fields_set and payload.presentation_policy_sha256 != (
             policy.sha256 if policy is not None else None
@@ -1464,13 +1668,21 @@ class PhotographicReviewService:
             for group in state["groups"]
         ):
             raise ReviewInputError("Revision reference must be a saved lighting-group reference")
+        if native_materials:
+            self._require_native_materials_lease(context, state, payload)
         async with self.expensive:
             image = await load_image(context, ref)
-            result = await _owned_thread(create_revision, image, recipe, reference_sha256=payload.reference_sha256)
+            if native_recipe is not None:
+                result = await _owned_thread(create_materials_revision, image, native_recipe)
+            elif legacy_recipe is not None:
+                result = await _owned_thread(create_revision, image, legacy_recipe, reference_sha256=payload.reference_sha256)
+            else:
+                raise ReviewInputError("Revision requires a validated recipe")
             del image
         preview = "data:image/png;base64," + base64.b64encode(result["preview_bytes"]).decode("ascii")
         if payload.preview_only:
             del result["source_bytes"], result["preview_bytes"]
+            result.pop("diagnostic_files", None)
             await self.revalidate(context)
             return {"preview_data_url": preview, "receipt": result["receipt"], "state_version": state["state_version"]}
         if len(state["revisions"]) >= 128:
@@ -1492,11 +1704,31 @@ class PhotographicReviewService:
             "input_color": "auto",
         }
         async with publication(context) as publication_paths:
+            native_products: list[JsonObject] = []
             with owned_review_directory(prefix="tp-photo-revision-") as directory:
                 path = Path(directory).resolve() / "master.tif"
                 await _owned_thread(path.write_bytes, result["source_bytes"])
                 await context.publish(storage, path, "image/tiff")
                 publication_paths.append(storage)
+                for filename, (data, mime) in result.get("diagnostic_files", {}).items():
+                    if filename not in {"materials-diagnostics.json", "materials-overlay.png", "materials-preview.png"}:
+                        raise ReviewInputError("Unsupported native Materials diagnostic product")
+                    product_path = Path(directory).resolve() / filename
+                    product_storage = f"photographic-review/{identity}/{filename}"
+                    await _owned_thread(product_path.write_bytes, data)
+                    await context.publish(product_storage, product_path, mime)
+                    publication_paths.append(product_storage)
+                    native_products.append(
+                        {
+                            "filename": filename,
+                            "sha256": hashlib.sha256(data).hexdigest(),
+                            "size_bytes": len(data),
+                            "content_type": mime,
+                            "kind": "review_asset",
+                            "storage_path": product_storage,
+                        }
+                    )
+                    del data
             entry: JsonObject = {
                 "id": identity,
                 "variant": variant,
@@ -1504,12 +1736,20 @@ class PhotographicReviewService:
                 "actor": context.actor,
                 "created_at": time.time(),
             }
+            if native_materials:
+                entry["native_source"] = {
+                    "artifact_path": ref["artifact_path"],
+                    "sha256": ref["sha256"],
+                    "source_identity_sha256": source_identity(ref),
+                }
+                entry["native_products"] = native_products
 
             def change(current: JsonObject) -> JsonObject:
                 current["revisions"].append(entry)
                 return current
 
             del result["source_bytes"], result["preview_bytes"]
+            result.pop("diagnostic_files", None)
             updated = await self.mutate(context, payload.expected_version, change, "revision", entry)
         return {
             **public_state(updated, projection),
@@ -1519,6 +1759,7 @@ class PhotographicReviewService:
                 "sha256": variant["sha256"],
                 "review_status": "unreviewed",
                 "receipt": result["receipt"],
+                **self._revision_diagnostics(context, updated, variant["artifact_path"]),
             },
             "preview_data_url": preview,
         }
@@ -1740,11 +1981,19 @@ class PhotographicReviewService:
     async def download(self, context: ReviewContext, identity: str, filename: str) -> FileResponse:
         state = await self.state(context)
         delivery = next((d for d in state["deliveries"] if d["id"] == identity), None)
+        native_revision = None
         if delivery is None:
-            raise ReviewAccessError("Delivery is unavailable", status=404, code="NOT_FOUND")
-        if not delivery_is_approved(context, state, delivery):
-            raise ReviewAccessError("Delivery approval was withdrawn", status=409, code="APPROVAL_REQUIRED")
-        ref = next((f for f in delivery["files"] if f["filename"] == filename), None)
+            native_revision = next(
+                (row for row in state["revisions"] if row["id"] == identity and row.get("native_products")), None
+            )
+            if native_revision is None:
+                raise ReviewAccessError("Delivery is unavailable", status=404, code="NOT_FOUND")
+            products = native_revision_products(native_revision)
+            ref = next((f for f in products if f["filename"] == filename), None)
+        else:
+            if not delivery_is_approved(context, state, delivery):
+                raise ReviewAccessError("Delivery approval was withdrawn", status=409, code="APPROVAL_REQUIRED")
+            ref = next((f for f in delivery["files"] if f["filename"] == filename), None)
         if ref is None:
             raise ReviewAccessError("Delivery file is unavailable", status=404, code="NOT_FOUND")
         directory = Path(tempfile.mkdtemp(prefix="tp-delivery-download-"))
@@ -1755,10 +2004,27 @@ class PhotographicReviewService:
             path = directory / "verified-download"
             lease = current_review_lease.get()
             if lease is not None:
-                lease.check_scratch(ref["size_bytes"])
+                lease.check_scratch(ref["size_bytes"] + (MAX_IMAGE_BYTES if native_revision is not None else 0))
+            if native_revision is not None:
+                selector = native_revision["native_source"]
+                parent = resolve(
+                    context,
+                    state,
+                    selector["artifact_path"],
+                    selector["sha256"],
+                    selector["source_identity_sha256"],
+                    require_identity=True,
+                )
+                if source_identity(parent) != parent["sha256"]:
+                    raise ReviewAccessError("Native Materials parent source identity is unsupported")
+                await context.materialize(parent, directory / "verified-parent", MAX_IMAGE_BYTES)
             await context.materialize(ref, path, MAX_BUNDLE_BYTES)
             await self.revalidate(context)
-            if not delivery_is_approved(context, await self.state(context), delivery):
+            current = await self.state(context)
+            if native_revision is not None:
+                if native_revision not in current["revisions"]:
+                    raise ReviewAccessError("Native Materials diagnostics changed; reload before inspection")
+            elif delivery is None or not delivery_is_approved(context, current, delivery):
                 raise ReviewAccessError("Delivery approval was withdrawn", status=409, code="APPROVAL_REQUIRED")
             return _OwnedDownloadResponse(
                 path,

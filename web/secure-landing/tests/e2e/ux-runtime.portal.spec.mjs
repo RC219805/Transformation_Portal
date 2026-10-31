@@ -162,12 +162,12 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-support\.js(?:\?.*)?$/, async (route) => {
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor)\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/javascript; charset=utf-8",
       headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
-      body: await readFile(path.join(PORTAL_ASSET_DIR, "portal-photographic-support.js")),
+      body: await readFile(path.join(PORTAL_ASSET_DIR, new URL(route.request().url()).pathname.split("/").pop())),
     });
   });
 
@@ -3579,12 +3579,16 @@ async function photographicFixturePng(width, height) {
 }
 
 async function installPagedPhotographicStateRoutes(page, jobId, {
-  sceneIds = ["input-0000", "input-0001"], labels = [], flatFilenames = false, workingMaster = false,
+  sceneIds = ["input-0000", "input-0001"], labels = [], flatFilenames = false, workingMaster = false, nativeMaterials = false,
 } = {}) {
   const base = `/v1/jobs/${jobId}/photographic-review`;
   const scenes = sceneIds.map((sceneId, index) => {
     const final = { role: "final", artifact_path: flatFilenames ? `${sceneId}.tif` : `${sceneId}/delivery.tif`,
       sha256: String(index + 1).repeat(64), width: 80, height: 60, bit_depth: 16, color_profile: "sRGB", intended_use: "Synthetic master" };
+    if (nativeMaterials) {
+      final.presentation_policy_sha256 = "b".repeat(64);
+      final.presentation = { available_views: ["recorded", "clip_srgb"], policy: { stage: "display_referred" }, policy_sha256: final.presentation_policy_sha256 };
+    }
     return { scene_id: sceneId, label: labels[index] || `Room ${index + 1}`, variants: [final, ...(workingMaster
       ? [{ ...final, role: "working_master", artifact_path: `${sceneId}/working-linear.tif`, sha256: "a".repeat(64), bit_depth: 32 }] : [])] };
   });
@@ -3596,15 +3600,17 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
       display_hint: { role: "primary_preview", priority: 1200, label: `${scene.label} master` },
     })) } };
   const server = { scenes, committedVersion: 1, readVersion: 1, decisions: [], pageRequests: [], detailRequests: [], mutations: [], deliveries: [], decisionGate: null, unexpectedRequests: [] };
+  if (nativeMaterials) Object.assign(server, { nativeMaterialsEnabled: true, revisions: [], revisionGate: null, previewReceiptChanges: null });
   const snapshots = new Map();
   const snapshot = () => ({ state_version: server.readVersion, catalogue_identity_sha256: server.readVersion.toString(16).padStart(64, "0"),
     decisions: server.readVersion >= server.committedVersion ? server.decisions.map((row) => ({ ...row })) : [],
     scenes: [...server.scenes], groups: [], presets: [{ schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg",
       long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, intended_use: "Website delivery", render: "perceptual_srgb", shoulder: 0.8 }], scope: "human_review_required",
     native_display: "8bit_srgb_derivative_one_source_pixel_per_css_pixel",
-    revision_constraints: { exposure_stops: [-1, 1], white_balance: [0.8, 1.25], saturation: [0.8, 1.2] } });
+    revision_constraints: { exposure_stops: [-1, 1], white_balance: [0.8, 1.25], saturation: [0.8, 1.2],
+      ...(nativeMaterials ? { native_materials: { enabled: server.nativeMaterialsEnabled } } : {}) } });
   const png = await photographicFixturePng(80, 60);
-  await installHydratedPortalRoutes(page, { jobs: [job], photographicPagedCatalogue: true });
+  await installHydratedPortalRoutes(page, { jobs: [job], photographicPagedCatalogue: true, photographicRecordedPresentation: nativeMaterials });
   await page.route(`**${base}**`, async (route) => {
     const request = route.request(), url = new URL(request.url());
     if (request.method() === "GET" && url.pathname === `${base}/scenes`) {
@@ -3634,11 +3640,49 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
       return;
     }
     if (request.method() === "GET" && url.pathname === `${base}/render`) {
+      const source = scenes.flatMap((scene) => scene.variants).find((variant) => variant.sha256 === url.searchParams.get("sha256"));
       await route.fulfill({ status: 200, contentType: "image/png", body: png, headers: {
         "Cache-Control": "no-store", "X-TP-Source-SHA256": url.searchParams.get("sha256"),
         "X-TP-Source-Identity-SHA256": url.searchParams.get("source_identity_sha256"),
-        "X-TP-Presentation-View": url.searchParams.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": "none",
+        "X-TP-Presentation-View": url.searchParams.get("view") || "clip_srgb", "X-TP-Presentation-Policy-SHA256": source?.presentation_policy_sha256 || "none",
       } });
+      return;
+    }
+    if (nativeMaterials && request.method() === "POST" && url.pathname === `${base}/revisions`) {
+      const payload = request.postDataJSON();
+      server.revisions.push({ payload, csrf: request.headers()["x-csrf-token"] });
+      if (server.revisionGate) { const gate = server.revisionGate; server.revisionGate = null; await gate; }
+      expect(payload.expected_version).toBe(server.committedVersion);
+      const scene = scenes.find((item) => item.variants.some((variant) => variant.artifact_path === payload.artifact_path));
+      const source = scene.variants.find((variant) => variant.artifact_path === payload.artifact_path);
+      const revisionSha = "c".repeat(64);
+      const receipt = {
+        schema: "tp.photo.materials_revision.v1", processing_contract: "tp.photo.materials_revision_processing.v1",
+        source_master_sha256: source.sha256, source_identity_sha256: source.source_identity_sha256 || source.sha256,
+        source_bit_depth: source.bit_depth, width: source.width, height: source.height, output_bit_depth: 16,
+        working_color: "linear_srgb", output_color: "display_encoded_srgb", precision_recovery: false,
+        input_presentation_policy_sha256: source.presentation_policy_sha256, policy_sha256: "d".repeat(64),
+        output_presentation: { schema: "tp.photo.revision_presentation.v1", stage: "display_referred" },
+        review_status: "unreviewed", approval_transferred: false, recipe: payload.recipe,
+        ...server.previewReceiptChanges,
+      };
+      if (payload.preview_only) {
+        await fulfillJson(route, { success: true, data: { preview_data_url: `data:image/png;base64,${png.toString("base64")}`, receipt } });
+        return;
+      }
+      source.role = "previous_revision";
+      const outputPolicy = "e".repeat(64);
+      const final = { ...source, role: "final", artifact_path: `revisions/native-${scene.scene_id}/master.tif`, sha256: revisionSha,
+        bit_depth: 16, presentation_policy_sha256: outputPolicy,
+        presentation: { ...source.presentation, policy_sha256: outputPolicy },
+        diagnostics: ["materials-overlay.png", "materials-diagnostics.json", "materials-preview.png"].map((filename) => ({
+          filename, sha256: "f".repeat(64), size_bytes: png.length, url: `${base}/files/native-${scene.scene_id}/${filename}`,
+        })) };
+      scene.variants.unshift(final);
+      server.committedVersion += 1; server.readVersion = server.committedVersion;
+      await fulfillJson(route, { success: true, data: { state_version: server.committedVersion,
+        revision: { id: `native-${scene.scene_id}`, artifact_path: final.artifact_path, sha256: final.sha256,
+          review_status: "unreviewed", receipt } } });
       return;
     }
     if (request.method() === "POST" && url.pathname === `${base}/decisions`) {
@@ -3664,6 +3708,111 @@ async function installPagedPhotographicStateRoutes(page, jobId, {
   });
   return server;
 }
+
+test("@portal-browser native Materials editor previews and saves a separate unapproved SDR revision accessibly", async ({ page }, testInfo) => {
+  const jobId = "job-native-materials-editor";
+  const server = await installPagedPhotographicStateRoutes(page, jobId, { nativeMaterials: true });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const mode = page.getByRole("combobox", { name: "Revision mode", exact: true });
+  const preview = page.locator('[data-ui="photographic-preview-revision"]');
+  const commit = page.locator('[data-ui="photographic-create-revision"]');
+  await expect(mode).toBeVisible();
+  await expect(mode.locator('option[value="native"]')).toHaveText("Native Materials · 8/16-bit display SDR");
+  await mode.selectOption("native");
+  await expect(page.locator('[data-ui="photographic-revision-exposure"]')).toBeDisabled();
+  await expect(page.locator('[data-ui="photographic-reference"]')).toBeDisabled();
+  await page.getByRole("button", { name: "Add local material region", exact: true }).click();
+  const label = page.getByRole("combobox", { name: "Material", exact: true });
+  await label.selectOption("glass");
+  await page.getByRole("spinbutton", { name: "Material strength", exact: true }).fill("0.02");
+  await expect(page.locator('[data-ui="photographic-materials-diagnostics"] a')).toHaveCount(0);
+  await expect(commit).toBeDisabled();
+  let releasePreview;
+  server.revisionGate = new Promise((resolve) => { releasePreview = resolve; });
+  const response = page.waitForResponse((candidate) => candidate.url().endsWith("/revisions") && candidate.request().method() === "POST");
+  try {
+    await preview.click();
+    await expect.poll(() => server.revisions.length).toBe(1);
+    await expect(mode).toBeDisabled();
+    await expect(label).toBeDisabled();
+    await expect(page.locator('[data-ui="photographic-scene-next"]')).toBeDisabled();
+  } finally {
+    releasePreview();
+  }
+  const rendered = (await (await response).json()).data;
+  expect(rendered.receipt).toMatchObject({ schema: "tp.photo.materials_revision.v1",
+    processing_contract: "tp.photo.materials_revision_processing.v1", output_bit_depth: 16,
+    source_master_sha256: "1".repeat(64), source_identity_sha256: "1".repeat(64),
+    input_presentation_policy_sha256: "b".repeat(64), review_status: "unreviewed", approval_transferred: false });
+  await expect(page.locator('[data-ui="photographic-variant-preview"]')).toBeVisible();
+  await expect(commit).toBeEnabled();
+  expect(server.revisions[0]).toEqual({ csrf: "hydrated-ux-csrf", payload: {
+    artifact_path: "input-0000/delivery.tif", sha256: "1".repeat(64), source_identity_sha256: "1".repeat(64),
+    scene_id: "input-0000", expected_version: 1, preview_only: true, presentation_policy_sha256: "b".repeat(64), reference_sha256: null,
+    recipe: { schema: "tp.photo.materials_recipe.v1", input_stage: "display_referred",
+      regions: [{ id: "region-1", label: "glass", region: [0.25, 0.25, 0.75, 0.75], strength: 0.02 }] },
+  } });
+  await expectNoHorizontalOverflow(page, "Native Materials editor");
+  await expectNoWcagViolations(page, "Native Materials editor");
+  await commit.click();
+  const revisionPath = "revisions/native-input-0000/master.tif";
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue(revisionPath);
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Unreviewed");
+  await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText("16-bit");
+  await expect(page.locator('[data-ui="photographic-materials-diagnostics"] a')).toHaveCount(3);
+  await expect(page.getByRole("link", { name: "Matching photographic preview (PNG)", exact: true })).toHaveAttribute("href",
+    `/v1/jobs/${jobId}/photographic-review/files/native-input-0000/materials-preview.png`);
+  expect(server.revisions).toHaveLength(2);
+  expect(server.revisions[1].payload).toEqual({ ...server.revisions[0].payload, preview_only: false });
+  expect(server.decisions).toEqual([]);
+  expect(server.scenes[0].variants.find((variant) => variant.artifact_path === "input-0000/delivery.tif")).toMatchObject({
+    role: "previous_revision", sha256: "1".repeat(64), bit_depth: 16,
+  });
+  await page.reload();
+  await expect(page.locator('[data-ui="photographic-primary"]')).toHaveValue(revisionPath);
+  await expect(page.locator('[data-ui="photographic-decision-status"]')).toContainText("Unreviewed");
+  await expect(page.locator('[data-ui="photographic-materials-diagnostics"] a')).toHaveCount(3);
+  await page.locator('[data-ui="photographic-review"]').screenshot({ path: testInfo.outputPath("native-materials-editor-saved.png") });
+});
+
+test("@portal-browser native Materials editor rejects mismatched preview and retains native drafts through flag loss", async ({ page }) => {
+  const jobId = "job-native-materials-flag-loss";
+  const server = await installPagedPhotographicStateRoutes(page, jobId, { nativeMaterials: true });
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const mode = page.locator('[data-ui="photographic-native-materials"]');
+  const exposure = page.locator('[data-ui="photographic-revision-exposure"]');
+  const status = page.locator('[data-ui="photographic-review-status"]');
+  const commit = page.locator('[data-ui="photographic-create-revision"]');
+  await exposure.fill("-0.1");
+  await mode.selectOption("native");
+  await expect(mode).toHaveValue("legacy");
+  await expect(exposure).toHaveValue("-0.1");
+  await expect(status).toContainText("Clear global adjustments");
+  await exposure.fill("0");
+  await mode.selectOption("native");
+  await page.locator('[data-ui="photographic-add-material"]').click();
+  server.previewReceiptChanges = { source_identity_sha256: "9".repeat(64) };
+  await page.locator('[data-ui="photographic-preview-revision"]').click();
+  await expect(status).toContainText("preview identity or recipe could not be verified");
+  await expect(commit).toBeDisabled();
+  await expect(page.locator('[data-ui="photographic-variant-preview"]')).toBeHidden();
+  server.nativeMaterialsEnabled = false;
+  await page.locator('[data-ui="photographic-review-refresh"]').click();
+  await expect(mode).toHaveValue("native");
+  await expect(page.locator('[data-ui="photographic-material-label"]')).toHaveValue("stone");
+  await expect(page.locator('[data-ui="photographic-preview-revision"]')).toBeDisabled();
+  await expect(page.locator('[data-ui="photographic-native-materials-help"]')).toContainText("Native intent is retained");
+  await page.locator('[data-ui="photographic-scene-next"]').click();
+  await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+  await expect(mode).toHaveValue("native");
+  await page.locator('[data-ui="photographic-discard-navigation"]').click();
+  await expect(page.locator('[data-ui="photographic-scene"]')).toHaveValue("input-0001");
+  await expect(mode).toBeHidden();
+  expect(server.revisions).toHaveLength(1);
+  expect(server.revisions[0].payload.recipe.schema).toBe("tp.photo.materials_recipe.v1");
+  expect(server.mutations).toEqual([]);
+  expect(server.unexpectedRequests).toEqual([]);
+});
 
 test("@portal-browser photographic paged catalogue traverses fifty scenes and preserves scoped keyboard and mobile review", async ({ page }, testInfo) => {
   test.setTimeout(90_000);

@@ -5,6 +5,7 @@ import {
   photographicDecisionMatches, nativeCropGeometry, photographicAssetUrl, photographicRecipe, photographicPreviewMatches, photographicRetryAfterMs,
 } from "../portal-src/photographic-review.js";
 import { photographicDeliveryAttempt } from "../portal-src/photographic-delivery-history.js";
+import { createPhotographicRevisionEditor } from "../portal-src/photographic-revision-editor.js";
 
 const SHA = "a".repeat(64);
 const ORIGINAL_SHA = "b".repeat(64);
@@ -121,6 +122,162 @@ function fixture({ responseHash = null, mutationError = false, extraFetch = null
   const job = { id: "job-one", pipeline: "lux-depth", artifacts: [{ ...variant, path: variant.artifact_path }] };
   return { root, body, state, requests, api, job };
 }
+
+function materialsCatalogue(source, enabled = true, extra = {}) {
+  return { state_version: 0, scenes: [{ scene_id: "input-0000", label: "Room", variants: [source, original] }],
+    decisions: [], groups: [], presets: [WEBSITE_PRESET], revision_constraints: { native_materials: { enabled } }, ...extra };
+}
+
+function materialsReceipt(source, recipe) {
+  return { schema: "tp.photo.materials_revision.v1", processing_contract: "tp.photo.materials_revision_processing.v1",
+    source_master_sha256: source.sha256, source_identity_sha256: source.source_identity_sha256 || source.sha256,
+    width: source.width, height: source.height, output_bit_depth: 16, policy_sha256: "d".repeat(64),
+    input_presentation_policy_sha256: source.presentation_policy_sha256 || null,
+    output_presentation: { schema: "tp.photo.revision_presentation.v1", stage: "display_referred" },
+    review_status: "unreviewed", approval_transferred: false, recipe };
+}
+
+test("native preview validation binds exact source, policy, recipe, SDR precision and unapproved state", () => {
+  const recipe = { schema: "tp.photo.materials_recipe.v1", input_stage: "display_referred",
+    regions: [{ id: "region-1", label: "stone", region: [0.25, 0.25, 0.75, 0.75], strength: 0.03 }] };
+  const source = { ...variant, presentation_policy_sha256: "c".repeat(64) };
+  const receipt = materialsReceipt(source, recipe);
+  const editor = createPhotographicRevisionEditor({ nodes: {} });
+  assert.equal(editor.matches(receipt, source, recipe), true);
+  assert.equal(photographicPreviewMatches(receipt, source, recipe), false, "legacy exported helper semantics remain unchanged");
+  for (const change of [{ source_master_sha256: ORIGINAL_SHA }, { source_identity_sha256: ORIGINAL_SHA }, { width: 1600 },
+    { processing_contract: "unknown" }, { input_presentation_policy_sha256: ORIGINAL_SHA }, { policy_sha256: "invalid" },
+    { output_bit_depth: 32 }, { approval_transferred: true }, { review_status: "approved" }, { reference_sha256: SHA },
+    { output_presentation: { schema: "tp.photo.revision_presentation.v1", stage: "working_linear" } },
+    { recipe: { ...recipe, regions: [{ ...recipe.regions[0], strength: 0.01 }] } }]) {
+    assert.equal(editor.matches({ ...receipt, ...change }, source, recipe), false);
+  }
+});
+
+test("native editor requires capability and an 8/16-bit SDR assertion with valid recorded metadata when present", async () => {
+  const policy = "c".repeat(64);
+  for (const [enabled, source, visible] of [
+    [false, variant, false], [true, variant, true], [true, { ...variant, bit_depth: 8 }, true],
+    [true, { ...variant, bit_depth: 32 }, false],
+    [true, { ...variant, presentation_policy_sha256: policy }, false],
+    [true, { ...variant, presentation_policy_sha256: policy, presentation: { policy_sha256: policy, policy: { stage: "working_linear" } } }, false],
+    [true, { ...variant, presentation_policy_sha256: policy, presentation: { policy_sha256: policy, policy: { stage: "display_referred" } } }, true],
+  ]) {
+    const h = fixture({ historyEnabled: false, extraFetch: (url) => url.endsWith("/photographic-review")
+      ? new Response(JSON.stringify({ success: true, data: materialsCatalogue(source, enabled) })) : null });
+    h.api.show(h.job, source); await settle();
+    assert.equal(h.root.find("photographic-native-materials").hidden, !visible);
+    h.api.show(null, null);
+  }
+});
+
+test("native mode preserves pending edits, bounds manual masks, and cannot fall back when capability disappears", async () => {
+  let enabled = true;
+  const h = fixture({ historyEnabled: false, extraFetch: (url) => url.endsWith("/photographic-review")
+    ? new Response(JSON.stringify({ success: true, data: materialsCatalogue(variant, enabled) })) : null });
+  h.api.show(h.job, variant); await settle();
+  const mode = h.root.find("photographic-native-materials");
+  const exposure = h.root.find("photographic-revision-exposure");
+  exposure.value = "-0.1"; await exposure.trigger("input");
+  mode.value = "native"; await mode.trigger("change");
+  assert.equal(mode.value, "legacy");
+  assert.equal(exposure.value, "-0.1");
+  assert.match(h.root.find("photographic-review-status").textContent, /Clear global adjustments/);
+  exposure.value = "0"; await exposure.trigger("input");
+  mode.value = "native"; await mode.trigger("change");
+  assert.equal(exposure.disabled, true);
+  assert.equal(h.root.find("photographic-reference").disabled, true);
+  for (let index = 0; index < 5; index += 1) await h.root.find("photographic-add-material").trigger();
+  assert.equal(h.root.find("photographic-material-regions").children.length, 4);
+  assert.ok(h.root.find("photographic-material-label"));
+  assert.equal(h.root.find("photographic-material-name"), undefined);
+  mode.value = "legacy"; await mode.trigger("change");
+  assert.equal(mode.value, "native", "mode changes never discard pending native masks");
+  enabled = false;
+  await h.root.find("photographic-review-refresh").trigger();
+  assert.equal(mode.value, "native");
+  await h.root.find("photographic-preview-revision").trigger();
+  assert.match(h.root.find("photographic-review-status").textContent, /cannot fall back/);
+  assert.equal(h.requests.filter((request) => request.options.method === "POST").length, 0);
+  h.api.show(null, null);
+});
+
+test("native manual regions validate shared-label strength before any preview POST", async () => {
+  const h = fixture({ historyEnabled: false, extraFetch: (url) => url.endsWith("/photographic-review")
+    ? new Response(JSON.stringify({ success: true, data: materialsCatalogue(variant) })) : null });
+  h.api.show(h.job, variant); await settle();
+  const mode = h.root.find("photographic-native-materials"); mode.value = "native"; await mode.trigger("change");
+  await h.root.find("photographic-add-material").trigger();
+  await h.root.find("photographic-add-material").trigger();
+  const strength = h.root.find("photographic-material-strength"); strength.value = "0.02"; await strength.trigger("input");
+  await h.root.find("photographic-preview-revision").trigger();
+  assert.match(h.root.find("photographic-review-status").textContent, /same material label require the same strength/);
+  assert.equal(h.requests.filter((request) => request.url.endsWith("/revisions")).length, 0);
+  strength.value = "0.06"; await strength.trigger("input");
+  await h.root.find("photographic-preview-revision").trigger();
+  assert.match(h.root.find("photographic-review-status").textContent, /outside the supported range/);
+  h.api.show(null, null);
+});
+
+test("native masked preview saves and reopens separately for native inspection, diagnostics, approval and export", async (t) => {
+  const location = globalThis.location; globalThis.location = { origin: "http://localhost" };
+  t.after(() => { globalThis.location = location; });
+  let current = { ...variant, width: 96, height: 64 };
+  let version = 0;
+  let decisions = [];
+  const source = current;
+  const h = fixture({ historyEnabled: false, extraFetch: (url, options) => {
+    if (url.endsWith("/photographic-review")) return new Response(JSON.stringify({ success: true,
+      data: materialsCatalogue(current, true, { state_version: version, decisions }) }));
+    if (url.endsWith("/revisions")) {
+      const payload = JSON.parse(options.body);
+      const receipt = materialsReceipt(source, payload.recipe);
+      if (payload.preview_only) return new Response(JSON.stringify({ success: true, data: { preview_data_url: "data:image/png;base64,cG5n", receipt } }));
+      version += 1;
+      current = { ...current, artifact_path: "revisions/native/master.tif", sha256: "f".repeat(64), diagnostics: [
+        { filename: "materials-overlay.png", sha256: "e".repeat(64), url: "/v1/jobs/job-one/photographic-review/files/native/materials-overlay.png" },
+        { filename: "materials-preview.png", sha256: "e".repeat(64), url: "/v1/jobs/job-one/photographic-review/files/native/materials-preview.png" },
+        { filename: "materials-diagnostics.json", sha256: "e".repeat(64), url: "/v1/jobs/job-one/photographic-review/files/native/materials-diagnostics.json" },
+        { filename: "private.json", sha256: "e".repeat(64), url: "/v1/jobs/job-other/photographic-review/files/native/private.json" },
+      ] };
+      return new Response(JSON.stringify({ success: true, data: { state_version: version, revision: { artifact_path: current.artifact_path, sha256: current.sha256 } } }));
+    }
+    if (url.endsWith("/decisions")) {
+      const payload = JSON.parse(options.body); decisions = [{ ...payload }]; version += 1;
+      return new Response(JSON.stringify({ success: true, data: { state_version: version } }));
+    }
+    if (url.endsWith("/delivery")) return new Response(JSON.stringify({ success: true, data: {
+      download_url: "/v1/jobs/job-one/photographic-review/files/delivery/approved.zip", filename: "approved.zip", sha256: SHA, files: [],
+    } }));
+    return null;
+  } });
+  h.api.show(h.job, source); await settle();
+  const mode = h.root.find("photographic-native-materials"); mode.value = "native"; await mode.trigger("change");
+  await h.root.find("photographic-add-material").trigger();
+  await h.root.find("photographic-preview-revision").trigger();
+  assert.equal(h.root.find("photographic-create-revision").disabled, false);
+  const preview = JSON.parse(h.requests.find((request) => request.url.endsWith("/revisions")).options.body);
+  assert.equal(preview.recipe.schema, "tp.photo.materials_recipe.v1");
+  assert.equal(preview.recipe.input_stage, "display_referred");
+  assert.equal(preview.reference_sha256, null);
+  assert.deepEqual(preview.recipe.regions, [{ id: "region-1", label: "stone", region: [0.25, 0.25, 0.75, 0.75], strength: 0.03 }]);
+  await h.root.find("photographic-create-revision").trigger();
+  assert.equal(h.root.find("photographic-primary").value, current.artifact_path);
+  assert.match(h.root.find("photographic-decision-status").textContent, /Unreviewed/);
+  const links = h.root.find("photographic-materials-diagnostics").children;
+  assert.equal(links.length, 3); assert.equal(links[0].download, "materials-overlay.png");
+  assert.equal(links[1].textContent, "Matching photographic preview (PNG)");
+  const inspection = h.root.find("photographic-inspection"); inspection.value = "native"; await inspection.trigger("change");
+  assert.ok(h.requests.some((request) => request.url.includes("/native-crop?") && request.url.includes(current.sha256)));
+  await h.root.find("photographic-decision-approved").trigger();
+  const approved = JSON.parse(h.requests.find((request) => request.url.endsWith("/decisions")).options.body);
+  assert.equal(approved.sha256, current.sha256); assert.equal(approved.expected_version, 1);
+  await h.root.find("photographic-deliver-approved").trigger();
+  const delivered = JSON.parse(h.requests.find((request) => request.url.endsWith("/delivery")).options.body);
+  assert.deepEqual(delivered.approved_sha256, [current.sha256]);
+  assert.equal(delivered.approved_sources[0].artifact_path, current.artifact_path);
+  h.api.show(null, null);
+});
 
 test("Review exposes explicit versions, fit-preview truth, and sends authenticated SHA-bound render requests", async () => {
   const h = fixture();
