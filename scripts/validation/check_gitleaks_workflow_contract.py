@@ -38,7 +38,7 @@ EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
     r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
     r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
 )
-EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^aca4a3389349350d0bb65b71e1bf2d000a3d102be0944813801c48c209e2ea2a$"
+EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^d76e4b1fff7bc62c430daf98df6773278274fb874f647696a487a0992e793736$"
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 

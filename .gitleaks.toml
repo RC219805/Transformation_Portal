@@ -44,5 +44,5 @@ condition = "AND"
 regexTarget = "secret"
 # v8.21.x can start a catalog chunk mid-line, hiding the structured source key.
 # This exact public source digest remains byte-verified by the catalog checker.
-regexes = ['''^aca4a3389349350d0bb65b71e1bf2d000a3d102be0944813801c48c209e2ea2a$''']
+regexes = ['''^d76e4b1fff7bc62c430daf98df6773278274fb874f647696a487a0992e793736$''']
 paths = ['''^docs/governance/documentation_catalog\.json$''']
