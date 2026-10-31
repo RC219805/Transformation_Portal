@@ -207,6 +207,9 @@ def _saved_assets(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract only saved server-owned derivative records, never browser refs."""
     assets: list[dict[str, Any]] = []
     candidates = [row.get("variant") for row in state.get("revisions", []) if isinstance(row, dict)]
+    candidates.extend(
+        product for row in state.get("revisions", []) if isinstance(row, dict) for product in row.get("native_products", [])
+    )
     candidates.extend(item for row in state.get("deliveries", []) if isinstance(row, dict) for item in row.get("files", []))
     for value in candidates:
         if not isinstance(value, dict):

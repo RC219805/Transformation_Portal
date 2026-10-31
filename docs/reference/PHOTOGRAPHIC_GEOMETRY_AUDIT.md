@@ -303,9 +303,13 @@ also retain the frozen byte ceiling. This is a conservative
 software allocation contract, not measured whole-host RSS or permission for
 parallel native jobs. The existing 67,108,864-pixel geometry cap also applies.
 
-The slice is CLI engineering capability. Managed native-Materials admission,
-actual runtime/whole-host resource qualification, retained-photo pilot and
-Richard's native photographic acceptance remain separate release gates.
+This recipe is CLI engineering capability. The separate managed Review
+[native Materials revision](PHOTOGRAPHIC_REVIEW_DELIVERY.md#managed-native-materials-revisions)
+uses explicit human rectangles on retained display-SDR photographs, existing
+review leases and a distinct recipe/receipt; it does not reinterpret this CLI
+binding or authorize its 12 GiB allocation from managed capacity. Actual
+runtime/whole-host resource qualification, retained-photo pilot and Richard's
+native photographic acceptance remain separate release gates.
 Rollback omits the native manifest/policy for new requests and retains matching
 readers for existing versioned reports; it never rewrites retained generations.
 

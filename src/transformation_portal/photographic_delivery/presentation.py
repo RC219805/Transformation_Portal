@@ -41,6 +41,7 @@ class PresentationPolicy:
             "v6_delivery",
             "revision_v1",
             "revision_v2",
+            "materials_revision_v1",
         }:
             raise ValueError("Unsupported photographic presentation authority")
         for digest in (self.authority_sha256, self.artifact_sha256, self.source_identity_sha256):
@@ -51,6 +52,8 @@ class PresentationPolicy:
             raise ValueError("Recorded native presentation requires its working content identity")
         if self.authority_kind == "v6_delivery" and self.stage != "display_referred":
             raise ValueError("A verified V6 delivery has already received its recorded render")
+        if self.authority_kind == "materials_revision_v1" and self.stage != "display_referred":
+            raise ValueError("A native SDR Materials revision retains its display-referred presentation")
         if self.authority_kind in {"v6_working_master", "revision_v1"} and self.stage != "working_linear":
             raise ValueError("Recorded working-master authority cannot authorize a display-stage reinterpretation")
 
@@ -162,6 +165,25 @@ def descriptor_policy(
 
 def revision_policy(receipt: Any, artifact_sha256: str) -> PresentationPolicy | None:
     """Recover known historical semantics; unknown receipts never grant a view."""
+    schema = receipt.get("schema") if isinstance(receipt, Mapping) else None
+    if (
+        isinstance(schema, str)
+        and schema.startswith("tp.photo.materials_revision.")
+        and schema != ("tp.photo.materials_revision.v1")
+    ):
+        raise ValueError("Unsupported native Materials revision presentation version")
+    if isinstance(receipt, Mapping) and receipt.get("schema") == "tp.photo.materials_revision.v1":
+        from .materials import validate_materials_revision_receipt
+
+        recipe = validate_materials_revision_receipt(receipt, artifact_sha256)
+        return PresentationPolicy(
+            "display_referred",
+            recipe,
+            "materials_revision_v1",
+            hashlib.sha256(canonicalize_json(receipt)).hexdigest(),
+            artifact_sha256,
+            artifact_sha256,
+        )
     if not isinstance(receipt, Mapping) or receipt.get("schema") not in ("tp.photo.revision.v1", "tp.photo.revision.v2"):
         return None
     if (

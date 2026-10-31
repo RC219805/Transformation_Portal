@@ -68,6 +68,71 @@ Reload and reassess the current selection before retrying. Canonical event
 bytes retain the authenticated actor, event kind, time and mutation details.
 Changing a filename, a browser selection or a metric value cannot confer approval.
 
+## Managed native Materials revisions
+
+Deploy the matching backend and browser assets before enabling
+`TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED=1` on the backend. This independent,
+default-off capability also requires `TP_PHOTO_REVIEW_ENABLED=1`; disabling
+admission never enables an unreserved native fallback. No SQL migration or new
+route is required. Both API prefixes retain `POST /revisions`, its envelope,
+source selectors, presentation identity and `expected_version` compare-and-swap.
+The browser advertises the mode only from `revision_constraints.native_materials`.
+
+Select a retained JPEG/PNG/TIFF photograph with integer 8/16-bit SDR pixels.
+The explicit display-SDR operation rejects a conflicting recorded working-stage
+policy, native NPY masters, float/HDR sources and out-of-range results. For an
+unrecorded raster, choosing this mode explicitly asserts display-SDR semantics;
+filenames, pixel ranges and ICC profiles never infer processing stage. Existing
+legacy revisions and their defaults are unchanged.
+
+The closed recipe `tp.photo.materials_recipe.v1` contains `input_stage` equal to
+`display_referred` and one to four `regions`. Each region has a unique `id`, a
+`label` (`glass`, `stone`, `water`, `foliage` or `sky`), normalized
+`region: [left, top, right, bottom]`, and `strength` from zero to 0.05. Repeated
+labels must share a strength. These are human-specified rectangles, not inferred
+semantic masks. Global grading and lighting-reference controls remain separate.
+Normalized edges truncate to native pixel edges, with an integer snap only within
+four floating-point ULPs. Genuine fractional edges retain truncation, and each
+region retains at least one in-bounds pixel. Generated native-mask hashes bind
+the affected pixels before execution.
+Clients cannot select executable kernels, physical paths, calibration trust,
+memory limits or an arbitrary policy. The server freezes the complete bounded
+MaterialsV4 policy, operation identity and generated native-mask evidence before
+applying the existing compositor to native floating-point pixels.
+
+Preview and save use the same source/recipe authority. A saved result is a
+separate TIFF16 with explicit display presentation and an unreviewed
+`tp.photo.materials_revision.v1` receipt. The receipt records source and native
+content identity, policy/evidence/operation hashes, actual execution deltas,
+encoded-output and reopened-content identities, alpha, and diagnostic hashes.
+Alpha and protected pixels are preserved; output is quantized only for TIFF16.
+Recorded display pixels receive no second tone transform during preview,
+reopened inspection or SDR export. New revisions never inherit approval.
+
+The native result, bounded matching preview, diagnostic descriptor and mask
+overlay publish through existing review ownership and CAS cleanup. Diagnostic
+links use the authenticated `GET /files/{identity}/{filename}` route; they
+revalidate the retained parent and committed product bytes. Diagnostics do not
+authorize editing, approval or destination proofs. Existing inspection,
+approval, delivery, response-loss recovery and revocation checks remain in force.
+
+Native admission atomically reserves decoded source/mask arrays, renderer and
+encoding intermediates, tile scratch, temporary files and publication copies.
+It retains inspection headroom and existing process-local ceilings; unknown or
+over-limit work fails with `413` before decoding. An earlier verified inspection
+can supply exact geometry for costing. No automatic downsampling, deletion,
+budget increase or recursive lease expansion makes an operation fit. Owned
+workers drain before cancellation releases reservations.
+
+Rollback disables `TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED` and restarts the
+backend. Existing recipes, revisions, diagnostic products and approvals remain
+stored and require compatible readers; rollback deletes nothing. The editor is
+loaded with the already deferred photographic viewer, preserving existing
+entry-asset budgets and selectors. Software contracts and fixture-driven HTTP
+tests do not establish representative native-runtime/resource or photographic
+acceptance. Retained-photo pilots, actual model qualification and Richard's
+scoped photographic decision remain separate; AWS/GPU validation stays on hold.
+
 ## Paged catalogue and review navigation
 
 The additive `tp.photo.scene_page.v1` catalogue supports up to 64 scenes. Use

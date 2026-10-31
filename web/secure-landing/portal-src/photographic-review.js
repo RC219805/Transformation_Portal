@@ -1,3 +1,4 @@
+import { createPhotographicRevisionEditor } from "./photographic-revision-editor.js";
 import {
   photographicVariantLabel, photographicProperties, photographicDecisionMatches, nativeCropGeometry,
   photographicJobUrl, photographicAssetUrl, photographicRecipe, photographicRetryAfterMs, photographicPreviewMatches,
@@ -83,6 +84,8 @@ export function createPhotographicReview(host) {
   try { recoveryStorage = photographicDeliveryRecoveryStorage(Object.hasOwn(host, "sessionStorage") ? host.sessionStorage : globalThis.sessionStorage); }
   catch { recoveryStorage = photographicDeliveryRecoveryStorage(null); }
   let nodes = {};
+  const editor = createPhotographicRevisionEditor({ nodes, el, input, select, field, button, status, resetPreview, revise,
+    getDraft: () => revisionDraft, getMaterials: () => materialDrafts });
   let pager = null;
   let noteDirty = false;
   let savedSelection = null;
@@ -242,9 +245,7 @@ export function createPhotographicReview(host) {
     if (nodes.commitRevision) nodes.commitRevision.disabled = blocked || !variantPreview;
     nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = blocked || currentVariant()?.role === "original"; });
     if (nodes.note) nodes.note.disabled = navigating;
-    Object.values(nodes.revisionInputs || {}).forEach((control) => { control.disabled = navigating; });
-    nodes.materials?.querySelectorAll("input,button").forEach((control) => { control.disabled = navigating; });
-    if (nodes.addRegion) nodes.addRegion.disabled = navigating;
+    editor.sync(data?.revision_constraints?.native_materials, currentVariant(), blocked);
   }
   function resetPreview() {
     variantPreview = null;
@@ -397,7 +398,7 @@ export function createPhotographicReview(host) {
     saveGroup.dataset.reviewMutation = "true";
     nodes.groups.append(field("Lighting group for this photograph", nodes.groupName), field("Reference photograph", nodes.reference), saveGroup);
     nodes.outliers = el("p", "", "photo-review-help", "photographic-quality-flags");
-    const revisions = buildRevisionControls();
+    const revisions = editor.build();
     const delivery = buildDeliveryControls();
     pager = createPhotographicPagedCatalogue({ el, button, field, select, request, status, selection, hasEdits, apply: applyPagedDetail,
       onLoading(value) { navigating = value; setPending(pending); updateDeliveryButton(); } });
@@ -406,41 +407,6 @@ export function createPhotographicReview(host) {
       quality, nodes.decisions, el("h4", "Set coherence", "photo-review-subtitle"), pager.controls, nodes.contact, nodes.groups, nodes.outliers, revisions, delivery, nodes.status);
     if (els.artifactShellContent?.prepend) els.artifactShellContent.prepend(panel);
     else els.artifactShellContent?.append(panel);
-  }
-
-  function buildRevisionControls() {
-    const section = el("section", "", "photo-review-section", "photographic-revision");
-    section.append(el("h4", "Create a separate revision", "photo-review-subtitle"),
-      el("p", "Bounded adjustments create a new unapproved artifact. Originals and existing deliveries stay unchanged. Inspect the rendered variant before creating it.", "photo-review-help"));
-    const controls = el("div", "", "photo-review-controls");
-    nodes.revisionInputs = {};
-    for (const [key, label, min, max, step] of [["exposure", "Exposure (EV)", -1, 1, 0.05], ["warmth", "Warmth balance", -0.15, 0.15, 0.01], ["saturation", "Saturation", 0.8, 1.2, 0.05]]) {
-      const control = input(`photographic-revision-${key}`, "number", String(revisionDraft[key]));
-      control.min = String(min); control.max = String(max); control.step = String(step);
-      control.addEventListener("input", () => { revisionDraft[key] = control.value; resetPreview(); });
-      nodes.revisionInputs[key] = control;
-      controls.append(field(label, control));
-    }
-    nodes.previewRevision = button("Preview variant", "photographic-preview-revision", () => void revise(true));
-    nodes.commitRevision = button("Create revision", "photographic-create-revision", () => void revise(false));
-    nodes.commitRevision.disabled = true;
-    nodes.previewRevision.dataset.reviewMutation = "true";
-    nodes.commitRevision.dataset.reviewMutation = "true";
-    nodes.variantPreview = el("img", "", "photo-review-variant hidden", "photographic-variant-preview");
-    nodes.variantPreview.alt = "Rendered adjustment preview; reduced resolution. New revision has not been created.";
-    nodes.revisionReceipt = el("p", "", "photo-review-help", "photographic-revision-receipt");
-    controls.append(nodes.previewRevision, nodes.commitRevision);
-    nodes.materials = el("div", "", "photo-review-materials", "photographic-material-regions");
-    const addRegion = button("Add local material region", "photographic-add-material", () => {
-      if (navigating) return;
-      if (materialDrafts.length >= 16) { status("At most 16 local regions are supported.", true); return; }
-      materialDrafts.push({ name: `Region ${materialDrafts.length + 1}`, region: [0.25, 0.25, 0.75, 0.75], exposure_stops: 0, warmth: 0, feather: 0.03 });
-      resetPreview(); renderMaterials();
-    });
-    nodes.addRegion = addRegion;
-    section.append(controls, el("p", "Local material regions are explicit feathered rectangles, not automatic semantic masks. Keep adjustments subtle; overlapping exposure is checked by the renderer.", "photo-review-help"),
-      addRegion, nodes.materials, nodes.variantPreview, nodes.revisionReceipt);
-    return section;
   }
 
   function buildDeliveryControls() {
@@ -470,36 +436,8 @@ export function createPhotographicReview(host) {
   function resetRecipe() {
     revisionDraft = { exposure: 0, warmth: 0, saturation: 1 };
     materialDrafts = [];
-    Object.entries(nodes.revisionInputs || {}).forEach(([key, control]) => { control.value = String(revisionDraft[key]); });
-    renderMaterials();
+    editor.reset();
     resetPreview();
-  }
-
-  function renderMaterials() {
-    if (!nodes.materials) return;
-    nodes.materials.replaceChildren();
-    materialDrafts.forEach((material, index) => {
-      const controls = el("fieldset", "", "photo-review-material-region");
-      controls.append(el("legend", `Local region ${index + 1}`));
-      const name = input("photographic-material-name", "text", material.name);
-      name.maxLength = 80;
-      name.addEventListener("input", () => { material.name = name.value; resetPreview(); });
-      controls.append(field("Material / region name", name));
-      for (const [position, label] of ["Left", "Top", "Right", "Bottom"].entries()) {
-        const control = input(`photographic-material-${label.toLowerCase()}`, "number", String(material.region[position]));
-        control.min = "0"; control.max = "1"; control.step = "0.01";
-        control.addEventListener("input", () => { material.region[position] = control.value; resetPreview(); });
-        controls.append(field(`${label} (0–1)`, control));
-      }
-      for (const [key, label, min, max, step] of [["exposure_stops", "Local exposure (EV)", -0.5, 0.5, 0.05], ["warmth", "Local warmth", -0.1, 0.1, 0.01], ["feather", "Edge feather", 0.005, 0.1, 0.005]]) {
-        const control = input(`photographic-material-${key}`, "number", String(material[key]));
-        control.min = String(min); control.max = String(max); control.step = String(step);
-        control.addEventListener("input", () => { material[key] = control.value; resetPreview(); });
-        controls.append(field(label, control));
-      }
-      controls.append(button("Remove region", "photographic-remove-material", () => { materialDrafts.splice(index, 1); resetPreview(); renderMaterials(); }));
-      nodes.materials.append(controls);
-    });
   }
 
   function chooseVariants() {
@@ -593,6 +531,14 @@ export function createPhotographicReview(host) {
     nodes.quality.replaceChildren();
     nodes.measureQuality.disabled = !currentVariant(comparePath);
     setPending(pending);
+    nodes.materialsDiagnostics.replaceChildren();
+    (currentVariant()?.diagnostics || []).forEach((file) => {
+      const url = photographicAssetUrl(file.url, jobId);
+      if (!url || !SHA256.test(file.sha256 || "")) return;
+      const link = el("a", file.filename === "materials-preview.png" ? "Matching photographic preview (PNG)" : file.filename);
+      bindDownload(link, url, file.filename, file.sha256, true);
+      nodes.materialsDiagnostics.append(link);
+    });
     renderContactSheet();
     renderPresets();
     rememberSelection(); notifySelection();
@@ -981,8 +927,11 @@ export function createPhotographicReview(host) {
     const variant = currentVariant();
     if (!variant) return;
     let recipe;
-    try { recipe = photographicRecipe({ ...revisionDraft, materials: materialDrafts }); } catch (error) { status(error.message, true); return; }
-    const key = JSON.stringify([variant.artifact_path, variant.sha256, identity(variant), variant.presentation_policy_sha256 || null, recipe, nodes.reference.value]);
+    try { recipe = editor.recipe(); } catch (error) { status(error.message, true); return; }
+    const reference = recipe.schema === "tp.photo.materials_recipe.v1" ? null : nodes.reference.value || null;
+    const keyFor = (selected, requested) => JSON.stringify([selected.artifact_path, selected.sha256, identity(selected),
+      selected.presentation_policy_sha256 || null, requested, requested.schema === "tp.photo.materials_recipe.v1" ? null : nodes.reference.value || null]);
+    const key = keyFor(variant, recipe);
     const expectedJob = jobId;
     const expectedGeneration = scopeGeneration;
     if (!previewOnly && variantPreview?.key !== key) { status("Render and inspect the current adjustments before creating a revision.", true); return; }
@@ -992,10 +941,10 @@ export function createPhotographicReview(host) {
       try {
         const result = await request("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
           ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
-          reference_sha256: nodes.reference.value || null, expected_version: data.state_version, preview_only: true }, 90000);
-        if (scopeGeneration !== expectedGeneration || currentVariant()?.artifact_path !== variant.artifact_path || key !== JSON.stringify([variant.artifact_path, currentVariant().sha256, identity(currentVariant()), currentVariant().presentation_policy_sha256 || null, photographicRecipe({ ...revisionDraft, materials: materialDrafts }), nodes.reference.value])) return;
+          reference_sha256: reference, expected_version: data.state_version, preview_only: true }, 90000);
+        if (scopeGeneration !== expectedGeneration || currentVariant()?.artifact_path !== variant.artifact_path || key !== keyFor(currentVariant(), editor.recipe())) return;
         if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result.preview_data_url || "")
-          || !photographicPreviewMatches(result.receipt, variant, recipe, nodes.reference.value || null)) throw new Error("Rendered variant preview identity or recipe could not be verified.");
+          || !editor.matches(result.receipt, variant, recipe, reference)) throw new Error("Rendered variant preview identity or recipe could not be verified.");
         variantPreview = { key, result };
         nodes.variantPreview.src = result.preview_data_url;
         nodes.variantPreview.classList.remove("hidden");
@@ -1006,7 +955,7 @@ export function createPhotographicReview(host) {
     } else {
       const result = await mutate("/revisions", { artifact_path: variant.artifact_path, sha256: variant.sha256, source_identity_sha256: identity(variant), scene_id: sceneId, recipe,
         ...(presentationAware(variant) ? { presentation_policy_sha256: variant.presentation_policy_sha256 || null } : {}),
-        reference_sha256: nodes.reference.value || null, preview_only: false }, "Revision created separately and remains unapproved.", 180000);
+        reference_sha256: reference, preview_only: false }, "Revision created separately and remains unapproved.", 180000);
       if (result) { chooseVariants(); render(); resetPreview(); }
     }
   }

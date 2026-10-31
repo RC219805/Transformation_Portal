@@ -60,6 +60,10 @@
       "repo_path": "public/portal-assets/portal-photographic-support.js",
       "media_type": "text/javascript; charset=utf-8"
     },
+    "portal-photographic-editor.js": {
+      "repo_path": "public/portal-assets/portal-photographic-editor.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
     "portal-photographic.css": {
       "repo_path": "public/portal-assets/portal-photographic.css",
       "media_type": "text/css; charset=utf-8"

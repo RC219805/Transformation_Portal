@@ -298,6 +298,204 @@ async def test_delivery_recovery_metadata_and_unknown_fields_survive_legacy_styl
     assert json.loads((await _events(store, job_id))[0])["details"]["request_correlation_id"] == "attempt"
 
 
+def _generated_native_materials_record():
+    """Use real native SDR math and all three exact diagnostic products."""
+    import io
+
+    import numpy as np
+    import tifffile
+
+    from transformation_portal.lux_depth_v4.photography import output_srgb_icc
+    from transformation_portal.lux_depth_v6.color import RenderRecipe
+    from transformation_portal.photographic_delivery import DeliveryImage
+    from transformation_portal.photographic_delivery.materials import MaterialsRecipe, create_materials_revision
+    from transformation_portal.photographic_delivery.presentation import PresentationPolicy
+
+    grid = np.indices((64, 96)).sum(axis=0) % 2
+    pixels = np.empty((64, 96, 4), dtype=np.uint16)
+    pixels[..., :3] = (20000 + grid * 15000)[..., None]
+    pixels[..., 3] = 65535
+    pixels[0, :, 3] = 0
+    pixels[1, :, 3] = 32768
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, pixels, photometric="rgb", extrasamples="unassalpha", iccprofile=output_srgb_icc())
+    source = buffer.getvalue()
+    source_sha = hashlib.sha256(source).hexdigest()
+    image = DeliveryImage(
+        "source.tif",
+        source_sha,
+        "Room",
+        source_bytes=source,
+        presentation=PresentationPolicy(
+            "display_referred", RenderRecipe("soft_srgb", 0.7), "v6_delivery", "b" * 64, source_sha, source_sha
+        ),
+    )
+    recipe = MaterialsRecipe.from_payload(
+        {
+            "schema": "tp.photo.materials_recipe.v1",
+            "input_stage": "display_referred",
+            "regions": [
+                {"id": f"region-{index}-" + "x" * 55, "label": label, "region": region, "strength": 0.03}
+                for index, (label, region) in enumerate(
+                    [
+                        ("glass", [0, 0, 0.5, 0.5]),
+                        ("stone", [0.5, 0, 1, 0.5]),
+                        ("water", [0, 0.5, 0.5, 1]),
+                        ("foliage", [0.5, 0.5, 1, 1]),
+                    ],
+                    start=1,
+                )
+            ],
+        }
+    )
+    result = create_materials_revision(image, recipe)
+    identity = "native-materials-store-record"
+    record = {
+        "id": identity,
+        "variant": {
+            "artifact_path": f"revisions/{identity}/master.tif",
+            "sha256": result["receipt"]["revision_sha256"],
+            "size_bytes": len(result["source_bytes"]),
+            "source_name": "master.tif",
+            "version": "r001",
+            "scene_id": "room",
+            "label": "Room",
+            "role": "final",
+            "kind": "review_asset",
+            "storage_path": f"photographic-review/{identity}/master.tif",
+            "input_color": "auto",
+        },
+        "receipt": result["receipt"],
+        "native_source": {
+            "artifact_path": "retained/source.tif",
+            "sha256": source_sha,
+            "source_identity_sha256": image.source_identity_sha256,
+        },
+        "native_products": [
+            {
+                "filename": filename,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size_bytes": len(data),
+                "content_type": mime,
+                "kind": "review_asset",
+                "storage_path": f"photographic-review/{identity}/{filename}",
+            }
+            for filename, (data, mime) in result["diagnostic_files"].items()
+        ],
+        "actor": {"username": "synthetic-reviewer", "assurance": "test_authenticated_operator"},
+        "created_at": 1.0,
+    }
+    assert len(record["receipt"]["recipe"]["regions"]) == 4
+    assert {product["filename"] for product in record["native_products"]} == {
+        "materials-overlay.png",
+        "materials-diagnostics.json",
+        "materials-preview.png",
+    }
+    assert len(record["receipt"]["diagnostics"]) == 3
+    for product in record["native_products"]:
+        diagnostic = next(row for row in record["receipt"]["diagnostics"] if row["filename"] == product["filename"])
+        assert all(product[key] == value for key, value in diagnostic.items())
+    return record
+
+
+async def _save_native_materials_record(store, job_id):
+    record = _generated_native_materials_record()
+
+    def save(state):
+        state["revisions"].append(record)
+        return state
+
+    updated = await store.mutate(
+        job_id,
+        "tenant-a",
+        0,
+        save,
+        {"kind": "revision", "actor": record["actor"], "created_at": 1.0, "details": record},
+    )
+    return record, updated
+
+
+async def test_generated_native_materials_receipt_and_three_product_closure_survive_projection_and_audit(review_store):
+    store, job_id = review_store
+    record, updated = await _save_native_materials_record(store, job_id)
+    assert await store.get(job_id, "tenant-a") == updated
+    assert updated["revisions"] == [record]
+    raw = (await _events(store, job_id))[0]
+    audit = json.loads(raw)
+    assert raw == canonicalize_json(audit)
+    assert audit["details"] == record
+    assert audit["projection_sha256"] == hashlib.sha256(canonicalize_json(updated)).hexdigest()
+    # A real maximum-four-region receipt (including 64-character region IDs)
+    # and all product metadata retain ample space within both store limits.
+    assert len(raw) < 128 * 1024 // 2
+    assert len(canonicalize_json(updated)) < 2 * 1024 * 1024 // 8
+    snapshot_sha = hashlib.sha256(raw).hexdigest()
+    changed = await store.mutate(job_id, "tenant-a", 1, _approve, {"kind": "decision"})
+    assert changed["revisions"][0] == record
+    assert hashlib.sha256((await _events(store, job_id))[0]).hexdigest() == snapshot_sha
+    # Detached caller containers cannot mutate a retained receipt or product
+    # identity after the atomic projection/event write.
+    record["receipt"]["execution"]["status"] = "caller-mutated"
+    record["native_products"][0]["sha256"] = "0" * 64
+    assert (await store.get(job_id, "tenant-a"))["revisions"] == updated["revisions"]
+    assert json.loads((await _events(store, job_id))[0])["details"] == updated["revisions"][0]
+
+
+async def test_postgres_native_materials_receipt_and_diagnostic_closure_survive_separate_process_restart(review_store):
+    from pathlib import Path
+
+    store, job_id = review_store
+    if isinstance(store, MemoryReviewStore):
+        pytest.skip("durable native Materials review requires the migrated dedicated Postgres lane")
+    _, expected = await _save_native_materials_record(store, job_id)
+    expected_events = [
+        {"sha256": hashlib.sha256(raw).hexdigest(), "payload": json.loads(raw)} for raw in await _events(store, job_id)
+    ]
+    await _SharedEngine.dispose(store.database_url)
+    code = """
+import asyncio, hashlib, json, os
+from sqlalchemy import select
+from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.orchestrator.models import PhotographicReviewEventModel
+from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+from transformation_portal.orchestrator.storage.postgres import _SharedEngine
+async def run():
+    url, job_id = os.environ['TP_TEST_POSTGRES_URL'], os.environ['TP_REVIEW_TEST_JOB_ID']
+    state = await PostgresReviewStore(url).get(job_id, 'tenant-a')
+    _, factory = await _SharedEngine.get(url)
+    async with factory() as session:
+        rows = (await session.scalars(select(PhotographicReviewEventModel)
+            .where(PhotographicReviewEventModel.job_id == job_id)
+            .order_by(PhotographicReviewEventModel.version))).all()
+        events = []
+        for row in rows:
+            payload = json.loads(row.canonical_bytes)
+            assert hashlib.sha256(row.canonical_bytes).hexdigest() == row.sha256
+            assert canonicalize_json(payload) == row.canonical_bytes
+            events.append({'sha256': row.sha256, 'payload': payload})
+    print(json.dumps({'state': state, 'events': events}, sort_keys=True))
+    await _SharedEngine.dispose(url)
+asyncio.run(run())
+"""
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        code,
+        env={
+            **os.environ,
+            "TP_REVIEW_TEST_JOB_ID": job_id,
+            "PYTHONPATH": os.pathsep.join(
+                [str(Path(__file__).resolve().parents[2] / "src"), os.environ.get("PYTHONPATH", "")]
+            ),
+        },
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+    assert process.returncode == 0, "separate native Materials review process failed"
+    assert json.loads(stdout) == {"state": expected, "events": expected_events}
+
+
 async def test_postgres_delivery_recovery_metadata_survives_separate_process_restart(review_store):
     store, job_id = review_store
     if isinstance(store, MemoryReviewStore):
