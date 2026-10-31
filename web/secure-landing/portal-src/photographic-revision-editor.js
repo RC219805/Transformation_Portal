@@ -29,7 +29,8 @@ export function createPhotographicRevisionEditor(host) {
     if (nodes.reference) nodes.reference.disabled = blocked || native;
     nodes.materials?.querySelectorAll("input,select,button").forEach((control) => { control.disabled = blocked; });
     nodes.addRegion.disabled = blocked || (native && !eligible) || getMaterials().length >= (native ? 4 : 16);
-    if (native && !eligible) { nodes.previewRevision.disabled = true; nodes.commitRevision.disabled = true; }
+    nodes.previewRevision.disabled = blocked || (native && !eligible);
+    if (native && !eligible) nodes.commitRevision.disabled = true;
   }
 
   function build() {

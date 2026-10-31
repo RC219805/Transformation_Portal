@@ -176,6 +176,7 @@ def operation_cost(
     inspections: list[dict[str, Any]] | None = None,
     *,
     native_materials_regions: int | None = None,
+    download_parent_bytes: int = 0,
 ) -> ReviewCost:
     """Reserve max(analytical allocation bound, 1.5 * observed peak).
 
@@ -188,8 +189,16 @@ def operation_cost(
         operation != "revision" or type(native_materials_regions) is not int or not 1 <= native_materials_regions <= 4
     ):
         raise ValueError("Native Materials costs require one to four validated regions for a revision")
+    if (
+        type(download_parent_bytes) is not int
+        or not 0 <= download_parent_bytes <= 512 * MIB
+        or (download_parent_bytes and operation != "download")
+    ):
+        raise ValueError("Parent snapshot costs require a bounded download byte allowance")
     if operation == "download":
-        return ReviewCost(256 * MIB, 0, decode_slots=0, interactive=False)
+        # Original verification snapshots retain read chunks alongside joined
+        # bytes. Reserve both complete copies before any source materialization.
+        return ReviewCost(256 * MIB + 2 * download_parent_bytes, 0, decode_slots=0, interactive=False)
     if operation not in {"render", "decision", "catalogue", "revision", "delivery", "quality", "groups"}:
         raise ValueError("Unknown photographic operation")
     pixels = MAX_REVIEW_PIXELS
@@ -257,6 +266,7 @@ class ReviewLease:
     released: bool = False
     tracked_paths: set[Path] = field(default_factory=set)
     future_scratch_finished: bool = False
+    native_revision_owner: object | None = None
 
     async def release_expensive(self, *, memory_quiescent: bool = True) -> None:
         """Release workers; retain memory until buffers and tracebacks are gone."""

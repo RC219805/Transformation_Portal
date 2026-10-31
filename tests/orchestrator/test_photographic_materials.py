@@ -521,6 +521,76 @@ async def test_native_cancellation_drains_worker_before_releasing_lease(review_f
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["save", "repeated_cancellation"])
+async def test_native_direct_sibling_cannot_reuse_consumed_lease(review_factory, monkeypatch, outcome):
+    from transformation_portal.orchestrator.photographic_admission import ReviewOverload, current_review_lease
+    from transformation_portal.photographic_delivery import materials
+
+    with review_factory() as case:
+        service = PhotographicReviewService(ReviewAdmissionConfig(enabled=True))
+        geometry = {"width": 96, "height": 64, "alpha": False}
+        service._remember_inspection(case.context, case.context.references[0], geometry)
+        request = RevisionRequest(**payload(case))
+        state = await service.state(case.context)
+        cost = service._resource_cost(case.context, state, "revision", (request,), [geometry])
+        lease = await service.admission.acquire("tenant_a", cost)
+        started, finish = threading.Event(), threading.Event()
+        original = materials.create_materials_revision
+
+        def controlled(image, selected_recipe):
+            started.set()
+            if not finish.wait(5):
+                raise AssertionError("Fixture worker did not receive completion")
+            return original(image, selected_recipe)
+
+        monkeypatch.setattr(materials, "create_materials_revision", controlled)
+        token = current_review_lease.set(lease)
+        task = asyncio.create_task(service.revision(case.context, request))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            claim = lease.native_revision_owner
+            reads = len(case.reads)
+            with pytest.raises(ReviewOverload) as rejected:
+                await service.revision(case.context, request)
+            assert rejected.value.reason == "revision_reservation_already_used"
+            legacy_request = RevisionRequest(**payload(case, recipe={"exposure_stops": 0.1}))
+            with pytest.raises(ReviewOverload) as rejected:
+                await service.revision(case.context, legacy_request)
+            assert rejected.value.reason == "revision_reservation_already_used"
+            assert lease.native_revision_owner is claim and len(case.reads) == reads
+            assert service.admission.snapshot()["active"] == 1
+            if outcome == "repeated_cancellation":
+                task.cancel()
+                await asyncio.sleep(0)
+                task.cancel()
+                await asyncio.sleep(0)
+                assert not task.done() and service.admission.snapshot()["active"] == 1
+                with pytest.raises(ReviewOverload) as rejected:
+                    await service.revision(case.context, request)
+                assert rejected.value.reason == "revision_reservation_already_used"
+            finish.set()
+            if outcome == "save":
+                result = await task
+                assert result["revision"]["review_status"] == "unreviewed"
+                assert lease.future_scratch_finished and lease.cost.memory_bytes == 0
+            else:
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                assert not case.assets and not case.writes
+            with pytest.raises(ReviewOverload) as rejected:
+                await service.revision(case.context, request)
+            assert rejected.value.reason == "revision_reservation_already_used"
+            assert len(case.reads) == reads and lease.native_revision_owner is claim
+        finally:
+            finish.set()
+            current_review_lease.reset(token)
+            if not task.done():
+                await asyncio.gather(task, return_exceptions=True)
+            await lease.release()
+            await service.close()
+
+
+@pytest.mark.asyncio
 async def test_adapter_reads_only_exact_committed_native_diagnostic_refs(tmp_path, monkeypatch):
     from copy import deepcopy
     from unittest.mock import AsyncMock

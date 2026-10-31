@@ -764,7 +764,36 @@ async def test_native_diagnostic_download_reserves_parent_snapshot_and_exact_pro
         ordinary = service._resource_cost(context(), {}, "download", ("other", "overlay.png"), None)
         assert cost.scratch_bytes >= 512 * 1024**2 + 12345 + 256 * 1024**2
         assert cost.scratch_bytes < ordinary.scratch_bytes
-        assert cost.decode_slots == 0 and cost.memory_bytes == 256 * 1024**2
+        assert cost.decode_slots == 0 and cost.memory_bytes == (256 + 2 * 512) * 1024**2
+        assert ordinary.memory_bytes == 256 * 1024**2
+    finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("parent_bytes", [-1, True, 1.5, 512 * 1024**2 + 1])
+async def test_download_parent_snapshot_cost_requires_a_bounded_byte_allowance(parent_bytes):
+    with pytest.raises(ValueError, match="bounded download byte allowance"):
+        operation_cost("download", configuration(), download_parent_bytes=parent_bytes)
+    with pytest.raises(ValueError, match="bounded download byte allowance"):
+        operation_cost("render", configuration(), download_parent_bytes=1)
+
+
+async def test_native_diagnostic_parent_memory_rejects_before_discovery_or_materialization(monkeypatch):
+    service = PhotographicReviewService(configuration(bulk_memory_bytes=GIB))
+    state = {
+        "state_version": 0,
+        "revisions": [{"id": "native-revision", "native_products": [{"filename": "overlay.png", "size_bytes": 12345}]}],
+    }
+    monkeypatch.setattr(service, "state", AsyncMock(return_value=state))
+    discover = AsyncMock(side_effect=AssertionError("Parent memory admission must precede source discovery"))
+    case = context(discover=discover)
+    try:
+        with pytest.raises(ReviewOverload) as caught:
+            await service.execute(case, service.download, "native-revision", "overlay.png")
+        assert caught.value.status == 413 and caught.value.reason == "operation_capacity_limit"
+        discover.assert_not_awaited()
+        case.materialize.assert_not_awaited()
+        assert service.admission.snapshot()["active"] == service.admission.snapshot()["outstanding"] == 0
     finally:
         await service.close()
 

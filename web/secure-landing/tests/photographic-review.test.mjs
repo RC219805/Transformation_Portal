@@ -173,8 +173,17 @@ test("native editor requires capability and an 8/16-bit SDR assertion with valid
 
 test("native mode preserves pending edits, bounds manual masks, and cannot fall back when capability disappears", async () => {
   let enabled = true;
-  const h = fixture({ historyEnabled: false, extraFetch: (url) => url.endsWith("/photographic-review")
-    ? new Response(JSON.stringify({ success: true, data: materialsCatalogue(variant, enabled) })) : null });
+  let completeLegacyPreview;
+  const h = fixture({ historyEnabled: false, extraFetch: (url, options) => {
+    if (url.endsWith("/photographic-review")) return new Response(JSON.stringify({ success: true, data: materialsCatalogue(variant, enabled) }));
+    if (!url.endsWith("/revisions")) return null;
+    const payload = JSON.parse(options.body);
+    return new Promise((resolve) => { completeLegacyPreview = () => resolve(new Response(JSON.stringify({ success: true, data: {
+      preview_data_url: "data:image/png;base64,cG5n", receipt: { schema: "tp.photo.revision.v1", source_master_sha256: SHA,
+        width: variant.width, height: variant.height, output_bit_depth: 32, review_status: "unreviewed", approval_transferred: false,
+        reference_sha256: null, recipe: payload.recipe },
+    } }))); });
+  } });
   h.api.show(h.job, variant); await settle();
   const mode = h.root.find("photographic-native-materials");
   const exposure = h.root.find("photographic-revision-exposure");
@@ -199,6 +208,21 @@ test("native mode preserves pending edits, bounds manual masks, and cannot fall 
   await h.root.find("photographic-preview-revision").trigger();
   assert.match(h.root.find("photographic-review-status").textContent, /cannot fall back/);
   assert.equal(h.requests.filter((request) => request.options.method === "POST").length, 0);
+  for (let index = 0; index < 4; index += 1) await h.root.find("photographic-remove-material").trigger();
+  mode.value = "legacy"; await mode.trigger("change");
+  const preview = h.root.find("photographic-preview-revision");
+  assert.equal(mode.value, "legacy");
+  assert.equal(mode.hidden, true);
+  assert.equal(preview.disabled, false, "explicitly leaving unavailable native mode restores local preview without a refresh");
+  assert.equal(exposure.disabled, false);
+  assert.equal(h.root.find("photographic-create-revision").disabled, true);
+  await preview.trigger();
+  assert.equal(preview.disabled, true, "the pending-operation guard still owns preview availability");
+  const posted = JSON.parse(h.requests.find((request) => request.url.endsWith("/revisions")).options.body);
+  assert.deepEqual(posted.recipe, photographicRecipe());
+  completeLegacyPreview(); await settle();
+  assert.equal(preview.disabled, false);
+  assert.equal(h.root.find("photographic-create-revision").disabled, false);
   h.api.show(null, null);
 });
 

@@ -1194,6 +1194,8 @@ class PhotographicReviewService:
             ]
             files.extend(native_files)
             size = files[0]["size_bytes"] if len(files) == 1 else MAX_BUNDLE_BYTES
+            if native_files:
+                cost = operation_cost("download", self.admission.config, download_parent_bytes=MAX_IMAGE_BYTES)
             # Native diagnostics retain a separately verified parent snapshot
             # through product retrieval; both private files coexist.
             workspace = (source + size if native_files else max(size, source)) + 256 * 1024**2
@@ -1640,8 +1642,16 @@ class PhotographicReviewService:
         from transformation_portal.photographic_delivery.materials import MaterialsRecipe, create_materials_revision
 
         native_materials = self._validate_native_revision(payload)
-        if native_materials and current_review_lease.get() is None:
+        lease = current_review_lease.get()
+        if native_materials and (lease is None or not self.admission.owns_lease(lease)):
             raise ReviewOverload("native_materials_reservation_required")
+        if lease is not None:
+            if lease.native_revision_owner is not None:
+                raise ReviewOverload("revision_reservation_already_used")
+            # One revision consumes one lease. Keep this marker through worker
+            # drain, CAS and cancellation; a released worker slot never grants
+            # a sibling task authority to reuse this operation's reservation.
+            lease.native_revision_owner = object()
         state = await self.state(context)
         if payload.expected_version != state["state_version"]:
             raise ReviewConflict("Review changed; reload before creating a revision")
