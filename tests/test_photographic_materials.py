@@ -150,6 +150,52 @@ def test_materials_overlap_is_protected_and_execution_reports_actual_native_delt
     assert diagnostics["evidence_sha256"] == result["receipt"]["evidence_sha256"]
 
 
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_materials_adjacent_decimal_edges_edit_distinct_native_columns_and_rows(axis):
+    shape = (4, 100) if axis == "x" else (100, 4)
+    samples = np.full((*shape, 3), 22000, np.uint16)
+    first = [0.28, 0, 0.29, 1] if axis == "x" else [0, 0.28, 1, 0.29]
+    second = [0.29, 0, 0.30, 1] if axis == "x" else [0, 0.29, 1, 0.30]
+    payload = _payload(region=first)
+    payload["regions"].append({"id": "region-2", "label": "water", "region": second, "strength": 0.03})
+    result = create_materials_revision(_image(pixels=samples), MaterialsRecipe.from_payload(payload))
+    after = tifffile.imread(io.BytesIO(result["source_bytes"])).astype(np.int32)
+    edited = np.any(np.abs(after - samples.astype(np.int32)) > 1, axis=2)
+    expected = np.zeros(shape, dtype=bool)
+    if axis == "x":
+        expected[:, 28:30] = True
+    else:
+        expected[28:30] = True
+    np.testing.assert_array_equal(edited, expected)
+    execution = result["receipt"]["execution"]
+    assert execution["changed_pixels"] == 8
+    assert [(region["coverage_px"], region["resolved_coverage_px"]) for region in execution["regions"]] == [(4, 4), (4, 4)]
+
+
+@pytest.mark.parametrize(
+    "shape,region,bounds",
+    [
+        ((3, 13), [0, 0, 0.5, 1], (0, 0, 6, 3)),
+        ((3, 13), [0.5, 0, 1, 1], (6, 0, 13, 3)),
+        ((3, 13), [0, 0, 1, 1], (0, 0, 13, 3)),
+        ((3, 100), [0.285, 0, 0.295, 1], (28, 0, 29, 3)),
+        ((3, 100), [0.29, 0, 0.29000000000000004, 1], (29, 0, 30, 3)),
+        ((3, 13), [float(np.nextafter(1.0, 0)), float(np.nextafter(1.0, 0)), 1, 1], (12, 2, 13, 3)),
+        ((3, 13), [0, 0, float(np.nextafter(0.0, 1)), float(np.nextafter(0.0, 1))], (0, 0, 1, 1)),
+    ],
+)
+def test_materials_native_edge_conversion_retains_fractional_truncation_and_bounded_minimum_area(shape, region, bounds):
+    samples = np.full((*shape, 3), 22000, np.uint16)
+    result = create_materials_revision(_image(pixels=samples), MaterialsRecipe.from_payload(_payload(region=region)))
+    after = tifffile.imread(io.BytesIO(result["source_bytes"])).astype(np.int32)
+    edited = np.any(np.abs(after - samples.astype(np.int32)) > 1, axis=2)
+    left, top, right, bottom = bounds
+    expected = np.zeros(shape, dtype=bool)
+    expected[top:bottom, left:right] = True
+    np.testing.assert_array_equal(edited, expected)
+    assert result["receipt"]["execution"]["changed_pixels"] == np.count_nonzero(expected) > 0
+
+
 def test_materials_display_preview_reopen_and_export_never_receive_second_tone(tmp_path, monkeypatch):
     image = _image()
     policy = PresentationPolicy(

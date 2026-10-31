@@ -91,6 +91,10 @@ The closed recipe `tp.photo.materials_recipe.v1` contains `input_stage` equal to
 `region: [left, top, right, bottom]`, and `strength` from zero to 0.05. Repeated
 labels must share a strength. These are human-specified rectangles, not inferred
 semantic masks. Global grading and lighting-reference controls remain separate.
+Normalized edges truncate to native pixel edges, with an integer snap only within
+four floating-point ULPs. Genuine fractional edges retain truncation, and each
+region retains at least one in-bounds pixel. Generated native-mask hashes bind
+the affected pixels before execution.
 Clients cannot select executable kernels, physical paths, calibration trust,
 memory limits or an arbitrary policy. The server freezes the complete bounded
 MaterialsV4 policy, operation identity and generated native-mask evidence before

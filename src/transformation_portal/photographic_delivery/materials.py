@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import math
 import re
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -155,13 +156,23 @@ def materials_policy(recipe: MaterialsRecipe) -> ResponsePolicy:
     )
 
 
+def _native_edge(coordinate: float, extent: int) -> int:
+    """Preserve truncation except for integer edges perturbed by float roundoff."""
+    scaled = coordinate * extent
+    nearest = round(scaled)
+    if abs(scaled - nearest) <= 4 * math.ulp(scaled):
+        return nearest
+    return int(scaled)
+
+
 def _evidence(master: ImageMaster, recipe: MaterialsRecipe) -> MaterialEvidence:
     height, width = master.shape
     regions = []
     for region in recipe.regions:
         left, top, right, bottom = region.region
-        x0, y0 = int(left * width), int(top * height)
-        x1, y1 = max(x0 + 1, int(right * width)), max(y0 + 1, int(bottom * height))
+        x0, y0 = min(_native_edge(left, width), width - 1), min(_native_edge(top, height), height - 1)
+        x1 = min(width, max(x0 + 1, _native_edge(right, width)))
+        y1 = min(height, max(y0 + 1, _native_edge(bottom, height)))
         mask = np.zeros(master.shape, np.float32)
         mask[y0:y1, x0:x1] = 1
         regions.append(RegionEvidence(region.id, region.label, mask, semantic_confidence=1.0, provenance="supplied"))
