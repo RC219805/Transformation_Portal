@@ -201,7 +201,7 @@ def _tiff(master: ImageMaster) -> bytes:
 def _overlay(master: ImageMaster, evidence: MaterialEvidence) -> bytes:
     samples = preview_samples(master).copy()
     height, width = samples.shape[:2]
-    coverage = np.zeros((height, width), np.float32)
+    native_coverage = np.zeros(master.shape, np.uint8)
     palette = {
         "glass": (40, 170, 255),
         "stone": (250, 180, 50),
@@ -211,13 +211,17 @@ def _overlay(master: ImageMaster, evidence: MaterialEvidence) -> bytes:
     }
     rgb = samples[..., :3].astype(np.float32)
     for region in evidence.regions:
+        native_coverage += region.mask > 0
         with Image.fromarray(region.mask) as mask:
             with mask.resize((width, height), Image.Resampling.BOX) as reduced:
                 weight = np.asarray(reduced, dtype=np.float32)
-        coverage += weight
         opacity = weight[..., None] * np.float32(0.35)
         rgb = rgb * (1 - opacity) + np.asarray(palette[region.label], np.float32) * opacity
-    rgb[coverage > 1] = (255, 70, 70)
+    # Native conflicts are categorical. Averaging the separate masks first can
+    # erase one-pixel overlaps, so reduce their actual conflict support instead.
+    with Image.fromarray((native_coverage > 1).astype(np.float32)) as conflict:
+        with conflict.resize((width, height), Image.Resampling.BOX) as reduced:
+            rgb[np.asarray(reduced) > 0] = (255, 70, 70)
     samples[..., :3] = np.rint(rgb).astype(np.uint8)
     buffer = io.BytesIO()
     with Image.fromarray(samples) as image:

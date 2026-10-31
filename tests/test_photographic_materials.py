@@ -197,6 +197,23 @@ def test_materials_overlay_is_bounded_without_reducing_native_geometry():
     assert {key: descriptor["preview"][key] for key in result["receipt"]["preview"]} == result["receipt"]["preview"]
 
 
+@pytest.mark.parametrize("overlap", [True, False])
+def test_materials_overlay_preserves_single_native_pixel_conflicts_before_reduction(overlap):
+    pixels = np.full((4, 3200, 3), 22000, np.uint16)
+    first = [0, 0, 1 / 3200, 0.25]
+    second = first if overlap else [1 / 3200, 0, 2 / 3200, 0.25]
+    payload = _payload(strength=0, region=first)
+    payload["regions"].append({"id": "region-2", "label": "water", "region": second, "strength": 0})
+    result = create_materials_revision(_image(pixels=pixels), MaterialsRecipe.from_payload(payload))
+    with Image.open(io.BytesIO(result["diagnostic_files"]["materials-overlay.png"][0])) as overlay:
+        samples = np.asarray(overlay)
+    assert samples.shape == (2, 1600, 3)
+    red = np.all(samples == [255, 70, 70], axis=2)
+    assert red[0, 0] == overlap
+    assert np.count_nonzero(red) == int(overlap)
+    assert result["receipt"]["execution"]["changed_pixels"] == 0
+
+
 @pytest.mark.parametrize(
     "damage",
     [
