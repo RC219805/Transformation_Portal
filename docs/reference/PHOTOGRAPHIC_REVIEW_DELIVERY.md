@@ -133,6 +133,63 @@ tests do not establish representative native-runtime/resource or photographic
 acceptance. Retained-photo pilots, actual model qualification and Richard's
 scoped photographic decision remain separate; AWS/GPU validation stays on hold.
 
+## Offline native Materials CPU measurements
+
+The additive CPU qualification command measures the existing compositor in fresh
+processes using caller-authorized retained TIFFs. It does not perform inference,
+modify managed feature flags, grant managed capacity, transfer approval, or
+establish photographic improvement. The initial input contract is integer
+8/16-bit SDR TIFF, at most 40 megapixels and 512 MiB, with explicit
+`display_referred` recipe semantics. Use the existing governed CPU environment
+with NumPy, Pillow, tifffile, SciPy and psutil; no model runtime reinstall is needed.
+
+Create a private parent directory outside retained source directories, then run
+from the repository root (substitute actual authorized paths and source hash):
+
+```bash
+PYTHONPATH=.:src ./.venv/bin/python -m transformation_portal.photographic_delivery.qualification \
+  --source /absolute/retained/photo.tif \
+  --source-sha256 <verified-source-sha256> \
+  --recipe /absolute/private/materials-recipe.json \
+  --output /absolute/private/qualification/new-run \
+  --repeats 3 --preflight-only
+```
+
+The recipe is the same closed `tp.photo.materials_recipe.v1` payload described
+above. Remove `--preflight-only` and choose another fresh output directory to
+measure; preflight writes a planning report and never executes a trial. Existing
+output directories are rejected. Inputs and output ancestors must not traverse
+symlinks. Keep all reports, snapshots and generated products outside Git.
+
+The independent offline ceiling is 12 GiB memory, 64 GiB scratch and 300 seconds
+per trial, with one to five sequential trials. It cannot enlarge managed limits.
+Planning uses the current conservative managed analytical memory estimate,
+geometry-derived scratch including all retained trials, inspection reservations,
+and physical free-space/headroom checks. The supervisor samples process RSS and
+scratch every 50 ms and drains its owned worker on cancellation or a bound
+violation. These checks are process-local supervision, not OS-enforced limits or
+multiprocess admission. The host must permit psutil to inspect its own worker;
+a denied process inspection is an environment failure and stops the worker.
+
+`qualification.json` records source, recipe, implementation and package identity;
+per-process RSS high-water and incremental peak; sampled logical/allocated
+scratch; latency; source revalidation; product and receipt hashes; reopened native
+precision; and normalized-pixel repeatability. File-system caches are uncontrolled,
+so fresh processes are not cold-cache evidence. Zero-effect recipes verify
+preservation within one 16-bit code; nonzero recipes provide distinct candidates
+that still require Richard's scoped photographic decision.
+
+The report compares the unchanged analytical reservation with measured
+incremental peak plus 50%. An insufficient estimate fails qualification; the tool
+never raises a limit or lowers a production profile. `managed_profile` compares
+memory with the command environment only, not a running backend. Complete managed
+eligibility, authenticated publication/download, representative model performance,
+and photographic acceptance remain unestablished. Exit 0 means planned or
+measured according to `status`; exit 2 means blocked or not qualified; exit 1 is
+an invalid input, runtime, verification or worker failure. Retain failed private
+namespaces for diagnosis; the command deletes only its successful trial's own
+verified temporary source snapshot.
+
 ## Paged catalogue and review navigation
 
 The additive `tp.photo.scene_page.v1` catalogue supports up to 64 scenes. Use
