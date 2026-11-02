@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import importlib.metadata
+import io
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,12 +17,19 @@ from transformation_portal.photographic_delivery import native_resources as reso
 pytestmark = pytest.mark.unit
 
 
-def _record(path: str, value: bytes) -> importlib.metadata.PackagePath:
-    entry = importlib.metadata.PackagePath(path)
+def _record(path: str, value: bytes) -> list[str]:
     encoded = base64.urlsafe_b64encode(hashlib.sha256(value).digest()).rstrip(b"=").decode("ascii")
-    entry.hash = importlib.metadata.FileHash("sha256=" + encoded)
-    entry.size = len(value)
-    return entry
+    return [path, "sha256=" + encoded, str(len(value))]
+
+
+def _read_record(distribution) -> list[list[str]]:
+    return list(csv.reader(io.StringIO((distribution._path / "RECORD").read_text())))
+
+
+def _write_record(distribution, rows: list[list[str]]) -> None:
+    raw = io.StringIO(newline="")
+    csv.writer(raw, lineterminator="\n").writerows(rows)
+    (distribution._path / "RECORD").write_text(raw.getvalue())
 
 
 @pytest.fixture(name="installed")
@@ -30,8 +39,14 @@ def fixture_installed(tmp_path, monkeypatch):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(value)
+    metadata_root = tmp_path / "closed_sdk-1.0.dist-info"
+    metadata_root.mkdir()
+    metadata = b"Metadata-Version: 2.1\nName: closed-sdk\nVersion: 1.0\n"
+    (metadata_root / "METADATA").write_bytes(metadata)
+    distribution = importlib.metadata.PathDistribution(metadata_root)
     entries = [_record(name, value) for name, value in payloads.items()]
-    distribution = SimpleNamespace(files=entries, locate_file=lambda relative: tmp_path / relative)
+    entries.extend([_record(metadata_root.name + "/METADATA", metadata), [metadata_root.name + "/RECORD", "", ""]])
+    _write_record(distribution, entries)
     monkeypatch.setattr(resources.importlib.metadata, "distribution", lambda name: distribution)
     return tmp_path, distribution, payloads
 
@@ -49,7 +64,7 @@ def test_actual_sdk_source_and_model_bytes_have_stable_bounded_identity(installe
         "files": 2,
         "bytes": sum(map(len, payloads.values())),
     }
-    distribution.files.reverse()
+    _write_record(distribution, list(reversed(_read_record(distribution))))
     assert _identity() == result
     cache = root / "closed_sdk/__pycache__"
     cache.mkdir()
@@ -69,24 +84,26 @@ def test_changed_actual_code_or_model_with_unchanged_record_is_rejected(installe
 @pytest.mark.parametrize("change", ["missing", "extra", "unhashed", "wrong_size", "wrong_algorithm", "symlink", "duplicate"])
 def test_record_and_actual_tree_must_agree_exactly(installed, change):
     root, distribution, _ = installed
-    entry = distribution.files[0]
+    entries = _read_record(distribution)
+    entry = entries[0]
     if change == "missing":
-        (root / str(entry)).unlink()
+        (root / entry[0]).unlink()
     elif change == "extra":
         (root / "closed_sdk/unrecorded.py").write_bytes(b"unreviewed executable")
     elif change == "unhashed":
-        entry.hash = None
+        entry[1], entry[2] = "", ""
     elif change == "wrong_size":
-        entry.size += 1
+        entry[2] = str(int(entry[2]) + 1)
     elif change == "wrong_algorithm":
-        entry.hash = importlib.metadata.FileHash("md5=arbitrary")
+        entry[1] = "md5=arbitrary"
     elif change == "symlink":
-        original = root / str(entry)
+        original = root / entry[0]
         saved = root / "saved.py"
         original.rename(saved)
         original.symlink_to(saved)
     else:
-        distribution.files.append(entry)
+        entries.append(entry.copy())
+    _write_record(distribution, entries)
     with pytest.raises(ValueError):
         _identity()
 
@@ -100,8 +117,69 @@ def test_missing_record_and_bounded_bytes_files_fail_closed(installed, monkeypat
     monkeypatch.setattr(resources, "_MAX_PACKAGE_PAYLOAD_FILES", 1)
     with pytest.raises(ValueError, match="bounded RECORD"):
         _identity()
-    distribution.files = None
+    (distribution._path / "RECORD").unlink()
     with pytest.raises(ValueError, match="bounded RECORD"):
+        _identity()
+
+
+@pytest.mark.parametrize("change", ["oversized", "too_many_missing_rows"])
+def test_record_is_bounded_before_importlib_can_materialize_file_entries(installed, monkeypatch, change):
+    _, distribution, _ = installed
+
+    def forbidden(_self):
+        pytest.fail("Unbounded importlib Distribution.files must never be accessed")
+
+    monkeypatch.setattr(importlib.metadata.PathDistribution, "files", property(forbidden))
+    record = distribution._path / "RECORD"
+    if change == "oversized":
+        with record.open("wb") as stream:
+            stream.truncate(resources._MAX_PACKAGE_RECORD_BYTES + 1)
+    else:
+        _write_record(
+            distribution,
+            [
+                _record(f"unrelated/missing-{index}.py", b"missing")
+                for index in range(resources._MAX_PACKAGE_PAYLOAD_FILES + 1)
+            ],
+        )
+        assert record.stat().st_size < resources._MAX_PACKAGE_RECORD_BYTES
+    with pytest.raises(ValueError, match="bounded RECORD"):
+        _identity()
+
+
+@pytest.mark.parametrize("raw", [b"one,two\n", b'"unfinished', b"bad,sha256=invalid,1\n", b"bad,,1\n", b"bad,,\xff\n"])
+def test_malformed_record_rows_fail_closed(installed, raw):
+    _, distribution, _ = installed
+    (distribution._path / "RECORD").write_bytes(raw)
+    with pytest.raises(ValueError, match="RECORD"):
+        _identity()
+
+
+@pytest.mark.parametrize("alias", ["metadata", "record", "root"])
+def test_record_metadata_and_root_must_be_canonical_local_paths(installed, alias, monkeypatch):
+    root, distribution, _ = installed
+    if alias == "metadata":
+        path = distribution._path
+        saved = path.with_name("preserved.dist-info")
+        path.rename(saved)
+        path.symlink_to(saved, target_is_directory=True)
+    elif alias == "record":
+        path = distribution._path / "RECORD"
+        saved = distribution._path / "preserved-record"
+        path.rename(saved)
+        path.symlink_to(saved)
+    else:
+        linked = root / "alias"
+        linked.symlink_to(root, target_is_directory=True)
+        distribution = importlib.metadata.PathDistribution(linked / distribution._path.name)
+        monkeypatch.setattr(resources.importlib.metadata, "distribution", lambda name: distribution)
+    with pytest.raises(ValueError, match="RECORD"):
+        _identity()
+
+
+def test_custom_distribution_cannot_supply_unbounded_file_metadata(installed, monkeypatch):
+    monkeypatch.setattr(resources.importlib.metadata, "distribution", lambda name: SimpleNamespace())
+    with pytest.raises(ValueError, match="bounded local RECORD"):
         _identity()
 
 

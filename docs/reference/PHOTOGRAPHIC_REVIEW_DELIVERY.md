@@ -410,13 +410,24 @@ maximum canonical pilot requests 600 seconds explicitly; it does not retry or
 extend deadlines automatically. This validation timer changes no production
 admission wait, service CPU limit, memory reservation or scratch protection.
 
+Lower-cost S3 eligibility covers only HTTP loopback with the measured SDK
+configuration. HTTPS, custom model loaders/search paths, altered service models,
+or changed cached operation/shape semantics retain conservative costing. The
+actual GET/HEAD/PUT/DELETE/list models and streaming behavior must match bounded
+packaged models and SDK extras. Validation releases its private reference models
+without relying on garbage collection; it does not change the live client.
+
 The reviewed v2 profile identity is
-`4b0250600bc740007d4dcb0bf674fb05ec8ff9462c8713af6d77efe4c6d3e1dd`.
+`1bbf572ebdf6600d53478052633c704b414011ddbc88ac285e44545ac820c8f5`.
 Its closure includes 69 source/declaration/schema files, 37 package versions,
-seven compiled extensions, actual verified payload trees for 13 SDK/validator/
-Redis distributions, and ten standard-library transport/JSON source files.
+eight compiled extensions, actual verified payload trees for 13 SDK/validator/
+Redis distributions, and eleven standard-library transport/JSON/CSV source files.
 Actual package bytes, tree membership and wheel RECORD hashes/sizes must agree;
 version strings or RECORD metadata alone do not establish payload identity.
+RECORD reads are bounded to 4 MiB and 32,768 total CSV rows before file-entry
+materialization, including unrelated and missing-file rows. Noncanonical
+metadata paths, malformed records and unsupported distribution adapters fail
+closed without selecting the lower profile.
 
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh

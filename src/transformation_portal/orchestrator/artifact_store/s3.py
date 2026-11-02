@@ -41,7 +41,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
+import json
 import math
+from collections import OrderedDict
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, List, Optional
 from urllib.parse import urlsplit
@@ -59,6 +61,8 @@ from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_
 
 _CHUNK_BYTES = 1024 * 1024
 _DEFAULT_PREFIX = "tp/artifacts"
+_NATIVE_MODEL_BYTES = 4 * 1024**2
+_NATIVE_MODEL_NODES = 65536
 
 
 def _normalize_prefix(prefix: str) -> str:
@@ -95,7 +99,7 @@ def _native_loopback_endpoint(value: Any) -> str | None:
     try:
         parsed = urlsplit(value)
         if (
-            parsed.scheme not in {"http", "https"}
+            parsed.scheme != "http"
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path not in {"", "/"}
@@ -143,6 +147,169 @@ def _native_config_digest(config: Any) -> str | None:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _native_model_digest(payload: Any) -> str | None:
+    """Reject unbounded/mutable-object graphs before model serialization."""
+    nodes, text = 0, 0
+    active: set[int] = set()
+
+    def bounded(value: Any, depth: int = 0) -> bool:
+        nonlocal nodes, text
+        nodes += 1
+        if nodes > _NATIVE_MODEL_NODES or depth > 24:
+            return False
+        if type(value) is str:
+            text += len(value)
+            return len(value) <= 262144 and text <= 2 * 1024**2
+        if value is None or type(value) in {bool, int}:
+            return type(value) is not int or value.bit_length() <= 64
+        if type(value) is float:
+            return math.isfinite(value)
+        if type(value) not in {dict, OrderedDict, list} or len(value) > _NATIVE_MODEL_NODES or id(value) in active:
+            return False
+        active.add(id(value))
+        try:
+            if type(value) is list:
+                return all(bounded(item, depth + 1) for item in value)
+            return all(
+                type(key) is str and bounded(key, depth + 1) and bounded(item, depth + 1) for key, item in value.items()
+            )
+        finally:
+            active.remove(id(value))
+
+    if not bounded(payload):
+        return None
+    encoded = dumps_json(payload, sort_keys=True, allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest() if len(encoded) <= _NATIVE_MODEL_BYTES else None
+
+
+def _native_operation_models(model: Any) -> dict[str, Any]:
+    """Include effective cached shape serialization, not only backing JSON."""
+    from botocore.model import ListShape, MapShape, OperationModel, Shape, StringShape, StructureShape
+
+    count = 0
+
+    def shape_payload(shape: Any, depth: int = 0) -> Any:
+        nonlocal count
+        count += 1
+        if count > _NATIVE_MODEL_NODES or depth > 16:
+            raise ValueError("Native S3 operation shape graph exceeds its bound")
+        if shape is None:
+            return None
+        if type(shape) not in {Shape, StringShape, StructureShape, ListShape, MapShape}:
+            raise ValueError("Unsupported native S3 operation shape")
+        definition = shape._shape_model
+        if type(definition) not in {dict, OrderedDict}:
+            raise ValueError("Unsupported native S3 shape definition")
+        if type(shape) is StructureShape:
+            members = definition.get("members", {})
+            if type(members) not in {dict, OrderedDict} or len(members) > 256:
+                raise ValueError("Native S3 shape definition has unbounded members")
+        definition_identity = _native_model_digest(definition)
+        if definition_identity is None:
+            raise ValueError("Native S3 shape definition exceeds its finite graph bound")
+        result = {
+            "name": shape.name,
+            "type": shape.type_name,
+            "definition_sha256": definition_identity,
+            "serialization": shape.serialization,
+            "metadata": shape.metadata,
+        }
+        if type(shape) is StructureShape:
+            if (
+                type(shape.members) not in {dict, OrderedDict}
+                or len(shape.members) > 256
+                or any(type(name) is not str or len(name) > 1024 for name in shape.members)
+            ):
+                raise ValueError("Native S3 operation has unbounded members")
+            result["members"] = {name: shape_payload(value, depth + 1) for name, value in shape.members.items()}
+        elif type(shape) is ListShape:
+            result["member"] = shape_payload(shape.member, depth + 1)
+        elif type(shape) is MapShape:
+            result.update(key=shape_payload(shape.key, depth + 1), value=shape_payload(shape.value, depth + 1))
+        return result
+
+    result = {}
+    for name in ("GetObject", "HeadObject", "PutObject", "DeleteObject", "ListObjectsV2"):
+        operation = model.operation_model(name)
+        if type(operation) is not OperationModel:
+            raise ValueError("Unsupported native S3 operation model")
+        operation_identity = _native_model_digest(operation._operation_model)
+        if operation_identity is None:
+            raise ValueError("Native S3 operation definition exceeds its finite graph bound")
+        input_shape = shape_payload(operation.input_shape)
+        output_shape = shape_payload(operation.output_shape)
+        result[name] = {
+            "definition_sha256": operation_identity,
+            "http": operation.http,
+            "streaming_input": operation.has_streaming_input,
+            "streaming_output": operation.has_streaming_output,
+            "input": input_shape,
+            "output": output_shape,
+        }
+    return result
+
+
+def _native_service_model_identity(client: Any) -> dict[str, str] | None:
+    """Bind actual S3 models to the verified packaged model and SDK extras."""
+    import boto3
+    from botocore.loaders import JSONFileLoader, Loader
+    from botocore.model import ServiceModel
+
+    loader, model = client._loader, client.meta.service_model
+    if (
+        type(loader) is not Loader
+        or type(loader.file_loader) is not JSONFileLoader
+        or loader._extras_types != Loader.BUILTIN_EXTRAS_TYPES
+        or type(model) is not ServiceModel
+        or model.api_version != "2006-03-01"
+        or len(loader.search_paths) > 3
+    ):
+        return None
+    builtin = Path(Loader.BUILTIN_DATA_PATH).resolve()
+    packaged_paths = {builtin, (Path(boto3.__file__).resolve().parent / "data").resolve()}
+    customer = Path(Loader.CUSTOMER_DATA_PATH).resolve()
+    for value in loader.search_paths:
+        if type(value) is not str or len(value) > 4096:
+            return None
+        path = Path(value).resolve()
+        if path not in packaged_paths and not (path == customer and not path.exists()):
+            return None
+    actual = _native_model_digest(model._service_description)
+    if actual is None:
+        return None
+
+    class BoundedFileLoader(JSONFileLoader):
+        def _load_file(self, full_path: str, open_method: Any) -> Any:
+            path = Path(full_path)
+            if not path.is_file():
+                return None
+            if path.resolve() != path or not path.is_relative_to(builtin):
+                raise ValueError("Packaged S3 model path changed")
+            with open_method(full_path, "rb") as stream:
+                raw = stream.read(_NATIVE_MODEL_BYTES + 1)
+            if len(raw) > _NATIVE_MODEL_BYTES:
+                raise ValueError("Packaged S3 model exceeds its byte bound")
+            return json.loads(raw.decode("utf-8"), object_pairs_hook=OrderedDict)
+
+    expected_loader = Loader(
+        extra_search_paths=[str(builtin)], file_loader=BoundedFileLoader(), include_default_search_paths=False
+    )
+    expected = expected_loader.load_service_model("s3", "service-2", api_version="2006-03-01")
+    if actual != _native_model_digest(expected):
+        return None
+    effective = _native_model_digest(_native_operation_models(model))
+    reference = ServiceModel(expected, service_name="s3")
+    try:
+        packaged_effective = _native_model_digest(_native_operation_models(reference))
+    finally:
+        # The fresh validation model caches operations that refer back to it.
+        # Break only that private cycle; never alter the live client's caches.
+        reference._instance_cache.clear()
+    if effective is None or effective != packaged_effective:
+        return None
+    return {"description_sha256": actual, "operations_sha256": effective}
+
+
 def _native_client_settings(client: Any) -> dict[str, Any] | None:
     """Read only the finite SDK path measured by the local-MinIO pilot.
 
@@ -151,6 +318,7 @@ def _native_client_settings(client: Any) -> dict[str, Any] | None:
     """
     from botocore.client import BaseClient
     from botocore.compat import HAS_CRT
+    from botocore.exceptions import BotoCoreError
     from botocore.httpsession import URLLib3Session
 
     if (
@@ -218,12 +386,19 @@ def _native_client_settings(client: Any) -> dict[str, Any] | None:
         or (config.tcp_keepalive is not None and type(config.tcp_keepalive) is not bool)
     ):
         return None
+    try:
+        model_identity = _native_service_model_identity(client)
+    except (BotoCoreError, KeyError, RecursionError):
+        return None
+    if model_identity is None:
+        return None
     return {
         "endpoint": url,
         "region": config.region_name,
         "client_id": id(client),
         "config_id": id(config),
         "config_sha256": config_digest,
+        "model": model_identity,
         "session_id": id(session),
         "pool_manager_id": id(session._manager),
         "connect_timeout": timeouts[0],

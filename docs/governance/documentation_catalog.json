@@ -4296,7 +4296,7 @@
         "src/transformation_portal/core/execution_plan_v4.py"
       ],
       "source_sha256": {
-        "app.py": "5b54cd045a17692cf1d2a78561a2c631842739f3e73efece9657308574f1226c",
+        "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
         "src/transformation_portal/core/execution_plan.py": "cd949d69ec779746d735d9542d4853e20e79f024cfb4f336c2330c2286622566",
         "src/transformation_portal/core/execution_plan_v2.py": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
         "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
@@ -4870,7 +4870,7 @@
         "src/transformation_portal/core/execution_plan_v4.py"
       ],
       "source_sha256": {
-        "app.py": "5b54cd045a17692cf1d2a78561a2c631842739f3e73efece9657308574f1226c",
+        "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
         "src/transformation_portal/core/execution_plan.py": "cd949d69ec779746d735d9542d4853e20e79f024cfb4f336c2330c2286622566",
         "src/transformation_portal/core/execution_plan_v2.py": "1ccaa8f96f999ccc5970841ccf6ea9563ba43e0b6663b07e739f10d4898cfc9d",
         "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
@@ -14792,7 +14792,7 @@
         "src/transformation_portal/orchestrator/execution_dispatch.py": "34508eba2239f0de09929211cf4507b3d32df657d49b5266ab5fece41c7a5b99",
         "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
         "pyproject.toml": "131694f4cd6df2c102737b08aafddbcfd7e371b0e5f13346adb810ea24509d4e",
-        "app.py": "5b54cd045a17692cf1d2a78561a2c631842739f3e73efece9657308574f1226c",
+        "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
         "src/transformation_portal/portal/lux_depth_jobs.py": "1dd19bbaf89166d6dade35639033cc92a9eae3316166b74deb1fa0728d3e19a1",
         "src/transformation_portal/orchestrator/lux_depth_adapter.py": "1076e05cc26fa3c1bd283a5e4792fc06974e8750ccd10d0a878053670a533a3d",
         "src/transformation_portal/orchestrator/execution_policy.py": "12b7061929a1d3654cb4cc8514c59e78febeb8ff18b16e3e76868d392afdc457",
@@ -15013,7 +15013,7 @@
         "tests/lux_depth_v6/test_depth_reconstruction_quality.py": "47e5de5ad8908129fd4b30ebc3c5ee7d274a7f98e544d4ff4e3b673874f25a15",
         "scripts/analysis/audit_lux_depth_v6_reconstruction.py": "952d5338ba613c224faf600c2bb068cab0daf55005d7659471920f56e9d1d961",
         "tests/test_audit_lux_depth_v6_reconstruction.py": "d4014120ca8a2f1c793e58bf848d48e3f067c3ce17fcf4f785fe402e8796e919",
-        "app.py": "5b54cd045a17692cf1d2a78561a2c631842739f3e73efece9657308574f1226c",
+        "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
         "src/transformation_portal/core/execution_plan_v5.py": "b207122ede0dfd4f41eb820dc0f6360600a9e6cdeaa201fe02773e935cc73aec",
         "src/transformation_portal/schemas/execution/plan.v5.schema.json": "991e972e05f67522c633b425b429043a05d5e16d631e52ec850949df28603bf1",
         "src/transformation_portal/lux_depth_v6/managed.py": "7d952f9fce6dcf860a41c1864743a9fe4d4c481ccc0f9ea16ab8e0dff1c2444d",
@@ -15231,7 +15231,7 @@
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
       "source_commit": "6921b761a470a2885ac91a7e9266945b25c011e7",
-      "content_sha256": "cf4adb4170a9a0f985d6a1bdf05c098be34782482952522ab5c413cdd7107f67",
+      "content_sha256": "e44a56493b8ec5d77259bb38c6b8d637c6f5ccf87651329f7d457afa7ac024d3",
       "source_references": [
         "app.py",
         "src/transformation_portal/api/routes/photographic_review.py",
@@ -15341,7 +15341,7 @@
         "tests/test_native_resource_package_payloads.py"
       ],
       "source_sha256": {
-        "app.py": "5b54cd045a17692cf1d2a78561a2c631842739f3e73efece9657308574f1226c",
+        "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
         "src/transformation_portal/api/routes/photographic_review.py": "bd8f494e350ab41d5da84081dca11ce2f7e54f09a69f9ee0a978670466c2abf6",
         "src/transformation_portal/api/v1/photographic_review.py": "526f016d68a11b81b8862a99fc1bf8edc82e7e5f08b24de35f9f2798d734462d",
         "src/transformation_portal/orchestrator/photographic_review_access.py": "cb532711f2ac6d73ccbf18aeccef2495edb0a2f88d55ececc2b4175f20637d7d",
@@ -15423,8 +15423,8 @@
         "src/transformation_portal/photographic_delivery/qualification.py": "5e14d518553fcb6f4683c3b0987b3a6e4bc929a1ee754e95d74345f584cd67d2",
         "tests/test_native_materials_qualification.py": "c046c848714d7045786529bbfb70e15c57de87a973d836dd743de0f18d5b50aa",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
-        "src/transformation_portal/photographic_delivery/native_resources.py": "e175ef5586e6103e26d2636bb8c49ae273dddb01ebe122a4ccd9ae4f10e0961b",
-        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "8361e028715efe6744f0b9cebb2b5cb4c0eea4f814cec12ad498ae169560547c",
+        "src/transformation_portal/photographic_delivery/native_resources.py": "74a83ae8593e97f080bec2a569bbba5f2dc3d175a455d41868f2ef4cd30eb944",
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "aca02924dc9615938c84907a78ca1ea04d6ad96a7602dc79122e765e95604060",
         "src/transformation_portal/photographic_delivery/managed_qualification.py": "a735bab0f1b8bf948c1fee2697478213409f7af1aa59a924caadd4a0872ef584",
         "src/transformation_portal/orchestrator/storage/postgres.py": "906b5bf63ff014ca6a23a6e72f06f3d22ba34d39b87d2c05c32eaba45620a88d",
         "tests/test_native_resource_inputs.py": "d4eeb1a9c9040129376c1f9cb38ffe003e4a7f9fee75c89af38023c3be46ef97",
@@ -15438,15 +15438,15 @@
         "tests/test_photographic_snapshot_allocation.py": "1702fb2490bd8691fb1f95085dc274cca12c7fb52e0c7ef13ec5fd0174cbc7ae",
         "pyproject.toml": "131694f4cd6df2c102737b08aafddbcfd7e371b0e5f13346adb810ea24509d4e",
         "requirements/base.in": "8f0bcf2454c6818addd371b538758da0cdc60b51982ebaf0436cddf08c05bd21",
-        "src/transformation_portal/orchestrator/artifact_store/s3.py": "b892750e488717fa9a3eed52930b095937a862184f412d66ed1e008d83851819",
+        "src/transformation_portal/orchestrator/artifact_store/s3.py": "c97a8825be020ae89bad8691c891a13bdc4309355578334e1ceef7c13c6fc552",
         "src/transformation_portal/orchestrator/artifact_store/__init__.py": "fe2f55bd0470d5ffb7029065dc1616e5eb281eaaebe66af861e943bdf6408d37",
         "src/transformation_portal/orchestrator/storage/operational.py": "b49d3ba939e904521ecd7fd876f5fc9081bf6be92c7455f4d8eb092e2d937527",
         "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e",
         "src/transformation_portal/core/execution_plan_v5.py": "b207122ede0dfd4f41eb820dc0f6360600a9e6cdeaa201fe02773e935cc73aec",
         "src/transformation_portal/orchestrator/lux_depth_adapter.py": "1076e05cc26fa3c1bd283a5e4792fc06974e8750ccd10d0a878053670a533a3d",
-        "tests/orchestrator/test_s3_native_resource_identity.py": "aa6eb25d3cc87ffde8f60a5337d703a53d71dfff40a2386e98acfae27fbcc21b",
+        "tests/orchestrator/test_s3_native_resource_identity.py": "4b576571ec7646c78013566306603ecf3655e0d4ff096bfcc9974f97081b3c7a",
         "tests/test_managed_materials_canonical_qualification.py": "63304167fbceb6b4a6b4b1afbaf1b6d84ff3c28adb026208d4342a161ccebb1b",
-        "tests/test_native_resource_package_payloads.py": "8f57d8d11df71cc1c0f60d6f6342894635a13527e0bbf1fdaf8cb577ebccc5d7"
+        "tests/test_native_resource_package_payloads.py": "6c301dacbc57cff42836a7dd7212687f32b98c231750ffa70516fc8be73350fa"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",

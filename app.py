@@ -180,6 +180,7 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 if TYPE_CHECKING:
     from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
     from transformation_portal.orchestrator.job_execution import JobExecutionService
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -1205,7 +1206,7 @@ def _configured_job_repository() -> JobRepository:
     return repo
 
 
-def get_operational_record_store():
+def get_operational_record_store() -> "PostgresOperationalRecordStore":
     """Keep qualified canonical reads on the admitted durable authority."""
     from transformation_portal.orchestrator.photographic_admission import current_review_lease
     from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
