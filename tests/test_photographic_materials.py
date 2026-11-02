@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import copy
+import gc
 import hashlib
 import io
 import json
+import weakref
 from dataclasses import replace
 
 import numpy as np
@@ -13,10 +15,12 @@ import pytest
 import tifffile
 from PIL import Image
 
+from transformation_portal.core.image_artifact import ImageMaster
 from transformation_portal.lux_depth_v4.photography import linear_to_srgb, output_srgb_icc
 from transformation_portal.lux_depth_v5.preview import preview_samples
 from transformation_portal.lux_depth_v6.color import RenderRecipe
 from transformation_portal.photographic_delivery import DeliveryImage, ExportPreset, NativeWorkingMaster, export_delivery
+from transformation_portal.photographic_delivery import materials as materials_module
 from transformation_portal.photographic_delivery.materials import (
     MATERIALS_RECIPE_SCHEMA,
     MaterialsRecipe,
@@ -72,6 +76,161 @@ def _reopen(result):
         source_bytes=result["source_bytes"],
         presentation=revision_policy(result["receipt"], result["receipt"]["revision_sha256"]),
     )
+
+
+def _historical_full_array_tiff(master):
+    """Freeze the pre-tiling encoder as an exact container/pixel oracle."""
+    if not np.isfinite(master.pixels).all() or np.any((master.pixels < 0) | (master.pixels > 1)):
+        raise ValueError("Native SDR Materials result must remain within unit linear RGB")
+    samples = np.rint(linear_to_srgb(master.pixels) * 65535).astype(np.uint16)
+    if master.alpha is not None:
+        samples = np.concatenate([samples, np.rint(master.alpha * 65535).astype(np.uint16)[..., None]], axis=2)
+    buffer = io.BytesIO()
+    tifffile.imwrite(
+        buffer,
+        samples,
+        photometric="rgb",
+        extrasamples="unassalpha" if master.alpha is not None else None,
+        metadata={"color_space": "srgb", "color_domain": "display_encoded_srgb"},
+        iccprofile=output_srgb_icc(),
+        extratags=[(274, "H", 1, 1, False)],
+    )
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+@pytest.mark.parametrize("alpha", [False, True])
+@pytest.mark.parametrize("shape,orientation", [((257, 255), 1), ((256, 256), 1), ((257, 257), 6), ((2, 65537), 8)])
+def test_tiled_materials_tiff_matches_historical_bytes_at_native_tile_boundaries(bits, alpha, shape, orientation):
+    # The full uint16 code range exercises transfer/rounding, including endpoints.
+    values = (np.arange(shape[0] * shape[1] * 3, dtype=np.uint32) % 65536).reshape(*shape, 3)
+    samples = values.astype(np.uint16) if bits == 16 else (values // 257).astype(np.uint8)
+    master = _image(pixels=samples, bits=bits, alpha=alpha, orientation=orientation).decode()
+    assert materials_module._tiff(master) == _historical_full_array_tiff(master)
+
+
+def test_tiled_materials_tiff_bounds_transfer_scratch_and_preserves_float32_rounding(monkeypatch):
+    # Both sides of the transfer knee, integer-encoding midpoints, and their ULPs.
+    encoded = (np.arange(65535, dtype=np.float32) + np.float32(0.5)) / np.float32(65535)
+    linear = np.where(encoded <= 0.04045, encoded / 12.92, ((encoded + 0.055) / 1.055) ** 2.4).astype(np.float32)
+    values = np.concatenate(
+        [
+            linear,
+            np.nextafter(linear, np.float32(0)),
+            np.nextafter(linear, np.float32(1)),
+            np.array([0, 0.0031308, np.nextafter(np.float32(0.0031308), np.float32(1)), 1], np.float32),
+        ]
+    )
+    pixels = np.repeat(values[:, None], 3, axis=1).reshape(1, -1, 3)
+    master = ImageMaster(pixels, "a" * 64, 16, alpha=values.reshape(1, -1))
+    expected = _historical_full_array_tiff(master)
+    observed_sizes = []
+
+    def bounded_transfer(tile):
+        observed_sizes.append(tile.shape[0])
+        assert tile.ndim == 2 and tile.shape[1] == 3
+        assert tile.shape[0] <= materials_module._TIFF_TILE_PIXELS
+        assert np.shares_memory(tile, master.pixels)
+        return linear_to_srgb(tile)
+
+    monkeypatch.setattr(materials_module, "linear_to_srgb", bounded_transfer)
+    assert materials_module._tiff(master) == expected
+    assert len(observed_sizes) > 1
+    assert max(observed_sizes) == materials_module._TIFF_TILE_PIXELS
+    assert sum(observed_sizes) == len(values)
+
+
+@pytest.mark.parametrize("value", [-0.0001, 1.0001])
+def test_tiled_materials_tiff_rejects_extended_last_tile_before_encoding(value, monkeypatch):
+    pixels = np.full((1, materials_module._TIFF_TILE_PIXELS + 1, 3), 0.5, np.float32)
+    pixels[0, -1, 2] = value
+    master = ImageMaster(pixels, "a" * 64, 16)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Invalid native SDR samples reached encoding")
+
+    monkeypatch.setattr(materials_module, "linear_to_srgb", forbidden)
+    monkeypatch.setattr(tifffile, "imwrite", forbidden)
+    with pytest.raises(ValueError, match="remain within unit linear RGB"):
+        materials_module._tiff(master)
+    with pytest.raises(ValueError, match="remain within unit linear RGB"):
+        _historical_full_array_tiff(master)
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+@pytest.mark.parametrize("alpha", [False, True])
+@pytest.mark.parametrize("strength", [0, 0.03])
+def test_tiled_materials_revision_preserves_complete_historical_result(bits, alpha, strength, monkeypatch):
+    grid = np.indices((257, 257)).sum(axis=0) % 2
+    samples = np.repeat((18000 + grid * 9000).astype(np.uint16)[..., None], 3, axis=2)
+    if bits == 8:
+        samples = (samples // 257).astype(np.uint8)
+    image = _image(pixels=samples, bits=bits, alpha=alpha, orientation=6)
+    payload = _payload(strength=strength, label="stone", region=[0, 0, 0.75, 1])
+    payload["regions"].append({"id": "region-2", "label": "water", "region": [0.25, 0, 1, 1], "strength": strength})
+    recipe = MaterialsRecipe.from_payload(payload)
+    original_source = image.snapshot()
+    actual = create_materials_revision(image, recipe)
+    monkeypatch.setattr(materials_module, "_tiff", _historical_full_array_tiff)
+    expected = create_materials_revision(image, recipe)
+    assert actual == expected
+    assert image.snapshot() == original_source
+    assert actual["receipt"]["execution"]["protected_changed_pixels"] == 0
+    changed_pixels = actual["receipt"]["execution"]["changed_pixels"]
+    if strength:
+        assert changed_pixels > 0
+    else:
+        assert changed_pixels == 0
+
+
+@pytest.mark.parametrize("strength", [0, 0.03])
+@pytest.mark.parametrize("alpha", [False, True])
+def test_materials_revision_releases_native_arrays_before_reopen_and_final_validation(strength, alpha, monkeypatch):
+    master_refs, retained_refs, evidence_refs = [], [], []
+    execution_array_refs, retained_array_refs, mask_refs = [], [], []
+    real_apply = materials_module.apply_response
+    real_decode = materials_module.decode_master
+    real_evidence = materials_module._evidence
+    real_validate = materials_module.validate_materials_revision_receipt
+
+    def track_apply(master, evidence, plan):
+        adjusted, execution = real_apply(master, evidence, plan)
+        master_refs.extend([weakref.ref(master), weakref.ref(adjusted)])
+        execution_array_refs.extend([weakref.ref(master.pixels), weakref.ref(adjusted.pixels)])
+        if master.alpha is not None:
+            execution_array_refs.extend([weakref.ref(master.alpha), weakref.ref(adjusted.alpha)])
+        assert (master is adjusted) == (strength == 0)
+        return adjusted, execution
+
+    def track_decode(*args, **kwargs):
+        gc.collect()
+        assert len(master_refs) == 2 and all(reference() is None for reference in master_refs)
+        assert all(reference() is None for reference in execution_array_refs)
+        retained = real_decode(*args, **kwargs)
+        retained_refs.append(weakref.ref(retained))
+        retained_array_refs.append(weakref.ref(retained.pixels))
+        if retained.alpha is not None:
+            retained_array_refs.append(weakref.ref(retained.alpha))
+        return retained
+
+    def track_evidence(*args, **kwargs):
+        evidence = real_evidence(*args, **kwargs)
+        evidence_refs.append(weakref.ref(evidence))
+        mask_refs.extend(weakref.ref(region.mask) for region in evidence.regions)
+        return evidence
+
+    def validate_released(*args, **kwargs):
+        gc.collect()
+        assert len(retained_refs) == len(evidence_refs) == 1
+        assert all(reference() is None for reference in retained_refs + evidence_refs + retained_array_refs + mask_refs)
+        return real_validate(*args, **kwargs)
+
+    monkeypatch.setattr(materials_module, "apply_response", track_apply)
+    monkeypatch.setattr(materials_module, "decode_master", track_decode)
+    monkeypatch.setattr(materials_module, "_evidence", track_evidence)
+    monkeypatch.setattr(materials_module, "validate_materials_revision_receipt", validate_released)
+    result = create_materials_revision(_image(alpha=alpha), MaterialsRecipe.from_payload(_payload(strength=strength)))
+    assert real_validate(result["receipt"], result["receipt"]["revision_sha256"])
 
 
 @pytest.mark.parametrize("orientation", range(1, 9))

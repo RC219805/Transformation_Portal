@@ -258,6 +258,8 @@ def _worker(specification: Path) -> None:
     operation_start = time.monotonic()
     result = create_materials_revision(image, recipe)
     operation_seconds = time.monotonic() - operation_start
+    multiplier = 1 if sys.platform == "darwin" else 1024
+    operation_return_peak = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier)
     receipt = result["receipt"]
     validate_materials_revision_receipt(receipt, receipt["revision_sha256"])
     products = {"master.tif": result["source_bytes"], **{name: item[0] for name, item in result["diagnostic_files"].items()}}
@@ -288,9 +290,9 @@ def _worker(specification: Path) -> None:
         raise ValueError("Zero-effect output changed native pixels beyond one 16-bit code")
     if before.alpha is not None and float(np.max(np.abs(before.alpha - after.alpha))) > 1 / 65535:
         raise ValueError("Native output changed straight alpha")
+    verification_complete_peak = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier)
     if _runtime_identity() != spec["runtime"]:
         raise ValueError("Qualification runtime changed during execution")
-    multiplier = 1 if sys.platform == "darwin" else 1024
     peak = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier)
     _write_json(
         root / "result.json",
@@ -301,6 +303,12 @@ def _worker(specification: Path) -> None:
             "baseline_rss_bytes": int(baseline * multiplier),
             "peak_rss_bytes": peak,
             "incremental_peak_rss_bytes": max(0, peak - int(baseline * multiplier)),
+            "rss_high_water_checkpoints": {
+                "semantics": "cumulative_process_high_water_not_phase_exclusive",
+                "scope": "offline_worker_not_managed_pipeline",
+                "operation_return_bytes": operation_return_peak,
+                "independent_verification_complete_bytes": verification_complete_peak,
+            },
             "operation_seconds": operation_seconds,
             "worker_seconds": time.monotonic() - started,
             "products": records,
