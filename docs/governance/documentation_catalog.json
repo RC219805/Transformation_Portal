@@ -15230,8 +15230,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "f82d0dcf0250d3f567ba6ff4010e549568799599",
-      "content_sha256": "c32fb2eb22e3287b140753bba6190967bd87762778eeed256ee7010a7fa8b5db",
+      "source_commit": "4f751f1b100c8cc5e9d529ab97a8525547f2a73d",
+      "content_sha256": "4468f073c8d71c077804ee9f8dd47a41ecd568ccf227b1e828c59721dd9fc2b3",
       "source_references": [
         "app.py",
         "src/transformation_portal/api/routes/photographic_review.py",
@@ -15311,7 +15311,9 @@
         "web/secure-landing/portal-src/photographic-revision-editor.js",
         "public/portal-assets/portal-photographic-editor.js",
         "src/transformation_portal/portal/asset_bundle.py",
-        "tests/test_app_orchestrator_runtime.py"
+        "tests/test_app_orchestrator_runtime.py",
+        "src/transformation_portal/photographic_delivery/qualification.py",
+        "tests/test_native_materials_qualification.py"
       ],
       "source_sha256": {
         "app.py": "63a1b693eb1b8dfcddc235ce8505f535eb9b60198fe86ce3d0d3bc3ebf03d392",
@@ -15392,7 +15394,9 @@
         "web/secure-landing/portal-src/photographic-revision-editor.js": "650e6ec4048f72cbd00647d22cd0be9bf82ac31b106859980536b97b231b7a6b",
         "public/portal-assets/portal-photographic-editor.js": "1aa6865046404dfa9cc670dfbd43c193255f3a786942365eae2452a6134684ad",
         "src/transformation_portal/portal/asset_bundle.py": "6ef4c3573c48ddbd25949edd3c2d51dadb8ed372eeb436b264758af18d06c7e8",
-        "tests/test_app_orchestrator_runtime.py": "6ab2bf1bf45df90ac62bf336e7701c9b1c4e399f9edb1f1b024c70852b3c248c"
+        "tests/test_app_orchestrator_runtime.py": "6ab2bf1bf45df90ac62bf336e7701c9b1c4e399f9edb1f1b024c70852b3c248c",
+        "src/transformation_portal/photographic_delivery/qualification.py": "5a411fb69dcd9435344b9f944a1837237270217eba7d012ca1b860fb451ab56a",
+        "tests/test_native_materials_qualification.py": "9b6054c8b19ae73cc2a7384ed8ad3d3effd062f438a2bc5a542fa9a7cac557be"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",
@@ -15402,7 +15406,8 @@
         ".venv/bin/python scripts/validation/check_portal_asset_budgets.py",
         "make check-documentation-catalog",
         "make test-documentation-contract",
-        ".venv/bin/python -m pytest tests/test_photographic_materials.py tests/orchestrator/test_photographic_materials.py tests/orchestrator/test_photographic_admission.py -q"
+        ".venv/bin/python -m pytest tests/test_photographic_materials.py tests/orchestrator/test_photographic_materials.py tests/orchestrator/test_photographic_admission.py -q",
+        ".venv/bin/python -m pytest tests/test_native_materials_qualification.py -q"
       ],
       "prior_classification": null,
       "prior_review_status": null
