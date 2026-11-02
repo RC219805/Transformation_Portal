@@ -168,7 +168,7 @@ def _runtime_identity() -> dict[str, Any]:
         "kind": "observed_code_and_package_versions_not_cache_authority",
         "python": platform.python_version(),
         "python_executable_sha256": executable_sha256,
-        "platform": platform.platform(),
+        "platform": {"system": platform.system(), "release": platform.release(), "version": platform.version()},
         "machine": platform.machine(),
         "packages": versions,
         "module_sha256": modules,
@@ -396,19 +396,23 @@ def _run_trial(
             if process.returncode:
                 raise RuntimeError(f"Offline Materials worker failed; inspect {root.name}/worker.log")
         finally:
-            if process.poll() is None:
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
+            drain_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+            try:
+                if process.poll() is None:
                     try:
-                        os.killpg(process.pid, signal.SIGKILL)
+                        os.killpg(process.pid, signal.SIGTERM)
                     except ProcessLookupError:
                         pass
-                    process.wait()
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        process.wait()
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, drain_mask)
     result = _read_json(root / "result.json", 256 * 1024)
     if (
         result["runtime"] != spec["runtime"]
@@ -582,9 +586,11 @@ def qualify(
                 report["source_unchanged"] = _source(source, expected_sha256) == bound
                 if not report["source_unchanged"]:
                     report["status"] = "failed"
-            except (OSError, ValueError) as error:
+            except BaseException as error:
                 report["status"] = "failed"
                 report["source_revalidation_error"] = {"type": type(error).__name__, "message": str(error)}
+                if not isinstance(error, (OSError, ValueError)):
+                    raise
             finally:
                 _write_json(output / "qualification.json", report)
     if not report["source_unchanged"]:

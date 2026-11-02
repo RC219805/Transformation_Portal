@@ -368,13 +368,18 @@ def test_runtime_identity_binds_delegated_color_implementations(tmp_path, monkey
     assert q._runtime_identity() != before
 
 
-@pytest.mark.parametrize("ignore_worker_termination", [False, True])
-def test_sigterm_and_repeated_cancellation_drain_a_real_owned_worker(case, tmp_path, ignore_worker_termination):
+@pytest.mark.parametrize("ignore_worker_termination,trigger", [(False, "signal"), (True, "signal"), (True, "timeout")])
+def test_sigterm_and_repeated_cancellation_drain_a_real_owned_worker(case, tmp_path, ignore_worker_termination, trigger):
     psutil = pytest.importorskip("psutil")
     marker, worker_ready = tmp_path / "owned.pid", tmp_path / "worker.ready"
+    draining = tmp_path / "worker.draining"
     worker_code = (
         "import signal,time; from pathlib import Path; "
-        + ("signal.signal(signal.SIGTERM, signal.SIG_IGN); " if ignore_worker_termination else "")
+        + (
+            f"signal.signal(signal.SIGTERM, lambda *_: Path({str(draining)!r}).write_text('draining')); "
+            if ignore_worker_termination
+            else ""
+        )
         + "signal.pthread_sigmask(signal.SIG_UNBLOCK,{signal.SIGINT,signal.SIGTERM}); "
         + f"Path({str(worker_ready)!r}).write_text('ready'); time.sleep(60)"
     )
@@ -391,7 +396,8 @@ def test_sigterm_and_repeated_cancellation_drain_a_real_owned_worker(case, tmp_p
         "q.subprocess.Popen = worker\n"
         "import psutil; from types import SimpleNamespace\n"
         "psutil.virtual_memory = lambda: SimpleNamespace(available=64*q.GIB)\n"
-        f"q.qualify(Path({str(case.source)!r}), {case.digest!r}, {case.recipe!r}, Path({str(case.output)!r}), repeats=1)\n"
+        f"q.qualify(Path({str(case.source)!r}), {case.digest!r}, {case.recipe!r}, Path({str(case.output)!r}), "
+        f"repeats=1, limits=q.QualificationLimits(timeout_seconds={1 if trigger == 'timeout' else 300}))\n"
     )
     environment = {**os.environ, "PYTHONPATH": str(Path(q.__file__).resolve().parents[2])}
     process = q.subprocess.Popen(
@@ -409,10 +415,17 @@ def test_sigterm_and_repeated_cancellation_drain_a_real_owned_worker(case, tmp_p
                 pytest.fail("Owned worker did not reach its deterministic cancellation barrier")
             time.sleep(0.01)
         worker_pid = int(marker.read_text())
-        process.send_signal(signal.SIGTERM)
-        if ignore_worker_termination:
-            time.sleep(0.1)
+        if trigger == "signal":
             process.send_signal(signal.SIGTERM)
+        if ignore_worker_termination:
+            while not draining.exists():
+                if process.poll() is not None or time.monotonic() >= deadline:
+                    pytest.fail("Worker did not reach the owned-drain barrier")
+                time.sleep(0.01)
+            process.send_signal(signal.SIGTERM)
+            if trigger == "timeout":
+                time.sleep(0.1)
+                process.send_signal(signal.SIGTERM)
         stdout, stderr = process.communicate(timeout=8)
         assert process.returncode == 128 + signal.SIGTERM, stderr.decode()
         assert not psutil.pid_exists(worker_pid)
@@ -436,3 +449,40 @@ def test_repeatability_requires_comparison_of_independent_trials(case, monkeypat
     report = q.qualify(case.source, case.digest, case.recipe, case.output, repeats=2)
     assert report["normalized_pixels_repeatable"] is repeatable
     assert report["status"] == ("measured" if repeatable else "not_qualified")
+
+
+@pytest.mark.parametrize("interruption", [SystemExit(143), KeyboardInterrupt(), RuntimeError("verification failed")])
+def test_interrupted_final_source_verification_cannot_persist_measured(case, monkeypatch, interruption):
+    original_source = q._source
+    calls = 0
+
+    def verify(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise interruption
+        return original_source(*args, **kwargs)
+
+    monkeypatch.setattr(q, "_source", verify)
+    monkeypatch.setattr(
+        q, "_run_trial", lambda *args, **kwargs: {"incremental_peak_rss_bytes": 1, "normalized_pixel_sha256": "a" * 64}
+    )
+    with pytest.raises(type(interruption)):
+        q.qualify(case.source, case.digest, case.recipe, case.output, repeats=1)
+    report = q._read_json(case.output / "qualification.json", 256 * 1024)
+    assert report["status"] == "failed" and report["source_unchanged"] is False
+    assert report["source_revalidation_error"]["type"] == type(interruption).__name__
+
+
+def test_runtime_identity_does_not_launch_external_platform_helpers(monkeypatch):
+    pytest.importorskip("psutil")
+    q._runtime_identity()  # Import the selected implementations before isolating OS identity reads.
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Runtime identity must not fork external platform helpers")
+
+    monkeypatch.setattr(q.subprocess, "Popen", forbidden)
+    monkeypatch.setattr(q.platform, "_platform_cache", {})
+    monkeypatch.setattr(q.platform, "_uname_cache", None)
+    identity = q._runtime_identity()
+    assert identity["platform"]["system"] in {"Darwin", "Linux"}
