@@ -142,6 +142,11 @@ class PostgresJobRepository(JobRepository):
         self._engine: Optional[AsyncEngine] = None
         self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
+    @property
+    def database_url(self) -> str:
+        """Configured durable authority, without exposing it on HTTP surfaces."""
+        return self._database_url
+
     async def _ensure_engine(self) -> async_sessionmaker[AsyncSession]:
         if self._session_factory is None:
             self._engine, self._session_factory = await _SharedEngine.get(self._database_url)

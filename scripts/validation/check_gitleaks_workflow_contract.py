@@ -33,12 +33,15 @@ EXPECTED_SAM2_TILING_PATH_REGEXES = [
     r"(^|/)web/secure-landing/portal-src/portal\.template\.js$",
 ]
 EXPECTED_CATALOG_PATH_REGEX = r"^docs/governance/documentation_catalog\.json$"
+EXPECTED_NATIVE_RESOURCE_CONTRACT_PATH_REGEX = (
+    r"^src/transformation_portal/photographic_delivery/native_resource_contract\.py$"
+)
 EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
     r'^\n?        "(?:\.github|src|tests|scripts|web|config|schemas|requirements|policy)/'
     r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
     r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
 )
-EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^d76e4b1fff7bc62c430daf98df6773278274fb874f647696a487a0992e793736$"
+EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^b08d087a63ac034d9a6a332f4beae22b0ba101d2246f3dac3e1f1cb619cb9388$"
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -129,7 +132,10 @@ def _validate_config(config: dict[str, object]) -> list[str]:
             auth_allowlist_found = True
         elif path_patterns == EXPECTED_SAM2_TILING_PATH_REGEXES and match_patterns == [EXPECTED_SAM2_TILING_MATCH_REGEX]:
             sam2_allowlist_found = True
-        elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_SOURCE_HASH_REGEX]:
+        elif path_patterns == [
+            EXPECTED_CATALOG_PATH_REGEX,
+            EXPECTED_NATIVE_RESOURCE_CONTRACT_PATH_REGEX,
+        ] and match_patterns == [EXPECTED_CATALOG_SOURCE_HASH_REGEX]:
             catalog_allowlist_found = True
         elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX]:
             catalog_chunk_allowlist_found = True
@@ -147,7 +153,9 @@ def _validate_config(config: dict[str, object]) -> list[str]:
     if not sam2_allowlist_found:
         errors.append("generic-api-key allowlist must match only the SAM2 tiling flag false positive")
     if not catalog_allowlist_found:
-        errors.append("generic-api-key allowlist must match only documentation catalog source SHA256 lines")
+        errors.append(
+            "generic-api-key allowlist must match only documentation catalog and native resource contract source SHA256 lines"
+        )
     if not catalog_chunk_allowlist_found:
         errors.append("generic-api-key allowlist must match only the exact public catalog chunk source SHA256")
 

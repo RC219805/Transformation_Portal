@@ -59,7 +59,10 @@ def read_snapshot(data: bytes | None, path: Path | None, digest: str, maximum: i
             info = os.fstat(stream.fileno())
             if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= maximum:
                 raise ValueError("Source must be a bounded regular file")
-            data = stream.read(maximum + 1)
+            # The pinned file already passed the maximum-size check. Bound the
+            # initial bytes allocation to its observed size, with one extra
+            # byte so concurrent growth still invalidates the expected digest.
+            data = stream.read(info.st_size + 1)
     if not isinstance(data, bytes) or not 0 < len(data) <= maximum or hashlib.sha256(data).hexdigest() != digest:
         raise ValueError("Source component SHA-256 changed; review and select the current artifact")
     return data

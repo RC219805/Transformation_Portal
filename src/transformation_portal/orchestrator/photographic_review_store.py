@@ -153,10 +153,21 @@ class PostgresReviewStore:
 _memory = MemoryReviewStore()
 
 
-def get_review_store() -> MemoryReviewStore | PostgresReviewStore:
+def get_configured_review_store() -> MemoryReviewStore | PostgresReviewStore:
     backend = os.environ.get("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() or "memory"
     if backend == "memory":
         return _memory
     if backend != "postgres" or not os.environ.get("TP_DATABASE_URL", "").strip():
         raise RuntimeError("Photographic review requires the configured orchestrator state backend")
     return PostgresReviewStore(os.environ["TP_DATABASE_URL"].strip())
+
+
+def get_review_store() -> MemoryReviewStore | PostgresReviewStore:
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+
+    lease = current_review_lease.get()
+    if lease is not None and lease.cost.native_resource_qualification is not None:
+        if lease.released or type(lease.native_review_store) is not PostgresReviewStore:
+            raise RuntimeError("Qualified native review authority is unavailable")
+        return lease.native_review_store
+    return get_configured_review_store()

@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 from urllib.parse import quote
 
 from starlette.responses import FileResponse, JSONResponse, Response
-from starlette.types import Receive, Scope, Send
+from starlette.types import Message, Receive, Scope, Send
 
 from transformation_portal.api.v1.envelopes import ApiEnvelope
 from transformation_portal.api.v1.photographic_review import (
@@ -184,6 +184,86 @@ class _OwnedDownloadResponse(FileResponse):
                         await self.admission_ticket.release()
 
 
+async def _release_native_response(lease: ReviewLease | None, ticket: ReviewRequestTicket | None) -> None:
+    try:
+        if lease is not None:
+            await lease.release()
+    finally:
+        if ticket is not None:
+            await ticket.release()
+
+
+class _OwnedNativeRevisionResult(dict[str, Any]):
+    """Internal HTTP handoff; direct service callers still receive ordinary dicts."""
+
+    def __init__(self, data: JsonObject, lease: ReviewLease) -> None:
+        super().__init__(data)
+        self.admission_lease: ReviewLease | None = lease
+        self.admission_ticket: ReviewRequestTicket | None = None
+
+    async def release(self) -> None:
+        self.clear()
+        lease, ticket = self.admission_lease, self.admission_ticket
+        self.admission_lease = self.admission_ticket = None
+        await drain_owned(_release_native_response(lease, ticket))
+
+
+class _OwnedNativeJSONResponse(JSONResponse):
+    """Own the complete native reservation through serialization and ASGI send."""
+
+    def __init__(self, content: JsonObject, owner: _OwnedNativeRevisionResult) -> None:
+        super().__init__(content, headers=HEADERS)
+        self.admission_lease, self.admission_ticket = owner.admission_lease, owner.admission_ticket
+        self._called = False
+
+    async def release(self) -> None:
+        self.body = b""
+        lease, ticket = self.admission_lease, self.admission_ticket
+        self.admission_lease = self.admission_ticket = None
+        await drain_owned(_release_native_response(lease, ticket))
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self._called:
+            raise RuntimeError("Native review response was already consumed")
+        self._called = True
+
+        async def send_owned(message: Message) -> None:
+            pending = None
+            frame = None
+            try:
+                pending = send(message)
+                if inspect.iscoroutine(pending):
+                    frame = pending.cr_frame
+                await pending
+            except BaseException as error:
+                completed = (
+                    (frame,)
+                    if frame is not None
+                    and inspect.iscoroutine(pending)
+                    and inspect.getcoroutinestate(pending) == inspect.CORO_CLOSED
+                    else ()
+                )
+                _clear_failed_frames(error, completed)
+                raise
+            finally:
+                del message, pending, frame
+
+        pending = super().__call__(scope, receive, send_owned)
+        frame = pending.cr_frame if inspect.iscoroutine(pending) else None
+        try:
+            await pending
+        except BaseException as error:
+            self.body = b""
+            completed = (frame,) if frame is not None and inspect.getcoroutinestate(pending) == inspect.CORO_CLOSED else ()
+            _clear_failed_frames(error, completed)
+            raise
+        finally:
+            # The sender and JSON response coroutine are quiescent. Do not
+            # retain a body in a response/traceback after returning its capacity.
+            del pending, frame
+            await self.release()
+
+
 @asynccontextmanager
 async def publication(context: ReviewContext) -> AsyncIterator[list[str]]:
     """Rollback only this request's uncommitted immutable keys on failure.
@@ -219,10 +299,30 @@ async def publication(context: ReviewContext) -> AsyncIterator[list[str]]:
         raise
 
 
+def _envelope_payload(data: JsonObject) -> JsonObject:
+    return ApiEnvelope[dict](schema="tp.photographic_review.v1", success=True, data=data).model_dump(mode="json")
+
+
 def envelope(data: JsonObject) -> JSONResponse:
-    return JSONResponse(
-        ApiEnvelope[dict](schema="tp.photographic_review.v1", success=True, data=data).model_dump(mode="json"), headers=HEADERS
-    )
+    return JSONResponse(_envelope_payload(data), headers=HEADERS)
+
+
+async def owned_envelope(data: JsonObject) -> JSONResponse:
+    """Build the unchanged public envelope before transferring native ownership."""
+    if not isinstance(data, _OwnedNativeRevisionResult):
+        return envelope(data)
+    try:
+        response = _OwnedNativeJSONResponse(_envelope_payload(data), data)
+    except BaseException as error:
+        data.clear()
+        # Synchronous serializer/constructor frames have stopped and may hold
+        # complete payload copies. Clear them before the memory owner releases.
+        _clear_failed_frames(error)
+        await data.release()
+        raise
+    data.clear()
+    data.admission_lease = data.admission_ticket = None
+    return response
 
 
 def base_url(context: ReviewContext) -> str:
@@ -624,6 +724,15 @@ def _metadata(image: DeliveryImage) -> JsonObject:
     return inspect_image(image)
 
 
+def _native_resource_evidence(image: DeliveryImage) -> Any:
+    """Inspect only a verified resident TIFF; retain no pixel or source buffers."""
+    from transformation_portal.photographic_delivery.native_resource_inputs import inspect_native_raster
+
+    if image.native is not None or image.source_bytes is None or image.source_bytes[:2] not in {b"II", b"MM"}:
+        return None
+    return inspect_native_raster(image.source_bytes, image.source_sha256)
+
+
 class _LegacyExpensiveGate:
     """Keep disabled/direct-call compatibility; an admitted operation owns its vector."""
 
@@ -708,7 +817,14 @@ class PhotographicReviewService:
         ):
             raise ReviewOverload("native_materials_reservation_required")
         inspections = self._admission_inspections(context, state, "revision", (payload,), {})
-        required = self._resource_cost(context, state, "revision", (payload,), inspections)
+        required = self._resource_cost(
+            context, state, "revision", (payload,), inspections, response_owned=lease.native_response_owned
+        )
+        if (
+            lease.cost.native_resource_qualification is not None
+            and lease.cost.native_resource_qualification != required.native_resource_qualification
+        ):
+            raise ReviewOverload("native_resource_scope_changed", status=413)
         fields = ("memory_bytes", "scratch_bytes", "decode_slots", "io_slots", "max_pixels", "native_materials_regions")
         if any(getattr(lease.cost, field) < getattr(required, field) for field in fields):
             raise ReviewOverload("native_materials_reservation_incomplete")
@@ -723,7 +839,9 @@ class PhotographicReviewService:
         if any(available.get(device, 0) < size for device, size in needed.items()):
             raise ReviewOverload("native_materials_reservation_filesystem_changed")
 
-    def _remember_inspection(self, context: ReviewContext, ref: JsonObject, inspection: JsonObject) -> None:
+    def _remember_inspection(
+        self, context: ReviewContext, ref: JsonObject, inspection: JsonObject, native_resource_evidence: Any = None
+    ) -> None:
         identity = source_identity(ref)
         if identity is not None and isinstance(ref.get("scene_id"), str):
             self._scene_hints[context.tenant_id, context.job_id, context.binding_identity, identity] = ref["scene_id"]
@@ -752,6 +870,18 @@ class PhotographicReviewService:
             identity,
         )
         self._inspection_costs[key] = {"width": width, "height": height, "alpha": alpha}
+        if native_resource_evidence is not None:
+            from transformation_portal.photographic_delivery.native_resource_inputs import NativeRasterEvidence
+
+            if (
+                isinstance(native_resource_evidence, NativeRasterEvidence)
+                and native_resource_evidence.source_sha256 == ref["sha256"] == identity
+                and (native_resource_evidence.width, native_resource_evidence.height, native_resource_evidence.alpha)
+                == (width, height, alpha)
+            ):
+                # Private, server-generated header authority. It is never
+                # copied into public inspections, decisions or request bodies.
+                self._inspection_costs[key]["_native_resource_evidence"] = native_resource_evidence
         self._inspection_costs.move_to_end(key)
         tenant_keys = [item for item in self._inspection_costs if item[0] == context.tenant_id]
         for stale in tenant_keys[:-_TENANT_INSPECTION_CACHE_LIMIT]:
@@ -790,7 +920,9 @@ class PhotographicReviewService:
                     self._inspection_costs.move_to_end(key)
         return result
 
-    async def execute(self, context: ReviewContext, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def execute(
+        self, context: ReviewContext, method: Callable[..., Any], *args: Any, _response_owned: bool = False, **kwargs: Any
+    ) -> Any:
         """Authorize before queueing; reserve once through all IO and publication."""
         if method == self.revision and args:
             self._validate_native_revision(args[0])
@@ -831,8 +963,8 @@ class PhotographicReviewService:
                     result = await self._execute_reserved(context, method, *args, **kwargs)
                 await self.revalidate(context)
             else:
-                result = await self._execute_reserved(context, method, *args, **kwargs)
-            if isinstance(result, _OwnedDownloadResponse):
+                result = await self._execute_reserved(context, method, *args, _response_owned=_response_owned, **kwargs)
+            if isinstance(result, (_OwnedDownloadResponse, _OwnedNativeRevisionResult)):
                 result.admission_ticket = ticket
                 transferred = True
             return result
@@ -841,20 +973,41 @@ class PhotographicReviewService:
                 await ticket.release()
 
     async def _execute_reserved(
-        self, context: ReviewContext, method: Callable[..., Any], *args: Any, _shared_render: bool = False, **kwargs: Any
+        self,
+        context: ReviewContext,
+        method: Callable[..., Any],
+        *args: Any,
+        _shared_render: bool = False,
+        _response_owned: bool = False,
+        **kwargs: Any,
     ) -> Any:
         state = await self.state(context)
         operation = method.__name__
         self._validate_admission_request(state, operation, args)
         inspections = self._admission_inspections(context, state, operation, args, kwargs)
-        cost = self._resource_cost(context, state, operation, args, inspections)
+        response_owned = (
+            _response_owned is True and method == self.revision and bool(args) and self._validate_native_revision(args[0])
+        )
+        cost = self._resource_cost(context, state, operation, args, inspections, response_owned=response_owned)
+        # Only the compact cost survives queueing. The invoked method reloads
+        # authoritative state and retains its existing version/CAS checks.
+        del state, inspections
         lease = await self.admission.acquire(context.tenant_id, cost)
+        lease.native_response_owned = response_owned
         token: Token[ReviewLease | None] | None = current_review_lease.set(lease)
         transferred = False
         result = None
         pending_operation = None
         method_frame = None
         try:
+            if cost.native_resource_qualification is not None:
+                from transformation_portal.orchestrator.photographic_review_access import NativeResourceScope
+
+                if not isinstance(context.native_resource_scope, NativeResourceScope):
+                    raise ReviewOverload("native_resource_scope_changed", status=413)
+                lease.native_artifact_store = context.native_artifact_store
+                lease.native_review_store = context.native_resource_scope.review_store
+                lease.native_job_repository = context.native_resource_scope.job_repository
             # Reference discovery has bounded streamed snapshots but no image
             # decode. Complete output-space preflight follows resolved geometry.
             lease.check_scratch(min(lease.cost.scratch_bytes, 2 * 1024**3), preparing=True)
@@ -885,8 +1038,19 @@ class PhotographicReviewService:
             # the shared bytes exist. The leader cannot authorize its followers.
             if not _shared_render:
                 await self.revalidate(context)
+                if lease.cost.native_resource_qualification is not None and (
+                    context.native_resource_scope is None
+                    or context.native_resource_scope() != lease.cost.native_resource_qualification.provider_scope_sha256
+                ):
+                    raise ReviewAccessError("Photographic resource backing changed; reload before review")
             if isinstance(result, _OwnedDownloadResponse):
                 result.admission_lease = lease
+                transferred = True
+            elif response_owned:
+                if not isinstance(result, dict):
+                    raise RuntimeError("Native review operation did not return its JSON payload")
+                await lease.release_expensive(memory_quiescent=False)
+                result = _OwnedNativeRevisionResult(result, lease)
                 transferred = True
             return result
         except BaseException as error:
@@ -1098,6 +1262,8 @@ class PhotographicReviewService:
         operation: str,
         args: tuple[Any, ...],
         inspections: list[JsonObject] | None,
+        *,
+        response_owned: bool = False,
     ) -> ReviewCost:
         """Freeze geometry-derived temporary and publication filesystem claims."""
         native_regions = None
@@ -1111,6 +1277,54 @@ class PhotographicReviewService:
             inspections,
             native_materials_regions=native_regions,
         )
+        if (
+            native_regions is not None
+            and response_owned
+            and context.native_resource_scope is not None
+            and context.binding_identity is not None
+        ):
+            from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+            from transformation_portal.orchestrator.photographic_review_access import NativeResourceScope
+            from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+            from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+            from transformation_portal.photographic_delivery.native_resource_inputs import NativeRasterEvidence
+            from transformation_portal.photographic_delivery.native_resources import qualify_native_resources
+
+            payload = args[0]
+            key = (
+                context.tenant_id,
+                context.job_id,
+                context.binding_identity,
+                payload.artifact_path,
+                payload.sha256,
+                payload.source_identity_sha256 or payload.sha256,
+            )
+            cached = self._inspection_costs.get(key, {})
+            evidence = cached.get("_native_resource_evidence")
+            scope_identity = context.native_resource_scope()
+            if (
+                isinstance(evidence, NativeRasterEvidence)
+                and isinstance(context.native_resource_scope, NativeResourceScope)
+                and scope_identity is not None
+                and type(context.native_artifact_store) is LocalArtifactStore
+                and context.native_resource_scope.store is context.native_artifact_store
+                and type(context.native_resource_scope.review_store) is PostgresReviewStore
+                and type(context.native_resource_scope.job_repository) is PostgresJobRepository
+            ):
+                qualified = qualify_native_resources(
+                    evidence,
+                    regions=native_regions,
+                    provider_scope_sha256=scope_identity,
+                    state=state,
+                    response_owned=response_owned,
+                )
+                if qualified is not None and qualified.memory_bytes < cost.memory_bytes:
+                    cost = replace(
+                        cost,
+                        memory_bytes=qualified.memory_bytes,
+                        max_pixels=evidence.width * evidence.height,
+                        native_resource_qualification=qualified,
+                    )
         rows = inspections or [{"width": 8000, "height": 5000, "alpha": True}]
 
         def source_bound(row: JsonObject) -> JsonObject:
@@ -1280,7 +1494,7 @@ class PhotographicReviewService:
     ) -> JsonObject:
         lease = current_review_lease.get()
         if lease is not None:
-            await lease.release_expensive()
+            await lease.release_expensive(memory_quiescent=not lease.native_response_owned)
         await self.revalidate(context)
         updated = await get_review_store().mutate(
             context.job_id,
@@ -1359,7 +1573,8 @@ class PhotographicReviewService:
                 image = await load_image(context, ref)
                 try:
                     metadata = await _owned_thread(_metadata, image)
-                    self._remember_inspection(context, ref, metadata)
+                    native_evidence = await _owned_thread(_native_resource_evidence, image)
+                    self._remember_inspection(context, ref, metadata, native_evidence)
                     scene = scenes.setdefault(
                         ref["scene_id"],
                         {
@@ -1682,6 +1897,14 @@ class PhotographicReviewService:
             self._require_native_materials_lease(context, state, payload)
         async with self.expensive:
             image = await load_image(context, ref)
+            if lease is not None and lease.cost.native_resource_qualification is not None:
+                evidence = await _owned_thread(_native_resource_evidence, image)
+                if (
+                    evidence is None
+                    or evidence.content_hash() != lease.cost.native_resource_qualification.raster_identity
+                    or evidence.source_sha256 != lease.cost.native_resource_qualification.source_sha256
+                ):
+                    raise ReviewOverload("native_resource_input_changed", status=413)
             if native_recipe is not None:
                 result = await _owned_thread(create_materials_revision, image, native_recipe)
             elif legacy_recipe is not None:

@@ -21,7 +21,10 @@ from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from transformation_portal.photographic_delivery.native_resources import NativeMaterialsQualification
 
 GIB = 1024**3
 MIB = 1024**2
@@ -121,6 +124,7 @@ class ReviewCost:
     max_pixels: int = 40_000_000
     filesystems: tuple[tuple[Path, int], ...] = ()
     native_materials_regions: int = 0
+    native_resource_qualification: NativeMaterialsQualification | None = None
 
     def __post_init__(self) -> None:
         if type(self.interactive) is not bool or any(
@@ -267,6 +271,10 @@ class ReviewLease:
     tracked_paths: set[Path] = field(default_factory=set)
     future_scratch_finished: bool = False
     native_revision_owner: object | None = None
+    native_response_owned: bool = False
+    native_artifact_store: Any = None
+    native_review_store: Any = None
+    native_job_repository: Any = None
 
     async def release_expensive(self, *, memory_quiescent: bool = True) -> None:
         """Release workers; retain memory until buffers and tracebacks are gone."""
@@ -707,6 +715,9 @@ class PhotographicAdmissionController:
             if not lease.released:
                 self._active.remove(lease)
                 lease.released = True
+                lease.native_artifact_store = None
+                lease.native_review_store = None
+                lease.native_job_repository = None
                 if not self._active:
                     self._idle.set()
                 self._schedule()

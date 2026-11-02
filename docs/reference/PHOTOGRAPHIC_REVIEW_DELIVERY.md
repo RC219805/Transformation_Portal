@@ -242,13 +242,147 @@ phase-exclusive allocation or managed operation cost. Existing complete-worker
 peak, incremental peak, resource guards and measured-margin decisions remain
 unchanged. Historical reports without these optional checkpoints remain usable.
 
-The production native admission formula, historical measured floor, inspection
-reserve and all configured limits remain unchanged. The retained 30 MP four-region
-profile still reserves about 10.35 GiB against an effective default 6 GiB bulk
-allowance and remains ineligible. Neither tiled transfer nor an offline measured
-peak authorizes a lower profile, larger budget or live feature enablement. A later
-profile change needs the complete managed analytical bound, incremental peak plus
-50%, concurrent reserved inspection and publication/cancellation evidence.
+The generic native admission formula, historical measured floors, inspection
+reserve and configured limits remain unchanged. Without the separately matched
+managed profile below, the retained 30 MP four-region request still reserves about
+10.35 GiB against 6 GiB effective default bulk capacity and remains ineligible.
+Tiled transfer or an offline measured peak alone cannot authorize a lower profile,
+larger budget or live feature enablement.
+
+## Managed native resource qualification
+
+The named `tp.photo.native_sdr_local.v1` profile has a fixed **6 GiB** reservation;
+it does not change the 12 GiB process-local ceiling, effective 6 GiB inspection
+reserve, worker/I/O limits or scratch/free-space protections. It applies only to
+HTTP-owned native revisions whose server-verified inspection, actual local
+publisher, Postgres job/review stores and frozen runtime/source identity match.
+The qualified inventory authority is retained Postgres `JobRecord` data, with
+canonical dispatch authority disabled for that inventory. Canonical dispatch and
+generation authority retains conservative costing pending its separate provider,
+validator/schema and execution-path qualification. Preserve canonical job authority;
+changing queue settings does not migrate or qualify a canonical inventory.
+Unknown, historical or conflicting authority retains conservative fallback
+costing. No filename, client option, environment label or supplied inspection can
+select the lower profile. Requests whose complete reservation does not fit still
+fail with typed `413`; no downsampling, deletion or automatic budget change occurs.
+The fixed profile is selected only when it lowers the existing conservative
+estimate; smaller operations keep that estimate and its existing admission behavior.
+
+Eligible raster evidence is bound to exact immutable source bytes: integer
+8/16-bit RGB or straight-alpha RGBA TIFF, at most 30,000,000 pixels, contiguous
+uncompressed strips and canonical sRGB ICC. A small structural parser bounds
+classic/BigTIFF headers before opaque decoder use: 64 KiB of header/tag data,
+32 tags, 64 strips, a 1 KiB closed description and a 4 KiB canonical ICC. It rejects
+extra directories, padding, overlapping/out-of-file offsets, unsupported metadata
+and unbounded layouts from eligibility. Other codecs/layouts do not inherit this
+qualification. Presentation and processing-stage authority remain independent.
+
+The pure-data `native_resource_contract.py` freezes the profile's functional
+source closure, CPython executable, five native extensions, package versions and
+Darwin arm64 runtime. The pilot is specific to CPython 3.12.14 and the recorded
+environment; another platform/build selects fallback. Set `OMP_NUM_THREADS`,
+`MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` and
+`VECLIB_MAXIMUM_THREADS` to `1` before starting the backend. A stale or incomplete
+contract cannot grant capacity. It is reviewed release data; never regenerate it
+merely to make a mismatched installation qualify.
+
+The analytical profile takes the maximum simultaneous native phase allocation,
+including snapshots, masks, hashing, codecs, previews and publication, and adds
+bounded metadata/response allowance. The worst 30 MP RGBA/four-region analytical
+case is about 5.065 GiB. The separate 4 GiB incremental-RSS acceptance ceiling is
+an acceptance requirement, not an observed measurement: measured incremental peak
+plus 50% must fit the fixed 6 GiB reservation. Projection/job metadata must satisfy
+the profile's 8 MiB heap, 65,536-node and depth-16 limits. Source/codec eligibility,
+metadata limits and backing-store identity are revalidated; all three actual
+providers are pinned for the operation so awaited I/O and uncertain cleanup use
+the same authorities.
+
+Native HTTP preview/save retain their complete memory reservation and outstanding
+request ticket through CAS, envelope serialization and response completion,
+failure or repeated cancellation. Decode and photographic I/O slots are released
+when expensive work is quiescent, before CAS. A slow response cannot release its
+memory early or authorize a second bulk operation. Direct service dictionaries,
+legacy revisions and existing download ownership retain their prior contracts.
+The selected source must first receive authoritative catalogue/scene inspection
+in this backend process; a cold or expired inspection cache selects fallback.
+TIFF decoding explicitly closes its owned in-memory file before color allocation,
+so retained tifffile metadata cycles cannot keep encoded snapshots resident until
+cyclic garbage collection.
+Normalization reuses its independent float32 cast buffer, and decoded rasters and
+mutable compositor output release before subsequent color/hash allocations;
+historical pixel, master-identity and receipt comparisons remain exact.
+Path-backed snapshots read at most their checked file size plus one growth-detection
+byte, while retaining the configured maximum, confined descriptors and exact hash
+checks. They do not allocate against the much larger generic snapshot ceiling.
+
+### Private managed CPU qualification command
+
+Use a fresh private namespace and a dedicated, already migrated Postgres database
+whose name ends in `_test`. `TP_MANAGED_QUALIFICATION_DATABASE_URL` is local-only;
+the tool does not reset a database, reinstall a runtime or dispatch inference.
+Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` and
+one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
+and the closed native Materials `recipe`. It seeds only unique private succeeded
+jobs and uses real signed authorization, the shared router, `AppReviewAccess`,
+Postgres CAS and file-backed publication. This is managed backend qualification;
+it does not claim a signed-in frontdoor/browser pilot or photographic acceptance.
+
+```bash
+PYTHONPATH=.:src ./.venv/bin/python -m transformation_portal.photographic_delivery.managed_qualification \
+  --manifest /absolute/private/retained-manifest.json \
+  --expected-profile-identity <reviewed-profile-sha256> \
+  --output /absolute/private/qualification/new-run \
+  --repeats 3 --preflight-only
+```
+
+Set the five thread variables above and the dedicated database URL before running.
+Inspect the planning report; remove `--preflight-only` and choose another fresh
+output namespace to measure. The current source/runtime must match the expected
+profile hash. The worker uses repeated cohorts in one process with its original
+baseline; cumulative high-water checkpoints are not exclusive phase allocations.
+The local campaign additionally requires 20 GiB of available host memory before
+launch and protects 8 GiB while running. These physical-headroom guards do not
+increase the admission controller's 12 GiB accounting ceiling or its 6 GiB native
+reservation. Scratch planning includes source copies, all retained trial products
+and publication copies; insufficient physical space blocks launch.
+Independent TIFF/PNG/pixel/receipt checks and Postgres event/state reconciliation
+run after that worker exits, in a separate process. Preserve failed namespaces
+for diagnosis; retained sources and finalized deliveries are never cleanup targets.
+
+Default qualification includes a same-tenant inspection while the native worker
+still owns its complete lease. A single repeat or `--no-concurrent-inspection`
+produces observations without full declared-cohort qualification. Controlled
+`--scenario cancel_helper`, `cancel_publication` and `publication_failure` runs
+require one source/one repeat and verify owned cleanup and unchanged review state.
+These fault observations alone do not qualify a photographic cohort. Host/provider
+rollout and Richard's scoped native photographic decision remain separate gates;
+AWS/GPU validation stays on hold.
+Only all-zero-strength preservation recipes can establish declared-cohort
+qualification. Nonzero runs retain resource observations and product/receipt
+verification, but do not establish protected-delta or photographic acceptance.
+
+### Reviewed pilot observations
+
+The frozen profile identity is
+`0ba2fcb84ef51eeb3be41931374183565ac8b99af9ecb5c72b969eec3a8f2b92`.
+On its recorded Darwin arm64/CPython runtime and retained-inventory providers,
+three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
+30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
+RGBA8 and RGBA16 three-repeat probes, one bounded nonzero observation and the
+20 MP Postgres success/cancellation/publication-failure modes brought the total
+to 60 saves and 300 independently verified products. All 295 products from the
+59 preservation saves verified; every preserved native TIFF had zero 16-bit code
+changes. Sources remained unchanged and all
+reservation counters drained. The nonzero observation is separate from
+preservation and photographic acceptance.
+
+The worst complete worker peak was 4,287,643,648 bytes; its measured incremental
+peak plus 50% was 6,318,342,144 bytes, below the fixed 6,442,450,944-byte reservation.
+Same-tenant inspection progressed while the complete native lease and encoded
+output were held after helper return. This is not an exclusive phase measurement
+or a worst-case overlap measurement of two live raster computations. Reports,
+source snapshots and products remain private, outside Git and finalized delivery;
+these observations do not enable production flags or qualify canonical generations.
 
 ## Paged catalogue and review navigation
 

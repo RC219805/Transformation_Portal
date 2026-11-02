@@ -383,6 +383,9 @@ def apply_response(
             metadata=master.metadata,
             source_icc=master.source_icc,
         )
+    # ImageMaster owns immutable copies; the mutable execution raster is no
+    # longer needed when the authoritative output content hash is allocated.
+    del output
     receipt = {
         "schema": "tp.materials.execution.v1",
         "plan_sha256": plan.content_hash(),
