@@ -193,7 +193,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
         "src/transformation_portal/orchestrator/artifact_store/base.py": "10860eb0bddd4d609dfe245f23b800f7ae5053939fcb4ecc7b3f6f5d5599f4c9",
         "src/transformation_portal/orchestrator/artifact_store/generation.py": "db530018530eae519fc40cc30b442afdf0e8d6a836ae6b6d59ae98ccce182fe1",
         "src/transformation_portal/orchestrator/artifact_store/local.py": "fae1eda7edecb88ea4b9892c7a9396f1ceb48e74ba302cb03abad19b4a2790c5",
-        "src/transformation_portal/orchestrator/artifact_store/s3.py": "c97a8825be020ae89bad8691c891a13bdc4309355578334e1ceef7c13c6fc552",
+        "src/transformation_portal/orchestrator/artifact_store/s3.py": "18ef3a6657c19d0d700555dabc425d5695623055c22ee7e93a0adceedbcddf34",
         "src/transformation_portal/orchestrator/dispatch.py": "0182370165b771b39b9bfdd2879d7efc40d5d120f6941bb46b723beb86fcbae4",
         "src/transformation_portal/orchestrator/execution_dispatch.py": "34508eba2239f0de09929211cf4507b3d32df657d49b5266ab5fece41c7a5b99",
         "src/transformation_portal/orchestrator/execution_policy.py": "12b7061929a1d3654cb4cc8514c59e78febeb8ff18b16e3e76868d392afdc457",

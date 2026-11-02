@@ -280,6 +280,108 @@ def test_packaged_model_identity_is_recomputed_and_detects_in_place_shape_edits(
         body["type"] = original  # boto3's default session shares its loader cache.
 
 
+def test_actual_offline_head_keeps_identity_after_pinned_sdk_http_mutation(
+    tmp_path: Path, client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    boto3 = pytest.importorskip("boto3")
+    stub = pytest.importorskip("botocore.stub")
+    # A fresh session owns an unmodified loader model even if other tests have
+    # already invoked SDK operations through boto3's shared default session.
+    instance = boto3.Session().client(
+        "s3",
+        endpoint_url=client.meta.endpoint_url,
+        region_name="us-east-1",
+        aws_access_key_id="private-offline-access",
+        aws_secret_access_key="private-offline-secret",
+    )
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Offline HEAD regression must never contact an endpoint")
+
+    monkeypatch.setattr(instance._endpoint, "make_request", forbidden)
+    try:
+        store = _store(tmp_path, instance)
+        before = store.native_resource_identity()
+        assert before is not None
+        description = instance.meta.service_model._service_description
+        cold = copy.deepcopy(description["operations"]["HeadObject"]["http"])
+        with stub.Stubber(instance) as responses:
+            responses.add_response("head_object", {"ContentLength": 1}, {"Bucket": "private-pilot", "Key": "existing.tif"})
+            assert instance.head_object(Bucket="private-pilot", Key="existing.tif")["ContentLength"] == 1
+        assert description["operations"]["HeadObject"]["http"] == {
+            **cold,
+            "requestUri": "/{Key+}",
+            "authPath": "/{Bucket}/{Key+}",
+        }
+        warmed = copy.deepcopy(description)
+        assert store.native_resource_identity() == before
+        assert description == warmed  # Identity validation never rewrites the client.
+    finally:
+        instance.close()
+
+
+def test_successive_pinned_sdk_http_states_keep_one_identity_for_all_native_operations(tmp_path: Path, client: Any) -> None:
+    handler = pytest.importorskip("botocore.handlers").remove_bucket_from_url_paths_from_model
+    store = _store(tmp_path, client)
+    before = store.native_resource_identity()
+    assert before is not None
+    model = client.meta.service_model
+    names = ("HeadObject", "GetObject", "PutObject", "DeleteObject", "ListObjectsV2", "HeadBucket")
+    saved = {name: copy.deepcopy(model.operation_model(name).http) for name in names}
+    try:
+        for name in names:
+            handler(params={}, model=model.operation_model(name), context={})
+            warmed = copy.deepcopy(model._service_description)
+            assert store.native_resource_identity() == before
+            assert model._service_description == warmed
+    finally:
+        for name, http in saved.items():
+            model.operation_model(name).http.clear()
+            model.operation_model(name).http.update(http)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("method", "POST"),
+        ("requestUri", "/unpackaged"),
+        ("authPath", "/unpackaged"),
+        ("requestUri", "/{Bucket}/{Key+}"),
+        ("authPath", None),
+    ],
+)
+def test_warmed_http_model_rejects_tampering_and_partial_transitions(
+    tmp_path: Path, client: Any, field: str, value: Any
+) -> None:
+    handler = pytest.importorskip("botocore.handlers").remove_bucket_from_url_paths_from_model
+    store = _store(tmp_path, client)
+    operation = client.meta.service_model.operation_model("HeadObject")
+    saved = dict(operation.http)
+    try:
+        handler(params={}, model=operation, context={})
+        assert store.native_resource_identity() is not None
+        operation.http[field] = value
+        assert store.native_resource_identity() is None
+    finally:
+        operation.http.clear()
+        operation.http.update(saved)
+
+
+def test_detached_cached_http_cannot_borrow_unchanged_backing_definition(tmp_path: Path, client: Any) -> None:
+    store = _store(tmp_path, client)
+    before = store.native_resource_identity()
+    assert before is not None
+    operation = client.meta.service_model.operation_model("GetObject")
+    original = operation.http
+    try:
+        operation.http = dict(original)
+        assert store.native_resource_identity() == before
+        operation.http["authPath"] = "/unpackaged"
+        assert store.native_resource_identity() is None
+    finally:
+        operation.http = original
+
+
 @pytest.mark.parametrize("payload_name", ["ContentLength", "missing"])
 def test_cached_effective_shape_edit_cannot_borrow_unchanged_backing_model(
     tmp_path: Path, client: Any, payload_name: str
@@ -360,10 +462,10 @@ def test_packaged_validation_models_do_not_wait_for_cyclic_gc(
     original = s3_module._native_operation_models
     references = []
 
-    def observed(model):
+    def observed(model, *args):
         if model is not client.meta.service_model:
             references.append(weakref.ref(model))
-        return original(model)
+        return original(model, *args)
 
     monkeypatch.setattr(s3_module, "_native_operation_models", observed)
     enabled = gc.isenabled()

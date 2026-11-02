@@ -26,7 +26,8 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Iterator
+from types import CoroutineType, FrameType, GeneratorType
+from typing import Any, Callable, Iterator
 from urllib.parse import urlsplit
 
 from transformation_portal.ingest.canonical_json import dumps_json
@@ -36,6 +37,7 @@ SCHEMA = "tp.photo.managed_materials_qualification.v1"
 MANIFEST_SCHEMA = "tp.photo.managed_materials_manifest.v1"
 MODULE = "transformation_portal.photographic_delivery.managed_qualification"
 MAX_REPORT_BYTES = 4 * offline.MIB
+MAX_FAILURE_DIAGNOSTIC_BYTES = 64 * 1024
 SCENARIOS = frozenset({"success", "cancel_helper", "cancel_publication", "cancel_transport", "publication_failure"})
 PROVIDERS = frozenset({"retained-local", "canonical-s3"})
 _SERVICE_ENV = (
@@ -444,7 +446,14 @@ def _headers(method: str, target: str) -> dict[str, str]:
     return {"x-api-key": os.environ["TP_API_KEY"], "x-tp-actor-assertion": encoded + "." + signature}
 
 
-async def _wait_for_barrier(operation: asyncio.Task[Any], event: Any, description: str, timeout: float = 30) -> None:
+async def _wait_for_barrier(
+    operation: asyncio.Task[Any],
+    event: Any,
+    description: str,
+    timeout: float = 30,
+    *,
+    on_timeout: Callable[[str, asyncio.Task[Any]], None] | None = None,
+) -> None:
     """Surface request failures immediately; never strand an owned waiter thread."""
 
     async def observe() -> None:
@@ -458,10 +467,83 @@ async def _wait_for_barrier(operation: asyncio.Task[Any], event: Any, descriptio
             operation.result()  # Preserve its actual HTTP/authority failure.
             raise RuntimeError(f"Managed request completed before its {description} barrier")
         if waiter not in completed:
-            raise TimeoutError(f"Managed request did not reach its {description} barrier")
+            error = TimeoutError(f"Managed request did not reach its {description} barrier")
+            if on_timeout is not None:
+                try:
+                    on_timeout(description, operation)
+                except Exception as diagnostic_error:
+                    error.add_note(f"Failure telemetry unavailable: {type(diagnostic_error).__name__}")
+            raise error
     finally:
         waiter.cancel()
         await asyncio.gather(waiter, return_exceptions=True)
+
+
+def _failure_location(frame: FrameType) -> dict[str, Any]:
+    """Copy code coordinates only; never retain frames, locals or source lines."""
+    return {"filename": frame.f_code.co_filename[-256:], "function": frame.f_code.co_name[:96], "line": frame.f_lineno}
+
+
+def _failure_task_stacks(operation: asyncio.Task[Any]) -> list[dict[str, Any]]:
+    tasks = [operation, *(task for task in asyncio.all_tasks() if task is not operation)][:8]
+    result = []
+    for index, task in enumerate(tasks):
+        locations = []
+        pending: Any = task.get_coro()
+        for _ in range(8):
+            if type(pending) is CoroutineType:
+                frame, pending = pending.cr_frame, pending.cr_await
+            elif type(pending) is GeneratorType:
+                frame, pending = pending.gi_frame, pending.gi_yieldfrom
+            else:
+                break
+            if frame is not None:
+                locations.append(_failure_location(frame))
+            del frame
+        del pending
+        result.append({"request_task": index == 0, "done": task.done(), "cancelled": task.cancelled(), "stack": locations})
+    return result
+
+
+def _failure_thread_stacks() -> list[dict[str, Any]]:
+    frames = sys._current_frames()
+    result = []
+    try:
+        for identifier, initial in list(frames.items())[:8]:
+            frame: FrameType | None = initial
+            locations = []
+            for _ in range(8):
+                if frame is None:
+                    break
+                locations.append(_failure_location(frame))
+                frame = frame.f_back
+            del frame
+            result.append({"thread_id": identifier, "stack": locations})
+    finally:
+        frames.clear()
+    return result
+
+
+def _failure_numbers(value: Any) -> dict[str, int | float | bool | None]:
+    if type(value) is not dict:
+        return {}
+    return {
+        key: item
+        for key, item in value.items()
+        if type(key) is str
+        and len(key) <= 64
+        and (item is None or type(item) in {int, bool} or type(item) is float and math.isfinite(item))
+    }
+
+
+def _failure_phase(record: dict[str, Any]) -> dict[str, Any]:
+    fields = ("elapsed_seconds", "rss_cumulative_high_water_bytes", "current_rss_bytes", "physical_free_bytes", "http_status")
+    return {
+        "phase": str(record.get("phase", ""))[:128],
+        **_failure_numbers({key: record.get(key) for key in fields}),
+        "admission": _failure_numbers(record.get("admission")),
+        "lease": _failure_numbers(record.get("lease")),
+    }
 
 
 class _Observer:
@@ -489,7 +571,9 @@ class _Observer:
         self.publication_root: Path | None = None
         self.object_root: Path | None = None
 
-    def capture(self, phase: str, *, inspection_crop: tuple[int, int, int, int] | None = None) -> None:
+    def capture(
+        self, phase: str, *, inspection_crop: tuple[int, int, int, int] | None = None, http_status: int | None = None
+    ) -> None:
         import psutil
 
         from transformation_portal.orchestrator.photographic_admission import current_review_lease
@@ -499,6 +583,7 @@ class _Observer:
         qualified = getattr(lease.cost, "native_resource_qualification", None) if lease is not None else None
         record = {
             "phase": phase,
+            "http_status": http_status,
             "inspection_crop": list(inspection_crop) if inspection_crop is not None else None,
             "elapsed_seconds": time.monotonic() - self.started,
             "rss_cumulative_high_water_bytes": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier),
@@ -530,6 +615,38 @@ class _Observer:
             }
         with self.lock:
             self.records.append(record)
+
+    def record_failure(self, description: str, operation: asyncio.Task[Any]) -> None:
+        """Keep bounded metadata at the timeout, before cancellation drains work."""
+        with self.lock:
+            phases = [_failure_phase(record) for record in self.records[-16:]]
+        payload: dict[str, Any] = {
+            "schema": "tp.photo.private_managed_failure_diagnostic.v1",
+            "barrier": description[:128],
+            "elapsed_seconds": time.monotonic() - self.started,
+            "request_done": operation.done(),
+            "request_cancelled": operation.cancelled(),
+            "admission": _failure_numbers(self.service.admission.snapshot()),
+            "last_phase_records": phases,
+            "task_stacks": _failure_task_stacks(operation),
+            "thread_stacks": _failure_thread_stacks(),
+            "truncated_metadata_entries": 0,
+            "scope": "coordinates_and_numeric_metadata_only_no_locals_arguments_source_lines_or_buffers",
+        }
+        while True:
+            raw = offline._canonical(payload) + b"\n"
+            if len(raw) <= MAX_FAILURE_DIAGNOSTIC_BYTES:
+                break
+            for field in ("task_stacks", "thread_stacks", "last_phase_records"):
+                if payload[field]:
+                    payload[field].pop(0 if field == "last_phase_records" else -1)
+                    payload["truncated_metadata_entries"] += 1
+                    break
+            else:
+                raise ValueError("Failure telemetry metadata exceeds its byte bound")
+        path = self.root / "failure-diagnostic.json"
+        with path.open("xb") as stream:
+            stream.write(raw)
 
 
 @contextmanager
@@ -641,10 +758,20 @@ class _ObservedTransport:
         observer = self.observer
         native = scope["type"] == "http" and scope.get("method") == "POST" and scope.get("path", "").endswith("/revisions")
         blocked = False
+        response_status: int | None = None
 
         async def observed_send(message: Any) -> None:
-            nonlocal blocked
-            if native and observer.pause_transport and not blocked and message["type"] == "http.response.body":
+            nonlocal blocked, response_status
+            if native and message["type"] == "http.response.start":
+                response_status = message["status"]
+                observer.capture("native_response_started", http_status=response_status)
+            if (
+                native
+                and response_status == 200
+                and observer.pause_transport
+                and not blocked
+                and message["type"] == "http.response.body"
+            ):
                 blocked = True
                 observer.capture("native_outer_transport_blocked")
                 observer.transport_entered.set()
@@ -673,8 +800,9 @@ def _require_transport_reservation(observer: _Observer, operation: asyncio.Task[
 
 
 async def _wait_for_owned_transport(observer: _Observer, operation: asyncio.Task[Any]) -> None:
-    await _wait_for_barrier(operation, observer.transport_entered, "outer transport send")
-    await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return")
+    diagnostic = getattr(observer, "record_failure", None)
+    await _wait_for_barrier(operation, observer.transport_entered, "outer transport send", on_timeout=diagnostic)
+    await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return", on_timeout=diagnostic)
     _require_transport_reservation(observer, operation)
     observer.capture("native_outer_transport_holds_reservation_after_inner_return")
 
@@ -926,10 +1054,18 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                         try:
                             if spec["scenario"] in {"cancel_helper", "cancel_publication"}:
                                 if spec["scenario"] == "cancel_helper":
-                                    await _wait_for_barrier(operation, observer.helper_entered, "native cancellation")
+                                    await _wait_for_barrier(
+                                        operation,
+                                        observer.helper_entered,
+                                        "native cancellation",
+                                        on_timeout=observer.record_failure,
+                                    )
                                 else:
                                     await _wait_for_barrier(
-                                        operation, observer.publication_entered, "publication cancellation"
+                                        operation,
+                                        observer.publication_entered,
+                                        "publication cancellation",
+                                        on_timeout=observer.record_failure,
                                     )
                                 held = service.admission.snapshot()
                                 operation.cancel()
@@ -955,7 +1091,12 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                 del operation
                                 continue
                             if concurrent:
-                                await _wait_for_barrier(operation, observer.helper_entered, "concurrent inspection")
+                                await _wait_for_barrier(
+                                    operation,
+                                    observer.helper_entered,
+                                    "concurrent inspection",
+                                    on_timeout=observer.record_failure,
+                                )
                                 await inspect_while_held("same_tenant_inspection_completed_while_native_held")
                             observer.helper_release.set()
                             if observer.pause_transport:
@@ -967,7 +1108,12 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                     _require_transport_reservation(observer, operation)
                                 if spec["scenario"] == "cancel_transport":
                                     operation.cancel()
-                                    await _wait_for_barrier(operation, observer.transport_cancelled, "transport cancellation")
+                                    await _wait_for_barrier(
+                                        operation,
+                                        observer.transport_cancelled,
+                                        "transport cancellation",
+                                        on_timeout=observer.record_failure,
+                                    )
                                     operation.cancel()
                                     await asyncio.sleep(0)
                                     _require_transport_reservation(observer, operation)

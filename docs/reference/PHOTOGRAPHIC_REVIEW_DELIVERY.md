@@ -409,6 +409,12 @@ an explicit integer from 1 to 900 for each supervised worker and verifier. The
 maximum canonical pilot requests 600 seconds explicitly; it does not retry or
 extend deadlines automatically. This validation timer changes no production
 admission wait, service CPU limit, memory reservation or scratch protection.
+An unmet private observation barrier writes at most 64 KiB of phase/admission
+metadata and task/thread code coordinates before cancellation. The exclusive
+`failure-diagnostic.json` excludes locals, arguments, source lines and image
+buffers; telemetry failure preserves the original timeout and owned drain.
+Transport ownership barriers hold successful native responses only; error
+responses pass through unchanged so their actual status and typed error surface.
 
 Lower-cost S3 eligibility covers only HTTP loopback with the measured SDK
 configuration. HTTPS, custom model loaders/search paths, altered service models,
@@ -416,9 +422,13 @@ or changed cached operation/shape semantics retain conservative costing. The
 actual GET/HEAD/PUT/DELETE/list models and streaming behavior must match bounded
 packaged models and SDK extras. Validation releases its private reference models
 without relying on garbage collection; it does not change the live client.
+Only the pinned SDK handler's exact before/after `requestUri` and `authPath`
+states are normalized in private comparison copies. Ordinary S3 requests may
+perform that rewrite without invalidating their resource scope; other HTTP,
+service-model and cached-shape changes retain conservative costing.
 
 The reviewed v2 profile identity is
-`1bbf572ebdf6600d53478052633c704b414011ddbc88ac285e44545ac820c8f5`.
+`2a78d79d12b5b7d56271fedd56aa83913d8bb15a57425a3bb0748cfaa83f8038`.
 Its closure includes 69 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.

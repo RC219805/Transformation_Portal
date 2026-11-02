@@ -182,7 +182,63 @@ def _native_model_digest(payload: Any) -> str | None:
     return hashlib.sha256(encoded).hexdigest() if len(encoded) <= _NATIVE_MODEL_BYTES else None
 
 
-def _native_operation_models(model: Any) -> dict[str, Any]:
+def _native_http_model(actual: Any, packaged: Any) -> dict[str, Any]:
+    """Accept only the pinned S3 handler's exact cold or warm HTTP mapping."""
+    if (
+        type(actual) not in {dict, OrderedDict}
+        or type(packaged) not in {dict, OrderedDict}
+        or _native_model_digest(actual) is None
+        or _native_model_digest(packaged) is None
+    ):
+        raise ValueError("Native S3 HTTP model exceeds its finite graph bound")
+    cold = dict(packaged)
+    warm = dict(cold)
+    uri = cold.get("requestUri")
+    if type(uri) is not str:
+        raise ValueError("Native S3 packaged HTTP URI is invalid")
+    bucket_path = "/{Bucket}"
+    if uri.startswith(bucket_path):
+        # botocore.handlers.remove_bucket_from_url_paths_from_model mutates
+        # these two fields on first use. Normalize private copies only.
+        warm["requestUri"] = uri[len(bucket_path) :]
+        auth_path = uri.split("?")[0]
+        warm["authPath"] = f"{auth_path}/" if auth_path == bucket_path else auth_path
+    if actual != cold and actual != warm:
+        raise ValueError("Native S3 HTTP model is not an exact packaged cold or warm state")
+    return cold
+
+
+def _native_operation_definition(actual: Any, packaged: Any) -> dict[str, Any]:
+    if (
+        type(actual) not in {dict, OrderedDict}
+        or type(packaged) not in {dict, OrderedDict}
+        or _native_model_digest(actual) is None
+    ):
+        raise ValueError("Native S3 operation definition exceeds its finite graph bound")
+    return {**actual, "http": _native_http_model(actual.get("http"), packaged.get("http"))}
+
+
+def _native_model_description(actual: Any, packaged: Any) -> dict[str, Any]:
+    """Canonicalize only validated HTTP state, preserving all other authority."""
+    if _native_model_digest(actual) is None or _native_model_digest(packaged) is None:
+        raise ValueError("Native S3 service description exceeds its finite graph bound")
+    operations, expected = actual.get("operations"), packaged.get("operations")
+    if (
+        type(operations) not in {dict, OrderedDict}
+        or type(expected) not in {dict, OrderedDict}
+        or len(operations) > 256
+        or set(operations) != set(expected)
+    ):
+        raise ValueError("Native S3 service operation set differs from its packaged authority")
+    return {
+        **actual,
+        "operations": {
+            name: _native_operation_definition(definition, expected[name]) for name, definition in operations.items()
+        },
+    }
+
+
+def _native_operation_models(model: Any, packaged_operations: Any) -> dict[str, Any]:
     """Include effective cached shape serialization, not only backing JSON."""
     from botocore.model import ListShape, MapShape, OperationModel, Shape, StringShape, StructureShape
 
@@ -233,14 +289,15 @@ def _native_operation_models(model: Any) -> dict[str, Any]:
         operation = model.operation_model(name)
         if type(operation) is not OperationModel:
             raise ValueError("Unsupported native S3 operation model")
-        operation_identity = _native_model_digest(operation._operation_model)
+        expected = packaged_operations[name]
+        operation_identity = _native_model_digest(_native_operation_definition(operation._operation_model, expected))
         if operation_identity is None:
             raise ValueError("Native S3 operation definition exceeds its finite graph bound")
         input_shape = shape_payload(operation.input_shape)
         output_shape = shape_payload(operation.output_shape)
         result[name] = {
             "definition_sha256": operation_identity,
-            "http": operation.http,
+            "http": _native_http_model(operation.http, expected["http"]),
             "streaming_input": operation.has_streaming_input,
             "streaming_output": operation.has_streaming_output,
             "input": input_shape,
@@ -274,8 +331,7 @@ def _native_service_model_identity(client: Any) -> dict[str, str] | None:
         path = Path(value).resolve()
         if path not in packaged_paths and not (path == customer and not path.exists()):
             return None
-    actual = _native_model_digest(model._service_description)
-    if actual is None:
+    if _native_model_digest(model._service_description) is None:
         return None
 
     class BoundedFileLoader(JSONFileLoader):
@@ -295,12 +351,13 @@ def _native_service_model_identity(client: Any) -> dict[str, str] | None:
         extra_search_paths=[str(builtin)], file_loader=BoundedFileLoader(), include_default_search_paths=False
     )
     expected = expected_loader.load_service_model("s3", "service-2", api_version="2006-03-01")
-    if actual != _native_model_digest(expected):
+    actual = _native_model_digest(_native_model_description(model._service_description, expected))
+    if actual is None or actual != _native_model_digest(expected):
         return None
-    effective = _native_model_digest(_native_operation_models(model))
+    effective = _native_model_digest(_native_operation_models(model, expected["operations"]))
     reference = ServiceModel(expected, service_name="s3")
     try:
-        packaged_effective = _native_model_digest(_native_operation_models(reference))
+        packaged_effective = _native_model_digest(_native_operation_models(reference, expected["operations"]))
     finally:
         # The fresh validation model caches operations that refer back to it.
         # Break only that private cycle; never alter the live client's caches.

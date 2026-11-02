@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import signal
+import threading
 from types import SimpleNamespace
 
 import numpy as np
@@ -55,6 +56,135 @@ async def test_barrier_keeps_the_actual_operation_owned_on_success_or_deadline()
 
 
 @pytest.mark.asyncio
+async def test_timeout_diagnostic_runs_before_cancellation_and_preserves_original_error():
+    finish = asyncio.Event()
+    operation = asyncio.create_task(finish.wait())
+    observed = []
+
+    def diagnose(description, task):
+        observed.append((description, task is operation, task.done(), task.cancelled()))
+
+    try:
+        with pytest.raises(TimeoutError, match="did not reach its inspection barrier"):
+            await managed._wait_for_barrier(operation, asyncio.Event(), "inspection", timeout=0.001, on_timeout=diagnose)
+        assert observed == [("inspection", True, False, False)]
+        assert not operation.done()
+    finally:
+        finish.set()
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_failure_cannot_replace_timeout_or_disclose_error_details():
+    finish = asyncio.Event()
+    operation = asyncio.create_task(finish.wait())
+
+    def unavailable(*_args):
+        raise OSError("credential-details-must-not-appear")
+
+    try:
+        with pytest.raises(TimeoutError, match="did not reach") as caught:
+            await managed._wait_for_barrier(operation, asyncio.Event(), "inspection", timeout=0.001, on_timeout=unavailable)
+        assert caught.value.__notes__ == ["Failure telemetry unavailable: OSError"]
+        assert "credential-details" not in str(caught.value)
+        assert not operation.done()
+    finally:
+        finish.set()
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_successful_barrier_does_not_write_failure_telemetry():
+    finish, reached = asyncio.Event(), asyncio.Event()
+    operation = asyncio.create_task(finish.wait())
+    reached.set()
+
+    def forbidden(*_args):
+        pytest.fail("Successful observation must not capture failure telemetry")
+
+    try:
+        await managed._wait_for_barrier(operation, reached, "inspection", on_timeout=forbidden)
+    finally:
+        finish.set()
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_failure_diagnostic_is_exclusive_bounded_metadata_with_last_sixteen_records(tmp_path, monkeypatch):
+    secret = "private-response-buffer-or-credential-never-serialize"
+    admission = {"active": 1, "queued": 0, "memory_reserved_bytes": 6 * managed.offline.GIB, "credential": secret}
+    observer = managed._Observer(tmp_path, SimpleNamespace(admission=SimpleNamespace(snapshot=lambda: admission)))
+    observer.records = [
+        {
+            "phase": f"phase-{index}",
+            "elapsed_seconds": index,
+            "admission": admission,
+            "lease": {"memory_bytes": 6 * managed.offline.GIB},
+            "unrelated_secret": secret,
+            "response_buffer": secret.encode(),
+        }
+        for index in range(24)
+    ]
+    finish = asyncio.Event()
+    operation = asyncio.create_task(finish.wait())
+    # Force the hard byte bound independently of normal stack-size bounds.
+    monkeypatch.setattr(managed, "_failure_task_stacks", lambda *_args: [{"stack": "x" * 70000}])
+    monkeypatch.setattr(managed, "_failure_thread_stacks", lambda: [])
+    try:
+        observer.record_failure("inspection", operation)
+        path = tmp_path / "failure-diagnostic.json"
+        raw = path.read_bytes()
+        assert len(raw) <= managed.MAX_FAILURE_DIAGNOSTIC_BYTES
+        assert secret.encode() not in raw
+        report = json.loads(raw)
+        assert [row["phase"] for row in report["last_phase_records"]] == [f"phase-{index}" for index in range(8, 24)]
+        assert report["admission"] == {key: value for key, value in admission.items() if key != "credential"}
+        assert report["request_done"] is report["request_cancelled"] is False
+        assert report["truncated_metadata_entries"] == 1
+        with pytest.raises(FileExistsError):
+            observer.record_failure("inspection", operation)
+        assert path.read_bytes() == raw
+    finally:
+        finish.set()
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_failure_stacks_copy_only_coordinates_without_locals_or_frame_retention(tmp_path):
+    stop, entered = threading.Event(), threading.Event()
+    sensitive = "sensitive-buffer-do-not-copy-to-evidence"
+
+    def blocked_private_worker():
+        response_buffer = sensitive.encode()
+        entered.set()
+        stop.wait()
+        assert response_buffer
+
+    worker = threading.Thread(target=blocked_private_worker)
+    worker.start()
+    operation = asyncio.create_task(asyncio.Event().wait())
+    observer = managed._Observer(tmp_path, SimpleNamespace(admission=SimpleNamespace(snapshot=lambda: {"active": 1})))
+    try:
+        assert entered.wait(1)
+        observer.record_failure("native processing", operation)
+        raw = (tmp_path / "failure-diagnostic.json").read_bytes()
+        assert sensitive.encode() not in raw and b"response_buffer" not in raw
+        report = json.loads(raw)
+        stacks = [item["stack"] for field in ("task_stacks", "thread_stacks") for item in report[field]]
+        assert any(location["function"] == "blocked_private_worker" for stack in stacks for location in stack)
+        assert all(set(location) == {"filename", "function", "line"} for stack in stacks for location in stack)
+        assert all(type(location["line"]) is int for stack in stacks for location in stack)
+        # Returned JSON metadata contains no live Python frame/task/array values.
+        assert json.loads(managed.offline._canonical(report)) == report
+    finally:
+        stop.set()
+        worker.join(timeout=1)
+        operation.cancel()
+        await asyncio.gather(operation, return_exceptions=True)
+    assert not worker.is_alive()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("memory,outstanding", [(0, 1), (6 * managed.offline.GIB, 0)])
 async def test_transport_probe_rejects_inner_response_release_before_outer_quiescence(memory, outstanding):
     finish = asyncio.Event()
@@ -87,11 +217,12 @@ async def test_observed_transport_blocks_outside_app_and_drains_repeated_cancel(
         transport_cancelled=asyncio.Event(),
         transport_cancel_release=asyncio.Event(),
         inner_response_returned=asyncio.Event(),
-        capture=phases.append,
+        capture=lambda phase, **_metadata: phases.append(phase),
     )
 
     async def app(_scope, _receive, send):
         observer.inner_response_returned.set()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"unaltered"})
 
     async def send(message):
@@ -102,7 +233,7 @@ async def test_observed_transport_blocks_outside_app_and_drains_repeated_cancel(
     )
     try:
         await managed._wait_for_owned_transport(observer, task)
-        assert sent == [] and not task.done()
+        assert sent == [{"type": "http.response.start", "status": 200, "headers": []}] and not task.done()
         if cancel:
             task.cancel()
             await managed._wait_for_barrier(task, observer.transport_cancelled, "cancelled send")
@@ -112,16 +243,57 @@ async def test_observed_transport_blocks_outside_app_and_drains_repeated_cancel(
             observer.transport_cancel_release.set()
             with pytest.raises(asyncio.CancelledError):
                 await task
-            assert sent == []
+            assert sent == [{"type": "http.response.start", "status": 200, "headers": []}]
         else:
             observer.transport_release.set()
             await task
-            assert sent == [{"type": "http.response.body", "body": b"unaltered"}]
+            assert sent == [
+                {"type": "http.response.start", "status": 200, "headers": []},
+                {"type": "http.response.body", "body": b"unaltered"},
+            ]
         assert phases[-1] == "native_outer_transport_quiescent"
     finally:
         observer.transport_release.set()
         observer.transport_cancel_release.set()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 413, 503, 500])
+async def test_error_transport_passes_exact_status_and_body_so_barrier_surfaces_actual_rejection(status):
+    import httpx
+
+    phases = []
+    observer = SimpleNamespace(
+        pause_transport=True,
+        capture=lambda phase, **metadata: phases.append((phase, metadata)),
+        transport_entered=asyncio.Event(),
+        transport_release=asyncio.Event(),
+    )
+    body = b"exact-managed-rejection"
+
+    async def app(_scope, _receive, send):
+        await send({"type": "http.response.start", "status": status, "headers": []})
+        await send({"type": "http.response.body", "body": body})
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=managed._ObservedTransport(app, observer)), base_url="http://localhost"
+    ) as client:
+
+        async def request():
+            response = await client.post("/v1/jobs/private/photographic-review/revisions")
+            assert response.status_code == status and response.content == body
+            raise RuntimeError(f"Managed request rejected: {response.status_code} {response.text}")
+
+        operation = asyncio.create_task(request())
+        with pytest.raises(RuntimeError, match=f"{status} exact-managed-rejection"):
+            await managed._wait_for_barrier(operation, asyncio.Event(), "native helper", timeout=1)
+        assert operation.done() and not operation.cancelled()
+        assert not observer.transport_entered.is_set()
+        assert phases == [
+            ("native_response_started", {"http_status": status}),
+            ("native_outer_transport_quiescent", {}),
+        ]
 
 
 def test_deployed_application_never_reuses_a_preimported_global_app(monkeypatch):
