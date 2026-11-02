@@ -4,11 +4,11 @@
 #
 #    pip-compile --constraint=all.txt --output-file=dev.txt dev.in
 #
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   -c all.txt
     #   httpx
-ast-serialize==0.12.1
+ast-serialize==0.13.1
     # via
     #   -c all.txt
     #   mypy
@@ -29,17 +29,17 @@ black==26.10.1
     # via
     #   -c all.txt
     #   -r dev.in
-boto3==1.43.111
+boto3==1.43.123
     # via
     #   -c all.txt
     #   moto
-botocore==1.43.111
+botocore==1.43.123
     # via
     #   -c all.txt
     #   boto3
     #   moto
     #   s3transfer
-certifi==2026.10.19
+certifi==2026.10.23
     # via
     #   -c all.txt
     #   httpcore
@@ -53,7 +53,7 @@ cfgv==3.5.0
     # via
     #   -c all.txt
     #   pre-commit
-chardet==7.6.0
+chardet==7.7.0
     # via
     #   -c all.txt
     #   diff-cover
@@ -65,7 +65,7 @@ click==8.4.2
     # via
     #   -c all.txt
     #   black
-coverage[toml]==7.16.2
+coverage[toml]==7.17.0
     # via
     #   -c all.txt
     #   pytest-cov
@@ -82,7 +82,7 @@ dill==0.4.1
     # via
     #   -c all.txt
     #   pylint
-distlib==0.4.3
+distlib==0.4.4
     # via
     #   -c all.txt
     #   virtualenv
@@ -90,12 +90,12 @@ execnet==2.1.2
     # via
     #   -c all.txt
     #   pytest-xdist
-filelock==4.2.4
+filelock==4.2.6
     # via
     #   -c all.txt
     #   python-discovery
     #   virtualenv
-flake8==7.4.1
+flake8==7.5.0
     # via
     #   -c all.txt
     #   -r dev.in
@@ -111,7 +111,7 @@ httpx==0.28.1
     # via
     #   -c all.txt
     #   -r dev.in
-hypothesis==6.169.0
+hypothesis==6.170.14
     # via
     #   -c all.txt
     #   -r dev.in
@@ -169,11 +169,11 @@ mccabe==0.7.0
     #   -c all.txt
     #   flake8
     #   pylint
-moto[s3]==5.2.4
+moto[s3]==5.2.5
     # via
     #   -c all.txt
     #   -r dev.in
-mypy==2.4.0
+mypy==2.4.1
     # via
     #   -c all.txt
     #   -r dev.in
@@ -182,7 +182,7 @@ mypy-extensions==1.1.0
     #   -c all.txt
     #   black
     #   mypy
-nodeenv==1.11.0
+nodeenv==1.12.0
     # via
     #   -c all.txt
     #   pre-commit
@@ -198,19 +198,19 @@ pathspec==1.1.1
     #   -c all.txt
     #   black
     #   mypy
-platformdirs==4.13.0
+platformdirs==4.14.3
     # via
     #   -c all.txt
     #   black
     #   pylint
     #   virtualenv
-pluggy==1.6.0
+pluggy==1.7.0
     # via
     #   -c all.txt
     #   diff-cover
     #   pytest
     #   pytest-cov
-pre-commit==4.6.2
+pre-commit==4.7.0
     # via
     #   -c all.txt
     #   -r dev.in
@@ -223,11 +223,11 @@ pycodestyle==2.15.0
     #   -c all.txt
     #   autopep8
     #   flake8
-pycparser==3.11
+pycparser==3.12
     # via
     #   -c all.txt
     #   cffi
-pyflakes==4.0.3
+pyflakes==4.1.0
     # via
     #   -c all.txt
     #   flake8
@@ -240,7 +240,7 @@ pylint==4.1.3
     # via
     #   -c all.txt
     #   -r dev.in
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   -c all.txt
     #   -r dev.in
@@ -250,7 +250,7 @@ pytest==9.1.1
     #   pytest-metadata
     #   pytest-rerunfailures
     #   pytest-xdist
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1.post1
     # via
     #   -c all.txt
     #   -r dev.in
@@ -278,7 +278,7 @@ python-dateutil==2.9.0.post0
     # via
     #   -c all.txt
     #   botocore
-python-discovery==1.6.2
+python-discovery==1.9.0
     # via
     #   -c all.txt
     #   virtualenv
@@ -312,7 +312,7 @@ rpds-py==2026.9.1
     #   -c all.txt
     #   jsonschema
     #   referencing
-s3transfer==0.19.2
+s3transfer==0.19.3
     # via
     #   -c all.txt
     #   boto3
@@ -324,11 +324,11 @@ sortedcontainers==2.4.0
     # via
     #   -c all.txt
     #   hypothesis
-tomlkit==0.15.1
+tomlkit==0.15.2
     # via
     #   -c all.txt
     #   pylint
-types-pyyaml==6.0.12.20260906
+types-pyyaml==6.0.12.20261030
     # via
     #   -c all.txt
     #   -r dev.in
@@ -345,7 +345,7 @@ urllib3==2.8.0
     #   botocore
     #   requests
     #   responses
-virtualenv==21.14.13
+virtualenv==21.15.2
     # via
     #   -c all.txt
     #   -r dev.in
