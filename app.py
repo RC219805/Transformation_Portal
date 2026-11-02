@@ -9226,7 +9226,16 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         app.state.job_repository_unavailable = False
 
 
-app = FastAPI(
+class _PhotographicReviewApplication(FastAPI):
+    """Keep native resource ownership outside all ASGI buffering/error layers."""
+
+    def build_middleware_stack(self) -> Any:
+        from transformation_portal.orchestrator.photographic_review_service import PhotographicTransportMiddleware
+
+        return PhotographicTransportMiddleware(super().build_middleware_stack())
+
+
+app = _PhotographicReviewApplication(
     title="Transformation Portal Orchestrator",
     version="0.3.0",
     docs_url=None,

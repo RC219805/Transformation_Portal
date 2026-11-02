@@ -256,6 +256,10 @@ it does not change the 12 GiB process-local ceiling, effective 6 GiB inspection
 reserve, worker/I/O limits or scratch/free-space protections. It applies only to
 HTTP-owned native revisions whose server-verified inspection, actual local
 publisher, Postgres job/review stores and frozen runtime/source identity match.
+The lower resource estimate also requires the live, nonclosed transport owner
+installed by the deployed application. A manually mounted router or direct HTTP
+handoff without that owner retains generic costing, even if its response is
+marked HTTP-owned.
 The qualified inventory authority is retained Postgres `JobRecord` data, with
 canonical dispatch authority disabled for that inventory. Canonical dispatch and
 generation authority retains conservative costing pending its separate provider,
@@ -299,9 +303,13 @@ the same authorities.
 
 Native HTTP preview/save retain their complete memory reservation and outstanding
 request ticket through CAS, envelope serialization and response completion,
-failure or repeated cancellation. Decode and photographic I/O slots are released
-when expensive work is quiescent, before CAS. A slow response cannot release its
-memory early or authorize a second bulk operation. Direct service dictionaries,
+failure or repeated cancellation. A request-owned ASGI finalizer wraps the complete
+deployed application, outside buffering, security and error middleware. An inner
+response returning after a middleware body handoff does not release capacity;
+the downstream send and owned cleanup must first become quiescent. Decode and
+photographic I/O slots are released when expensive work is quiescent, before CAS.
+A slow response cannot release memory early or authorize a second bulk operation.
+Direct service dictionaries,
 legacy revisions and existing download ownership retain their prior contracts.
 The selected source must first receive authoritative catalogue/scene inspection
 in this backend process; a cold or expired inspection cache selects fallback.
@@ -323,8 +331,11 @@ the tool does not reset a database, reinstall a runtime or dispatch inference.
 Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` and
 one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
 and the closed native Materials `recipe`. It seeds only unique private succeeded
-jobs and uses real signed authorization, the shared router, `AppReviewAccess`,
-Postgres CAS and file-backed publication. This is managed backend qualification;
+jobs and uses real signed authorization, the deployed application and middleware,
+the shared router, `AppReviewAccess`, Postgres CAS and file-backed publication.
+The transport barrier waits for both a blocked outer send and the inner native
+response's actual return before checking its complete reservation and ticket.
+This is managed backend qualification;
 it does not claim a signed-in frontdoor/browser pilot or photographic acceptance.
 
 ```bash
@@ -354,6 +365,11 @@ still owns its complete lease. A single repeat or `--no-concurrent-inspection`
 produces observations without full declared-cohort qualification. Controlled
 `--scenario cancel_helper`, `cancel_publication` and `publication_failure` runs
 require one source/one repeat and verify owned cleanup and unchanged review state.
+`--scenario cancel_transport` also requires one source/one repeat. It cancels the
+outer send after commit and inner response return, repeats caller cancellation
+while send cleanup is held, then recovers and independently verifies the single
+committed revision and its products. Transport cancellation preserves that
+committed state; it does not undo publication or repeat the revision POST.
 These fault observations alone do not qualify a photographic cohort. Host/provider
 rollout and Richard's scoped native photographic decision remain separate gates;
 AWS/GPU validation stays on hold.
@@ -364,23 +380,27 @@ verification, but do not establish protected-delta or photographic acceptance.
 ### Reviewed pilot observations
 
 The frozen profile identity is
-`0ba2fcb84ef51eeb3be41931374183565ac8b99af9ecb5c72b969eec3a8f2b92`.
+`931eef15893c0be7ae42e414d14b62dc8532c3a6aa4cf4000762d07b7194bbf5`.
 On its recorded Darwin arm64/CPython runtime and retained-inventory providers,
 three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
 30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
 RGBA8 and RGBA16 three-repeat probes, one bounded nonzero observation and the
 20 MP Postgres success/cancellation/publication-failure modes brought the total
-to 60 saves and 300 independently verified products. All 295 products from the
-59 preservation saves verified; every preserved native TIFF had zero 16-bit code
-changes. Sources remained unchanged and all
-reservation counters drained. The nonzero observation is separate from
+to 61 saves and 305 independently verified products. This includes one committed
+revision and five verified products recovered after transport cancellation.
+All 300 products from the 60 preservation saves verified; every preserved native
+TIFF had zero 16-bit code changes. Sources remained unchanged and all reservation
+counters drained. The nonzero observation is separate from
 preservation and photographic acceptance.
 
-The worst complete worker peak was 4,287,643,648 bytes; its measured incremental
-peak plus 50% was 6,318,342,144 bytes, below the fixed 6,442,450,944-byte reservation.
+The worst complete worker peak was 4,352,573,440 bytes; its measured incremental
+peak plus 50% was 6,415,785,984 bytes, below the fixed 6,442,450,944-byte reservation
+by 26,664,960 bytes.
 Same-tenant inspection progressed while the complete native lease and encoded
-output were held after helper return. This is not an exclusive phase measurement
-or a worst-case overlap measurement of two live raster computations. Reports,
+output were held after helper return and after the inner response returned while
+the deployed outer transport remained blocked. A distinct uncached crop verified
+a fresh source read at that transport barrier. This is not an exclusive phase
+measurement or a worst-case overlap measurement of two live raster computations. Reports,
 source snapshots and products remain private, outside Git and finalized delivery;
 these observations do not enable production flags or qualify canonical generations.
 

@@ -54,6 +54,111 @@ async def test_barrier_keeps_the_actual_operation_owned_on_success_or_deadline()
         await operation
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("memory,outstanding", [(0, 1), (6 * managed.offline.GIB, 0)])
+async def test_transport_probe_rejects_inner_response_release_before_outer_quiescence(memory, outstanding):
+    finish = asyncio.Event()
+    operation = asyncio.create_task(finish.wait())
+    observer = SimpleNamespace(
+        service=SimpleNamespace(
+            admission=SimpleNamespace(snapshot=lambda: {"memory_reserved_bytes": memory, "outstanding": outstanding})
+        )
+    )
+    try:
+        with pytest.raises(RuntimeError, match="before outer send"):
+            managed._require_transport_reservation(observer, operation)
+    finally:
+        finish.set()
+        await operation
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_observed_transport_blocks_outside_app_and_drains_repeated_cancel(cancel):
+    phases, sent = [], []
+    observer = SimpleNamespace(
+        service=SimpleNamespace(
+            admission=SimpleNamespace(snapshot=lambda: {"memory_reserved_bytes": 6 * managed.offline.GIB, "outstanding": 1})
+        ),
+        pause_transport=True,
+        scenario="cancel_transport" if cancel else "success",
+        transport_entered=asyncio.Event(),
+        transport_release=asyncio.Event(),
+        transport_cancelled=asyncio.Event(),
+        transport_cancel_release=asyncio.Event(),
+        inner_response_returned=asyncio.Event(),
+        capture=phases.append,
+    )
+
+    async def app(_scope, _receive, send):
+        observer.inner_response_returned.set()
+        await send({"type": "http.response.body", "body": b"unaltered"})
+
+    async def send(message):
+        sent.append(message)
+
+    task = asyncio.create_task(
+        managed._ObservedTransport(app, observer)({"type": "http", "method": "POST", "path": "/v1/revisions"}, None, send)
+    )
+    try:
+        await managed._wait_for_owned_transport(observer, task)
+        assert sent == [] and not task.done()
+        if cancel:
+            task.cancel()
+            await managed._wait_for_barrier(task, observer.transport_cancelled, "cancelled send")
+            task.cancel()
+            await asyncio.sleep(0)
+            managed._require_transport_reservation(observer, task)
+            observer.transport_cancel_release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert sent == []
+        else:
+            observer.transport_release.set()
+            await task
+            assert sent == [{"type": "http.response.body", "body": b"unaltered"}]
+        assert phases[-1] == "native_outer_transport_quiescent"
+    finally:
+        observer.transport_release.set()
+        observer.transport_cancel_release.set()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+def test_deployed_application_never_reuses_a_preimported_global_app(monkeypatch):
+    monkeypatch.setitem(managed.sys.modules, "app", SimpleNamespace())
+    with pytest.raises(RuntimeError, match="fresh deployed application"):
+        managed._deployed_application(object())
+
+
+@pytest.mark.parametrize("kind", ["deployed", "plain", "failed_import"])
+def test_deployed_application_captures_real_router_service_and_always_restores_constructor(monkeypatch, kind):
+    from transformation_portal.api.routes import photographic_review as routes
+
+    monkeypatch.delitem(managed.sys.modules, "app", raising=False)
+    constructor, service = routes.PhotographicReviewService, object()
+
+    class DeployedApplication:
+        pass
+
+    module = SimpleNamespace(
+        app=DeployedApplication() if kind == "deployed" else object(), _PhotographicReviewApplication=DeployedApplication
+    )
+
+    def imported(name):
+        assert name == "app" and routes.PhotographicReviewService() is service
+        if kind == "failed_import":
+            raise RuntimeError("controlled import failure")
+        return module
+
+    monkeypatch.setattr(managed.importlib, "import_module", imported)
+    if kind == "deployed":
+        assert managed._deployed_application(service) is module
+    else:
+        with pytest.raises(RuntimeError, match="controlled import|deployed outer"):
+            managed._deployed_application(service)
+    assert routes.PhotographicReviewService is constructor
+
+
 @pytest.fixture(name="case")
 def fixture_case(tmp_path, monkeypatch):
     root, output = tmp_path / "retained", tmp_path / "evidence"
@@ -184,6 +289,7 @@ def test_complete_managed_margin_cannot_raise_fixed_profile_and_verifier_is_sequ
                     "baseline_rss_bytes": 0,
                     "peak_rss_bytes": incremental,
                     "incremental_peak_rss_bytes": incremental,
+                    "transport_ownership_verified": True,
                 },
             )
         else:
@@ -202,11 +308,17 @@ def test_complete_managed_margin_cannot_raise_fixed_profile_and_verifier_is_sequ
 
 
 @pytest.mark.parametrize(
-    "repeats,concurrent,repeatable,passed",
-    [(1, True, True, False), (2, False, True, False), (2, True, True, True), (2, True, False, False)],
+    "repeats,concurrent,repeatable,transport_verified,passed",
+    [
+        (1, True, True, True, False),
+        (2, False, True, True, False),
+        (2, True, True, True, True),
+        (2, True, False, True, False),
+        (2, True, True, False, False),
+    ],
 )
 def test_profile_gate_requires_repeatability_and_real_same_tenant_inspection(
-    case, monkeypatch, repeats, concurrent, repeatable, passed
+    case, monkeypatch, repeats, concurrent, repeatable, transport_verified, passed
 ):
     def run(root, mode, **_kwargs):
         if mode == "_worker":
@@ -217,6 +329,7 @@ def test_profile_gate_requires_repeatability_and_real_same_tenant_inspection(
                     "baseline_rss_bytes": 0,
                     "peak_rss_bytes": 4 * managed.offline.GIB,
                     "incremental_peak_rss_bytes": 4 * managed.offline.GIB,
+                    "transport_ownership_verified": transport_verified,
                 },
             )
         else:
@@ -235,6 +348,9 @@ def test_profile_gate_requires_repeatability_and_real_same_tenant_inspection(
         assert report["encoded_products_repeatable"] is repeatable
     if not repeatable:
         assert report["status"] == "not_qualified" and report["blocking_reasons"] == ["encoded_products_not_repeatable"]
+    if not transport_verified:
+        assert report["status"] == "not_qualified"
+        assert report["blocking_reasons"] == ["deployed_transport_ownership_unverified"]
 
 
 @pytest.mark.parametrize("repeat", [0, 4, True])
@@ -482,19 +598,42 @@ def test_real_postgres_managed_child_rgba_cohort_faults_and_independent_restart_
     assert report["status"] == "measured", report["blocking_reasons"]
     result = report["complete_managed_result"]
     phases = [entry["phase"] for entry in result["phases"]]
-    if scenario == "success":
-        assert len(result["results"]) == 2 and len(report["independent_verification"]["results"]) == 2
+    if scenario in {"success", "cancel_transport"}:
+        expected = 2 if scenario == "success" else 1
+        assert len(result["results"]) == expected and len(report["independent_verification"]["results"]) == expected
+        assert result["transport_ownership_verified"] is True
         assert all(
             row["products_verified"] == 5 and row["maximum_16bit_code_delta"] <= 1
             for row in report["independent_verification"]["results"]
         )
-        assert "same_tenant_inspection_completed_while_native_held" in phases
+        assert "native_outer_transport_holds_reservation_after_inner_return" in phases
         assert (
             phases.index("publication_written")
             < phases.index("publication_verified")
             < phases.index("before_cas_after_product_drop")
-            < phases.index("response_sent")
+            < phases.index("native_outer_transport_blocked")
         )
+        if scenario == "success":
+            assert "same_tenant_inspection_completed_while_native_held" in phases
+            assert "same_tenant_inspection_completed_while_outer_transport_blocked" in phases
+            helper_crop = next(
+                row["inspection_crop"]
+                for row in result["phases"]
+                if row["phase"] == "same_tenant_inspection_completed_while_native_held"
+            )
+            transport_crop = next(
+                row["inspection_crop"]
+                for row in result["phases"]
+                if row["phase"] == "same_tenant_inspection_completed_while_outer_transport_blocked"
+            )
+            assert helper_crop != transport_crop
+            outer_start = phases.index("native_outer_transport_holds_reservation_after_inner_return")
+            outer_end = phases.index("same_tenant_inspection_completed_while_outer_transport_blocked")
+            assert "source_loaded" in phases[outer_start + 1 : outer_end]
+            assert phases.index("native_inner_response_returned") < phases.index("response_sent")
+        else:
+            assert "repeated_transport_cancellation_holds_owned_memory" in phases
+            assert "cancelled_transport_committed_revision_recovered" in phases
     else:
         assert result["results"] == report["independent_verification"]["results"] == []
         if scenario.startswith("cancel_"):

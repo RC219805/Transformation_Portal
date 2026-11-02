@@ -7,6 +7,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import importlib
 import importlib.metadata
 import importlib.util
 import json
@@ -33,7 +34,7 @@ SCHEMA = "tp.photo.managed_materials_qualification.v1"
 MANIFEST_SCHEMA = "tp.photo.managed_materials_manifest.v1"
 MODULE = "transformation_portal.photographic_delivery.managed_qualification"
 MAX_REPORT_BYTES = 4 * offline.MIB
-SCENARIOS = frozenset({"success", "cancel_helper", "cancel_publication", "publication_failure"})
+SCENARIOS = frozenset({"success", "cancel_helper", "cancel_publication", "cancel_transport", "publication_failure"})
 _MANAGED_MODULES = (
     MODULE,
     "app",
@@ -41,6 +42,7 @@ _MANAGED_MODULES = (
     "transformation_portal.api.v1.photographic_review",
     "transformation_portal.api.v1.envelopes",
     "transformation_portal.orchestrator.photographic_review_service",
+    "transformation_portal.orchestrator.photographic_admission",
     "transformation_portal.orchestrator.photographic_review_access",
     "transformation_portal.orchestrator.photographic_review_store",
     "transformation_portal.portal.photographic_review_access",
@@ -208,10 +210,16 @@ class _Observer:
         self.publication_entered = asyncio.Event()
         self.publication_release = asyncio.Event()
         self.publication_count = 0
+        self.pause_transport = False
+        self.transport_entered = asyncio.Event()
+        self.transport_release = asyncio.Event()
+        self.transport_cancelled = asyncio.Event()
+        self.transport_cancel_release = asyncio.Event()
+        self.inner_response_returned = asyncio.Event()
         self.expected_profile_identity = expected_profile_identity
         self.started = time.monotonic()
 
-    def capture(self, phase: str) -> None:
+    def capture(self, phase: str, *, inspection_crop: tuple[int, int, int, int] | None = None) -> None:
         import psutil
 
         from transformation_portal.orchestrator.photographic_admission import current_review_lease
@@ -221,6 +229,7 @@ class _Observer:
         qualified = getattr(lease.cost, "native_resource_qualification", None) if lease is not None else None
         record = {
             "phase": phase,
+            "inspection_crop": list(inspection_crop) if inspection_crop is not None else None,
             "elapsed_seconds": time.monotonic() - self.started,
             "rss_cumulative_high_water_bytes": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier),
             "current_rss_bytes": psutil.Process().memory_info().rss,
@@ -261,6 +270,14 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
     )
     mutation = observer.service.mutate
     write = LocalArtifactStore.write_immutable_file
+    response_call = service._OwnedNativeJSONResponse.__call__
+
+    async def response_returned(*args: Any, **kwargs: Any) -> None:
+        try:
+            await response_call(*args, **kwargs)
+        finally:
+            observer.capture("native_inner_response_returned")
+            observer.inner_response_returned.set()
 
     async def loaded(*args: Any, **kwargs: Any) -> Any:
         result = await load(*args, **kwargs)
@@ -320,30 +337,98 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
     service.load_image, materials.create_materials_revision = loaded, created
     access._publication_snapshot, access._verify_staged = staged, verified
     setattr(LocalArtifactStore, "write_immutable_file", written)
+    setattr(service._OwnedNativeJSONResponse, "__call__", response_returned)
     observer.service.mutate = mutate
     try:
         yield
     finally:
         observer.helper_release.set()
         observer.publication_release.set()
+        observer.transport_release.set()
+        observer.transport_cancel_release.set()
         service.load_image, materials.create_materials_revision = load, create
         access._publication_snapshot, access._verify_staged = snapshot, verify
         setattr(LocalArtifactStore, "write_immutable_file", write)
+        setattr(service._OwnedNativeJSONResponse, "__call__", response_call)
         observer.service.mutate = mutation
+
+
+class _ObservedTransport:
+    """Block outside the deployed middleware; keep only ASGI metadata/events."""
+
+    def __init__(self, app: Any, observer: _Observer) -> None:
+        self.app, self.observer = app, observer
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        observer = self.observer
+        native = scope["type"] == "http" and scope.get("method") == "POST" and scope.get("path", "").endswith("/revisions")
+        blocked = False
+
+        async def observed_send(message: Any) -> None:
+            nonlocal blocked
+            if native and observer.pause_transport and not blocked and message["type"] == "http.response.body":
+                blocked = True
+                observer.capture("native_outer_transport_blocked")
+                observer.transport_entered.set()
+                try:
+                    await observer.transport_release.wait()
+                except asyncio.CancelledError:
+                    if observer.scenario == "cancel_transport":
+                        from transformation_portal.orchestrator.photographic_admission import drain_owned
+
+                        observer.transport_cancelled.set()
+                        await drain_owned(observer.transport_cancel_release.wait())
+                    raise
+            await send(message)
+
+        try:
+            await self.app(scope, receive, observed_send)
+        finally:
+            if native:
+                observer.capture("native_outer_transport_quiescent")
+
+
+def _require_transport_reservation(observer: _Observer, operation: asyncio.Task[Any]) -> None:
+    snapshot = observer.service.admission.snapshot()
+    if operation.done() or snapshot["memory_reserved_bytes"] != 6 * offline.GIB or snapshot["outstanding"] != 1:
+        raise RuntimeError("Deployed transport released native memory/ticket before outer send became quiescent")
+
+
+async def _wait_for_owned_transport(observer: _Observer, operation: asyncio.Task[Any]) -> None:
+    await _wait_for_barrier(operation, observer.transport_entered, "outer transport send")
+    await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return")
+    _require_transport_reservation(observer, operation)
+    observer.capture("native_outer_transport_holds_reservation_after_inner_return")
+
+
+def _deployed_application(service: Any) -> Any:
+    """Capture the real router's service while importing its complete deployed app."""
+    from transformation_portal.api.routes import photographic_review as routes
+
+    if "app" in sys.modules:
+        raise RuntimeError("Managed qualification requires a fresh deployed application import")
+    constructor = routes.PhotographicReviewService
+    setattr(routes, "PhotographicReviewService", lambda: service)
+    try:
+        application = importlib.import_module("app")
+    finally:
+        setattr(routes, "PhotographicReviewService", constructor)
+    if not isinstance(application.app, application._PhotographicReviewApplication):
+        raise RuntimeError("Managed qualification requires the deployed outer photographic lifecycle")
+    return application
 
 
 async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
     import httpx
-    from fastapi import FastAPI
 
-    import app
-    from transformation_portal.api.routes import photographic_review as routes
     from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
     from transformation_portal.orchestrator.photographic_review_service import PhotographicReviewService
     from transformation_portal.orchestrator.photographic_review_store import get_review_store
     from transformation_portal.orchestrator.storage.base import JobRecord
     from transformation_portal.orchestrator.storage.postgres import _SharedEngine
-    from transformation_portal.portal.photographic_review_access import AppReviewAccess
+
+    service = PhotographicReviewService()
+    app = _deployed_application(service)
 
     # Request cleanup is unrelated to qualification and must not sweep existing
     # rows in the dedicated database. The actual helper takes its normal cheap exit.
@@ -377,27 +462,47 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             artifact_lookup=lookup,
         )
     )
-    service = PhotographicReviewService()
     observer = _Observer(root, service, spec["scenario"], spec["runtime"]["managed_profile_identity"])
-    api = FastAPI()
-    # Capture the actual lifecycle service without changing its router API,
-    # authentication, execution methods, cost calculation or controller.
-    constructor = routes.PhotographicReviewService
-    setattr(routes, "PhotographicReviewService", lambda: service)
-    try:
-        router = routes.create_photographic_review_router(AppReviewAccess(app).runtime())
-    finally:
-        setattr(routes, "PhotographicReviewService", constructor)
-    api.include_router(router)
+    api = app.app
     base = f"/v1/jobs/{job_id}/photographic-review"
     results, version = [], 0
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://qualification") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_ObservedTransport(api, observer)), base_url="http://localhost"
+    ) as client:
 
         async def request(method: str, target: str, *, expected_status: int = 200, **kwargs: Any) -> Any:
             response = await client.request(method, target, headers=_headers(method, target), **kwargs)
             if response.status_code != expected_status:
                 raise RuntimeError(f"Managed request rejected: {response.status_code} {response.text[:500]}")
             return response
+
+        async def inspect_while_held(phase: str, *, shifted: bool = False) -> None:
+            from urllib.parse import urlencode
+
+            selected = items[-1]
+            geometry = spec["sources"][-1]["bound"]
+            width, height = min(64, geometry["width"]), min(64, geometry["height"])
+            # A distinct crop avoids treating the earlier read's cached result
+            # as fresh inspection work while the outer transport is blocked.
+            x = int(shifted and geometry["width"] > width)
+            y = int(shifted and not x and geometry["height"] > height)
+            target = (
+                base
+                + "/native-crop?"
+                + urlencode(
+                    {
+                        "artifact_path": selected["path"],
+                        "sha256": selected["sha256"],
+                        "source_identity_sha256": selected["sha256"],
+                        "x": x,
+                        "y": y,
+                        "width": width,
+                        "height": height,
+                    }
+                )
+            )
+            await asyncio.wait_for(request("GET", target), timeout=10)
+            observer.capture(phase, inspection_crop=(x, y, width, height))
 
         try:
             unauthorized = await client.get(base)
@@ -414,6 +519,10 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             with _observe_operations(observer):
                 catalogue = await request("GET", base)
                 del catalogue
+                from transformation_portal.orchestrator.photographic_review_service import PhotographicTransportMiddleware
+
+                if not isinstance(api.middleware_stack, PhotographicTransportMiddleware):
+                    raise RuntimeError("Managed qualification bypassed the deployed outer photographic middleware")
                 observer.capture("catalogue_complete")
                 for repeat in range(spec["repeats"]):
                     for index, row in enumerate(spec["sources"]):
@@ -429,6 +538,10 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                         }
                         concurrent = spec["scenario"] == "success" and spec["concurrent_inspection"] and repeat == index == 0
                         observer.pause_helper = concurrent or spec["scenario"] == "cancel_helper"
+                        observer.pause_transport = repeat == index == 0 and spec["scenario"] in {
+                            "success",
+                            "cancel_transport",
+                        }
                         operation = asyncio.create_task(
                             request(
                                 "POST",
@@ -438,7 +551,7 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                             )
                         )
                         try:
-                            if spec["scenario"].startswith("cancel_"):
+                            if spec["scenario"] in {"cancel_helper", "cancel_publication"}:
                                 if spec["scenario"] == "cancel_helper":
                                     await _wait_for_barrier(operation, observer.helper_entered, "native cancellation")
                                 else:
@@ -470,32 +583,51 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                 continue
                             if concurrent:
                                 await _wait_for_barrier(operation, observer.helper_entered, "concurrent inspection")
-                                selected = items[-1]
-                                from urllib.parse import urlencode
-
-                                target = (
-                                    base
-                                    + "/native-crop?"
-                                    + urlencode(
+                                await inspect_while_held("same_tenant_inspection_completed_while_native_held")
+                            observer.helper_release.set()
+                            if observer.pause_transport:
+                                await _wait_for_owned_transport(observer, operation)
+                                if concurrent:
+                                    await inspect_while_held(
+                                        "same_tenant_inspection_completed_while_outer_transport_blocked", shifted=True
+                                    )
+                                    _require_transport_reservation(observer, operation)
+                                if spec["scenario"] == "cancel_transport":
+                                    operation.cancel()
+                                    await _wait_for_barrier(operation, observer.transport_cancelled, "transport cancellation")
+                                    operation.cancel()
+                                    await asyncio.sleep(0)
+                                    _require_transport_reservation(observer, operation)
+                                    observer.capture("repeated_transport_cancellation_holds_owned_memory")
+                                    observer.transport_cancel_release.set()
+                                    try:
+                                        await operation
+                                    except asyncio.CancelledError:
+                                        pass
+                                    else:
+                                        raise RuntimeError("Cancelled native transport unexpectedly completed")
+                                    committed = await get_review_store().get(job_id, tenant)
+                                    if len(committed["revisions"]) != version + 1:
+                                        raise RuntimeError("Transport cancellation lost or duplicated its committed revision")
+                                    results.append(
                                         {
-                                            "artifact_path": selected["path"],
-                                            "sha256": selected["sha256"],
-                                            "source_identity_sha256": selected["sha256"],
-                                            "x": 0,
-                                            "y": 0,
-                                            "width": 64,
-                                            "height": 64,
+                                            "source_index": index,
+                                            "repeat": repeat,
+                                            "revision_id": committed["revisions"][-1]["id"],
                                         }
                                     )
-                                )
-                                await asyncio.wait_for(request("GET", target), timeout=10)
-                                observer.capture("same_tenant_inspection_completed_while_native_held")
-                            observer.helper_release.set()
+                                    version += 1
+                                    observer.capture("cancelled_transport_committed_revision_recovered")
+                                    del committed, operation
+                                    continue
+                                observer.transport_release.set()
                             response = await operation
                         except BaseException:
                             operation.cancel()
                             observer.helper_release.set()
                             observer.publication_release.set()
+                            observer.transport_release.set()
+                            observer.transport_cancel_release.set()
                             await asyncio.gather(operation, return_exceptions=True)
                             raise
                         finally:
@@ -511,7 +643,7 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             state = await get_review_store().get(job_id, tenant)
             if state["decisions"] or state["deliveries"] or len(state["revisions"]) != version:
                 raise RuntimeError("Qualification unexpectedly changed approvals/deliveries or lost a revision")
-            if spec["scenario"] != "success":
+            if spec["scenario"] not in {"success", "cancel_transport"}:
                 published = await store.list_for_job(tenant + "__" + job_id)
                 if any(entry.relative_path.startswith("photographic-review/") for entry in published):
                     raise RuntimeError("Failed native operation left an uncommitted publication")
@@ -536,6 +668,11 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             ):
                 raise RuntimeError("Managed qualification left owned reservations active")
             observer.capture("quiescent")
+            transport_verified = spec["scenario"] in {"success", "cancel_transport"}
+            if transport_verified and not any(
+                record["phase"] == "native_outer_transport_holds_reservation_after_inner_return" for record in observer.records
+            ):
+                raise RuntimeError("Managed qualification did not prove deployed transport ownership")
             return {
                 "job_id": job_id,
                 "tenant_id": tenant,
@@ -543,10 +680,13 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                 "scenario": spec["scenario"],
                 "phases": observer.records,
                 "final_admission": snapshot,
+                "transport_ownership_verified": transport_verified,
             }
         finally:
             observer.helper_release.set()
             observer.publication_release.set()
+            observer.transport_release.set()
+            observer.transport_cancel_release.set()
             await service.close()
             await _SharedEngine.dispose(os.environ["TP_DATABASE_URL"])
 
@@ -581,7 +721,7 @@ def _worker(specification: Path) -> None:
             "baseline_semantics": "actual_rss_after_module_imports_before_managed_setup",
             "worker_seconds": time.monotonic() - started,
             "source_inventory_authority": "postgres_job_record_retained_inventory",
-            "transport": "real_shared_router_asgi_including_owned_response_send",
+            "transport": "deployed_app_security_middleware_outer_asgi_finalizer_and_transport_send",
         },
     )
 
@@ -1005,6 +1145,8 @@ def qualify(
                     for index in range(len(sources))
                 )
             measured_reasons = []
+            if scenario in {"success", "cancel_transport"} and result.get("transport_ownership_verified") is not True:
+                measured_reasons.append("deployed_transport_ownership_unverified")
             if margin > 6 * offline.GIB:
                 measured_reasons.append("measured_margin_exceeds_native_profile")
             if repeatable is False:
@@ -1022,7 +1164,11 @@ def qualify(
                 encoded_products_repeatable=repeatable,
                 managed_profile_qualification=(
                     "passed_for_declared_cohort"
-                    if margin <= 6 * offline.GIB and repeatable is True and concurrent_inspection and preservation_only
+                    if not measured_reasons
+                    and margin <= 6 * offline.GIB
+                    and repeatable is True
+                    and concurrent_inspection
+                    and preservation_only
                     else "not_established"
                 ),
             )

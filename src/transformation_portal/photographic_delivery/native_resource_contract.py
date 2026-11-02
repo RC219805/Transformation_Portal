@@ -49,7 +49,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
     },
     "schema": "tp.photo.native_resource_contract.v1",
     "sources": {
-        "app.py": "d7f3d5d86c5061cc3bcba7b4e37098c9ea31dcc440beeeecf54e71c57f288059",
+        "app.py": "91e9c8ebf37d2bdc898a9bef5f2c3184067c7af275e31ee6ee1eed99f57180ba",
         "src/transformation_portal/api/routes/__init__.py": "266f6ecdf8f1bdb1a9c6ed4956bcacb1dbc73cbae14d4010a6e4b55983d9b0f1",
         "src/transformation_portal/api/routes/photographic_review.py": "bd8f494e350ab41d5da84081dca11ce2f7e54f09a69f9ee0a978670466c2abf6",
         "src/transformation_portal/api/v1/__init__.py": "00722b8a261ed8e8e8fe9c46968731c59c8906d3dc463e39129a2c707a69e807",
@@ -81,7 +81,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
         "src/transformation_portal/orchestrator/models.py": "8855521bb900c448264f79130448d426dfb9cbd728a4d491c38cea7bf1186ab7",
         "src/transformation_portal/orchestrator/photographic_admission.py": "17c80b441c560f5fb2d534b525be1aef718c4de9f4a576d3589bc1778201eaec",
         "src/transformation_portal/orchestrator/photographic_review_access.py": "5e1fa878caeb0501df7561974c473b41528f5dbb3fa1457d2e20b6c03ebdd2f2",
-        "src/transformation_portal/orchestrator/photographic_review_service.py": "61ca16de1e722f264fcb42649fcab801221d219c902414f6bd0405815d4c8cdc",
+        "src/transformation_portal/orchestrator/photographic_review_service.py": "329c8ba8a116eb73c30c432b4c858b7cf09285e1e360c205b151c6b6d861c7f8",
         "src/transformation_portal/orchestrator/photographic_review_store.py": "2663a6ee7db0c218c60a70ba16238824ab9ecc3d5cf02d77f510888188f54563",
         "src/transformation_portal/orchestrator/photographic_scene_catalogue.py": "4ba197af6b0af1cd0a3c97caa02d74707b6e5eb1912b28d3f86a5f3f8ee134fc",
         "src/transformation_portal/orchestrator/storage/__init__.py": "6deddbd98f9bae63f8f9526a7cf3f58c7a037a47c02feb5641001cb1713c2e84",

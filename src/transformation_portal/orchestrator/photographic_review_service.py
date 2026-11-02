@@ -23,7 +23,7 @@ import uuid
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from contextvars import Token
+from contextvars import ContextVar, Token
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -31,8 +31,9 @@ from types import CodeType, FrameType
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 from urllib.parse import quote
 
+from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
-from starlette.types import Message, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from transformation_portal.api.v1.envelopes import ApiEnvelope
 from transformation_portal.api.v1.photographic_review import (
@@ -193,6 +194,167 @@ async def _release_native_response(lease: ReviewLease | None, ticket: ReviewRequ
             await ticket.release()
 
 
+class _NativeTransportOwner:
+    """One request's native response, retained beyond buffering middleware."""
+
+    def __init__(self, scope: Scope) -> None:
+        self.scope = scope
+        self.response: _OwnedNativeJSONResponse | None = None
+        self.closed = False
+
+    def adopt(self, response: _OwnedNativeJSONResponse) -> None:
+        if self.closed or (self.response is not None and self.response is not response):
+            raise RuntimeError("Photographic transport already owns a native response")
+        if response._transport_owner is not None and response._transport_owner is not self:
+            raise RuntimeError("Native response belongs to another photographic transport")
+        self.response = response
+        response._transport_owner = self
+
+    async def release(self) -> None:
+        self.closed = True
+        response, self.response = self.response, None
+        if response is not None:
+            response._transport_owner = None
+            await response.release()
+
+
+_native_transport_owner: ContextVar[_NativeTransportOwner | None] = ContextVar("native_transport_owner", default=None)
+
+
+async def _clear_transport_failure(error: BaseException, scope: Scope, send: Send, coordinator: FrameType | None) -> None:
+    """Drop this stopped request's buffering frames, never a live subscriber."""
+    pending, seen, frames = [error], set(), set()
+    while pending:
+        failure = pending.pop()
+        if id(failure) in seen:
+            continue
+        seen.add(id(failure))
+        trace = failure.__traceback__
+        while trace is not None:
+            frame = trace.tb_frame
+            values = frame.f_locals
+            request = values.get("request")
+            if frame is not coordinator and (
+                values.get("scope") is scope
+                or (isinstance(request, Request) and request.scope is scope)
+                or values.get("send") is send
+            ):
+                frames.add(frame)
+            trace = trace.tb_next
+        pending.extend(value for value in (failure.__cause__, failure.__context__) if value is not None)
+        if isinstance(failure, BaseExceptionGroup):
+            pending.extend(failure.exceptions)
+    streams = {}
+    for frame in frames:
+        for value in list(frame.f_locals.values()):
+            if isinstance(value, Response) and type(value).__module__.startswith("starlette."):
+                iterator = getattr(value, "body_iterator", None)
+                if inspect.isasyncgen(iterator):
+                    streams[id(iterator)] = iterator
+    # The complete owned ASGI task (including its middleware task group) has
+    # stopped. Its yielded body iterators are now exclusively cleanup-owned.
+    for iterator in streams.values():
+        await iterator.aclose()
+    _clear_failed_frames(error, tuple(frames))
+
+
+class PhotographicTransportMiddleware:
+    """Finalize native ownership outside the complete deployed ASGI stack.
+
+    BaseHTTPMiddleware may finish an inner JSONResponse while its own streaming
+    response still owns those bytes. A shared per-request owner survives that
+    child-task handoff and releases only after the downstream transport stops.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        inherited = _native_transport_owner.get()
+        if inherited is not None and inherited.scope is scope:
+            raise RuntimeError("Photographic transport ownership was installed twice")
+        owner = _NativeTransportOwner(scope)
+        token = _native_transport_owner.set(owner)
+
+        async def send_owned(message: Message) -> None:
+            pending = None
+            frame = None
+            try:
+                pending = send(message)
+                if inspect.iscoroutine(pending):
+                    frame = pending.cr_frame
+                await pending
+            except BaseException as error:
+                completed = (
+                    (frame,)
+                    if frame is not None
+                    and inspect.iscoroutine(pending)
+                    and inspect.getcoroutinestate(pending) == inspect.CORO_CLOSED
+                    else ()
+                )
+                _clear_failed_frames(error, completed)
+                raise
+            finally:
+                del message, pending, frame
+
+        operation = self.app(scope, receive, send_owned)
+        frame = operation.cr_frame if inspect.iscoroutine(operation) else None
+        worker = asyncio.ensure_future(operation)
+        try:
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                # Cancel the owned stack once, then drain it. Repeated caller
+                # cancellation cannot abandon downstream send cleanup.
+                if not worker.done():
+                    worker.cancel()
+                while not worker.done():
+                    try:
+                        await asyncio.shield(worker)
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception:
+                        break
+                if not worker.cancelled():
+                    failure = worker.exception()
+                    try:
+                        if failure is not None:
+                            if owner.response is not None:
+                                coordinator = inspect.currentframe()
+                                try:
+                                    await drain_owned(_clear_transport_failure(failure, scope, send_owned, coordinator))
+                                finally:
+                                    del coordinator
+                            completed = (frame,) if frame is not None else ()
+                            _clear_failed_frames(failure, completed)
+                    finally:
+                        del failure
+                raise
+        except BaseException as error:
+            if worker.done() and owner.response is not None:
+                coordinator = inspect.currentframe()
+                try:
+                    await drain_owned(_clear_transport_failure(error, scope, send_owned, coordinator))
+                finally:
+                    del coordinator
+            completed = (frame,) if frame is not None and worker.done() else ()
+            _clear_failed_frames(error, completed)
+            raise
+        finally:
+            if (
+                frame is not None
+                and inspect.iscoroutine(operation)
+                and inspect.getcoroutinestate(operation) == inspect.CORO_CLOSED
+            ):
+                frame.clear()
+            del operation, worker, frame
+            _native_transport_owner.reset(token)
+            await drain_owned(owner.release())
+
+
 class _OwnedNativeRevisionResult(dict[str, Any]):
     """Internal HTTP handoff; direct service callers still receive ordinary dicts."""
 
@@ -215,9 +377,12 @@ class _OwnedNativeJSONResponse(JSONResponse):
         super().__init__(content, headers=HEADERS)
         self.admission_lease, self.admission_ticket = owner.admission_lease, owner.admission_ticket
         self._called = False
+        self._transport_owner: _NativeTransportOwner | None = None
 
     async def release(self) -> None:
         self.body = b""
+        if self._transport_owner is not None:
+            return
         lease, ticket = self.admission_lease, self.admission_ticket
         self.admission_lease = self.admission_ticket = None
         await drain_owned(_release_native_response(lease, ticket))
@@ -226,6 +391,15 @@ class _OwnedNativeJSONResponse(JSONResponse):
         if self._called:
             raise RuntimeError("Native review response was already consumed")
         self._called = True
+        transport = _native_transport_owner.get()
+        if transport is not None:
+            try:
+                transport.adopt(self)
+            except BaseException as error:
+                _clear_failed_frames(error)
+                if self._transport_owner is None:
+                    await self.release()
+                raise
 
         async def send_owned(message: Message) -> None:
             pending = None
@@ -322,6 +496,15 @@ async def owned_envelope(data: JsonObject) -> JSONResponse:
         raise
     data.clear()
     data.admission_lease = data.admission_ticket = None
+    transport = _native_transport_owner.get()
+    if transport is not None:
+        try:
+            transport.adopt(response)
+        except BaseException as error:
+            response.body = b""
+            _clear_failed_frames(error)
+            await response.release()
+            raise
     return response
 
 
@@ -1277,9 +1460,12 @@ class PhotographicReviewService:
             inspections,
             native_materials_regions=native_regions,
         )
+        transport = _native_transport_owner.get()
         if (
             native_regions is not None
             and response_owned
+            and transport is not None
+            and not transport.closed
             and context.native_resource_scope is not None
             and context.binding_identity is not None
         ):

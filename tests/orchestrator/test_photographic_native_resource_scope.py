@@ -1,8 +1,8 @@
 """Qualified native costing binds real server authorities, never public claims.
 
-These are isolated contract tests. Runtime matching and the documented prior
-cost floor are synthetic; no database, provider, photographic or resource
-measurement acceptance is established here.
+These are isolated contract tests. Runtime matching, active transport and the
+documented prior cost floor are synthetic; no database, provider, photographic
+or resource measurement acceptance is established here.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import copy
 import hashlib
 import io
 import logging
+from contextvars import ContextVar
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +46,11 @@ def _resource_case(monkeypatch, tmp_path):
     monkeypatch.setenv("TP_DATABASE_URL", DATABASE)
     monkeypatch.setenv("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED", "1")
     monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1")
+    monkeypatch.setattr(
+        review,
+        "_native_transport_owner",
+        ContextVar("fixture_native_transport_owner", default=review._NativeTransportOwner({"type": "http"})),
+    )
     # Runtime matching is synthetic. The source closure and qualification
     # functions remain real, and no test output is qualification evidence.
     runtime = copy.deepcopy(resources.RESOURCE_CONTRACT["runtime"])
@@ -188,6 +194,22 @@ def test_qualified_native_profile_is_fixed_response_owned_and_keeps_legacy_floor
     assert case.cost(response_owned=False).native_resource_qualification is None
     assert admission._MEASURED_40MP == before
     assert before["revision"] == (3_987_947_520, 6_153_633_792)
+
+
+@pytest.mark.parametrize("transport_state", ["missing", "closed"])
+def test_lower_profile_requires_the_live_outer_transport_owner(resource_case, monkeypatch, transport_state):
+    case = resource_case
+    owner = None
+    if transport_state == "closed":
+        owner = review._NativeTransportOwner({"type": "http"})
+        owner.closed = True
+    monkeypatch.setattr(review, "_native_transport_owner", ContextVar("unavailable_native_transport", default=owner))
+    assert resources.runtime_profile_identity() is not None
+    cost = case.cost()
+    assert cost.native_resource_qualification is None and cost.memory_bytes == 7 * GIB
+    with pytest.raises(ReviewOverload) as error:
+        case.service.admission._validate_cost(cost)
+    assert error.value.status == 413
 
 
 def test_private_header_authority_is_not_persisted_or_exposed_as_an_inspection(resource_case):
