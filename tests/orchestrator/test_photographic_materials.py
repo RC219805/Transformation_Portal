@@ -332,7 +332,13 @@ def test_managed_native_rejects_unsupported_or_conflicting_retained_source(revie
         assert response.status_code == 400 and not case.writes and not case.assets
 
 
-def test_native_diagnostics_revalidate_parent_and_tenant_without_granting_approval(review_factory):
+def test_native_diagnostics_revalidate_parent_and_tenant_without_granting_approval(review_factory, monkeypatch):
+    from transformation_portal.orchestrator import photographic_admission as admission
+
+    # These auth/identity assertions need admission headroom independently of
+    # unrelated files on the host. Real low-space admission remains fail closed.
+    disk = SimpleNamespace(total=128 * admission.GIB, used=64 * admission.GIB, free=64 * admission.GIB)
+    monkeypatch.setattr(admission.shutil, "disk_usage", lambda _path: disk)
     with review_factory() as case:
         inspect_source(case)
         saved = case.client.post(case.base + "/revisions", json=payload(case)).json()["data"]["revision"]
@@ -341,6 +347,11 @@ def test_native_diagnostics_revalidate_parent_and_tenant_without_granting_approv
         assert case.client.get(url, headers={"x-tenant": "tenant_b"}).status_code == 403
         assert case.client.get(url.replace(case.job_id, "job_other")).status_code == 404
         assert case.client.get(url.replace(saved["id"], "unknown")).status_code == 404
+        disk.free = admission.GIB
+        unavailable = case.client.get(url.replace(saved["id"], "unknown"))
+        assert unavailable.status_code == 503
+        assert unavailable.json()["error"]["details"]["reason"] == "scratch_unavailable"
+        disk.free = 64 * admission.GIB
         assert case.client.get(url.rsplit("/", 1)[0] + "/master.tif").status_code == 404
         case.controls.authorized = False
         assert case.client.get(url).status_code == 403

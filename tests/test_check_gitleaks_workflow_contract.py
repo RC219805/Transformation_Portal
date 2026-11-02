@@ -49,11 +49,14 @@ paths = [
 ]
 
 [[rules.allowlists]]
-description = "Ignore byte-verified documentation catalog source SHA256 values"
+description = "Ignore byte-verified source SHA256 values in the documentation catalog and native resource contract"
 condition = "AND"
 regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
 regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX}''']
-paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
+paths = [
+  '''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''',
+  '''{gitleaks_contract.EXPECTED_NATIVE_RESOURCE_CONTRACT_PATH_REGEX}''',
+]
 
 [[rules.allowlists]]
 description = "Ignore one public source SHA256 split across a scanner chunk boundary"
@@ -294,14 +297,91 @@ def test_catalog_source_hash_exception_cannot_be_widened(mutation: str) -> None:
     elif mutation == "line":
         config = config.replace(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, r"[0-9a-f]{64}")
     else:
-        index = config.index('condition = "AND"', config.index('description = "Ignore byte-verified documentation'))
+        index = config.index('condition = "AND"', config.index('description = "Ignore byte-verified source SHA256'))
         config = config[:index] + config[index:].replace('condition = "AND"', 'condition = "OR"', 1)
     errors = gitleaks_contract.validate_gitleaks_contract(config, valid_ci_workflow_text(), valid_firewall_workflow_text())
     assert errors
     if mutation == "condition":
         assert "generic-api-key allowlists must require AND semantics" in errors
     else:
-        assert "generic-api-key allowlist must match only documentation catalog source SHA256 lines" in errors
+        assert (
+            "generic-api-key allowlist must match only documentation catalog and native resource contract source SHA256 lines"
+            in errors
+        )
+
+
+def test_native_resource_contract_exception_matches_only_structured_source_hash_lines() -> None:
+    config = tomllib.loads(valid_config_text())
+    allowlist = next(
+        item
+        for item in config["rules"][0]["allowlists"]
+        if item["regexes"] == [gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX]
+    )
+    digest = hashlib.sha256(b"native resource source binding fixture").hexdigest()
+    line = f'        "src/transformation_portal/portal/photographic_review_access.py": "{digest}",'
+    assert allowlist["condition"] == "AND" and allowlist["regexTarget"] == "line"
+    assert any(
+        re.search(pattern, "src/transformation_portal/photographic_delivery/native_resource_contract.py")
+        for pattern in allowlist["paths"]
+    )
+    assert any(re.search(pattern, line) for pattern in allowlist["regexes"])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py.backup",
+        "src/transformation_portal/photographic_delivery/native_resource_contract_copy.py",
+        "src/transformation_portal/photographic_delivery/native_resources.py",
+        "tests/src/transformation_portal/photographic_delivery/native_resource_contract.py",
+        "src/transformation_portal/photographic_delivery/credentials.py",
+    ],
+)
+def test_native_resource_contract_exception_does_not_match_other_files(path: str) -> None:
+    assert re.search(gitleaks_contract.EXPECTED_NATIVE_RESOURCE_CONTRACT_PATH_REGEX, path) is None
+
+
+@pytest.mark.parametrize(
+    "mutation", ["third_path", "native_path", "catalog_path", "missing_native", "condition", "target", "line"]
+)
+def test_shared_source_hash_exception_keeps_exactly_two_paths_and_closed_line_semantics(mutation: str) -> None:
+    config = tomllib.loads(valid_config_text())
+    allowlist = next(
+        item
+        for item in config["rules"][0]["allowlists"]
+        if item["regexes"] == [gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX]
+    )
+    if mutation == "third_path":
+        allowlist["paths"].append(r"^src/credentials\.py$")
+    elif mutation == "native_path":
+        allowlist["paths"][1] = r"^src/transformation_portal/photographic_delivery/.*"
+    elif mutation == "catalog_path":
+        allowlist["paths"][0] = r"^docs/governance/.*"
+    elif mutation == "missing_native":
+        allowlist["paths"].pop()
+    elif mutation == "condition":
+        allowlist["condition"] = "OR"
+    elif mutation == "target":
+        allowlist["regexTarget"] = "secret"
+    else:
+        allowlist["regexes"] = [r"[0-9a-f]{64}"]
+    assert gitleaks_contract._validate_config(config)
+
+
+@pytest.mark.parametrize("context", ["credential_key", "assignment", "extra_credential", "non_hash"])
+def test_native_resource_contract_exception_rejects_new_secret_context(context: str) -> None:
+    digest = hashlib.sha256(b"native source binding lookalike").hexdigest()
+    source = "src/transformation_portal/service.py"
+    if context == "credential_key":
+        source = "api_key"
+    elif context == "non_hash":
+        digest = "credential-" + digest
+    line = f'        "{source}": "{digest}",'
+    if context == "assignment":
+        line = f'API_KEY = "{digest}"'
+    elif context == "extra_credential":
+        line += f' "api_key": "{digest}"'
+    assert re.search(gitleaks_contract.EXPECTED_CATALOG_SOURCE_HASH_REGEX, line) is None
 
 
 def test_chunk_exception_digest_is_the_public_catalog_source_hash() -> None:

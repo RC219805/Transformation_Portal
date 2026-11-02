@@ -22,7 +22,7 @@ from transformation_portal.api.v1.photographic_review import (
 )
 from transformation_portal.orchestrator.photographic_admission import ReviewOverload
 from transformation_portal.orchestrator.photographic_review_access import ReviewAccessError, ReviewInputError, ReviewRuntime
-from transformation_portal.orchestrator.photographic_review_service import PhotographicReviewService, envelope
+from transformation_portal.orchestrator.photographic_review_service import PhotographicReviewService, owned_envelope
 from transformation_portal.orchestrator.photographic_review_store import ReviewConflict
 
 LOGGER = logging.getLogger(__name__)
@@ -77,9 +77,9 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             result = (
                 await method(context, *args, **kwargs)
                 if lightweight_authorization
-                else await service.execute(context, method, *args, **kwargs)
+                else await service.execute(context, method, *args, _response_owned=True, **kwargs)
             )
-            return result if isinstance(result, Response) else envelope(result)
+            return result if isinstance(result, Response) else await owned_envelope(result)
         except ReviewOverload as exc:
             response = runtime.error_response(
                 exc.status,

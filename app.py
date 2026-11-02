@@ -1177,6 +1177,19 @@ def _repository_unavailable_response(*, details: Optional[Dict[str, Any]] = None
 
 
 def _job_repository() -> JobRepository:
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+
+    lease = current_review_lease.get()
+    if lease is not None and lease.cost.native_resource_qualification is not None:
+        from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+        if lease.released or type(lease.native_job_repository) is not PostgresJobRepository:
+            raise RuntimeError("Qualified native job authority is unavailable")
+        return lease.native_job_repository
+    return _configured_job_repository()
+
+
+def _configured_job_repository() -> JobRepository:
     repo = getattr(app.state, "job_repository", None)
     if repo is not None:
         return repo
@@ -7402,6 +7415,17 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
 
 def _artifact_store() -> ArtifactStore:
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+
+    lease = current_review_lease.get()
+    if lease is not None and lease.cost.native_resource_qualification is not None:
+        from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
+        # The qualified operation owns this exact server-selected provider.
+        # Never switch to an unqualified publisher across an awaited read/write.
+        if lease.released or type(lease.native_artifact_store) is not LocalArtifactStore:
+            raise RuntimeError("Qualified native artifact authority is unavailable")
+        return lease.native_artifact_store
     return get_artifact_store()
 
 
@@ -9202,7 +9226,16 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         app.state.job_repository_unavailable = False
 
 
-app = FastAPI(
+class _PhotographicReviewApplication(FastAPI):
+    """Keep native resource ownership outside all ASGI buffering/error layers."""
+
+    def build_middleware_stack(self) -> Any:
+        from transformation_portal.orchestrator.photographic_review_service import PhotographicTransportMiddleware
+
+        return PhotographicTransportMiddleware(super().build_middleware_stack())
+
+
+app = _PhotographicReviewApplication(
     title="Transformation Portal Orchestrator",
     version="0.3.0",
     docs_url=None,

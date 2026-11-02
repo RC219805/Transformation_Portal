@@ -242,13 +242,185 @@ phase-exclusive allocation or managed operation cost. Existing complete-worker
 peak, incremental peak, resource guards and measured-margin decisions remain
 unchanged. Historical reports without these optional checkpoints remain usable.
 
-The production native admission formula, historical measured floor, inspection
-reserve and all configured limits remain unchanged. The retained 30 MP four-region
-profile still reserves about 10.35 GiB against an effective default 6 GiB bulk
-allowance and remains ineligible. Neither tiled transfer nor an offline measured
-peak authorizes a lower profile, larger budget or live feature enablement. A later
-profile change needs the complete managed analytical bound, incremental peak plus
-50%, concurrent reserved inspection and publication/cancellation evidence.
+The generic native admission formula, historical measured floors, inspection
+reserve and configured limits remain unchanged. Without the separately matched
+managed profile below, the retained 30 MP four-region request still reserves about
+10.35 GiB against 6 GiB effective default bulk capacity and remains ineligible.
+Tiled transfer or an offline measured peak alone cannot authorize a lower profile,
+larger budget or live feature enablement.
+
+## Managed native resource qualification
+
+The named `tp.photo.native_sdr_local.v1` profile has a fixed **6 GiB** reservation;
+it does not change the 12 GiB process-local ceiling, effective 6 GiB inspection
+reserve, worker/I/O limits or scratch/free-space protections. It applies only to
+HTTP-owned native revisions whose server-verified inspection, actual local
+publisher, Postgres job/review stores and frozen runtime/source identity match.
+The lower resource estimate also requires the live, nonclosed transport owner
+installed by the deployed application. A manually mounted router or direct HTTP
+handoff without that owner retains generic costing, even if its response is
+marked HTTP-owned.
+The qualified inventory authority is retained Postgres `JobRecord` data, with
+canonical dispatch authority disabled for that inventory. Canonical dispatch and
+generation authority retains conservative costing pending its separate provider,
+validator/schema and execution-path qualification. Preserve canonical job authority;
+changing queue settings does not migrate or qualify a canonical inventory.
+Unknown, historical or conflicting authority retains conservative fallback
+costing. No filename, client option, environment label or supplied inspection can
+select the lower profile. Requests whose complete reservation does not fit still
+fail with typed `413`; no downsampling, deletion or automatic budget change occurs.
+The fixed profile is selected only when it lowers the existing conservative
+estimate; smaller operations keep that estimate and its existing admission behavior.
+
+Eligible raster evidence is bound to exact immutable source bytes: integer
+8/16-bit RGB or straight-alpha RGBA TIFF, at most 30,000,000 pixels, contiguous
+uncompressed strips and canonical sRGB ICC. A small structural parser bounds
+classic/BigTIFF headers before opaque decoder use: 64 KiB of header/tag data,
+32 tags, 64 strips, a 1 KiB closed description and a 4 KiB canonical ICC. It rejects
+extra directories, padding, overlapping/out-of-file offsets, unsupported metadata
+and unbounded layouts from eligibility. Other codecs/layouts do not inherit this
+qualification. Presentation and processing-stage authority remain independent.
+
+The pure-data `native_resource_contract.py` freezes the profile's functional
+source closure, current `pyproject.toml` and `requirements/base.in` declarations,
+CPython executable, five native extensions, package versions and Darwin arm64
+runtime. Qualification checks every active direct core requirement against the
+actual installed versions, using the host's requirement markers. Stale installed
+project metadata cannot authorize an older dependency floor. Missing, conflicting
+or unsupported requirements select fallback. The recorded supported environment
+includes Pillow 13.0.0, certifi 2026.10.19 and packaging 26.3.
+The pilot is specific to CPython 3.12.14 and the recorded environment;
+another platform/build selects fallback. Set `OMP_NUM_THREADS`,
+`MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` and
+`VECLIB_MAXIMUM_THREADS` to `1` before starting the backend. A stale or incomplete
+contract cannot grant capacity. It is reviewed release data; never regenerate it
+merely to make a mismatched installation qualify.
+
+The analytical profile takes the maximum simultaneous native phase allocation,
+including snapshots, masks, hashing, codecs, previews and publication, and adds
+bounded metadata/response allowance. The worst 30 MP RGBA/four-region analytical
+case is about 5.065 GiB. The separate 4 GiB incremental-RSS acceptance ceiling is
+an acceptance requirement, not an observed measurement: measured incremental peak
+plus 50% must fit the fixed 6 GiB reservation. Projection/job metadata must satisfy
+the profile's 8 MiB heap, 65,536-node and depth-16 limits. Source/codec eligibility,
+metadata limits and backing-store identity are revalidated; all three actual
+providers are pinned for the operation so awaited I/O and uncertain cleanup use
+the same authorities.
+
+Native HTTP preview/save retain their complete memory reservation and outstanding
+request ticket through CAS, envelope serialization and response completion,
+failure or repeated cancellation. A request-owned ASGI finalizer wraps the complete
+deployed application, outside buffering, security and error middleware. An inner
+response returning after a middleware body handoff does not release capacity;
+the downstream send and owned cleanup must first become quiescent. Decode and
+photographic I/O slots are released when expensive work is quiescent, before CAS.
+A slow response cannot release memory early or authorize a second bulk operation.
+Direct service dictionaries, legacy revisions and existing download ownership
+retain their prior contracts.
+The selected source must first receive authoritative catalogue/scene inspection
+in this backend process; a cold or expired inspection cache selects fallback.
+TIFF decoding explicitly closes its owned in-memory file before color allocation,
+so retained tifffile metadata cycles cannot keep encoded snapshots resident until
+cyclic garbage collection.
+Normalization reuses its independent float32 cast buffer, and decoded rasters and
+mutable compositor output release before subsequent color/hash allocations;
+historical pixel, master-identity and receipt comparisons remain exact.
+Path-backed snapshots read at most their checked file size plus one growth-detection
+byte, while retaining the configured maximum, confined descriptors and exact hash
+checks. They do not allocate against the much larger generic snapshot ceiling.
+
+### Private managed CPU qualification command
+
+Use a fresh private namespace and a dedicated, already migrated Postgres database
+whose name ends in `_test`. `TP_MANAGED_QUALIFICATION_DATABASE_URL` is local-only;
+the tool does not reset a database, reinstall a runtime or dispatch inference.
+Provision a separate CPU qualification environment from the current pinned
+`requirements/base.txt`, `requirements/dev.txt` and `requirements/ci.txt`, using
+`requirements/constraints.txt` and pip 26.2.2. Install the reviewed
+project metadata and run `pip check` in that environment. Include `psutil==7.2.2`
+as the explicit qualification dependency already pinned by the supported Darwin
+ML lock; it does not require installing that ML environment or its umbrella.
+The pilot preserves the canonical core environment and existing model runtimes.
+Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` and
+one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
+and the closed native Materials `recipe`. It seeds only unique private succeeded
+jobs and uses real signed authorization, the deployed application and middleware,
+the shared router, `AppReviewAccess`, Postgres CAS and file-backed publication.
+The transport barrier waits for both a blocked outer send and the inner native
+response's actual return before checking its complete reservation and ticket.
+This is managed backend qualification;
+it does not claim a signed-in frontdoor/browser pilot or photographic acceptance.
+
+```bash
+PYTHONPATH=.:src /absolute/private/core-env/bin/python -m transformation_portal.photographic_delivery.managed_qualification \
+  --manifest /absolute/private/retained-manifest.json \
+  --expected-profile-identity <reviewed-profile-sha256> \
+  --output /absolute/private/qualification/new-run \
+  --repeats 3 --preflight-only
+```
+
+Set the five thread variables above and the dedicated database URL before running.
+Inspect the planning report; remove `--preflight-only` and choose another fresh
+output namespace to measure. The current source/runtime must match the expected
+profile hash. The worker uses repeated cohorts in one process with its original
+baseline; cumulative high-water checkpoints are not exclusive phase allocations.
+The local campaign additionally requires 20 GiB of available host memory before
+launch and protects 8 GiB while running. These physical-headroom guards do not
+increase the admission controller's 12 GiB accounting ceiling or its 6 GiB native
+reservation. Scratch planning includes source copies, all retained trial products
+and publication copies; insufficient physical space blocks launch.
+Independent TIFF/PNG/pixel/receipt checks and Postgres event/state reconciliation
+run after that worker exits, in a separate process. Preserve failed namespaces
+for diagnosis; retained sources and finalized deliveries are never cleanup targets.
+
+Default qualification includes a same-tenant inspection while the native worker
+still owns its complete lease. A single repeat or `--no-concurrent-inspection`
+produces observations without full declared-cohort qualification. Controlled
+`--scenario cancel_helper`, `cancel_publication` and `publication_failure` runs
+require one source/one repeat and verify owned cleanup and unchanged review state.
+`--scenario cancel_transport` also requires one source/one repeat. It cancels the
+outer send after commit and inner response return, repeats caller cancellation
+while send cleanup is held, then recovers and independently verifies the single
+committed revision and its products. Transport cancellation preserves that
+committed state; it does not undo publication or repeat the revision POST.
+These fault observations alone do not qualify a photographic cohort. Host/provider
+rollout and Richard's scoped native photographic decision remain separate gates;
+AWS/GPU validation stays on hold.
+Only all-zero-strength preservation recipes can establish declared-cohort
+qualification. Nonzero runs retain resource observations and product/receipt
+verification, but do not establish protected-delta or photographic acceptance.
+
+### Reviewed pilot observations
+
+The frozen supported profile identity is
+`005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+On its supported Darwin arm64/CPython runtime and retained-inventory providers,
+three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
+30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
+RGBA8 and RGBA16 three-repeat probes, one bounded nonzero observation and the
+20 MP Postgres success/cancellation/publication-failure modes brought the total
+to 61 saves and 305 independently verified products. This includes one committed
+revision and five verified products recovered after transport cancellation.
+All 300 products from the 60 preservation saves verified; every preserved native
+TIFF had zero 16-bit code changes. Sources remained unchanged and all reservation
+counters drained. The nonzero observation is separate from
+preservation and photographic acceptance.
+
+The original alpha warm-cohort preflight blocked on physical scratch headroom
+before worker launch and produced no saves or products. Its report remains
+separate provenance; a fresh retry completed the measured 24 saves and 120
+products under the unchanged runtime, resource ceilings and free-space guards.
+
+The worst complete worker peak was 4,296,785,920 bytes; its measured incremental
+peak plus 50% was 6,333,136,896 bytes, below the fixed 6,442,450,944-byte reservation
+by 109,314,048 bytes.
+Same-tenant inspection progressed while the complete native lease and encoded
+output were held after helper return and after the inner response returned while
+the deployed outer transport remained blocked. A distinct uncached crop verified
+a fresh source read at that transport barrier. This is not an exclusive phase
+measurement or a worst-case overlap measurement of two live raster computations.
+Reports, source snapshots and products remain private, outside Git and finalized delivery;
+these observations do not enable production flags or qualify canonical generations.
 
 ## Paged catalogue and review navigation
 

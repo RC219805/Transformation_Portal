@@ -40,11 +40,12 @@ from transformation_portal.orchestrator.photographic_admission import (
     run_review_thread,
 )
 from transformation_portal.orchestrator.photographic_review_access import (
+    NativeResourceScope,
     ReviewAccessError,
     ReviewContext,
     ReviewRuntime,
 )
-from transformation_portal.orchestrator.photographic_review_store import get_review_store
+from transformation_portal.orchestrator.photographic_review_store import get_configured_review_store, get_review_store
 
 _SHA = re.compile(r"^[a-f0-9]{64}$")
 _SCENE = re.compile(r"(?:^|/)(input-[0-9]{4,})(?:/|$)")
@@ -235,6 +236,112 @@ class AppReviewAccess:
             authorize_admission=self.authorize_admission,
             authorize_catalogue=self.authorize_catalogue,
         )
+
+    def _native_resource_scope(self, job: Any) -> NativeResourceScope | None:
+        """Bind the qualified profile to real local/durable server authorities.
+
+        An environment label or an object exposing a root_dir is insufficient.
+        Unsupported adapters retain the existing conservative costing path.
+        """
+        if self.app._uses_dispatch_authority():
+            # Canonical plan/generation authority needs separate qualification.
+            return None
+
+        from sqlalchemy.engine import make_url
+
+        from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+        from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+        from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+        from transformation_portal.photographic_delivery.native_resources import metadata_heap_is_bounded
+
+        # Inspect the unscoped factory: the active native lease pins actual
+        # reads/writes separately, so a later configuration change is detectable.
+        store_factory = getattr(self.app, "get_artifact_store", None)
+        repository_factory = getattr(self.app, "_configured_job_repository", None) or getattr(
+            self.app, "_job_repository", None
+        )
+        if not callable(store_factory) or not callable(repository_factory):
+            return None
+        store, reviews = store_factory(), get_configured_review_store()
+        if type(store) is not LocalArtifactStore or type(reviews) is not PostgresReviewStore:
+            return None
+        repository = repository_factory()
+        if (
+            type(store) is not LocalArtifactStore
+            or type(reviews) is not PostgresReviewStore
+            or type(repository) is not PostgresJobRepository
+        ):
+            return None
+
+        def bounded_job_metadata() -> bool:
+            metadata = {
+                name: getattr(job, name, None)
+                for name in ("request", "effective_request", "artifacts", "logs_tail", "run_summary", "error")
+            }
+            lookup = getattr(job, "artifact_lookup", {})
+            if type(lookup) is not dict or len(lookup) > 1024 or not metadata_heap_is_bounded(metadata):
+                return False
+            lookup_text: dict[str, str] = {}
+            text_size = 0
+            for key, path in lookup.items():
+                if type(key) is not str or not isinstance(path, Path):
+                    return False
+                value = str(path)
+                text_size += len(key) + len(value)
+                if len(key) > 1024 or len(value) > 4096 or text_size > 256 * 1024:
+                    return False
+                lookup_text[key] = value
+            metadata["artifact_lookup"] = lookup_text
+            return metadata_heap_is_bounded(metadata)
+
+        if not bounded_job_metadata():
+            return None
+        root = store.root_dir
+        if not root.is_absolute() or root.resolve() != root or not root.is_dir():
+            return None
+        stat_identity = root.stat().st_dev, root.stat().st_ino
+        # Passwords never enter reports or resource identities. Object identity
+        # additionally prevents substituting another configured live backend.
+        database_url = reviews.database_url
+        repository_database_url = repository.database_url
+        if make_url(repository_database_url) != make_url(database_url):
+            return None
+        database = make_url(database_url).render_as_string(hide_password=True)
+        payload = {
+            "schema": "tp.photo.local_resource_scope.v1",
+            "publisher": "LocalArtifactStore",
+            "job_repository": "PostgresJobRepository",
+            "review_store": "PostgresReviewStore",
+            "database": database,
+            "root": str(root),
+            "device": stat_identity[0],
+            "inode": stat_identity[1],
+            "dispatch_authority": self.app._uses_dispatch_authority(),
+        }
+        identity = hashlib.sha256(canonicalize_json(payload)).hexdigest()
+
+        def current_scope() -> str | None:
+            try:
+                current = root.stat()
+                current_reviews = get_configured_review_store()
+                if (
+                    self.app.get_artifact_store() is not store
+                    or type(current_reviews) is not PostgresReviewStore
+                    or current_reviews.database_url != database_url
+                    or repository_factory() is not repository
+                    or repository.database_url != repository_database_url
+                    or not bounded_job_metadata()
+                    or store.root_dir != root
+                    or root.resolve() != root
+                    or (current.st_dev, current.st_ino) != stat_identity
+                    or self.app._uses_dispatch_authority() != payload["dispatch_authority"]
+                ):
+                    return None
+            except OSError:
+                return None
+            return identity
+
+        return NativeResourceScope(store, current_scope, reviews, repository)
 
     def _storage_job_id(self, job: Any) -> str:
         # Match the parent's ordinary retention/deletion namespace. Canonical
@@ -659,9 +766,31 @@ class AppReviewAccess:
                         )
 
             issued: set[str] = set()
+            # Only this exact, server-selected file-backed publisher and durable
+            # review store may use the named pilot's smaller native profile.
+            native_scope = (
+                self._native_resource_scope(job)
+                if os.environ.get("TP_PHOTO_REVIEW_ENABLED") == "1"
+                and os.environ.get("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED") == "1"
+                else None
+            )
+            initial_native_scope = native_scope() if native_scope is not None else None
 
             async def publish(storage: str, source: Path, mime: str) -> None:
-                await self._publish(request, job, storage, source, mime)
+                if initial_native_scope is not None and native_scope is not None and native_scope() != initial_native_scope:
+                    raise ReviewAccessError("Photographic resource backing changed; reload before review")
+                if initial_native_scope is not None:
+                    await self._publish(
+                        request,
+                        job,
+                        storage,
+                        source,
+                        mime,
+                        resource_scope=native_scope,
+                        expected_resource_scope=initial_native_scope,
+                    )
+                else:
+                    await self._publish(request, job, storage, source, mime)
                 issued.add(storage)
 
             return ReviewContext(
@@ -675,9 +804,15 @@ class AppReviewAccess:
                 revalidate=revalidate,
                 discover_references=lambda: self._references(request, job, tenant),
                 binding_identity=binding_identity,
-                publication_root=getattr(self.app._artifact_store(), "root_dir", None) if admission else None,
+                publication_root=(
+                    native_scope.store.root_dir
+                    if admission and initial_native_scope is not None and native_scope is not None
+                    else getattr(self.app._artifact_store(), "root_dir", None) if admission else None
+                ),
                 discover_scene_index=lambda: self._references(request, job, tenant, index_only=True),
                 discover_scene_references=lambda scenes: self._references(request, job, tenant, scene_ids=scenes),
+                native_resource_scope=native_scope,
+                native_artifact_store=native_scope.store if initial_native_scope is not None and native_scope else None,
             )
         except ReviewAccessError as exc:
             return app._error_response(exc.status, code=exc.code, message=str(exc), details={"job_id": job_id})
@@ -826,7 +961,17 @@ class AppReviewAccess:
             )
         return identity
 
-    async def _publish(self, request: Request, job: Any, storage_path: str, source: Path, content_type: str) -> None:
+    async def _publish(
+        self,
+        request: Request,
+        job: Any,
+        storage_path: str,
+        source: Path,
+        content_type: str,
+        *,
+        resource_scope: Callable[[], str | None] | None = None,
+        expected_resource_scope: str | None = None,
+    ) -> None:
         storage_path = _safe_relative(storage_path)
         if not storage_path.startswith("photographic-review/"):
             raise ReviewAccessError("Invalid review publication namespace", status=400, code="INVALID_ARGUMENT")
@@ -852,6 +997,10 @@ class AppReviewAccess:
                 staged = Path(directory).resolve() / "artifact"
                 size, digest = await _owned_operation(run_review_thread(_publication_snapshot, source, staged, maximum_bytes))
                 store = self.app._artifact_store()
+                if expected_resource_scope is not None and (
+                    resource_scope is None or resource_scope() != expected_resource_scope
+                ):
+                    raise ReviewAccessError("Photographic resource backing changed; reload before review")
                 lease = current_review_lease.get()
                 if lease is not None:
                     local_root = getattr(store, "root_dir", None)
@@ -883,6 +1032,12 @@ class AppReviewAccess:
                         status=current.status_code,
                         code="ARTIFACT_UNAVAILABLE",
                     )
+                if expected_resource_scope is not None and (
+                    resource_scope is None or resource_scope() != expected_resource_scope
+                ):
+                    # Stay inside the exact created-key cleanup authority. The
+                    # caller has not yet recorded this successful publication.
+                    raise ReviewAccessError("Photographic resource backing changed; reload before review")
         except BaseException as exc:
             if created and store is not None:
                 # The immutable write succeeded in this invocation; an existing

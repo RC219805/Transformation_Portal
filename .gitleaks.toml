@@ -31,12 +31,16 @@ paths = [
 ]
 
 [[rules.allowlists]]
-description = "Ignore byte-verified documentation catalog source SHA256 values"
+description = "Ignore byte-verified source SHA256 values in the documentation catalog and native resource contract"
 condition = "AND"
 regexTarget = "line"
-# The catalog checker independently compares these source bindings with file bytes.
+# The catalog checker and native runtime contract independently compare these
+# source bindings with file bytes.
 regexes = ['''^\n?        "(?:\.github|src|tests|scripts|web|config|schemas|requirements|policy)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$''']
-paths = ['''^docs/governance/documentation_catalog\.json$''']
+paths = [
+  '''^docs/governance/documentation_catalog\.json$''',
+  '''^src/transformation_portal/photographic_delivery/native_resource_contract\.py$''',
+]
 
 [[rules.allowlists]]
 description = "Ignore one public source SHA256 split across a scanner chunk boundary"
@@ -44,5 +48,5 @@ condition = "AND"
 regexTarget = "secret"
 # v8.21.x can start a catalog chunk mid-line, hiding the structured source key.
 # This exact public source digest remains byte-verified by the catalog checker.
-regexes = ['''^d76e4b1fff7bc62c430daf98df6773278274fb874f647696a487a0992e793736$''']
+regexes = ['''^b08d087a63ac034d9a6a332f4beae22b0ba101d2246f3dac3e1f1cb619cb9388$''']
 paths = ['''^docs/governance/documentation_catalog\.json$''']

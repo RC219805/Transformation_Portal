@@ -380,7 +380,7 @@ def decode_master(
     if is_tiff:
         import tifffile
 
-        with tifffile.TiffFile(io.BytesIO(source_bytes)) as tif:
+        with io.BytesIO(source_bytes) as source, tifffile.TiffFile(source) as tif:
             page = tif.pages[0]
             if not isinstance(page, tifffile.TiffPage):
                 raise ValueError("V4 photographic TIFF requires a complete image page")
@@ -443,7 +443,11 @@ def decode_master(
         raise ValueError("Photographic samples must be uint8, uint16 or float32")
     bits = pixels.dtype.itemsize * 8
     divisor = float(np.iinfo(pixels.dtype).max) if np.issubdtype(pixels.dtype, np.integer) else 1.0
-    values = pixels.astype(np.float32) / divisor
+    values = pixels.astype(np.float32)
+    values /= divisor
+    # Normalization owns independent float samples. Do not retain the decoded
+    # integer/float raster through color preparation and immutable master copies.
+    del pixels
     if values.ndim == 2:
         samples, alpha = values, None
     elif values.ndim == 3 and values.shape[2] in {2, 3, 4}:

@@ -24,6 +24,19 @@ class ReviewInputError(ValueError):
     """A deliberately public validation diagnostic from the review boundary."""
 
 
+@dataclass(frozen=True, slots=True)
+class NativeResourceScope:
+    """Server capability binding one actual publisher to its live identity."""
+
+    store: Any
+    revalidate: Callable[[], str | None]
+    review_store: Any = None
+    job_repository: Any = None
+
+    def __call__(self) -> str | None:
+        return self.revalidate()
+
+
 @dataclass(frozen=True)
 class ReviewContext:
     job_id: str
@@ -39,6 +52,8 @@ class ReviewContext:
     publication_root: Path | None = None
     discover_scene_index: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None
     discover_scene_references: Callable[[set[str]], Awaitable[list[dict[str, Any]]]] | None = None
+    native_resource_scope: Callable[[], str | None] | None = None
+    native_artifact_store: Any = None
 
 
 @dataclass(frozen=True)
