@@ -15231,7 +15231,7 @@
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
       "source_commit": "4cb5ba3417e618d5ef1aa09d93b1a71e15b5fe42",
-      "content_sha256": "2d09461f09dcfd261b78ee9d206a104a43cc5dc5e9b92936bb7e9b62e5a802a8",
+      "content_sha256": "f43674e74535a441cb27e00a8232e8a6c767b521fb674cfd065cbb7e583a9f5c",
       "source_references": [
         "app.py",
         "src/transformation_portal/api/routes/photographic_review.py",
@@ -15327,7 +15327,9 @@
         "src/transformation_portal/lux_depth_v4/photography.py",
         "src/transformation_portal/materials_v4/engine.py",
         "tests/test_photographic_decode_buffers.py",
-        "tests/test_photographic_snapshot_allocation.py"
+        "tests/test_photographic_snapshot_allocation.py",
+        "pyproject.toml",
+        "requirements/base.in"
       ],
       "source_sha256": {
         "app.py": "91e9c8ebf37d2bdc898a9bef5f2c3184067c7af275e31ee6ee1eed99f57180ba",
@@ -15412,19 +15414,21 @@
         "src/transformation_portal/photographic_delivery/qualification.py": "5e14d518553fcb6f4683c3b0987b3a6e4bc929a1ee754e95d74345f584cd67d2",
         "tests/test_native_materials_qualification.py": "c046c848714d7045786529bbfb70e15c57de87a973d836dd743de0f18d5b50aa",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
-        "src/transformation_portal/photographic_delivery/native_resources.py": "20d5a176eedbab6f5523786a466fe1e26d5666f7dfe78c7bbb8d06608c880b95",
-        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "e62f3bab3923cf3595831d07a4b7ff49093bca9c909c03a4ce04e99c22acb23f",
+        "src/transformation_portal/photographic_delivery/native_resources.py": "2e1ca5ce98a98b610cf31c1756074b2e578f032d87f840f95c45f3f56b5fe348",
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "1a25f869046267bee1fb558472c7edf25ba8028654b1fd01d76452e6e7866d63",
         "src/transformation_portal/photographic_delivery/managed_qualification.py": "c7d8701634b09d830b2c0e3b986cc03d21b581da98686f1b2c068c31b4a10747",
         "src/transformation_portal/orchestrator/storage/postgres.py": "906b5bf63ff014ca6a23a6e72f06f3d22ba34d39b87d2c05c32eaba45620a88d",
         "tests/test_native_resource_inputs.py": "d4eeb1a9c9040129376c1f9cb38ffe003e4a7f9fee75c89af38023c3be46ef97",
-        "tests/test_native_resource_profile.py": "4d1e0b28d700942bfb84d9e3e953c091edc2a17f9e9ad190adfffbcd4ae808f9",
+        "tests/test_native_resource_profile.py": "59e7ef01bbeee59927cae78981bf279b4bcc1fced06ddb5c07e279b3682aac4e",
         "tests/test_managed_materials_qualification.py": "492da6c8eee3e756eb523ea3346d801140353a15a9a0073a499dd2041c58179e",
         "tests/orchestrator/test_photographic_native_resource_scope.py": "78d7d141bb74fedb05ebc668ce3d6b205ee96286884c1434d1af1b9feb6a67aa",
         "tests/orchestrator/test_photographic_native_response_ownership.py": "ae11bad9eca93253ac2ae193e26ca8ce79d83c1f9ad644007135fbd8eba98fa9",
         "src/transformation_portal/lux_depth_v4/photography.py": "7f805a56ec68b7d244c3701ac2ba17ba4ec6c17dede721c85dfb0275604cf6a6",
         "src/transformation_portal/materials_v4/engine.py": "1ce6693faf97047b9341c01d06f570b63289072594751484c2128fc46fd5d029",
         "tests/test_photographic_decode_buffers.py": "7a1776765b9abf74f4405cce7254bcc4d4d9fd55e7c248e88646ab3cf18710c0",
-        "tests/test_photographic_snapshot_allocation.py": "1702fb2490bd8691fb1f95085dc274cca12c7fb52e0c7ef13ec5fd0174cbc7ae"
+        "tests/test_photographic_snapshot_allocation.py": "1702fb2490bd8691fb1f95085dc274cca12c7fb52e0c7ef13ec5fd0174cbc7ae",
+        "pyproject.toml": "131694f4cd6df2c102737b08aafddbcfd7e371b0e5f13346adb810ea24509d4e",
+        "requirements/base.in": "8f0bcf2454c6818addd371b538758da0cdc60b51982ebaf0436cddf08c05bd21"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",

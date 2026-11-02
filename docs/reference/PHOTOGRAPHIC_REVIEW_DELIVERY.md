@@ -282,9 +282,15 @@ and unbounded layouts from eligibility. Other codecs/layouts do not inherit this
 qualification. Presentation and processing-stage authority remain independent.
 
 The pure-data `native_resource_contract.py` freezes the profile's functional
-source closure, CPython executable, five native extensions, package versions and
-Darwin arm64 runtime. The pilot is specific to CPython 3.12.14 and the recorded
-environment; another platform/build selects fallback. Set `OMP_NUM_THREADS`,
+source closure, current `pyproject.toml` and `requirements/base.in` declarations,
+CPython executable, five native extensions, package versions and Darwin arm64
+runtime. Qualification checks every active direct core requirement against the
+actual installed versions, using the host's requirement markers. Stale installed
+project metadata cannot authorize an older dependency floor. Missing, conflicting
+or unsupported requirements select fallback. The recorded supported environment
+includes Pillow 13.0.0, certifi 2026.10.19 and packaging 26.3.
+The pilot is specific to CPython 3.12.14 and the recorded environment;
+another platform/build selects fallback. Set `OMP_NUM_THREADS`,
 `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` and
 `VECLIB_MAXIMUM_THREADS` to `1` before starting the backend. A stale or incomplete
 contract cannot grant capacity. It is reviewed release data; never regenerate it
@@ -309,8 +315,8 @@ response returning after a middleware body handoff does not release capacity;
 the downstream send and owned cleanup must first become quiescent. Decode and
 photographic I/O slots are released when expensive work is quiescent, before CAS.
 A slow response cannot release memory early or authorize a second bulk operation.
-Direct service dictionaries,
-legacy revisions and existing download ownership retain their prior contracts.
+Direct service dictionaries, legacy revisions and existing download ownership
+retain their prior contracts.
 The selected source must first receive authoritative catalogue/scene inspection
 in this backend process; a cold or expired inspection cache selects fallback.
 TIFF decoding explicitly closes its owned in-memory file before color allocation,
@@ -328,6 +334,13 @@ checks. They do not allocate against the much larger generic snapshot ceiling.
 Use a fresh private namespace and a dedicated, already migrated Postgres database
 whose name ends in `_test`. `TP_MANAGED_QUALIFICATION_DATABASE_URL` is local-only;
 the tool does not reset a database, reinstall a runtime or dispatch inference.
+Provision a separate CPU qualification environment from the current pinned
+`requirements/base.txt`, `requirements/dev.txt` and `requirements/ci.txt`, using
+`requirements/constraints.txt` and pip 26.2.2. Install the reviewed
+project metadata and run `pip check` in that environment. Include `psutil==7.2.2`
+as the explicit qualification dependency already pinned by the supported Darwin
+ML lock; it does not require installing that ML environment or its umbrella.
+The pilot preserves the canonical core environment and existing model runtimes.
 Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` and
 one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
 and the closed native Materials `recipe`. It seeds only unique private succeeded
@@ -339,7 +352,7 @@ This is managed backend qualification;
 it does not claim a signed-in frontdoor/browser pilot or photographic acceptance.
 
 ```bash
-PYTHONPATH=.:src ./.venv/bin/python -m transformation_portal.photographic_delivery.managed_qualification \
+PYTHONPATH=.:src /absolute/private/core-env/bin/python -m transformation_portal.photographic_delivery.managed_qualification \
   --manifest /absolute/private/retained-manifest.json \
   --expected-profile-identity <reviewed-profile-sha256> \
   --output /absolute/private/qualification/new-run \
@@ -379,9 +392,9 @@ verification, but do not establish protected-delta or photographic acceptance.
 
 ### Reviewed pilot observations
 
-The frozen profile identity is
-`931eef15893c0be7ae42e414d14b62dc8532c3a6aa4cf4000762d07b7194bbf5`.
-On its recorded Darwin arm64/CPython runtime and retained-inventory providers,
+The frozen supported profile identity is
+`005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+On its supported Darwin arm64/CPython runtime and retained-inventory providers,
 three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
 30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
 RGBA8 and RGBA16 three-repeat probes, one bounded nonzero observation and the
@@ -393,15 +406,20 @@ TIFF had zero 16-bit code changes. Sources remained unchanged and all reservatio
 counters drained. The nonzero observation is separate from
 preservation and photographic acceptance.
 
-The worst complete worker peak was 4,352,573,440 bytes; its measured incremental
-peak plus 50% was 6,415,785,984 bytes, below the fixed 6,442,450,944-byte reservation
-by 26,664,960 bytes.
+The original alpha warm-cohort preflight blocked on physical scratch headroom
+before worker launch and produced no saves or products. Its report remains
+separate provenance; a fresh retry completed the measured 24 saves and 120
+products under the unchanged runtime, resource ceilings and free-space guards.
+
+The worst complete worker peak was 4,296,785,920 bytes; its measured incremental
+peak plus 50% was 6,333,136,896 bytes, below the fixed 6,442,450,944-byte reservation
+by 109,314,048 bytes.
 Same-tenant inspection progressed while the complete native lease and encoded
 output were held after helper return and after the inner response returned while
 the deployed outer transport remained blocked. A distinct uncached crop verified
 a fresh source read at that transport barrier. This is not an exclusive phase
-measurement or a worst-case overlap measurement of two live raster computations. Reports,
-source snapshots and products remain private, outside Git and finalized delivery;
+measurement or a worst-case overlap measurement of two live raster computations.
+Reports, source snapshots and products remain private, outside Git and finalized delivery;
 these observations do not enable production flags or qualify canonical generations.
 
 ## Paged catalogue and review navigation

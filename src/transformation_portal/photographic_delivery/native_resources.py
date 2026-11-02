@@ -10,6 +10,7 @@ import os
 import platform
 import re
 import sys
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -26,9 +27,23 @@ MAX_PIXELS, MAX_REGIONS = 30_000_000, 4
 MAX_STATE_BYTES, MAX_STATE_NODES, MAX_STATE_DEPTH = 8 * MIB, 65536, 16
 _FIXED_BYTES = 1444 * MIB + GIB
 _THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
-_PACKAGES = ("numpy", "Pillow", "tifffile", "scipy", "psutil", "fastapi", "starlette", "pydantic", "SQLAlchemy", "asyncpg")
+_PACKAGES = (
+    "numpy",
+    "Pillow",
+    "tifffile",
+    "scipy",
+    "psutil",
+    "fastapi",
+    "starlette",
+    "pydantic",
+    "SQLAlchemy",
+    "asyncpg",
+    "packaging",
+)
 _EXTENSIONS = ("numpy._core._multiarray_umath", "PIL._imaging", "PIL._imagingcms", "scipy.ndimage._nd_image", "zlib")
 _SOURCE_PATHS = (
+    "pyproject.toml",
+    "requirements/base.in",
     "app.py",
     "src/transformation_portal/photographic_delivery/native_resources.py",
     "src/transformation_portal/photographic_delivery/native_resource_inputs.py",
@@ -99,6 +114,9 @@ def _source_identity() -> dict[str, str]:
     sources = {}
     for relative in _SOURCE_PATHS:
         expected = _file_hash(root / relative)
+        if not relative.endswith(".py"):
+            sources[relative] = expected
+            continue
         name = relative.removeprefix("src/").removesuffix(".py").replace("/", ".")
         name = name.removesuffix(".__init__")
         loaded = sys.modules.get(name)
@@ -110,6 +128,62 @@ def _source_identity() -> dict[str, str]:
     return sources
 
 
+def _requirement_line(line: str) -> str:
+    """Remove plain requirements-file comments while preserving quoted markers."""
+    quote = None
+    for index, character in enumerate(line):
+        if character in {"'", '"'}:
+            if quote == character:
+                quote = None
+            elif quote is None:
+                quote = character
+        elif character == "#" and quote is None and (index == 0 or line[index - 1].isspace()):
+            return line[:index].strip()
+    return line.strip()
+
+
+def _active_runtime_requirements(root: Path | None = None, environment: dict[str, str] | None = None) -> tuple[Any, ...]:
+    # The parser is optional for the ordinary runtime; its absence denies only this profile.
+    from packaging.markers import UndefinedEnvironmentName
+    from packaging.requirements import Requirement
+
+    root = root or Path(__file__).resolve().parents[3]
+    with (root / "pyproject.toml").open("rb") as stream:
+        project = tomllib.load(stream).get("project")
+    dependencies = project.get("dependencies") if type(project) is dict else None
+    if type(dependencies) is not list or not dependencies or any(type(value) is not str for value in dependencies):
+        raise ValueError("Native resources require declared core dependency requirements")
+    lines = [_requirement_line(line) for line in (root / "requirements/base.in").read_text(encoding="utf-8").splitlines()]
+    requirements = tuple(Requirement(value) for value in (*dependencies, *(line for line in lines if line)))
+    try:
+        return tuple(value for value in requirements if value.marker is None or value.marker.evaluate(environment))
+    except UndefinedEnvironmentName as error:
+        raise ValueError("Native resources do not support the declared marker context") from error
+
+
+def _validate_runtime_packages(packages: dict[str, str], requirements: tuple[Any, ...]) -> None:
+    from packaging.utils import canonicalize_name
+    from packaging.version import Version
+
+    versions = {canonicalize_name(name): Version(value) for name, value in packages.items()}
+    for requirement in requirements:
+        version = versions.get(canonicalize_name(requirement.name))
+        if requirement.url is not None or version is None or version not in requirement.specifier:
+            raise ValueError(f"Native resource package does not satisfy declared core requirement: {requirement}")
+
+
+def _runtime_packages() -> dict[str, str]:
+    from packaging.utils import canonicalize_name
+
+    requirements = _active_runtime_requirements()
+    names = {canonicalize_name(name): name for name in _PACKAGES}
+    for requirement in requirements:
+        names.setdefault(canonicalize_name(requirement.name), requirement.name)
+    packages = {name: importlib.metadata.version(name) for _, name in sorted(names.items())}
+    _validate_runtime_packages(packages, requirements)
+    return packages
+
+
 def _runtime_identity() -> dict[str, Any] | None:
     if (platform.python_implementation(), platform.python_version(), platform.system(), platform.machine()) != (
         "CPython",
@@ -118,6 +192,7 @@ def _runtime_identity() -> dict[str, Any] | None:
         "arm64",
     ) or any(os.environ.get(name) != "1" for name in _THREAD_ENV):
         return None
+    packages = _runtime_packages()
     extensions = {}
     for name in _EXTENSIONS:
         spec = importlib.util.find_spec(name)
@@ -132,7 +207,7 @@ def _runtime_identity() -> dict[str, Any] | None:
         "release": platform.release(),
         "version": platform.version(),
         "executable_sha256": _file_hash(Path(sys.executable).resolve()),
-        "packages": {name: importlib.metadata.version(name) for name in _PACKAGES},
+        "packages": packages,
         "extensions": extensions,
         "thread_environment": {name: os.environ[name] for name in _THREAD_ENV},
     }
