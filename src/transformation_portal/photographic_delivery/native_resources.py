@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -12,18 +13,20 @@ import re
 import sys
 import tomllib
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from importlib.resources import files
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.photographic_delivery.native_resource_contract import RESOURCE_CONTRACT
 from transformation_portal.photographic_delivery.native_resource_inputs import NativeRasterEvidence
 
-PROFILE_ID = "tp.photo.native_sdr_local.v1"
+PROFILE_ID = "tp.photo.native_sdr_managed.v2"
 GIB, MIB = 1024**3, 1024**2
 MEMORY_BYTES = 6 * GIB
 ACCEPTANCE_PEAK_BYTES = 4 * GIB  # An acceptance ceiling, never a claimed observation.
 MAX_PIXELS, MAX_REGIONS = 30_000_000, 4
+MAX_CANONICAL_PLAN_BYTES, MAX_CANONICAL_INPUTS = 512 * 1024, 8
 MAX_STATE_BYTES, MAX_STATE_NODES, MAX_STATE_DEPTH = 8 * MIB, 65536, 16
 _FIXED_BYTES = 1444 * MIB + GIB
 _THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
@@ -39,8 +42,58 @@ _PACKAGES = (
     "SQLAlchemy",
     "asyncpg",
     "packaging",
+    "boto3",
+    "botocore",
+    "s3transfer",
+    "urllib3",
+    "redis",
+    "jsonschema",
+    "jsonschema-specifications",
+    "referencing",
+    "rpds-py",
+    "attrs",
+    "jmespath",
+    "python-dateutil",
+    "six",
+    "pydantic-core",
 )
-_EXTENSIONS = ("numpy._core._multiarray_umath", "PIL._imaging", "PIL._imagingcms", "scipy.ndimage._nd_image", "zlib")
+_EXTENSIONS = (
+    "numpy._core._multiarray_umath",
+    "PIL._imaging",
+    "PIL._imagingcms",
+    "scipy.ndimage._nd_image",
+    "rpds.rpds",
+    "pydantic_core._pydantic_core",
+    "zlib",
+)
+_PAYLOAD_PACKAGES = {
+    "boto3": ("boto3",),
+    "botocore": ("botocore",),
+    "s3transfer": ("s3transfer",),
+    "urllib3": ("urllib3",),
+    "jmespath": ("jmespath",),
+    "jsonschema": ("jsonschema",),
+    "jsonschema-specifications": ("jsonschema_specifications",),
+    "referencing": ("referencing",),
+    "rpds-py": ("rpds",),
+    "attrs": ("attr", "attrs"),
+    "redis": ("redis",),
+    "python-dateutil": ("dateutil",),
+    "six": ("six.py",),
+}
+_STDLIB_PAYLOADS = (
+    "http.client",
+    "ssl",
+    "socket",
+    "urllib.parse",
+    "urllib.request",
+    "urllib.response",
+    "json.decoder",
+    "json.encoder",
+    "json.scanner",
+    "gzip",
+)
+_MAX_PACKAGE_PAYLOAD_BYTES, _MAX_PACKAGE_PAYLOAD_FILES = 100 * MIB, 32768
 _SOURCE_PATHS = (
     "pyproject.toml",
     "requirements/base.in",
@@ -60,6 +113,14 @@ _SOURCE_PATHS = (
     "src/transformation_portal/core/security/fs_guard.py",
     "src/transformation_portal/core/security/path_safety.py",
     "src/transformation_portal/core/execution_plan.py",
+    "src/transformation_portal/core/execution_plan_v2.py",
+    "src/transformation_portal/core/execution_plan_v3.py",
+    "src/transformation_portal/core/execution_plan_v4.py",
+    "src/transformation_portal/core/execution_plan_v5.py",
+    "src/transformation_portal/schemas/execution/plan.v2.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v3.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v4.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v5.schema.json",
     "src/transformation_portal/ingest/canonical_json.py",
     "src/transformation_portal/materials_v4/engine.py",
     "src/transformation_portal/materials_v4/contracts.py",
@@ -75,6 +136,16 @@ _SOURCE_PATHS = (
     "src/transformation_portal/orchestrator/photographic_review_store.py",
     "src/transformation_portal/orchestrator/photographic_scene_catalogue.py",
     "src/transformation_portal/orchestrator/dispatch.py",
+    "src/transformation_portal/orchestrator/execution_dispatch.py",
+    "src/transformation_portal/orchestrator/execution_policy.py",
+    "src/transformation_portal/orchestrator/queue/__init__.py",
+    "src/transformation_portal/orchestrator/queue/base.py",
+    "src/transformation_portal/orchestrator/queue/locator.py",
+    "src/transformation_portal/orchestrator/queue/redis.py",
+    "src/transformation_portal/orchestrator/lux_depth_adapter.py",
+    "src/transformation_portal/orchestrator/photography_adapter.py",
+    "src/transformation_portal/orchestrator/photography_v6_adapter.py",
+    "src/transformation_portal/orchestrator/artifact_store/s3.py",
     "src/transformation_portal/orchestrator/storage/__init__.py",
     "src/transformation_portal/orchestrator/storage/base.py",
     "src/transformation_portal/orchestrator/storage/postgres.py",
@@ -109,11 +180,119 @@ def _file_hash(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[str, Any]:
+    """Verify installed wheel payload bytes, including non-Python SDK models.
+
+    RECORD is a per-file expectation, never authority on its own: actual tree
+    membership, lengths and SHA256 bytes must all agree. Generated bytecode is
+    excluded, just as wheel RECORD leaves it unhashed; executable sources and
+    compiled extensions remain covered. No pip cache or installer receipt is
+    consulted, and no package is imported to discover its payload.
+    """
+    distribution = importlib.metadata.distribution(name)
+    entries = distribution.files
+    if entries is None or len(entries) > _MAX_PACKAGE_PAYLOAD_FILES:
+        raise ValueError(f"Native resource package has no bounded RECORD: {name}")
+    base = Path(str(distribution.locate_file(""))).resolve(strict=True)
+    expected: dict[str, Any] = {}
+    for entry in entries:
+        record_relative = PurePosixPath(str(entry))
+        if not record_relative.parts or record_relative.parts[0] not in roots:
+            continue
+        if (
+            record_relative.is_absolute()
+            or ".." in record_relative.parts
+            or "\\" in str(entry)
+            or record_relative.as_posix() != str(entry)
+            or str(entry) in expected
+        ):
+            raise ValueError(f"Native resource package RECORD path is invalid: {name}")
+        if "__pycache__" not in record_relative.parts:
+            expected[str(entry)] = entry
+    actual: dict[str, Path] = {}
+    for relative_root in roots:
+        root = base / relative_root
+        if root.is_symlink() or not root.exists():
+            raise ValueError(f"Native resource package root is invalid: {name}")
+        candidates = root.rglob("*") if root.is_dir() else iter((root,))
+        for index, path in enumerate(candidates):
+            if index >= _MAX_PACKAGE_PAYLOAD_FILES:
+                raise ValueError(f"Native resource package exceeds its tree bound: {name}")
+            tree_relative = path.relative_to(base)
+            if "__pycache__" in tree_relative.parts:
+                continue
+            if path.is_symlink():
+                raise ValueError(f"Native resource package contains a symlink: {name}")
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ValueError(f"Native resource package contains a non-file: {name}")
+            actual[tree_relative.as_posix()] = path
+            if len(actual) > _MAX_PACKAGE_PAYLOAD_FILES:
+                raise ValueError(f"Native resource package exceeds its file bound: {name}")
+    if not expected or set(actual) != set(expected):
+        raise ValueError(f"Native resource package tree differs from RECORD: {name}")
+    rows, total = [], 0
+    for relative_name, path in sorted(actual.items()):
+        entry = expected[relative_name]
+        size, recorded_hash = path.stat().st_size, entry.hash
+        total += size
+        if (
+            total > _MAX_PACKAGE_PAYLOAD_BYTES
+            or type(entry.size) is not int
+            or entry.size != size
+            or recorded_hash is None
+            or recorded_hash.mode != "sha256"
+        ):
+            raise ValueError(f"Native resource package RECORD is unverifiable: {name}")
+        observed = _file_hash(path)
+        encoded = base64.urlsafe_b64encode(bytes.fromhex(observed)).rstrip(b"=").decode("ascii")
+        if encoded != recorded_hash.value:
+            raise ValueError(f"Native resource package bytes differ from RECORD: {name}")
+        rows.append([relative_name, size, observed])
+    # Check already executing modules too: an editable or mixed environment
+    # cannot borrow a neighboring installation's matching wheel payload.
+    for module_name, module in tuple(sys.modules.items()):
+        if module_name.split(".", 1)[0] not in {root.removesuffix(".py") for root in roots}:
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin is None:  # Namespace packages carry no executable file.
+            continue
+        if type(origin) is not str:
+            raise ValueError(f"Loaded native resource package origin is invalid: {name}")
+        path = Path(origin).resolve(strict=True)
+        if not path.is_relative_to(base) or path.relative_to(base).as_posix() not in actual:
+            raise ValueError(f"Loaded native resource package is from another tree: {name}")
+    return {"sha256": hashlib.sha256(_canonical(rows)).hexdigest(), "files": len(rows), "bytes": total}
+
+
+def _runtime_package_payloads() -> dict[str, Any]:
+    payloads = {name: _distribution_payload_identity(name, roots) for name, roots in _PAYLOAD_PACKAGES.items()}
+    stdlib = {}
+    for name in _STDLIB_PAYLOADS:
+        spec = importlib.util.find_spec(name)
+        if spec is None or spec.origin is None:
+            raise ValueError(f"Native resource standard library payload is missing: {name}")
+        path = Path(spec.origin)
+        if path.suffix != ".py" or not path.is_file():
+            raise ValueError(f"Native resource standard library source is unavailable: {name}")
+        loaded = sys.modules.get(name)
+        if loaded is not None and getattr(loaded, "__file__", None) != spec.origin:
+            raise ValueError(f"Loaded native resource standard library differs: {name}")
+        stdlib[name] = _file_hash(path)
+    payloads["stdlib"] = stdlib
+    return payloads
+
+
 def _source_identity() -> dict[str, str]:
     root = Path(__file__).resolve().parents[3]
     sources = {}
     for relative in _SOURCE_PATHS:
         expected = _file_hash(root / relative)
+        if relative.startswith("src/transformation_portal/schemas/execution/"):
+            resource = files("transformation_portal.schemas.execution").joinpath(Path(relative).name)
+            if hashlib.sha256(resource.read_bytes()).hexdigest() != expected:
+                raise ValueError("Loaded native resource schema differs")
         if not relative.endswith(".py"):
             sources[relative] = expected
             continue
@@ -208,6 +387,7 @@ def _runtime_identity() -> dict[str, Any] | None:
         "version": platform.version(),
         "executable_sha256": _file_hash(Path(sys.executable).resolve()),
         "packages": packages,
+        "package_payloads": _runtime_package_payloads(),
         "extensions": extensions,
         "thread_environment": {name: os.environ[name] for name in _THREAD_ENV},
     }
@@ -217,6 +397,8 @@ def _limits() -> dict[str, int]:
     return {
         "pixels": MAX_PIXELS,
         "regions": MAX_REGIONS,
+        "canonical_plan_bytes": MAX_CANONICAL_PLAN_BYTES,
+        "canonical_inputs": MAX_CANONICAL_INPUTS,
         "memory_bytes": MEMORY_BYTES,
         "acceptance_peak_bytes": ACCEPTANCE_PEAK_BYTES,
         "state_heap_bytes": MAX_STATE_BYTES,

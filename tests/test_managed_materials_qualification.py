@@ -273,13 +273,16 @@ def test_signed_fixture_headers_are_method_target_bound_and_not_forged_actor_hea
 
 
 @pytest.mark.parametrize("incremental,qualified", [(4 * managed.offline.GIB, True), (5 * managed.offline.GIB, False)])
+@pytest.mark.parametrize("timeout", [None, 1, 600, 900])
 def test_complete_managed_margin_cannot_raise_fixed_profile_and_verifier_is_sequential(
-    case, monkeypatch, incremental, qualified
+    case, monkeypatch, incremental, qualified, timeout
 ):
     phases = []
 
     def run(root, mode, **kwargs):
         assert kwargs["memory_limit"] == 12 * managed.offline.GIB
+        assert kwargs["timeout"] == (300 if timeout is None else timeout)
+        assert managed.offline._read_json(root / "specification.json")["process_timeout_seconds"] == kwargs["timeout"]
         phases.append(mode)
         if mode == "_worker":
             managed.offline._write_json(
@@ -298,13 +301,48 @@ def test_complete_managed_margin_cannot_raise_fixed_profile_and_verifier_is_sequ
         return {}
 
     monkeypatch.setattr(managed, "_run_process", run)
-    report = managed.qualify(case.manifest, case.output, "a" * 64, repeats=1)
+    options = {} if timeout is None else {"process_timeout_seconds": timeout}
+    report = managed.qualify(case.manifest, case.output, "a" * 64, repeats=1, **options)
+    assert report["process_timeout_seconds"] == (300 if timeout is None else timeout)
     assert report["status"] == ("measured" if qualified else "not_qualified")
     assert report["measured_incremental_peak_plus_50_percent_bytes"] == incremental * 3 // 2
     assert report["config"]["memory_bytes"] == 12 * managed.offline.GIB
     assert report["source_unchanged"]
     assert report["encoded_products_repeatable"] is None
     assert report["managed_profile_qualification"] == "not_established"
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 901, True, False, 1.5, "600", None])
+def test_process_timeout_is_explicit_bounded_and_rejected_before_output_creation(case, timeout):
+    with pytest.raises(ValueError, match="process timeout"):
+        managed.qualify(case.manifest, case.output, "a" * 64, process_timeout_seconds=timeout)
+    assert not case.output.exists()
+
+
+@pytest.mark.parametrize("arguments,expected", [([], 300), (["--process-timeout-seconds", "600"], 600)])
+def test_public_cli_process_timeout_default_and_explicit_override(monkeypatch, arguments, expected):
+    observed = {}
+
+    def qualify(*_args, **kwargs):
+        observed.update(kwargs)
+        return {"status": "planned", "blocking_reasons": []}
+
+    monkeypatch.setattr(managed, "qualify", qualify)
+    monkeypatch.setattr(
+        managed.sys,
+        "argv",
+        [
+            "managed-qualification",
+            "--manifest",
+            "/private/manifest.json",
+            "--output",
+            "/private/output",
+            "--expected-profile-identity",
+            "a" * 64,
+            *arguments,
+        ],
+    )
+    assert managed.main() == 0 and observed["process_timeout_seconds"] == expected
 
 
 @pytest.mark.parametrize(
@@ -497,6 +535,7 @@ def test_actual_native_master_content_must_match_the_receipt(which):
 @pytest.mark.parametrize("failure", ["memory", "scratch", "timeout", "children", "observer", "cancel"])
 def test_supervisor_drains_only_owned_process_group_on_every_failure(tmp_path, monkeypatch, failure):
     psutil = pytest.importorskip("psutil")
+    managed.offline._write_json(tmp_path / "specification.json", {"provider": "retained-local"})
     state = SimpleNamespace(returncode=None, killed=[], waited=False)
 
     class Process:

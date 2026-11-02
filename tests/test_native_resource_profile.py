@@ -65,7 +65,7 @@ def test_native_profile_stays_unqualified_without_reviewed_data(evidence, monkey
 def test_native_profile_qualification_is_fixed_frozen_and_source_bound(evidence, matching_contract):
     qualified = _qualify(evidence)
     assert qualified is not None
-    assert qualified.profile_id == "tp.photo.native_sdr_local.v1"
+    assert qualified.profile_id == "tp.photo.native_sdr_managed.v2"
     assert qualified.profile_identity == resources.profile_identity() == resources.runtime_profile_identity()
     assert qualified.source_sha256 == evidence.source_sha256
     assert qualified.raster_identity == evidence.content_hash()
@@ -246,6 +246,7 @@ def test_native_runtime_revalidates_compiled_binary_hashes_without_package_chang
         monkeypatch.setenv(name, "1")
     monkeypatch.setattr(resources.importlib.util, "find_spec", lambda name: SimpleNamespace(origin=str(extension)))
     monkeypatch.setattr(resources, "_runtime_packages", lambda: {"test-package": "1.0"})
+    monkeypatch.setattr(resources, "_runtime_package_payloads", lambda: {"test-package": {"sha256": "e" * 64}})
     monkeypatch.setattr(resources.sys, "executable", str(executable))
     monkeypatch.setattr(resources, "_source_identity", lambda: {"source.py": "a" * 64})
     contract = resources.capture_contract()
@@ -267,6 +268,14 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert all((root / path).is_file() for path in paths)
     actual = resources._source_identity()
     assert set(actual) == set(paths) and all(len(digest) == 64 for digest in actual.values())
+
+
+def test_native_profile_rejects_schema_resources_from_another_source_closure(monkeypatch, tmp_path):
+    monkeypatch.setattr(resources, "_runtime_identity", lambda: {"runtime": "schema-closure-test"})
+    monkeypatch.setattr(resources, "RESOURCE_CONTRACT", resources.capture_contract())
+    monkeypatch.setattr(resources, "files", lambda package: tmp_path)
+    (tmp_path / "plan.v2.schema.json").write_bytes(b"{}")
+    assert resources.runtime_profile_identity() is None
 
 
 @pytest.mark.parametrize(

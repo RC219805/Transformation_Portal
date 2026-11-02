@@ -251,20 +251,37 @@ larger budget or live feature enablement.
 
 ## Managed native resource qualification
 
-The named `tp.photo.native_sdr_local.v1` profile has a fixed **6 GiB** reservation;
+The named `tp.photo.native_sdr_managed.v2` profile has a fixed **6 GiB** reservation;
 it does not change the 12 GiB process-local ceiling, effective 6 GiB inspection
 reserve, worker/I/O limits or scratch/free-space protections. It applies only to
-HTTP-owned native revisions whose server-verified inspection, actual local
-publisher, Postgres job/review stores and frozen runtime/source identity match.
+HTTP-owned native revisions whose server-verified inspection, actual qualified
+publisher, Postgres authorities and frozen runtime/source identity match.
 The lower resource estimate also requires the live, nonclosed transport owner
 installed by the deployed application. A manually mounted router or direct HTTP
 handoff without that owner retains generic costing, even if its response is
 marked HTTP-owned.
-The qualified inventory authority is retained Postgres `JobRecord` data, with
-canonical dispatch authority disabled for that inventory. Canonical dispatch and
-generation authority retains conservative costing pending its separate provider,
-validator/schema and execution-path qualification. Preserve canonical job authority;
-changing queue settings does not migrate or qualify a canonical inventory.
+Retained Postgres `JobRecord` inventories qualify with the exact local artifact
+publisher and durable job/review stores. A separate canonical path supports
+Unified `process` V5/V4 plans, one to eight inputs, through real Postgres
+operational records and a bounded loopback S3-compatible publisher. It validates
+immutable plan/binding authority and pins the operational store alongside the
+job/review stores and publisher. Other plan families retain conservative costing.
+Changing queue settings never migrates or qualifies canonical inventory.
+
+The canonical pilot additionally requires the server-owned
+`TP_PHOTO_REVIEW_S3_PUBLICATION_ROOT` to identify the actual host bind mounted as
+MinIO `/data`. This is an operator physical-storage mapping, not a client path.
+Use the qualification command's container/bind/port/image receipt to verify it
+before deployment. The runtime pins its canonical path and device/inode together
+with the real initialized S3 client's endpoint, configuration and object identity.
+No credentials enter resource identities or public responses. Missing, changed,
+remote or unsupported storage bindings retain conservative costing; the setting
+does not migrate a bucket or make a VM named volume a host directory. Requalify
+after changing the service image, command or bind mapping; those are trusted
+deployment settings outside per-request runtime inspection. Scratch
+claims cover both temporary and actual publication filesystems, with all existing
+remaining-commitment, inspection-reserve and free-space checks. Ordinary S3
+storage remains supported without this optional qualification setting.
 Unknown, historical or conflicting authority retains conservative fallback
 costing. No filename, client option, environment label or supplied inspection can
 select the lower profile. Requests whose complete reservation does not fit still
@@ -303,8 +320,8 @@ case is about 5.065 GiB. The separate 4 GiB incremental-RSS acceptance ceiling i
 an acceptance requirement, not an observed measurement: measured incremental peak
 plus 50% must fit the fixed 6 GiB reservation. Projection/job metadata must satisfy
 the profile's 8 MiB heap, 65,536-node and depth-16 limits. Source/codec eligibility,
-metadata limits and backing-store identity are revalidated; all three actual
-providers are pinned for the operation so awaited I/O and uncertain cleanup use
+metadata limits and backing-store identity are revalidated; all actual
+authorities are pinned for the operation so awaited I/O and uncertain cleanup use
 the same authorities.
 
 Native HTTP preview/save retain their complete memory reservation and outstanding
@@ -345,7 +362,7 @@ Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` an
 one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
 and the closed native Materials `recipe`. It seeds only unique private succeeded
 jobs and uses real signed authorization, the deployed application and middleware,
-the shared router, `AppReviewAccess`, Postgres CAS and file-backed publication.
+the shared router, `AppReviewAccess`, Postgres CAS and the selected publisher.
 The transport barrier waits for both a blocked outer send and the inner native
 response's actual return before checking its complete reservation and ticket.
 This is managed backend qualification;
@@ -358,6 +375,48 @@ PYTHONPATH=.:src /absolute/private/core-env/bin/python -m transformation_portal.
   --output /absolute/private/qualification/new-run \
   --repeats 3 --preflight-only
 ```
+
+For canonical qualification, add `--provider canonical-s3`,
+`--canonical-plan /absolute/private/retained-plan.json`,
+`--canonical-bindings /absolute/private/unified-bindings.json`,
+`--s3-container tp-native-canonical-minio-<session>` and
+`--s3-publication-root /absolute/private/minio-data`. Supply explicit local-only
+`TP_MANAGED_QUALIFICATION_REDIS_URL`, `TP_MANAGED_QUALIFICATION_S3_ENDPOINT`,
+`TP_MANAGED_QUALIFICATION_S3_BUCKET`,
+`TP_MANAGED_QUALIFICATION_S3_ACCESS_KEY_ID` and
+`TP_MANAGED_QUALIFICATION_S3_SECRET_ACCESS_KEY` through the private environment.
+These are isolated test-service credentials, not AWS account credentials. The
+command rejects remote endpoints and records the owned running MinIO image,
+version, loopback port and read-write `/data` host bind before launching work.
+It copies unchanged original references, rebinds only their owned input root,
+and imports retained TIFF fixtures through real Redis locator delivery, Postgres
+claim/fence and immutable S3 generation publication. No model executes. The
+report labels this fixture import; it does not claim that the imported bytes
+were newly inferred from that plan. Plan input order and retained fixture order
+must describe the same scenes. Verification uses fresh Postgres authority and
+streamed S3 source/product bytes after the worker exits. Local and publication
+scratch are included in campaign planning and physical free-space monitoring.
+The canonical plan retains all source/object copies and every committed product
+plus its later verifier copy. It separately reserves the maximum active native
+snapshot, private/staging and MinIO write transients; per-operation staging is
+not multiplied across already quiescent repeats. The report records every
+term. This lifetime calculation changes no configured ceiling, inspection
+reservation or physical free-space guard. The verifier starts after the managed
+worker exits; arbitrary concurrent campaigns are outside this bound.
+The default `retained-local` provider and its command remain compatible.
+`--process-timeout-seconds` keeps the historical 300-second default and accepts
+an explicit integer from 1 to 900 for each supervised worker and verifier. The
+maximum canonical pilot requests 600 seconds explicitly; it does not retry or
+extend deadlines automatically. This validation timer changes no production
+admission wait, service CPU limit, memory reservation or scratch protection.
+
+The reviewed v2 profile identity is
+`4b0250600bc740007d4dcb0bf674fb05ec8ff9462c8713af6d77efe4c6d3e1dd`.
+Its closure includes 69 source/declaration/schema files, 37 package versions,
+seven compiled extensions, actual verified payload trees for 13 SDK/validator/
+Redis distributions, and ten standard-library transport/JSON source files.
+Actual package bytes, tree membership and wheel RECORD hashes/sizes must agree;
+version strings or RECORD metadata alone do not establish payload identity.
 
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh
@@ -392,8 +451,10 @@ verification, but do not establish protected-delta or photographic acceptance.
 
 ### Reviewed pilot observations
 
-The frozen supported profile identity is
-`005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+The historical retained-inventory `tp.photo.native_sdr_local.v1` profile identity
+was `005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+It is preserved foundation evidence; it cannot authorize the current expanded
+source/runtime/provider contract.
 On its supported Darwin arm64/CPython runtime and retained-inventory providers,
 three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
 30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
@@ -420,7 +481,7 @@ the deployed outer transport remained blocked. A distinct uncached crop verified
 a fresh source read at that transport barrier. This is not an exclusive phase
 measurement or a worst-case overlap measurement of two live raster computations.
 Reports, source snapshots and products remain private, outside Git and finalized delivery;
-these observations do not enable production flags or qualify canonical generations.
+these historical observations do not enable production flags or qualify canonical generations.
 
 ## Paged catalogue and review navigation
 

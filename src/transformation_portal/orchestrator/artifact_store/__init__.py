@@ -38,6 +38,7 @@ _PREFIX_ENV = "TP_ARTIFACT_PREFIX"
 _ENDPOINT_ENV = "TP_ARTIFACT_ENDPOINT_URL"
 _REGION_ENV = "TP_ARTIFACT_REGION"
 _LOCAL_ROOT_ENV = "TP_ARTIFACT_LOCAL_ROOT"
+_PHOTO_S3_PUBLICATION_ROOT_ENV = "TP_PHOTO_REVIEW_S3_PUBLICATION_ROOT"
 
 _store: Optional[ArtifactStore] = None
 
@@ -70,11 +71,13 @@ def get_artifact_store() -> ArtifactStore:
         prefix = os.getenv(_PREFIX_ENV, "").strip() or "tp/artifacts"
         endpoint_url = os.getenv(_ENDPOINT_ENV, "").strip() or None
         region_name = os.getenv(_REGION_ENV, "").strip() or None
+        publication_root = os.getenv(_PHOTO_S3_PUBLICATION_ROOT_ENV, "").strip()
         _store = S3ArtifactStore(
             bucket=bucket,
             prefix=prefix,
             endpoint_url=endpoint_url,
             region_name=region_name,
+            photographic_publication_root=Path(publication_root).expanduser() if publication_root else None,
         )
         return _store
 

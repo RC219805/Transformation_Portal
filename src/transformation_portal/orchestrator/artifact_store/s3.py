@@ -40,9 +40,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
+import math
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, List, Optional
+from urllib.parse import urlsplit
 
+from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactNotFoundError,
     ArtifactObjectMetadata,
@@ -84,6 +88,156 @@ def _load_boto3() -> Any:
     return boto3
 
 
+def _native_loopback_endpoint(value: Any) -> str | None:
+    """Recognize the closed local-MinIO pilot endpoint without DNS/network I/O."""
+    if type(value) is not str or len(value) > 512 or any(ord(char) <= 32 or ord(char) == 127 for char in value):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or parsed.hostname is None
+            or parsed.port is None
+            or parsed.port == 0
+        ):
+            return None
+        if not ipaddress.ip_address(parsed.hostname).is_loopback:
+            return None
+        return value.rstrip("/")
+    except ValueError:
+        return None
+
+
+def _native_config_digest(config: Any) -> str | None:
+    """Bind finite SDK options, including in-place mutation of unused defaults."""
+    from botocore.config import Config
+
+    def scalar(value: Any) -> bool:
+        if value is None or type(value) is bool:
+            return True
+        if type(value) is str:
+            return len(value) <= 1024
+        return type(value) in {int, float} and math.isfinite(value) and 0 <= value <= 2**31
+
+    def option(value: Any) -> bool:
+        return scalar(value) or (
+            type(value) is dict
+            and len(value) <= 16
+            and all(type(key) is str and len(key) <= 64 and scalar(item) for key, item in value.items())
+        )
+
+    if type(config) is not Config or len(Config.OPTION_DEFAULTS) > 64:
+        return None
+    provided = config._user_provided_options
+    if type(provided) is not dict or set(provided) - set(Config.OPTION_DEFAULTS):
+        return None
+    values = {name: getattr(config, name) for name in Config.OPTION_DEFAULTS}
+    if not all(option(value) for value in (*values.values(), *provided.values())):
+        return None
+    encoded = dumps_json({"effective": values, "provided": provided}, sort_keys=True, allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _native_client_settings(client: Any) -> dict[str, Any] | None:
+    """Read only the finite SDK path measured by the local-MinIO pilot.
+
+    This is eligibility, not S3 configuration. Other clients retain their
+    ordinary behavior and use the conservative photographic resource profile.
+    """
+    from botocore.client import BaseClient
+    from botocore.compat import HAS_CRT
+    from botocore.httpsession import URLLib3Session
+
+    if (
+        not isinstance(client, BaseClient)
+        or type(client).__module__ != "botocore.client"
+        or type(client).__name__ != "S3"
+        or client.meta.service_model.service_name != "s3"
+        or HAS_CRT
+    ):
+        return None
+    config, endpoint = client.meta.config, client._endpoint
+    config_digest = _native_config_digest(config)
+    session = endpoint.http_session
+    url = _native_loopback_endpoint(client.meta.endpoint_url)
+    if (
+        url is None
+        or config_digest is None
+        or _native_loopback_endpoint(endpoint.host) != url
+        or type(session) is not URLLib3Session
+        or type(config.region_name) is not str
+        or not 1 <= len(config.region_name) <= 64
+    ):
+        return None
+    if session._proxy_config.proxy_url_for(url) is not None or config.proxies or config.proxies_config:
+        return None
+    timeouts = (config.connect_timeout, config.read_timeout)
+    if any(type(value) not in {int, float} or not math.isfinite(value) or not 0 < value <= 60 for value in timeouts):
+        return None
+    pool = config.max_pool_connections
+    if type(pool) is not int or not 1 <= pool <= 10 or session._max_pool_connections != pool:
+        return None
+    if session._timeout.connect_timeout != timeouts[0] or session._timeout.read_timeout != timeouts[1]:
+        return None
+    retries = config.retries
+    if type(retries) is not dict or set(retries) - {"mode", "total_max_attempts"}:
+        return None
+    mode = retries.get("mode")
+    if mode not in {"legacy", "standard"}:
+        return None
+    # The pinned SDK's legacy S3 model inherits five attempts; standard uses
+    # three. Explicit Config limits have already been normalized by botocore.
+    attempts = retries.get("total_max_attempts", 5 if mode == "legacy" else 3)
+    if type(attempts) is not int or not 1 <= attempts <= 10:
+        return None
+    s3 = config.s3
+    if s3 is not None and (
+        type(s3) is not dict
+        or set(s3) - {"addressing_style", "payload_signing_enabled"}
+        or s3.get("addressing_style", "auto") not in {"auto", "path"}
+        or type(s3.get("payload_signing_enabled", False)) is not bool
+    ):
+        return None
+    if (
+        config.signature_version != "s3v4"
+        or config.parameter_validation is not True
+        or config.client_cert is not None
+        or config.use_dualstack_endpoint not in {None, False}
+        or config.use_fips_endpoint not in {None, False}
+        or config.endpoint_discovery_enabled not in {None, False}
+        or config.client_context_params
+        or config.sigv4a_signing_region_set is not None
+        or config.auth_scheme_preference is not None
+        or config.request_checksum_calculation not in {"when_supported", "when_required"}
+        or config.response_checksum_validation not in {"when_supported", "when_required"}
+        or (config.tcp_keepalive is not None and type(config.tcp_keepalive) is not bool)
+    ):
+        return None
+    return {
+        "endpoint": url,
+        "region": config.region_name,
+        "client_id": id(client),
+        "config_id": id(config),
+        "config_sha256": config_digest,
+        "session_id": id(session),
+        "pool_manager_id": id(session._manager),
+        "connect_timeout": timeouts[0],
+        "read_timeout": timeouts[1],
+        "max_pool_connections": pool,
+        "retry_mode": mode,
+        "total_max_attempts": attempts,
+        "s3": dict(s3) if s3 is not None else None,
+        "request_checksum_calculation": config.request_checksum_calculation,
+        "response_checksum_validation": config.response_checksum_validation,
+        "tcp_keepalive": config.tcp_keepalive,
+    }
+
+
 class S3ArtifactStore(ArtifactStore):
     """S3 implementation of ``ArtifactStore``.
 
@@ -100,6 +254,7 @@ class S3ArtifactStore(ArtifactStore):
         endpoint_url: Optional[str] = None,
         region_name: Optional[str] = None,
         client: Optional[Any] = None,
+        photographic_publication_root: Optional[Path] = None,
     ) -> None:
         if not bucket:
             raise ArtifactStoreError("S3ArtifactStore requires a non-empty bucket (TP_ARTIFACT_BUCKET).")
@@ -109,6 +264,18 @@ class S3ArtifactStore(ArtifactStore):
         self._region_name = region_name or None
         self._client = client
         self._lock = asyncio.Lock()
+        self._native_publication_root: Path | None = None
+        self._native_publication_stat: tuple[int, int] | None = None
+        if isinstance(photographic_publication_root, Path) and photographic_publication_root.is_absolute():
+            try:
+                if not photographic_publication_root.is_symlink():
+                    root = photographic_publication_root.resolve(strict=True)
+                    if root.is_dir():
+                        info = root.stat()
+                        self._native_publication_root = root
+                        self._native_publication_stat = info.st_dev, info.st_ino
+            except (OSError, ValueError):
+                pass
 
     @property
     def backend(self) -> str:
@@ -121,6 +288,61 @@ class S3ArtifactStore(ArtifactStore):
     @property
     def key_prefix(self) -> str:
         return self._prefix
+
+    @property
+    def native_publication_root(self) -> Path | None:
+        """Operator-mapped MinIO host capacity root, never a remote S3 claim.
+
+        The private qualification campaign must independently verify the actual
+        container bind/endpoint mapping. Merely configuring this path does not
+        establish that physical mapping, and no directory is created here.
+        """
+        root = self._native_publication_root
+        if root is None:
+            return None
+        try:
+            info = root.stat()
+            if root.resolve() == root and root.is_dir() and (info.st_dev, info.st_ino) == self._native_publication_stat:
+                return root
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def native_resource_identity(self) -> dict[str, Any] | None:
+        """Return a private closed identity only for the bounded local pilot.
+
+        No client is initialized and no network/credential discovery executes.
+        Unsupported configuration simply retains conservative admission.
+        """
+        root = self.native_publication_root
+        root_identity = self._native_publication_stat
+        if root is None or root_identity is None or self._client is None:
+            return None
+        if (
+            type(self._bucket) is not str
+            or not 1 <= len(self._bucket) <= 255
+            or len(self._prefix) > 1024
+            or len(str(root)) > 4096
+        ):
+            return None
+        try:
+            settings = _native_client_settings(self._client)
+            configured = _native_loopback_endpoint(self._endpoint_url)
+            if settings is None or configured is None or configured != settings["endpoint"]:
+                return None
+            if self._region_name is not None and self._region_name != settings["region"]:
+                return None
+            return {
+                "schema": "tp.photo.s3_resource_identity.v1",
+                "bucket": self._bucket,
+                "prefix": self._prefix,
+                "root": str(root),
+                "device": root_identity[0],
+                "inode": root_identity[1],
+                "client": settings,
+            }
+        except (AttributeError, ImportError, OSError, TypeError, ValueError):
+            return None
 
     async def _get_client(self) -> Any:
         if self._client is not None:
