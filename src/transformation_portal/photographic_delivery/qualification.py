@@ -15,6 +15,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -191,9 +192,21 @@ def _scratch_usage(root: Path) -> dict[str, int]:
     return {"logical_bytes": logical, "allocated_bytes": allocated, "accounted_bytes": max(logical, allocated)}
 
 
-def _write_json(path: Path, value: Any) -> None:
-    with path.open("xb") as stream:
-        stream.write(_canonical(value))
+def _write_json(path: Path, value: Any, *, replace_owned_report: bool = False) -> None:
+    raw = _canonical(value)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if replace_owned_report:
+            os.replace(temporary, path)
+        else:
+            os.link(temporary, path)  # Preserve exclusive creation for all new records.
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _copy_source(source: Path, destination: Path, bound: dict[str, Any]) -> None:
@@ -398,19 +411,29 @@ def _run_trial(
         finally:
             drain_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
             try:
-                if process.poll() is None:
+                # The leader may already have exited while its owned group survives.
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                deadline = time.monotonic() + 3
+                while True:
                     try:
-                        os.killpg(process.pid, signal.SIGTERM)
+                        os.killpg(process.pid, 0)
                     except ProcessLookupError:
-                        pass
-                    try:
-                        process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        try:
-                            os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        process.wait()
+                        break
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("Owned qualification process group did not disappear after SIGKILL")
+                    time.sleep(0.01)
             finally:
                 signal.pthread_sigmask(signal.SIG_SETMASK, drain_mask)
     result = _read_json(root / "result.json", 256 * 1024)
@@ -592,7 +615,14 @@ def qualify(
                 if not isinstance(error, (OSError, ValueError)):
                     raise
             finally:
-                _write_json(output / "qualification.json", report)
+                try:
+                    _write_json(output / "qualification.json", report)
+                except (SystemExit, KeyboardInterrupt) as error:
+                    report["status"] = "failed"
+                    report["report_publication_error"] = {"type": type(error).__name__, "message": str(error)}
+                    # This path belongs exclusively to the newly created qualification namespace.
+                    _write_json(output / "qualification.json", report, replace_owned_report=True)
+                    raise
     if not report["source_unchanged"]:
         raise ValueError("Retained source changed during qualification")
     return report

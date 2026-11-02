@@ -168,7 +168,10 @@ geometry-derived scratch including all retained trials, inspection reservations,
 and physical free-space/headroom checks. The supervisor samples process RSS and
 scratch every 50 ms and drains its owned worker on cancellation or a bound
 violation. SIGINT/SIGTERM drain the owned worker, including repeated cancellation;
-prior signal handlers are restored afterward. Run the command in the main thread.
+prior signal handlers are restored afterward. Surviving owned process groups are
+escalated independently of leader exit; unexpected descendants fail the run.
+Report publication is atomic, and interrupted publication records failure before
+propagating cancellation. Run the command in the main thread.
 These checks are process-local supervision, not OS-enforced limits or
 multiprocess admission. The host must permit psutil to inspect its own worker;
 a denied process inspection is an environment failure and stops the worker.

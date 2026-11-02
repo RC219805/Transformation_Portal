@@ -307,12 +307,14 @@ def test_failure_drains_only_the_owned_worker(tmp_path, monkeypatch, failure):
         return Process()
 
     def kill(pid, event):
+        if event == 0:
+            raise ProcessLookupError()
         state.killed.append((pid, event))
         state.returncode = -event
 
-    clock = iter([0, 1000 if failure == "timeout" else 0])
+    clock = iter([0])
     monkeypatch.setattr(q.subprocess, "Popen", launch)
-    monkeypatch.setattr(q.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(q.time, "monotonic", lambda: next(clock, 1000 if failure == "timeout" else 0))
     monkeypatch.setattr(q.os, "killpg", kill)
 
     def observe(pid):
@@ -343,7 +345,7 @@ def test_failure_drains_only_the_owned_worker(tmp_path, monkeypatch, failure):
     }[failure]
     with pytest.raises(expected):
         q._run_trial(tmp_path / "trial", {}, q.QualificationLimits(), q.GIB, q.GIB, 1, 1)
-    assert state.killed == [(424242, signal.SIGTERM)] and state.waited
+    assert state.killed == [(424242, signal.SIGTERM), (424242, signal.SIGKILL)] and state.waited
 
 
 def test_runtime_identity_binds_delegated_color_implementations(tmp_path, monkeypatch):
@@ -486,3 +488,114 @@ def test_runtime_identity_does_not_launch_external_platform_helpers(monkeypatch)
     monkeypatch.setattr(q.platform, "_uname_cache", None)
     identity = q._runtime_identity()
     assert identity["platform"]["system"] in {"Darwin", "Linux"}
+
+
+@pytest.mark.parametrize("phase", ["serialization", "after_publication"])
+def test_signal_during_report_publication_leaves_atomic_failed_record(case, monkeypatch, phase):
+    monkeypatch.setattr(
+        q, "_run_trial", lambda *args, **kwargs: {"incremental_peak_rss_bytes": 1, "normalized_pixel_sha256": "a" * 64}
+    )
+    if phase == "serialization":
+        original = q._canonical
+
+        def serialize(value):
+            if value.get("schema") == q.SCHEMA and value["status"] == "measured":
+                os.kill(os.getpid(), signal.SIGTERM)
+            return original(value)
+
+        monkeypatch.setattr(q, "_canonical", serialize)
+    else:
+        original_write = q._write_json
+
+        def write(path, value, **kwargs):
+            original_write(path, value, **kwargs)
+            if path.name == "qualification.json" and value["status"] == "measured":
+                os.kill(os.getpid(), signal.SIGTERM)
+
+        monkeypatch.setattr(q, "_write_json", write)
+    with pytest.raises(SystemExit):
+        q.qualify(case.source, case.digest, case.recipe, case.output, repeats=1)
+    report = q._read_json(case.output / "qualification.json", 256 * 1024)
+    assert report["status"] == "failed" and report["source_unchanged"]
+    assert report["report_publication_error"]["type"] == "SystemExit"
+    assert not list(case.output.glob(".qualification.json.*"))
+
+
+def test_atomic_json_never_replaces_existing_unowned_record(tmp_path):
+    record = tmp_path / "retained.json"
+    record.write_bytes(b"preserve")
+    with pytest.raises(FileExistsError):
+        q._write_json(record, {"new": "record"})
+    assert record.read_bytes() == b"preserve"
+    assert not list(tmp_path.glob(".retained.json.*"))
+
+
+@pytest.mark.parametrize("leader_exits", [False, True])
+def test_unexpected_descendant_is_drained_after_its_leader_exits(case, tmp_path, leader_exits):
+    psutil = pytest.importorskip("psutil")
+    ready = tmp_path / "descendant.pid"
+    child_code = (
+        "import os,signal,time; from pathlib import Path; "
+        "signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+        f"Path({str(ready)!r}).write_text(str(os.getpid())); time.sleep(60)"
+    )
+    leader = tmp_path / "leader.py"
+    leader.write_text(
+        "import os,subprocess,sys,time\nfrom pathlib import Path\n"
+        f"child = subprocess.Popen([sys.executable,'-c',{child_code!r}])\n"
+        f"while not Path({str(ready)!r}).exists(): time.sleep(.01)\n"
+        + ("os._exit(0)\n" if leader_exits else "time.sleep(60)\n")
+    )
+    script = tmp_path / "descendant_supervisor.py"
+    script.write_text(
+        "from pathlib import Path\nfrom types import SimpleNamespace\nimport time,psutil\n"
+        "from transformation_portal.photographic_delivery import qualification as q\n"
+        "launch = q.subprocess.Popen\n"
+        "def worker(*args, **kwargs):\n"
+        "    if args[0][1:3] != ['-m',q._MODULES[0]]: return launch(*args, **kwargs)\n"
+        f"    return launch([q.sys.executable,{str(leader)!r}], **kwargs)\n"
+        "actual_process = psutil.Process\n"
+        "def observe(pid):\n"
+        "    owned = actual_process(pid)\n"
+        "    def children(**kwargs):\n"
+        "        deadline=time.monotonic()+10\n"
+        f"        while not Path({str(ready)!r}).exists():\n"
+        "            if time.monotonic()>deadline: raise RuntimeError('Descendant barrier failed')\n"
+        "            time.sleep(.01)\n"
+        f"        return [actual_process(int(Path({str(ready)!r}).read_text()))]\n"
+        "    return SimpleNamespace(memory_info=owned.memory_info, children=children)\n"
+        "psutil.Process=observe\nq.subprocess.Popen=worker\n"
+        "psutil.virtual_memory=lambda:SimpleNamespace(available=64*q.GIB)\n"
+        f"q.qualify(Path({str(case.source)!r}),{case.digest!r},{case.recipe!r},Path({str(case.output)!r}),repeats=1)\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(Path(q.__file__).resolve().parents[2])}
+    process = q.subprocess.Popen(
+        [q.sys.executable, str(script)],
+        env=environment,
+        stdout=q.subprocess.PIPE,
+        stderr=q.subprocess.PIPE,
+        start_new_session=True,
+    )
+    child_pid = None
+    try:
+        stdout, stderr = process.communicate(timeout=20)
+        assert process.returncode != 0, stdout.decode()
+        assert ready.exists(), stderr.decode()
+        child_pid = int(ready.read_text())
+        try:
+            assert psutil.Process(child_pid).status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}
+        except psutil.NoSuchProcess:
+            pass
+        report = q._read_json(case.output / "qualification.json", 256 * 1024)
+        assert report["status"] == "failed" and report["source_unchanged"]
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        if ready.exists() and child_pid is None:
+            child_pid = int(ready.read_text())
+        if child_pid is not None:
+            try:
+                psutil.Process(child_pid).kill()
+            except psutil.NoSuchProcess:
+                pass
