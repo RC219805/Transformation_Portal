@@ -63,6 +63,7 @@ def test_real_worker_verifies_rgba_products_without_managed_or_human_approval(ca
     before = dict(os.environ)
     handlers = {event: signal.getsignal(event) for event in (signal.SIGINT, signal.SIGTERM)}
     report = q.qualify(case.source, case.digest, case.recipe, case.output, repeats=1)
+    assert report["schema"] == "tp.photo.materials_cpu_qualification.v1"
     assert report["status"] == "measured" and report["source_unchanged"]
     assert report["analytical_reservation_covers_measured_margin"]
     assert report["managed_profile"]["memory_eligible"]
@@ -77,6 +78,16 @@ def test_real_worker_verifies_rgba_products_without_managed_or_human_approval(ca
     trial = report["trials"][0]
     assert trial["zero_effect"] and trial["maximum_16bit_code_delta"] <= 1
     assert trial["observed_peak_rss_bytes"] > 0
+    checkpoints = trial["rss_high_water_checkpoints"]
+    assert checkpoints["semantics"] == "cumulative_process_high_water_not_phase_exclusive"
+    assert checkpoints["scope"] == "offline_worker_not_managed_pipeline"
+    assert (
+        0
+        < checkpoints["operation_return_bytes"]
+        <= checkpoints["independent_verification_complete_bytes"]
+        <= trial["peak_rss_bytes"]
+        <= trial["observed_peak_rss_bytes"]
+    )
     assert trial["sampled_peak_accounted_bytes"] >= trial["sampled_peak_allocated_bytes"] > 0
     assert {entry["filename"] for entry in trial["products"]} == {
         "master.tif",
@@ -87,6 +98,68 @@ def test_real_worker_verifies_rgba_products_without_managed_or_human_approval(ca
     }
     np.testing.assert_array_equal(tifffile.imread(case.output / "trial-1/master.tif"), expected)
     assert not (case.output / "trial-1/source.snapshot.tif").exists()
+
+
+def test_worker_rss_checkpoints_preserve_cumulative_phase_order_and_total_metrics(case, monkeypatch):
+    import resource
+
+    from transformation_portal.lux_depth_v4 import photography
+    from transformation_portal.photographic_delivery import materials
+
+    case.output.mkdir()
+    specification = case.output / "specification.json"
+    q._write_json(
+        specification,
+        {
+            "source": str(case.source),
+            "bound": q._source(case.source, case.digest),
+            "recipe": case.recipe,
+            "runtime": q._runtime_identity(),
+        },
+    )
+    # Sampling has cumulative semantics, including source preparation and imports.
+    # Exclusive phase allocation or managed-pipeline reservations cannot be inferred.
+    samples = iter([10, 20, 30, 40])
+    events = []
+
+    def observe(usage):
+        assert usage == resource.RUSAGE_SELF
+        sample = next(samples)
+        events.append(f"rss:{sample}")
+        return SimpleNamespace(ru_maxrss=sample)
+
+    create_revision = materials.create_materials_revision
+    decode_master = photography.decode_master
+
+    def create(*args, **kwargs):
+        result = create_revision(*args, **kwargs)
+        events.append("operation_return")
+        return result
+
+    def decode(*args, **kwargs):
+        result = decode_master(*args, **kwargs)
+        if kwargs.get("source_name") == "master.tif":
+            events.append("independent_reopen")
+        return result
+
+    monkeypatch.setattr(resource, "getrusage", observe)
+    monkeypatch.setattr(materials, "create_materials_revision", create)
+    monkeypatch.setattr(photography, "decode_master", decode)
+    q._worker(specification)
+    result = q._read_json(case.output / "result.json", 256 * 1024)
+    multiplier = 1 if q.sys.platform == "darwin" else 1024
+    assert events == ["rss:10", "operation_return", "rss:20", "independent_reopen", "rss:30", "rss:40"]
+    assert result["rss_high_water_checkpoints"] == {
+        "semantics": "cumulative_process_high_water_not_phase_exclusive",
+        "scope": "offline_worker_not_managed_pipeline",
+        "operation_return_bytes": 20 * multiplier,
+        "independent_verification_complete_bytes": 30 * multiplier,
+    }
+    assert result["baseline_rss_bytes"] == 10 * multiplier
+    assert result["peak_rss_bytes"] == 40 * multiplier
+    assert result["incremental_peak_rss_bytes"] == 30 * multiplier
+    assert result["zero_effect"] and result["maximum_16bit_code_delta"] <= 1
+    assert len(result["products"]) == 5
 
 
 @pytest.mark.parametrize("limit", ["memory", "offline"])

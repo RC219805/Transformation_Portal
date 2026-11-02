@@ -28,6 +28,7 @@ MATERIALS_REVISION_SCHEMA = "tp.photo.materials_revision.v1"
 MAX_MATERIAL_REGIONS = 4
 MAX_MATERIALS_DESCRIPTOR_BYTES = 256 * 1024
 MAX_MATERIALS_OVERLAY_BYTES = MAX_PREVIEW_BYTES
+_TIFF_TILE_PIXELS = 256 * 256
 _OPERATIONS = MappingProxyType({operation.label: operation.operation_id for operation in ResponsePolicy().operations})
 MATERIAL_LABELS = frozenset(_OPERATIONS)
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
@@ -191,11 +192,22 @@ def _tiff(master: ImageMaster) -> bytes:
     import tifffile
 
     # Reject extended samples rather than silently clipping a response to fit SDR.
-    if not np.isfinite(master.pixels).all() or np.any((master.pixels < 0) | (master.pixels > 1)):
-        raise ValueError("Native SDR Materials result must remain within unit linear RGB")
-    samples = np.rint(linear_to_srgb(master.pixels) * 65535).astype(np.uint16)
-    if master.alpha is not None:
-        samples = np.concatenate([samples, np.rint(master.alpha * 65535).astype(np.uint16)[..., None]], axis=2)
+    # Immutable masters are C-contiguous, so these views need no full-frame copy.
+    # Flat spans also bound scratch for very wide or short native photographs.
+    pixels = master.pixels.reshape(-1, 3)
+    for start in range(0, len(pixels), _TIFF_TILE_PIXELS):
+        tile = pixels[start : start + _TIFF_TILE_PIXELS]
+        if not np.isfinite(tile).all() or np.any((tile < 0) | (tile > 1)):
+            raise ValueError("Native SDR Materials result must remain within unit linear RGB")
+    channels = 4 if master.alpha is not None else 3
+    samples = np.empty((*master.shape, channels), dtype=np.uint16)
+    destination = samples.reshape(-1, channels)
+    alpha = master.alpha.reshape(-1) if master.alpha is not None else None
+    for start in range(0, len(pixels), _TIFF_TILE_PIXELS):
+        stop = start + _TIFF_TILE_PIXELS
+        destination[start:stop, :3] = np.rint(linear_to_srgb(pixels[start:stop]) * 65535).astype(np.uint16)
+        if alpha is not None:
+            destination[start:stop, 3] = np.rint(alpha[start:stop] * 65535).astype(np.uint16)
     buffer = io.BytesIO()
     tifffile.imwrite(
         buffer,
@@ -262,7 +274,15 @@ def create_materials_revision(image: DeliveryImage, recipe: MaterialsRecipe) -> 
     policy = materials_policy(recipe)
     plan = plan_response(master, evidence, policy)
     adjusted, execution = apply_response(master, evidence, plan)
+    shape = master.shape
+    source_bit_depth = master.source_bit_depth
+    alpha_mode = "straight" if master.alpha is not None else None
+    input_content_sha = master.content_hash()
+    execution_content_sha = input_content_sha if adjusted is master else adjusted.content_hash()
     source_bytes = _tiff(adjusted)
+    # The prepared plan and evidence retain hashes/masks, never master objects.
+    # Keep only exact scalar authority before allocating the reopened master.
+    del master, adjusted
     # Container quantization and new source metadata have their own exact identity.
     retained = decode_master(source_bytes, source_name="master.tif", input_color="auto")
     preview, preview_receipt = encode_preview(retained, relative_path="materials-preview.png")
@@ -270,6 +290,10 @@ def create_materials_revision(image: DeliveryImage, recipe: MaterialsRecipe) -> 
     overlay = _overlay(retained, evidence)
     render_recipe = image.presentation.recipe if image.presentation is not None else RenderRecipe(mode="clip_srgb")
     content_sha = retained.content_hash()
+    del retained
+    evidence_payload = evidence.to_payload()
+    evidence_sha = evidence.content_hash()
+    del evidence
     preview_render = {
         "schema": "tp.photo.presentation_render.v1",
         "recipe": render_recipe.to_payload(),
@@ -284,13 +308,13 @@ def create_materials_revision(image: DeliveryImage, recipe: MaterialsRecipe) -> 
         "approval_authority": False,
         "recipe_sha256": sha256(canonical_bytes(recipe.to_payload())),
         "source_identity_sha256": image.source_identity_sha256,
-        "input_master_content_sha256": master.content_hash(),
+        "input_master_content_sha256": input_content_sha,
         "revision_sha256": sha256(source_bytes),
-        "execution_output_master_content_sha256": adjusted.content_hash(),
+        "execution_output_master_content_sha256": execution_content_sha,
         "output_master_content_sha256": content_sha,
-        "evidence_sha256": evidence.content_hash(),
+        "evidence_sha256": evidence_sha,
         "operations_sha256": operation_contract_hash(),
-        "native_shape": list(master.shape),
+        "native_shape": list(shape),
         "preview": {
             **preview_receipt,
             "filename": "materials-preview.png",
@@ -302,7 +326,7 @@ def create_materials_revision(image: DeliveryImage, recipe: MaterialsRecipe) -> 
             "filename": "materials-overlay.png",
             "sha256": sha256(overlay),
             "size_bytes": len(overlay),
-            "shape": list(preview_shape(master.shape)),
+            "shape": list(preview_shape(shape)),
             "meaning": "human_rectangles_positive_overlap_red",
             "resampling": "area_average_native_mask",
             "source_coordinates": "orientation_normalized_native",
@@ -321,20 +345,20 @@ def create_materials_revision(image: DeliveryImage, recipe: MaterialsRecipe) -> 
         "revision_sha256": sha256(source_bytes),
         "recipe": recipe.to_payload(),
         "recipe_sha256": sha256(canonical_bytes(recipe.to_payload())),
-        "source_bit_depth": master.source_bit_depth,
+        "source_bit_depth": source_bit_depth,
         "output_bit_depth": 16,
         "working_color": "linear_srgb",
         "output_color": "display_encoded_srgb",
         "precision_recovery": False,
-        "width": master.shape[1],
-        "height": master.shape[0],
-        "alpha_mode": "straight" if master.alpha is not None else None,
+        "width": shape[1],
+        "height": shape[0],
+        "alpha_mode": alpha_mode,
         "alpha_preserved": True,
-        "input_master_content_sha256": master.content_hash(),
-        "execution_output_master_content_sha256": adjusted.content_hash(),
+        "input_master_content_sha256": input_content_sha,
+        "execution_output_master_content_sha256": execution_content_sha,
         "output_master_content_sha256": content_sha,
-        "evidence": evidence.to_payload(),
-        "evidence_sha256": evidence.content_hash(),
+        "evidence": evidence_payload,
+        "evidence_sha256": evidence_sha,
         "policy": policy.to_payload(),
         "policy_sha256": sha256(canonical_bytes(policy.to_payload())),
         "operations_sha256": operation_contract_hash(),

@@ -196,6 +196,60 @@ an invalid input, runtime, verification or worker failure. Retain failed private
 namespaces for diagnosis; the command deletes only its successful trial's own
 verified temporary source snapshot.
 
+## Native allocation boundaries
+
+Native TIFF16 transfer validates the complete SDR master in bounded spans before
+allocating its final native-resolution uint16 destination. Transfer and rounding
+use the same pointwise float32 operations, with at most 65,536 pixels per span;
+very wide or short images do not create full-width scratch. RGB and straight
+alpha write directly into their final channels. TIFF metadata, ICC, orientation,
+encoded bytes, receipts and diagnostic semantics are preserved. This changes
+allocation lifetime, not resolution, grading, processing stage or approval.
+
+The native revision helper freezes input/execution content hashes and scalar
+metadata, then releases input and adjusted masters after TIFF encoding and before
+reopening that TIFF for verified diagnostics. Zero-effect execution can alias its
+input, so the released storage is one master; changed execution can hold two.
+The reopened master and masks are released after their final verified use.
+
+Let `P` be native pixels, `R` explicit region count and `A` equal one for alpha:
+
+| Phase or retained object | Array-visible storage / ownership |
+| --- | --- |
+| Immutable master | `12P + 4AP` bytes; source and changed result can be distinct |
+| Immutable masks | `4RP` bytes, plus temporary construction/hash copies |
+| Compositor execution | Source, masks, mutable RGB output and bounded tile scratch; freezing a changed result adds an immutable master |
+| TIFF transfer | Final `6P + 2AP` uint16 samples plus bounded transfer/quantization spans; encoded TIFF bytes remain separate |
+| Output reopening | Encoded output, masks, decoder temporaries and reopened master; the managed `DeliveryImage` still owns its encoded input snapshot, while original/adjusted masters are no longer retained |
+| Managed source loading | Private source file and verified immutable encoded snapshot, including transient chunk/join costs |
+| Managed publication | Returned TIFF/diagnostic bytes remain owned across private-file writes, staged publication and streamed integrity checks |
+| CAS and response | Large result buffers are dropped before mutation; receipt, bounded preview data URL, inventory and projection still remain |
+
+These rows describe simultaneous ownership, not a summed process RSS limit.
+Native source snapshotting, decoded-image/ICC intermediates, masks and hashes,
+preview/overlay arrays, renderer scratch, publication/provider buffers, state and
+response serialization still require complete managed qualification. Publication
+also reserves geometry-derived private/staging/store copies on each filesystem.
+Lease ownership must persist through worker and I/O quiescence, failure and
+cancellation; releasing arrays early does not grant another operation that lease.
+
+The CPU report adds `rss_high_water_checkpoints` after native revision helper
+return and after independent reopened-output verification. The helper includes
+decode, planning/execution, TIFF encoding/reopening, previews/overlays and receipt
+validation. Both checkpoints are **cumulative process high-water
+marks**, including earlier imports/snapshotting/work. Their difference is not a
+phase-exclusive allocation or managed operation cost. Existing complete-worker
+peak, incremental peak, resource guards and measured-margin decisions remain
+unchanged. Historical reports without these optional checkpoints remain usable.
+
+The production native admission formula, historical measured floor, inspection
+reserve and all configured limits remain unchanged. The retained 30 MP four-region
+profile still reserves about 10.35 GiB against an effective default 6 GiB bulk
+allowance and remains ineligible. Neither tiled transfer nor an offline measured
+peak authorizes a lower profile, larger budget or live feature enablement. A later
+profile change needs the complete managed analytical bound, incremental peak plus
+50%, concurrent reserved inspection and publication/cancellation evidence.
+
 ## Paged catalogue and review navigation
 
 The additive `tp.photo.scene_page.v1` catalogue supports up to 64 scenes. Use
