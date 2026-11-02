@@ -344,8 +344,6 @@ def test_canonical_product_bound_uses_actual_overlay_and_descriptor_caps(monkeyp
 
 @pytest.mark.parametrize("low_root", [None, "workspace", "publication"])
 def test_canonical_headroom_checks_both_filesystems_at_unchanged_reserve_and_floor(tmp_path, monkeypatch, low_root):
-    import psutil
-
     from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig
 
     sources = _unequal_scratch_sources()
@@ -365,7 +363,9 @@ def test_canonical_headroom_checks_both_filesystems_at_unchanged_reserve_and_flo
         return SimpleNamespace(free=total + reserve - int(low))
 
     monkeypatch.setattr(managed.shutil, "disk_usage", usage)
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(available=100 * managed.offline.GIB))
+    monkeypatch.setitem(
+        sys.modules, "psutil", SimpleNamespace(virtual_memory=lambda: SimpleNamespace(available=100 * managed.offline.GIB))
+    )
     scratch, reasons = managed._headroom(sources, 3, tmp_path, authority, publication)
     assert scratch == total and reasons == ([] if low_root is None else ["physical_scratch_headroom"])
     assert tmp_path in observed
@@ -374,8 +374,6 @@ def test_canonical_headroom_checks_both_filesystems_at_unchanged_reserve_and_flo
 
 
 def test_retained_local_campaign_formula_is_exactly_unchanged(tmp_path, monkeypatch):
-    import psutil
-
     from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
 
     sources = _unequal_scratch_sources()
@@ -385,7 +383,9 @@ def test_retained_local_campaign_formula_is_exactly_unchanged(tmp_path, monkeypa
         for row in sources
     )
     monkeypatch.setattr(managed.shutil, "disk_usage", lambda _path: SimpleNamespace(free=100 * managed.offline.GIB))
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(available=100 * managed.offline.GIB))
+    monkeypatch.setitem(
+        sys.modules, "psutil", SimpleNamespace(virtual_memory=lambda: SimpleNamespace(available=100 * managed.offline.GIB))
+    )
     assert managed._headroom(sources, 3, tmp_path) == (expected, [])
 
 
