@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import signal
+import time
+from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,13 +20,13 @@ from transformation_portal.photographic_delivery import qualification as q
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture
-def case(tmp_path, monkeypatch):
+@pytest.fixture(name="case")
+def qualification_case(tmp_path, monkeypatch):
     psutil = pytest.importorskip("psutil")
     from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig
 
-    for name in ReviewAdmissionConfig.__dataclass_fields__:
-        monkeypatch.delenv("TP_PHOTO_REVIEW_" + name.upper(), raising=False)
+    for descriptor in fields(ReviewAdmissionConfig):
+        monkeypatch.delenv("TP_PHOTO_REVIEW_" + descriptor.name.upper(), raising=False)
     # Synthetic headroom only: the tiny real subprocess does not qualify a host.
     monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(available=64 * q.GIB))
     source_root, output_root = tmp_path / "retained", tmp_path / "qualification"
@@ -59,6 +61,7 @@ def test_real_worker_verifies_rgba_products_without_managed_or_human_approval(ca
         case.digest = hashlib.sha256(case.source.read_bytes()).hexdigest()
         expected = samples.astype(np.uint16) * 257
     before = dict(os.environ)
+    handlers = {event: signal.getsignal(event) for event in (signal.SIGINT, signal.SIGTERM)}
     report = q.qualify(case.source, case.digest, case.recipe, case.output, repeats=1)
     assert report["status"] == "measured" and report["source_unchanged"]
     assert report["analytical_reservation_covers_measured_margin"]
@@ -68,6 +71,8 @@ def test_real_worker_verifies_rgba_products_without_managed_or_human_approval(ca
     assert report["photographic_acceptance"] == "not_established"
     assert report["production_flags_changed"] is report["model_inference_performed"] is False
     assert dict(os.environ) == before
+    assert {event: signal.getsignal(event) for event in handlers} == handlers
+    assert report["normalized_pixels_repeatable"] is None
     assert case.digest == hashlib.sha256(case.source.read_bytes()).hexdigest()
     trial = report["trials"][0]
     assert trial["zero_effect"] and trial["maximum_16bit_code_delta"] <= 1
@@ -100,6 +105,27 @@ def test_capacity_rejection_precedes_pixel_decode_and_worker_launch(case, monkey
     assert report["status"] == "blocked" and not report["trials"]
     assert report["source_unchanged"]
     assert set(path.name for path in case.output.iterdir()) == {"qualification.json"}
+
+
+def test_special_input_cannot_block_before_resource_supervision(case):
+    fifo = case.source.parent / "not-a-regular-file.tif"
+    os.mkfifo(fifo)
+    environment = {**os.environ, "PYTHONPATH": str(Path(q.__file__).resolve().parents[2])}
+    result = q.subprocess.run(
+        [
+            q.sys.executable,
+            "-c",
+            "from pathlib import Path; from transformation_portal.photographic_delivery.qualification import _open_regular; "
+            "_open_regular(Path(__import__('sys').argv[1]), 1024)",
+            str(fifo),
+        ],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode != 0 and "bounded regular files" in result.stderr
 
 
 def test_bad_source_digest_never_creates_output_or_allocates_pixels(case, monkeypatch):
@@ -147,7 +173,7 @@ def test_preflight_does_not_execute_or_grant_managed_capacity(case, monkeypatch)
 
     monkeypatch.setattr(q, "_run_trial", forbidden)
     report = q.qualify(case.source, case.digest, case.recipe, case.output, preflight_only=True)
-    assert report["status"] == "planned" and report["trials"] == []
+    assert report["status"] == "planned" and not report["trials"]
     assert report["managed_profile"]["managed_grant"] is False
 
 
@@ -250,6 +276,7 @@ def test_cli_preflight_cannot_claim_execution_or_managed_acceptance(case):
             "--preflight-only",
         ],
         env=environment,
+        check=False,
         capture_output=True,
         text=True,
         timeout=30,
@@ -317,3 +344,95 @@ def test_failure_drains_only_the_owned_worker(tmp_path, monkeypatch, failure):
     with pytest.raises(expected):
         q._run_trial(tmp_path / "trial", {}, q.QualificationLimits(), q.GIB, q.GIB, 1, 1)
     assert state.killed == [(424242, signal.SIGTERM)] and state.waited
+
+
+def test_runtime_identity_binds_delegated_color_implementations(tmp_path, monkeypatch):
+    pytest.importorskip("psutil")
+    from transformation_portal.lux_depth_v4 import photography
+
+    before = q._runtime_identity()
+    for function in (photography.apply_input_color, photography.linear_to_srgb, photography.output_srgb_icc):
+        assert function.__module__ in before["module_sha256"]
+    actual_import = q.importlib.import_module
+    replacement = tmp_path / "color.py"
+    replacement.write_text("changed color implementation")
+    monkeypatch.setattr(
+        q.importlib,
+        "import_module",
+        lambda name: (
+            SimpleNamespace(__file__=str(replacement))
+            if name == photography.linear_to_srgb.__module__
+            else actual_import(name)
+        ),
+    )
+    assert q._runtime_identity() != before
+
+
+@pytest.mark.parametrize("ignore_worker_termination", [False, True])
+def test_sigterm_and_repeated_cancellation_drain_a_real_owned_worker(case, tmp_path, ignore_worker_termination):
+    psutil = pytest.importorskip("psutil")
+    marker, worker_ready = tmp_path / "owned.pid", tmp_path / "worker.ready"
+    worker_code = (
+        "import signal,time; from pathlib import Path; "
+        + ("signal.signal(signal.SIGTERM, signal.SIG_IGN); " if ignore_worker_termination else "")
+        + "signal.pthread_sigmask(signal.SIG_UNBLOCK,{signal.SIGINT,signal.SIGTERM}); "
+        + f"Path({str(worker_ready)!r}).write_text('ready'); time.sleep(60)"
+    )
+    script = tmp_path / "supervisor.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "from transformation_portal.photographic_delivery import qualification as q\n"
+        "launch = q.subprocess.Popen\n"
+        "def worker(*args, **kwargs):\n"
+        "    if args[0][1:3] != ['-m', q._MODULES[0]]: return launch(*args, **kwargs)\n"
+        f"    process = launch([q.sys.executable, '-c', {worker_code!r}], **kwargs)\n"
+        f"    Path({str(marker)!r}).write_text(str(process.pid))\n"
+        "    return process\n"
+        "q.subprocess.Popen = worker\n"
+        "import psutil; from types import SimpleNamespace\n"
+        "psutil.virtual_memory = lambda: SimpleNamespace(available=64*q.GIB)\n"
+        f"q.qualify(Path({str(case.source)!r}), {case.digest!r}, {case.recipe!r}, Path({str(case.output)!r}), repeats=1)\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(Path(q.__file__).resolve().parents[2])}
+    process = q.subprocess.Popen(
+        [q.sys.executable, str(script)],
+        env=environment,
+        stdout=q.subprocess.PIPE,
+        stderr=q.subprocess.PIPE,
+        start_new_session=True,
+    )
+    worker_pid = None
+    try:
+        deadline = time.monotonic() + 10
+        while not (marker.exists() and worker_ready.exists()):
+            if process.poll() is not None or time.monotonic() >= deadline:
+                pytest.fail("Owned worker did not reach its deterministic cancellation barrier")
+            time.sleep(0.01)
+        worker_pid = int(marker.read_text())
+        process.send_signal(signal.SIGTERM)
+        if ignore_worker_termination:
+            time.sleep(0.1)
+            process.send_signal(signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=8)
+        assert process.returncode == 128 + signal.SIGTERM, stderr.decode()
+        assert not psutil.pid_exists(worker_pid)
+        report = q._read_json(case.output / "qualification.json", 256 * 1024)
+        assert report["status"] == "failed" and report["source_unchanged"]
+        assert report["error"]["type"] == "SystemExit"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        if worker_pid is not None and psutil.pid_exists(worker_pid):
+            os.kill(worker_pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("repeatable", [False, True])
+def test_repeatability_requires_comparison_of_independent_trials(case, monkeypatch, repeatable):
+    pixels = iter(["a" * 64, ("a" if repeatable else "b") * 64])
+    monkeypatch.setattr(
+        q, "_run_trial", lambda *args, **kwargs: {"incremental_peak_rss_bytes": 1, "normalized_pixel_sha256": next(pixels)}
+    )
+    report = q.qualify(case.source, case.digest, case.recipe, case.output, repeats=2)
+    assert report["normalized_pixels_repeatable"] is repeatable
+    assert report["status"] == ("measured" if repeatable else "not_qualified")

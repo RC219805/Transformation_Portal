@@ -167,7 +167,9 @@ Planning uses the current conservative managed analytical memory estimate,
 geometry-derived scratch including all retained trials, inspection reservations,
 and physical free-space/headroom checks. The supervisor samples process RSS and
 scratch every 50 ms and drains its owned worker on cancellation or a bound
-violation. These checks are process-local supervision, not OS-enforced limits or
+violation. SIGINT/SIGTERM drain the owned worker, including repeated cancellation;
+prior signal handlers are restored afterward. Run the command in the main thread.
+These checks are process-local supervision, not OS-enforced limits or
 multiprocess admission. The host must permit psutil to inspect its own worker;
 a denied process inspection is an environment failure and stops the worker.
 
@@ -175,7 +177,8 @@ a denied process inspection is an environment failure and stops the worker.
 per-process RSS high-water and incremental peak; sampled logical/allocated
 scratch; latency; source revalidation; product and receipt hashes; reopened native
 precision; and normalized-pixel repeatability. File-system caches are uncontrolled,
-so fresh processes are not cold-cache evidence. Zero-effect recipes verify
+so fresh processes are not cold-cache evidence. Single-trial repeatability is
+`null` (unassessed); two or more trials must agree. Zero-effect recipes verify
 preservation within one 16-bit code; nonzero recipes provide distinct candidates
 that still require Richard's scoped photographic decision.
 

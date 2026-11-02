@@ -16,9 +16,10 @@ import stat
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Iterator
 
 SCHEMA = "tp.photo.materials_cpu_qualification.v1"
 GIB = 1024**3
@@ -29,12 +30,17 @@ _MODULES = (
     "transformation_portal.photographic_delivery.qualification",
     "transformation_portal.photographic_delivery.materials",
     "transformation_portal.photographic_delivery.models",
+    "transformation_portal.photographic_delivery.native",
+    "transformation_portal.core.image_artifact",
+    "transformation_portal.core.photographic_export",
+    "transformation_portal.ingest.canonical_json",
     "transformation_portal.photographic_delivery.presentation",
     "transformation_portal.orchestrator.photographic_admission",
     "transformation_portal.materials_v4.engine",
     "transformation_portal.materials_v4.contracts",
     "transformation_portal.materials_v4.operations",
     "transformation_portal.lux_depth_v4.photography",
+    "transformation_portal.lux_depth_v4.color_preparation",
     "transformation_portal.lux_depth_v5.preview",
     "transformation_portal.lux_depth_v6.color",
 )
@@ -81,7 +87,11 @@ def _read_json(path: Path, maximum: int = MAX_RECIPE_BYTES) -> Any:
 def _open_regular(path: Path, maximum: int) -> BinaryIO:
     if path != path.resolve(strict=True):
         raise ValueError("Qualification inputs must not traverse symbolic links")
-    stream = open(path, "rb", opener=lambda name, flags: os.open(name, flags | getattr(os, "O_NOFOLLOW", 0)))
+    stream = open(
+        path,
+        "rb",
+        opener=lambda name, flags: os.open(name, flags | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)),
+    )
     info = os.fstat(stream.fileno())
     if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= maximum:
         stream.close()
@@ -145,7 +155,13 @@ def _runtime_identity() -> dict[str, Any]:
         if module.__file__ is None:
             raise RuntimeError("Qualification requires file-backed implementation modules")
         modules[name] = hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
-    versions = {name: importlib.metadata.version(name) for name in ("numpy", "Pillow", "tifffile", "scipy", "psutil")}
+    versions: dict[str, str | None] = {
+        name: importlib.metadata.version(name) for name in ("numpy", "Pillow", "tifffile", "scipy", "psutil")
+    }
+    try:
+        versions["imagecodecs"] = importlib.metadata.version("imagecodecs")
+    except importlib.metadata.PackageNotFoundError:
+        versions["imagecodecs"] = None
     with Path(sys.executable).resolve().open("rb") as executable:
         executable_sha256 = hashlib.file_digest(executable, "sha256").hexdigest()
     return {
@@ -199,6 +215,8 @@ def _copy_source(source: Path, destination: Path, bound: dict[str, Any]) -> None
 
 def _worker(specification: Path) -> None:
     import resource
+
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT, signal.SIGTERM})
 
     baseline = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     spec = _read_json(specification)
@@ -284,6 +302,25 @@ def _worker(specification: Path) -> None:
     snapshot.unlink()  # Only this fresh trial's owned, verified temporary copy.
 
 
+@contextmanager
+def _supervisor_signals() -> Iterator[None]:
+    """Route termination through cleanup; repeated signals cannot interrupt draining."""
+    previous = {event: signal.getsignal(event) for event in (signal.SIGINT, signal.SIGTERM)}
+
+    def terminate(event: int, frame: Any) -> None:
+        for selected in previous:
+            signal.signal(selected, signal.SIG_IGN)
+        raise SystemExit(128 + event)
+
+    try:
+        for event in previous:
+            signal.signal(event, terminate)
+        yield
+    finally:
+        for event, handler in previous.items():
+            signal.signal(event, handler)
+
+
 def _run_trial(
     root: Path,
     spec: dict[str, Any],
@@ -316,15 +353,22 @@ def _run_trial(
     started, peak, peak_scratch, peak_logical, peak_allocated = time.monotonic(), 0, 0, 0, 0
     minimum_memory, minimum_disk = psutil.virtual_memory().available, shutil.disk_usage(root).free
     with (root / "worker.log").open("xb") as log:
-        process = subprocess.Popen(
-            [sys.executable, "-m", _MODULES[0], "_worker", str(root / "specification.json")],
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=log,
-            start_new_session=True,
-        )
+        # Block only the launch/ownership handoff; the child unblocks on entry.
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
         try:
+            process = subprocess.Popen(
+                [sys.executable, "-m", _MODULES[0], "_worker", str(root / "specification.json")],
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+        except BaseException:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            raise
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
             owned = psutil.Process(process.pid)
             while process.poll() is None:
                 try:
@@ -498,40 +542,51 @@ def qualify(
         "source_unchanged": False,
     }
     output.mkdir(mode=0o700)
-    try:
-        if not reasons and not preflight_only:
-            for number in range(1, repeats + 1):
-                spec = {"source": str(source), "bound": bound, "recipe": recipe.to_payload(), "runtime": runtime}
-                report["trials"].append(
-                    _run_trial(
-                        output / f"trial-{number}", spec, limits, cost.memory_bytes, scratch, protected_memory, protected_disk
-                    )
-                )
-            report["status"] = "measured"
-            report["normalized_pixels_repeatable"] = len({trial["normalized_pixel_sha256"] for trial in report["trials"]}) == 1
-            if not report["normalized_pixels_repeatable"]:
-                report["status"] = "not_qualified"
-                report["blocking_reasons"].append("normalized_output_pixels_differ_between_trials")
-            measured = max(trial["incremental_peak_rss_bytes"] for trial in report["trials"])
-            report["observed_incremental_peak_plus_50_percent_bytes"] = math.ceil(measured * 1.5)
-            report["analytical_reservation_covers_measured_margin"] = cost.memory_bytes >= math.ceil(measured * 1.5)
-            if not report["analytical_reservation_covers_measured_margin"]:
-                report["status"] = "not_qualified"
-                report["blocking_reasons"].append("measured_margin_exceeds_analytical_reservation")
-    except BaseException as error:
-        report["status"] = "failed"
-        report["error"] = {"type": type(error).__name__, "message": str(error)}
-        raise
-    finally:
+    with _supervisor_signals():
         try:
-            report["source_unchanged"] = _source(source, expected_sha256) == bound
-            if not report["source_unchanged"]:
-                report["status"] = "failed"
-        except (OSError, ValueError) as error:
+            if not reasons and not preflight_only:
+                for number in range(1, repeats + 1):
+                    spec = {"source": str(source), "bound": bound, "recipe": recipe.to_payload(), "runtime": runtime}
+                    report["trials"].append(
+                        _run_trial(
+                            output / f"trial-{number}",
+                            spec,
+                            limits,
+                            cost.memory_bytes,
+                            scratch,
+                            protected_memory,
+                            protected_disk,
+                        )
+                    )
+                report["status"] = "measured"
+                report["normalized_pixels_repeatable"] = (
+                    len({trial["normalized_pixel_sha256"] for trial in report["trials"]}) == 1
+                    if len(report["trials"]) >= 2
+                    else None
+                )
+                if report["normalized_pixels_repeatable"] is False:
+                    report["status"] = "not_qualified"
+                    report["blocking_reasons"].append("normalized_output_pixels_differ_between_trials")
+                measured = max(trial["incremental_peak_rss_bytes"] for trial in report["trials"])
+                report["observed_incremental_peak_plus_50_percent_bytes"] = math.ceil(measured * 1.5)
+                report["analytical_reservation_covers_measured_margin"] = cost.memory_bytes >= math.ceil(measured * 1.5)
+                if not report["analytical_reservation_covers_measured_margin"]:
+                    report["status"] = "not_qualified"
+                    report["blocking_reasons"].append("measured_margin_exceeds_analytical_reservation")
+        except BaseException as error:
             report["status"] = "failed"
-            report["source_revalidation_error"] = {"type": type(error).__name__, "message": str(error)}
+            report["error"] = {"type": type(error).__name__, "message": str(error)}
+            raise
         finally:
-            _write_json(output / "qualification.json", report)
+            try:
+                report["source_unchanged"] = _source(source, expected_sha256) == bound
+                if not report["source_unchanged"]:
+                    report["status"] = "failed"
+            except (OSError, ValueError) as error:
+                report["status"] = "failed"
+                report["source_revalidation_error"] = {"type": type(error).__name__, "message": str(error)}
+            finally:
+                _write_json(output / "qualification.json", report)
     if not report["source_unchanged"]:
         raise ValueError("Retained source changed during qualification")
     return report
