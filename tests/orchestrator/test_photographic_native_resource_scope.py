@@ -1,8 +1,8 @@
 """Qualified native costing binds real server authorities, never public claims.
 
-These are isolated contract tests. Runtime matching, active transport and the
-documented prior cost floor are synthetic; no database, provider, photographic
-or resource measurement acceptance is established here.
+These are isolated contract tests. Runtime matching, executable-cache authority,
+active transport and the documented prior cost floor are synthetic; no database,
+provider, photographic or resource measurement acceptance is established here.
 """
 
 from __future__ import annotations
@@ -52,10 +52,13 @@ def _resource_case(monkeypatch, tmp_path):
         "_native_transport_owner",
         ContextVar("fixture_native_transport_owner", default=review._NativeTransportOwner({"type": "http"})),
     )
-    # Runtime matching is synthetic. The source closure and qualification
-    # functions remain real, and no test output is qualification evidence.
+    # Runtime and executable-cache authority are synthetic in this scope fixture.
+    # Source-byte hashing and qualification functions remain real. Separate cache
+    # tests exercise absent/forged caches and custom loaders without this mock.
+    # No scope-fixture output is runtime or resource qualification evidence.
     runtime = copy.deepcopy(resources.RESOURCE_CONTRACT["runtime"])
     monkeypatch.setattr(resources, "_runtime_identity", lambda: copy.deepcopy(runtime))
+    monkeypatch.setattr(resources, "_verify_executable_caches", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(resources, "RESOURCE_CONTRACT", resources.capture_contract())
     original_operation_cost = review.operation_cost
 
