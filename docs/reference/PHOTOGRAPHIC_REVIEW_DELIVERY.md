@@ -444,8 +444,8 @@ perform that rewrite without invalidating their resource scope; other HTTP,
 service-model and cached-shape changes retain conservative costing.
 
 The reviewed v2 profile identity is
-`036f0468471ecc551049aa822805cd3e04368e50ad1bb289b58f119156d6466e`.
-Its closure includes 69 source/declaration/schema files, 37 package versions,
+`45842dd1173a6b5ee07c944b886883baffcd3a76fafa33f89736e00fe7e3afad`.
+Its closure includes 72 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
 Actual package bytes, tree membership and wheel RECORD hashes/sizes must agree;
@@ -454,6 +454,17 @@ RECORD reads are bounded to 4 MiB and 32,768 total CSV rows before file-entry
 materialization, including unrelated and missing-file rows. Noncanonical
 metadata paths, malformed records and unsupported distribution adapters fail
 closed without selecting the lower profile.
+
+Qualification also verifies selectable CPython caches against those reviewed
+sources using the existing bounded
+[semantic bytecode verifier](../../src/transformation_portal/lux_depth_v4/_bytecode.py).
+It checks timestamp and hash headers, optimization variants and the effective
+`pycache_prefix` without unmarshalling cache code or scanning a global cache
+directory. Verified equivalent cache churn does not change presentation or
+resource identity. Already loaded Python modules must retain matching selected
+cache evidence; cacheless, custom-loader and mismatched installations retain
+conservative costing. These checks detect installation drift; they do not attest
+arbitrary live process mutation or code which restores its cache after execution.
 
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh
