@@ -444,7 +444,7 @@ perform that rewrite without invalidating their resource scope; other HTTP,
 service-model and cached-shape changes retain conservative costing.
 
 The reviewed v2 profile identity is
-`45842dd1173a6b5ee07c944b886883baffcd3a76fafa33f89736e00fe7e3afad`.
+`b7768cdfbb433869dd4a4dc4ef14237475831824c69b7f2f03b06b1d98c929e9`.
 Its closure includes 72 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
@@ -454,6 +454,12 @@ RECORD reads are bounded to 4 MiB and 32,768 total CSV rows before file-entry
 materialization, including unrelated and missing-file rows. Noncanonical
 metadata paths, malformed records and unsupported distribution adapters fail
 closed without selecting the lower profile.
+Package and runtime-file hashing uses no-follow regular-file descriptors, reads
+at most the initial byte length plus one, and verifies recorded package lengths
+and before/after file identity. Growing, truncated, replaced or nonregular
+inputs fail closed.
+Dependency declarations use the same stable reader with a 4 MiB metadata cap
+before TOML or requirements parsing.
 
 Qualification also verifies selectable CPython caches against those reviewed
 sources using the existing bounded
