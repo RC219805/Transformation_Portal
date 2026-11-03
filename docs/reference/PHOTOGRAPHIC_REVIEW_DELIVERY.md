@@ -472,6 +472,10 @@ cache evidence; cacheless, custom-loader and mismatched installations retain
 conservative costing. These checks detect installation drift; they do not attest
 arbitrary live process mutation or code which restores its cache after execution.
 
+Isolated scope and source-hash unit tests use explicitly synthetic runtime/cache
+authority. Real executable-cache regression tests and supported-host resource
+measurements retain their separate authority.
+
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh
 output namespace to measure. The current source/runtime must match the expected
