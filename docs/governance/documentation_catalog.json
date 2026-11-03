@@ -15107,7 +15107,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "4cb5ba3417e618d5ef1aa09d93b1a71e15b5fe42",
+      "source_commit": "8bb218cae968146f6d0119d955455c302ed4d9c4",
       "content_sha256": "c2f2f5664e5d4b238dffad66e333086b0ad1e6dffc7444466aa92f479d9451dc",
       "source_references": [
         "src/transformation_portal/core/image_artifact.py",
@@ -15162,7 +15162,7 @@
         "tests/test_v2_native_materials.py"
       ],
       "source_sha256": {
-        "src/transformation_portal/core/image_artifact.py": "d90f847b6c3ad663d7d92e83d4ddf778772acafffa33437deaf6e0f1c0219e56",
+        "src/transformation_portal/core/image_artifact.py": "dd1ed99836746f09a8f2603144ae72fb1279faa851ffe385cd2c91cc64889fc5",
         "src/transformation_portal/core/depth_evidence.py": "0580fdfb65069c2112fcb8ad52666cedb2ba6a25f39ccdd3b11487d64e34fe9f",
         "src/transformation_portal/lux_depth_v4/photography.py": "7f805a56ec68b7d244c3701ac2ba17ba4ec6c17dede721c85dfb0275604cf6a6",
         "src/transformation_portal/lux_depth_v4/raw.py": "c1330c6ce82eb8921dd912a53ff85b02bdb26a4ab44eeee42727e2aa2795252a",
@@ -15230,8 +15230,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "a876224b094050848f1f7cfda8a3a3075a486082",
-      "content_sha256": "e11842b7a1219c658809ea7c78936977f7ba5fdc8d9cefed2ae534c2c5e9519d",
+      "source_commit": "2b4c8300dfcfb7e2ff862b2ed6ec9035b6870e69",
+      "content_sha256": "90f3ae433ca7133426b4798d525627464d6a5064601045a4306f8b8a3deb4087",
       "source_references": [
         "app.py",
         "src/transformation_portal/api/routes/photographic_review.py",
@@ -15338,7 +15338,9 @@
         "src/transformation_portal/orchestrator/lux_depth_adapter.py",
         "tests/orchestrator/test_s3_native_resource_identity.py",
         "tests/test_managed_materials_canonical_qualification.py",
-        "tests/test_native_resource_package_payloads.py"
+        "tests/test_native_resource_package_payloads.py",
+        "src/transformation_portal/core/image_artifact.py",
+        "tests/core/test_image_artifact_hash_allocation.py"
       ],
       "source_sha256": {
         "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
@@ -15424,7 +15426,7 @@
         "tests/test_native_materials_qualification.py": "c046c848714d7045786529bbfb70e15c57de87a973d836dd743de0f18d5b50aa",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
         "src/transformation_portal/photographic_delivery/native_resources.py": "74a83ae8593e97f080bec2a569bbba5f2dc3d175a455d41868f2ef4cd30eb944",
-        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "613e551772050e3853cf78cb59b1b7e6b5958e691cb1313acaea9a810b2a24e4",
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "67a6e30dec6b38f25185088f0749a8c718ec119e3eab045cc28537b9d8e71c06",
         "src/transformation_portal/photographic_delivery/managed_qualification.py": "520da462422f40f07b504ac5ad6a1b94554a63ee6c4ffdab0afdf1ba77c83d88",
         "src/transformation_portal/orchestrator/storage/postgres.py": "906b5bf63ff014ca6a23a6e72f06f3d22ba34d39b87d2c05c32eaba45620a88d",
         "tests/test_native_resource_inputs.py": "d4eeb1a9c9040129376c1f9cb38ffe003e4a7f9fee75c89af38023c3be46ef97",
@@ -15446,7 +15448,9 @@
         "src/transformation_portal/orchestrator/lux_depth_adapter.py": "1076e05cc26fa3c1bd283a5e4792fc06974e8750ccd10d0a878053670a533a3d",
         "tests/orchestrator/test_s3_native_resource_identity.py": "b7a3ecf9f8ea96351f08210bebb68e87bc19f43075b2efc63a52368258093e7c",
         "tests/test_managed_materials_canonical_qualification.py": "2f12bd2da7eccf304c352050edd069a6616ae863956e56dbf48e7edcf4bb487c",
-        "tests/test_native_resource_package_payloads.py": "6c301dacbc57cff42836a7dd7212687f32b98c231750ffa70516fc8be73350fa"
+        "tests/test_native_resource_package_payloads.py": "6c301dacbc57cff42836a7dd7212687f32b98c231750ffa70516fc8be73350fa",
+        "src/transformation_portal/core/image_artifact.py": "dd1ed99836746f09a8f2603144ae72fb1279faa851ffe385cd2c91cc64889fc5",
+        "tests/core/test_image_artifact_hash_allocation.py": "f8bc75099ff7b6d8be436591a06e50668aaa9bf594f89ac3ee3fdc96b9e398f5"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",
