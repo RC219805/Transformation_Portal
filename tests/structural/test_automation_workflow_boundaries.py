@@ -58,3 +58,36 @@ def test_dependency_submission_retains_retry_and_trigger_contract_without_unused
     assert 'if [ "$evidence" != "success" ]' in status["run"]
     assert not any(step.get("uses", "").startswith("actions/cache@") for step in steps)
     assert all("pip-tools" not in step.get("run", "") for step in steps)
+
+
+def test_ingest_schema_drift_defers_blobs_without_weakening_history_or_policy() -> None:
+    job = _workflow("ingest_contract_validation.yml")["jobs"]["schema-drift-detection"]
+    steps = job["steps"]
+    checkouts = [step for step in steps if step.get("id", "").startswith("checkout_schema_")]
+
+    assert job["if"] == "github.event_name == 'pull_request'"
+    assert job["timeout-minutes"] == "10"
+    assert [step["id"] for step in checkouts] == ["checkout_schema_1", "checkout_schema_2"]
+    for checkout in checkouts:
+        assert checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        assert checkout["continue-on-error"] == "true"
+        assert checkout["with"] == {
+            "ref": "${{ github.event.pull_request.head.sha }}",
+            "fetch-depth": "0",
+            "filter": "blob:none",
+            "lfs": "false",
+            "submodules": "false",
+        }
+    assert checkouts[1]["if"] == "steps.checkout_schema_1.outcome == 'failure'"
+    enforce = next(step for step in steps if step["name"] == "Enforce checkout success")
+    assert enforce["if"] == "steps.checkout_schema_1.outcome == 'failure' && steps.checkout_schema_2.outcome == 'failure'"
+    assert "exit 1" in enforce["run"]
+
+    policy = next(step["run"] for step in steps if step["name"] == "Check for schema changes with policy enforcement")
+    assert 'git cat-file -e "${BASE_SHA}^{commit}"' in policy
+    assert 'git cat-file -e "${HEAD_SHA}^{commit}"' in policy
+    assert 'CHANGED_FILES=$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")' in policy
+    assert 'git diff "${BASE_SHA}...${HEAD_SHA}" -- src/transformation_portal/ingest/schemas.py' in policy
+    assert 'SCHEMA_FILES="src/transformation_portal/ingest/schemas.py"' in policy
+    assert "VERSION_CHANGED" in policy and "CHANGELOG.md" in policy and "docs/apex/ingest_contract.md" in policy
+    assert any(step["name"] == "Verify schema version consistency" for step in steps)

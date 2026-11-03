@@ -102,9 +102,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          # Keep the PR base commit local so schema drift detection can diff
-          # without a second network fetch, which has been flaky in CI.
+          # Keep full commit/tree history for merge-base schema policy, while
+          # fetching historical file blobs only when the checkout or diff needs them.
           fetch-depth: 0
+          filter: blob:none
           lfs: false
           submodules: false
 
@@ -116,6 +117,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          filter: blob:none
           lfs: false
           submodules: false
 
