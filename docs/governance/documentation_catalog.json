@@ -15230,8 +15230,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "2b4c8300dfcfb7e2ff862b2ed6ec9035b6870e69",
-      "content_sha256": "90f3ae433ca7133426b4798d525627464d6a5064601045a4306f8b8a3deb4087",
+      "source_commit": "80574631304e11ac1dcae48c7d810a21dfacd5d6",
+      "content_sha256": "a64455c665c7a1bec410aae7f341e2b1af28d4c860c88faab75332f3f727ef8c",
       "source_references": [
         "app.py",
         "src/transformation_portal/api/routes/photographic_review.py",
@@ -15340,7 +15340,9 @@
         "tests/test_managed_materials_canonical_qualification.py",
         "tests/test_native_resource_package_payloads.py",
         "src/transformation_portal/core/image_artifact.py",
-        "tests/core/test_image_artifact_hash_allocation.py"
+        "tests/core/test_image_artifact_hash_allocation.py",
+        "src/transformation_portal/lux_depth_v4/color_preparation.py",
+        "tests/lux_depth_v4/test_analytic_color_allocation.py"
       ],
       "source_sha256": {
         "app.py": "b7f923351a021499fd7d450cad83662262ec8bb20f04642f5cab2cbbf4c10abb",
@@ -15426,7 +15428,7 @@
         "tests/test_native_materials_qualification.py": "c046c848714d7045786529bbfb70e15c57de87a973d836dd743de0f18d5b50aa",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
         "src/transformation_portal/photographic_delivery/native_resources.py": "74a83ae8593e97f080bec2a569bbba5f2dc3d175a455d41868f2ef4cd30eb944",
-        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "67a6e30dec6b38f25185088f0749a8c718ec119e3eab045cc28537b9d8e71c06",
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "a1040acbb8e482e374338f619d1312f1de736edc3819c872c4e117c42c63d9c1",
         "src/transformation_portal/photographic_delivery/managed_qualification.py": "520da462422f40f07b504ac5ad6a1b94554a63ee6c4ffdab0afdf1ba77c83d88",
         "src/transformation_portal/orchestrator/storage/postgres.py": "906b5bf63ff014ca6a23a6e72f06f3d22ba34d39b87d2c05c32eaba45620a88d",
         "tests/test_native_resource_inputs.py": "d4eeb1a9c9040129376c1f9cb38ffe003e4a7f9fee75c89af38023c3be46ef97",
@@ -15450,7 +15452,9 @@
         "tests/test_managed_materials_canonical_qualification.py": "2f12bd2da7eccf304c352050edd069a6616ae863956e56dbf48e7edcf4bb487c",
         "tests/test_native_resource_package_payloads.py": "6c301dacbc57cff42836a7dd7212687f32b98c231750ffa70516fc8be73350fa",
         "src/transformation_portal/core/image_artifact.py": "dd1ed99836746f09a8f2603144ae72fb1279faa851ffe385cd2c91cc64889fc5",
-        "tests/core/test_image_artifact_hash_allocation.py": "f8bc75099ff7b6d8be436591a06e50668aaa9bf594f89ac3ee3fdc96b9e398f5"
+        "tests/core/test_image_artifact_hash_allocation.py": "f8bc75099ff7b6d8be436591a06e50668aaa9bf594f89ac3ee3fdc96b9e398f5",
+        "src/transformation_portal/lux_depth_v4/color_preparation.py": "7e3ea66dfd770069efeb2e9d0a0910d51babf284ed8c24962b3fa0f7adfa37f4",
+        "tests/lux_depth_v4/test_analytic_color_allocation.py": "d20309ab753c6f1945f77463e025f51b0935d422c77a280f7444c6e2a3bdcaa3"
       },
       "validation_commands": [
         ".venv/bin/python -m pytest tests/test_photographic_delivery.py tests/test_photographic_native_master.py tests/test_package_verified_delivery.py tests/test_v2_color_contract.py tests/test_ad_editorial_post_pipeline_paths.py -q",

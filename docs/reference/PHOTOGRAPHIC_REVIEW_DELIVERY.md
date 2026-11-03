@@ -198,6 +198,14 @@ verified temporary source snapshot.
 
 ## Native allocation boundaries
 
+Analytic sRGB ingest evaluates the unchanged pointwise float32 transfer in
+two-axis tiles of at most 262,144 pixels, writing one final native RGB array.
+Grayscale expansion is also tile-bounded; linear and ICC paths retain their
+existing behavior. This avoids full-frame branch temporaries without changing
+pixels, separate alpha, orientation or rendering semantics; see the
+[color preparation implementation](../../src/transformation_portal/lux_depth_v4/color_preparation.py)
+and [exact-sample allocation tests](../../tests/lux_depth_v4/test_analytic_color_allocation.py).
+
 Native TIFF16 transfer validates the complete SDR master in bounded spans before
 allocating its final native-resolution uint16 destination. Transfer and rounding
 use the same pointwise float32 operations, with at most 65,536 pixels per span;
@@ -436,7 +444,7 @@ perform that rewrite without invalidating their resource scope; other HTTP,
 service-model and cached-shape changes retain conservative costing.
 
 The reviewed v2 profile identity is
-`99d5c17b91532adf6ef528c10c391e245c2bc45ac6323380ae537f54ad4b9ffe`.
+`036f0468471ecc551049aa822805cd3e04368e50ad1bb289b58f119156d6466e`.
 Its closure includes 69 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
