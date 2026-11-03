@@ -264,6 +264,11 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert "src/transformation_portal/photographic_delivery/native_resource_contract.py" not in paths
     assert "app.py" in paths
     assert "pyproject.toml" in paths and "requirements/base.in" in paths
+    assert {
+        "src/transformation_portal/lux_depth_v4/runtime.py",
+        "src/transformation_portal/lux_depth_v4/_bytecode.py",
+        "src/transformation_portal/depth/backends/da3_runtime_identity.py",
+    }.issubset(paths)
     root = Path(resources.__file__).resolve().parents[3]
     assert all((root / path).is_file() for path in paths)
     actual = resources._source_identity()

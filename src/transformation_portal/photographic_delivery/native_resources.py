@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import csv
 import hashlib
+import importlib.machinery
 import importlib.metadata
 import importlib.util
 import io
@@ -132,6 +133,9 @@ _SOURCE_PATHS = (
     "src/transformation_portal/materials_v4/contracts.py",
     "src/transformation_portal/materials_v4/operations.py",
     "src/transformation_portal/lux_depth_v4/photography.py",
+    "src/transformation_portal/lux_depth_v4/runtime.py",
+    "src/transformation_portal/lux_depth_v4/_bytecode.py",
+    "src/transformation_portal/depth/backends/da3_runtime_identity.py",
     "src/transformation_portal/lux_depth_v4/color_preparation.py",
     "src/transformation_portal/lux_depth_v4/io.py",
     "src/transformation_portal/lux_depth_v5/preview.py",
@@ -184,6 +188,102 @@ def _digest(value: Any) -> bool:
 def _file_hash(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _verify_executable_caches(
+    sources: tuple[Path, ...], loaded: tuple[tuple[str, Any], ...] = (), expected_hashes: dict[Path, str] | None = None
+) -> None:
+    """Verify selected source caches, including warm modules, without loading code.
+
+    Cache bytes never enter capsule identity: ordinary verified cache churn is
+    harmless. Already loaded Python modules require their selected cache to
+    remain available as evidence; cacheless/custom loaders select fallback.
+    This detects installation drift, not arbitrary same-process code which can
+    rewrite its own module metadata or restore a cache after execution.
+    """
+    from transformation_portal.lux_depth_v4 import runtime as bytecode
+
+    try:
+        configuration = bytecode._bytecode_configuration()
+        sources = tuple(sorted(set(sources)))
+        budget = bytecode._bytecode_budget()
+        source_identities = {}
+        for source in sources:
+            raw_source, identity = bytecode._read_bytecode_input(source, bytecode._MAX_BYTECODE_SOURCE_BYTES)
+            budget[1][0] -= len(raw_source)
+            if budget[1][0] < 0:
+                raise ValueError("Native resource cache source exceeds validation budget")
+            if expected_hashes is not None and hashlib.sha256(raw_source).hexdigest() != expected_hashes[source]:
+                raise ValueError("Native resource cache source differs from verified bytes")
+            source_identities[str(source)] = identity
+            del raw_source
+        selected = bytecode._selected_source_caches(sources)
+        receipts: dict = {}
+        namespace: dict = {}
+        bytecode._verify_selected_caches(selected, receipts, namespace, budget, source_identities=source_identities)
+        for cache, source, _optimization in selected:
+            if str(cache) not in receipts:
+                continue  # Absent lazy caches permit normal source compilation.
+            raw, cache_identity = bytecode._read_bytecode_input(cache, bytecode._MAX_BYTECODE_BYTES)
+            budget[1][0] -= len(raw)
+            if budget[1][0] < 0 or len(raw) < 16 or raw[:4] != importlib.util.MAGIC_NUMBER:
+                raise ValueError("Native resource cache header or validation budget is invalid")
+            flags = int.from_bytes(raw[4:8], "little")
+            if flags not in {0, 1, 3}:
+                raise ValueError("Native resource cache flags are invalid")
+            source_identity = receipts[str(cache)][1]
+            if flags == 0:
+                observed = source.stat()
+                expected_header = (int(observed.st_mtime) & 0xFFFFFFFF, observed.st_size & 0xFFFFFFFF)
+                if (int.from_bytes(raw[8:12], "little"), int.from_bytes(raw[12:16], "little")) != expected_header:
+                    raise ValueError("Native resource timestamp cache differs from its source")
+            else:
+                source_bytes, observed_identity = bytecode._read_bytecode_input(source, bytecode._MAX_BYTECODE_SOURCE_BYTES)
+                budget[1][0] -= len(source_bytes)
+                if (
+                    observed_identity != source_identity
+                    or budget[1][0] < 0
+                    or raw[8:16] != importlib.util.source_hash(source_bytes)
+                ):
+                    raise ValueError("Native resource hash cache differs from its source")
+            if cache_identity != receipts[str(cache)][0]:
+                raise ValueError("Native resource cache changed during verification")
+        for source in sources:
+            if bytecode._stat_identity(source.lstat()) != source_identities[str(source)]:
+                raise ValueError("Native resource source changed during cache verification")
+        selected_paths = {cache for cache, _source, optimization in selected if optimization == sys.flags.optimize}
+        for name, module in loaded:
+            origin = getattr(module, "__file__", None)
+            if not isinstance(origin, str) or Path(origin).suffix != ".py":
+                raise ValueError(f"Loaded native resource Python source is invalid: {name}")
+            loader = getattr(module, "__loader__", None)
+            spec = getattr(module, "__spec__", None)
+            if (
+                type(loader) is not importlib.machinery.SourceFileLoader
+                or type(spec) is not importlib.machinery.ModuleSpec
+                or spec.loader is not loader
+                or not isinstance(spec.origin, str)
+                or Path(spec.origin).resolve() != Path(origin).resolve(strict=True)
+                or Path(loader.path).resolve() != Path(origin).resolve(strict=True)
+            ):
+                raise ValueError(f"Loaded native resource requires its standard source loader: {name}")
+            cached = getattr(module, "__cached__", None)
+            if not isinstance(cached, str):
+                raise ValueError(f"Loaded native resource cache evidence is missing: {name}")
+            source = Path(origin).resolve(strict=True)
+            expected = bytecode._source_cache_path(str(source), sys.flags.optimize)
+            path = Path(os.path.abspath(cached))
+            if (
+                path != expected
+                or path not in selected_paths
+                or str(path) not in receipts
+                or path.resolve(strict=True) != path
+            ):
+                raise ValueError(f"Loaded native resource cache is not selected for its source: {name}")
+        if bytecode._bytecode_configuration() != configuration:
+            raise ValueError("Native resource bytecode configuration changed")
+    except RuntimeError as error:
+        raise ValueError("Native resource executable cache verification failed") from error
 
 
 def _distribution_record(name: str) -> tuple[Path, list[tuple[str, str | None, int | None]]]:
@@ -240,9 +340,9 @@ def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[st
 
     RECORD is a per-file expectation, never authority on its own: actual tree
     membership, lengths and SHA256 bytes must all agree. Generated bytecode is
-    excluded, just as wheel RECORD leaves it unhashed; executable sources and
-    compiled extensions remain covered. No pip cache or installer receipt is
-    consulted, and no package is imported to discover its payload.
+    verified against reviewed sources, then excluded from content identity.
+    No pip cache or installer receipt is consulted, and no package is imported
+    to discover its payload.
     """
     base, entries = _distribution_record(name)
     expected: dict[str, tuple[str | None, int | None]] = {}
@@ -284,6 +384,7 @@ def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[st
     if not expected or set(actual) != set(expected):
         raise ValueError(f"Native resource package tree differs from RECORD: {name}")
     rows, total = [], 0
+    verified_sources: dict[Path, str] = {}
     for relative_name, path in sorted(actual.items()):
         recorded_hash, recorded_size = expected[relative_name]
         size = path.stat().st_size
@@ -300,8 +401,11 @@ def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[st
         if encoded != recorded_hash:
             raise ValueError(f"Native resource package bytes differ from RECORD: {name}")
         rows.append([relative_name, size, observed])
+        if path.suffix == ".py":
+            verified_sources[path] = observed
     # Check already executing modules too: an editable or mixed environment
     # cannot borrow a neighboring installation's matching wheel payload.
+    loaded_sources = []
     for module_name, module in tuple(sys.modules.items()):
         if module_name.split(".", 1)[0] not in {root.removesuffix(".py") for root in roots}:
             continue
@@ -313,12 +417,18 @@ def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[st
         path = Path(origin).resolve(strict=True)
         if not path.is_relative_to(base) or path.relative_to(base).as_posix() not in actual:
             raise ValueError(f"Loaded native resource package is from another tree: {name}")
+        if path.suffix == ".pyc":
+            raise ValueError(f"Loaded native resource package is sourceless: {name}")
+        if path.suffix == ".py":
+            loaded_sources.append((module_name, module))
+    _verify_executable_caches(tuple(verified_sources), tuple(loaded_sources), verified_sources)
     return {"sha256": hashlib.sha256(_canonical(rows)).hexdigest(), "files": len(rows), "bytes": total}
 
 
 def _runtime_package_payloads() -> dict[str, Any]:
     payloads = {name: _distribution_payload_identity(name, roots) for name, roots in _PAYLOAD_PACKAGES.items()}
     stdlib = {}
+    sources, loaded_sources, verified_sources = [], [], {}
     for name in _STDLIB_PAYLOADS:
         spec = importlib.util.find_spec(name)
         if spec is None or spec.origin is None:
@@ -329,7 +439,12 @@ def _runtime_package_payloads() -> dict[str, Any]:
         loaded = sys.modules.get(name)
         if loaded is not None and getattr(loaded, "__file__", None) != spec.origin:
             raise ValueError(f"Loaded native resource standard library differs: {name}")
+        sources.append(path)
+        if loaded is not None:
+            loaded_sources.append((name, loaded))
         stdlib[name] = _file_hash(path)
+        verified_sources[path] = stdlib[name]
+    _verify_executable_caches(tuple(sources), tuple(loaded_sources), verified_sources)
     payloads["stdlib"] = stdlib
     return payloads
 
@@ -337,6 +452,7 @@ def _runtime_package_payloads() -> dict[str, Any]:
 def _source_identity() -> dict[str, str]:
     root = Path(__file__).resolve().parents[3]
     sources = {}
+    executable_sources, loaded_sources = [], []
     for relative in _SOURCE_PATHS:
         expected = _file_hash(root / relative)
         if relative.startswith("src/transformation_portal/schemas/execution/"):
@@ -346,6 +462,7 @@ def _source_identity() -> dict[str, str]:
         if not relative.endswith(".py"):
             sources[relative] = expected
             continue
+        executable_sources.append(root / relative)
         name = relative.removeprefix("src/").removesuffix(".py").replace("/", ".")
         name = name.removesuffix(".__init__")
         loaded = sys.modules.get(name)
@@ -353,7 +470,13 @@ def _source_identity() -> dict[str, str]:
             origin = getattr(loaded, "__file__", None)
             if not isinstance(origin, str) or _file_hash(Path(origin)) != expected:
                 raise ValueError(f"Loaded native resource source differs: {name}")
+            loaded_sources.append((name, loaded))
         sources[relative] = expected
+    _verify_executable_caches(
+        tuple(executable_sources),
+        tuple(loaded_sources),
+        {root / relative: digest for relative, digest in sources.items() if relative.endswith(".py")},
+    )
     return sources
 
 
