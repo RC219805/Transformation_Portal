@@ -172,7 +172,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
         "src/transformation_portal/core/execution_plan_v3.py": "095864322aa96e380e6374a6af34c412e8b3221a76955e0fe32c7abf03f66b0b",
         "src/transformation_portal/core/execution_plan_v4.py": "064d36541de3e76412a315042d4598b00330609655e309846a73791aee8ab84e",
         "src/transformation_portal/core/execution_plan_v5.py": "b207122ede0dfd4f41eb820dc0f6360600a9e6cdeaa201fe02773e935cc73aec",
-        "src/transformation_portal/core/image_artifact.py": "d90f847b6c3ad663d7d92e83d4ddf778772acafffa33437deaf6e0f1c0219e56",
+        "src/transformation_portal/core/image_artifact.py": "dd1ed99836746f09a8f2603144ae72fb1279faa851ffe385cd2c91cc64889fc5",
         "src/transformation_portal/core/photographic_export.py": "5f5133187c14e0b94397ff475671a2b490199af29d02383c1ca368ab793c851f",
         "src/transformation_portal/core/security/frontdoor_identity.py": "08aeb537388526e8dfa02eae5c1b3cf02091e68101c9b80d6842a9f886677469",
         "src/transformation_portal/core/security/fs_guard.py": "1d275c11dc5c2b58744a1309a7cbc9b327a960df118eb486cca77782663f0503",

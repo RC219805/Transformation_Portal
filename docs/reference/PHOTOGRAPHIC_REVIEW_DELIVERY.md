@@ -206,6 +206,14 @@ alpha write directly into their final channels. TIFF metadata, ICC, orientation,
 encoded bytes, receipts and diagnostic semantics are preserved. This changes
 allocation lifetime, not resolution, grading, processing stage or approval.
 
+Content hashing reads the existing buffer for exact, read-only C-contiguous
+NumPy arrays whose bounded owner chain ends in immutable bytes. It preserves
+the historical C-order digest, dtype, shape, names and semantic metadata.
+Writable, strided, Fortran-layout, subclass and mutable-backed arrays retain
+their historical snapshot path. This avoids a full native RGB or alpha hash
+copy without changing processing or cache identities; see the
+[hash compatibility tests](../../tests/core/test_image_artifact_hash_allocation.py).
+
 The native revision helper freezes input/execution content hashes and scalar
 metadata, then releases input and adjusted masters after TIFF encoding and before
 reopening that TIFF for verified diagnostics. Zero-effect execution can alias its
@@ -428,7 +436,7 @@ perform that rewrite without invalidating their resource scope; other HTTP,
 service-model and cached-shape changes retain conservative costing.
 
 The reviewed v2 profile identity is
-`2a78d79d12b5b7d56271fedd56aa83913d8bb15a57425a3bb0748cfaa83f8038`.
+`99d5c17b91532adf6ef528c10c391e245c2bc45ac6323380ae537f54ad4b9ffe`.
 Its closure includes 69 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
