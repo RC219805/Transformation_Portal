@@ -180,7 +180,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
         "src/transformation_portal/core/security/serialization.py": "35cc5cb082227ef64bb0c611bb9716140806f935a5127770e67d503cf76ff1a6",
         "src/transformation_portal/core/security/tenant.py": "51bde535e74d45e365401ada14217c392ffa7b741c90155d52f8524a6df5bd88",
         "src/transformation_portal/ingest/canonical_json.py": "92d4e78b699c4881afb60aeff7587074256ab5aa5e3774cf46a1285be45146af",
-        "src/transformation_portal/lux_depth_v4/color_preparation.py": "d83508fbbc5957accd73e9b6fca7de823802bbc01e59a15b1c335172752c0469",
+        "src/transformation_portal/lux_depth_v4/color_preparation.py": "7e3ea66dfd770069efeb2e9d0a0910d51babf284ed8c24962b3fa0f7adfa37f4",
         "src/transformation_portal/lux_depth_v4/io.py": "91fda6688214d14a992d075c1123ffa578a038581d248a30a0658a1feed8c799",
         "src/transformation_portal/lux_depth_v4/photography.py": "7f805a56ec68b7d244c3701ac2ba17ba4ec6c17dede721c85dfb0275604cf6a6",
         "src/transformation_portal/lux_depth_v5/preview.py": "7437b5dc5c365b94effdfc5cc03d60b752021da5d0c28b891c1d1f9a51b64b16",

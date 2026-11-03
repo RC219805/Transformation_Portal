@@ -446,8 +446,19 @@ def apply_input_color(samples: np.ndarray, prepared: PreparedColor) -> np.ndarra
     if min(samples.shape[:2]) <= 0 or (samples.ndim == 3 and samples.shape[2] != 3):
         raise ValueError("Color preparation requires HxW grayscale or HxWx3 RGB samples")
     if prepared.transform_profile is None:
+        if prepared.source_color == "srgb":
+            height, width = samples.shape[:2]
+            output = np.empty((height, width, 3), np.float32)
+            columns = min(width, _TILE_PIXELS)
+            rows = max(1, _TILE_PIXELS // columns)
+            for y in range(0, height, rows):
+                for x in range(0, width, columns):
+                    tile = samples[y : y + rows, x : x + columns]
+                    rgb = np.repeat(tile[..., None], 3, axis=2) if samples.ndim == 2 else tile
+                    output[y : y + rows, x : x + columns] = srgb_to_linear(rgb)
+            return output
         rgb = np.repeat(samples[..., None], 3, axis=2) if samples.ndim == 2 else samples
-        return srgb_to_linear(rgb) if prepared.source_color == "srgb" else rgb
+        return rgb
     if samples.ndim == 2 and prepared.source_color == "icc_rgb" and prepared.source_profile is None:
         # Calibrated PNG declarations describe neutral RGB even for a grayscale
         # raster; embedded ICC profiles must still match their actual channels.
