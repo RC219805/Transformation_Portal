@@ -9,6 +9,7 @@ import importlib.metadata
 import importlib.util
 import io
 import marshal
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -96,6 +97,118 @@ def test_changed_actual_code_or_model_with_unchanged_record_is_rejected(installe
     (root / target).write_bytes(bytes([original[0] ^ 1]) + original[1:])
     with pytest.raises(ValueError, match="bytes differ from RECORD"):
         _identity()
+
+
+@pytest.mark.parametrize("change", ["grow", "shrink", "replace"])
+def test_payload_hashing_stops_within_recorded_bytes_and_rejects_mid_read_changes(installed, monkeypatch, change):
+    root, _, _ = installed
+    source = root / "closed_sdk/__init__.py"
+    original = source.read_bytes()
+    fdopen = resources.os.fdopen
+    delivered, read_limits = [], []
+
+    class ChangingReader:
+        def __init__(self, stream):
+            self.stream = stream
+            self.changed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *arguments):
+            return self.stream.__exit__(*arguments)
+
+        def fileno(self):
+            return self.stream.fileno()
+
+        def read(self, amount):
+            assert 0 < amount <= len(original) + 1
+            read_limits.append(amount)
+            block = self.stream.read(amount)
+            delivered.append(len(block))
+            if not self.changed:
+                self.changed = True
+                if change == "grow":
+                    with source.open("ab") as writer:
+                        writer.write(b"x" * 4096)
+                elif change == "shrink":
+                    with source.open("r+b") as writer:
+                        writer.truncate(len(original) - 1)
+                else:
+                    source.rename(root / "preserved-original.py")
+                    source.write_bytes(original)
+            return block
+
+    def opened(descriptor, *arguments, **options):
+        stream = fdopen(descriptor, *arguments, **options)
+        return ChangingReader(stream) if options.get("buffering") == 0 else stream
+
+    monkeypatch.setattr(resources.os, "fdopen", opened)
+    with pytest.raises(ValueError, match="file (grew|changed)"):
+        _identity()
+    assert read_limits
+    assert sum(delivered) <= len(original) + 1
+
+
+def test_payload_replacement_after_path_stat_is_rejected_before_read(installed, monkeypatch):
+    root, _, _ = installed
+    source = root / "closed_sdk/__init__.py"
+    original = source.read_bytes()
+    open_file = resources.os.open
+
+    def replaced(path, flags, *arguments, **options):
+        if path == source:
+            source.rename(root / "preserved-original.py")
+            source.write_bytes(original)
+        return open_file(path, flags, *arguments, **options)
+
+    monkeypatch.setattr(resources.os, "open", replaced)
+    with pytest.raises(ValueError, match="changed before hashing"):
+        resources._file_hash(source, expected_size=len(original))
+
+
+@pytest.mark.parametrize("change", ["recorded_size", "byte_limit", "symlink", "directory", "fifo"])
+def test_payload_file_bounds_and_type_are_checked_before_open(tmp_path, monkeypatch, change):
+    source = tmp_path / "source.py"
+    source.write_bytes(b"VALUE = 1\n")
+    recorded = source.stat().st_size
+    if change == "recorded_size":
+        recorded -= 1
+    elif change == "byte_limit":
+        monkeypatch.setattr(resources, "_MAX_PACKAGE_PAYLOAD_BYTES", recorded - 1)
+    else:
+        target = tmp_path / "preserved-source.py"
+        source.rename(target)
+        if change == "symlink":
+            source.symlink_to(target)
+        elif change == "directory":
+            source.mkdir()
+        else:
+            os.mkfifo(source)
+
+    def forbidden(*_arguments, **_options):
+        pytest.fail("Invalid payload must be rejected before opening or reading")
+
+    monkeypatch.setattr(resources.os, "open", forbidden)
+    with pytest.raises(ValueError, match="regular-file or recorded-size bound"):
+        resources._file_hash(source, expected_size=recorded)
+
+
+def test_payload_hash_supports_empty_regular_sources(tmp_path):
+    source = tmp_path / "__init__.py"
+    source.write_bytes(b"")
+    assert resources._file_hash(source, expected_size=0) == hashlib.sha256(b"").hexdigest()
+
+
+@pytest.mark.parametrize("target", ["pyproject.toml", "requirements/base.in"])
+def test_runtime_dependency_metadata_is_bounded_before_parsing(tmp_path, monkeypatch, target):
+    (tmp_path / "requirements").mkdir()
+    (tmp_path / "pyproject.toml").write_text('[project]\ndependencies = ["packaging>=26"]\n')
+    (tmp_path / "requirements/base.in").write_text("")
+    monkeypatch.setattr(resources, "_MAX_PACKAGE_RECORD_BYTES", 64)
+    (tmp_path / target).write_bytes(b"x" * 65)
+    with pytest.raises(ValueError, match="regular-file or recorded-size bound"):
+        resources._active_runtime_requirements(tmp_path)
 
 
 @pytest.mark.parametrize("change", ["missing", "extra", "unhashed", "wrong_size", "wrong_algorithm", "symlink", "duplicate"])

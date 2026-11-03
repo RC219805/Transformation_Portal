@@ -222,7 +222,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
         "src/transformation_portal/photographic_delivery/models.py": "afe2573520eab2fef3d9a9271fbdec84e8eaebe3fedc54354c9c7f05323f41ea",
         "src/transformation_portal/photographic_delivery/native.py": "144a962a4837c7e0ccf101d65906f784565133cd63be79e6375664397aabbb02",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
-        "src/transformation_portal/photographic_delivery/native_resources.py": "4232d49bbd79b118b9a683baff10276b7d3040cff994bf487a4ab22f48d5bf12",
+        "src/transformation_portal/photographic_delivery/native_resources.py": "83b2a4771b0eb767703ab883862d79452c8b9193e71eb50d88283d8c9c804f27",
         "src/transformation_portal/photographic_delivery/presentation.py": "bdf6887b60e28098426f1af1ea4bb653a40fb59629046c8b4a4272d6dd2fdc9a",
         "src/transformation_portal/portal/job_artifacts.py": "58612f25186a5a844eb6e4c46d998d5dccfc9c870dc85ca9f9e5aa4493fccf9b",
         "src/transformation_portal/portal/path_security.py": "be5f8e9c52df734f2c03b7753c69e56a43cc4a06518bb73c55fddd6f835eb483",

@@ -185,9 +185,55 @@ def _digest(value: Any) -> bool:
     return type(value) is str and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
-def _file_hash(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+def _file_identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _read_runtime_file(
+    path: Path, *, expected_size: int | None = None, capture_metadata: bool = False
+) -> tuple[str, bytes | None]:
+    """Read stable runtime bytes once within their observed and declared bounds."""
+    maximum = _MAX_PACKAGE_RECORD_BYTES if capture_metadata else _MAX_PACKAGE_PAYLOAD_BYTES
+    before = path.lstat()
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or not 0 <= before.st_size <= maximum
+        or (expected_size is not None and (type(expected_size) is not int or expected_size != before.st_size))
+    ):
+        raise ValueError("Native resource file exceeds its regular-file or recorded-size bound")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    digest, count, parts = hashlib.sha256(), 0, []
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
+        if _file_identity(os.fstat(stream.fileno())) != _file_identity(before):
+            raise ValueError("Native resource file changed before hashing")
+        while count <= before.st_size:
+            block = stream.read(min(MIB, before.st_size - count + 1))
+            if not block:
+                break
+            count += len(block)
+            if count > before.st_size:
+                raise ValueError("Native resource file grew beyond its hashing bound")
+            digest.update(block)
+            if capture_metadata:
+                parts.append(block)
+        after = os.fstat(stream.fileno())
+    if (
+        count != before.st_size
+        or _file_identity(before) != _file_identity(after)
+        or _file_identity(before) != _file_identity(path.lstat())
+    ):
+        raise ValueError("Native resource file changed during hashing")
+    return digest.hexdigest(), b"".join(parts) if capture_metadata else None
+
+
+def _file_hash(path: Path, *, expected_size: int | None = None) -> str:
+    return _read_runtime_file(path, expected_size=expected_size)[0]
+
+
+def _metadata_bytes(path: Path) -> bytes:
+    _digest, payload = _read_runtime_file(path, capture_metadata=True)
+    assert payload is not None
+    return payload
 
 
 def _verify_executable_caches(
@@ -396,7 +442,7 @@ def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[st
             or recorded_hash is None
         ):
             raise ValueError(f"Native resource package RECORD is unverifiable: {name}")
-        observed = _file_hash(path)
+        observed = _file_hash(path, expected_size=recorded_size)
         encoded = base64.urlsafe_b64encode(bytes.fromhex(observed)).rstrip(b"=").decode("ascii")
         if encoded != recorded_hash:
             raise ValueError(f"Native resource package bytes differ from RECORD: {name}")
@@ -457,7 +503,7 @@ def _source_identity() -> dict[str, str]:
         expected = _file_hash(root / relative)
         if relative.startswith("src/transformation_portal/schemas/execution/"):
             resource = files("transformation_portal.schemas.execution").joinpath(Path(relative).name)
-            if hashlib.sha256(resource.read_bytes()).hexdigest() != expected:
+            if not isinstance(resource, Path) or _file_hash(resource) != expected:
                 raise ValueError("Loaded native resource schema differs")
         if not relative.endswith(".py"):
             sources[relative] = expected
@@ -500,12 +546,11 @@ def _active_runtime_requirements(root: Path | None = None, environment: dict[str
     from packaging.requirements import Requirement
 
     root = root or Path(__file__).resolve().parents[3]
-    with (root / "pyproject.toml").open("rb") as stream:
-        project = tomllib.load(stream).get("project")
+    project = tomllib.loads(_metadata_bytes(root / "pyproject.toml").decode("utf-8")).get("project")
     dependencies = project.get("dependencies") if type(project) is dict else None
     if type(dependencies) is not list or not dependencies or any(type(value) is not str for value in dependencies):
         raise ValueError("Native resources require declared core dependency requirements")
-    lines = [_requirement_line(line) for line in (root / "requirements/base.in").read_text(encoding="utf-8").splitlines()]
+    lines = [_requirement_line(line) for line in _metadata_bytes(root / "requirements/base.in").decode("utf-8").splitlines()]
     requirements = tuple(Requirement(value) for value in (*dependencies, *(line for line in lines if line)))
     try:
         return tuple(value for value in requirements if value.marker is None or value.marker.evaluate(environment))
