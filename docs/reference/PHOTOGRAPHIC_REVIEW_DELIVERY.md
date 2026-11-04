@@ -448,7 +448,7 @@ models are read through nonblocking, no-follow regular-file snapshots with
 bounded encoded and decoded lengths and stable file identity.
 
 The reviewed v2 profile identity is
-`191e17df4cc69c4ae772727b6351fc224d8254f41a4125a1af593fd7708f58ad`.
+`59de6acd915dbda8caaea39fc80fe4e90fe8409ad34bd8588ef01c9af265a251`.
 Its closure includes 72 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
@@ -464,6 +464,15 @@ and before/after file identity. Growing, truncated, replaced or nonregular
 inputs fail closed.
 Dependency declarations use the same stable reader with a 4 MiB metadata cap
 before TOML or requirements parsing.
+
+Color preparation releases normalized interleaved samples before immutable
+master construction when transformed RGB owns independent storage, detaching
+straight alpha first. Aliasing linear inputs retain their backing storage until
+the master freezes it. Region evidence hashes its immutable contiguous float32
+mask buffer directly. Pixel values, alpha, orientation, metadata and historical
+digests remain exact. These allocation changes retain the same reservation and
+the measured incremental-peak-plus-50-percent acceptance rule; fresh managed
+qualification establishes their actual process-memory effect.
 
 Qualification also verifies selectable CPython caches against those reviewed
 sources using the existing bounded
