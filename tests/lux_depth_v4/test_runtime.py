@@ -6,7 +6,10 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import marshal
+import os
 import py_compile
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -432,6 +435,52 @@ def test_selected_source_cannot_change_after_the_entry_stat_check(closure, monke
     monkeypatch.setattr(runtime, "_read_bytecode_input", changed_source)
     with pytest.raises(RuntimeError, match="source changed|cached bytecode differs"):
         prepared.verify()
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires POSIX FIFO support")
+def test_bytecode_input_replaced_by_fifo_rejects_without_waiting_for_writer(tmp_path):
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    script = r"""
+import os
+from pathlib import Path
+import stat
+import sys
+
+from transformation_portal.lux_depth_v4 import runtime
+
+path = Path(sys.argv[1])
+path.write_bytes(b"previously regular input")
+assert stat.S_ISREG(path.lstat().st_mode)
+original_open = os.open
+replacements = []
+
+def replace_before_open(filename, flags, *args, **kwargs):
+    if Path(filename) == path:
+        path.unlink()
+        os.mkfifo(path)
+        replacements.append(path)
+    return original_open(filename, flags, *args, **kwargs)
+
+runtime.os.open = replace_before_open
+try:
+    runtime._read_bytecode_input(path, 64)
+except RuntimeError as error:
+    assert "regular-file bound" in str(error)
+else:
+    raise AssertionError("FIFO replacement must fail before reading")
+assert replacements == [path] and stat.S_ISFIFO(path.lstat().st_mode)
+print("fifo_replacement_rejected_without_writer")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path / "replaced-input.pyc")],
+        env={**os.environ, "PYTHONPATH": str(source_root)},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "fifo_replacement_rejected_without_writer"
 
 
 def test_selected_prefix_obeys_existing_depth_bound(closure, monkeypatch, tmp_path):

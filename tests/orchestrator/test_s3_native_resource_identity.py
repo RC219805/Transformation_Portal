@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import copy
 import gc
+import gzip
 import json
+import os
+import subprocess
+import sys
 import weakref
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -183,6 +188,201 @@ def test_directory_identity_and_symlink_are_not_rebound(tmp_path: Path, client: 
 def test_unmeasured_sdk_configuration_falls_back(tmp_path: Path, client: Any, name: str, value: Any) -> None:
     setattr(client.meta.config, name, value)
     assert _store(tmp_path, client).native_resource_identity() is None
+
+
+@pytest.mark.parametrize("location", ["effective", "provided", "effective-nested", "provided-nested"])
+@pytest.mark.parametrize("value", [1 << 10000, -(1 << 10000)], ids=["huge-positive", "huge-negative"])
+def test_huge_sdk_config_integers_fall_back_without_api_calls(
+    tmp_path: Path, client: Any, monkeypatch: pytest.MonkeyPatch, location: str, value: int
+) -> None:
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Resource identity must never perform an S3 API call")
+
+    monkeypatch.setattr(client, "_make_api_call", forbidden)
+    store = _store(tmp_path, client)
+    assert store.native_resource_identity() is not None
+    configuration = client.meta.config
+    if location == "effective":
+        configuration.request_min_compression_size_bytes = value
+    elif location == "provided":
+        configuration._user_provided_options["request_min_compression_size_bytes"] = value
+    elif location == "effective-nested":
+        configuration.retries = {"mode": "legacy", "total_max_attempts": value}
+    else:
+        configuration._user_provided_options["retries"] = {"mode": "legacy", "total_max_attempts": value}
+    assert store.native_resource_identity() is None
+
+
+def test_oversized_supplied_option_map_rejects_before_iteration_or_models(
+    tmp_path: Path, client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = _store(tmp_path, client)
+    assert store.native_resource_identity() is not None
+    config = client.meta.config
+    config._user_provided_options = {f"unmeasured-{index}": None for index in range(len(config.OPTION_DEFAULTS) + 1)}
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Oversized options must reject before set materialization, model inspection or API calls")
+
+    monkeypatch.setattr(s3_module, "set", forbidden, raising=False)
+    monkeypatch.setattr(s3_module, "_native_service_model_identity", forbidden)
+    monkeypatch.setattr(client, "_make_api_call", forbidden)
+    assert store.native_resource_identity() is None
+
+
+@pytest.mark.parametrize("compressed", [False, True], ids=["json", "gzip"])
+def test_packaged_model_snapshot_preserves_json_order(tmp_path: Path, compressed: bool) -> None:
+    raw = b'{"second":2,"first":1}'
+    path = tmp_path / ("service-2.json.gz" if compressed else "service-2.json")
+    path.write_bytes(gzip.compress(raw) if compressed else raw)
+    result = s3_module._native_packaged_model_file(str(path), gzip.open if compressed else open, tmp_path)
+    assert isinstance(result, OrderedDict)
+    assert list(result.items()) == [("second", 2), ("first", 1)]
+
+
+def test_packaged_model_rejects_custom_opener_without_calling_it(tmp_path: Path) -> None:
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("A custom SDK opener cannot run during native resource inspection")
+
+    with pytest.raises(ValueError, match="Unsupported.*opener"):
+        s3_module._native_packaged_model_file(str(tmp_path / "service-2.json"), forbidden, tmp_path)
+
+
+@pytest.mark.parametrize("compressed", [False, True], ids=["json", "gzip"])
+def test_packaged_model_rejects_oversized_encoded_input_before_open(
+    tmp_path: Path, compressed: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / ("service-2.json.gz" if compressed else "service-2.json")
+    with path.open("wb") as stream:
+        stream.truncate(s3_module._NATIVE_MODEL_BYTES + 1)
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Oversized encoded models must reject before descriptor allocation or decoding")
+
+    monkeypatch.setattr(os, "open", forbidden)
+    with pytest.raises(ValueError, match="encoded regular-file bound"):
+        s3_module._native_packaged_model_file(str(path), gzip.open if compressed else open, tmp_path)
+
+
+def test_packaged_model_rejects_oversized_gzip_output(tmp_path: Path) -> None:
+    path = tmp_path / "service-2.json.gz"
+    path.write_bytes(gzip.compress(b"x" * (s3_module._NATIVE_MODEL_BYTES + 1)))
+    with pytest.raises(ValueError, match="decoded byte bound"):
+        s3_module._native_packaged_model_file(str(path), gzip.open, tmp_path)
+
+
+@pytest.mark.parametrize("problem", ["truncated", "corrupt-deflate"])
+def test_malformed_gzip_model_falls_back_without_api_calls(
+    tmp_path: Path, client: Any, monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    store = _store(tmp_path, client)
+    assert store.native_resource_identity() is not None
+    valid = gzip.compress(b'{"known":true}')
+    malformed = valid[:-1] if problem == "truncated" else valid[:10] + b"\x07" + valid[-8:]
+    path = tmp_path / "service-2.json.gz"
+    path.write_bytes(malformed)
+    read_model = s3_module._native_packaged_model_file
+    with pytest.raises(ValueError, match="invalid compressed bytes"):
+        read_model(str(path), gzip.open, tmp_path)
+
+    def changed_model(*_args: Any, **_kwargs: Any) -> Any:
+        return read_model(str(path), gzip.open, tmp_path)
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Malformed model fallback must never perform an S3 API call")
+
+    monkeypatch.setattr(s3_module, "_native_packaged_model_file", changed_model)
+    monkeypatch.setattr(client, "_make_api_call", forbidden)
+    assert store.native_resource_identity() is None
+
+
+@pytest.mark.parametrize("compressed", [False, True], ids=["json", "gzip"])
+@pytest.mark.parametrize("mutation", ["grow", "replace"])
+def test_packaged_model_rejects_changed_snapshot_with_observed_length_bound(
+    tmp_path: Path, compressed: bool, mutation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / ("service-2.json.gz" if compressed else "service-2.json")
+    raw = gzip.compress(b"{}") if compressed else b"{}"
+    path.write_bytes(raw)
+    original_fdopen = os.fdopen
+    requested = []
+
+    class ChangedOnRead:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+
+        def __enter__(self) -> Any:
+            self.stream.__enter__()
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def fileno(self) -> int:
+            return self.stream.fileno()
+
+        def read(self, count: int) -> bytes:
+            requested.append(count)
+            if mutation == "grow":
+                with path.open("ab") as writer:
+                    writer.write(b"growing encoded model")
+            else:
+                path.rename(tmp_path / "preserved-original")
+                path.write_bytes(raw)
+            return self.stream.read(count)
+
+    monkeypatch.setattr(os, "fdopen", lambda *args, **kwargs: ChangedOnRead(original_fdopen(*args, **kwargs)))
+    with pytest.raises(ValueError, match="changed during snapshot"):
+        s3_module._native_packaged_model_file(str(path), gzip.open if compressed else open, tmp_path)
+    assert requested == [len(raw) + 1]
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires POSIX FIFO support")
+@pytest.mark.parametrize("compressed", [False, True], ids=["json", "gzip"])
+def test_packaged_model_fifo_replacement_rejects_without_waiting_for_writer(tmp_path: Path, compressed: bool) -> None:
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    script = r"""
+import gzip
+import os
+from pathlib import Path
+import stat
+import sys
+
+from transformation_portal.orchestrator.artifact_store import s3
+
+path = Path(sys.argv[1])
+compressed = path.suffix == ".gz"
+path.write_bytes(gzip.compress(b"{}") if compressed else b"{}")
+original_open = os.open
+replacements = []
+
+def replace_before_open(filename, flags, *args, **kwargs):
+    if Path(filename) == path:
+        path.unlink()
+        os.mkfifo(path)
+        replacements.append(path)
+    return original_open(filename, flags, *args, **kwargs)
+
+os.open = replace_before_open
+try:
+    s3._native_packaged_model_file(str(path), gzip.open if compressed else open, path.parent)
+except ValueError as error:
+    assert "changed before snapshot" in str(error)
+else:
+    raise AssertionError("FIFO model replacement must reject before decoding")
+assert replacements == [path] and stat.S_ISFIFO(path.lstat().st_mode)
+print("model_fifo_rejected_without_writer")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path / ("service-2.json.gz" if compressed else "service-2.json"))],
+        env={**os.environ, "PYTHONPATH": str(source_root)},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "model_fifo_rejected_without_writer"
 
 
 def test_pinned_config_and_client_replacements_change_identity(tmp_path: Path, client: Any) -> None:

@@ -126,7 +126,7 @@ def _native_config_digest(config: Any) -> str | None:
             return True
         if type(value) is str:
             return len(value) <= 1024
-        return type(value) in {int, float} and math.isfinite(value) and 0 <= value <= 2**31
+        return type(value) in {int, float} and 0 <= value <= 2**31 and math.isfinite(value)
 
     def option(value: Any) -> bool:
         return scalar(value) or (
@@ -138,7 +138,11 @@ def _native_config_digest(config: Any) -> str | None:
     if type(config) is not Config or len(Config.OPTION_DEFAULTS) > 64:
         return None
     provided = config._user_provided_options
-    if type(provided) is not dict or set(provided) - set(Config.OPTION_DEFAULTS):
+    if (
+        type(provided) is not dict
+        or len(provided) > len(Config.OPTION_DEFAULTS)
+        or set(provided) - set(Config.OPTION_DEFAULTS)
+    ):
         return None
     values = {name: getattr(config, name) for name in Config.OPTION_DEFAULTS}
     if not all(option(value) for value in (*values.values(), *provided.values())):
@@ -306,6 +310,59 @@ def _native_operation_models(model: Any, packaged_operations: Any) -> dict[str, 
     return result
 
 
+def _native_packaged_model_file(full_path: str, open_method: Any, root: Path) -> Any:
+    """Decode only a finite, stable regular-file snapshot owned by this reader."""
+    import builtins
+    import gzip
+    import io
+    import os
+    import stat
+    import zlib
+
+    if open_method is not builtins.open and open_method is not gzip.open:
+        raise ValueError("Unsupported packaged S3 model opener")
+    path = Path(full_path)
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        return None
+    if path.resolve() != path or not path.is_relative_to(root):
+        raise ValueError("Packaged S3 model path changed")
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or not 0 <= before.st_size <= _NATIVE_MODEL_BYTES
+        or getattr(before, "st_flags", 0) & 0x40000000
+    ):
+        raise ValueError("Packaged S3 model exceeds its encoded regular-file bound")
+
+    def identity(info: Any) -> tuple[int, ...]:
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or identity(opened) != identity(before):
+            raise ValueError("Packaged S3 model changed before snapshot")
+        raw = stream.read(before.st_size + 1)
+        after = os.fstat(stream.fileno())
+    if (
+        len(raw) != before.st_size
+        or identity(after) != identity(before)
+        or identity(path.lstat()) != identity(before)
+        or path.resolve() != path
+    ):
+        raise ValueError("Packaged S3 model changed during snapshot")
+    if open_method is gzip.open:
+        try:
+            with io.BytesIO(raw) as encoded, gzip.GzipFile(fileobj=encoded, mode="rb") as decoded:
+                raw = decoded.read(_NATIVE_MODEL_BYTES + 1)
+        except (EOFError, zlib.error) as error:
+            raise ValueError("Packaged S3 model has invalid compressed bytes") from error
+    if len(raw) > _NATIVE_MODEL_BYTES:
+        raise ValueError("Packaged S3 model exceeds its decoded byte bound")
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=OrderedDict)
+
+
 def _native_service_model_identity(client: Any) -> dict[str, str] | None:
     """Bind actual S3 models to the verified packaged model and SDK extras."""
     import boto3
@@ -336,16 +393,7 @@ def _native_service_model_identity(client: Any) -> dict[str, str] | None:
 
     class BoundedFileLoader(JSONFileLoader):
         def _load_file(self, full_path: str, open_method: Any) -> Any:
-            path = Path(full_path)
-            if not path.is_file():
-                return None
-            if path.resolve() != path or not path.is_relative_to(builtin):
-                raise ValueError("Packaged S3 model path changed")
-            with open_method(full_path, "rb") as stream:
-                raw = stream.read(_NATIVE_MODEL_BYTES + 1)
-            if len(raw) > _NATIVE_MODEL_BYTES:
-                raise ValueError("Packaged S3 model exceeds its byte bound")
-            return json.loads(raw.decode("utf-8"), object_pairs_hook=OrderedDict)
+            return _native_packaged_model_file(full_path, open_method, builtin)
 
     expected_loader = Loader(
         extra_search_paths=[str(builtin)], file_loader=BoundedFileLoader(), include_default_search_paths=False
