@@ -456,6 +456,12 @@ def decode_master(
     else:
         raise ValueError("Unsupported photographic sample shape")
     linear = apply_input_color(samples, prepared)
+    # Independent color output no longer needs the interleaved normalized raster.
+    # Detach its alpha view before immutable master copies; an aliasing linear
+    # result retains its original storage for as long as it is needed.
+    if alpha is not None and not np.may_share_memory(linear, values):
+        alpha = alpha.copy(order="C")
+    del samples, values
     return ImageMaster(
         linear,
         source_sha256,
