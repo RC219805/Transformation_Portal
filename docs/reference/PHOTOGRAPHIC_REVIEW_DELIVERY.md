@@ -442,9 +442,13 @@ Only the pinned SDK handler's exact before/after `requestUri` and `authPath`
 states are normalized in private comparison copies. Ordinary S3 requests may
 perform that rewrite without invalidating their resource scope; other HTTP,
 service-model and cached-shape changes retain conservative costing.
+SDK option maps are bounded before key/value materialization, and integer
+options are range-checked before finite-number conversion. Packaged JSON/gzip
+models are read through nonblocking, no-follow regular-file snapshots with
+bounded encoded and decoded lengths and stable file identity.
 
 The reviewed v2 profile identity is
-`b7768cdfbb433869dd4a4dc4ef14237475831824c69b7f2f03b06b1d98c929e9`.
+`191e17df4cc69c4ae772727b6351fc224d8254f41a4125a1af593fd7708f58ad`.
 Its closure includes 72 source/declaration/schema files, 37 package versions,
 eight compiled extensions, actual verified payload trees for 13 SDK/validator/
 Redis distributions, and eleven standard-library transport/JSON/CSV source files.
@@ -466,7 +470,8 @@ sources using the existing bounded
 [semantic bytecode verifier](../../src/transformation_portal/lux_depth_v4/_bytecode.py).
 It checks timestamp and hash headers, optimization variants and the effective
 `pycache_prefix` without unmarshalling cache code or scanning a global cache
-directory. Verified equivalent cache churn does not change presentation or
+directory. Nonblocking descriptor opens reject replacement FIFOs before reads.
+Verified equivalent cache churn does not change presentation or
 resource identity. Already loaded Python modules must retain matching selected
 cache evidence; cacheless, custom-loader and mismatched installations retain
 conservative costing. These checks detect installation drift; they do not attest
@@ -474,7 +479,9 @@ arbitrary live process mutation or code which restores its cache after execution
 
 Isolated scope and source-hash unit tests use explicitly synthetic runtime/cache
 authority. Real executable-cache regression tests and supported-host resource
-measurements retain their separate authority.
+measurements retain their separate authority. The canonical service-backed
+regression suite is marked `integration` and `slow`; ordinary unit selection
+does not launch its native cohort.
 
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh
