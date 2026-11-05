@@ -387,6 +387,8 @@ def test_firewall_checkout_trust_contract_passes_repo_config() -> None:
 
 
 def test_firewall_core_parallelism_preserves_selection_and_coverage_contract() -> None:
+    _, canonical_config = _load_config(BUILD_WORKFLOW_PATH)
+    canonical_test_timeout = canonical_config["jobs"]["test"]["timeout-minutes"]
     marker = (
         "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark and not stress"
     )
@@ -406,7 +408,7 @@ def test_firewall_core_parallelism_preserves_selection_and_coverage_contract() -
         assert not job.get("continue-on-error", False)
         assert not step.get("continue-on-error", False)
         if workflow_path == FIREWALL_WORKFLOW_PATH:
-            assert job["timeout-minutes"] == 20
+            assert job["timeout-minutes"] == canonical_test_timeout
             assert "--json-report" in args
             assert "--json-report-file=test-results/core-py3.12.json" in args
 
