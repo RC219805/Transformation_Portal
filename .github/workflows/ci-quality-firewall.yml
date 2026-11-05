@@ -393,7 +393,7 @@ jobs:
     needs: [preflight, test-isolation, validate-dependency-constraints, validate-python-compatibility]
     if: needs.preflight.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45  # Match the canonical build.yml test job.
     strategy:
       fail-fast: false
       matrix:
