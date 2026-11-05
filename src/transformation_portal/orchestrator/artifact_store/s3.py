@@ -40,9 +40,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
+import json
+import math
+from collections import OrderedDict
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, List, Optional
+from urllib.parse import urlsplit
 
+from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactNotFoundError,
     ArtifactObjectMetadata,
@@ -55,6 +61,8 @@ from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_
 
 _CHUNK_BYTES = 1024 * 1024
 _DEFAULT_PREFIX = "tp/artifacts"
+_NATIVE_MODEL_BYTES = 4 * 1024**2
+_NATIVE_MODEL_NODES = 65536
 
 
 def _normalize_prefix(prefix: str) -> str:
@@ -84,6 +92,432 @@ def _load_boto3() -> Any:
     return boto3
 
 
+def _native_loopback_endpoint(value: Any) -> str | None:
+    """Recognize the closed local-MinIO pilot endpoint without DNS/network I/O."""
+    if type(value) is not str or len(value) > 512 or any(ord(char) <= 32 or ord(char) == 127 for char in value):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "http"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or parsed.hostname is None
+            or parsed.port is None
+            or parsed.port == 0
+        ):
+            return None
+        if not ipaddress.ip_address(parsed.hostname).is_loopback:
+            return None
+        return value.rstrip("/")
+    except ValueError:
+        return None
+
+
+def _native_config_digest(config: Any) -> str | None:
+    """Bind finite SDK options, including in-place mutation of unused defaults."""
+    from botocore.config import Config
+
+    def scalar(value: Any) -> bool:
+        if value is None or type(value) is bool:
+            return True
+        if type(value) is str:
+            return len(value) <= 1024
+        return type(value) in {int, float} and 0 <= value <= 2**31 and math.isfinite(value)
+
+    def option(value: Any) -> bool:
+        return scalar(value) or (
+            type(value) is dict
+            and len(value) <= 16
+            and all(type(key) is str and len(key) <= 64 and scalar(item) for key, item in value.items())
+        )
+
+    if type(config) is not Config or len(Config.OPTION_DEFAULTS) > 64:
+        return None
+    provided = config._user_provided_options
+    if (
+        type(provided) is not dict
+        or len(provided) > len(Config.OPTION_DEFAULTS)
+        or set(provided) - set(Config.OPTION_DEFAULTS)
+    ):
+        return None
+    values = {name: getattr(config, name) for name in Config.OPTION_DEFAULTS}
+    if not all(option(value) for value in (*values.values(), *provided.values())):
+        return None
+    encoded = dumps_json({"effective": values, "provided": provided}, sort_keys=True, allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _native_model_digest(payload: Any) -> str | None:
+    """Reject unbounded/mutable-object graphs before model serialization."""
+    nodes, text = 0, 0
+    active: set[int] = set()
+
+    def bounded(value: Any, depth: int = 0) -> bool:
+        nonlocal nodes, text
+        nodes += 1
+        if nodes > _NATIVE_MODEL_NODES or depth > 24:
+            return False
+        if type(value) is str:
+            text += len(value)
+            return len(value) <= 262144 and text <= 2 * 1024**2
+        if value is None or type(value) in {bool, int}:
+            return type(value) is not int or value.bit_length() <= 64
+        if type(value) is float:
+            return math.isfinite(value)
+        if type(value) not in {dict, OrderedDict, list} or len(value) > _NATIVE_MODEL_NODES or id(value) in active:
+            return False
+        active.add(id(value))
+        try:
+            if type(value) is list:
+                return all(bounded(item, depth + 1) for item in value)
+            return all(
+                type(key) is str and bounded(key, depth + 1) and bounded(item, depth + 1) for key, item in value.items()
+            )
+        finally:
+            active.remove(id(value))
+
+    if not bounded(payload):
+        return None
+    encoded = dumps_json(payload, sort_keys=True, allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest() if len(encoded) <= _NATIVE_MODEL_BYTES else None
+
+
+def _native_http_model(actual: Any, packaged: Any) -> dict[str, Any]:
+    """Accept only the pinned S3 handler's exact cold or warm HTTP mapping."""
+    if (
+        type(actual) not in {dict, OrderedDict}
+        or type(packaged) not in {dict, OrderedDict}
+        or _native_model_digest(actual) is None
+        or _native_model_digest(packaged) is None
+    ):
+        raise ValueError("Native S3 HTTP model exceeds its finite graph bound")
+    cold = dict(packaged)
+    warm = dict(cold)
+    uri = cold.get("requestUri")
+    if type(uri) is not str:
+        raise ValueError("Native S3 packaged HTTP URI is invalid")
+    bucket_path = "/{Bucket}"
+    if uri.startswith(bucket_path):
+        # botocore.handlers.remove_bucket_from_url_paths_from_model mutates
+        # these two fields on first use. Normalize private copies only.
+        warm["requestUri"] = uri[len(bucket_path) :]
+        auth_path = uri.split("?")[0]
+        warm["authPath"] = f"{auth_path}/" if auth_path == bucket_path else auth_path
+    if actual != cold and actual != warm:
+        raise ValueError("Native S3 HTTP model is not an exact packaged cold or warm state")
+    return cold
+
+
+def _native_operation_definition(actual: Any, packaged: Any) -> dict[str, Any]:
+    if (
+        type(actual) not in {dict, OrderedDict}
+        or type(packaged) not in {dict, OrderedDict}
+        or _native_model_digest(actual) is None
+    ):
+        raise ValueError("Native S3 operation definition exceeds its finite graph bound")
+    return {**actual, "http": _native_http_model(actual.get("http"), packaged.get("http"))}
+
+
+def _native_model_description(actual: Any, packaged: Any) -> dict[str, Any]:
+    """Canonicalize only validated HTTP state, preserving all other authority."""
+    if _native_model_digest(actual) is None or _native_model_digest(packaged) is None:
+        raise ValueError("Native S3 service description exceeds its finite graph bound")
+    operations, expected = actual.get("operations"), packaged.get("operations")
+    if (
+        type(operations) not in {dict, OrderedDict}
+        or type(expected) not in {dict, OrderedDict}
+        or len(operations) > 256
+        or set(operations) != set(expected)
+    ):
+        raise ValueError("Native S3 service operation set differs from its packaged authority")
+    return {
+        **actual,
+        "operations": {
+            name: _native_operation_definition(definition, expected[name]) for name, definition in operations.items()
+        },
+    }
+
+
+def _native_operation_models(model: Any, packaged_operations: Any) -> dict[str, Any]:
+    """Include effective cached shape serialization, not only backing JSON."""
+    from botocore.model import ListShape, MapShape, OperationModel, Shape, StringShape, StructureShape
+
+    count = 0
+
+    def shape_payload(shape: Any, depth: int = 0) -> Any:
+        nonlocal count
+        count += 1
+        if count > _NATIVE_MODEL_NODES or depth > 16:
+            raise ValueError("Native S3 operation shape graph exceeds its bound")
+        if shape is None:
+            return None
+        if type(shape) not in {Shape, StringShape, StructureShape, ListShape, MapShape}:
+            raise ValueError("Unsupported native S3 operation shape")
+        definition = shape._shape_model
+        if type(definition) not in {dict, OrderedDict}:
+            raise ValueError("Unsupported native S3 shape definition")
+        if type(shape) is StructureShape:
+            members = definition.get("members", {})
+            if type(members) not in {dict, OrderedDict} or len(members) > 256:
+                raise ValueError("Native S3 shape definition has unbounded members")
+        definition_identity = _native_model_digest(definition)
+        if definition_identity is None:
+            raise ValueError("Native S3 shape definition exceeds its finite graph bound")
+        result = {
+            "name": shape.name,
+            "type": shape.type_name,
+            "definition_sha256": definition_identity,
+            "serialization": shape.serialization,
+            "metadata": shape.metadata,
+        }
+        if type(shape) is StructureShape:
+            if (
+                type(shape.members) not in {dict, OrderedDict}
+                or len(shape.members) > 256
+                or any(type(name) is not str or len(name) > 1024 for name in shape.members)
+            ):
+                raise ValueError("Native S3 operation has unbounded members")
+            result["members"] = {name: shape_payload(value, depth + 1) for name, value in shape.members.items()}
+        elif type(shape) is ListShape:
+            result["member"] = shape_payload(shape.member, depth + 1)
+        elif type(shape) is MapShape:
+            result.update(key=shape_payload(shape.key, depth + 1), value=shape_payload(shape.value, depth + 1))
+        return result
+
+    result = {}
+    for name in ("GetObject", "HeadObject", "PutObject", "DeleteObject", "ListObjectsV2"):
+        operation = model.operation_model(name)
+        if type(operation) is not OperationModel:
+            raise ValueError("Unsupported native S3 operation model")
+        expected = packaged_operations[name]
+        operation_identity = _native_model_digest(_native_operation_definition(operation._operation_model, expected))
+        if operation_identity is None:
+            raise ValueError("Native S3 operation definition exceeds its finite graph bound")
+        input_shape = shape_payload(operation.input_shape)
+        output_shape = shape_payload(operation.output_shape)
+        result[name] = {
+            "definition_sha256": operation_identity,
+            "http": _native_http_model(operation.http, expected["http"]),
+            "streaming_input": operation.has_streaming_input,
+            "streaming_output": operation.has_streaming_output,
+            "input": input_shape,
+            "output": output_shape,
+        }
+    return result
+
+
+def _native_packaged_model_file(full_path: str, open_method: Any, root: Path) -> Any:
+    """Decode only a finite, stable regular-file snapshot owned by this reader."""
+    import builtins
+    import gzip
+    import io
+    import os
+    import stat
+    import zlib
+
+    if open_method is not builtins.open and open_method is not gzip.open:
+        raise ValueError("Unsupported packaged S3 model opener")
+    path = Path(full_path)
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        return None
+    if path.resolve() != path or not path.is_relative_to(root):
+        raise ValueError("Packaged S3 model path changed")
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or not 0 <= before.st_size <= _NATIVE_MODEL_BYTES
+        or getattr(before, "st_flags", 0) & 0x40000000
+    ):
+        raise ValueError("Packaged S3 model exceeds its encoded regular-file bound")
+
+    def identity(info: Any) -> tuple[int, ...]:
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or identity(opened) != identity(before):
+            raise ValueError("Packaged S3 model changed before snapshot")
+        raw = stream.read(before.st_size + 1)
+        after = os.fstat(stream.fileno())
+    if (
+        len(raw) != before.st_size
+        or identity(after) != identity(before)
+        or identity(path.lstat()) != identity(before)
+        or path.resolve() != path
+    ):
+        raise ValueError("Packaged S3 model changed during snapshot")
+    if open_method is gzip.open:
+        try:
+            with io.BytesIO(raw) as encoded, gzip.GzipFile(fileobj=encoded, mode="rb") as decoded:
+                raw = decoded.read(_NATIVE_MODEL_BYTES + 1)
+        except (EOFError, zlib.error) as error:
+            raise ValueError("Packaged S3 model has invalid compressed bytes") from error
+    if len(raw) > _NATIVE_MODEL_BYTES:
+        raise ValueError("Packaged S3 model exceeds its decoded byte bound")
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=OrderedDict)
+
+
+def _native_service_model_identity(client: Any) -> dict[str, str] | None:
+    """Bind actual S3 models to the verified packaged model and SDK extras."""
+    import boto3
+    from botocore.loaders import JSONFileLoader, Loader
+    from botocore.model import ServiceModel
+
+    loader, model = client._loader, client.meta.service_model
+    if (
+        type(loader) is not Loader
+        or type(loader.file_loader) is not JSONFileLoader
+        or loader._extras_types != Loader.BUILTIN_EXTRAS_TYPES
+        or type(model) is not ServiceModel
+        or model.api_version != "2006-03-01"
+        or len(loader.search_paths) > 3
+    ):
+        return None
+    builtin = Path(Loader.BUILTIN_DATA_PATH).resolve()
+    packaged_paths = {builtin, (Path(boto3.__file__).resolve().parent / "data").resolve()}
+    customer = Path(Loader.CUSTOMER_DATA_PATH).resolve()
+    for value in loader.search_paths:
+        if type(value) is not str or len(value) > 4096:
+            return None
+        path = Path(value).resolve()
+        if path not in packaged_paths and not (path == customer and not path.exists()):
+            return None
+    if _native_model_digest(model._service_description) is None:
+        return None
+
+    class BoundedFileLoader(JSONFileLoader):
+        def _load_file(self, full_path: str, open_method: Any) -> Any:
+            return _native_packaged_model_file(full_path, open_method, builtin)
+
+    expected_loader = Loader(
+        extra_search_paths=[str(builtin)], file_loader=BoundedFileLoader(), include_default_search_paths=False
+    )
+    expected = expected_loader.load_service_model("s3", "service-2", api_version="2006-03-01")
+    actual = _native_model_digest(_native_model_description(model._service_description, expected))
+    if actual is None or actual != _native_model_digest(expected):
+        return None
+    effective = _native_model_digest(_native_operation_models(model, expected["operations"]))
+    reference = ServiceModel(expected, service_name="s3")
+    try:
+        packaged_effective = _native_model_digest(_native_operation_models(reference, expected["operations"]))
+    finally:
+        # The fresh validation model caches operations that refer back to it.
+        # Break only that private cycle; never alter the live client's caches.
+        reference._instance_cache.clear()
+    if effective is None or effective != packaged_effective:
+        return None
+    return {"description_sha256": actual, "operations_sha256": effective}
+
+
+def _native_client_settings(client: Any) -> dict[str, Any] | None:
+    """Read only the finite SDK path measured by the local-MinIO pilot.
+
+    This is eligibility, not S3 configuration. Other clients retain their
+    ordinary behavior and use the conservative photographic resource profile.
+    """
+    from botocore.client import BaseClient
+    from botocore.compat import HAS_CRT
+    from botocore.exceptions import BotoCoreError
+    from botocore.httpsession import URLLib3Session
+
+    if (
+        not isinstance(client, BaseClient)
+        or type(client).__module__ != "botocore.client"
+        or type(client).__name__ != "S3"
+        or client.meta.service_model.service_name != "s3"
+        or HAS_CRT
+    ):
+        return None
+    config, endpoint = client.meta.config, client._endpoint
+    config_digest = _native_config_digest(config)
+    session = endpoint.http_session
+    url = _native_loopback_endpoint(client.meta.endpoint_url)
+    if (
+        url is None
+        or config_digest is None
+        or _native_loopback_endpoint(endpoint.host) != url
+        or type(session) is not URLLib3Session
+        or type(config.region_name) is not str
+        or not 1 <= len(config.region_name) <= 64
+    ):
+        return None
+    if session._proxy_config.proxy_url_for(url) is not None or config.proxies or config.proxies_config:
+        return None
+    timeouts = (config.connect_timeout, config.read_timeout)
+    if any(type(value) not in {int, float} or not math.isfinite(value) or not 0 < value <= 60 for value in timeouts):
+        return None
+    pool = config.max_pool_connections
+    if type(pool) is not int or not 1 <= pool <= 10 or session._max_pool_connections != pool:
+        return None
+    if session._timeout.connect_timeout != timeouts[0] or session._timeout.read_timeout != timeouts[1]:
+        return None
+    retries = config.retries
+    if type(retries) is not dict or set(retries) - {"mode", "total_max_attempts"}:
+        return None
+    mode = retries.get("mode")
+    if mode not in {"legacy", "standard"}:
+        return None
+    # The pinned SDK's legacy S3 model inherits five attempts; standard uses
+    # three. Explicit Config limits have already been normalized by botocore.
+    attempts = retries.get("total_max_attempts", 5 if mode == "legacy" else 3)
+    if type(attempts) is not int or not 1 <= attempts <= 10:
+        return None
+    s3 = config.s3
+    if s3 is not None and (
+        type(s3) is not dict
+        or set(s3) - {"addressing_style", "payload_signing_enabled"}
+        or s3.get("addressing_style", "auto") not in {"auto", "path"}
+        or type(s3.get("payload_signing_enabled", False)) is not bool
+    ):
+        return None
+    if (
+        config.signature_version != "s3v4"
+        or config.parameter_validation is not True
+        or config.client_cert is not None
+        or config.use_dualstack_endpoint not in {None, False}
+        or config.use_fips_endpoint not in {None, False}
+        or config.endpoint_discovery_enabled not in {None, False}
+        or config.client_context_params
+        or config.sigv4a_signing_region_set is not None
+        or config.auth_scheme_preference is not None
+        or config.request_checksum_calculation not in {"when_supported", "when_required"}
+        or config.response_checksum_validation not in {"when_supported", "when_required"}
+        or (config.tcp_keepalive is not None and type(config.tcp_keepalive) is not bool)
+    ):
+        return None
+    try:
+        model_identity = _native_service_model_identity(client)
+    except (BotoCoreError, KeyError, RecursionError):
+        return None
+    if model_identity is None:
+        return None
+    return {
+        "endpoint": url,
+        "region": config.region_name,
+        "client_id": id(client),
+        "config_id": id(config),
+        "config_sha256": config_digest,
+        "model": model_identity,
+        "session_id": id(session),
+        "pool_manager_id": id(session._manager),
+        "connect_timeout": timeouts[0],
+        "read_timeout": timeouts[1],
+        "max_pool_connections": pool,
+        "retry_mode": mode,
+        "total_max_attempts": attempts,
+        "s3": dict(s3) if s3 is not None else None,
+        "request_checksum_calculation": config.request_checksum_calculation,
+        "response_checksum_validation": config.response_checksum_validation,
+        "tcp_keepalive": config.tcp_keepalive,
+    }
+
+
 class S3ArtifactStore(ArtifactStore):
     """S3 implementation of ``ArtifactStore``.
 
@@ -100,6 +534,7 @@ class S3ArtifactStore(ArtifactStore):
         endpoint_url: Optional[str] = None,
         region_name: Optional[str] = None,
         client: Optional[Any] = None,
+        photographic_publication_root: Optional[Path] = None,
     ) -> None:
         if not bucket:
             raise ArtifactStoreError("S3ArtifactStore requires a non-empty bucket (TP_ARTIFACT_BUCKET).")
@@ -109,6 +544,18 @@ class S3ArtifactStore(ArtifactStore):
         self._region_name = region_name or None
         self._client = client
         self._lock = asyncio.Lock()
+        self._native_publication_root: Path | None = None
+        self._native_publication_stat: tuple[int, int] | None = None
+        if isinstance(photographic_publication_root, Path) and photographic_publication_root.is_absolute():
+            try:
+                if not photographic_publication_root.is_symlink():
+                    root = photographic_publication_root.resolve(strict=True)
+                    if root.is_dir():
+                        info = root.stat()
+                        self._native_publication_root = root
+                        self._native_publication_stat = info.st_dev, info.st_ino
+            except (OSError, ValueError):
+                pass
 
     @property
     def backend(self) -> str:
@@ -121,6 +568,61 @@ class S3ArtifactStore(ArtifactStore):
     @property
     def key_prefix(self) -> str:
         return self._prefix
+
+    @property
+    def native_publication_root(self) -> Path | None:
+        """Operator-mapped MinIO host capacity root, never a remote S3 claim.
+
+        The private qualification campaign must independently verify the actual
+        container bind/endpoint mapping. Merely configuring this path does not
+        establish that physical mapping, and no directory is created here.
+        """
+        root = self._native_publication_root
+        if root is None:
+            return None
+        try:
+            info = root.stat()
+            if root.resolve() == root and root.is_dir() and (info.st_dev, info.st_ino) == self._native_publication_stat:
+                return root
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def native_resource_identity(self) -> dict[str, Any] | None:
+        """Return a private closed identity only for the bounded local pilot.
+
+        No client is initialized and no network/credential discovery executes.
+        Unsupported configuration simply retains conservative admission.
+        """
+        root = self.native_publication_root
+        root_identity = self._native_publication_stat
+        if root is None or root_identity is None or self._client is None:
+            return None
+        if (
+            type(self._bucket) is not str
+            or not 1 <= len(self._bucket) <= 255
+            or len(self._prefix) > 1024
+            or len(str(root)) > 4096
+        ):
+            return None
+        try:
+            settings = _native_client_settings(self._client)
+            configured = _native_loopback_endpoint(self._endpoint_url)
+            if settings is None or configured is None or configured != settings["endpoint"]:
+                return None
+            if self._region_name is not None and self._region_name != settings["region"]:
+                return None
+            return {
+                "schema": "tp.photo.s3_resource_identity.v1",
+                "bucket": self._bucket,
+                "prefix": self._prefix,
+                "root": str(root),
+                "device": root_identity[0],
+                "inode": root_identity[1],
+                "client": settings,
+            }
+        except (AttributeError, ImportError, OSError, TypeError, ValueError):
+            return None
 
     async def _get_client(self) -> Any:
         if self._client is not None:

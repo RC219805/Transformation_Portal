@@ -2,28 +2,35 @@
 
 from __future__ import annotations
 
+import base64
+import csv
 import hashlib
+import importlib.machinery
 import importlib.metadata
 import importlib.util
+import io
 import math
 import os
 import platform
 import re
+import stat
 import sys
 import tomllib
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from importlib.resources import files
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.photographic_delivery.native_resource_contract import RESOURCE_CONTRACT
 from transformation_portal.photographic_delivery.native_resource_inputs import NativeRasterEvidence
 
-PROFILE_ID = "tp.photo.native_sdr_local.v1"
+PROFILE_ID = "tp.photo.native_sdr_managed.v2"
 GIB, MIB = 1024**3, 1024**2
 MEMORY_BYTES = 6 * GIB
 ACCEPTANCE_PEAK_BYTES = 4 * GIB  # An acceptance ceiling, never a claimed observation.
 MAX_PIXELS, MAX_REGIONS = 30_000_000, 4
+MAX_CANONICAL_PLAN_BYTES, MAX_CANONICAL_INPUTS = 512 * 1024, 8
 MAX_STATE_BYTES, MAX_STATE_NODES, MAX_STATE_DEPTH = 8 * MIB, 65536, 16
 _FIXED_BYTES = 1444 * MIB + GIB
 _THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
@@ -39,8 +46,61 @@ _PACKAGES = (
     "SQLAlchemy",
     "asyncpg",
     "packaging",
+    "boto3",
+    "botocore",
+    "s3transfer",
+    "urllib3",
+    "redis",
+    "jsonschema",
+    "jsonschema-specifications",
+    "referencing",
+    "rpds-py",
+    "attrs",
+    "jmespath",
+    "python-dateutil",
+    "six",
+    "pydantic-core",
 )
-_EXTENSIONS = ("numpy._core._multiarray_umath", "PIL._imaging", "PIL._imagingcms", "scipy.ndimage._nd_image", "zlib")
+_EXTENSIONS = (
+    "numpy._core._multiarray_umath",
+    "PIL._imaging",
+    "PIL._imagingcms",
+    "scipy.ndimage._nd_image",
+    "rpds.rpds",
+    "pydantic_core._pydantic_core",
+    "zlib",
+    "_csv",
+)
+_PAYLOAD_PACKAGES = {
+    "boto3": ("boto3",),
+    "botocore": ("botocore",),
+    "s3transfer": ("s3transfer",),
+    "urllib3": ("urllib3",),
+    "jmespath": ("jmespath",),
+    "jsonschema": ("jsonschema",),
+    "jsonschema-specifications": ("jsonschema_specifications",),
+    "referencing": ("referencing",),
+    "rpds-py": ("rpds",),
+    "attrs": ("attr", "attrs"),
+    "redis": ("redis",),
+    "python-dateutil": ("dateutil",),
+    "six": ("six.py",),
+}
+_STDLIB_PAYLOADS = (
+    "csv",
+    "http.client",
+    "ssl",
+    "socket",
+    "urllib.parse",
+    "urllib.request",
+    "urllib.response",
+    "json.decoder",
+    "json.encoder",
+    "json.scanner",
+    "gzip",
+)
+_MAX_PACKAGE_PAYLOAD_BYTES, _MAX_PACKAGE_PAYLOAD_FILES = 100 * MIB, 32768
+_MAX_PACKAGE_RECORD_BYTES = 4 * MIB
 _SOURCE_PATHS = (
     "pyproject.toml",
     "requirements/base.in",
@@ -60,11 +120,22 @@ _SOURCE_PATHS = (
     "src/transformation_portal/core/security/fs_guard.py",
     "src/transformation_portal/core/security/path_safety.py",
     "src/transformation_portal/core/execution_plan.py",
+    "src/transformation_portal/core/execution_plan_v2.py",
+    "src/transformation_portal/core/execution_plan_v3.py",
+    "src/transformation_portal/core/execution_plan_v4.py",
+    "src/transformation_portal/core/execution_plan_v5.py",
+    "src/transformation_portal/schemas/execution/plan.v2.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v3.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v4.schema.json",
+    "src/transformation_portal/schemas/execution/plan.v5.schema.json",
     "src/transformation_portal/ingest/canonical_json.py",
     "src/transformation_portal/materials_v4/engine.py",
     "src/transformation_portal/materials_v4/contracts.py",
     "src/transformation_portal/materials_v4/operations.py",
     "src/transformation_portal/lux_depth_v4/photography.py",
+    "src/transformation_portal/lux_depth_v4/runtime.py",
+    "src/transformation_portal/lux_depth_v4/_bytecode.py",
+    "src/transformation_portal/depth/backends/da3_runtime_identity.py",
     "src/transformation_portal/lux_depth_v4/color_preparation.py",
     "src/transformation_portal/lux_depth_v4/io.py",
     "src/transformation_portal/lux_depth_v5/preview.py",
@@ -75,6 +146,16 @@ _SOURCE_PATHS = (
     "src/transformation_portal/orchestrator/photographic_review_store.py",
     "src/transformation_portal/orchestrator/photographic_scene_catalogue.py",
     "src/transformation_portal/orchestrator/dispatch.py",
+    "src/transformation_portal/orchestrator/execution_dispatch.py",
+    "src/transformation_portal/orchestrator/execution_policy.py",
+    "src/transformation_portal/orchestrator/queue/__init__.py",
+    "src/transformation_portal/orchestrator/queue/base.py",
+    "src/transformation_portal/orchestrator/queue/locator.py",
+    "src/transformation_portal/orchestrator/queue/redis.py",
+    "src/transformation_portal/orchestrator/lux_depth_adapter.py",
+    "src/transformation_portal/orchestrator/photography_adapter.py",
+    "src/transformation_portal/orchestrator/photography_v6_adapter.py",
+    "src/transformation_portal/orchestrator/artifact_store/s3.py",
     "src/transformation_portal/orchestrator/storage/__init__.py",
     "src/transformation_portal/orchestrator/storage/base.py",
     "src/transformation_portal/orchestrator/storage/postgres.py",
@@ -104,19 +185,330 @@ def _digest(value: Any) -> bool:
     return type(value) is str and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
-def _file_hash(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+def _file_identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _read_runtime_file(
+    path: Path, *, expected_size: int | None = None, capture_metadata: bool = False
+) -> tuple[str, bytes | None]:
+    """Read stable runtime bytes once within their observed and declared bounds."""
+    maximum = _MAX_PACKAGE_RECORD_BYTES if capture_metadata else _MAX_PACKAGE_PAYLOAD_BYTES
+    before = path.lstat()
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or not 0 <= before.st_size <= maximum
+        or (expected_size is not None and (type(expected_size) is not int or expected_size != before.st_size))
+    ):
+        raise ValueError("Native resource file exceeds its regular-file or recorded-size bound")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    digest, count, parts = hashlib.sha256(), 0, []
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
+        if _file_identity(os.fstat(stream.fileno())) != _file_identity(before):
+            raise ValueError("Native resource file changed before hashing")
+        while count <= before.st_size:
+            block = stream.read(min(MIB, before.st_size - count + 1))
+            if not block:
+                break
+            count += len(block)
+            if count > before.st_size:
+                raise ValueError("Native resource file grew beyond its hashing bound")
+            digest.update(block)
+            if capture_metadata:
+                parts.append(block)
+        after = os.fstat(stream.fileno())
+    if (
+        count != before.st_size
+        or _file_identity(before) != _file_identity(after)
+        or _file_identity(before) != _file_identity(path.lstat())
+    ):
+        raise ValueError("Native resource file changed during hashing")
+    return digest.hexdigest(), b"".join(parts) if capture_metadata else None
+
+
+def _file_hash(path: Path, *, expected_size: int | None = None) -> str:
+    return _read_runtime_file(path, expected_size=expected_size)[0]
+
+
+def _metadata_bytes(path: Path) -> bytes:
+    _digest, payload = _read_runtime_file(path, capture_metadata=True)
+    assert payload is not None
+    return payload
+
+
+def _verify_executable_caches(
+    sources: tuple[Path, ...], loaded: tuple[tuple[str, Any], ...] = (), expected_hashes: dict[Path, str] | None = None
+) -> None:
+    """Verify selected source caches, including warm modules, without loading code.
+
+    Cache bytes never enter capsule identity: ordinary verified cache churn is
+    harmless. Already loaded Python modules require their selected cache to
+    remain available as evidence; cacheless/custom loaders select fallback.
+    This detects installation drift, not arbitrary same-process code which can
+    rewrite its own module metadata or restore a cache after execution.
+    """
+    from transformation_portal.lux_depth_v4 import runtime as bytecode
+
+    try:
+        configuration = bytecode._bytecode_configuration()
+        sources = tuple(sorted(set(sources)))
+        budget = bytecode._bytecode_budget()
+        source_identities = {}
+        for source in sources:
+            raw_source, identity = bytecode._read_bytecode_input(source, bytecode._MAX_BYTECODE_SOURCE_BYTES)
+            budget[1][0] -= len(raw_source)
+            if budget[1][0] < 0:
+                raise ValueError("Native resource cache source exceeds validation budget")
+            if expected_hashes is not None and hashlib.sha256(raw_source).hexdigest() != expected_hashes[source]:
+                raise ValueError("Native resource cache source differs from verified bytes")
+            source_identities[str(source)] = identity
+            del raw_source
+        selected = bytecode._selected_source_caches(sources)
+        receipts: dict = {}
+        namespace: dict = {}
+        bytecode._verify_selected_caches(selected, receipts, namespace, budget, source_identities=source_identities)
+        for cache, source, _optimization in selected:
+            if str(cache) not in receipts:
+                continue  # Absent lazy caches permit normal source compilation.
+            raw, cache_identity = bytecode._read_bytecode_input(cache, bytecode._MAX_BYTECODE_BYTES)
+            budget[1][0] -= len(raw)
+            if budget[1][0] < 0 or len(raw) < 16 or raw[:4] != importlib.util.MAGIC_NUMBER:
+                raise ValueError("Native resource cache header or validation budget is invalid")
+            flags = int.from_bytes(raw[4:8], "little")
+            if flags not in {0, 1, 3}:
+                raise ValueError("Native resource cache flags are invalid")
+            source_identity = receipts[str(cache)][1]
+            if flags == 0:
+                observed = source.stat()
+                expected_header = (int(observed.st_mtime) & 0xFFFFFFFF, observed.st_size & 0xFFFFFFFF)
+                if (int.from_bytes(raw[8:12], "little"), int.from_bytes(raw[12:16], "little")) != expected_header:
+                    raise ValueError("Native resource timestamp cache differs from its source")
+            else:
+                source_bytes, observed_identity = bytecode._read_bytecode_input(source, bytecode._MAX_BYTECODE_SOURCE_BYTES)
+                budget[1][0] -= len(source_bytes)
+                if (
+                    observed_identity != source_identity
+                    or budget[1][0] < 0
+                    or raw[8:16] != importlib.util.source_hash(source_bytes)
+                ):
+                    raise ValueError("Native resource hash cache differs from its source")
+            if cache_identity != receipts[str(cache)][0]:
+                raise ValueError("Native resource cache changed during verification")
+        for source in sources:
+            if bytecode._stat_identity(source.lstat()) != source_identities[str(source)]:
+                raise ValueError("Native resource source changed during cache verification")
+        selected_paths = {cache for cache, _source, optimization in selected if optimization == sys.flags.optimize}
+        for name, module in loaded:
+            origin = getattr(module, "__file__", None)
+            if not isinstance(origin, str) or Path(origin).suffix != ".py":
+                raise ValueError(f"Loaded native resource Python source is invalid: {name}")
+            loader = getattr(module, "__loader__", None)
+            spec = getattr(module, "__spec__", None)
+            if (
+                type(loader) is not importlib.machinery.SourceFileLoader
+                or type(spec) is not importlib.machinery.ModuleSpec
+                or spec.loader is not loader
+                or not isinstance(spec.origin, str)
+                or Path(spec.origin).resolve() != Path(origin).resolve(strict=True)
+                or Path(loader.path).resolve() != Path(origin).resolve(strict=True)
+            ):
+                raise ValueError(f"Loaded native resource requires its standard source loader: {name}")
+            cached = getattr(module, "__cached__", None)
+            if not isinstance(cached, str):
+                raise ValueError(f"Loaded native resource cache evidence is missing: {name}")
+            source = Path(origin).resolve(strict=True)
+            expected = bytecode._source_cache_path(str(source), sys.flags.optimize)
+            path = Path(os.path.abspath(cached))
+            if (
+                path != expected
+                or path not in selected_paths
+                or str(path) not in receipts
+                or path.resolve(strict=True) != path
+            ):
+                raise ValueError(f"Loaded native resource cache is not selected for its source: {name}")
+        if bytecode._bytecode_configuration() != configuration:
+            raise ValueError("Native resource bytecode configuration changed")
+    except RuntimeError as error:
+        raise ValueError("Native resource executable cache verification failed") from error
+
+
+def _distribution_record(name: str) -> tuple[Path, list[tuple[str, str | None, int | None]]]:
+    """Bound local wheel metadata before parsing or materializing file entries."""
+    distribution = importlib.metadata.distribution(name)
+    metadata_root = getattr(distribution, "_path", None)
+    if (
+        type(distribution) is not importlib.metadata.PathDistribution
+        or not isinstance(metadata_root, Path)
+        or not metadata_root.is_absolute()
+        or metadata_root.suffix != ".dist-info"
+        or metadata_root.resolve(strict=True) != metadata_root
+        or not metadata_root.is_dir()
+    ):
+        raise ValueError(f"Native resource package has no bounded local RECORD: {name}")
+    record = metadata_root / "RECORD"
+    try:
+        if record.resolve(strict=True) != record:
+            raise ValueError(f"Native resource package RECORD is not canonical: {name}")
+        descriptor = os.open(record, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(descriptor, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= _MAX_PACKAGE_RECORD_BYTES:
+                raise ValueError(f"Native resource package has no bounded RECORD: {name}")
+            raw = stream.read(_MAX_PACKAGE_RECORD_BYTES + 1)
+            after = os.fstat(stream.fileno())
+        current = record.lstat()
+        identities = {
+            (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns) for info in (before, after, current)
+        }
+        if len(identities) != 1 or len(raw) != before.st_size or len(raw) > _MAX_PACKAGE_RECORD_BYTES:
+            raise ValueError(f"Native resource package RECORD changed while reading: {name}")
+        rows: list[tuple[str, str | None, int | None]] = []
+        seen: set[str] = set()
+        for index, row in enumerate(csv.reader(io.StringIO(raw.decode("utf-8"), newline=""), strict=True), 1):
+            if index > _MAX_PACKAGE_PAYLOAD_FILES or len(row) != 3 or not row[0] or row[0] in seen:
+                raise ValueError(f"Native resource package has no bounded RECORD: {name}")
+            seen.add(row[0])
+            if not row[1] and not row[2]:  # RECORD itself and generated bytecode may be unhashed.
+                rows.append((row[0], None, None))
+                continue
+            if re.fullmatch(r"sha256=[A-Za-z0-9_-]{43}", row[1]) is None or re.fullmatch(r"[0-9]{1,20}", row[2]) is None:
+                raise ValueError(f"Native resource package RECORD hash/size is invalid: {name}")
+            rows.append((row[0], row[1].removeprefix("sha256="), int(row[2])))
+    except (OSError, UnicodeError, csv.Error) as error:
+        raise ValueError(f"Native resource package has no bounded RECORD: {name}") from error
+    if not rows:
+        raise ValueError(f"Native resource package has no bounded RECORD: {name}")
+    return metadata_root.parent, rows
+
+
+def _distribution_payload_identity(name: str, roots: tuple[str, ...]) -> dict[str, Any]:
+    """Verify installed wheel payload bytes, including non-Python SDK models.
+
+    RECORD is a per-file expectation, never authority on its own: actual tree
+    membership, lengths and SHA256 bytes must all agree. Generated bytecode is
+    verified against reviewed sources, then excluded from content identity.
+    No pip cache or installer receipt is consulted, and no package is imported
+    to discover its payload.
+    """
+    base, entries = _distribution_record(name)
+    expected: dict[str, tuple[str | None, int | None]] = {}
+    for relative, digest, size in entries:
+        record_relative = PurePosixPath(relative)
+        if not record_relative.parts or record_relative.parts[0] not in roots:
+            continue
+        if (
+            record_relative.is_absolute()
+            or ".." in record_relative.parts
+            or "\\" in relative
+            or record_relative.as_posix() != relative
+            or relative in expected
+        ):
+            raise ValueError(f"Native resource package RECORD path is invalid: {name}")
+        if "__pycache__" not in record_relative.parts:
+            expected[relative] = (digest, size)
+    actual: dict[str, Path] = {}
+    for relative_root in roots:
+        root = base / relative_root
+        if root.is_symlink() or not root.exists():
+            raise ValueError(f"Native resource package root is invalid: {name}")
+        candidates = root.rglob("*") if root.is_dir() else iter((root,))
+        for index, path in enumerate(candidates):
+            if index >= _MAX_PACKAGE_PAYLOAD_FILES:
+                raise ValueError(f"Native resource package exceeds its tree bound: {name}")
+            tree_relative = path.relative_to(base)
+            if "__pycache__" in tree_relative.parts:
+                continue
+            if path.is_symlink():
+                raise ValueError(f"Native resource package contains a symlink: {name}")
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ValueError(f"Native resource package contains a non-file: {name}")
+            actual[tree_relative.as_posix()] = path
+            if len(actual) > _MAX_PACKAGE_PAYLOAD_FILES:
+                raise ValueError(f"Native resource package exceeds its file bound: {name}")
+    if not expected or set(actual) != set(expected):
+        raise ValueError(f"Native resource package tree differs from RECORD: {name}")
+    rows, total = [], 0
+    verified_sources: dict[Path, str] = {}
+    for relative_name, path in sorted(actual.items()):
+        recorded_hash, recorded_size = expected[relative_name]
+        size = path.stat().st_size
+        total += size
+        if (
+            total > _MAX_PACKAGE_PAYLOAD_BYTES
+            or type(recorded_size) is not int
+            or recorded_size != size
+            or recorded_hash is None
+        ):
+            raise ValueError(f"Native resource package RECORD is unverifiable: {name}")
+        observed = _file_hash(path, expected_size=recorded_size)
+        encoded = base64.urlsafe_b64encode(bytes.fromhex(observed)).rstrip(b"=").decode("ascii")
+        if encoded != recorded_hash:
+            raise ValueError(f"Native resource package bytes differ from RECORD: {name}")
+        rows.append([relative_name, size, observed])
+        if path.suffix == ".py":
+            verified_sources[path] = observed
+    # Check already executing modules too: an editable or mixed environment
+    # cannot borrow a neighboring installation's matching wheel payload.
+    loaded_sources = []
+    for module_name, module in tuple(sys.modules.items()):
+        if module_name.split(".", 1)[0] not in {root.removesuffix(".py") for root in roots}:
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin is None:  # Namespace packages carry no executable file.
+            continue
+        if type(origin) is not str:
+            raise ValueError(f"Loaded native resource package origin is invalid: {name}")
+        path = Path(origin).resolve(strict=True)
+        if not path.is_relative_to(base) or path.relative_to(base).as_posix() not in actual:
+            raise ValueError(f"Loaded native resource package is from another tree: {name}")
+        if path.suffix == ".pyc":
+            raise ValueError(f"Loaded native resource package is sourceless: {name}")
+        if path.suffix == ".py":
+            loaded_sources.append((module_name, module))
+    _verify_executable_caches(tuple(verified_sources), tuple(loaded_sources), verified_sources)
+    return {"sha256": hashlib.sha256(_canonical(rows)).hexdigest(), "files": len(rows), "bytes": total}
+
+
+def _runtime_package_payloads() -> dict[str, Any]:
+    payloads = {name: _distribution_payload_identity(name, roots) for name, roots in _PAYLOAD_PACKAGES.items()}
+    stdlib = {}
+    sources, loaded_sources, verified_sources = [], [], {}
+    for name in _STDLIB_PAYLOADS:
+        spec = importlib.util.find_spec(name)
+        if spec is None or spec.origin is None:
+            raise ValueError(f"Native resource standard library payload is missing: {name}")
+        path = Path(spec.origin)
+        if path.suffix != ".py" or not path.is_file():
+            raise ValueError(f"Native resource standard library source is unavailable: {name}")
+        loaded = sys.modules.get(name)
+        if loaded is not None and getattr(loaded, "__file__", None) != spec.origin:
+            raise ValueError(f"Loaded native resource standard library differs: {name}")
+        sources.append(path)
+        if loaded is not None:
+            loaded_sources.append((name, loaded))
+        stdlib[name] = _file_hash(path)
+        verified_sources[path] = stdlib[name]
+    _verify_executable_caches(tuple(sources), tuple(loaded_sources), verified_sources)
+    payloads["stdlib"] = stdlib
+    return payloads
 
 
 def _source_identity() -> dict[str, str]:
     root = Path(__file__).resolve().parents[3]
     sources = {}
+    executable_sources, loaded_sources = [], []
     for relative in _SOURCE_PATHS:
         expected = _file_hash(root / relative)
+        if relative.startswith("src/transformation_portal/schemas/execution/"):
+            resource = files("transformation_portal.schemas.execution").joinpath(Path(relative).name)
+            if not isinstance(resource, Path) or _file_hash(resource) != expected:
+                raise ValueError("Loaded native resource schema differs")
         if not relative.endswith(".py"):
             sources[relative] = expected
             continue
+        executable_sources.append(root / relative)
         name = relative.removeprefix("src/").removesuffix(".py").replace("/", ".")
         name = name.removesuffix(".__init__")
         loaded = sys.modules.get(name)
@@ -124,7 +516,13 @@ def _source_identity() -> dict[str, str]:
             origin = getattr(loaded, "__file__", None)
             if not isinstance(origin, str) or _file_hash(Path(origin)) != expected:
                 raise ValueError(f"Loaded native resource source differs: {name}")
+            loaded_sources.append((name, loaded))
         sources[relative] = expected
+    _verify_executable_caches(
+        tuple(executable_sources),
+        tuple(loaded_sources),
+        {root / relative: digest for relative, digest in sources.items() if relative.endswith(".py")},
+    )
     return sources
 
 
@@ -148,12 +546,11 @@ def _active_runtime_requirements(root: Path | None = None, environment: dict[str
     from packaging.requirements import Requirement
 
     root = root or Path(__file__).resolve().parents[3]
-    with (root / "pyproject.toml").open("rb") as stream:
-        project = tomllib.load(stream).get("project")
+    project = tomllib.loads(_metadata_bytes(root / "pyproject.toml").decode("utf-8")).get("project")
     dependencies = project.get("dependencies") if type(project) is dict else None
     if type(dependencies) is not list or not dependencies or any(type(value) is not str for value in dependencies):
         raise ValueError("Native resources require declared core dependency requirements")
-    lines = [_requirement_line(line) for line in (root / "requirements/base.in").read_text(encoding="utf-8").splitlines()]
+    lines = [_requirement_line(line) for line in _metadata_bytes(root / "requirements/base.in").decode("utf-8").splitlines()]
     requirements = tuple(Requirement(value) for value in (*dependencies, *(line for line in lines if line)))
     try:
         return tuple(value for value in requirements if value.marker is None or value.marker.evaluate(environment))
@@ -208,6 +605,7 @@ def _runtime_identity() -> dict[str, Any] | None:
         "version": platform.version(),
         "executable_sha256": _file_hash(Path(sys.executable).resolve()),
         "packages": packages,
+        "package_payloads": _runtime_package_payloads(),
         "extensions": extensions,
         "thread_environment": {name: os.environ[name] for name in _THREAD_ENV},
     }
@@ -217,12 +615,16 @@ def _limits() -> dict[str, int]:
     return {
         "pixels": MAX_PIXELS,
         "regions": MAX_REGIONS,
+        "canonical_plan_bytes": MAX_CANONICAL_PLAN_BYTES,
+        "canonical_inputs": MAX_CANONICAL_INPUTS,
         "memory_bytes": MEMORY_BYTES,
         "acceptance_peak_bytes": ACCEPTANCE_PEAK_BYTES,
         "state_heap_bytes": MAX_STATE_BYTES,
         "state_nodes": MAX_STATE_NODES,
         "state_depth": MAX_STATE_DEPTH,
         "fixed_overhead_bytes": _FIXED_BYTES,
+        "package_record_bytes": _MAX_PACKAGE_RECORD_BYTES,
+        "package_record_rows": _MAX_PACKAGE_PAYLOAD_FILES,
     }
 
 

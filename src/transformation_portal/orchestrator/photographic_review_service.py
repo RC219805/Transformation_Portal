@@ -1191,6 +1191,7 @@ class PhotographicReviewService:
                 lease.native_artifact_store = context.native_artifact_store
                 lease.native_review_store = context.native_resource_scope.review_store
                 lease.native_job_repository = context.native_resource_scope.job_repository
+                lease.native_operational_store = context.native_resource_scope.operational_store
             # Reference discovery has bounded streamed snapshots but no image
             # decode. Complete output-space preflight follows resolved geometry.
             lease.check_scratch(min(lease.cost.scratch_bytes, 2 * 1024**3), preparing=True)
@@ -1470,8 +1471,10 @@ class PhotographicReviewService:
             and context.binding_identity is not None
         ):
             from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+            from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
             from transformation_portal.orchestrator.photographic_review_access import NativeResourceScope
             from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+            from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
             from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
             from transformation_portal.photographic_delivery.native_resource_inputs import NativeRasterEvidence
             from transformation_portal.photographic_delivery.native_resources import qualify_native_resources
@@ -1492,7 +1495,16 @@ class PhotographicReviewService:
                 isinstance(evidence, NativeRasterEvidence)
                 and isinstance(context.native_resource_scope, NativeResourceScope)
                 and scope_identity is not None
-                and type(context.native_artifact_store) is LocalArtifactStore
+                and (
+                    (
+                        type(context.native_artifact_store) is LocalArtifactStore
+                        and context.native_resource_scope.operational_store is None
+                    )
+                    or (
+                        type(context.native_artifact_store) is S3ArtifactStore
+                        and type(context.native_resource_scope.operational_store) is PostgresOperationalRecordStore
+                    )
+                )
                 and context.native_resource_scope.store is context.native_artifact_store
                 and type(context.native_resource_scope.review_store) is PostgresReviewStore
                 and type(context.native_resource_scope.job_repository) is PostgresJobRepository

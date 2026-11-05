@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-10-23 UTC
+**Last Updated**: 2026-11-03 UTC
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,403 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,405 lines total
 - **Required PR check snapshot (2026-09-18 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
@@ -40,7 +40,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 657 | **Keep** — APEX-specific matrix runner with synthetic PR/push evidence and real scheduled/manual backend runs. Standalone domain. |
 | 17 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | Failing checks; see remote snapshot | 125 | **Merge → `contract-validations.yml`** (proposed new) |
 | 18 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | Failing checks; see remote snapshot | 95 | **Merge → `contract-validations.yml`** |
-| 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | Failing checks; see remote snapshot | 229 | **Merge → `contract-validations.yml`** |
+| 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | Failing checks; see remote snapshot | 231 | **Merge → `contract-validations.yml`** |
 | 20 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | Failing checks; see remote snapshot | 159 | **Merge → `contract-validations.yml`** |
 | 21 | `determinism-gate.yml` | determinism-gate | PR | Failing checks; see remote snapshot | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
 | 22 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
@@ -103,10 +103,10 @@ Aggregated reduction: **5 fewer workflows** (4 contract validators → 1 = net �
 4. **Create `contract-validations.yml`** combining four single-purpose contract validators:
    - `apex_policy_validation.yml` (125 lines)
    - `evalsuite_contract_validation.yml` (95 lines)
-   - `ingest_contract_validation.yml` (229 lines)
+   - `ingest_contract_validation.yml` (231 lines)
    - `machine_mode_contract_validation.yml` (159 lines)
 
-   Each becomes a job in the unified workflow. Triggers: `pull_request, push, workflow_dispatch`. Use a change-classification job and job-level `if:` conditions so only affected validators run; GitHub does not support a job-level `paths:` trigger. Estimated combined size after dedupe of setup steps: ~400 lines (vs. 608 today).
+   Each becomes a job in the unified workflow. Triggers: `pull_request, push, workflow_dispatch`. Use a change-classification job and job-level `if:` conditions so only affected validators run; GitHub does not support a job-level `paths:` trigger. Estimated combined size after dedupe of setup steps: ~400 lines (vs. 610 today).
 
 5. **Create `determinism.yml`** combining the two determinism workflows (`determinism-gate.yml` + `determinism-cross-isa.yml`). 400 lines combined → likely ~300 after dedupe.
 

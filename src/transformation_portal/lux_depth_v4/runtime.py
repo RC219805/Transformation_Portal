@@ -106,7 +106,7 @@ def _source_compilation_filenames(source: Path) -> tuple[str, ...]:
 
 def _read_bytecode_input(path: Path, maximum: int) -> tuple[bytes, tuple[int, int, int, int, int]]:
     """Read a bounded immutable file without following links or parsing bytecode."""
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, "rb") as handle:
         before = os.fstat(handle.fileno())
         if not stat.S_ISREG(before.st_mode) or not 0 <= before.st_size <= maximum:

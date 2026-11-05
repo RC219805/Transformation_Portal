@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from numbers import Real
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 import numpy as np
 
@@ -56,6 +56,20 @@ def validate_source_sha256(value: str) -> None:
         raise ValueError("source_sha256 must be a lowercase SHA-256 digest")
 
 
+def _array_sha256(array: np.ndarray) -> str:
+    """Avoid snapshots only when native C-order bytes are immutable authority."""
+    if type(array) is np.ndarray and array.flags.c_contiguous and not array.flags.writeable:
+        owner: Any = array
+        for _ in range(16):
+            if isinstance(owner, bytes):
+                # NumPy implements the buffer protocol; its stubs omit it.
+                return hashlib.sha256(cast(Any, array)).hexdigest()
+            if type(owner) is not np.ndarray:
+                break
+            owner = owner.base
+    return hashlib.sha256(array.tobytes(order="C")).hexdigest()
+
+
 def artifact_content_hash(payload: Mapping[str, Any], arrays: Mapping[str, np.ndarray | None]) -> str:
     """Bind named arrays, their dtype/shape, and semantic metadata."""
     descriptors = {}
@@ -66,7 +80,7 @@ def artifact_content_hash(payload: Mapping[str, Any], arrays: Mapping[str, np.nd
             else {
                 "shape": list(array.shape),
                 "dtype": array.dtype.str,
-                "sha256": hashlib.sha256(array.tobytes(order="C")).hexdigest(),
+                "sha256": _array_sha256(array),
             }
         )
     encoded = dumps_json(

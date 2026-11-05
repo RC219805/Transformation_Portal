@@ -237,20 +237,58 @@ class AppReviewAccess:
             authorize_catalogue=self.authorize_catalogue,
         )
 
-    def _native_resource_scope(self, job: Any) -> NativeResourceScope | None:
-        """Bind the qualified profile to real local/durable server authorities.
+    async def _canonical_native_authority(self, job: Any, tenant_id: str) -> str | None:
+        """Bound the measured Unified process family without image discovery.
+
+        Other canonical families keep conservative admission. Immutable bytes
+        are checked again by normal discovery under the complete resource lease.
+        """
+        from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, validate_unified_dispatch
+        from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+        from transformation_portal.photographic_delivery.native_resources import (
+            MAX_CANONICAL_INPUTS,
+            MAX_CANONICAL_PLAN_BYTES,
+            metadata_heap_is_bounded,
+        )
+
+        records = self.app.get_operational_record_store()
+        if type(records) is not PostgresOperationalRecordStore:
+            return None
+        locator = await records.get_locator(job.id)
+        if locator is None or locator.tenant_id != tenant_id:
+            return None
+        raw = await records.fetch_plan(locator)
+        bindings = await records.fetch_execution_bindings(locator)
+        if bindings is None or len(raw) > MAX_CANONICAL_PLAN_BYTES or len(bindings) > MAX_CANONICAL_PLAN_BYTES:
+            return None
+        try:
+            carrier = UnifiedBindings(bindings)
+            plan = decode_bounded_json_object(raw)
+            if carrier.workflow != "process" or plan.get("schema") != "tp.execution.plan.v5":
+                return None
+            inference = plan.get("inference")
+            inputs = inference.get("inputs") if type(inference) is dict else None
+            if type(inputs) is not list or not 1 <= len(inputs) <= MAX_CANONICAL_INPUTS:
+                return None
+            if not metadata_heap_is_bounded({"plan": plan, "bindings": carrier.to_payload()}):
+                return None
+            validate_unified_dispatch(raw, bindings)
+        except ValueError:
+            return None
+        return hashlib.sha256(raw + b"\x00" + bindings).hexdigest()
+
+    def _native_resource_scope(self, job: Any, canonical_authority: str | None = None) -> NativeResourceScope | None:
+        """Bind the qualified profile to concrete measured server authorities.
 
         An environment label or an object exposing a root_dir is insufficient.
         Unsupported adapters retain the existing conservative costing path.
         """
-        if self.app._uses_dispatch_authority():
-            # Canonical plan/generation authority needs separate qualification.
-            return None
-
         from sqlalchemy.engine import make_url
 
         from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+        from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
         from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+        from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
         from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
         from transformation_portal.photographic_delivery.native_resources import metadata_heap_is_bounded
 
@@ -263,14 +301,26 @@ class AppReviewAccess:
         if not callable(store_factory) or not callable(repository_factory):
             return None
         store, reviews = store_factory(), get_configured_review_store()
-        if type(store) is not LocalArtifactStore or type(reviews) is not PostgresReviewStore:
+        canonical = self.app._uses_dispatch_authority()
+        records_factory = getattr(self.app, "_configured_operational_record_store", None)
+        records = records_factory() if canonical and callable(records_factory) else None
+        if canonical:
+            if (
+                type(canonical_authority) is not str
+                or not _SHA.fullmatch(canonical_authority)
+                or type(store) is not S3ArtifactStore
+                or type(records) is not PostgresOperationalRecordStore
+            ):
+                return None
+            store_identity = store.native_resource_identity()
+            if store_identity is None:
+                return None
+        elif type(store) is not LocalArtifactStore:
+            return None
+        if type(reviews) is not PostgresReviewStore:
             return None
         repository = repository_factory()
-        if (
-            type(store) is not LocalArtifactStore
-            or type(reviews) is not PostgresReviewStore
-            or type(repository) is not PostgresJobRepository
-        ):
+        if type(repository) is not PostgresJobRepository:
             return None
 
         def bounded_job_metadata() -> bool:
@@ -296,33 +346,38 @@ class AppReviewAccess:
 
         if not bounded_job_metadata():
             return None
-        root = store.root_dir
-        if not root.is_absolute() or root.resolve() != root or not root.is_dir():
-            return None
-        stat_identity = root.stat().st_dev, root.stat().st_ino
+        root = store.root_dir if not canonical else None
+        stat_identity = (0, 0)
+        if root is not None:
+            if not root.is_absolute() or root.resolve() != root or not root.is_dir():
+                return None
+            stat_identity = root.stat().st_dev, root.stat().st_ino
         # Passwords never enter reports or resource identities. Object identity
         # additionally prevents substituting another configured live backend.
         database_url = reviews.database_url
         repository_database_url = repository.database_url
+        records_database_url = getattr(records, "database_url", None)
         if make_url(repository_database_url) != make_url(database_url):
+            return None
+        if canonical and (records_database_url is None or make_url(records_database_url) != make_url(database_url)):
             return None
         database = make_url(database_url).render_as_string(hide_password=True)
         payload = {
-            "schema": "tp.photo.local_resource_scope.v1",
-            "publisher": "LocalArtifactStore",
+            "schema": "tp.photo.provider_resource_scope.v1",
+            "publisher": type(store).__name__,
             "job_repository": "PostgresJobRepository",
             "review_store": "PostgresReviewStore",
             "database": database,
-            "root": str(root),
-            "device": stat_identity[0],
-            "inode": stat_identity[1],
+            "storage": (
+                store_identity if canonical else {"root": str(root), "device": stat_identity[0], "inode": stat_identity[1]}
+            ),
+            "canonical_authority": canonical_authority,
             "dispatch_authority": self.app._uses_dispatch_authority(),
         }
         identity = hashlib.sha256(canonicalize_json(payload)).hexdigest()
 
         def current_scope() -> str | None:
             try:
-                current = root.stat()
                 current_reviews = get_configured_review_store()
                 if (
                     self.app.get_artifact_store() is not store
@@ -331,17 +386,28 @@ class AppReviewAccess:
                     or repository_factory() is not repository
                     or repository.database_url != repository_database_url
                     or not bounded_job_metadata()
-                    or store.root_dir != root
-                    or root.resolve() != root
-                    or (current.st_dev, current.st_ino) != stat_identity
                     or self.app._uses_dispatch_authority() != payload["dispatch_authority"]
                 ):
                     return None
+                if canonical:
+                    if (
+                        not callable(records_factory)
+                        or records_factory() is not records
+                        or getattr(records, "database_url", None) != records_database_url
+                        or store.native_resource_identity() != store_identity
+                    ):
+                        return None
+                else:
+                    if root is None:
+                        return None
+                    current = root.stat()
+                    if store.root_dir != root or root.resolve() != root or (current.st_dev, current.st_ino) != stat_identity:
+                        return None
             except OSError:
                 return None
             return identity
 
-        return NativeResourceScope(store, current_scope, reviews, repository)
+        return NativeResourceScope(store, current_scope, reviews, repository, records)
 
     def _storage_job_id(self, job: Any) -> str:
         # Match the parent's ordinary retention/deletion namespace. Canonical
@@ -751,6 +817,15 @@ class AppReviewAccess:
             binding_identity = (
                 await self._binding_identity(job, tenant_id) if include_references or admission or catalogue else None
             )
+            native_enabled = (
+                os.environ.get("TP_PHOTO_REVIEW_ENABLED") == "1"
+                and os.environ.get("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED") == "1"
+            )
+            canonical_authority = (
+                await self._canonical_native_authority(job, tenant_id)
+                if native_enabled and admission and app._uses_dispatch_authority()
+                else None
+            )
 
             async def revalidate() -> None:
                 await self._revalidate(request, job, tenant_id)
@@ -764,16 +839,15 @@ class AppReviewAccess:
                             "Photographic source bindings changed; reload before review",
                             code="CATALOGUE_CHANGED" if catalogue else "ARTIFACT_CHANGED",
                         )
+                if (
+                    canonical_authority is not None
+                    and await self._canonical_native_authority(job, tenant_id) != canonical_authority
+                ):
+                    raise ReviewAccessError("Photographic canonical resource authority changed; reload before review")
 
             issued: set[str] = set()
-            # Only this exact, server-selected file-backed publisher and durable
-            # review store may use the named pilot's smaller native profile.
-            native_scope = (
-                self._native_resource_scope(job)
-                if os.environ.get("TP_PHOTO_REVIEW_ENABLED") == "1"
-                and os.environ.get("TP_PHOTO_REVIEW_NATIVE_MATERIALS_ENABLED") == "1"
-                else None
-            )
+            # Only the captured measured providers may use the smaller profile.
+            native_scope = self._native_resource_scope(job, canonical_authority) if native_enabled and admission else None
             initial_native_scope = native_scope() if native_scope is not None else None
 
             async def publish(storage: str, source: Path, mime: str) -> None:
@@ -805,7 +879,10 @@ class AppReviewAccess:
                 discover_references=lambda: self._references(request, job, tenant),
                 binding_identity=binding_identity,
                 publication_root=(
-                    native_scope.store.root_dir
+                    (
+                        getattr(native_scope.store, "root_dir", None)
+                        or getattr(native_scope.store, "native_publication_root", None)
+                    )
                     if admission and initial_native_scope is not None and native_scope is not None
                     else getattr(self.app._artifact_store(), "root_dir", None) if admission else None
                 ),

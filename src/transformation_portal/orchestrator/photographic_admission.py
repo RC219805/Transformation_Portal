@@ -275,6 +275,7 @@ class ReviewLease:
     native_artifact_store: Any = None
     native_review_store: Any = None
     native_job_repository: Any = None
+    native_operational_store: Any = None
 
     async def release_expensive(self, *, memory_quiescent: bool = True) -> None:
         """Release workers; retain memory until buffers and tracebacks are gone."""
@@ -718,6 +719,7 @@ class PhotographicAdmissionController:
                 lease.native_artifact_store = None
                 lease.native_review_store = None
                 lease.native_job_repository = None
+                lease.native_operational_store = None
                 if not self._active:
                     self._idle.set()
                 self._schedule()

@@ -10,6 +10,7 @@ import hmac
 import importlib
 import importlib.metadata
 import importlib.util
+import ipaddress
 import json
 import math
 import os
@@ -25,7 +26,9 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Iterator
+from types import CoroutineType, FrameType, GeneratorType
+from typing import Any, Callable, Iterator
+from urllib.parse import urlsplit
 
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.photographic_delivery import qualification as offline
@@ -34,7 +37,16 @@ SCHEMA = "tp.photo.managed_materials_qualification.v1"
 MANIFEST_SCHEMA = "tp.photo.managed_materials_manifest.v1"
 MODULE = "transformation_portal.photographic_delivery.managed_qualification"
 MAX_REPORT_BYTES = 4 * offline.MIB
+MAX_FAILURE_DIAGNOSTIC_BYTES = 64 * 1024
 SCENARIOS = frozenset({"success", "cancel_helper", "cancel_publication", "cancel_transport", "publication_failure"})
+PROVIDERS = frozenset({"retained-local", "canonical-s3"})
+_SERVICE_ENV = (
+    "TP_MANAGED_QUALIFICATION_REDIS_URL",
+    "TP_MANAGED_QUALIFICATION_S3_ENDPOINT",
+    "TP_MANAGED_QUALIFICATION_S3_BUCKET",
+    "TP_MANAGED_QUALIFICATION_S3_ACCESS_KEY_ID",
+    "TP_MANAGED_QUALIFICATION_S3_SECRET_ACCESS_KEY",
+)
 _MANAGED_MODULES = (
     MODULE,
     "app",
@@ -49,6 +61,16 @@ _MANAGED_MODULES = (
     "transformation_portal.orchestrator.artifact_store.local",
     "transformation_portal.orchestrator.artifact_store.generation",
     "transformation_portal.orchestrator.storage.postgres",
+    "transformation_portal.orchestrator.storage.operational",
+    "transformation_portal.orchestrator.artifact_store.s3",
+    "transformation_portal.orchestrator.queue.locator",
+    "transformation_portal.orchestrator.queue.redis",
+    "transformation_portal.orchestrator.execution_dispatch",
+    "transformation_portal.orchestrator.lux_depth_adapter",
+    "transformation_portal.orchestrator.photography_adapter",
+    "transformation_portal.orchestrator.photography_v6_adapter",
+    "transformation_portal.core.execution_plan_v4",
+    "transformation_portal.core.execution_plan_v5",
     "transformation_portal.orchestrator.models",
     "transformation_portal.core.security.frontdoor_identity",
     "transformation_portal.core.security.tenant",
@@ -71,7 +93,25 @@ def runtime_identity() -> dict[str, Any]:
         if location is None or location.origin is None:
             raise RuntimeError("Managed qualification requires file-backed implementation modules")
         identity["module_sha256"][name] = hashlib.sha256(Path(location.origin).read_bytes()).hexdigest()
-    for name in ("fastapi", "starlette", "pydantic", "SQLAlchemy", "asyncpg", "httpx"):
+    for name in (
+        "fastapi",
+        "starlette",
+        "pydantic",
+        "SQLAlchemy",
+        "asyncpg",
+        "httpx",
+        "boto3",
+        "botocore",
+        "s3transfer",
+        "redis",
+        "jsonschema",
+        "jsonschema-specifications",
+        "referencing",
+        "rpds-py",
+        "attrs",
+        "jmespath",
+        "urllib3",
+    ):
         identity["packages"][name] = importlib.metadata.version(name)
     identity["managed_profile_identity"] = _profile_identity()
     return identity
@@ -88,6 +128,165 @@ def _database_url(environment: dict[str, str] | None = None) -> str:
     if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_test"):
         raise ValueError("A dedicated Postgres *_test database is required")
     return raw
+
+
+def _loopback_url(raw: str, *, redis: bool = False) -> str:
+    """Deny cloud endpoints, credentials and DNS indirection in private campaigns."""
+    try:
+        parsed = urlsplit(raw)
+        address = ipaddress.ip_address(parsed.hostname or "")
+        valid_path = parsed.path in {"", "/"} if not redis else parsed.path.lstrip("/").isdigit()
+        if (
+            parsed.scheme != ("redis" if redis else "http")
+            or not address.is_loopback
+            or parsed.port is None
+            or not valid_path
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError
+        if redis and not 0 <= int(parsed.path.lstrip("/")) <= 15:
+            raise ValueError
+    except ValueError:
+        raise ValueError("Canonical qualification requires explicit credential-free loopback service endpoints") from None
+    return raw
+
+
+def _canonical_services(environment: dict[str, str] | None = None) -> dict[str, str]:
+    source = os.environ if environment is None else environment
+    values = {key: source.get(key, "") for key in _SERVICE_ENV}
+    _loopback_url(values[_SERVICE_ENV[0]], redis=True)
+    _loopback_url(values[_SERVICE_ENV[1]])
+    bucket = values[_SERVICE_ENV[2]]
+    if not 3 <= len(bucket) <= 63 or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for character in bucket):
+        raise ValueError("Canonical qualification requires an explicit private test bucket")
+    if not values[_SERVICE_ENV[3]] or not values[_SERVICE_ENV[4]]:
+        raise ValueError("Canonical qualification requires local test-service credentials in its private environment")
+    return values
+
+
+def _minio_receipt(container: str | None, publication_root: Path | None, endpoint: str) -> dict[str, Any]:
+    if (
+        container is None
+        or not container.startswith("tp-native-canonical-")
+        or len(container) > 128
+        or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for character in container)
+        or publication_root is None
+        or not publication_root.is_absolute()
+        or not publication_root.is_dir()
+        or publication_root != publication_root.resolve()
+    ):
+        raise ValueError("Canonical qualification requires its owned MinIO container and canonical bind directory")
+    projection = (
+        '{"mounts":{{json .Mounts}},"ports":{{json .NetworkSettings.Ports}},'
+        '"image":{{json .Config.Image}},"image_id":{{json .Image}},"running":{{json .State.Running}},'
+        '"entrypoint":{{json .Path}},"arguments":{{json .Args}}}'
+    )
+    inspected = subprocess.run(
+        ["docker", "inspect", "--format", projection, container],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=15,
+        check=True,
+    )
+    if len(inspected.stdout) > 256 * 1024:
+        raise ValueError("Owned MinIO inspection exceeded its metadata budget")
+    data = json.loads(inspected.stdout)
+    mounts = [row for row in data["mounts"] if row.get("Destination") == "/data"]
+    ports = data["ports"].get("9000/tcp", [])
+    target = urlsplit(endpoint)
+    if (
+        data.get("running") is not True
+        or data.get("entrypoint") != "/usr/bin/docker-entrypoint.sh"
+        or data.get("arguments") != ["server", "/data", "--console-address", ":9001"]
+        or len(mounts) != 1
+        or mounts[0].get("Type") != "bind"
+        or mounts[0].get("RW") is not True
+        or Path(mounts[0]["Source"]).resolve() != publication_root
+        or len(ports) != 1
+        or ports[0].get("HostIp") != target.hostname
+        or ports[0].get("HostPort") != str(target.port)
+        or not isinstance(data.get("image_id"), str)
+        or not data["image_id"].startswith("sha256:")
+    ):
+        raise ValueError("Owned MinIO container does not prove the requested endpoint and physical publication mapping")
+    version = subprocess.run(
+        ["docker", "exec", container, "minio", "--version"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=15,
+        check=True,
+    )
+    if len(version.stdout) > 4096 or not version.stdout.startswith(b"minio version "):
+        raise ValueError("Owned MinIO container version is unavailable")
+    return {
+        "container": container,
+        "endpoint": endpoint,
+        "publication_root": str(publication_root),
+        "image": data["image"],
+        "image_id": data["image_id"],
+        "entrypoint": data["entrypoint"],
+        "arguments": data["arguments"],
+        "version": version.stdout.decode("utf-8").strip(),
+        "bind_destination": "/data",
+        "read_write": True,
+    }
+
+
+def _bound_file(path: Path, expected_sha256: str, expected_size: int) -> dict[str, Any]:
+    if type(expected_size) is not int or not 0 < expected_size <= offline.MAX_SOURCE_BYTES:
+        raise ValueError("Canonical input requires a bounded recorded byte length")
+    with offline._open_regular(path, offline.MAX_SOURCE_BYTES) as stream:
+        before = os.fstat(stream.fileno())
+        if before.st_size != expected_size:
+            raise ValueError("Canonical original source differs from its immutable plan")
+        hasher = hashlib.sha256()
+        count = 0
+        while chunk := stream.read(min(offline.MIB, expected_size - count + 1)):
+            count += len(chunk)
+            if count > expected_size:
+                raise ValueError("Canonical original source grew beyond its immutable byte bound")
+            hasher.update(chunk)
+        digest = hasher.hexdigest()
+        after = os.fstat(stream.fileno())
+    if offline._identity(before) != offline._identity(after) or count != expected_size or digest != expected_sha256:
+        raise ValueError("Canonical original source differs from its immutable plan")
+    return {"sha256": digest, "size_bytes": before.st_size, "file_identity": offline._identity(before)}
+
+
+def _canonical_authority(plan_path: Path | None, bindings_path: Path | None) -> dict[str, Any]:
+    """Validate real Unified process authority without executing its model plan."""
+    from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, validate_unified_dispatch
+
+    if plan_path is None or bindings_path is None:
+        raise ValueError("Canonical S3 qualification requires explicit Unified plan and bindings files")
+    with offline._open_regular(plan_path, 512 * 1024) as stream:
+        plan = stream.read(512 * 1024 + 1)
+    with offline._open_regular(bindings_path, 64 * 1024) as stream:
+        bindings = stream.read(64 * 1024 + 1)
+    envelope = UnifiedBindings(bindings)
+    if envelope.workflow != "process":
+        raise ValueError("Canonical S3 qualification currently covers Unified process authority only")
+    parsed = validate_unified_dispatch(plan, bindings).to_payload()
+    original_root = Path(envelope.to_payload()["photography_bindings"]["input_root"])
+    originals = []
+    for row in parsed["inference"]["inputs"]:
+        path = original_root / row["path"]
+        if not path.is_relative_to(original_root):
+            raise ValueError("Canonical original escaped its bound input root")
+        originals.append(
+            {"path": str(path), "relative_path": row["path"], "bound": _bound_file(path, row["sha256"], row["size_bytes"])}
+        )
+    return {
+        "plan": plan.decode("utf-8"),
+        "bindings": bindings.decode("utf-8"),
+        "plan_sha256": hashlib.sha256(plan).hexdigest(),
+        "bindings_sha256": hashlib.sha256(bindings).hexdigest(),
+        "originals": originals,
+        "scope": "retained_fixture_import_under_validated_unified_process_authority_no_inference",
+    }
 
 
 def _manifest(path: Path) -> list[dict[str, Any]]:
@@ -113,25 +312,76 @@ def _manifest(path: Path) -> list[dict[str, Any]]:
     return result
 
 
-def _headroom(sources: list[dict[str, Any]], repeats: int, output_parent: Path) -> tuple[int, list[str]]:
+def _canonical_scratch_plan(sources: list[dict[str, Any]], repeats: int, authority: dict[str, Any]) -> dict[str, Any]:
+    """Bound complete retained data plus one live operation, not all trial staging."""
+    from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
+    from transformation_portal.photographic_delivery.materials import (
+        MAX_MATERIALS_DESCRIPTOR_BYTES,
+        MAX_MATERIALS_OVERLAY_BYTES,
+    )
+
+    products = [
+        row["bound"]["width"] * row["bound"]["height"] * 8
+        + 65536
+        + MAX_PREVIEW_BYTES
+        + MAX_MATERIALS_OVERLAY_BYTES
+        + MAX_MATERIALS_DESCRIPTOR_BYTES
+        for row in sources
+    ]
+    terms = {
+        "base_metadata_bytes": 256 * offline.MIB,
+        "retained_source_and_generation_snapshot_bytes": 3 * sum(row["bound"]["size_bytes"] for row in sources),
+        "retained_original_copy_bytes": sum(row["bound"]["size_bytes"] for row in authority["originals"]),
+        "all_s3_products_and_independent_verifier_copies_bytes": 2 * repeats * sum(products),
+        "one_live_operation_transient_bytes": max(
+            row["bound"]["size_bytes"] + 4 * product for row, product in zip(sources, products, strict=True)
+        ),
+    }
+    # Each POST drains its source/private products/publication staging before
+    # the next trial. The verifier begins only after that worker has exited;
+    # all S3 products and every independent verification copy remain retained.
+    # The transient allowance includes the current publication and MinIO write.
+    return {
+        "schema": "tp.photo.private_canonical_campaign_scratch.v1",
+        "scope": "complete_private_campaign_lifetime_bound_not_operation_admission_limits",
+        "terms": terms,
+        "total_bytes": sum(terms.values()),
+        "product_upper_bound_bytes": products,
+        "repeat_count": repeats,
+    }
+
+
+def _headroom(
+    sources: list[dict[str, Any]],
+    repeats: int,
+    output_parent: Path,
+    authority: dict[str, Any] | None = None,
+    publication_root: Path | None = None,
+) -> tuple[int, list[str]]:
     import psutil
 
     from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
     from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig, effective_interactive_reserve
 
     config = ReviewAdmissionConfig(enabled=True)
-    # Two source copies; complete private/staging/store output commitments and
-    # reports. Count every repeat retained in this fresh namespace, never old data.
-    scratch = 256 * offline.MIB
-    for row in sources:
-        bound = row["bound"]
-        product = bound["width"] * bound["height"] * 8 + 65536 + 2 * MAX_PREVIEW_BYTES + 256 * 1024
-        scratch += 2 * bound["size_bytes"] + 3 * product * repeats
+    if (authority is None) != (publication_root is None):
+        raise ValueError("Canonical campaign scratch requires both original authority and its publication filesystem")
+    if authority is not None:
+        scratch = _canonical_scratch_plan(sources, repeats, authority)["total_bytes"]
+    else:
+        # Preserve the retained-local campaign's existing complete-copy bound.
+        scratch = 256 * offline.MIB
+        for row in sources:
+            bound = row["bound"]
+            product = bound["width"] * bound["height"] * 8 + 65536 + 2 * MAX_PREVIEW_BYTES + 256 * 1024
+            scratch += 2 * bound["size_bytes"] + 3 * product * repeats
     reasons = []
     if scratch > config.scratch_bytes - config.interactive_scratch_bytes:
         reasons.append("scratch_operation_limit")
-    if shutil.disk_usage(output_parent).free < scratch + config.interactive_scratch_bytes + config.scratch_floor_bytes:
-        reasons.append("physical_scratch_headroom")
+    for filesystem in dict.fromkeys([output_parent, *([publication_root] if publication_root is not None else [])]):
+        if shutil.disk_usage(filesystem).free < scratch + config.interactive_scratch_bytes + config.scratch_floor_bytes:
+            reasons.append("physical_scratch_headroom")
+            break
     if psutil.virtual_memory().available < config.memory_bytes + effective_interactive_reserve(config) + 2 * offline.GIB:
         reasons.append("physical_memory_headroom")
     return scratch, reasons
@@ -158,6 +408,25 @@ def _configure_worker(root: Path) -> None:
         "TP_ALLOWED_INPUT_ROOTS": str(root),
         "TP_ALLOWED_OUTPUT_ROOTS": str(root),
     }
+    spec = offline._read_json(root / "specification.json", MAX_REPORT_BYTES)
+    if spec.get("provider", "retained-local") == "canonical-s3":
+        services = _canonical_services()
+        environment.update(
+            TP_ORCHESTRATOR_QUEUE_BACKEND="redis",
+            TP_REDIS_URL=services[_SERVICE_ENV[0]],
+            TP_REDIS_KEY_PREFIX="tp:managed-qualification:" + spec["service_namespace"],
+            TP_ORCHESTRATOR_EXECUTION_ROOT=str(root / "execution"),
+            TP_ARTIFACT_STORE="s3",
+            TP_ARTIFACT_ENDPOINT_URL=services[_SERVICE_ENV[1]],
+            TP_ARTIFACT_BUCKET=services[_SERVICE_ENV[2]],
+            TP_ARTIFACT_PREFIX="tp/managed-qualification/" + spec["service_namespace"],
+            TP_ARTIFACT_REGION="us-east-1",
+            TP_PHOTO_REVIEW_S3_PUBLICATION_ROOT=spec["s3_publication_root"],
+            AWS_ACCESS_KEY_ID=services[_SERVICE_ENV[3]],
+            AWS_SECRET_ACCESS_KEY=services[_SERVICE_ENV[4]],
+            AWS_DEFAULT_REGION="us-east-1",
+            AWS_EC2_METADATA_DISABLED="true",
+        )
     os.environ.update(environment)
     os.environ["TP_MANAGED_QUALIFICATION_TENANT"] = tenant
 
@@ -177,7 +446,14 @@ def _headers(method: str, target: str) -> dict[str, str]:
     return {"x-api-key": os.environ["TP_API_KEY"], "x-tp-actor-assertion": encoded + "." + signature}
 
 
-async def _wait_for_barrier(operation: asyncio.Task[Any], event: Any, description: str, timeout: float = 30) -> None:
+async def _wait_for_barrier(
+    operation: asyncio.Task[Any],
+    event: Any,
+    description: str,
+    timeout: float = 30,
+    *,
+    on_timeout: Callable[[str, asyncio.Task[Any]], None] | None = None,
+) -> None:
     """Surface request failures immediately; never strand an owned waiter thread."""
 
     async def observe() -> None:
@@ -191,10 +467,83 @@ async def _wait_for_barrier(operation: asyncio.Task[Any], event: Any, descriptio
             operation.result()  # Preserve its actual HTTP/authority failure.
             raise RuntimeError(f"Managed request completed before its {description} barrier")
         if waiter not in completed:
-            raise TimeoutError(f"Managed request did not reach its {description} barrier")
+            error = TimeoutError(f"Managed request did not reach its {description} barrier")
+            if on_timeout is not None:
+                try:
+                    on_timeout(description, operation)
+                except Exception as diagnostic_error:
+                    error.add_note(f"Failure telemetry unavailable: {type(diagnostic_error).__name__}")
+            raise error
     finally:
         waiter.cancel()
         await asyncio.gather(waiter, return_exceptions=True)
+
+
+def _failure_location(frame: FrameType) -> dict[str, Any]:
+    """Copy code coordinates only; never retain frames, locals or source lines."""
+    return {"filename": frame.f_code.co_filename[-256:], "function": frame.f_code.co_name[:96], "line": frame.f_lineno}
+
+
+def _failure_task_stacks(operation: asyncio.Task[Any]) -> list[dict[str, Any]]:
+    tasks = [operation, *(task for task in asyncio.all_tasks() if task is not operation)][:8]
+    result = []
+    for index, task in enumerate(tasks):
+        locations = []
+        pending: Any = task.get_coro()
+        for _ in range(8):
+            if type(pending) is CoroutineType:
+                frame, pending = pending.cr_frame, pending.cr_await
+            elif type(pending) is GeneratorType:
+                frame, pending = pending.gi_frame, pending.gi_yieldfrom
+            else:
+                break
+            if frame is not None:
+                locations.append(_failure_location(frame))
+            del frame
+        del pending
+        result.append({"request_task": index == 0, "done": task.done(), "cancelled": task.cancelled(), "stack": locations})
+    return result
+
+
+def _failure_thread_stacks() -> list[dict[str, Any]]:
+    frames = sys._current_frames()
+    result = []
+    try:
+        for identifier, initial in list(frames.items())[:8]:
+            frame: FrameType | None = initial
+            locations = []
+            for _ in range(8):
+                if frame is None:
+                    break
+                locations.append(_failure_location(frame))
+                frame = frame.f_back
+            del frame
+            result.append({"thread_id": identifier, "stack": locations})
+    finally:
+        frames.clear()
+    return result
+
+
+def _failure_numbers(value: Any) -> dict[str, int | float | bool | None]:
+    if type(value) is not dict:
+        return {}
+    return {
+        key: item
+        for key, item in value.items()
+        if type(key) is str
+        and len(key) <= 64
+        and (item is None or type(item) in {int, bool} or type(item) is float and math.isfinite(item))
+    }
+
+
+def _failure_phase(record: dict[str, Any]) -> dict[str, Any]:
+    fields = ("elapsed_seconds", "rss_cumulative_high_water_bytes", "current_rss_bytes", "physical_free_bytes", "http_status")
+    return {
+        "phase": str(record.get("phase", ""))[:128],
+        **_failure_numbers({key: record.get(key) for key in fields}),
+        "admission": _failure_numbers(record.get("admission")),
+        "lease": _failure_numbers(record.get("lease")),
+    }
 
 
 class _Observer:
@@ -218,8 +567,13 @@ class _Observer:
         self.inner_response_returned = asyncio.Event()
         self.expected_profile_identity = expected_profile_identity
         self.started = time.monotonic()
+        self.publication_store_type: Any = None
+        self.publication_root: Path | None = None
+        self.object_root: Path | None = None
 
-    def capture(self, phase: str, *, inspection_crop: tuple[int, int, int, int] | None = None) -> None:
+    def capture(
+        self, phase: str, *, inspection_crop: tuple[int, int, int, int] | None = None, http_status: int | None = None
+    ) -> None:
         import psutil
 
         from transformation_portal.orchestrator.photographic_admission import current_review_lease
@@ -229,6 +583,7 @@ class _Observer:
         qualified = getattr(lease.cost, "native_resource_qualification", None) if lease is not None else None
         record = {
             "phase": phase,
+            "http_status": http_status,
             "inspection_crop": list(inspection_crop) if inspection_crop is not None else None,
             "elapsed_seconds": time.monotonic() - self.started,
             "rss_cumulative_high_water_bytes": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * multiplier),
@@ -251,8 +606,47 @@ class _Observer:
                 }
             ),
         }
+        if self.publication_root is not None:
+            record["publication_filesystem"] = {
+                "root": str(self.publication_root),
+                "device": self.publication_root.stat().st_dev,
+                "physical_free_bytes": shutil.disk_usage(self.publication_root).free,
+                "owned_prefix_usage": offline._scratch_usage(self.object_root) if self.object_root is not None else None,
+            }
         with self.lock:
             self.records.append(record)
+
+    def record_failure(self, description: str, operation: asyncio.Task[Any]) -> None:
+        """Keep bounded metadata at the timeout, before cancellation drains work."""
+        with self.lock:
+            phases = [_failure_phase(record) for record in self.records[-16:]]
+        payload: dict[str, Any] = {
+            "schema": "tp.photo.private_managed_failure_diagnostic.v1",
+            "barrier": description[:128],
+            "elapsed_seconds": time.monotonic() - self.started,
+            "request_done": operation.done(),
+            "request_cancelled": operation.cancelled(),
+            "admission": _failure_numbers(self.service.admission.snapshot()),
+            "last_phase_records": phases,
+            "task_stacks": _failure_task_stacks(operation),
+            "thread_stacks": _failure_thread_stacks(),
+            "truncated_metadata_entries": 0,
+            "scope": "coordinates_and_numeric_metadata_only_no_locals_arguments_source_lines_or_buffers",
+        }
+        while True:
+            raw = offline._canonical(payload) + b"\n"
+            if len(raw) <= MAX_FAILURE_DIAGNOSTIC_BYTES:
+                break
+            for field in ("task_stacks", "thread_stacks", "last_phase_records"):
+                if payload[field]:
+                    payload[field].pop(0 if field == "last_phase_records" else -1)
+                    payload["truncated_metadata_entries"] += 1
+                    break
+            else:
+                raise ValueError("Failure telemetry metadata exceeds its byte bound")
+        path = self.root / "failure-diagnostic.json"
+        with path.open("xb") as stream:
+            stream.write(raw)
 
 
 @contextmanager
@@ -269,7 +663,8 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
         access._verify_staged,
     )
     mutation = observer.service.mutate
-    write = LocalArtifactStore.write_immutable_file
+    write_class = observer.publication_store_type or LocalArtifactStore
+    write = write_class.write_immutable_file
     response_call = service._OwnedNativeJSONResponse.__call__
 
     async def response_returned(*args: Any, **kwargs: Any) -> None:
@@ -336,7 +731,7 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
 
     service.load_image, materials.create_materials_revision = loaded, created
     access._publication_snapshot, access._verify_staged = staged, verified
-    setattr(LocalArtifactStore, "write_immutable_file", written)
+    setattr(write_class, "write_immutable_file", written)
     setattr(service._OwnedNativeJSONResponse, "__call__", response_returned)
     observer.service.mutate = mutate
     try:
@@ -348,7 +743,7 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
         observer.transport_cancel_release.set()
         service.load_image, materials.create_materials_revision = load, create
         access._publication_snapshot, access._verify_staged = snapshot, verify
-        setattr(LocalArtifactStore, "write_immutable_file", write)
+        setattr(write_class, "write_immutable_file", write)
         setattr(service._OwnedNativeJSONResponse, "__call__", response_call)
         observer.service.mutate = mutation
 
@@ -363,10 +758,20 @@ class _ObservedTransport:
         observer = self.observer
         native = scope["type"] == "http" and scope.get("method") == "POST" and scope.get("path", "").endswith("/revisions")
         blocked = False
+        response_status: int | None = None
 
         async def observed_send(message: Any) -> None:
-            nonlocal blocked
-            if native and observer.pause_transport and not blocked and message["type"] == "http.response.body":
+            nonlocal blocked, response_status
+            if native and message["type"] == "http.response.start":
+                response_status = message["status"]
+                observer.capture("native_response_started", http_status=response_status)
+            if (
+                native
+                and response_status == 200
+                and observer.pause_transport
+                and not blocked
+                and message["type"] == "http.response.body"
+            ):
                 blocked = True
                 observer.capture("native_outer_transport_blocked")
                 observer.transport_entered.set()
@@ -395,8 +800,9 @@ def _require_transport_reservation(observer: _Observer, operation: asyncio.Task[
 
 
 async def _wait_for_owned_transport(observer: _Observer, operation: asyncio.Task[Any]) -> None:
-    await _wait_for_barrier(operation, observer.transport_entered, "outer transport send")
-    await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return")
+    diagnostic = getattr(observer, "record_failure", None)
+    await _wait_for_barrier(operation, observer.transport_entered, "outer transport send", on_timeout=diagnostic)
+    await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return", on_timeout=diagnostic)
     _require_transport_reservation(observer, operation)
     observer.capture("native_outer_transport_holds_reservation_after_inner_return")
 
@@ -418,6 +824,91 @@ def _deployed_application(service: Any) -> Any:
     return application
 
 
+async def _seed_canonical(
+    app: Any, root: Path, spec: dict[str, Any], tenant: str, job_id: str
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Import retained fixtures through real locator/fence/generation authorities."""
+    from transformation_portal.ingest.canonical_json import canonicalize_json
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+    from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, validate_unified_dispatch
+    from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
+    from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
+    from transformation_portal.orchestrator.storage.base import JobRecord
+
+    authority = spec["canonical_authority"]
+    original_root = root / "workspaces" / tenant / "inputs"
+    original_root.mkdir(parents=True)
+    for row in authority["originals"]:
+        target = original_root / row["relative_path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(offline._copy_source, Path(row["path"]), target, row["bound"])
+    envelope = UnifiedBindings(authority["bindings"].encode("utf-8")).to_payload()
+    rebound = PhotographyBindings.from_payload({**envelope["photography_bindings"], "input_root": str(original_root)})
+    bindings = UnifiedBindings(canonicalize_json({**envelope, "photography_bindings": rebound.to_payload()})).canonical_bytes
+    plan = authority["plan"].encode("utf-8")
+    validate_unified_dispatch(plan, bindings)
+    records, broker, store = app.get_operational_record_store(), app.get_queue_broker(), app._artifact_store()
+    if type(broker) is not RedisLocatorQueueBroker or type(store) is not S3ArtifactStore or not app._uses_dispatch_authority():
+        raise ValueError("Canonical qualification requires actual Redis and S3 provider factories")
+    attempt_root = root / "workspaces" / tenant / "outputs" / job_id
+    request = {"pipeline": "lux-depth", "args": {"workflow": "process", "output_dir": str(attempt_root)}}
+    locator = await records.admit(
+        JobRecord(id=job_id, created_at=time.time(), request=request, effective_request={**request, "tenant_id": tenant}),
+        plan,
+        tenant_id=tenant,
+        output_root=str(attempt_root),
+        requested_output_root=str(attempt_root),
+        global_limit=4,
+        tenant_limit=2,
+        execution_bindings=bindings,
+    )
+    worker_id = "qualification-fixture-import"
+    await broker.enqueue(locator)
+    lease = await broker.acquire_lease(worker_id, lease_seconds=300)
+    if lease is None or lease.request != locator:
+        raise ValueError("Canonical qualification did not acquire its exact Redis locator")
+    try:
+        fence = await records.claim_dispatch(locator, worker_id, lease_seconds=300)
+        files, expected = {}, {}
+        for index, row in enumerate(spec["sources"]):
+            relative = f"v6/input-{index:04d}/delivery.tif"
+            path = Path(fence.output_root) / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(offline._copy_source, Path(row["path"]), path, row["bound"])
+            files[relative] = path
+            expected[relative] = {key: row["bound"][key] for key in ("sha256", "size_bytes")}
+        await GenerationPublisher(artifact_store=store, record_store=records).publish(
+            fence,
+            files,
+            state="succeeded",
+            exit_code=0,
+            artifacts={},
+            run_summary={"qualification_fixture_import": True, "model_inference_performed": False},
+            expected_file_integrity=expected,
+        )
+        for outbox_id, own_job_id, _kind, _payload in await records.pending_outbox():
+            if own_job_id == job_id:
+                await records.acknowledge_outbox(outbox_id)
+    finally:
+        await broker.release_lease(worker_id, job_id)
+        await broker.close()
+    manifest = await records.committed_manifest(job_id, tenant)
+    if manifest is None or len(manifest["files"]) != len(spec["sources"]):
+        raise ValueError("Canonical fixture publication did not commit its exact source inventory")
+    return manifest["files"], {
+        "schema": "tp.photo.private_canonical_fixture_import.v1",
+        "redis_locator_acquired": True,
+        "plan_sha256": hashlib.sha256(plan).hexdigest(),
+        "bindings_sha256": hashlib.sha256(bindings).hexdigest(),
+        "generation_manifest_sha256": hashlib.sha256(canonicalize_json(manifest)).hexdigest(),
+        "generation_id": manifest["generation_id"],
+        "originals_copied": len(authority["originals"]),
+        "bindings": bindings.decode("utf-8"),
+        "model_inference_performed": False,
+    }
+
+
 async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
     import httpx
 
@@ -435,11 +926,16 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
     app._LAST_REQUEST_JOB_CLEANUP_AT = time.time() + 3600
     tenant, job_id = os.environ["TP_MANAGED_QUALIFICATION_TENANT"], "qual_" + uuid.uuid4().hex
     job_root = root / "workspaces" / tenant / "outputs" / job_id
-    items, lookup = [], {}
+    items: list[dict[str, Any]] = []
+    lookup: dict[str, Path] = {}
     store = app._artifact_store()
-    if not isinstance(store, LocalArtifactStore):
+    canonical = spec.get("provider", "retained-local") == "canonical-s3"
+    canonical_import = None
+    if canonical:
+        items, canonical_import = await _seed_canonical(app, root, spec, tenant, job_id)
+    elif not isinstance(store, LocalArtifactStore):
         raise ValueError("Managed resource qualification requires the real local artifact store")
-    for index, row in enumerate(spec["sources"]):
+    for index, row in enumerate([] if canonical else spec["sources"]):
         relative = f"v6/input-{index:04d}/delivery.tif"
         path = job_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -449,20 +945,25 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
         lookup[relative] = path
     now = time.time()
     repository = app._job_repository()
-    await repository.create(
-        JobRecord(
-            id=job_id,
-            created_at=now,
-            state="succeeded",
-            finished_at=now,
-            exit_code=0,
-            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(job_root)}},
-            effective_request={"tenant_id": tenant, "pipeline": "lux-depth-v3", "args": {"output_dir": str(job_root)}},
-            artifacts={"items": items, "lifecycle": {"mirror_status": "mirrored", "artifact_store_backend": "local"}},
-            artifact_lookup=lookup,
+    if not canonical:
+        await repository.create(
+            JobRecord(
+                id=job_id,
+                created_at=now,
+                state="succeeded",
+                finished_at=now,
+                exit_code=0,
+                request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(job_root)}},
+                effective_request={"tenant_id": tenant, "pipeline": "lux-depth-v3", "args": {"output_dir": str(job_root)}},
+                artifacts={"items": items, "lifecycle": {"mirror_status": "mirrored", "artifact_store_backend": "local"}},
+                artifact_lookup=lookup,
+            )
         )
-    )
     observer = _Observer(root, service, spec["scenario"], spec["runtime"]["managed_profile_identity"])
+    observer.publication_store_type = type(store)
+    if canonical:
+        observer.publication_root = Path(spec["s3_publication_root"])
+        observer.object_root = observer.publication_root / store.bucket / store.key_prefix
     api = app.app
     base = f"/v1/jobs/{job_id}/photographic-review"
     results, version = [], 0
@@ -553,10 +1054,18 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                         try:
                             if spec["scenario"] in {"cancel_helper", "cancel_publication"}:
                                 if spec["scenario"] == "cancel_helper":
-                                    await _wait_for_barrier(operation, observer.helper_entered, "native cancellation")
+                                    await _wait_for_barrier(
+                                        operation,
+                                        observer.helper_entered,
+                                        "native cancellation",
+                                        on_timeout=observer.record_failure,
+                                    )
                                 else:
                                     await _wait_for_barrier(
-                                        operation, observer.publication_entered, "publication cancellation"
+                                        operation,
+                                        observer.publication_entered,
+                                        "publication cancellation",
+                                        on_timeout=observer.record_failure,
                                     )
                                 held = service.admission.snapshot()
                                 operation.cancel()
@@ -582,7 +1091,12 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                 del operation
                                 continue
                             if concurrent:
-                                await _wait_for_barrier(operation, observer.helper_entered, "concurrent inspection")
+                                await _wait_for_barrier(
+                                    operation,
+                                    observer.helper_entered,
+                                    "concurrent inspection",
+                                    on_timeout=observer.record_failure,
+                                )
                                 await inspect_while_held("same_tenant_inspection_completed_while_native_held")
                             observer.helper_release.set()
                             if observer.pause_transport:
@@ -594,7 +1108,12 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                     _require_transport_reservation(observer, operation)
                                 if spec["scenario"] == "cancel_transport":
                                     operation.cancel()
-                                    await _wait_for_barrier(operation, observer.transport_cancelled, "transport cancellation")
+                                    await _wait_for_barrier(
+                                        operation,
+                                        observer.transport_cancelled,
+                                        "transport cancellation",
+                                        on_timeout=observer.record_failure,
+                                    )
                                     operation.cancel()
                                     await asyncio.sleep(0)
                                     _require_transport_reservation(observer, operation)
@@ -644,21 +1163,17 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             if state["decisions"] or state["deliveries"] or len(state["revisions"]) != version:
                 raise RuntimeError("Qualification unexpectedly changed approvals/deliveries or lost a revision")
             if spec["scenario"] not in {"success", "cancel_transport"}:
-                published = await store.list_for_job(tenant + "__" + job_id)
+                published = await store.list_for_job(job_id if canonical else tenant + "__" + job_id)
                 if any(entry.relative_path.startswith("photographic-review/") for entry in published):
                     raise RuntimeError("Failed native operation left an uncommitted publication")
             for result, revision in zip(results, state["revisions"], strict=True):
-                products = []
-                for entry in [revision["variant"], *revision["native_products"]]:
-                    key = entry["storage_path"]
-                    products.append(
-                        {
-                            "path": str(store.root_dir / (tenant + "__" + job_id) / key),
-                            "sha256": entry["sha256"],
-                            "size_bytes": entry["size_bytes"],
-                            "content_type": entry.get("content_type", "image/tiff"),
-                        }
-                    )
+                products = _committed_products(
+                    root,
+                    {"tenant_id": tenant, "job_id": job_id, "provider": spec.get("provider", "retained-local")},
+                    revision,
+                    spec["sources"][result["source_index"]],
+                    result["source_index"],
+                )
                 receipt_path = root / ("receipt-" + result["revision_id"] + ".json")
                 offline._write_json(receipt_path, revision["receipt"])
                 result.update(products=products, receipt_path=str(receipt_path))
@@ -681,6 +1196,8 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                 "phases": observer.records,
                 "final_admission": snapshot,
                 "transport_ownership_verified": transport_verified,
+                "provider": spec.get("provider", "retained-local"),
+                "canonical_fixture_import": canonical_import,
             }
         finally:
             observer.helper_release.set()
@@ -688,6 +1205,8 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             observer.transport_release.set()
             observer.transport_cancel_release.set()
             await service.close()
+            if canonical:
+                await store.close()
             await _SharedEngine.dispose(os.environ["TP_DATABASE_URL"])
 
 
@@ -720,7 +1239,11 @@ def _worker(specification: Path) -> None:
             "checkpoint_semantics": "cumulative_process_high_water_not_phase_exclusive",
             "baseline_semantics": "actual_rss_after_module_imports_before_managed_setup",
             "worker_seconds": time.monotonic() - started,
-            "source_inventory_authority": "postgres_job_record_retained_inventory",
+            "source_inventory_authority": (
+                "postgres_canonical_committed_generation_unified_process"
+                if spec.get("provider") == "canonical-s3"
+                else "postgres_job_record_retained_inventory"
+            ),
             "transport": "deployed_app_security_middleware_outer_asgi_finalizer_and_transport_send",
         },
     )
@@ -734,7 +1257,8 @@ def _committed_products(
 
     identity = _normalize_job_id(committed["id"])
     scope = _normalize_job_id(result["tenant_id"] + "__" + result["job_id"])
-    store_root = root / "artifacts" / scope
+    canonical = result.get("provider") == "canonical-s3"
+    store_root = root / "verified-products" / result["job_id"] if canonical else root / "artifacts" / scope
     variant = committed["variant"]
     original = committed.get("native_source", {})
     if (
@@ -777,6 +1301,7 @@ def _committed_products(
             "sha256": row["sha256"],
             "size_bytes": row["size_bytes"],
             "content_type": row["content_type"],
+            **({"storage_path": row["storage_path"], "storage_job_id": result["job_id"]} if canonical else {}),
         }
         for row in rows
     ]
@@ -788,6 +1313,91 @@ def _verify_master_content(before: Any, after: Any, receipt: dict[str, Any]) -> 
         or after.content_hash() != receipt["output_master_content_sha256"]
     ):
         raise ValueError("Actual managed master content differs from its committed receipt")
+
+
+def _s3_store(spec: dict[str, Any]) -> Any:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    services = _canonical_services()
+    os.environ.update(
+        AWS_ACCESS_KEY_ID=services[_SERVICE_ENV[3]],
+        AWS_SECRET_ACCESS_KEY=services[_SERVICE_ENV[4]],
+        AWS_DEFAULT_REGION="us-east-1",
+        AWS_EC2_METADATA_DISABLED="true",
+    )
+    return S3ArtifactStore(
+        bucket=services[_SERVICE_ENV[2]],
+        prefix="tp/managed-qualification/" + spec["service_namespace"],
+        endpoint_url=services[_SERVICE_ENV[1]],
+        region_name="us-east-1",
+    )
+
+
+async def _verify_canonical_inventory(spec: dict[str, Any], result: dict[str, Any]) -> None:
+    from transformation_portal.ingest.canonical_json import canonicalize_json
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.storage.postgres import _SharedEngine
+
+    url = _database_url()
+    store = _s3_store(spec)
+    try:
+        records = PostgresOperationalRecordStore(database_url=url)
+        locator = await records.get_locator(result["job_id"])
+        if locator is None or locator.tenant_id != result["tenant_id"]:
+            raise ValueError("Canonical source locator changed after managed worker exit")
+        plan, bindings = await records.fetch_plan(locator), await records.fetch_execution_bindings(locator)
+        manifest = await records.committed_manifest(result["job_id"], result["tenant_id"])
+        imported = result["canonical_fixture_import"]
+        if (
+            hashlib.sha256(plan).hexdigest() != imported["plan_sha256"]
+            or hashlib.sha256(plan).hexdigest() != spec["canonical_authority"]["plan_sha256"]
+            or bindings is None
+            or hashlib.sha256(bindings).hexdigest() != imported["bindings_sha256"]
+            or manifest is None
+            or hashlib.sha256(canonicalize_json(manifest)).hexdigest() != imported["generation_manifest_sha256"]
+            or manifest["generation_id"] != imported["generation_id"]
+            or len(manifest["files"]) != len(spec["sources"])
+        ):
+            raise ValueError("Canonical source generation or execution authority changed after managed worker exit")
+        for index, (entry, source) in enumerate(zip(manifest["files"], spec["sources"], strict=True)):
+            if (
+                entry["path"] != f"v6/input-{index:04d}/delivery.tif"
+                or entry["storage_path"] != f"generations/{manifest['generation_id']}/{entry['path']}"
+                or any(entry[key] != source["bound"][key] for key in ("sha256", "size_bytes"))
+            ):
+                raise ValueError("Canonical committed source inventory differs from the retained fixture manifest")
+            chunks = await store.open_bytes(result["job_id"], entry["storage_path"])
+            count, digest = 0, hashlib.sha256()
+            try:
+                async for chunk in chunks:
+                    count += len(chunk)
+                    if count > entry["size_bytes"]:
+                        raise ValueError("Canonical source object exceeds its committed length")
+                    digest.update(chunk)
+            finally:
+                await chunks.aclose()
+            if count != entry["size_bytes"] or digest.hexdigest() != entry["sha256"]:
+                raise ValueError("Canonical source object differs from its committed bytes")
+    finally:
+        await store.close()
+        await _SharedEngine.dispose(url)
+
+
+async def _materialize_s3_products(root: Path, spec: dict[str, Any], products: list[dict[str, Any]]) -> None:
+    """Verify fresh committed object bytes into the independent verifier's namespace."""
+    from transformation_portal.portal.photographic_review_access import _stream_snapshot
+
+    store = _s3_store(spec)
+    try:
+        for product in products:
+            path = Path(product["path"])
+            if not path.is_relative_to(root / "verified-products") or path.exists() or path.is_symlink():
+                raise ValueError("Independent S3 verification requires a fresh owned product path")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            chunks = await store.open_bytes(product["storage_job_id"], product["storage_path"])
+            await _stream_snapshot(chunks, path, offline.MAX_SOURCE_BYTES, product["size_bytes"], product["sha256"])
+    finally:
+        await store.close()
 
 
 def _verify(specification: Path) -> None:
@@ -804,6 +1414,9 @@ def _verify(specification: Path) -> None:
     if runtime_identity() != spec["runtime"]:
         raise ValueError("Independent verification runtime changed before execution")
     result = offline._read_json(root / "managed-result.json", MAX_REPORT_BYTES)
+    canonical = spec.get("provider") == "canonical-s3"
+    if canonical:
+        asyncio.run(_verify_canonical_inventory(spec, result))
 
     async def persisted() -> dict[str, Any]:
         from sqlalchemy import select
@@ -864,6 +1477,8 @@ def _verify(specification: Path) -> None:
         products = _committed_products(root, result, committed, source, row["source_index"])
         if row["products"] != products:
             raise ValueError("Managed worker inventory differs from fresh committed Postgres metadata")
+        if canonical:
+            asyncio.run(_materialize_s3_products(root, spec, products))
         for product in products:
             path = Path(product["path"])
             if not path.is_relative_to(root) or path.is_symlink():
@@ -968,7 +1583,7 @@ def _run_process(root: Path, mode: str, *, memory_limit: int, scratch_limit: int
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key in {"PATH", "HOME", "LANG", "SYSTEMROOT", "TP_MANAGED_QUALIFICATION_DATABASE_URL"}
+        if key in {"PATH", "HOME", "LANG", "SYSTEMROOT", "TP_MANAGED_QUALIFICATION_DATABASE_URL", *_SERVICE_ENV}
     }
     scratch = root / "scratch"
     scratch.mkdir(exist_ok=True)
@@ -982,6 +1597,13 @@ def _run_process(root: Path, mode: str, *, memory_limit: int, scratch_limit: int
         OPENBLAS_NUM_THREADS="1",
         NUMEXPR_NUM_THREADS="1",
         VECLIB_MAXIMUM_THREADS="1",
+    )
+    spec = offline._read_json(root / "specification.json", MAX_REPORT_BYTES)
+    publication_root = Path(spec["s3_publication_root"]) if spec.get("provider") == "canonical-s3" else None
+    object_root = (
+        publication_root / _canonical_services()[_SERVICE_ENV[2]] / "tp/managed-qualification" / spec["service_namespace"]
+        if publication_root is not None
+        else None
     )
     started, peak, scratch_peak = time.monotonic(), 0, 0
     with log.open("xb") as output:
@@ -1008,13 +1630,20 @@ def _run_process(root: Path, mode: str, *, memory_limit: int, scratch_limit: int
                         raise RuntimeError("Managed qualification worker unexpectedly launched another process")
                 except psutil.NoSuchProcess:
                     pass
-                scratch_peak = max(scratch_peak, offline._scratch_usage(root)["accounted_bytes"])
+                current_scratch = offline._scratch_usage(root)["accounted_bytes"]
+                if object_root is not None and object_root.exists():
+                    current_scratch += offline._scratch_usage(object_root)["accounted_bytes"]
+                scratch_peak = max(scratch_peak, current_scratch)
                 if peak > memory_limit or psutil.virtual_memory().available < 8 * offline.GIB:
                     raise RuntimeError("Managed qualification memory bound exceeded")
                 if scratch_peak > scratch_limit or shutil.disk_usage(root).free < 4 * offline.GIB + max(
                     0, scratch_limit - scratch_peak
                 ):
                     raise RuntimeError("Managed qualification scratch/headroom bound exceeded")
+                if publication_root is not None and shutil.disk_usage(publication_root).free < 4 * offline.GIB + max(
+                    0, scratch_limit - scratch_peak
+                ):
+                    raise RuntimeError("Managed qualification provider scratch/headroom bound exceeded")
                 if log.stat().st_size > offline.MIB or time.monotonic() - started > timeout:
                     raise RuntimeError("Managed qualification time/log bound exceeded")
                 time.sleep(0.05)
@@ -1057,15 +1686,24 @@ def qualify(
     concurrent_inspection: bool = True,
     preflight_only: bool = False,
     scenario: str = "success",
+    provider: str = "retained-local",
+    canonical_plan: Path | None = None,
+    canonical_bindings: Path | None = None,
+    s3_publication_root: Path | None = None,
+    s3_container: str | None = None,
+    process_timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """Run repeated cohorts in one process, then verify in a separate process."""
     _database_url()
+    if type(process_timeout_seconds) is not int or not 1 <= process_timeout_seconds <= 900:
+        raise ValueError("Managed qualification process timeout requires an integer from 1 to 900 seconds")
     if (
         type(repeats) is not int
         or not 1 <= repeats <= 3
         or type(concurrent_inspection) is not bool
         or type(preflight_only) is not bool
         or scenario not in SCENARIOS
+        or provider not in PROVIDERS
         or (scenario != "success" and repeats != 1)
     ):
         raise ValueError("Managed qualification requires one to three repeats and explicit boolean options")
@@ -1074,6 +1712,15 @@ def qualify(
 
     validate_source_sha256(expected_profile_identity)
     sources = _manifest(manifest)
+    authority, minio = None, None
+    if provider == "canonical-s3":
+        services = _canonical_services()
+        authority = _canonical_authority(canonical_plan, canonical_bindings)
+        if len(authority["originals"]) != len(sources):
+            raise ValueError("Canonical qualification requires one plan input per retained fixture source")
+        minio = _minio_receipt(s3_container, s3_publication_root, services[_SERVICE_ENV[1]])
+    elif any(value is not None for value in (canonical_plan, canonical_bindings, s3_publication_root, s3_container)):
+        raise ValueError("Canonical authority and service options require the canonical-s3 provider")
     preservation_only = all(region["strength"] == 0 for source in sources for region in source["recipe"]["regions"])
     if scenario != "success" and len(sources) != 1:
         raise ValueError("Failure qualification requires one explicit retained source and one repeat")
@@ -1083,20 +1730,36 @@ def qualify(
     if any(output.is_relative_to(Path(row["path"]).parent) for row in sources):
         raise ValueError("Managed qualification output must remain separate from retained sources")
     runtime = runtime_identity()
-    scratch, reasons = _headroom(sources, repeats, output.parent)
+    scratch, reasons = (
+        _headroom(sources, repeats, output.parent, authority, s3_publication_root)
+        if authority is not None
+        else _headroom(sources, repeats, output.parent)
+    )
     if runtime["managed_profile_identity"] != expected_profile_identity:
         reasons.append("governed_runtime_profile_mismatch")
     report: dict[str, Any] = {
         "schema": SCHEMA,
         "status": "blocked" if reasons else "planned",
         "blocking_reasons": reasons,
-        "scope": "private_managed_cpu_local_store_postgres_not_frontdoor_or_photographic_acceptance",
+        "scope": (
+            "private_managed_cpu_canonical_unified_redis_loopback_s3_postgres_not_frontdoor_or_photographic_acceptance"
+            if provider == "canonical-s3"
+            else "private_managed_cpu_local_store_postgres_not_frontdoor_or_photographic_acceptance"
+        ),
+        "provider": provider,
+        "minio_service_receipt": minio,
         "runtime": runtime,
         "source_sha256": [row["bound"]["sha256"] for row in sources],
         "repeats": repeats,
         "scenario": scenario,
+        "process_timeout_seconds": process_timeout_seconds,
+        "canonical_authority": (
+            {key: authority[key] for key in ("plan_sha256", "bindings_sha256", "scope")} if authority is not None else None
+        ),
+        "s3_publication_root": str(s3_publication_root) if s3_publication_root is not None else None,
         "config": asdict(ReviewAdmissionConfig(enabled=True)),
         "scratch_reservation_bytes": scratch,
+        "canonical_scratch_plan": _canonical_scratch_plan(sources, repeats, authority) if authority is not None else None,
         "production_flags_changed": False,
         "model_inference_performed": False,
         "aws_gpu_validation_performed": False,
@@ -1120,22 +1783,35 @@ def qualify(
         "repeats": repeats,
         "concurrent_inspection": concurrent_inspection,
         "scenario": scenario,
+        "process_timeout_seconds": process_timeout_seconds,
+        "provider": provider,
+        "canonical_authority": authority,
+        "s3_publication_root": str(s3_publication_root) if s3_publication_root is not None else None,
+        "service_namespace": uuid.uuid4().hex,
     }
     offline._write_json(output / "specification.json", specification)
     try:
         with offline._supervisor_signals():
-            observed = _run_process(output, "_worker", memory_limit=12 * offline.GIB, scratch_limit=scratch)
+            observed = _run_process(
+                output, "_worker", memory_limit=12 * offline.GIB, scratch_limit=scratch, timeout=process_timeout_seconds
+            )
             result = offline._read_json(output / "managed-result.json", MAX_REPORT_BYTES)
             if result["runtime"] != runtime:
                 raise ValueError("Managed worker evidence runtime differs")
             observed_peak = max(result["peak_rss_bytes"], observed.get("sampled_peak_rss_bytes", 0))
             incremental_peak = max(0, observed_peak - result["baseline_rss_bytes"])
             margin = math.ceil(incremental_peak * 1.5)
-            _run_process(output, "_verify", memory_limit=12 * offline.GIB, scratch_limit=scratch)
+            _run_process(
+                output, "_verify", memory_limit=12 * offline.GIB, scratch_limit=scratch, timeout=process_timeout_seconds
+            )
             verification = offline._read_json(output / "verification.json", MAX_REPORT_BYTES)
             for row in sources:
                 if offline._source(Path(row["path"]), row["bound"]["sha256"]) != row["bound"]:
                     raise ValueError("Retained source changed during managed qualification")
+            if authority is not None:
+                for row in authority["originals"]:
+                    if _bound_file(Path(row["path"]), row["bound"]["sha256"], row["bound"]["size_bytes"]) != row["bound"]:
+                        raise ValueError("Canonical original source changed during managed qualification")
             repeatable = None
             if repeats >= 2 and scenario == "success":
                 repeated = verification["results"]
@@ -1192,6 +1868,12 @@ def main() -> int:
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--no-concurrent-inspection", action="store_true")
     parser.add_argument("--scenario", choices=sorted(SCENARIOS), default="success")
+    parser.add_argument("--provider", choices=sorted(PROVIDERS), default="retained-local")
+    parser.add_argument("--canonical-plan", type=Path)
+    parser.add_argument("--canonical-bindings", type=Path)
+    parser.add_argument("--s3-publication-root", type=Path)
+    parser.add_argument("--s3-container")
+    parser.add_argument("--process-timeout-seconds", type=int, default=300)
     arguments = parser.parse_args()
     report = qualify(
         arguments.manifest,
@@ -1201,6 +1883,12 @@ def main() -> int:
         concurrent_inspection=not arguments.no_concurrent_inspection,
         preflight_only=arguments.preflight_only,
         scenario=arguments.scenario,
+        provider=arguments.provider,
+        canonical_plan=arguments.canonical_plan,
+        canonical_bindings=arguments.canonical_bindings,
+        s3_publication_root=arguments.s3_publication_root,
+        s3_container=arguments.s3_container,
+        process_timeout_seconds=arguments.process_timeout_seconds,
     )
     print(dumps_json({"schema": SCHEMA, "status": report["status"], "blocking_reasons": report["blocking_reasons"]}))
     return 0 if report["status"] in {"planned", "measured"} else 2

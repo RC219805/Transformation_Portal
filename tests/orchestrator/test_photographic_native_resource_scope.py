@@ -1,8 +1,8 @@
 """Qualified native costing binds real server authorities, never public claims.
 
-These are isolated contract tests. Runtime matching, active transport and the
-documented prior cost floor are synthetic; no database, provider, photographic
-or resource measurement acceptance is established here.
+These are isolated contract tests. Runtime matching, executable-cache authority,
+active transport and the documented prior cost floor are synthetic; no database,
+provider, photographic or resource measurement acceptance is established here.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
 from transformation_portal.orchestrator.photographic_admission import GIB, ReviewAdmissionConfig, ReviewCost, ReviewOverload
 from transformation_portal.orchestrator.photographic_review_access import NativeResourceScope, ReviewContext
 from transformation_portal.orchestrator.photographic_review_store import PostgresReviewStore
+from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
 from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
 from transformation_portal.photographic_delivery import native_resources as resources
 from transformation_portal.photographic_delivery.native_resource_inputs import inspect_native_raster
@@ -51,10 +52,13 @@ def _resource_case(monkeypatch, tmp_path):
         "_native_transport_owner",
         ContextVar("fixture_native_transport_owner", default=review._NativeTransportOwner({"type": "http"})),
     )
-    # Runtime matching is synthetic. The source closure and qualification
-    # functions remain real, and no test output is qualification evidence.
+    # Runtime and executable-cache authority are synthetic in this scope fixture.
+    # Source-byte hashing and qualification functions remain real. Separate cache
+    # tests exercise absent/forged caches and custom loaders without this mock.
+    # No scope-fixture output is runtime or resource qualification evidence.
     runtime = copy.deepcopy(resources.RESOURCE_CONTRACT["runtime"])
     monkeypatch.setattr(resources, "_runtime_identity", lambda: copy.deepcopy(runtime))
+    monkeypatch.setattr(resources, "_verify_executable_caches", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(resources, "RESOURCE_CONTRACT", resources.capture_contract())
     original_operation_cost = review.operation_cost
 
@@ -360,6 +364,110 @@ def test_canonical_dispatch_keeps_generic_native_cost_without_a_qualified_scope(
     assert cost.memory_bytes == expected.memory_bytes < 2 * GIB
 
 
+@pytest.fixture(name="canonical_case")
+def _canonical_case(resource_case, monkeypatch):
+    case = resource_case
+    case.live.dispatch = True
+    case.live.records = PostgresOperationalRecordStore(database_url=DATABASE)
+    store = S3ArtifactStore(bucket="qualified", endpoint_url="http://127.0.0.1:9000")
+    # The S3 tests separately exercise real botocore configuration. This fixture
+    # selects private server capabilities without network or resource claims.
+    case.live.store = store
+    case.live.storage_identity = {"endpoint": "loopback", "root_inode": 123}
+    monkeypatch.setattr(store, "native_resource_identity", lambda: case.live.storage_identity)
+    case.app._configured_operational_record_store = lambda: case.live.records
+    scope = case.adapter._native_resource_scope(case.job, "f" * 64)
+    assert isinstance(scope, NativeResourceScope)
+    case.canonical_scope = scope
+    case.canonical_context = replace(case.context, native_resource_scope=scope, native_artifact_store=store)
+    return case
+
+
+def test_canonical_s3_admission_pins_real_durable_providers_and_bounded_authority(canonical_case):
+    case = canonical_case
+    assert case.canonical_scope.operational_store is case.live.records
+    assert case.canonical_scope.store is case.live.store
+    assert case.cost(context=case.canonical_context).memory_bytes == 6 * GIB
+    assert case.adapter._native_resource_scope(case.job) is None
+
+
+@pytest.mark.parametrize("change", ["records", "database", "storage", "dispatch", "store"])
+def test_canonical_s3_scope_rejects_provider_and_authority_drift(canonical_case, change):
+    case = canonical_case
+    if change == "records":
+        case.live.records = PostgresOperationalRecordStore(database_url=DATABASE)
+    elif change == "database":
+        case.live.records._database_url = DATABASE + "_other"
+    elif change == "storage":
+        case.live.storage_identity = {"endpoint": "changed"}
+    elif change == "dispatch":
+        case.live.dispatch = False
+    else:
+        case.live.store = S3ArtifactStore(bucket="replacement")
+    assert case.canonical_scope() is None
+    assert case.cost(context=case.canonical_context).native_resource_qualification is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dispatch_selector", [False, True])
+async def test_canonical_lease_keeps_operational_reads_pinned_until_release(canonical_case, monkeypatch, dispatch_selector):
+    import app as app_module
+
+    case = canonical_case
+    original = case.live.records
+    replacement = PostgresOperationalRecordStore(database_url=DATABASE + "_other")
+    monkeypatch.setattr(app_module, "_configured_operational_record_store", lambda: replacement)
+    monkeypatch.setattr(app_module, "_uses_dispatch_authority", lambda: dispatch_selector)
+    monkeypatch.setattr(app_module, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(app_module, "get_operational_audit_store", lambda: pytest.fail("audit changed admitted authority"))
+    monkeypatch.setattr(original, "append", AsyncMock())
+    lease = await case.service.admission.acquire("tenant", case.cost(context=case.canonical_context))
+    lease.native_operational_store = original
+    lease.native_artifact_store = case.canonical_scope.store
+    token = admission.current_review_lease.set(lease)
+    try:
+        assert app_module.get_operational_record_store() is original
+        assert app_module._artifact_store() is case.canonical_scope.store
+        assert await app_module._record_pilot_audit(action="artifact_fetch", decision="accepted") is None
+        original.append.assert_awaited_once()
+        await lease.release()
+        assert lease.native_operational_store is None
+        with pytest.raises(RuntimeError, match="authority"):
+            app_module.get_operational_record_store()
+    finally:
+        admission.current_review_lease.reset(token)
+        await lease.release()
+        await case.service.close()
+    assert app_module.get_operational_record_store() is replacement
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect", ["tenant", "missing_bindings", "large_plan", "large_bindings", "family", "input_count"])
+async def test_canonical_authority_is_closed_before_qualification(canonical_case, monkeypatch, defect):
+    from transformation_portal.ingest.canonical_json import canonicalize_json
+    from transformation_portal.orchestrator import lux_depth_adapter
+
+    case = canonical_case
+    records = case.live.records
+    case.app.get_operational_record_store = lambda: records
+    locator = SimpleNamespace(tenant_id="other" if defect == "tenant" else "tenant")
+    plan = {"schema": "tp.execution.plan.v5", "inference": {"inputs": [{}] * (9 if defect == "input_count" else 1)}}
+    raw = b"x" * (512 * 1024 + 1) if defect == "large_plan" else canonicalize_json(plan)
+    bindings = None if defect == "missing_bindings" else b"x" * (512 * 1024 + 1) if defect == "large_bindings" else b"{}"
+    monkeypatch.setattr(records, "get_locator", AsyncMock(return_value=locator))
+    monkeypatch.setattr(records, "fetch_plan", AsyncMock(return_value=raw))
+    monkeypatch.setattr(records, "fetch_execution_bindings", AsyncMock(return_value=bindings))
+    monkeypatch.setattr(
+        lux_depth_adapter,
+        "UnifiedBindings",
+        lambda value: SimpleNamespace(workflow="infer" if defect == "family" else "process", to_payload=lambda: {}),
+    )
+    validator = AsyncMock()
+    monkeypatch.setattr(lux_depth_adapter, "validate_unified_dispatch", validator)
+    assert await case.adapter._canonical_native_authority(case.job, "tenant") is None
+    validator.assert_not_called()
+
+
 @pytest.mark.parametrize("field", ["request", "artifact_lookup"])
 def test_scope_rechecks_bounded_job_metadata(resource_case, field):
     case = resource_case
@@ -597,6 +705,26 @@ async def test_context_publication_filesystem_comes_from_captured_store_not_a_fr
     assert isinstance(context, ReviewContext)
     assert context.native_artifact_store is case.store
     assert context.publication_root == context.native_artifact_store.root_dir
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("canonical", [False, True])
+async def test_history_with_native_flags_never_constructs_a_photographic_provider_scope(resource_case, monkeypatch, canonical):
+    case = resource_case
+    case.live.dispatch = canonical
+    case.app._cleanup_expired_jobs = AsyncMock()
+    case.app._now = lambda: 0
+    case.app.PILOT_CONTROL_PLANE_ENABLED = False
+    case.app._job_tenant_id = lambda job: "tenant"
+    case.app.LOGGER = logging.getLogger(__name__)
+    monkeypatch.setattr(case.adapter, "_job", AsyncMock(return_value=(case.job, None)))
+    monkeypatch.setattr(case.adapter, "_native_resource_scope", lambda *args: pytest.fail("history constructed IO authority"))
+    monkeypatch.setattr(
+        case.adapter, "_binding_identity", AsyncMock(side_effect=AssertionError("history discovered inventory"))
+    )
+    context = await case.adapter.authorize_history(None, case.job.id)
+    assert isinstance(context, ReviewContext)
+    assert context.references == [] and context.native_resource_scope is None and context.native_artifact_store is None
 
 
 @pytest.mark.asyncio

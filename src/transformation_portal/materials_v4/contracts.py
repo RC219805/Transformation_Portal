@@ -232,7 +232,9 @@ class RegionEvidence:
             "mask": {
                 "shape": list(self.mask.shape),
                 "dtype": "float32",
-                "sha256": hashlib.sha256(self.mask.tobytes()).hexdigest(),
+                # Construction freezes C-contiguous little-endian float32 bytes.
+                # Hash that exact buffer without another full native-mask copy.
+                "sha256": hashlib.sha256(memoryview(self.mask).cast("B")).hexdigest(),
             },
             "semantic_confidence": self.semantic_confidence,
             "geometric_quality": self.geometric_quality,

@@ -49,6 +49,14 @@ def fixture_matching_contract(monkeypatch):
     return runtime, sources, contract
 
 
+@pytest.fixture(name="synthetic_cache_authority")
+def fixture_synthetic_cache_authority(monkeypatch):
+    # Only the marked source-closure tests use synthetic cache authority. Their
+    # source-byte, origin and schema checks remain real; this is no host/runtime
+    # qualification. Executable-cache rejection tests never request this fixture.
+    monkeypatch.setattr(resources, "_verify_executable_caches", lambda *_args, **_kwargs: None)
+
+
 def _qualify(evidence, **overrides):
     args = {"regions": 1, "provider_scope_sha256": "c" * 64, "state": {"version": 1, "revisions": []}, "response_owned": True}
     args.update(overrides)
@@ -65,7 +73,7 @@ def test_native_profile_stays_unqualified_without_reviewed_data(evidence, monkey
 def test_native_profile_qualification_is_fixed_frozen_and_source_bound(evidence, matching_contract):
     qualified = _qualify(evidence)
     assert qualified is not None
-    assert qualified.profile_id == "tp.photo.native_sdr_local.v1"
+    assert qualified.profile_id == "tp.photo.native_sdr_managed.v2"
     assert qualified.profile_identity == resources.profile_identity() == resources.runtime_profile_identity()
     assert qualified.source_sha256 == evidence.source_sha256
     assert qualified.raster_identity == evidence.content_hash()
@@ -246,6 +254,7 @@ def test_native_runtime_revalidates_compiled_binary_hashes_without_package_chang
         monkeypatch.setenv(name, "1")
     monkeypatch.setattr(resources.importlib.util, "find_spec", lambda name: SimpleNamespace(origin=str(extension)))
     monkeypatch.setattr(resources, "_runtime_packages", lambda: {"test-package": "1.0"})
+    monkeypatch.setattr(resources, "_runtime_package_payloads", lambda: {"test-package": {"sha256": "e" * 64}})
     monkeypatch.setattr(resources.sys, "executable", str(executable))
     monkeypatch.setattr(resources, "_source_identity", lambda: {"source.py": "a" * 64})
     contract = resources.capture_contract()
@@ -256,6 +265,7 @@ def test_native_runtime_revalidates_compiled_binary_hashes_without_package_chang
     assert resources.runtime_profile_identity() is None
 
 
+@pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_source_closure_excludes_only_pure_data_authority_and_includes_loader():
     paths = resources._SOURCE_PATHS
     assert "src/transformation_portal/photographic_delivery/native_resources.py" in paths
@@ -263,16 +273,31 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert "src/transformation_portal/photographic_delivery/native_resource_contract.py" not in paths
     assert "app.py" in paths
     assert "pyproject.toml" in paths and "requirements/base.in" in paths
+    assert {
+        "src/transformation_portal/lux_depth_v4/runtime.py",
+        "src/transformation_portal/lux_depth_v4/_bytecode.py",
+        "src/transformation_portal/depth/backends/da3_runtime_identity.py",
+    }.issubset(paths)
     root = Path(resources.__file__).resolve().parents[3]
     assert all((root / path).is_file() for path in paths)
     actual = resources._source_identity()
     assert set(actual) == set(paths) and all(len(digest) == 64 for digest in actual.values())
 
 
+@pytest.mark.usefixtures("synthetic_cache_authority")
+def test_native_profile_rejects_schema_resources_from_another_source_closure(monkeypatch, tmp_path):
+    monkeypatch.setattr(resources, "_runtime_identity", lambda: {"runtime": "schema-closure-test"})
+    monkeypatch.setattr(resources, "RESOURCE_CONTRACT", resources.capture_contract())
+    monkeypatch.setattr(resources, "files", lambda package: tmp_path)
+    (tmp_path / "plan.v2.schema.json").write_bytes(b"{}")
+    assert resources.runtime_profile_identity() is None
+
+
 @pytest.mark.parametrize(
     "name",
     ["app", "transformation_portal.photographic_delivery.models", "transformation_portal.photographic_delivery"],
 )
+@pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_profile_rejects_loaded_sources_from_a_different_checkout(monkeypatch, tmp_path, name):
     monkeypatch.setattr(resources, "_runtime_identity", lambda: {"runtime": "source-closure-test"})
     monkeypatch.setattr(resources, "RESOURCE_CONTRACT", resources.capture_contract())
@@ -289,6 +314,7 @@ def test_native_profile_rejects_loaded_sources_from_a_different_checkout(monkeyp
     assert resources.runtime_profile_identity() is None
 
 
+@pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_profile_checks_loaded_file_bytes_without_importing_unloaded_app(monkeypatch):
     monkeypatch.delitem(resources.sys.modules, "app", raising=False)
     identities = resources._source_identity()
@@ -445,6 +471,7 @@ def test_native_runtime_capture_and_matching_fail_closed_before_binary_discovery
     assert resources.runtime_profile_identity() is None
 
 
+@pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_declaration_source_hashes_do_not_discover_python_modules(monkeypatch):
     for name in ("pyproject.toml", "requirements.base.in"):
         monkeypatch.setitem(resources.sys.modules, name, SimpleNamespace(__file__="/not-a-python-module"))

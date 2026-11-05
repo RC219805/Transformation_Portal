@@ -198,6 +198,14 @@ verified temporary source snapshot.
 
 ## Native allocation boundaries
 
+Analytic sRGB ingest evaluates the unchanged pointwise float32 transfer in
+two-axis tiles of at most 262,144 pixels, writing one final native RGB array.
+Grayscale expansion is also tile-bounded; linear and ICC paths retain their
+existing behavior. This avoids full-frame branch temporaries without changing
+pixels, separate alpha, orientation or rendering semantics; see the
+[color preparation implementation](../../src/transformation_portal/lux_depth_v4/color_preparation.py)
+and [exact-sample allocation tests](../../tests/lux_depth_v4/test_analytic_color_allocation.py).
+
 Native TIFF16 transfer validates the complete SDR master in bounded spans before
 allocating its final native-resolution uint16 destination. Transfer and rounding
 use the same pointwise float32 operations, with at most 65,536 pixels per span;
@@ -205,6 +213,14 @@ very wide or short images do not create full-width scratch. RGB and straight
 alpha write directly into their final channels. TIFF metadata, ICC, orientation,
 encoded bytes, receipts and diagnostic semantics are preserved. This changes
 allocation lifetime, not resolution, grading, processing stage or approval.
+
+Content hashing reads the existing buffer for exact, read-only C-contiguous
+NumPy arrays whose bounded owner chain ends in immutable bytes. It preserves
+the historical C-order digest, dtype, shape, names and semantic metadata.
+Writable, strided, Fortran-layout, subclass and mutable-backed arrays retain
+their historical snapshot path. This avoids a full native RGB or alpha hash
+copy without changing processing or cache identities; see the
+[hash compatibility tests](../../tests/core/test_image_artifact_hash_allocation.py).
 
 The native revision helper freezes input/execution content hashes and scalar
 metadata, then releases input and adjusted masters after TIFF encoding and before
@@ -251,20 +267,37 @@ larger budget or live feature enablement.
 
 ## Managed native resource qualification
 
-The named `tp.photo.native_sdr_local.v1` profile has a fixed **6 GiB** reservation;
+The named `tp.photo.native_sdr_managed.v2` profile has a fixed **6 GiB** reservation;
 it does not change the 12 GiB process-local ceiling, effective 6 GiB inspection
 reserve, worker/I/O limits or scratch/free-space protections. It applies only to
-HTTP-owned native revisions whose server-verified inspection, actual local
-publisher, Postgres job/review stores and frozen runtime/source identity match.
+HTTP-owned native revisions whose server-verified inspection, actual qualified
+publisher, Postgres authorities and frozen runtime/source identity match.
 The lower resource estimate also requires the live, nonclosed transport owner
 installed by the deployed application. A manually mounted router or direct HTTP
 handoff without that owner retains generic costing, even if its response is
 marked HTTP-owned.
-The qualified inventory authority is retained Postgres `JobRecord` data, with
-canonical dispatch authority disabled for that inventory. Canonical dispatch and
-generation authority retains conservative costing pending its separate provider,
-validator/schema and execution-path qualification. Preserve canonical job authority;
-changing queue settings does not migrate or qualify a canonical inventory.
+Retained Postgres `JobRecord` inventories qualify with the exact local artifact
+publisher and durable job/review stores. A separate canonical path supports
+Unified `process` V5/V4 plans, one to eight inputs, through real Postgres
+operational records and a bounded loopback S3-compatible publisher. It validates
+immutable plan/binding authority and pins the operational store alongside the
+job/review stores and publisher. Other plan families retain conservative costing.
+Changing queue settings never migrates or qualifies canonical inventory.
+
+The canonical pilot additionally requires the server-owned
+`TP_PHOTO_REVIEW_S3_PUBLICATION_ROOT` to identify the actual host bind mounted as
+MinIO `/data`. This is an operator physical-storage mapping, not a client path.
+Use the qualification command's container/bind/port/image receipt to verify it
+before deployment. The runtime pins its canonical path and device/inode together
+with the real initialized S3 client's endpoint, configuration and object identity.
+No credentials enter resource identities or public responses. Missing, changed,
+remote or unsupported storage bindings retain conservative costing; the setting
+does not migrate a bucket or make a VM named volume a host directory. Requalify
+after changing the service image, command or bind mapping; those are trusted
+deployment settings outside per-request runtime inspection. Scratch
+claims cover both temporary and actual publication filesystems, with all existing
+remaining-commitment, inspection-reserve and free-space checks. Ordinary S3
+storage remains supported without this optional qualification setting.
 Unknown, historical or conflicting authority retains conservative fallback
 costing. No filename, client option, environment label or supplied inspection can
 select the lower profile. Requests whose complete reservation does not fit still
@@ -303,8 +336,8 @@ case is about 5.065 GiB. The separate 4 GiB incremental-RSS acceptance ceiling i
 an acceptance requirement, not an observed measurement: measured incremental peak
 plus 50% must fit the fixed 6 GiB reservation. Projection/job metadata must satisfy
 the profile's 8 MiB heap, 65,536-node and depth-16 limits. Source/codec eligibility,
-metadata limits and backing-store identity are revalidated; all three actual
-providers are pinned for the operation so awaited I/O and uncertain cleanup use
+metadata limits and backing-store identity are revalidated; all actual
+authorities are pinned for the operation so awaited I/O and uncertain cleanup use
 the same authorities.
 
 Native HTTP preview/save retain their complete memory reservation and outstanding
@@ -345,7 +378,7 @@ Its closed manifest contains `schema: tp.photo.managed_materials_manifest.v1` an
 one to eight ordered `sources`, each with an absolute `path`, verified `sha256`
 and the closed native Materials `recipe`. It seeds only unique private succeeded
 jobs and uses real signed authorization, the deployed application and middleware,
-the shared router, `AppReviewAccess`, Postgres CAS and file-backed publication.
+the shared router, `AppReviewAccess`, Postgres CAS and the selected publisher.
 The transport barrier waits for both a blocked outer send and the inner native
 response's actual return before checking its complete reservation and ticket.
 This is managed backend qualification;
@@ -358,6 +391,106 @@ PYTHONPATH=.:src /absolute/private/core-env/bin/python -m transformation_portal.
   --output /absolute/private/qualification/new-run \
   --repeats 3 --preflight-only
 ```
+
+For canonical qualification, add `--provider canonical-s3`,
+`--canonical-plan /absolute/private/retained-plan.json`,
+`--canonical-bindings /absolute/private/unified-bindings.json`,
+`--s3-container tp-native-canonical-minio-<session>` and
+`--s3-publication-root /absolute/private/minio-data`. Supply explicit local-only
+`TP_MANAGED_QUALIFICATION_REDIS_URL`, `TP_MANAGED_QUALIFICATION_S3_ENDPOINT`,
+`TP_MANAGED_QUALIFICATION_S3_BUCKET`,
+`TP_MANAGED_QUALIFICATION_S3_ACCESS_KEY_ID` and
+`TP_MANAGED_QUALIFICATION_S3_SECRET_ACCESS_KEY` through the private environment.
+These are isolated test-service credentials, not AWS account credentials. The
+command rejects remote endpoints and records the owned running MinIO image,
+version, loopback port and read-write `/data` host bind before launching work.
+It copies unchanged original references, rebinds only their owned input root,
+and imports retained TIFF fixtures through real Redis locator delivery, Postgres
+claim/fence and immutable S3 generation publication. No model executes. The
+report labels this fixture import; it does not claim that the imported bytes
+were newly inferred from that plan. Plan input order and retained fixture order
+must describe the same scenes. Verification uses fresh Postgres authority and
+streamed S3 source/product bytes after the worker exits. Local and publication
+scratch are included in campaign planning and physical free-space monitoring.
+The canonical plan retains all source/object copies and every committed product
+plus its later verifier copy. It separately reserves the maximum active native
+snapshot, private/staging and MinIO write transients; per-operation staging is
+not multiplied across already quiescent repeats. The report records every
+term. This lifetime calculation changes no configured ceiling, inspection
+reservation or physical free-space guard. The verifier starts after the managed
+worker exits; arbitrary concurrent campaigns are outside this bound.
+The default `retained-local` provider and its command remain compatible.
+`--process-timeout-seconds` keeps the historical 300-second default and accepts
+an explicit integer from 1 to 900 for each supervised worker and verifier. The
+maximum canonical pilot requests 600 seconds explicitly; it does not retry or
+extend deadlines automatically. This validation timer changes no production
+admission wait, service CPU limit, memory reservation or scratch protection.
+An unmet private observation barrier writes at most 64 KiB of phase/admission
+metadata and task/thread code coordinates before cancellation. The exclusive
+`failure-diagnostic.json` excludes locals, arguments, source lines and image
+buffers; telemetry failure preserves the original timeout and owned drain.
+Transport ownership barriers hold successful native responses only; error
+responses pass through unchanged so their actual status and typed error surface.
+
+Lower-cost S3 eligibility covers only HTTP loopback with the measured SDK
+configuration. HTTPS, custom model loaders/search paths, altered service models,
+or changed cached operation/shape semantics retain conservative costing. The
+actual GET/HEAD/PUT/DELETE/list models and streaming behavior must match bounded
+packaged models and SDK extras. Validation releases its private reference models
+without relying on garbage collection; it does not change the live client.
+Only the pinned SDK handler's exact before/after `requestUri` and `authPath`
+states are normalized in private comparison copies. Ordinary S3 requests may
+perform that rewrite without invalidating their resource scope; other HTTP,
+service-model and cached-shape changes retain conservative costing.
+SDK option maps are bounded before key/value materialization, and integer
+options are range-checked before finite-number conversion. Packaged JSON/gzip
+models are read through nonblocking, no-follow regular-file snapshots with
+bounded encoded and decoded lengths and stable file identity.
+
+The reviewed v2 profile identity is
+`59de6acd915dbda8caaea39fc80fe4e90fe8409ad34bd8588ef01c9af265a251`.
+Its closure includes 72 source/declaration/schema files, 37 package versions,
+eight compiled extensions, actual verified payload trees for 13 SDK/validator/
+Redis distributions, and eleven standard-library transport/JSON/CSV source files.
+Actual package bytes, tree membership and wheel RECORD hashes/sizes must agree;
+version strings or RECORD metadata alone do not establish payload identity.
+RECORD reads are bounded to 4 MiB and 32,768 total CSV rows before file-entry
+materialization, including unrelated and missing-file rows. Noncanonical
+metadata paths, malformed records and unsupported distribution adapters fail
+closed without selecting the lower profile.
+Package and runtime-file hashing uses no-follow regular-file descriptors, reads
+at most the initial byte length plus one, and verifies recorded package lengths
+and before/after file identity. Growing, truncated, replaced or nonregular
+inputs fail closed.
+Dependency declarations use the same stable reader with a 4 MiB metadata cap
+before TOML or requirements parsing.
+
+Color preparation releases normalized interleaved samples before immutable
+master construction when transformed RGB owns independent storage, detaching
+straight alpha first. Aliasing linear inputs retain their backing storage until
+the master freezes it. Region evidence hashes its immutable contiguous float32
+mask buffer directly. Pixel values, alpha, orientation, metadata and historical
+digests remain exact. These allocation changes retain the same reservation and
+the measured incremental-peak-plus-50-percent acceptance rule; fresh managed
+qualification establishes their actual process-memory effect.
+
+Qualification also verifies selectable CPython caches against those reviewed
+sources using the existing bounded
+[semantic bytecode verifier](../../src/transformation_portal/lux_depth_v4/_bytecode.py).
+It checks timestamp and hash headers, optimization variants and the effective
+`pycache_prefix` without unmarshalling cache code or scanning a global cache
+directory. Nonblocking descriptor opens reject replacement FIFOs before reads.
+Verified equivalent cache churn does not change presentation or
+resource identity. Already loaded Python modules must retain matching selected
+cache evidence; cacheless, custom-loader and mismatched installations retain
+conservative costing. These checks detect installation drift; they do not attest
+arbitrary live process mutation or code which restores its cache after execution.
+
+Isolated scope and source-hash unit tests use explicitly synthetic runtime/cache
+authority. Real executable-cache regression tests and supported-host resource
+measurements retain their separate authority. The canonical service-backed
+regression suite is marked `integration` and `slow`; ordinary unit selection
+does not launch its native cohort.
 
 Set the five thread variables above and the dedicated database URL before running.
 Inspect the planning report; remove `--preflight-only` and choose another fresh
@@ -392,8 +525,10 @@ verification, but do not establish protected-delta or photographic acceptance.
 
 ### Reviewed pilot observations
 
-The frozen supported profile identity is
-`005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+The historical retained-inventory `tp.photo.native_sdr_local.v1` profile identity
+was `005953dfe79ff58623d66e424452990732fdcae4e3928f3c9a75a96220671bab`.
+It is preserved foundation evidence; it cannot authorize the current expanded
+source/runtime/provider contract.
 On its supported Darwin arm64/CPython runtime and retained-inventory providers,
 three repeats of the eight retained 6708×4472 RGB16 photographs and an eight-source
 30 MP RGBA8 synthetic cohort each completed 24 saves. Separate 30 MP RGB8,
@@ -420,7 +555,7 @@ the deployed outer transport remained blocked. A distinct uncached crop verified
 a fresh source read at that transport barrier. This is not an exclusive phase
 measurement or a worst-case overlap measurement of two live raster computations.
 Reports, source snapshots and products remain private, outside Git and finalized delivery;
-these observations do not enable production flags or qualify canonical generations.
+these historical observations do not enable production flags or qualify canonical generations.
 
 ## Paged catalogue and review navigation
 

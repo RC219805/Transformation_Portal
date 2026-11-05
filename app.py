@@ -129,7 +129,7 @@ from transformation_portal.orchestrator.queue import (
 )
 from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBroker
 from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
-from transformation_portal.orchestrator.storage import get_operational_record_store
+from transformation_portal.orchestrator.storage import get_operational_record_store as _configured_operational_record_store
 from transformation_portal.orchestrator.storage.operational import AdmissionRejected
 from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_forever
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
@@ -180,6 +180,7 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 if TYPE_CHECKING:
     from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
     from transformation_portal.orchestrator.job_execution import JobExecutionService
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -1205,6 +1206,19 @@ def _configured_job_repository() -> JobRepository:
     return repo
 
 
+def get_operational_record_store() -> "PostgresOperationalRecordStore":
+    """Keep qualified canonical reads on the admitted durable authority."""
+    from transformation_portal.orchestrator.photographic_admission import current_review_lease
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+
+    lease = current_review_lease.get()
+    if lease is not None and lease.cost.native_resource_qualification is not None:
+        if lease.released or type(lease.native_operational_store) is not PostgresOperationalRecordStore:
+            raise RuntimeError("Qualified native canonical authority is unavailable")
+        return lease.native_operational_store
+    return _configured_operational_record_store()
+
+
 def _job_event_store() -> JobEventStore:
     return get_job_event_store()
 
@@ -1284,7 +1298,16 @@ async def _record_pilot_audit(
     if not PILOT_CONTROL_PLANE_ENABLED:
         return None
     try:
-        store = get_operational_audit_store()
+        from transformation_portal.orchestrator.photographic_admission import current_review_lease
+
+        lease = current_review_lease.get()
+        store = (
+            get_operational_record_store()
+            if lease is not None
+            and lease.cost.native_resource_qualification is not None
+            and (lease.native_operational_store is not None or _uses_dispatch_authority())
+            else get_operational_audit_store()
+        )
         await store.append(
             OperationalAuditRecord(
                 created_at=_now(),
@@ -7420,10 +7443,11 @@ def _artifact_store() -> ArtifactStore:
     lease = current_review_lease.get()
     if lease is not None and lease.cost.native_resource_qualification is not None:
         from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+        from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
 
         # The qualified operation owns this exact server-selected provider.
         # Never switch to an unqualified publisher across an awaited read/write.
-        if lease.released or type(lease.native_artifact_store) is not LocalArtifactStore:
+        if lease.released or type(lease.native_artifact_store) not in (LocalArtifactStore, S3ArtifactStore):
             raise RuntimeError("Qualified native artifact authority is unavailable")
         return lease.native_artifact_store
     return get_artifact_store()

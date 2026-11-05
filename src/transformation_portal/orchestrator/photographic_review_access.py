@@ -32,6 +32,7 @@ class NativeResourceScope:
     revalidate: Callable[[], str | None]
     review_store: Any = None
     job_repository: Any = None
+    operational_store: Any = None
 
     def __call__(self) -> str | None:
         return self.revalidate()

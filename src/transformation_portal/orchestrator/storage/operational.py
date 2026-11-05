@@ -52,6 +52,11 @@ class DispatchAuthorityLost(RepositoryError):
 class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
     """One authoritative boundary sharing the existing Postgres engine."""
 
+    @property
+    def database_url(self) -> str:
+        """Server-private durable identity for photographic provider pinning."""
+        return self._database_url
+
     @staticmethod
     async def _now(session: AsyncSession) -> float:
         now = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
