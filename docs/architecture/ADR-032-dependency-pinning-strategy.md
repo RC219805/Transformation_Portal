@@ -111,7 +111,7 @@ pydantic>=2.0,<3           # Major version boundary
 **Examples:**
 ```
 mypy>=1.10                 # Type checker: CLI stable, benefits from latest rules
-pylint>=3.0                # Linter: CLI stable, benefits from latest diagnostics
+pylint>=4.0.9              # Linter: JSON stats cache excludes pickle deserialization
 flake8>=7.0                # Linter: new rules are improvements
 ```
 
