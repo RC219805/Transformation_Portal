@@ -235,7 +235,8 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
 
 
 @pytest.mark.parametrize(
-    "filename", ["requirements-lint.txt", "requirements/dev.in", "requirements/dev.txt", "requirements/all.txt"]
+    "filename",
+    ["requirements-lint.txt", "requirements-dev.txt", "requirements/dev.in", "requirements/dev.txt", "requirements/all.txt"],
 )
 def test_pylint_governed_surfaces_exclude_pickle_cache_code_execution(filename: str) -> None:
     requirements = [

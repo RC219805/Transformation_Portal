@@ -733,6 +733,8 @@ class TestRootGovernanceMetadata:
         assert "black>=26.10.1" in dev_extra
         assert "Werkzeug>=3.1.9,<4" in dev_extra
         assert "Werkzeug>=3.1.9,<4" in requirements_dev
+        assert "pylint>=4.0.9" in dev_extra
+        assert "pylint>=4.0.9" in requirements_dev
         assert "black>=24.8" not in dev_extra
         assert "black>=26.10.1" in requirements_dev
         assert "black>=24.8" not in contributing
@@ -742,7 +744,7 @@ class TestRootGovernanceMetadata:
         assert "black>=24.8" not in adr_032
         assert "| `black`       | dev.in  | `>=24.8`" not in adr_032
         assert "| `black`       | dev.in  | `==26.10.1`" in adr_032
-        assert "pylint>=3.0" in adr_032
+        assert "pylint>=4.0.9" in adr_032
 
     def test_contributing_dependency_audit_schedule_requires_completion_evidence(self):
         """A scheduled audit must not be presented as a completed audit."""
