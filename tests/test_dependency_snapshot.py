@@ -70,7 +70,7 @@ def test_real_governed_inventory_is_complete_and_has_current_security_pins() -> 
         assert all(set(package) == {"package_url"} for package in manifest["resolved"].values())
         assert "pkg:pypi/urllib3@2.7.0" not in manifest["resolved"]
     assert "pkg:pypi/urllib3@2.8.0" in snapshot["manifests"]["requirements/all.txt"]["resolved"]
-    for package in ("pypdf@6.21.2", "black@26.10.1", "virtualenv@21.14.13"):
+    for package in ("pypdf@6.21.4", "black@26.10.1", "virtualenv@21.14.13"):
         assert f"pkg:pypi/{package}" in snapshot["manifests"]["requirements/all.txt"]["resolved"]
 
 

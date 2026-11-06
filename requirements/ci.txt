@@ -130,7 +130,7 @@ pygments==2.21.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.21.2
+pypdf==6.21.4
     # via
     #   -c all.txt
     #   -r ci.in

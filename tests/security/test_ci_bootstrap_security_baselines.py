@@ -16,7 +16,7 @@ GOVERNED_LOCK_CLICK_PIN = "click==8.4.2"
 SAFE_DETERMINISM_TOOLCHAIN = (
     f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" "{GOVERNED_SETUPTOOLS_PIN}" "wheel==0.46.2"'
 )
-PYPDF_SECURITY_FLOOR = "pypdf>=6.21.2"
+PYPDF_SECURITY_FLOOR = "pypdf>=6.21.4"
 GOVERNED_CI_TORCH_PIN = "torch==2.13.0"
 GOVERNED_CI_TORCHVISION_PIN = "torchvision==0.28.0"
 
@@ -223,13 +223,42 @@ def test_pypdf_governed_surfaces_require_non_vulnerable_release() -> None:
     assert locked_versions[0] == locked_versions[1]
     assert Version("6.21.0") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
     assert Version("6.21.1") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
-    assert ">=6.21.2" in contributing
-    assert "GHSA-5hx5-vpf9-5wcv" in contributing
-    assert "`>=6.21.2`" in dependency_adr
+    assert Version("6.21.2") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
+    assert Version("6.21.3") not in Requirement(PYPDF_SECURITY_FLOOR).specifier
+    assert ">=6.21.4" in contributing
+    assert "GHSA-5849-834g-hvw5" in contributing
+    assert "`>=6.21.4`" in dependency_adr
 
     governed_surfaces = "\n".join((ci_input, pyproject, all_lock, ci_lock, contributing, dependency_adr))
     assert "pypdf>=6.13.3" not in governed_surfaces
     assert "pypdf==6.14.2" not in governed_surfaces
+
+
+@pytest.mark.parametrize(
+    "filename", ["requirements-lint.txt", "requirements/dev.in", "requirements/dev.txt", "requirements/all.txt"]
+)
+def test_pylint_governed_surfaces_exclude_pickle_cache_code_execution(filename: str) -> None:
+    requirements = [
+        Requirement(line.split("#", 1)[0].strip())
+        for line in (REPO_ROOT / filename).read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith(("#", "-"))
+    ]
+    pylint = next(requirement for requirement in requirements if requirement.name.lower() == "pylint")
+    assert pylint.url is None and pylint.marker is None and not pylint.extras
+    assert Version("4.0.7") not in pylint.specifier
+    assert Version("4.0.8") not in pylint.specifier
+    assert any(
+        specifier.operator in {"==", ">="} and Version(specifier.version) >= Version("4.0.9") for specifier in pylint.specifier
+    )
+
+
+def test_dev_extra_pylint_floor_excludes_pickle_cache_code_execution() -> None:
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = [Requirement(item) for item in pyproject["project"]["optional-dependencies"]["dev"]]
+    pylint = next(requirement for requirement in requirements if requirement.name.lower() == "pylint")
+    assert Version("4.0.7") not in pylint.specifier
+    assert Version("4.0.8") not in pylint.specifier
+    assert Version("4.0.9") in pylint.specifier
 
 
 def test_virtualenv_activation_and_seed_wheel_security_floor() -> None:
