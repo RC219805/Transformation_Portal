@@ -21,7 +21,7 @@ Werkzeug>=3.1.9,<4  # GHSA-g6x2-hccm-hh4m: patched moto HTTP dependency
 # Type checking and linting
 mypy>=1.10
 flake8>=7.0
-pylint>=3.0
+pylint>=4.0.9             # JSON stats cache; excludes pickle-cache code execution
 black==26.10.1  # CAS determinism + GHSA-cg8m-r9f2-5wm2: patched action version validation
 isort>=5.13,<9
 autopep8>=2.0,<3

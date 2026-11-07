@@ -111,7 +111,7 @@ pydantic>=2.0,<3           # Major version boundary
 **Examples:**
 ```
 mypy>=1.10                 # Type checker: CLI stable, benefits from latest rules
-pylint>=3.0                # Linter: CLI stable, benefits from latest diagnostics
+pylint>=4.0.9              # Linter: JSON stats cache excludes pickle deserialization
 flake8>=7.0                # Linter: new rules are improvements
 ```
 
@@ -204,14 +204,14 @@ Exceptions to pinning rules require explicit approval via one of:
 | `mypy`        | dev.in  | `>=1.10`        | Type checker: benefits from latest rules   |
 | `black`       | dev.in  | `==26.10.1`     | Formatter: exact tested pin; patched action-version validation |
 | `flake8`      | dev.in  | `>=7.0`         | Linter: new rules are improvements         |
-| `pylint`      | dev.in  | `>=3.0`         | Linter: CLI stable across minor versions   |
+| `pylint`      | dev.in  | `>=4.0.9`       | Linter: JSON stats cache excludes pickle deserialization |
 | `PyYAML`      | ml.in   | `>=6.0`         | Config parser: strong backward compat      |
 | `colour-science` | ml.in | `>=0.4.2`    | Color math library: stable API             |
 | `coremltools` | ml.in   | `>=7.0`         | Apple ML tools: platform-specific updates  |
 | `psutil`      | ml.in   | `>=5.9.0`       | System utilities: OS compatibility layer   |
 | `memory-profiler` | ml.in | `>=0.61.0`  | Dev/profiling tool in optional deps        |
 | `types-PyYAML` | dev.in | `>=6.0.12`     | Type stubs: must track PyYAML version      |
-| `pypdf`       | ci.in   | `>=6.21.2`      | PDF utilities: backward-compatible 6.x security floor |
+| `pypdf`       | ci.in   | `>=6.21.4`      | PDF utilities: backward-compatible 6.x security floor |
 
 ---
 

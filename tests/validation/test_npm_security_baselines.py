@@ -23,8 +23,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
         ("package-lock.json", "sharp", "0.35.5"),
         ("cloudflare/transformationportal-worker/package-lock.json", "sharp", "0.35.5"),
         ("web/secure-landing/package-lock.json", "sharp", "0.35.5"),
-        # Next.js 16.3.8 fixes the October 2026 cache and SSRF advisories.
-        ("web/secure-landing/package-lock.json", "next", "16.3.8"),
+        # Next.js 16.4.5 is the November 2026 security release for seven advisories.
+        ("web/secure-landing/package-lock.json", "next", "16.4.5"),
         # GHSA-68fv-2mgg-jv7q: indexed source-map denial of service.
         ("web/secure-landing/package-lock.json", "source-map-js", "1.2.2"),
     ),

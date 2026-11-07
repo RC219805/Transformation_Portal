@@ -49,3 +49,17 @@ def test_fastvlm_captioning_closure_excludes_incompatible_demo_ui_dependencies()
 
     # Upstream Gradio demos impose Pillow<13; governed captioning uses mlx_vlm.generate.
     assert names.isdisjoint({"gradio", "gradio-client", "hf-gradio"})
+
+
+def test_fastvlm_pydantic_core_matches_the_reviewed_pydantic_release() -> None:
+    requirements = [
+        Requirement(line)
+        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+    # Pydantic 2.13.4 requires this exact core version; update the pair together.
+    for distribution, version in (("pydantic", "2.13.4"), ("pydantic-core", "2.46.4")):
+        matching = [requirement for requirement in requirements if canonicalize_name(requirement.name) == distribution]
+        assert len(matching) == 1, f"FastVLM must contain one exact {distribution} pin"
+        assert str(matching[0].specifier) == f"=={version}"
