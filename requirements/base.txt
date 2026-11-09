@@ -8,7 +8,7 @@ aiofiles==25.1.0
     # via
     #   -c all.txt
     #   -r base.in
-alembic==1.20.0
+alembic==1.20.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -21,7 +21,7 @@ annotated-types==0.8.0
     # via
     #   -c all.txt
     #   pydantic
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   -c all.txt
     #   starlette
@@ -34,16 +34,16 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.111
+boto3==1.43.126
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.111
+botocore==1.43.126
     # via
     #   -c all.txt
     #   boto3
     #   s3transfer
-certifi==2026.10.19
+certifi==2026.10.23
     # via
     #   -c all.txt
     #   -r base.in
@@ -109,7 +109,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-narwhals==2.27.1
+narwhals==2.28.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -134,12 +134,12 @@ pillow==13.0.0
     # via
     #   -c all.txt
     #   -r base.in
-pydantic==2.14.1
+pydantic==2.14.3
     # via
     #   -c all.txt
     #   -r base.in
     #   fastapi
-pydantic-core==2.50.1
+pydantic-core==2.50.4
     # via
     #   -c all.txt
     #   pydantic
@@ -169,7 +169,7 @@ rpds-py==2026.9.1
     #   -c all.txt
     #   jsonschema
     #   referencing
-s3transfer==0.19.2
+s3transfer==0.19.3
     # via
     #   -c all.txt
     #   boto3
@@ -190,7 +190,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.1.4
+sqlalchemy[asyncio]==2.1.8
     # via
     #   -c all.txt
     #   -r base.in
@@ -201,7 +201,7 @@ starlette==1.6.0
     #   -c all.txt
     #   -r base.in
     #   fastapi
-threadpoolctl==3.7.0
+threadpoolctl==3.8.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -213,7 +213,7 @@ tqdm==4.70.1
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.27.3
+typer==0.28.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -229,7 +229,7 @@ typing-extensions==4.16.0
     #   sqlalchemy
     #   starlette
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   -c all.txt
     #   fastapi
