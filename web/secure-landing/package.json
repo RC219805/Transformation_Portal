@@ -46,6 +46,6 @@
     "braces": "file:./vendor/braces",
     "esbuild": "^0.28.2",
     "postcss": "8.5.32",
-    "stylelint": "^17.16.0"
+    "stylelint": "^18.0.0"
   }
 }
