@@ -680,6 +680,23 @@ def test_dependency_update_rejects_previous_upload_release() -> None:
     assert "dependency-update audit upload must use only the pinned action and governed inputs" in errors
 
 
+@pytest.mark.parametrize(
+    "unreviewed_action",
+    (
+        "peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1",
+        "peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8",
+        "peter-evans/create-pull-request@v8",
+        "peter-evans/create-pull-request@main",
+    ),
+)
+def test_dependency_update_rejects_unreviewed_pull_request_action(unreviewed_action: str) -> None:
+    broken = valid_workflow_text().replace(workflow_contract.TRUSTED_CREATE_PR_ACTION, unreviewed_action, 1)
+
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+
+    assert "dependency-update PR creation must use only the pinned action and governed inputs" in errors
+
+
 def test_dependency_update_rejects_extra_pull_request_action_input() -> None:
     broken = valid_workflow_text().replace(
         "        add-paths: |\n",

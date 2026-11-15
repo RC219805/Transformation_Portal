@@ -389,7 +389,7 @@ def test_root_worker_runtime_selection_matches_node22_contract() -> None:
     frontdoor_package = _load_json(frontdoor_root / "package.json")
 
     assert root_node_pin == frontdoor_node_pin == "22"
-    assert root_package["engines"] == worker_package["engines"] == frontdoor_package["engines"] == {"node": ">=22.23.2 <23"}
+    assert root_package["engines"] == worker_package["engines"] == frontdoor_package["engines"] == {"node": ">=22.23.5 <23"}
     for directory, manifest in (
         (PROJECT_ROOT, root_package),
         (WORKER_ROOT, worker_package),

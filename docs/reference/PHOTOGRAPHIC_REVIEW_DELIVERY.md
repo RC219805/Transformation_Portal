@@ -1136,7 +1136,7 @@ make test-frontdoor-contract
 ```
 
 The new UI stays deferred behind Review/Build surfaces. Use supported Node
-`>=22.23.2 <23`, including the official distribution for compression-sensitive
+`>=22.23.5 <23`, including the official distribution for compression-sensitive
 asset/CSS evidence. The bounded Build feature exception is **15,500 raw bytes /
 4,500 gzip bytes**, accommodating profile controls, explicit V2 input-color
 selection, persistence/reconciliation and precision guidance. The local official

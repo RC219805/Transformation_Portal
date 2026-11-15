@@ -491,6 +491,11 @@ async function gotoHydratedPortal(page, target = "/portal") {
     await expect(control).toHaveCSS('color', themeColor);
     await expect(control).toHaveCSS('-webkit-text-fill-color', themeColor);
   }
+  for (const id of ['presetStabilityBadge', 'backendModeBadge']) {
+    const badge = page.locator(`#${id}`);
+    if (!await badge.isVisible()) continue;
+    await expect(badge).toHaveCSS('color', themeColor);
+  }
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {

@@ -8,7 +8,6 @@ Tests validate:
 - Fallback behavior
 """
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,58 +23,60 @@ from transformation_portal.metrics.zone_resolver import ZoneResolver
 class TestZoneResolver:
     """Test ZoneResolver functionality."""
 
-    def setup_method(self):
-        """Clear zone cache before each test."""
+    @pytest.fixture(autouse=True)
+    def isolated_zone_context(self, monkeypatch):
+        """Isolate zone state and restore the caller's environment after each test."""
         ZoneResolver.clear_cache()
-        # Clear environment variables
-        os.environ.pop("APEX_ZONE", None)
-        os.environ.pop("KUBE_NODE_ZONE", None)
-
-    def teardown_method(self):
-        """Clean up after each test."""
+        monkeypatch.delenv("APEX_ZONE", raising=False)
+        monkeypatch.delenv("KUBE_NODE_ZONE", raising=False)
+        yield
         ZoneResolver.clear_cache()
-        os.environ.pop("APEX_ZONE", None)
-        os.environ.pop("KUBE_NODE_ZONE", None)
 
     def test_explicit_override(self):
         """Test explicit override has highest priority."""
         zone = ZoneResolver.resolve(override="test-zone-1")
         assert zone == "test-zone-1"
 
-    def test_apex_zone_env_var(self):
+    def test_apex_zone_env_var(self, monkeypatch):
         """Test APEX_ZONE environment variable."""
-        os.environ["APEX_ZONE"] = "env-zone-1"
+        monkeypatch.setenv("APEX_ZONE", "env-zone-1")
         zone = ZoneResolver.resolve()
         assert zone == "env-zone-1"
 
-    def test_kube_node_zone_env_var(self):
+    def test_kube_node_zone_env_var(self, monkeypatch):
         """Test Kubernetes KUBE_NODE_ZONE environment variable."""
-        os.environ["KUBE_NODE_ZONE"] = "us-west-2a"
+        monkeypatch.setenv("KUBE_NODE_ZONE", "us-west-2a")
         zone = ZoneResolver.resolve()
         assert zone == "us-west-2a"
 
-    def test_apex_zone_takes_priority_over_kube(self):
+    def test_apex_zone_takes_priority_over_kube(self, monkeypatch):
         """Test APEX_ZONE has priority over KUBE_NODE_ZONE."""
-        os.environ["APEX_ZONE"] = "apex-zone"
-        os.environ["KUBE_NODE_ZONE"] = "kube-zone"
+        monkeypatch.setenv("APEX_ZONE", "apex-zone")
+        monkeypatch.setenv("KUBE_NODE_ZONE", "kube-zone")
         zone = ZoneResolver.resolve()
         assert zone == "apex-zone"
 
     def test_fallback_to_local(self):
         """Test fallback to 'local' when no zone detected."""
-        zone = ZoneResolver.resolve()
+        with (
+            patch.object(ZoneResolver, "_resolve_kubernetes_zone", return_value=None) as kubernetes,
+            patch.object(ZoneResolver, "_resolve_aws_zone", return_value=None) as aws,
+        ):
+            zone = ZoneResolver.resolve()
         assert zone == "local"
+        kubernetes.assert_called_once_with()
+        aws.assert_called_once_with()
 
-    def test_caching(self):
+    def test_caching(self, monkeypatch):
         """Test zone resolution is cached."""
-        os.environ["APEX_ZONE"] = "cached-zone"
+        monkeypatch.setenv("APEX_ZONE", "cached-zone")
 
         # First resolution
         zone1 = ZoneResolver.resolve()
         assert zone1 == "cached-zone"
 
         # Change environment variable (should still use cached value)
-        os.environ["APEX_ZONE"] = "new-zone"
+        monkeypatch.setenv("APEX_ZONE", "new-zone")
         zone2 = ZoneResolver.resolve()
         assert zone2 == "cached-zone"  # Still cached
 
@@ -84,15 +85,19 @@ class TestZoneResolver:
         zone3 = ZoneResolver.resolve()
         assert zone3 == "new-zone"  # Now uses new value
 
-    def test_is_multi_zone(self):
+    def test_is_multi_zone(self, monkeypatch):
         """Test is_multi_zone detection."""
         # Local zone is not multi-zone
         ZoneResolver.clear_cache()
-        assert not ZoneResolver.is_multi_zone()
+        with (
+            patch.object(ZoneResolver, "_resolve_kubernetes_zone", return_value=None),
+            patch.object(ZoneResolver, "_resolve_aws_zone", return_value=None),
+        ):
+            assert not ZoneResolver.is_multi_zone()
 
         # Non-local zone is multi-zone
         ZoneResolver.clear_cache()
-        os.environ["APEX_ZONE"] = "us-west-2a"
+        monkeypatch.setenv("APEX_ZONE", "us-west-2a")
         assert ZoneResolver.is_multi_zone()
 
     @patch("os.path.exists")
@@ -106,9 +111,11 @@ class TestZoneResolver:
         mock_open.return_value = mock_file
 
         ZoneResolver.clear_cache()
-        zone = ZoneResolver.resolve()
+        with patch.object(ZoneResolver, "_resolve_aws_zone") as aws:
+            zone = ZoneResolver.resolve()
 
         assert zone == "us-east-1b"
+        aws.assert_not_called()
 
     @patch("http.client.HTTPConnection")
     def test_aws_zone_detection(self, mock_http_connection):
@@ -128,7 +135,8 @@ class TestZoneResolver:
         mock_http_connection.return_value = mock_conn
 
         ZoneResolver.clear_cache()
-        zone = ZoneResolver.resolve()
+        with patch.object(ZoneResolver, "_resolve_kubernetes_zone", return_value=None):
+            zone = ZoneResolver.resolve()
 
         assert zone == "us-west-2c"
 
@@ -141,7 +149,8 @@ class TestZoneResolver:
         mock_http_connection.return_value = mock_conn
 
         ZoneResolver.clear_cache()
-        zone = ZoneResolver.resolve()
+        with patch.object(ZoneResolver, "_resolve_kubernetes_zone", return_value=None):
+            zone = ZoneResolver.resolve()
 
         # Should fallback to local
         assert zone == "local"

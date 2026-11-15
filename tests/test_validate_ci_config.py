@@ -325,8 +325,7 @@ def test_worker_request_contract_runs_in_blocking_frontdoor_job() -> None:
         if step.get("run") == "npm --prefix cloudflare/transformationportal-worker test"
     )
     assert any(
-        step.get("uses", "").startswith("actions/setup-node@")
-        and step.get("with", {}).get("node-version-file") == "web/secure-landing/.nvmrc"
+        step.get("uses", "").startswith("actions/setup-node@") and step.get("with", {}).get("node-version") == "22.23.5"
         for step in steps[:worker_step_index]
     )
     assert "if" not in steps[worker_step_index]
@@ -1074,3 +1073,19 @@ def test_build_workflow_coverage_upload_keeps_html_artifact_path(tmp_path: Path)
 
     assert validator.validate_build_coverage_contract(workflow_path, config) is False
     assert any("Coverage upload path must include 'htmlcov/'" in error for error in validator.errors)
+
+
+@pytest.mark.parametrize("workflow", ["build.yml", "frontdoor-deployment-gate.yml"])
+def test_frontdoor_workflows_pin_the_patched_node_runtime(workflow: str) -> None:
+    """A rolling major may reuse a runner-cached release below the security floor."""
+    _, config = _load_config(PROJECT_ROOT / ".github" / "workflows" / workflow)
+    node_steps = [
+        step
+        for job in config["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("uses", "").startswith("actions/setup-node@")
+    ]
+    assert node_steps, f"{workflow} must install its supported Node runtime"
+    for step in node_steps:
+        assert step["with"]["node-version"] == "22.23.5"
+        assert "node-version-file" not in step["with"]

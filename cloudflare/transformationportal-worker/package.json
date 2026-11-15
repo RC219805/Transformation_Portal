@@ -10,7 +10,7 @@
     "dry-run": "wrangler deploy --dry-run"
   },
   "engines": {
-    "node": ">=22.23.2 <23"
+    "node": ">=22.23.5 <23"
   },
   "packageManager": "npm@11.12.1",
   "overrides": {
@@ -18,8 +18,8 @@
     "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261104.1",
+    "@cloudflare/workers-types": "5.20261110.1",
     "typescript": "6.0.3",
-    "wrangler": "4.157.0"
+    "wrangler": "4.160.1"
   }
 }
