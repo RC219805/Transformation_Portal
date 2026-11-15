@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -38,8 +39,18 @@ def test_distributed_configuration_is_explicit_and_admission_creates_no_director
         execution_workspace_base(require_configured=True)
 
 
-@pytest.mark.parametrize("kind", ["relative", "symlink", "public_permissions"])
-def test_workspace_rejects_unprotected_storage(private_base: Path, monkeypatch, tmp_path: Path, kind: str):
+@pytest.mark.parametrize(
+    ("kind", "creation_umask"),
+    [
+        pytest.param("relative", 0o022, id="relative"),
+        pytest.param("symlink", 0o022, id="symlink"),
+        pytest.param("public_permissions", 0o022, id="public_permissions"),
+        pytest.param("public_permissions", 0o077, id="public_permissions_restrictive_umask"),
+    ],
+)
+def test_workspace_rejects_unprotected_storage(
+    private_base: Path, monkeypatch, tmp_path: Path, kind: str, creation_umask: int
+):
     if kind == "relative":
         monkeypatch.setenv(EXECUTION_ROOT_ENV, "relative-path")
     elif kind == "symlink":
@@ -47,7 +58,13 @@ def test_workspace_rejects_unprotected_storage(private_base: Path, monkeypatch, 
         destination.mkdir(mode=0o700)
         private_base.symlink_to(destination, target_is_directory=True)
     else:
-        private_base.mkdir(mode=0o755)
+        previous_umask = os.umask(creation_umask)
+        try:
+            private_base.mkdir(mode=0o755)
+            # mkdir filters its mode through umask; this fixture must be public.
+            private_base.chmod(0o755)
+        finally:
+            os.umask(previous_umask)
     with pytest.raises(ArtifactStoreError):
         execution_workspace_base(require_configured=True)
 

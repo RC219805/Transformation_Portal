@@ -133,6 +133,14 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-ci.txt
+            requirements.txt
+            requirements/base.txt
+            requirements/constraints.txt
+            pyproject.toml
+            .github/workflows/enforcement.yml
 
       - name: Install core dependencies
         run: |
@@ -162,6 +170,14 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-ci.txt
+            requirements.txt
+            requirements/base.txt
+            requirements/constraints.txt
+            pyproject.toml
+            .github/workflows/enforcement.yml
 
       - name: Free disk space
         run: |
@@ -200,6 +216,14 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-ci.txt
+            requirements.txt
+            requirements/base.txt
+            requirements/constraints.txt
+            pyproject.toml
+            .github/workflows/enforcement.yml
 
       - name: Install dependencies
         run: |
@@ -211,8 +235,8 @@ jobs:
           python -c "import numpy, pandas, jsonschema"
 
       - name: Run golden regression tests
-        # Uses same marker as test-layer1 to ensure contract/regression coverage
-        run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=1
+        # Layer 1 retains the full non-ML suite; this check owns explicit golden contracts.
+        run: pytest tests/ -m "golden and not ml and not slow and not benchmark" --maxfail=1
 
   artifact-boundary:
     name: Verify Artifact Boundary

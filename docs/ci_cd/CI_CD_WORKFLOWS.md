@@ -131,7 +131,7 @@ Important:
 Purpose: Detect vulnerable dependencies, unsafe patterns, or insecure workflow configuration.
 
 Common checks you may see:
-- CodeQL analysis (Python / Actions)
+- CodeQL analysis (Python / Actions / JavaScript-TypeScript, including the frontdoor and Worker)
 - Dependency submission / dependency scanning
 - Repository "Security Unified" checks (org-specific aggregation)
 

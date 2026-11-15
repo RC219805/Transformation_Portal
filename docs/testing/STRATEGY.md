@@ -1,7 +1,7 @@
 # Test Strategy
 
 **Document Status:** Active
-**Last Updated:** 2026-09-12
+**Last Updated:** 2026-11-15
 **Version:** 1.2.0
 **Related ADRs:** ADR-034 (Benchmark Exclusion), ADR-044 (Test Marker Enforcement)
 
@@ -78,13 +78,15 @@ pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" 
 | Attribute | Value |
 |-----------|-------|
 | **Markers** | `ml and slow`, `integration`, `stress` |
-| **Duration** | Nightly/scheduled only |
+| **Duration** | Slow/model-backed integration: nightly/scheduled; stress follows each workflow's selector. |
 | **Dependencies** | Full ML stack, model downloads |
 
 **Execution:** Slow/model-backed integration belongs in manual or scheduled lanes.
 Non-ML tests marked `integration` are included by the core PR expression; the
 ML-fast PR expression excludes `integration`. Read the complete expression,
-not the marker name alone.
+not the marker name alone. The `stress` marker alone is not a universal manual-only
+boundary: `build.yml` and Enforcement retain stress cases that match their other
+marker conditions; `ci.yml` and the post-CI firewall explicitly exclude stress.
 
 ---
 
@@ -103,9 +105,11 @@ The ledger defaults are 10% p95 and 15% mean regression thresholds; these are
 not universal PR-blocking wall-clock gates. Scheduled lanes require their own
 valid execution and baseline evidence.
 
-**CI Exclusion:** Per ADR-034, benchmark tests are excluded from PR gating via:
-- Marker expression: `not benchmark`
-- Environment variable opt-in: `TP_RUN_BENCHMARKS=1`
+**CI Exclusion:** Per ADR-034, the `not benchmark` marker expression is the PR
+gating boundary. Additional environment opt-ins, such as
+`TP_RUN_BENCHMARKS=1`, apply only to individual tests that consume them; they
+are not a universal requirement for owned benchmark writers. Follow the
+specific writer's documented invocation and evidence contract.
 
 ---
 
@@ -119,8 +123,8 @@ valid execution and baseline evidence.
 | `golden` | Golden master regression tests | Yes | Core |
 | `ml` | Tests requiring ML models/dependencies | No | ML-Fast |
 | `slow` | Long-running tests | No | ML-Slow |
-| `integration` | Multi-component integration tests | No | Integration |
-| `stress` | Resource limit and large batch tests | No | Manual |
+| `integration` | Multi-component integration tests | Yes for non-ML core | Core; ML selection is workflow-specific |
+| `stress` | Resource limit and large batch tests | Workflow-dependent | Read the complete selector |
 | `benchmark` | Performance benchmarks | No | Scheduled |
 
 ---
@@ -237,8 +241,12 @@ exercise the full matrix. Other workflow failures are separate signals.
 ### Excluded from PR Gating
 
 - `benchmark` marked tests
-- `stress` marked tests
 - Full ML integration tests requiring model downloads
+
+Stress is not globally excluded from PR validation. The canonical build and
+Enforcement selectors do not add `not stress`, preserving cases that otherwise
+match their expressions. The push and post-CI firewall selectors explicitly add
+`not stress`; a manual-only assumption must not replace the actual expression.
 
 ---
 
