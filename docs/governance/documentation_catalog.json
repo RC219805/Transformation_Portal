@@ -15230,7 +15230,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "1578ecbff289640ea4520376d20c6238cee4108b",
+      "source_commit": "de3574f87d412a5a9a0e210457c731825c459da1",
       "content_sha256": "96f2dfbda26101e514c563edb80387e986bc6d86dd08e27528bb54850d353d40",
       "source_references": [
         "app.py",
@@ -15379,7 +15379,7 @@
         "web/secure-landing/portal-src/internal/photographic-profiles.js": "a3a47598808d61b68cdec5b75d0320e42c4145b51ce9d0efc0cee2073e0d40b1",
         "web/secure-landing/portal-src/photographic-review.js": "22df72896955c4c96c095624b392fceabc2f06ae6b9516eb86a3da4063456008",
         "web/secure-landing/portal-src/portal.template.js": "47654d0ef3fac41b12f727ee60cb2a0faf33b6fdc9601cb64b5562e21eccc59f",
-        "web/secure-landing/package.json": "729a6a833927b3ef53b079e37e5395d993c5ee78d6771ef8f3f3b8912f29a7aa",
+        "web/secure-landing/package.json": "805fd2408f550d631634fc60f5c11e67a608d66fe3cbf2b8a6328d758d0fec61",
         "config/portal_asset_budgets.json": "1f9f975adadc1befddf694368b7913e05cb3645423543922ca9a9343dcadebc4",
         "tests/orchestrator/test_photographic_review_access.py": "ce26e93505e14b904d6330f14c0a1bd07fd06408bb3880e4931938f06d276848",
         "tests/orchestrator/test_photographic_review_http.py": "48d7ae202dee06dbbfac5d1b8d11d595d9f0d1a51ece1b48c85d505c591b6df4",
