@@ -42,10 +42,11 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@playwright/test": "1.64.1",
+    "@playwright/test": "1.65.1",
     "braces": "file:./vendor/braces",
     "esbuild": "^0.28.2",
+    "micromatch": "4.0.8",
     "postcss": "8.5.32",
-    "stylelint": "^17.16.0"
+    "stylelint": "^18.0.0"
   }
 }

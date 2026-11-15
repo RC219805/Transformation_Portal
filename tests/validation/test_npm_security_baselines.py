@@ -53,6 +53,8 @@ def test_frontdoor_braces_uses_the_reviewed_local_security_fork() -> None:
     frontdoor = REPO_ROOT / "web/secure-landing"
     manifest = json.loads((frontdoor / "package.json").read_text(encoding="utf-8"))
     lock = json.loads((frontdoor / "package-lock.json").read_text(encoding="utf-8"))
+    assert "micromatch" in manifest["devDependencies"], "The security consumer must be explicitly declared"
+    assert Version(lock["packages"]["node_modules/micromatch"]["version"]) >= Version("4.0.8")
     assert manifest["devDependencies"]["braces"] == "file:./vendor/braces"
     assert manifest["overrides"]["braces"] == "$braces"
     fork = lock["packages"]["vendor/braces"]
@@ -63,5 +65,5 @@ def test_frontdoor_braces_uses_the_reviewed_local_security_fork() -> None:
         for location, package in lock["packages"].items()
         if location == "node_modules/braces" or location.endswith("/node_modules/braces")
     ]
-    assert resolutions, "The Stylelint dependency chain must resolve the bounded fork"
+    assert resolutions, "The installed security consumer must resolve the bounded fork"
     assert all(package.get("link") is True and package["resolved"] == "vendor/braces" for package in resolutions)
