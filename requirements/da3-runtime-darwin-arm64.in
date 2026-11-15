@@ -12,7 +12,7 @@ cryptography==50.0.0  # Governed DA3 baseline
 moviepy==1.0.3  # Governed DA3 baseline
 einops==0.8.2  # Governed DA3 baseline
 huggingface-hub==1.9.0  # Governed DA3 baseline
-imageio==2.37.3  # Governed DA3 baseline
+imageio==2.38.1  # Governed DA3 baseline
 numpy>=2.0,<3
 opencv-python==4.11.0.86  # Governed DA3 baseline
 open3d==0.19.0  # Governed DA3 baseline
