@@ -33,7 +33,10 @@ def _assert_node_security_floor(
     if required_resolution or declared:
         assert resolved, f"{directory} must resolve {package} in its committed lock"
     for path, version in resolved.items():
-        assert Version(version) >= minimum, f"{directory}/{path} resolves vulnerable {package} {version}"
+        resolved_version = Version(version)
+        # fast-uri advisories also affect 4.0.0-4.2.2; the 3.x floor cannot cover that branch.
+        required_minimum = max(minimum, Version("4.2.3")) if package == "fast-uri" and resolved_version.major == 4 else minimum
+        assert resolved_version >= required_minimum, f"{directory}/{path} resolves vulnerable {package} {version}"
 
 
 @pytest.mark.parametrize(
@@ -70,6 +73,8 @@ def test_node_manifest_and_closure_meet_security_floor(
         ("3.1.9", False, False, None),
         ("3.1.8", False, False, "resolves vulnerable fast-uri"),
         ("3.1.7", False, False, "resolves vulnerable fast-uri"),
+        ("4.2.2", False, False, "resolves vulnerable fast-uri"),
+        ("4.2.3", False, False, None),
         (None, True, False, "must resolve fast-uri"),
         (None, False, True, "must resolve fast-uri"),
     ),
