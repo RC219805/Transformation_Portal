@@ -41,9 +41,10 @@ def _assert_node_security_floor(
     (
         (".", "undici", "7.30.1", "overrides", True),
         ("cloudflare/transformationportal-worker", "undici", "7.30.1", "overrides", True),
-        ("web/secure-landing", "next", "16.3.6", "dependencies", True),
-        # Stylelint 18 removed the validator chain that previously installed fast-uri.
-        ("web/secure-landing", "fast-uri", "3.1.8", None, False),
+        # Next 16.4.5 is the upstream security release; 16.4.6 remains the current lock.
+        ("web/secure-landing", "next", "16.4.5", "dependencies", True),
+        # Stylelint 18 removed fast-uri; reject affected versions if the chain returns.
+        ("web/secure-landing", "fast-uri", "3.1.9", None, False),
     ),
 )
 def test_node_manifest_and_closure_meet_security_floor(
@@ -66,7 +67,8 @@ def test_node_manifest_and_closure_meet_security_floor(
     ("resolved_version", "declared", "required_resolution", "error"),
     (
         (None, False, False, None),
-        ("3.1.8", False, False, None),
+        ("3.1.9", False, False, None),
+        ("3.1.8", False, False, "resolves vulnerable fast-uri"),
         ("3.1.7", False, False, "resolves vulnerable fast-uri"),
         (None, True, False, "must resolve fast-uri"),
         (None, False, True, "must resolve fast-uri"),
@@ -79,13 +81,26 @@ def test_removed_transitives_still_enforce_installed_and_declared_security_floor
     required_resolution: bool,
     error: str | None,
 ) -> None:
-    manifest = {"devDependencies": {"fast-uri": "3.1.8"}} if declared else {}
+    manifest = {"devDependencies": {"fast-uri": "3.1.9"}} if declared else {}
     packages = {"node_modules/fast-uri": {"version": resolved_version}} if resolved_version else {}
     (tmp_path / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
     (tmp_path / "package-lock.json").write_text(json.dumps({"packages": packages}), encoding="utf-8")
 
     if error:
         with pytest.raises(AssertionError, match=error):
-            _assert_node_security_floor(tmp_path, "fast-uri", "3.1.8", None, required_resolution=required_resolution)
+            _assert_node_security_floor(tmp_path, "fast-uri", "3.1.9", None, required_resolution=required_resolution)
     else:
-        _assert_node_security_floor(tmp_path, "fast-uri", "3.1.8", None, required_resolution=required_resolution)
+        _assert_node_security_floor(tmp_path, "fast-uri", "3.1.9", None, required_resolution=required_resolution)
+
+
+@pytest.mark.parametrize(("version", "affected"), (("16.4.2", True), ("16.4.4", True), ("16.4.5", False)))
+def test_next_security_release_boundary(tmp_path: Path, version: str, affected: bool) -> None:
+    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {"next": version}}), encoding="utf-8")
+    (tmp_path / "package-lock.json").write_text(
+        json.dumps({"packages": {"node_modules/next": {"version": version}}}), encoding="utf-8"
+    )
+    if affected:
+        with pytest.raises(AssertionError):
+            _assert_node_security_floor(tmp_path, "next", "16.4.5", "dependencies", required_resolution=True)
+    else:
+        _assert_node_security_floor(tmp_path, "next", "16.4.5", "dependencies", required_resolution=True)
