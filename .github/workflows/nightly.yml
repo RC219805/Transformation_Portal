@@ -4,7 +4,13 @@ on:
   schedule:
     # Run at 2 AM UTC daily
     - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      install_only:
+        description: Qualify the shared CPU dependency installation without running suites or models
+        required: false
+        default: false
+        type: boolean
 
 # Prevent overlapping scheduled runs while allowing manual runs during scheduled runs
 concurrency:
@@ -21,6 +27,7 @@ env:
 jobs:
   stress-tests:
     name: Stress & Endurance Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.install_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -42,11 +49,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install memory-profiler psutil pytest-timeout
-          pip install -e .
+          bash scripts/ci/install_nightly_dependencies.sh
 
       - name: Run stress tests
         run: |
@@ -72,8 +75,8 @@ jobs:
 
   performance-benchmarks:
     name: Performance Regression Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.install_only }}
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -86,122 +89,58 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install pytest-benchmark
-          pip install -e .
-
-      - name: Check for baseline
-        id: baseline
-        run: |
-          # Prefer a canonical checked-in baseline owned by nightly, if present
-          if [ -f "tools/benchmarks/baseline.json" ]; then
-            echo "baseline_file=tools/benchmarks/baseline.json" >> "$GITHUB_OUTPUT"
-            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
-          # Fall back to any existing committed baselines under tests/benchmarks/baselines/
-          elif ls tests/benchmarks/baselines/*.json >/dev/null 2>&1; then
-            FIRST_BASELINE_FILE="$(ls tests/benchmarks/baselines/*.json | head -n 1)"
-            echo "Using fallback baseline at $FIRST_BASELINE_FILE"
-            echo "baseline_file=$FIRST_BASELINE_FILE" >> "$GITHUB_OUTPUT"
-            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::No benchmark baseline file found at tools/benchmarks/baseline.json or tests/benchmarks/baselines/*.json — perf regression comparison will be skipped"
-            echo "⚠️ Perf regression comparison skipped: no baseline file present" >> "$GITHUB_STEP_SUMMARY"
-            echo "has_baseline=false" >> "$GITHUB_OUTPUT"
-          fi
+          bash scripts/ci/install_nightly_dependencies.sh
 
       - name: Run performance benchmarks
         id: benchmark
         run: |
           set -euo pipefail
 
-          # Check if any benchmark tests exist using exit-code semantics
-          # Exit code 5 = no tests collected (pytest convention)
-          # Exit code 0 = collection succeeded
-          # Other exit codes = collection/import failure
+          # Refuse to reuse evidence from an earlier invocation.
+          mkdir "$BENCHMARK_EVIDENCE_DIR"
+          export BENCHMARK_ARTIFACTS_DIR="$BENCHMARK_EVIDENCE_DIR/benchmark-artifacts"
+          mkdir "$BENCHMARK_ARTIFACTS_DIR"
+
+          # Keep the full benchmark selection. The Lux baseline writers use
+          # their own timing harness, so --benchmark-only would skip them.
           set +e
-          pytest tests/ -m "benchmark" --collect-only -q > benchmark-collect.log 2>&1
-          COLLECT_EXIT=$?
+          pytest tests/ -m "benchmark" \
+            --json-report --json-report-file="$BENCHMARK_EVIDENCE_DIR/pytest-report.json" \
+            --benchmark-json="$BENCHMARK_EVIDENCE_DIR/pytest-benchmark.json" \
+            > "$BENCHMARK_EVIDENCE_DIR/pytest.log" 2>&1
+          PYTEST_EXIT=$?
+          cat "$BENCHMARK_EVIDENCE_DIR/pytest.log"
+          python scripts/ci/check_performance_evidence.py \
+            --report "$BENCHMARK_EVIDENCE_DIR/pytest-report.json" \
+            --artifacts-dir "$BENCHMARK_ARTIFACTS_DIR" \
+            --baselines-dir tests/benchmarks/baselines \
+            > "$BENCHMARK_EVIDENCE_DIR/evidence-gate.log" 2>&1
+          EVIDENCE_EXIT=$?
+          cat "$BENCHMARK_EVIDENCE_DIR/evidence-gate.log"
           set -e
 
-          if [ "$COLLECT_EXIT" -eq 5 ]; then
-            echo "status=no_tests" >> $GITHUB_OUTPUT
-            echo "⚠️ No benchmark tests found"
-            exit 0
-          elif [ "$COLLECT_EXIT" -ne 0 ]; then
-            echo "status=failed" >> $GITHUB_OUTPUT
-            echo "❌ Benchmark collection failed with exit code $COLLECT_EXIT"
-            cat benchmark-collect.log || true
-            exit "$COLLECT_EXIT"
-          fi
-
-          echo "Benchmark collection succeeded"
-
-          COMPARE_ARGS=()
-          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            echo "Using baseline: ${{ steps.baseline.outputs.baseline_file }}"
-            COMPARE_ARGS=(
-              "--benchmark-compare=${{ steps.baseline.outputs.baseline_file }}"
-              "--benchmark-compare-fail=mean:10%"
-            )
+          echo "pytest_exit=$PYTEST_EXIT" >> "$GITHUB_OUTPUT"
+          echo "evidence_exit=$EVIDENCE_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$PYTEST_EXIT" -eq 0 ] && [ "$EVIDENCE_EXIT" -eq 0 ]; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          elif [ "$PYTEST_EXIT" -eq 1 ] && [ "$EVIDENCE_EXIT" -eq 2 ]; then
+            # Only the evidence gate's complete failed-writer comparison
+            # can classify a regression candidate; generic pytest 1 cannot.
+            echo "status=regression" >> "$GITHUB_OUTPUT"
           else
-            echo "No baseline found; running without regression comparison."
-          fi
-
-          # Run benchmarks - capture exit code to distinguish regression vs failure
-          if pytest tests/ \
-            -m "benchmark" \
-            --benchmark-only \
-            --benchmark-json=benchmark-results.json \
-            "${COMPARE_ARGS[@]}"; then
-            echo "status=passed" >> $GITHUB_OUTPUT
-          else
-            BENCHMARK_EXIT=$?
-            # Exit code 1 typically indicates pytest assertion/comparison failure (regression)
-            # Exit codes > 1 indicate setup/environment/tool failures
-            if [ $BENCHMARK_EXIT -eq 1 ]; then
-              echo "status=regression" >> $GITHUB_OUTPUT
-              echo "⚠️ Performance regression detected (>10% mean increase)"
-            else
-              echo "status=failed" >> $GITHUB_OUTPUT
-              echo "❌ Benchmark execution failed with exit code $BENCHMARK_EXIT"
-            fi
+            echo "status=failed" >> "$GITHUB_OUTPUT"
           fi
         env:
+          BENCHMARK_EVIDENCE_DIR: ${{ runner.temp }}/nightly-benchmarks-${{ github.run_id }}-${{ github.run_attempt }}
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
 
-      - name: Check performance budgets
-        run: |
-          # Define performance budgets
-          # Example: PBR generation must complete in < 5 seconds per image
-          if [ -f benchmark-results.json ]; then
-            python -c "
-          import json
-          try:
-              with open('benchmark-results.json') as f:
-                  data = json.load(f)
-              benchmarks = data.get('benchmarks', [])
-              if benchmarks:
-                  for bench in benchmarks:
-                      name = bench['name']
-                      mean = bench['stats']['mean']
-                      print(f'{name}: {mean:.4f}s')
-              else:
-                  print('No benchmarks were run')
-          except (json.JSONDecodeError, KeyError) as e:
-              print(f'Failed to parse benchmark results: {e}')
-              print('No benchmarks were run or file is empty')
-          "
-          else
-            echo "No benchmark results file found - no benchmarks were run"
-          fi
-
       - name: Upload benchmark results
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: benchmark-results
-          path: benchmark-results.json
+          path: ${{ runner.temp }}/nightly-benchmarks-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Create issue on performance regression (deduplicated)
@@ -236,13 +175,27 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: '⚠️ Performance Regression Detected',
-                body: `Nightly performance benchmarks detected regression beyond acceptable threshold.\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                body: `A required Lux baseline-writer test failed with complete execution evidence against the committed tests/benchmarks/baselines/. This is a regression candidate; inspect the test failure and evidence before changing baselines.\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 labels: ['performance', 'regression', 'automated']
               });
             }
 
+      - name: Enforce nightly benchmark evidence
+        if: always()
+        env:
+          BENCHMARK_STATUS: ${{ steps.benchmark.outputs.status }}
+          PYTEST_EXIT: ${{ steps.benchmark.outputs.pytest_exit }}
+          EVIDENCE_EXIT: ${{ steps.benchmark.outputs.evidence_exit }}
+        run: |
+          set -euo pipefail
+          if [ "$BENCHMARK_STATUS" != "passed" ] || [ "$PYTEST_EXIT" != "0" ] || [ "$EVIDENCE_EXIT" != "0" ]; then
+            echo "Nightly benchmark gate failed (status=$BENCHMARK_STATUS, pytest=$PYTEST_EXIT, evidence=$EVIDENCE_EXIT)."
+            exit 1
+          fi
+
   memory-leak-detection:
     name: Memory Leak Detection
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.install_only }}
     runs-on: ubuntu-latest
 
     steps:
@@ -255,11 +208,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install memory-profiler psutil pytest-memray
-          pip install -e .
+          bash scripts/ci/install_nightly_dependencies.sh
 
       - name: Run memory profiling tests
         run: |
@@ -306,6 +255,7 @@ jobs:
 
   dependency-audit-deep:
     name: Deep Dependency Audit
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.install_only }}
     runs-on: ubuntu-latest
 
     steps:
@@ -327,9 +277,78 @@ jobs:
           cyclonedx-py requirements --output-file sbom.json --output-format json requirements.txt || \
           cyclonedx-py requirements requirements.txt --output sbom.json --format json
 
-      - name: Audit all dependencies
+      - name: Audit core requirements (advisory findings)
+        id: audit
         run: |
-          pip-audit --desc -r requirements.txt --format json --output audit-report.json || true
+          set -euo pipefail
+          # This requirement-spec report is advisory. Security Unified owns
+          # the blocking installed-environment scan under ADR-032.
+          if [ -e audit-report.json ] || [ -L audit-report.json ]; then
+            echo "::error::Refusing to reuse an existing audit-report.json"
+            echo "Advisory core requirements audit: invalid pre-existing report; scanner not run." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          AUDIT_EXIT=0
+          pip-audit --desc -r requirements.txt --format json --output audit-report.json || AUDIT_EXIT=$?
+          python - "$AUDIT_EXIT" <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import sys
+
+          raw_exit = int(sys.argv[1])
+          count = None
+          error = None
+          def object_record(pairs):
+              record = {}
+              for key, value in pairs:
+                  if key in record:
+                      raise ValueError("duplicate audit report field")
+                  record[key] = value
+              return record
+          def invalid_constant(value):
+              raise ValueError("non-finite audit report value")
+          try:
+              report = Path("audit-report.json")
+              if report.is_symlink() or not report.is_file():
+                  raise ValueError("missing or non-regular audit report")
+              with report.open("rb") as stream:
+                  raw = stream.read(4 * 1024 * 1024 + 1)
+              if len(raw) > 4 * 1024 * 1024:
+                  raise ValueError("audit report exceeds 4 MiB")
+              payload = json.loads(raw, object_pairs_hook=object_record, parse_constant=invalid_constant)
+              dependencies = payload.get("dependencies") if isinstance(payload, dict) else None
+              if not isinstance(dependencies, list) or not dependencies:
+                  raise ValueError("missing or empty dependency inventory")
+              total = 0
+              for dependency in dependencies:
+                  if not isinstance(dependency, dict) or "skip_reason" in dependency:
+                      raise ValueError("incomplete dependency record")
+                  if any(not isinstance(dependency.get(key), str) or not dependency[key].strip() for key in ("name", "version")):
+                      raise ValueError("malformed dependency identity")
+                  vulnerabilities = dependency.get("vulns")
+                  if not isinstance(vulnerabilities, list):
+                      raise ValueError("malformed vulnerability list")
+                  if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"].strip() for item in vulnerabilities):
+                      raise ValueError("malformed vulnerability record")
+                  total += len(vulnerabilities)
+              if raw_exit != (1 if total else 0):
+                  raise ValueError("scanner exit is inconsistent with complete report")
+              count = total
+          except (OSError, ValueError, RecursionError) as exc:
+              error = str(exc)
+          status = "failed" if error else "advisory_findings" if count else "clean"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"status={status}\naudit_exit={raw_exit}\nadvisory_count={count if count is not None else 'not_checked'}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write(f"### Advisory core requirement-spec audit\n- Status: {status}\n- Raw scanner exit: {raw_exit}\n- Reported advisories: {count if count is not None else 'not_checked'}\n")
+              stream.write("Security Unified remains the blocking installed-environment authority.\n")
+          if error:
+              print(f"::error::Invalid advisory audit evidence: {error}")
+              raise SystemExit(1)
+          if count:
+              print(f"::warning::Advisory core requirement-spec audit reported {count} advisories; see the report and required Security Unified check.")
+          PY
 
       - name: Check for banned dependencies
         run: |
@@ -347,6 +366,7 @@ jobs:
           fi
 
       - name: Upload SBOM and audit reports
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: dependency-audit
@@ -357,6 +377,7 @@ jobs:
 
   integration-tests-full:
     name: Full Integration Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.install_only }}
     runs-on: ubuntu-latest
 
     steps:
@@ -374,11 +395,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install transformers  # Required for depth_canonical integration tests
-          pip install -e .
+          bash scripts/ci/install_nightly_dependencies.sh
 
       - name: Run full integration test suite
         run: |
@@ -390,11 +407,34 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           TRANSFORMERS_OFFLINE: 1  # Don't download models during tests
 
+  install-only:
+    name: Install-only CPU Dependency Qualification
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          bash scripts/ci/install_nightly_dependencies.sh
+
   nightly-summary:
     name: Nightly Summary
     needs: [stress-tests, performance-benchmarks, memory-leak-detection, dependency-audit-deep, integration-tests-full]
     runs-on: ubuntu-latest
-    if: always()
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || !inputs.install_only) }}
 
     steps:
       - name: Generate summary
@@ -411,7 +451,9 @@ jobs:
         if: |
           needs.stress-tests.result == 'failure' ||
           needs.performance-benchmarks.result == 'failure' ||
-          needs.memory-leak-detection.result == 'failure'
+          needs.memory-leak-detection.result == 'failure' ||
+          needs.dependency-audit-deep.result == 'failure' ||
+          needs.integration-tests-full.result == 'failure'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |

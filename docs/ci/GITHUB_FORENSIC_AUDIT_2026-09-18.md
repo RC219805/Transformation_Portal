@@ -261,14 +261,31 @@ accompanying PR. Source contract checks, synthetic pytest selection
 fixtures and development-checkout timings remain distinct from hosted
 execution, representative performance and production acceptance.
 
-The separate legacy Nightly performance path still needs its bounded evidence
-and CPU-install repair: it accepts empty collections, selects fallback baseline
-files by filename and swallows pytest failures. Controlled execution reproduced
-these outcomes. Its repair must preserve the broad benchmark selection, use
-the owned evidence validator and committed baseline authority, and qualify
-installation independently of model inference. Existing cross-workflow trust
-boundaries, legacy callable compatibility helpers, release/OIDC approvals and
-real-model acceptance are not relaxed by this follow-up.
+The scoped Nightly follow-on retains the broad `tests/ -m benchmark` selection
+and uses the unchanged owned evidence validator and four committed Lux baselines.
+Controlled shell contracts reject empty/skipped and invalid evidence, preserve
+raw pytest failure independently, and classify only complete failed-writer
+evidence as a regression candidate. Fresh artifacts are uploaded before the
+final failing gate; filename-selected comparison and swallowed failures are removed.
+
+The advisory core requirement-spec audit now distinguishes complete reports
+from scanner failure. Valid vulnerability findings remain advisory under
+ADR-032; missing, malformed, incomplete, stale or exit-inconsistent evidence
+fails the job, while reports are retained on failure. The summary's existing
+failure notification covers dependency and integration failures as well as
+stress, performance and memory failures. Security Unified retains sole blocking
+installed-environment dependency-scan authority; this does not expand Nightly's
+scan scope or establish a clean installed environment.
+
+The [install-only CPU qualification](https://github.com/RC219805/Transformation_Portal/actions/runs/43769741406)
+at `86078f4d27c425c7d379270b0147e6f1ca2fb33f` succeeded on Ubuntu 26.04.1,
+CPython 3.11.18 x64 with `torch==2.13.0+cpu` and `torchvision==0.28.0+cpu`.
+One install-only job ran; all six normal jobs, including the summary, skipped.
+Both `pip check` calls, the post-extras CPU identity guard and tooling imports
+passed. This qualifies dependency installation/imports; broad-suite execution,
+representative performance, model inference and native/photographic acceptance
+retain separate gates. Existing cross-workflow trust boundaries, legacy callable
+helpers and release/OIDC approvals are preserved.
 
 The accepted upstream Accelerate exposure remains tracked in
 [#2186](https://github.com/RC219805/Transformation_Portal/issues/2186); configured

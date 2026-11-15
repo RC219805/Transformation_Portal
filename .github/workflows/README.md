@@ -49,8 +49,16 @@ The former `python-app.yml` and `pylint.yml` are not active workflow files.
 | [`submit-pypi.yml`](submit-pypi.yml) | Tag/manual package publication through configured OIDC environments. |
 | [`apex_performance.yml`](apex_performance.yml) | Synthetic PR/push matrix; scheduled/manual real mode requires backend execution evidence. Pages publication alone proves no inference result. |
 | [`performance-monitor.yml`](performance-monitor.yml) | Scheduled/manual Lux smoke with four required writer tests/artifacts and parsed baselines. |
-| [`nightly.yml`](nightly.yml), [`ml-slow-suite.yml`](ml-slow-suite.yml) | Separate deep/ML lanes with their own prerequisites; see the performance policy's legacy-nightly limitations. |
+| [`nightly.yml`](nightly.yml), [`ml-slow-suite.yml`](ml-slow-suite.yml) | Separate deep/ML lanes with their own prerequisites; Nightly benchmarks require the [owned evidence gate](../../docs/performance/GATE_POLICY.md). |
 | [`ai-code-review.yml`](ai-code-review.yml), [`summary.yml`](summary.yml), [`smart-issue-management.yml`](smart-issue-management.yml) | Advisory AI automation; service-unavailable diagnostics are not approvals or successful reviews. |
+
+Nightly's `pip-audit -r requirements.txt` report covers the core requirement
+specification: valid vulnerability findings remain advisory. Missing, malformed,
+incomplete or exit-inconsistent reports fail the audit job; reports are retained
+even on failure, and its summary notification covers all five deep-check jobs.
+The 4 MiB report limit bounds internal CI evidence parsing, not native resource
+admission. [Security Unified remains the blocking installed-environment
+authority](../../docs/architecture/ADR-032-dependency-pinning-strategy.md).
 
 ## Package publishing prerequisites
 

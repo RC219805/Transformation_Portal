@@ -52,12 +52,16 @@ The accepted tiers above remain policy. Actual execution evidence is narrower:
   complete passing evidence; exit 2 classifies a writer regression; exit 1 is
   invalid evidence; exit 3 is a non-writer suite failure. Four executed writers,
   four fresh artifacts, and parseable committed baselines are required.
-- The separate legacy `nightly.yml` benchmark job still installs
-  `torch==2.5.1+cpu`/`torchvision==0.20.1+cpu`, picks a fallback JSON baseline
-  by filename, and permits a no-test/no-baseline path. It lacks the Lux evidence
-  validator and classifies pytest exit 1 broadly. Those implementation gaps
-  require a bounded workflow repair; a green nightly summary does not prove
-  the evidence requirements above. Do not copy its old pins into setup.
+- `nightly.yml` retains the broad `tests/ -m benchmark` selection and uses the
+  same owned evidence validator with fresh reports/artifacts. Only a complete
+  failed-writer comparison can classify a regression candidate; raw pytest
+  failures independently fail its final gate. Empty, skipped, collection/import
+  failures and non-writer suite failures cannot pass or claim a tolerance breach.
+  Its four CPU test lanes share the governed `torch==2.13.0+cpu` and
+  `torchvision==0.28.0+cpu` installation path. The default-off manual
+  `install_only` option runs that installation, `pip check`, and imports only;
+  it skips the full suites and summary and proves no benchmark, model, native
+  resource, or photographic acceptance.
 - `apex_performance.yml` PR/push runs are synthetic and gate enforcement is
   shadow mode. Scheduled/manual real mode must complete the current matrix and
   produce V1/V2 evidence before dashboard/ledger publication. A comment or
