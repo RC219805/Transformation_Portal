@@ -74,7 +74,7 @@ MIN_PYTHON_VERSION = (3, 11)
 
 # Required Node major and released security floor for the frontdoor.
 REQUIRED_NODE_MAJOR = 22
-MIN_NODE_VERSION = (22, 23, 2)
+MIN_NODE_VERSION = (22, 23, 5)
 
 # Ports used by validation targets
 VALIDATION_PORTS = {
@@ -127,7 +127,7 @@ def check_node_version() -> CheckResult:
             name="Node.js version",
             passed=False,
             message="Node.js is not installed or not in PATH",
-            guidance="Install patched Node.js 22.x (>=22.23.2) via nvm, fnm, volta, or nodejs.org",
+            guidance="Install patched Node.js 22.x (>=22.23.5) via nvm, fnm, volta, or nodejs.org",
         )
 
     try:
@@ -160,13 +160,13 @@ def check_node_version() -> CheckResult:
             return CheckResult(
                 name="Node.js version",
                 passed=True,
-                message=f"Node.js {version_str} meets requirement (>=22.23.2 <23)",
+                message=f"Node.js {version_str} meets requirement (>=22.23.5 <23)",
             )
         else:
             return CheckResult(
                 name="Node.js version",
                 passed=False,
-                message=f"Node.js {version_str} does not meet requirement (>=22.23.2 <23)",
+                message=f"Node.js {version_str} does not meet requirement (>=22.23.5 <23)",
                 guidance="Install patched Node 22.x: nvm install 22 / fnm install 22, then select it",
             )
     except subprocess.TimeoutExpired:

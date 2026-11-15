@@ -9,7 +9,7 @@ This guide covers the canonical workflow for validating the Transformation Porta
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Python | ≥3.11 | Backend, tests, validation scripts |
-| Node.js | >=22.23.2 <23 | Managed frontdoor (secure-landing) |
+| Node.js | >=22.23.5 <23 | Managed frontdoor (secure-landing) |
 | Chrome/Chromium | Latest | Browser smoke tests |
 | Chrome for Testing | Contract-pinned (`151.0.7922.34`) | CSS layer computed-style parity |
 
@@ -23,7 +23,7 @@ make check-environment
 
 This validates:
 - Python version (≥3.11)
-- Node.js version (22.x, minimum 22.23.2, required for frontdoor)
+- Node.js version (22.x, minimum 22.23.5, required for frontdoor)
 - Chrome/Chromium availability
 - Port availability (3000, 8000)
 - Frontdoor npm dependencies
@@ -48,7 +48,7 @@ To inspect only that check in machine-readable form:
 
 ### Node.js Version (Important)
 
-The managed frontdoor requires **Node.js 22.x, minimum 22.23.2**. This floor includes the July 2026 Node security fixes; use the latest patched 22.x release rather than treating the minimum as a permanently current release. Native dependencies (`better-sqlite3`, `argon2`) are ABI-sensitive. The `.nvmrc` selection remains rolling `22`.
+The managed frontdoor requires **Node.js 22.x, minimum 22.23.5**. This floor includes the [November 2026 Node security fixes](https://nodejs.org/en/blog/release/v22.23.5); use the latest patched 22.x release rather than treating the minimum as a permanently current release. Native dependencies (`better-sqlite3`, `argon2`) are ABI-sensitive. The `.nvmrc` selection remains rolling `22`.
 
 ```bash
 # Check current version
@@ -216,10 +216,10 @@ node ./scripts/seed-frontdoor-user.mjs \
 ### Node Version Mismatch
 
 ```
-Node.js v20.20.1 does not meet requirement (>=22.23.2 <23)
+Node.js v20.20.1 does not meet requirement (>=22.23.5 <23)
 ```
 
-**Solution:** Install a patched Node 22.x release (minimum 22.23.2) using your version manager, then select it.
+**Solution:** Install a patched Node 22.x release (minimum 22.23.5) using your version manager, then select it.
 
 ### Port Already in Use
 

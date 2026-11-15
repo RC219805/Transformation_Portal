@@ -80,7 +80,7 @@ verified output artifacts are separate evidence levels.
 
 The front door is a Node app.
 
-- Required runtime: Node `22.x`, minimum `22.23.2` (the July 2026 security release).
+- Required runtime: Node `22.x`, minimum `22.23.5` (the [November 2026 security release](https://nodejs.org/en/blog/release/v22.23.5)).
 - Install, dev, test, build, and start fail fast below that security floor or outside Node 22.x. Install the latest patched 22.x release; `.nvmrc` intentionally keeps the rolling `22` selection.
 - Runtime guardrails also verify native addons like `better-sqlite3` and `argon2` before the front door boots.
 
@@ -412,7 +412,7 @@ originRequest:
 
 Validation prerequisites for every local managed frontdoor run:
 
-- Switch the frontdoor shell to patched Node `22.x` (minimum `22.23.2`) first.
+- Switch the frontdoor shell to patched Node `22.x` (minimum `22.23.5`) first.
   `web/secure-landing` ships `.nvmrc` with rolling `22`, and
   install/test/build/start fail fast below the security floor or outside that major.
 - If the shell previously used another Node major, rebuild the native modules

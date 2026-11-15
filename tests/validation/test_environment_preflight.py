@@ -20,13 +20,17 @@ CHECK_LOCAL_ENVIRONMENT_PATH = PROJECT_ROOT / "scripts" / "validation" / "check_
 NODE_SECURITY_CASES = (
     ("v22.22.2", False),
     ("v22.23.1", False),
-    ("v22.23.2", True),
-    ("v22.23.3", True),
+    ("v22.23.2", False),
+    ("v22.23.3", False),
+    ("v22.23.4", False),
+    ("v22.23.5", True),
+    ("v22.23.6", True),
     ("v22.24.0", True),
     ("v22.100.0", True),
     ("v23.0.0", False),
     ("v20.19.0", False),
     ("v22.23.2-rc.1", False),
+    ("v22.23.5-rc.1", False),
     ("not-a-version", False),
 )
 
@@ -81,7 +85,7 @@ class TestCheckLocalEnvironment:
         """Version-shaped stdout from a failed executable is not runtime evidence."""
         monkeypatch.setattr(env_module.shutil, "which", lambda command: "/fixture/node")
         monkeypatch.setattr(
-            env_module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="v22.23.3", returncode=1)
+            env_module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="v22.23.5", returncode=1)
         )
         assert env_module.check_node_version().passed is False
 

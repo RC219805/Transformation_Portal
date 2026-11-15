@@ -20,21 +20,21 @@ import {
 test("runtime guard rejects non-22 runtimes with one recovery path", () => {
   assert.throws(
     () => ensureSupportedNodeVersion("25.9.0"),
-    /requires Node >=22\.23\.2 <23\. Current runtime: 25\.9\.0\. Install a patched Node 22 release \(>=22\.23\.2\), reinstall or rebuild front-door dependencies under that runtime, then retry\./
+    /requires Node >=22\.23\.5 <23\. Current runtime: 25\.9\.0\. Install a patched Node 22 release \(>=22\.23\.5\), reinstall or rebuild front-door dependencies under that runtime, then retry\./
   );
-  assert.match(formatUnsupportedNodeMessage("22.22.2"), /requires Node >=22\.23\.2 <23/);
+  assert.match(formatUnsupportedNodeMessage("22.22.2"), /requires Node >=22\.23\.5 <23/);
 });
 
 test("runtime guard rejects releases below the Node 22 security floor", () => {
-  for (const version of ["22.0.0", "22.22.2", "22.23.1", "22.23.2-rc.1", "22.invalid", "23.0.0"]) {
+  for (const version of ["22.0.0", "22.22.2", "22.23.1", "22.23.2", "22.23.3", "22.23.4", "22.23.2-rc.1", "22.23.5-rc.1", "22.invalid", "23.0.0"]) {
     assert.equal(isSupportedNodeVersion(version), false, version);
     assert.throws(() => ensureSupportedNodeVersion(version), /requires Node/, version);
   }
 });
 
 test("runtime guard accepts the fixed release and later stable Node 22 releases", () => {
-  assert.equal(supportedNodeRange(), ">=22.23.2 <23");
-  for (const version of ["22.23.2", "22.23.3", "22.24.0", "22.100.0"]) {
+  assert.equal(supportedNodeRange(), ">=22.23.5 <23");
+  for (const version of ["22.23.5", "22.23.6", "22.24.0", "22.100.0"]) {
     assert.equal(isSupportedNodeVersion(version), true, version);
     assert.doesNotThrow(() => ensureSupportedNodeVersion(version), version);
   }
@@ -50,7 +50,7 @@ test("runtime guard collapses native addon ABI mismatches into actionable guidan
   assert.match(message, /native dependency "better-sqlite3"/);
   assert.match(message, /native addon ABI mismatch/);
   assert.doesNotMatch(message, /NODE_MODULE_VERSION 127/);
-  assert.match(message, /Install a patched Node 22 release \(>=22\.23\.2\), reinstall or rebuild front-door dependencies under that runtime, then retry\./);
+  assert.match(message, /Install a patched Node 22 release \(>=22\.23\.5\), reinstall or rebuild front-door dependencies under that runtime, then retry\./);
 });
 
 test("standalone start resolves both supported server output paths", () => {
