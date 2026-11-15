@@ -30,8 +30,10 @@ idna==3.20
     # via requests
 license-expression==30.4.4
     # via cyclonedx-python-lib
-markdown-it-py==4.2.0
-    # via rich
+markdown-it-py==4.3.0
+    # via
+    #   -r security.in
+    #   rich
 mdurl==0.1.2
     # via markdown-it-py
 msgpack==1.2.3

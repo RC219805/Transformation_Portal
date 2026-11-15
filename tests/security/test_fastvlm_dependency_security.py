@@ -24,6 +24,7 @@ REQUIREMENTS = Path(__file__).resolve().parents[2] / "config/fastvlm_runtime_req
         ("yarl", "1.25.1"),  # Required by aiohttp 3.14.4.
         ("fsspec", "2026.6.0"),  # GHSA-27vj-qcqg-25rc: ReferenceFileSystem template injection.
         ("multidict", "6.9.1"),  # GHSA-54p9-h82j-f925: items-view reference leak.
+        ("markdown-it-py", "4.3.0"),  # Upstream v4.3.0: quadratic inline/unterminated-HTML parsing DoS fixes.
     ],
 )
 def test_fastvlm_dependency_security_floor(distribution: str, minimum_version: str) -> None:

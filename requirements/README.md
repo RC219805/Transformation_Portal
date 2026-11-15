@@ -514,6 +514,16 @@ make check-ml-darwin-arm64
 make check-da3-runtime-darwin-arm64
 ```
 
+Darwin ML compile, update, and check commands first verify the existing complete
+generic lock set without publishing it. The freshness check compares temporary
+host-normalized resolutions; the full-set validator still enforces every header,
+platform-marked OpenCV pin, and Linux keyring dependency. A missing, stale, or
+malformed generic set fails before the native ML resolver starts. Refresh that
+set on its `ubuntu-x64-generic` owner lane, then rerun the Darwin command. Native
+ML resolution continues to use the checked `base.txt` constraint, and public
+generic writer aliases still publish all six files through their serialized
+transaction.
+
 The DA3 check seeds its temporary resolver output with the current lock, matching
 the conservative compile lane. It verifies input/lock consistency without
 requiring unrelated transitive upgrades; use the explicit update lane to refresh

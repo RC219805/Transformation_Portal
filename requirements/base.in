@@ -12,6 +12,7 @@ opencv-python>=4.8.0,<5 ; platform_system != "Linux"               # required fo
 
 # CLI framework and utilities
 typer>=0.10.0,<1           # CLI framework
+markdown-it-py>=4.3.0,<5   # Security: patched quadratic-time parsing of crafted Markdown.
 tqdm>=4.66,<5              # progress bar utility
 
 # Web orchestration service stack (exact pins for API/UI parity)

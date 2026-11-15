@@ -108,7 +108,7 @@ joblib==1.6.0
     #   scikit-learn
 lazy-loader==0.5
     # via scikit-image
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0
     # via
     #   -c base.txt
     #   rich

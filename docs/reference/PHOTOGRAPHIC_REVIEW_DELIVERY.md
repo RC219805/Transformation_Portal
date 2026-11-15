@@ -329,6 +329,14 @@ another platform/build selects fallback. Set `OMP_NUM_THREADS`,
 contract cannot grant capacity. It is reviewed release data; never regenerate it
 merely to make a mismatched installation qualify.
 
+The recorded resource capsule remains historical after the Markdown parser
+security floor moves to `markdown-it-py>=4.3.0,<5`. Its source and direct-package
+identities do not authorize the updated dependency closure. Preserve the capsule
+and its measurements; the current installation uses conservative analytical
+costing until a separately reviewed successor is qualified. A dependency audit,
+parser regression test, or source-lock refresh does not establish native resource
+acceptance or enable additional capacity.
+
 The analytical profile takes the maximum simultaneous native phase allocation,
 including snapshots, masks, hashing, codecs, previews and publication, and adds
 bounded metadata/response allowance. The worst 30 MP RGBA/four-region analytical
