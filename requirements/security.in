@@ -17,6 +17,9 @@ bandit[toml]>=1.9,<2
 # This is the SOLE governed blocking dependency scanner for CI
 pip-audit>=2.10,<3
 
+# Rich parser dependency: upstream 4.3.0 fixes quadratic-time parsing DoS.
+markdown-it-py>=4.3.0,<5
+
 # Transitive cachecontrol[filecache] dependency; floor kept explicit for GHSA-6v7p-g79w-8964.
 msgpack>=1.2.1,<2
 

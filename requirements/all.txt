@@ -164,8 +164,10 @@ mako==1.4.3
     # via
     #   -r base.in
     #   alembic
-markdown-it-py==4.2.0
-    # via rich
+markdown-it-py==4.3.0
+    # via
+    #   -r base.in
+    #   rich
 markupsafe==3.0.4
     # via
     #   jinja2

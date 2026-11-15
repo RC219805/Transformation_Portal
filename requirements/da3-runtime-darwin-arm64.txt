@@ -143,8 +143,10 @@ kiwisolver==1.5.1
     # via matplotlib
 lz4==4.4.5
     # via rosbags
-markdown-it-py==4.2.0
-    # via rich
+markdown-it-py==4.3.0
+    # via
+    #   -r da3-runtime-darwin-arm64.in
+    #   rich
 markupsafe==3.0.3
     # via
     #   flask

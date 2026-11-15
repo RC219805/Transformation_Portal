@@ -97,9 +97,10 @@ mako==1.4.3
     #   -c all.txt
     #   -r base.in
     #   alembic
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0
     # via
     #   -c all.txt
+    #   -r base.in
     #   rich
 markupsafe==3.0.4
     # via

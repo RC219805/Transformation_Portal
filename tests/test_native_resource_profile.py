@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import tifffile
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.lux_depth_v4.color_preparation import output_srgb_icc
@@ -479,7 +480,7 @@ def test_native_declaration_source_hashes_do_not_discover_python_modules(monkeyp
     assert len(identities["pyproject.toml"]) == len(identities["requirements/base.in"]) == 64
 
 
-def test_reviewed_native_contract_satisfies_current_declared_core_requirements():
+def _historical_runtime_requirements():
     runtime = resources.RESOURCE_CONTRACT["runtime"]
     assert set(resources._PACKAGES).issubset(runtime["packages"])
     environment = {
@@ -495,4 +496,45 @@ def test_reviewed_native_contract_satisfies_current_declared_core_requirements()
         "sys_platform": "darwin",
         "os_name": "posix",
     }
-    resources._validate_runtime_packages(runtime["packages"], resources._active_runtime_requirements(environment=environment))
+    return runtime, resources._active_runtime_requirements(environment=environment)
+
+
+def test_historical_native_contract_rejects_current_markdown_security_floor():
+    runtime, requirements = _historical_runtime_requirements()
+    markdown = tuple(value for value in requirements if canonicalize_name(value.name) == "markdown-it-py")
+    other_requirements = tuple(value for value in requirements if canonicalize_name(value.name) != "markdown-it-py")
+    assert markdown
+    assert all("4.3.0" in value.specifier and "4.2.0" not in value.specifier for value in markdown)
+    with pytest.raises(ValueError, match="markdown-it-py"):
+        resources._validate_runtime_packages(runtime["packages"], requirements)
+
+    # Preserve validation of every other active dependency; only Markdown is new.
+    resources._validate_runtime_packages(runtime["packages"], other_requirements)
+    candidate_packages = {**runtime["packages"], "markdown-it-py": "4.3.0"}
+    resources._validate_runtime_packages(candidate_packages, requirements)
+    assert "markdown-it-py" not in runtime["packages"]
+
+
+def test_historical_native_profile_missing_markdown_selects_fallback(evidence, monkeypatch):
+    runtime, current_requirements = _historical_runtime_requirements()
+    historical_runtime = copy.deepcopy(runtime)
+    historical_sources = dict(resources.RESOURCE_CONTRACT["sources"])
+    active_requirements = tuple(value for value in current_requirements if canonicalize_name(value.name) != "markdown-it-py")
+
+    def controlled_runtime_identity():
+        resources._validate_runtime_packages(historical_runtime["packages"], active_requirements)
+        return copy.deepcopy(historical_runtime)
+
+    # Match all other authority deliberately, avoiding ambient host/source drift.
+    monkeypatch.setattr(resources, "_runtime_identity", controlled_runtime_identity)
+    monkeypatch.setattr(resources, "_source_identity", lambda: dict(historical_sources))
+    historical_identity = resources.profile_identity()
+    assert resources.runtime_profile_identity() == historical_identity
+    assert _qualify(evidence) is not None
+
+    active_requirements = current_requirements
+    with pytest.raises(ValueError, match="markdown-it-py"):
+        resources.capture_contract()
+    assert resources.runtime_profile_identity() is None
+    assert _qualify(evidence) is None
+    assert resources.profile_identity() == historical_identity

@@ -87,7 +87,7 @@ keyring==25.7.0
     # via
     #   -c all.txt
     #   twine
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0
     # via
     #   -c all.txt
     #   rich

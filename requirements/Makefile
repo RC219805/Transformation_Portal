@@ -64,7 +64,7 @@ PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
 	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
 	_publish-generic-lock-set _prepare-generic-lock-set \
-	require-pip-compile require-darwin-arm64-authority require-da3-runtime-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
+	require-pip-compile require-checked-generic-base require-darwin-arm64-authority require-da3-runtime-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
@@ -241,12 +241,16 @@ _prepare-generic-lock-set:
 		--staged-generic-dir "$$tmp_dir" --expected-python "$(LOCK_PYTHON_VERSION)"
 
 # ML layer lockfiles - checked-in contract is limited to target-owned core locks.
-# Target-owned core lockfiles resolve against the base layer contract.
-# Linux keeps the exact base.txt constraint. Darwin uses base.in so the
-# conservative macOS ML lock can carry numpy<2 without inheriting the
-# host-resolved base.txt NumPy exact pin.
+# Target-owned core lockfiles resolve against the checked generic base.txt.
+# Native Darwin lanes verify the existing complete generic set without
+# publishing it; generic publication remains owned by its authoritative lane.
 # NOTE: Non-core optional ML layers are not compiled here.
 # NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
+
+# Check freshness and every static generic invariant without a publication.
+require-checked-generic-base: require-pip-compile check-generic
+	@$(PIP_PYTHON_BIN) ../scripts/validation/check_requirements_lock_contract.py \
+		--staged-generic-dir "$(CURDIR)" --expected-python "$(LOCK_PYTHON_VERSION)"
 
 # Target-owned ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
 require-darwin-arm64-authority:
@@ -278,7 +282,7 @@ refuse-linux-x86_64-authority:
 
 ml-core-darwin-x86_64.txt: refuse-darwin-x86_64-authority
 
-ml-core-darwin-arm64.txt: require-darwin-arm64-authority require-pip-compile ml-core-darwin-arm64.in base.txt
+ml-core-darwin-arm64.txt: require-darwin-arm64-authority require-checked-generic-base ml-core-darwin-arm64.in
 	@echo "Compiling ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 
@@ -287,12 +291,12 @@ ml-core-linux.txt: refuse-linux-x86_64-authority
 compile-ml-darwin-arm64: ml-core-darwin-arm64.txt
 	@echo "✓ Darwin arm64 ML lock compiled successfully"
 
-update-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile base.txt
+update-ml-darwin-arm64: require-darwin-arm64-authority require-checked-generic-base
 	@echo "Updating ml-core-darwin-arm64.txt on authoritative Darwin arm64 lane..."
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 	@echo "✓ Darwin arm64 ML lock updated successfully"
 
-check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile check-generic
+check-ml-darwin-arm64: require-darwin-arm64-authority require-checked-generic-base
 	@echo "Checking Darwin arm64 ML lock..."
 	@set -euo pipefail; \
 	repo_dir="$$(pwd)"; \

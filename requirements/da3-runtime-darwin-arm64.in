@@ -35,3 +35,6 @@ addict==2.4.0  # Governed DA3 baseline
 pre-commit==4.6.2  # Governed DA3 baseline
 virtualenv==21.14.13  # Shell activation escaping fixes plus patched Python 3.11 pip seed
 Werkzeug>=3.1.9,<4  # Security floor for the transitive Open3D dashboard dependency
+
+# Security: 4.3.0 fixes quadratic Markdown parsing paths.
+markdown-it-py>=4.3.0,<5
