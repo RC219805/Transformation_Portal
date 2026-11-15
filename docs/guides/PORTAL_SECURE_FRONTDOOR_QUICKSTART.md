@@ -97,12 +97,12 @@ regenerating CSS ownership evidence. Its report records exact gzip sizes;
 Homebrew Node can link a different zlib and produce a different compressed size
 for identical CSS. A gzip-only freshness failure is a toolchain mismatch, not a
 reason to relax the CSS hash, architecture, or asset-budget checks. For example,
-the reviewed [Frontdoor contract run for PR #2231](https://github.com/RC219805/Transformation_Portal/actions/runs/38994338160/job/117283441929) used official Node `22.23.3`:
+the reviewed [Frontdoor contract run for PR #2231](https://github.com/RC219805/Transformation_Portal/actions/runs/38994338160/job/117283441929) used official Node `22.23.3`. Current CI pins official Node `22.23.5`; use that runtime for current regeneration:
 
 ```bash
 cd web/secure-landing
-nvm install 22.23.3
-nvm use 22.23.3
+nvm install 22.23.5
+nvm use 22.23.5
 npm ci
 npm run build:portal
 node scripts/check-portal-css-architecture.mjs --write-ownership-report
