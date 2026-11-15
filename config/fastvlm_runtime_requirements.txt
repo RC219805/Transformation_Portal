@@ -1,5 +1,5 @@
 # Caption-only MLX runtime; upstream Gradio demos require vulnerable Pillow<13.
-pip==26.2.2
+pip==26.3
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4
 aiosignal==1.4.0
@@ -27,7 +27,7 @@ httpx==0.28.1
 huggingface_hub==1.16.0
 idna==3.20
 Jinja2==3.1.6
-markdown-it-py==4.1.0
+markdown-it-py==4.2.0
 MarkupSafe==3.0.4
 mdurl==0.1.2
 mlx==0.32.4
@@ -74,7 +74,7 @@ torchvision==0.28.0
 tqdm==4.70.0
 transformers==5.10.4
 typer==0.27.2
-typing-inspection==0.4.4
+typing-inspection==0.4.5
 typing_extensions==4.15.0
 urllib3==2.8.0
 uvicorn==0.52.1
