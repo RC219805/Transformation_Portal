@@ -2,15 +2,15 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-11-03 UTC
+**Last Updated**: 2026-11-15 UTC
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,405 lines total
-- **Required PR check snapshot (2026-09-18 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
-- **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy.
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,466 lines total
+- **Required PR check snapshot (2026-11-15 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
+- **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy. The Code Quality setup API currently reports that the feature is unavailable; configured severity is not proof of analysis or zero findings.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
 
@@ -22,12 +22,12 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 
 | # | File | Name | Triggers | Source behavior | LOC | Recommendation |
 |---|------|------|----------|-----------|-------------|----------------|
-| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1480 | **Keep** — primary PR gate; aggregated `CI Gate` check; conditional native amd64 CPU/full GPU image builds and offline software probes; lightweight documentation catalog, maintained-link and editorial lock validation |
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1517 | **Keep** — primary PR gate; aggregated `CI Gate` check; conditional native amd64 CPU/full GPU image builds and offline software probes; lightweight documentation catalog, maintained-link and editorial lock validation; declared npm ownership and root/Worker compilation/dry-run coverage in the existing Frontdoor gate |
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 614 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 971 | **Keep pending equivalence proof** — trusted `workflow_run` verification includes resolution, isolation, security, coverage, and flake-analysis evidence. A passing upstream `CI Gate` alone does not prove this workflow redundant. |
-| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 231 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
+| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 255 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, full non-ML Layer 1, conditional ML, and explicit Golden contracts. Distinct from `build.yml` test surface. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
-| 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | Failing checks; see remote snapshot | 114 | **Keep** — GitHub semantic SAST for Actions, Python, and JavaScript/TypeScript; includes frontdoor and Worker source. |
+| 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | Analysis and SARIF upload | 114 | **Keep** — GitHub semantic SAST for Actions, Python, and JavaScript/TypeScript; includes frontdoor and Worker source. |
 | 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | Dependency Security required on main | 279 | **Keep** — pip-audit + checkpoint-loading source gates; distinct from CodeQL. Unfiltered main PR trigger, read-only dependency job, no secret dependency or soft failure. |
 | 8 | `dependency-review.yml` | Dependency Review | PR | ⚠️ Advisory (warn-only) | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. The workflow sets `warn-only: true` and the job name is "Dependency Review (advisory)", so findings never fail a PR — they only post warnings. |
 | 9 | `dependency-submission.yml` | Dependency Submission | push, PR, manual | ❌ No | 232 | **Keep** — submits verified committed Python lock inventories; API failures remain advisory. |
@@ -38,11 +38,11 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 14 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
 | 15 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 219 | **Keep** — schedule-only by design; runs the Lux perf smoke harness against committed baselines (`tests/benchmarks/baselines/`) and is green only when `scripts/ci/check_performance_evidence.py` proves the required tests executed and the four artifacts were produced (repair 1.6-a, #2062); the gate's exit code also classifies regression (valid evidence, failed baseline-writer comparison) vs failed (invalid evidence, or a non-writer suite failure); distinct from nightly benchmarks. |
 | 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 657 | **Keep** — APEX-specific matrix runner with synthetic PR/push evidence and real scheduled/manual backend runs. Standalone domain. |
-| 17 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | Failing checks; see remote snapshot | 125 | **Merge → `contract-validations.yml`** (proposed new) |
-| 18 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | Failing checks; see remote snapshot | 95 | **Merge → `contract-validations.yml`** |
-| 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | Failing checks; see remote snapshot | 231 | **Merge → `contract-validations.yml`** |
-| 20 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | Failing checks; see remote snapshot | 159 | **Merge → `contract-validations.yml`** |
-| 21 | `determinism-gate.yml` | determinism-gate | PR | Failing checks; see remote snapshot | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
+| 17 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | Contract validation | 125 | **Merge → `contract-validations.yml`** (proposed new) |
+| 18 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | Contract validation | 95 | **Merge → `contract-validations.yml`** |
+| 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | Contract validation | 231 | **Merge → `contract-validations.yml`** |
+| 20 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | Contract validation | 159 | **Merge → `contract-validations.yml`** |
+| 21 | `determinism-gate.yml` | determinism-gate | PR | Contract validation | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
 | 22 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
 | 23 | `docs.yml` | Documentation | PR, push, manual | ⚠️ Advisory | 133 | **Keep** — multi-job (build, validate-markdown, navigation); coherent. |
 | 24 | `frontdoor-deployment-gate.yml` | Frontdoor Deployment Gate | manual only | Manual | 131 | **Keep** — operational gate for frontdoor deploys. |
@@ -163,7 +163,7 @@ After Tier A + B alone: 31 → 23. After Tier C: ~19 (depending on calls). The o
 Current principles, checked against source and the remote protection snapshot:
 
 1. **Preserve both required checks** — `build.yml` owns `CI Gate`; `security-unified.yml` owns the separately required `Dependency Security`. Branch protection is remote state; verify the dated snapshot before merging.
-2. **Scheduled workflows own their domain** — `nightly.yml`, `performance-monitor.yml` are non-blocking validation.
+2. **Scheduled workflows own their domain** — `nightly.yml` and `performance-monitor.yml` are independent evidence lanes, not remotely required PR checks. A failed job still requires triage.
 3. **Actions are SHA-pinned** — All third-party actions reference commit SHAs for supply-chain security. Enforcement: `enforcement.yml` → `action-pins` job.
 4. **Issue creation is deduplicated** — Automated workflows check for existing open issues before creating new ones.
 5. **Concurrency follows side effects** — Cancel superseded validation within its event/ref group. Serialize dependency branch writers without cancelling a publication transaction. Release jobs, scheduled evidence, and issue/PR automation need distinct policies; a universal cancellation rule is unsafe.
@@ -176,10 +176,10 @@ Current principles, checked against source and the remote protection snapshot:
 
 ```yaml
 # ✅ Good — SHA pinned
-- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
 # ❌ Bad — floating tag
-- uses: actions/checkout@v6
+- uses: actions/checkout@v7
 ```
 
 Enforcement: `enforcement.yml` → `action-pins` job.
@@ -210,7 +210,7 @@ if (existingIssue) {
 For conditional job execution on PRs, use `dorny/paths-filter` instead of unreliable `github.event.head_commit.modified`:
 
 ```yaml
-- uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
+- uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
   with:
     filters: |
       ml:
@@ -231,6 +231,7 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-11-15 | Rechecked protection/capability state; closed root-runtime classification and Worker toolchain coverage gaps, narrowed Golden while retaining Layer 1, and bound complete Enforcement cache inputs. | Preserve named checks, trust boundaries and fixed time budgets; distinguish unavailable Code Quality from zero findings and remove source-proven duplicate execution. |
 | 2026-09-18 | Forensic review: repaired PR classification, serialized dependency writers, reduced advisory setup, separated release destinations, extended CodeQL language coverage, and refreshed source counts. | Preserve check identities and trusted-event boundaries while removing proven waste and stale guidance. |
 | 2026-09-12 | Recounted 31 workflows (8,225 lines), distinguished workflow failure from remote required checks, and labeled historical consolidation proposals. | Source review at the recorded baseline; no workflow policy changes. |
 | 2026-09-04 | Refreshed all 31 workflow line counts from the frozen live `.github/workflows/*.yml` inventory (8,225 total). | Keep the maintained matrix synchronized with the governed workflow files. |

@@ -1,5 +1,7 @@
 # GitHub Configuration Forensic Audit
 
+> Historical evidence is preserved below. The [2026-11-15 follow-up](#follow-up-review-2026-11-15-utc) records a new source and remote-state review; September observations are not current enforcement claims.
+
 **Audit date:** 2026-09-18 UTC
 **Source baseline:** `6e6c204456df404881c77f9db03585da3fc7f829`
 **Scope:** tracked `.github` files, their execution consumers, focused tests,
@@ -176,3 +178,100 @@ publication, real model inference, hosted duration savings, or equivalence for
 retiring overlapping workflows. Existing route, selector, CLI flag, required
 check and firewall checkout contracts were retained; the documented release
 trigger restriction and cache-format migration are intentional changes.
+
+
+## Follow-up review: 2026-11-15 UTC
+
+**Source baseline:** `60ab90f6298b62c12c726a694953bff4ec0dbd1f`.
+**Scope:** the same tracked GitHub automation surface, its execution consumers,
+focused regression coverage, and read-only remote protection and capability
+metadata. The September record above remains a dated record of PR
+[#2145](https://github.com/RC219805/Transformation_Portal/pull/2145).
+
+The new baseline has **109 tracked `.github` files**, **31 active workflow YAML
+files**, and **8,405 workflow lines**. These are baseline counts; the maintained
+[workflow matrix](WORKFLOW_MATRIX.md) records the resulting patch inventory.
+
+### Remote configuration and effective capability
+
+Read-only rechecks of main protection and ruleset `9331244` still show strict
+`CI Gate` and `Dependency Security` checks bound to app `15368`, conversation
+resolution and admin enforcement, Copilot review on push, code-quality severity
+`all`, and CodeQL thresholds `all`. Configured rules and available services are
+separate evidence: `GET /repos/RC219805/Transformation_Portal/code-quality/setup`
+returned HTTP 404 with `Code quality is not available for this repository.`
+This is an unavailable signal, not zero quality findings. No remote setting,
+protection rule, severity threshold, or alert dismissal was changed.
+
+At preceding main `2fada4bd747e9e96b996c90055aaf4bd35902139`,
+[primary CI](https://github.com/RC219805/Transformation_Portal/actions/runs/43755866219),
+[Enforcement](https://github.com/RC219805/Transformation_Portal/actions/runs/43755866088),
+the [push firewall](https://github.com/RC219805/Transformation_Portal/actions/runs/43755866111),
+and the automatic [trusted post-CI firewall](https://github.com/RC219805/Transformation_Portal/actions/runs/43759448810)
+all passed. The trusted audit verified 14 executed full-SHA checkout logs and
+all 16 trusted jobs. This is hosted evidence for that exact commit, not proof
+of this follow-up patch or permission to retire a workflow.
+
+### Gaps reproduced and bounded corrections
+
+| Finding | Correction and preserved contract |
+| --- | --- |
+| Root `.nvmrc` and Dependabot configuration were classified as lightweight documentation even though runtime/parity and dependency-governance checks consume them. | Include exact paths in primary classification, with positive and rename-away cases. Root Node changes request the existing Frontdoor gate; ordinary documentation retains lightweight validation. |
+| Frontdoor CI ran seven dependency-free Worker request tests but never installed or compiled the governed Worker/root toolchain. Its bundled npm also differed from the declared npm owner. | Activate and verify npm 11.12.1, bind all three consumed owner locks in the cache, install the root/Worker closures, and run blocking parity, TypeScript and both dry-run checks in the existing 15-minute Frontdoor job. No deployment, route, selector or auth behavior changes. |
+| Layer 1 and Golden duplicated the complete non-ML suite. | Keep Layer 1 unchanged and select `golden and not ml and not slow and not benchmark` for the existing Golden check. Retain its ID, name, admission condition, install policy and failure behavior. Real pytest fixtures prove mixed-marker union preservation, empty-selection failure and independent failure propagation. |
+| Enforcement pip caches did not explicitly bind every consumed transitive input and inline dependency pin. | Bind the requirement wrappers, base/constraints, package metadata and owning workflow. Installed versions and numeric test-environment overrides remain unchanged. |
+| A public-storage rejection fixture inherited umask: under `0077`, `mkdir(mode=0755)` created a private `0700` directory and never exercised rejection. | Set the fixture's exact public mode and cover both `0022` and `0077`; the product's owner/mode validation is unchanged. |
+| Current matrix labels mixed dated failing runs with workflow responsibilities. | Refresh the dated remote snapshot and source behavior, current action examples, and exact inventory. Historical consolidation proposals remain explicitly unapproved. |
+
+### Performance and coverage evidence
+
+On the exact baseline, the actual
+[Layer 1](https://github.com/RC219805/Transformation_Portal/actions/runs/43762505793)
+and Golden jobs each reported **19,493 passed, 326 skipped, 756 deselected**.
+Layer 1's pytest phase took **1,041.49 seconds**; Golden's took **877.61
+seconds**. Their Python version, all four successful install phases and source
+selectors matched; only `--maxfail` differed. This establishes duplicate work,
+not a controlled post-change speed comparison.
+
+The narrowed local Golden collection contains **134 Phase 4 contracts**.
+Layer 1 still owns the full non-ML selection, including unmarked and stress
+cases. The explicit Golden check is not representative photographic quality
+acceptance; the reconstruction golden module is ML-marked and retains its
+existing exclusion. No test, marker family, named check, or workflow is retired.
+Hosted savings and installed Linux collection counts require the exact patch's
+CI; no percentage or universal latency improvement is claimed.
+
+### Validation and remaining boundaries
+
+A restrictive private validation runner reproduced the storage-fixture failure:
+`make ci` on baseline `60ab90f6` reported **2,600 passed, 125 skipped, one
+fixture failure**. A controlled probe confirmed that the unchanged product
+accepts actual `0700` and rejects actual `0755`; this was test/environment
+logic, not weakened product protection.
+
+The updated focused workflow/RAG/release/classifier/Golden/Worker/workspace
+contracts passed **676 tests, 2 intentionally disabled-workflow skips**.
+Full local `make ci` passed with the same restrictive `0077` umask, including
+fast tests, orchestrator contracts, frontend coverage and production build.
+This resolves the reproduced fixture failure without changing product mode
+validation. Actual root/Worker/frontend owner installs, Worker TypeScript,
+root/Worker dry-runs and dependency parity also passed using official Node
+22.23.5 and npm 11.12.1. Exact-head hosted acceptance is recorded in the
+accompanying PR. Source contract checks, synthetic pytest selection
+fixtures and development-checkout timings remain distinct from hosted
+execution, representative performance and production acceptance.
+
+The separate legacy Nightly performance path still needs its bounded evidence
+and CPU-install repair: it accepts empty collections, selects fallback baseline
+files by filename and swallows pytest failures. Controlled execution reproduced
+these outcomes. Its repair must preserve the broad benchmark selection, use
+the owned evidence validator and committed baseline authority, and qualify
+installation independently of model inference. Existing cross-workflow trust
+boundaries, legacy callable compatibility helpers, release/OIDC approvals and
+real-model acceptance are not relaxed by this follow-up.
+
+The accepted upstream Accelerate exposure remains tracked in
+[#2186](https://github.com/RC219805/Transformation_Portal/issues/2186); configured
+or passing checks do not constitute an upstream fix. Retained photographs,
+approvals, finalized delivery and frozen model runtimes are preserved. No new
+model inference was run; AWS/GPU validation remains on hold.

@@ -83,6 +83,7 @@ new AsyncFunction('core', 'context', 'github', input.script)(core, context, gith
         ".github/agents/transformation-portal-architect.md",
         ".github/agents/rag_system/classifier.py",
         ".pre-commit-config.yaml",
+        ".github/dependabot.yml",
         "Dockerfile",
         "docker-compose.yml",
         "requirements/core.txt",
@@ -107,6 +108,7 @@ def test_runtime_and_governance_changes_require_full_ci(path: str) -> None:
         "config/portal_asset_budgets.json",
         "package.json",
         "package-lock.json",
+        ".nvmrc",
         "wrangler.jsonc",
         ".github/workflows/build.yml",
         "portal.html",
@@ -134,7 +136,14 @@ def test_ordinary_documentation_keeps_lightweight_ci(path: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "previous_path,frontdoor", [("app.py", "false"), ("public/portal-assets/portal.js", "true"), ("Dockerfile", "false")]
+    "previous_path,frontdoor",
+    [
+        ("app.py", "false"),
+        ("public/portal-assets/portal.js", "true"),
+        ("Dockerfile", "false"),
+        (".nvmrc", "true"),
+        (".github/dependabot.yml", "false"),
+    ],
 )
 def test_renames_out_of_runtime_paths_retain_required_validation(previous_path: str, frontdoor: str) -> None:
     outputs = _classify([{"filename": "docs/archive/old-source.txt", "previous_filename": previous_path}])
