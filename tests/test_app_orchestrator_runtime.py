@@ -1566,8 +1566,10 @@ def test_portal_protected_suppression_reads_managed_error_envelope_details() -> 
     assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
     assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
     recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
-    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in recovery_body
-    assert "_recordProtectedFamilySuppression('jobs_list', nonRetryableDetails);" in recovery_body
+    assert (
+        "_recordProtectedFamilySuppression(type === 'upload' ? 'uploads_staging' : 'jobs_list', nonRetryableDetails);"
+        in recovery_body
+    )
 
 
 def test_portal_lux_dispatch_payload_preserves_path_fields_after_canonical_args() -> None:
@@ -1853,9 +1855,9 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "buildStep: resolveBuildStep(state.portalUi.buildStep)" in persist_body
     assert "window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);" in schedule_body
     assert "window.requestIdleCallback" in schedule_body
-    assert "_persistTransientPortalDraft();" in schedule_body
+    assert "_persistTransientPortalDraft(false);" in schedule_body
     assert "_cancelScheduledTransientPortalDraftPersist();" in flush_body
-    assert "return _persistTransientPortalDraft();" in flush_body
+    assert "return _persistTransientPortalDraft(false);" in flush_body
     assert "API_KEY_STORAGE_KEY" not in persist_body
     assert "csrfToken" not in persist_body
     assert "state.jobs" not in persist_body
