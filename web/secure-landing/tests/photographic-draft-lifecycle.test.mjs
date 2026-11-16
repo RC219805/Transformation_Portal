@@ -114,6 +114,56 @@ for (const paged of [false, true]) {
     assert.equal(h.root.find("photographic-discard-navigation").hidden, false);
   });
 
+  for (const succeeds of [true, false]) {
+    test(`${mode} confirmed replacement locks authoring until a delayed read ${succeeds ? "succeeds" : "fails"}`, async (t) => {
+      let delayed = false, finish, waitingReads = 0;
+      const h = fixture({ paged, sceneCount: 2, extraFetch: (request, { server, detail }) => {
+        if (!delayed || !request.path.endsWith(paged ? "/scene" : "/photographic-review")) return null;
+        waitingReads += 1;
+        return new Promise((resolve) => { finish = () => resolve(succeeds
+          ? json(paged ? detail(request.params.get("scene_id")) : {
+            state_version: server.stateVersion, decisions: server.decisions, groups: server.groups, presets: server.presets, scenes: h.scenes,
+          }) : error("UNAVAILABLE", "Replacement unavailable", 503)); });
+      } });
+      t.after(() => { finish?.(); h.api.show(null, null); });
+      h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+      const note = await edit(h, "photographic-decision-note", "Confirmed old-source draft");
+      const lighting = await edit(h, "photographic-lighting-group", "Retained lighting");
+      const revision = await edit(h, "photographic-revision-exposure", "0.2");
+      h.scenes[0].variants[0].sha256 = "e".repeat(64);
+      h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
+      await h.api.refresh(); await settle();
+      assert.equal(h.root.find("photographic-discard-navigation").hidden, false);
+      delayed = true;
+      await h.root.find("photographic-discard-navigation").trigger();
+      assert.ok(finish, "The confirmed source read remains pending");
+      assert.equal(note.disabled, true);
+      assert.equal(lighting.disabled, true);
+      assert.equal(revision.disabled, true);
+      assert.equal(h.root.find("photographic-discard-navigation").disabled, true);
+      assert.equal(h.root.find("photographic-cancel-navigation").disabled, true);
+      await h.root.find("photographic-cancel-navigation").trigger();
+      assert.doesNotMatch(h.root.find("photographic-review-status").textContent, /Navigation canceled/);
+      await h.root.find("photographic-discard-navigation").trigger();
+      assert.equal(waitingReads, 1, "A repeated click cannot start an overlapping replacement");
+      await h.root.find("photographic-decision-approved").trigger();
+      assert.equal(requested(h, "/decisions").length, 0);
+      assert.equal(note.value, "Confirmed old-source draft");
+      finish(); await settle(); finish = null;
+      assert.equal(note.disabled, false, "Authoring resumes only after replacement settles");
+      assert.equal(h.root.find("photographic-deliver-approved").disabled, true, "Replacement cannot authorize delivery");
+      if (succeeds) {
+        assert.equal(note.value, "");
+        assert.equal(h.api.hasUnsavedChanges(), false);
+      } else {
+        assert.equal(note.value, "Confirmed old-source draft");
+        assert.equal(lighting.value, "Retained lighting");
+        assert.equal(revision.value, "0.2");
+        assert.equal(h.api.hasUnsavedChanges(), true);
+      }
+    });
+  }
+
   for (const field of ["name", "reference"]) {
     test(`${mode} unsaved lighting ${field} survives refresh and requires explicit discard`, async (t) => {
       const h = fixture({ paged, sceneCount: 2 });

@@ -155,3 +155,43 @@ test('a real edit and undo still supersede a pending import', async () => {
   assert.equal(h.state.config.inputDir, original); assert.equal(h.state.portalUi.activeProfileName, 'Saved profile');
   assert.equal(h.context.els.profileSelect.value, 'Saved profile');
 });
+
+function eventControl(value = '') {
+  const listeners = new Map();
+  return { value, files: [], addEventListener: (type, listener) => listeners.set(type, listener),
+    dispatch(type) { return listeners.get(type)?.({ target: this }); } };
+}
+
+for (const phase of ['module loading', 'file loading']) {
+  for (const undo of [false, true]) {
+    test(`unblurred photographic text ${undo ? 'edit and undo' : 'input'} supersedes import during ${phase}`, async () => {
+      const h = importHostHarness(), before = structuredClone(h.state);
+      const control = eventControl(h.state.config.photographyV6.companionsManifest);
+      const fileInput = eventControl('selected.json');
+      h.context.importTextControl = control;
+      h.context.els.fileInput = fileInput;
+      vm.runInContext(section('    const safeBindText = (', '    const safeBindInput = (')
+        + '\nsafeBindText(importTextControl, () => state.config.photographyV6, "companionsManifest");', h.context);
+      let releaseModule, releaseFile;
+      const json = JSON.stringify({ args: { input_dir: '/stale/import' } });
+      fileInput.files = [{ size: json.length, text: () => phase === 'file loading'
+        ? new Promise(resolve => { releaseFile = resolve; }) : Promise.resolve(json) }];
+      h.context.loadDeferredSurface = () => phase === 'module loading'
+        ? new Promise(resolve => { releaseModule = resolve; }) : Promise.resolve(h.api);
+      vm.runInContext(section("if (els.fileInput) els.fileInput.addEventListener('change'", 'if (els.copyCliBtn)'), h.context);
+      const importing = fileInput.dispatch('change');
+      await new Promise(resolve => setImmediate(resolve));
+      control.value = '/unblurred/manifest.json'; control.dispatch('input');
+      if (undo) { control.value = before.config.photographyV6.companionsManifest; control.dispatch('input'); }
+      assert.deepEqual(h.state, before, 'input must retain existing change-only state semantics');
+      assert.equal(h.saves.length, 0, 'input must not persist or normalize the uncommitted control');
+      if (phase === 'module loading') releaseModule(h.api); else releaseFile(json);
+      await importing;
+      assert.deepEqual(h.state, before, 'the stale candidate must not replace the current draft');
+      assert.equal(control.value, undo ? before.config.photographyV6.companionsManifest : '/unblurred/manifest.json');
+      assert.equal(h.saves.length, 0); assert.deepEqual(h.notices, []);
+      assert.equal(h.context.els.profileSelect.value, 'Saved profile');
+      assert.equal(fileInput.value, '');
+    });
+  }
+}
