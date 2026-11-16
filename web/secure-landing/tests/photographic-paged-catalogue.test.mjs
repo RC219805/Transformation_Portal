@@ -20,6 +20,44 @@ test("concurrent refreshes coalesce the selected catalogue read and finish with 
   assert.match(h.root.find("photographic-review-status").textContent, /Review refreshed/);
 });
 
+test("contact rail resets both scroll axes only when ordered page membership changes", async (t) => {
+  const h = fixture();
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const rail = h.root.find("photographic-contact-sheet");
+  rail.scrollTop = 683; rail.scrollLeft = 121;
+  h.server.stateVersion += 1; await h.api.refresh(); await settle();
+  assert.equal(rail.scrollTop, 683); assert.equal(rail.scrollLeft, 121);
+  await h.root.find("photographic-page-next").trigger();
+  assert.equal(selected(h), h.scenes[PAGE_SIZE].scene_id);
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+  rail.scrollTop = 400; rail.scrollLeft = 80;
+  await h.root.find("photographic-page-previous").trigger();
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+  rail.scrollTop = 300; rail.scrollLeft = 50;
+  const sort = h.root.find("photographic-scene-sort"); sort.value = "label"; await sort.trigger("change");
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+});
+
+test("a reset starts a new contact rail scope even when the next job reuses scene IDs", async () => {
+  const h = fixture({ sceneCount: 1 });
+  const node = (tag, text = "", className = "", ui = "") => {
+    const element = new Element(tag); element.textContent = text; element.className = className; element.dataset.ui = ui; return element;
+  };
+  const pager = createPhotographicPagedCatalogue({ el: node, button: (text, ui, handler) => {
+    const control = node("button", text, "", ui); control.addEventListener("click", handler); return control;
+  }, field: (_label, control) => control, select: (ui) => node("select", "", "", ui), status() {}, hasEdits: () => false,
+  selection: () => ({ sceneId: "input-0000" }), apply() {}, request: async (path) => {
+    const url = new URL(path, "http://localhost");
+    return structuredClone(url.pathname === "/scenes" ? h.page(url.searchParams) : h.detail("input-0000"));
+  } });
+  const rail = node("div");
+  await pager.refresh(); pager.renderCards(rail, "input-0000");
+  rail.scrollTop = 683; rail.scrollLeft = 121;
+  pager.reset(); await pager.refresh(); pager.renderCards(rail, "input-0000");
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+});
+
 test("next unreviewed follows the selected name sort across pages", async (t) => {
   const h = fixture();
   t.after(() => h.api.show(null, null));

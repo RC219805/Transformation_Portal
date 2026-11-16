@@ -4,9 +4,9 @@ export const MAX_CONFIG_IMPORT_BYTES = 1024 * 1024;
 export function createDeferredConfigTransferApi(host) {
     const { state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike } = host;
     let readIntent = 0;
-    function text(value, fallback) {
-        if (value != null && typeof value !== 'string') throw new Error('Invalid configuration.');
-        return value || fallback;
+    function text(value, fallback, normalize) {
+        if (value != null && typeof value !== 'string') throw new Error('Invalid import.');
+        return normalize ? _textOrFallback(value, fallback) : value || fallback;
     }
     function validateFields(next, previous) {
         for (const [key, value] of Object.entries(next)) {
@@ -20,17 +20,17 @@ export function createDeferredConfigTransferApi(host) {
             } else if (key === 'maxWorkers' || key === 'maxGpuWorkers') {
                 valid = value === '' || Number.isSafeInteger(value) && value > 0;
             }
-            if (!valid) throw new Error('Invalid configuration.');
+            if (!valid) throw new Error('Invalid import.');
         }
     }
     function candidate(data) {
         if (!data || typeof data !== 'object' || Array.isArray(data)
             || (data.schema !== undefined && data.schema !== 'tp.portal.export.v1')
             || !data.args || typeof data.args !== 'object' || Array.isArray(data.args)) {
-            throw new Error('Invalid configuration.');
+            throw new Error('Invalid import.');
         }
         const pipeline = data.pipeline === undefined ? state.pipeline : data.pipeline;
-        if (typeof pipeline !== 'string' || !host.supportedPipelines.has(pipeline)) throw new Error('Invalid configuration.');
+        if (typeof pipeline !== 'string' || !host.supportedPipelines.has(pipeline)) throw new Error('Invalid import.');
         const c = JSON.parse(JSON.stringify(state.config));
         data = JSON.parse(JSON.stringify(data));
         const args = data.args;
@@ -54,9 +54,9 @@ export function createDeferredConfigTransferApi(host) {
             c.segmentation.enable = parseBoolLike(args.enable_segmentation, c.segmentation.enable);
             c.segmentation.backend = _resolveSegmentationBackend(args.segmentation_backend || c.segmentation.backend);
             c.segmentation.sam2ModelSize = _resolveSam2ModelSize(args.sam2_model_size || c.segmentation.sam2ModelSize);
-            c.segmentation.sam2CheckpointPath = _textOrFallback(
+            c.segmentation.sam2CheckpointPath = text(
                 args.sam2_checkpoint_path,
-                c.segmentation.sam2CheckpointPath
+                c.segmentation.sam2CheckpointPath, true
             );
             c.segmentation.sam2TilingEnabled = parseBoolLike(
                 args.sam2_tiling_enabled,
@@ -102,13 +102,13 @@ export function createDeferredConfigTransferApi(host) {
             );
 
             c.gate = c.gate || {};
-            c.gate.archiveIndex = _textOrFallback(
+            c.gate.archiveIndex = text(
                 args.archive_index,
-                c.gate.archiveIndex
+                c.gate.archiveIndex, true
             );
-            c.gate.manifestJsonl = _textOrFallback(
+            c.gate.manifestJsonl = text(
                 args.manifest_jsonl,
-                c.gate.manifestJsonl
+                c.gate.manifestJsonl, true
             );
             c.licenses.nonCommercialOk = parseBoolLike(
                 args.non_commercial_ok,
@@ -131,16 +131,16 @@ export function createDeferredConfigTransferApi(host) {
             c.reconstruction.groupingMode = _resolveGroupingMode(
                 args.grouping_mode || c.reconstruction.groupingMode
             );
-            c.reconstruction.camerasSidecarPath = _textOrFallback(
+            c.reconstruction.camerasSidecarPath = text(
                 args.cameras_sidecar_path,
-                c.reconstruction.camerasSidecarPath
+                c.reconstruction.camerasSidecarPath, true
             );
             c.reconstruction.iterations = _parsePositiveIntOrNull(
                 args.reconstruction_iterations
             ) || c.reconstruction.iterations;
-            c.reconstruction.tier = _textOrFallback(
+            c.reconstruction.tier = text(
                 args.reconstruction_tier,
-                c.reconstruction.tier
+                c.reconstruction.tier, true
             );
             c.reconstruction.emitSceneDebugBundle = parseBoolLike(
                 args.emit_scene_debug_bundle,
@@ -148,16 +148,16 @@ export function createDeferredConfigTransferApi(host) {
             );
 
             c.raw = c.raw || {};
-            c.raw.ingestMode = _textOrFallback(args.raw_ingest_mode, c.raw.ingestMode);
-            c.raw.wbMode = _textOrFallback(args.raw_wb_mode, c.raw.wbMode);
-            c.raw.demosaic = _textOrFallback(args.raw_demosaic, c.raw.demosaic);
+            c.raw.ingestMode = text(args.raw_ingest_mode, c.raw.ingestMode, true);
+            c.raw.wbMode = text(args.raw_wb_mode, c.raw.wbMode, true);
+            c.raw.demosaic = text(args.raw_demosaic, c.raw.demosaic, true);
 
             c.captioning = c.captioning || {};
             c.captioning.enableFastVlm = parseBoolLike(
                 args.vlm_captioning_enabled,
                 c.captioning.enableFastVlm
             );
-            c.captioning.model = _textOrFallback(args.vlm_captioning_model, c.captioning.model);
+            c.captioning.model = text(args.vlm_captioning_model, c.captioning.model, true);
             c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(
                 args.vlm_captioning_proxy_format || c.captioning.proxyFormat
             );
@@ -165,13 +165,13 @@ export function createDeferredConfigTransferApi(host) {
                 _parsePositiveIntOrNull(args.vlm_captioning_max_side_px) || c.captioning.maxSidePx;
             c.captioning.timeoutSeconds =
                 _parsePositiveIntOrNull(args.fastvlm_timeout_seconds) || c.captioning.timeoutSeconds;
-            c.captioning.pythonExecutable = _textOrFallback(
+            c.captioning.pythonExecutable = text(
                 args.fastvlm_python_executable,
-                c.captioning.pythonExecutable
+                c.captioning.pythonExecutable, true
             );
-            c.captioning.mlxVlmDir = _textOrFallback(
+            c.captioning.mlxVlmDir = text(
                 args.fastvlm_mlx_vlm_dir,
-                c.captioning.mlxVlmDir
+                c.captioning.mlxVlmDir, true
             );
 
             c.runtime = c.runtime || {};
@@ -179,7 +179,7 @@ export function createDeferredConfigTransferApi(host) {
             c.runtime.maxWorkersMode = c.runtime.maxWorkers === '' ? 'auto' : 'fixed';
             c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(args.max_gpu_workers) || '';
             c.runtime.maxGpuWorkersMode = c.runtime.maxGpuWorkers === '' ? 'auto' : 'fixed';
-            c.runtime.logLevel = _textOrFallback(args.log_level, c.runtime.logLevel);
+            c.runtime.logLevel = text(args.log_level, c.runtime.logLevel, true);
         host.migrate(c);
         validateFields(c, host.configTemplate?.() || state.config);
         return { pipeline, config: c };
@@ -189,7 +189,7 @@ export function createDeferredConfigTransferApi(host) {
         if (!file) return false;
         let next;
         try {
-            if (!Number.isFinite(file.size) || file.size > MAX_CONFIG_IMPORT_BYTES || file.size < 0) throw new Error('Invalid configuration.');
+            if (!Number.isFinite(file.size) || file.size > MAX_CONFIG_IMPORT_BYTES || file.size < 0) throw new Error('Invalid import.');
             next = candidate(JSON.parse(await file.text()));
         } catch {
             host.notify('Invalid JSON file.', 'error');
