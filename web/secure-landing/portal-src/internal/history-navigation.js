@@ -30,6 +30,8 @@ export function createPortalHistoryNavigation(host) {
       });
       return;
     }
+    // Native fragment entries inherit their route index without leaving it.
+    if (target === position) { host.apply(); return; }
     if (target === permitted || !host.hasEdits()) {
       permitted = null; position = target; host.apply(); return;
     }

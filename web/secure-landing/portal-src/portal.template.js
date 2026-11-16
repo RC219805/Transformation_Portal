@@ -6006,7 +6006,7 @@ function _applyStagedUploadResult(result) {
     const fileCount = Math.max(0, Number(summary.file_count) || 0);
     const totalBytes = Math.max(0, Number(summary.total_bytes) || 0);
     if (!inputDir) {
-        throw new Error('staged upload response did not include input_dir');
+        throw new Error('Upload input_dir missing');
     }
 
     _setStagedUploadState({
@@ -6564,7 +6564,7 @@ async function _loadDeferredReviewSurface() {
     deferredReviewSurfaceLoadPromise = import(moduleUrl)
         .then((module) => {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
-                throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
+                throw new Error('Review module factory missing');
             }
             _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
@@ -6632,7 +6632,7 @@ async function loadDeferredSurface(name, hostFactory) {
         .then((module) => {
             const factory = module?.[descriptor.factoryName];
             if (typeof factory !== 'function') {
-                throw new Error(`Deferred surface "${name}" missing factory ${descriptor.factoryName}`);
+                throw new Error(`Missing ${name} factory`);
             }
             entry.lastFailureAt = 0;
             entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
@@ -8711,7 +8711,7 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
             ? payload.data
             : null;
-        if (!data) throw new Error('invalid config metadata payload');
+        if (!data) throw new Error('invalid metadata');
         if (state.pipeline !== pipelineName) return;
         state.metadata = {
             pipeline: String(data.pipeline || pipelineName),
@@ -8890,7 +8890,7 @@ async function _fetchConfigPreview(payload, request) {
         const data = response?.success === true && response?.data && typeof response.data === 'object'
             ? response.data
             : null;
-        if (!data) throw new Error('invalid config preview payload');
+        if (!data) throw new Error('invalid preview');
         if (!request.isCurrent() || _configPreviewRequestKey(generatePayload()) !== requestKey) {
             return;
         }
@@ -10711,6 +10711,7 @@ function bindInputs() {
 
     const safeBindText = (el, category, key) => {
         if (!el) return;
+        el.addEventListener('input', () => { configImportGeneration += 1; });
         el.addEventListener('change', (e) => {
             const previousPipeline = state.pipeline;
             if (category) (typeof category === 'function' ? category() : state.config[category])[key] = e.target.value;

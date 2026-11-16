@@ -109,6 +109,7 @@ export function createPhotographicReview(host) {
     purge: purgePrivateReview, reload: () => load(true), restoreContext: () => show(context.job, context.artifact),
     resume: () => { setPanelVisible(); setPending(false); render(); },
     discard: () => { resetAuthoringDraft(); render(); },
+    onDiscarding: () => { setPending(pending); updateDeliveryButton(); },
     pause: () => {
       scopeGeneration += 1; dataRequest += 1; historyRequest += 1;
       requests.forEach((controller) => controller.abort()); requests.clear();
@@ -254,7 +255,8 @@ export function createPhotographicReview(host) {
   function currentScene() { return data?.scenes.find((scene) => scene.scene_id === sceneId) || null; }
   function currentVariant(path = primaryPath) { return currentScene()?.variants.find((variant) => variant.artifact_path === path) || null; }
   function decision(variant) { return data?.decisions.find((item) => photographicDecisionMatches(item, variant)) || null; }
-  function mutationBlocked() { return !drafts.key() || !currentVariant() || lifecycle.frozen() || lifecycle.requiresReconciliation() || pending || navigating || (pagedCatalogueEnabled() && !pager.current()); }
+  function authoringBlocked() { return !drafts.key() || !currentVariant() || lifecycle.frozen() || lifecycle.discarding() || navigating; }
+  function mutationBlocked() { return authoringBlocked() || lifecycle.requiresReconciliation() || pending || (pagedCatalogueEnabled() && !pager.current()); }
   function setPending(value) {
     pending = value;
     pager?.lock(value);
@@ -263,11 +265,11 @@ export function createPhotographicReview(host) {
     if (nodes.refresh) nodes.refresh.disabled = value || navigating;
     if (nodes.commitRevision) nodes.commitRevision.disabled = blocked || !variantPreview;
     nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = blocked || currentVariant()?.role === "original"; });
-    if (nodes.note) nodes.note.disabled = !drafts.key() || !currentVariant() || lifecycle.frozen() || navigating;
+    if (nodes.note) nodes.note.disabled = authoringBlocked();
     if (nodes.groupName) nodes.groupName.disabled = blocked;
     if (nodes.scene) nodes.scene.setAttribute("aria-disabled", String(blocked));
     if (nodes.primary) nodes.primary.setAttribute("aria-disabled", String(blocked));
-    if (nodes.discardNavigation) nodes.discardNavigation.disabled = nodes.cancelNavigation.disabled = pending || navigating || lifecycle.frozen();
+    if (nodes.discardNavigation) nodes.discardNavigation.disabled = nodes.cancelNavigation.disabled = pending || navigating || lifecycle.frozen() || lifecycle.discarding();
     editor.sync(data?.revision_constraints?.native_materials, currentVariant(), blocked);
     renderDraftStatus();
   }
