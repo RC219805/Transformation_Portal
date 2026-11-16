@@ -47,16 +47,17 @@ export function createPhotographicDraftLifecycle(host) {
     if (!nodes.draftStatus) return;
     const dirty = host.hasEdits();
     nodes.draftStatus.dataset.state = frozen ? "frozen" : ["saving", "failed", "unknown"].includes(saveState) ? saveState : dirty ? "unsaved" : "saved";
-    nodes.draftStatus.textContent = frozen ? "Review paused. Unsaved changes remain in this tab while access is checked."
+    const text = frozen ? "Review paused. Unsaved changes remain in this tab while access is checked."
       : saveState === "saving" ? "Saving the submitted changes. Newer edits are retained."
       : saveState === "failed" ? "Save failed. Your unsaved changes are retained."
       : saveState === "unknown" ? "Save outcome unknown. Refresh to reconcile before trying again."
       : dirty ? "Unsaved changes" : "Saved";
+    if (nodes.draftStatus.textContent !== text) nodes.draftStatus.textContent = text;
     host.onChange?.({ dirty, frozen });
   }
-  function retain(action) {
+  function retain(action, options = {}) {
     if (discarding || !host.hasEdits()) return false;
-    pendingNavigation = action;
+    pendingNavigation = { action, leave: options.leave === true };
     nodes.discardNavigation.hidden = nodes.cancelNavigation.hidden = false;
     host.status("Unsaved edits are retained. Save or explicitly discard them to continue.", true);
     return true;
@@ -64,11 +65,11 @@ export function createPhotographicDraftLifecycle(host) {
   async function navigate(action, options = {}) {
     if (frozen && options.leave === true) {
       if (!host.hasEdits()) { purge(); return action(); }
-      pendingNavigation = action;
+      pendingNavigation = { action, leave: true };
       mask("Unsaved changes remain private. Discard them to leave, or keep waiting for access to recover."); return false;
     }
     if (host.blocked() || frozen) { host.status("Review is busy. Wait for the current operation before navigating.", true); return false; }
-    return retain(action) ? false : action();
+    return retain(action, options) ? false : action();
   }
   function removeNotice() { if (notice) { notice.hidden = true; notice.remove(); notice = null; } }
   function purge() { frozen = reauthorizing = false; saveState = "idle"; clearNavigation(); removeNotice(); host.purge(); }
@@ -78,9 +79,11 @@ export function createPhotographicDraftLifecycle(host) {
       notice = host.el("div", "", "photo-review-help", "photographic-authorization-status");
       notice.setAttribute("role", "status");
       notice.append(host.el("p"), host.button("Discard retained draft", "photographic-discard-frozen-draft", () => {
-        const action = pendingNavigation;
-        if (!action && host.authorization().status !== "ready") return;
-        purge(); if (action) void action(); else host.restoreContext();
+        const next = pendingNavigation;
+        if (!next?.leave && host.authorization().status !== "ready") return;
+        // A source retry closes over job/pager state that purge removes.
+        // Restore its authorized context through show() instead of invoking it.
+        purge(); if (next?.leave) void next.action(); else host.restoreContext();
       }), host.button("Keep waiting", "photographic-cancel-frozen-navigation", () => {
         clearNavigation(); mask("Review paused while sign-in is checked. Unsaved changes remain private in this tab.");
       }));
@@ -119,7 +122,7 @@ export function createPhotographicDraftLifecycle(host) {
     nodes.draftStatus.setAttribute("role", "status"); nodes.draftStatus.setAttribute("aria-live", "polite");
     nodes.discardNavigation = host.button("Discard unsaved edits and continue", "photographic-discard-navigation", async () => {
       if (host.blocked() || frozen || !pendingNavigation) return;
-      const action = pendingNavigation;
+      const action = pendingNavigation.action;
       discarding = true;
       try { const result = await action(); if (result !== false) { host.discard?.(); clearNavigation(); } }
       finally { discarding = false; render(); }

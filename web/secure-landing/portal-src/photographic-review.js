@@ -1,3 +1,4 @@
+import { mountPhotographicWorkspace, buildPhotographicDeliveryControls, photographicDeliverySummary } from "./photographic-workspace.js";
 import { createPhotographicRevisionEditor } from "./photographic-revision-editor.js";
 import { createPhotographicDraftState, createPhotographicDraftLifecycle, createPhotographicReviewElements, photographicDraftSourceKey, hydratePhotographicDraftForms, normalizedPhotographicReview as normalizedReview } from "./photographic-draft-state.js";
 import {
@@ -42,6 +43,7 @@ export function createPhotographicReview(host) {
   const imageCache = new Map();
   const imageInFlight = new Map();
   const thumbnailImages = new Map();
+  let pageThumbnails = null, pageThumbnailsLoading = null, thumbnailRender = 0;
   const thumbnailLoads = new WeakMap();
   const thumbnailObserver = globalThis.IntersectionObserver ? new IntersectionObserver((entries) => {
     entries.filter((entry) => entry.isIntersecting).forEach((entry) => { thumbnailObserver.unobserve(entry.target); thumbnailLoads.get(entry.target)?.(); });
@@ -81,7 +83,7 @@ export function createPhotographicReview(host) {
   catch { recoveryStorage = photographicDeliveryRecoveryStorage(null); }
   let nodes = {};
   const editor = createPhotographicRevisionEditor({ nodes, el, input, select, field, button, status, resetPreview, revise,
-    getDraft: () => revisionDraft, getMaterials: () => materialDrafts, onEdit: () => { drafts.edit("revision"); renderDraftStatus(); } });
+    getDraft: () => revisionDraft, getMaterials: () => materialDrafts, regionContext, onEdit: () => { drafts.edit("revision"); renderDraftStatus(); } });
   let pager = null;
   let savedSelection = null;
   let initialArtifactPath = "";
@@ -129,13 +131,16 @@ export function createPhotographicReview(host) {
     requests.forEach((controller) => controller.abort()); requests.clear();
     stopBlink(); releaseImages(); imageRequest += 1; pager?.reset();
     data = null; jobId = ""; actorScope = ""; deliveryActorScope = ""; inventoryKey = ""; primaryPath = comparePath = sceneId = "";
-    inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); deliverySelections.clear(); presetEdits.clear();
+    inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); deliverySelections.clear(); presetEdits.clear(); sceneLabels.clear();
     deliverySources = []; selectedPresets.clear(); deliveryAttempt = null; deliveryHistory = []; deliveryCursor = null;
     recoveryStorageBlocked = false; deliveryOutcome = "idle";
     resetAuthoringDraft(); clearPendingNavigation(); pending = false;
     if (nodes.note) nodes.note.value = "";
     if (nodes.groupName) nodes.groupName.value = "";
-    if (nodes.reference) nodes.reference.replaceChildren();
+    if (nodes.property) nodes.property.value = "Property";
+    for (const key of ["reference", "scene", "primary", "compare"]) {
+      if (nodes[key]) { nodes[key].replaceChildren(); nodes[key].value = ""; }
+    }
     if (nodes.contact) nodes.contact.replaceChildren();
     nodes.figures?.forEach(({ image, caption }) => { image.removeAttribute("src"); caption.textContent = ""; });
     panel?.classList.add("hidden");
@@ -215,6 +220,7 @@ export function createPhotographicReview(host) {
   }
   function releaseImages() {
     displayedInspectionKey = "";
+    thumbnailRender += 1; pageThumbnails?.reset();
     clearDownload();
     thumbnailObserver?.disconnect();
     thumbnailImages.forEach((image) => { if (image.src?.startsWith("blob:")) URL.revokeObjectURL(image.src); });
@@ -240,6 +246,14 @@ export function createPhotographicReview(host) {
   function viewFor(variant) {
     return recordedPresentationEnabled() && presentationView === "recorded" && variant?.presentation?.available_views?.includes("recorded")
       && SHA256.test(variant.presentation_policy_sha256 || "") ? "recorded" : "clip_srgb";
+  }
+  function regionContext() {
+    const variant = currentVariant();
+    if (!Number.isInteger(variant?.width) || !Number.isInteger(variant?.height) || variant.width < 1 || variant.height < 1) return null;
+    const key = imageKey(variant, inspection === "native");
+    return { key, width: variant.width, height: variant.height, visible: mode === "side_by_side",
+      ready: displayedInspectionKey === key && !mutationBlocked(),
+      crop: inspection === "native" ? nativeCropGeometry(variant, center, cropSize) : { x: 0, y: 0, width: variant.width, height: variant.height } };
   }
   function imageKey(variant, native, edge = 1600) {
     return JSON.stringify([jobId, actorScope, variant.artifact_path, variant.sha256, identity(variant),
@@ -427,42 +441,17 @@ export function createPhotographicReview(host) {
     nodes.groups.append(field("Lighting group for this photograph", nodes.groupName), field("Reference photograph", nodes.reference), saveGroup);
     nodes.outliers = el("p", "", "photo-review-help", "photographic-quality-flags");
     const revisions = editor.build();
-    const delivery = buildDeliveryControls();
+    const delivery = buildPhotographicDeliveryControls({ nodes, el, input, field, button, deliver, loadDeliveryHistory });
+    nodes.property.addEventListener("input", updateDeliveryButton);
     lifecycle.mount();
-    pager = createPhotographicPagedCatalogue({ el, button, field, select, request, status, selection, hasEdits, apply: applyPagedDetail,
+    pager = createPhotographicPagedCatalogue({ el, button, field, select, request, status, selection, hasEdits, apply: applyPagedDetail, onCards: renderPageThumbnails,
       navigation: requestNavigation, retainNavigation, discarding: lifecycle.discarding,
       canApply: (loaded, id, path) => canApplyReview(loaded, id, path || primaryPath, () => pager.locate(id, path || primaryPath)),
       onLoading(value) { navigating = value; setPending(pending); updateDeliveryButton(); } });
     pager.controls.hidden = !pagedCatalogueEnabled();
-    panel.append(heading, controls, nodes.nativeControls, nodes.nativeNotice, nodes.stage, nodes.metadata, comparisonTools,
-      quality, nodes.decisions, nodes.draftStatus, nodes.discardNavigation, nodes.cancelNavigation,
-      el("h4", "Set coherence", "photo-review-subtitle"), pager.controls, nodes.contact, nodes.groups, nodes.outliers, revisions, delivery, nodes.status);
+    mountPhotographicWorkspace({ panel, nodes, el, heading, controls, comparisonTools, quality, revisions, delivery, pagerControls: pager.controls });
     if (els.artifactShellContent?.prepend) els.artifactShellContent.prepend(panel);
     else els.artifactShellContent?.append(panel);
-  }
-
-  function buildDeliveryControls() {
-    const section = el("section", "", "photo-review-section", "photographic-delivery");
-    section.append(el("h4", "Deliver approved set", "photo-review-subtitle"),
-      el("p", "Choose destination requirements. The bundle includes meaningful filenames, a contact sheet, inventory, and verified source-master links. Approval is checked again at export.", "photo-review-help"));
-    nodes.property = input("photographic-property-name", "text", "Property");
-    nodes.property.maxLength = 100;
-    nodes.presets = el("div", "", "photo-review-controls", "photographic-delivery-presets");
-    nodes.deliverySelectionSummary = el("p", "", "photo-review-help", "photographic-delivery-selection-summary");
-    nodes.deliver = button("Deliver approved set", "photographic-deliver-approved", () => void deliver());
-    nodes.deliver.dataset.reviewMutation = "true";
-    nodes.deliver.disabled = true;
-    nodes.deliveryResult = el("div", "", "photo-review-help", "photographic-delivery-result");
-    nodes.deliveryHistory = el("div", "", "photo-review-help", "photographic-delivery-history");
-    nodes.deliveryHistoryStatus = el("p", "", "photo-review-help", "photographic-delivery-history-status");
-    nodes.reconcileDelivery = button("Refresh delivery history / reconcile", "photographic-delivery-reconcile", () => void loadDeliveryHistory());
-    nodes.moreDeliveries = button("Load older deliveries", "photographic-delivery-history-more", () => void loadDeliveryHistory(true));
-    nodes.moreDeliveries.disabled = true;
-    nodes.deliveryHistoryControls = el("section", "", "hidden", "photographic-delivery-history-controls");
-    nodes.deliveryHistoryControls.append(el("h5", "Committed delivery history"), nodes.reconcileDelivery,
-      nodes.deliveryHistoryStatus, nodes.deliveryHistory, nodes.moreDeliveries);
-    section.append(field("Property name", nodes.property), nodes.presets, nodes.deliverySelectionSummary, nodes.deliver, nodes.deliveryResult, nodes.deliveryHistoryControls);
-    return section;
   }
 
   function resetRecipe() {
@@ -484,7 +473,7 @@ export function createPhotographicReview(host) {
 
   async function load(force = false, minimumVersion = null) {
     if (!jobId) return false;
-    if (force) void loadDeliveryHistory();
+    if (force) { pageThumbnails?.reset(); void loadDeliveryHistory(); }
     const expectedJob = jobId;
     const sequence = ++dataRequest;
     status("Loading photographic review…");
@@ -566,6 +555,22 @@ export function createPhotographicReview(host) {
     renderPresets();
     rememberSelection(); notifySelection();
     void renderImages();
+  }
+
+  function renderPageThumbnails(page, cards) {
+    const sequence = ++thumbnailRender;
+    if (state.auth?.features?.photographicCatalogueThumbnails !== true) { pageThumbnails?.reset(); return; }
+    if (!pageThumbnailsLoading) pageThumbnailsLoading = import("./photographic-thumbnails.js").then(({ createPhotographicThumbnails }) => {
+      pageThumbnails = createPhotographicThumbnails({ document: doc, fetchImpl,
+        headers: () => _buildAuthHeaders({ Accept: "image/png" }, "GET"),
+        context: () => ({ jobId, owner: actorScope, ready: authorization().status === "ready" && !lifecycle.frozen(),
+          enabled: state.auth?.features?.photographicCatalogueThumbnails === true,
+          view: recordedPresentationEnabled() && presentationView === "recorded" ? "recorded" : "clip_srgb" }),
+        onAuthorizationFailure: (code) => { lifecycle.pause(); host.onReviewAuthorizationFailure?.(code); },
+        onCatalogueChanged: () => status("Photograph catalogue changed. Refresh review before loading more thumbnails.", true) });
+      return pageThumbnails;
+    }).catch(() => { pageThumbnailsLoading = null; return null; });
+    void pageThumbnailsLoading.then((api) => { if (sequence === thumbnailRender) api?.render(page, cards); });
   }
 
   function renderContactSheet() {
@@ -706,9 +711,12 @@ export function createPhotographicReview(host) {
       || ["submitting", "outcome_unknown", "reconciling", "refresh_required"].includes(deliveryOutcome) || !count || !selectedPresets.size;
     nodes.deliver.textContent = `Deliver approved set (${count})`;
     if (nodes.deliverySelectionSummary) {
-      nodes.deliverySelectionSummary.hidden = !pagedCatalogueEnabled();
+      nodes.deliverySelectionSummary.hidden = false;
       const selected = [...deliverySelections].filter(([, path]) => path);
-      nodes.deliverySelectionSummary.textContent = `${selected.length} selected across all pages (${count} currently recorded approved). ${selected.map(([id]) => sceneLabels.get(id) || recordedScenes.get(id)?.label || inspectedScenes.get(id)?.scene.label || id).join(", ")}. Every selected source is opened and revalidated before export.`;
+      nodes.deliverySelectionSummary.textContent = photographicDeliverySummary({
+        total: pagedCatalogueEnabled() ? pager.page()?.total_scenes || 0 : data?.scenes.length || 0,
+        selected: selected.length, approved: count, products: [...selectedPresets].map((name) => name.replaceAll("_", " ")), property: nodes.property.value.trim()
+      });
     }
   }
 
@@ -722,6 +730,7 @@ export function createPhotographicReview(host) {
     for (const option of nodes.mode.options) option.disabled = option.value !== "side_by_side" && !aligned;
     nodes.stage.dataset.mode = mode;
     nodes.stage.dataset.inspection = inspection;
+    editor.syncOverlay();
     nodes.presentation.value = recordedPresentationEnabled() ? presentationView : "clip_srgb";
     nodes.presentation.disabled = !recordedPresentationEnabled();
     nodes.stage.dataset.presentation = viewFor(primary);
@@ -857,7 +866,7 @@ export function createPhotographicReview(host) {
             return;
           }
           figure.image.classList.remove("hidden");
-          if (index === 0) displayedInspectionKey = imageKey(variant, inspection === "native");
+          if (index === 0) { displayedInspectionKey = imageKey(variant, inspection === "native"); editor.syncOverlay(); }
           if (source.geometry) { figure.cropCaption = ` · Crop x=${source.geometry.x}, y=${source.geometry.y}, ${source.geometry.width} × ${source.geometry.height}, native 1:1 verified`; figure.caption.textContent = imageMetadata(variant) + figure.cropCaption; }
         };
         figure.image.onerror = () => { if (sequence === imageRequest) status("Image display failed. Retained metadata and downloads remain available.", true); };

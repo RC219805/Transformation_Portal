@@ -5522,7 +5522,8 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
             photographicRecordedPresentation: bootstrap.features?.photographicRecordedPresentation === true,
-            photographicPagedCatalogue: bootstrap.features?.photographicPagedCatalogue === true
+            photographicPagedCatalogue: bootstrap.features?.photographicPagedCatalogue === true,
+            photographicCatalogueThumbnails: bootstrap.features?.photographicCatalogueThumbnails === true
         }
     };
     // The logout button is rendered with the `hidden` attribute and only

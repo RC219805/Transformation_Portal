@@ -162,7 +162,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor|drafts|loader)\.js(?:\?.*)?$/, async (route) => {
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor|drafts|loader|workspace|thumbnails)\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/javascript; charset=utf-8",
@@ -4331,21 +4331,24 @@ test("@portal-browser photographic revoked delivery choice requires explicit exc
   server.readVersion = 3;
   await page.locator('[data-ui="photographic-decision-approved"]').click();
   await expect(decision).toContainText("Approved");
-  await expect(summary).toContainText("2 selected across all pages (2 currently recorded approved)");
+  await expect(summary).toContainText("2 approved sources of 2");
+  await expect(summary).toContainText("2 selected for revalidation");
   server.decisions = server.decisions.map((row) => row.scene_id === "input-0000" ? { ...row, status: "needs_revision" } : row);
   server.committedVersion = 4; server.readVersion = 4;
   await page.locator('[data-ui="photographic-review-refresh"]').click();
-  await expect(summary).toContainText("2 selected across all pages (1 currently recorded approved)");
+  await expect(summary).toContainText("1 approved source of 2");
+  await expect(summary).toContainText("2 selected for revalidation");
   await deliver.click();
   await expect(status).toContainText("A selected delivery source is no longer approved or available. Your selection is retained");
   expect(server.deliveries).toEqual([]);
-  await expect(summary).toContainText("2 selected across all pages");
+  await expect(summary).toContainText("2 selected for revalidation");
   await scene.selectOption("input-0000");
   await expect(decision).toContainText("Needs revision");
   await expect(deliveryChoice).toHaveValue("input-0000/delivery.tif");
   await expect(deliveryChoice.locator('option[value=""]')).toHaveText("Exclude from delivery");
   await deliveryChoice.selectOption("");
-  await expect(summary).toContainText("1 selected across all pages (1 currently recorded approved)");
+  await expect(summary).toContainText("1 approved source of 2");
+  await expect(summary).toContainText("1 selected for revalidation");
   await deliver.click();
   await expect(page.locator('[data-ui="photographic-delivery-download"]')).toHaveAttribute("href", `/v1/jobs/${jobId}/photographic-review/files/remaining/approved.zip`);
   expect(server.deliveries).toHaveLength(1);
@@ -4684,6 +4687,7 @@ test("@portal-browser real photographic API preserves native identity through sa
   await expect.poll(() => native.evaluate((image) => [image.naturalWidth, image.naturalHeight, Number.parseFloat(getComputedStyle(image).width), Number.parseFloat(getComputedStyle(image).height)]))
     .toEqual([Math.min(final.width, 512), Math.min(final.height, 512), Math.min(final.width, 512), Math.min(final.height, 512)]);
   await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText(final.sha256);
+  await page.locator('[data-ui="photographic-coherence-details"] summary').click();
   await page.locator('[data-ui="photographic-measure-quality"]').click();
   await expect(page.locator('[data-ui="photographic-quality-results"]')).toContainText("spatial_v2");
   expect((await getState()).decisions).toHaveLength(0);
@@ -4948,6 +4952,7 @@ for (const paged of [false, true]) {
     await scene.selectOption('input-0001');
     await page.locator('[data-ui="photographic-discard-navigation"]').click();
     await expect(scene).toHaveValue('input-0001'); await expect(note).toHaveValue('');
+    await page.locator('[data-ui="photographic-coherence-details"] summary').click();
     await page.locator('[data-ui="photographic-lighting-group"]').fill('Unsaved room B lighting');
     await scene.selectOption('input-0000');
     await expect(scene).toHaveValue('input-0001');

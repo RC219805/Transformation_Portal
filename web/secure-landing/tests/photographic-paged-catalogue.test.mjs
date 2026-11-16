@@ -790,11 +790,11 @@ test("a retained delivery choice whose approval was revoked can be explicitly ex
   t.after(() => h.api.show(null, null));
   h.api.show(h.job, h.scenes[0].variants[0]); await settle();
   const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(2 currently recorded approved\)/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 approved sources of 10.*2 selected for revalidation/);
   h.server.decisions[0].status = "needs_revision";
   h.server.stateVersion += 1; h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
   await h.api.refresh(); await settle();
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(1 currently recorded approved\)/, "Revocation must retain the operator's exact selection until explicit exclusion");
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 approved source of 10.*2 selected for revalidation/, "Revocation must retain the operator's exact selection until explicit exclusion");
   assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
   await h.root.find("photographic-deliver-approved").trigger();
   assert.equal(requested(h, "/delivery").length, 0, "Revocation blocks export until the operator resolves the retained choice");
@@ -803,12 +803,12 @@ test("a retained delivery choice whose approval was revoked can be explicitly ex
   assert.equal(choice.value, "input-0000/delivery.tif");
   assert.equal(choice.options.some((option) => option.value === ""), true);
   choice.value = ""; await choice.trigger("change");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages \(1 currently recorded approved\)/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 approved source of 10.*1 selected for revalidation/);
   assert.equal(requested(h, "/delivery").length, 0, "Explicit exclusion changes only the local delivery selection");
   await h.root.find("photographic-page-next").trigger();
   await h.root.find("photographic-scene-next").trigger();
   assert.equal(selected(h), "input-0009");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected for revalidation/);
   await h.root.find("photographic-deliver-approved").trigger();
   assert.equal(requested(h, "/delivery").length, 1);
   const body = JSON.parse(requested(h, "/delivery")[0].options.body);
@@ -831,7 +831,7 @@ test("flag-off review still clears revoked delivery choices automatically", asyn
   h.server.decisions[0].status = "needs_revision"; h.server.stateVersion += 1;
   await h.api.refresh(); await settle();
   assert.deepEqual(h.root.findAll("photographic-delivery-version").map((control) => control.value), ["input-0001/delivery.tif"], "Legacy review must not retain an exclusion control for the revoked source");
-  assert.equal(h.root.find("photographic-delivery-selection-summary").hidden, true);
+  assert.equal(h.root.find("photographic-delivery-selection-summary").hidden, false);
   const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
   assert.equal(requested(h, "/delivery").length, 0);
   await h.root.find("photographic-deliver-approved").trigger();

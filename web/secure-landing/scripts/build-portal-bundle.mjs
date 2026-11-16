@@ -137,6 +137,10 @@ async function renderPortalCssAsset() {
   return renderedCss;
 }
 
+async function renderPhotographicWorkspaceCssAsset() {
+  return minifyCssText(`@layer components {${readFileSync(path.resolve(PORTAL_CSS_SOURCE_DIR, "photographic-workspace.css"), "utf-8")}}`);
+}
+
 async function renderPhotographicCssAsset() {
   // Join the components layer already established by index.css. Source
   // fragments do not introduce an independent global layer order.
@@ -226,6 +230,10 @@ if (process.argv.includes("--check-css")) {
   if (photographicCss !== await renderPhotographicCssAsset()) {
     throw new Error(`${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)} is stale. Run npm run build:portal.`);
   }
+  const workspaceCssPath = path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-workspace.css");
+  if (!existsSync(workspaceCssPath) || readFileSync(workspaceCssPath, "utf-8") !== await renderPhotographicWorkspaceCssAsset()) {
+    throw new Error("Photographic workspace CSS is stale. Run npm run build:portal.");
+  }
   console.log(`portal css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)}`);
   console.log(`photographic css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH)}`);
   process.exit(0);
@@ -234,6 +242,7 @@ if (process.argv.includes("--check-css")) {
 if (cssOnly) {
   const portalCssChanged = await buildPortalCssAsset();
   writeIfChanged(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, await renderPhotographicCssAsset());
+  writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-workspace.css"), await renderPhotographicWorkspaceCssAsset());
   const portalCssStats = statSync(PORTAL_CSS_ASSET_PATH);
   console.log(
     `portal css ${portalCssChanged ? "updated" : "unchanged"} (--css-only): ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} (${portalCssStats.size} bytes)`
@@ -275,6 +284,34 @@ const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY,
   minifySyntax: true,
   minifyWhitespace: true
 });
+const photographicThumbnailsBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/photographic-thumbnails.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+const photographicThumbnailsText = `${photographicThumbnailsBuild.text.trim()}\n`;
+const photographicThumbnailsHash = createHash("sha256").update(photographicThumbnailsText).digest("hex").slice(0, 12);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-thumbnails.js"), photographicThumbnailsText);
+const photographicThumbnailsPlugin = {
+  name: "photographic-thumbnails-asset",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /^\.\/photographic-thumbnails\.js$/ }, () => ({
+      path: `./portal-photographic-thumbnails.js?v=${photographicThumbnailsHash}`, external: true
+    }));
+  }
+};
+const photographicWorkspaceBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/photographic-workspace.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+const photographicWorkspaceText = `${photographicWorkspaceBuild.text.trim()}\n`;
+const photographicWorkspaceHash = createHash("sha256").update(photographicWorkspaceText).digest("hex").slice(0, 12);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-workspace.js"), photographicWorkspaceText);
+const photographicWorkspacePlugin = {
+  name: "photographic-workspace-asset",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /^\.\/photographic-workspace\.js$/ }, () => ({
+      path: `./portal-photographic-workspace.js?v=${photographicWorkspaceHash}`, external: true
+    }));
+  }
+};
 const photographicDraftBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/photographic-draft-state.js"), {
   format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
 });
@@ -309,14 +346,14 @@ const photographicSupportPlugin = {
 const photographicEditorBuild = await bundleText(PORTAL_PHOTOGRAPHIC_EDITOR_ENTRY, {
   format: "esm", keepNames: true, metafile: emitMetafile,
   minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true,
-  plugins: [photographicSupportPlugin]
+  plugins: [photographicSupportPlugin, photographicWorkspacePlugin]
 });
 const photographicEditorText = `${photographicEditorBuild.text.trim()}\n`;
 const photographicEditorHash = createHash("sha256").update(photographicEditorText).digest("hex").slice(0, 12);
 const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
   format: "esm", keepNames: true, metafile: emitMetafile,
   minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true,
-  plugins: [photographicSupportPlugin, photographicDraftPlugin, {
+  plugins: [photographicSupportPlugin, photographicDraftPlugin, photographicWorkspacePlugin, photographicThumbnailsPlugin, {
     name: "photographic-editor-asset",
     setup(buildApi) {
       buildApi.onResolve({ filter: /^\.\/photographic-revision-editor\.js$/ }, () => ({
@@ -406,6 +443,7 @@ const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `$
 const photographicChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_ASSET_PATH, `${photographicReviewBuild.text.trim()}\n`);
 const photographicSupportChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_SUPPORT_ASSET_PATH, photographicSupportText);
 const photographicEditorChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_EDITOR_ASSET_PATH, photographicEditorText);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-workspace.css"), await renderPhotographicWorkspaceCssAsset());
 const photographicCssChanged = writeIfChanged(PORTAL_PHOTOGRAPHIC_CSS_ASSET_PATH, await renderPhotographicCssAsset());
 const operateSurfaceChanged = writeIfChanged(PORTAL_OPERATE_SURFACE_ASSET_PATH, `${deferredOperateSurfaceBuild.text.trim()}\n`);
 const buildSurfaceChanged = writeIfChanged(PORTAL_BUILD_SURFACE_ASSET_PATH, `${deferredBuildSurfaceBuild.text.trim()}\n`);
