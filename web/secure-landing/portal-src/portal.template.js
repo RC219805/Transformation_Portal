@@ -1238,8 +1238,7 @@ function _syncConsoleRoute(replace = false) {
     const nextHref = `${url.pathname}${url.search}${url.hash}`;
     const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextHref === currentHref) return;
-    const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
+    portalHistoryNavigation.record(replace, { view: state.currentView, jobId: state.selectedJobId || '' }, nextHref);
 }
 
 function _managedReturnToPath() {
@@ -12879,7 +12878,6 @@ window.addEventListener('beforeunload', (event) => {
     }
 });
 window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
-window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('beforeunload', _flushPortalRumOnPagehide);
 window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
@@ -12890,19 +12888,17 @@ window.addEventListener('pageshow', () => {
 window.addEventListener('focus', () => {
     reconcileBuildSurfaceFromDom();
 });
-window.addEventListener('popstate', () => {
-    const targetHref = window.location.href;
-    const apply = () => {
-        window.history.replaceState(null, '', targetHref);
+const portalHistoryNavigation = portalInternals.createPortalHistoryNavigation({
+    history: window.history,
+    hasEdits: () => Boolean(deferredReviewSurfaceApi?.hasUnsavedChanges?.()),
+    requestNavigation: (action) => deferredReviewSurfaceApi.requestNavigation(action, { leave: true }),
+    apply: () => {
         applyConsoleRouteFromLocation(true);
         portalRenderSurfaces.render('jobQueue', state);
         _focusConsoleViewHeading(state.currentView);
-    };
-    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
-        _syncConsoleRoute(true);
-        void deferredReviewSurfaceApi.requestNavigation(apply, { leave: true });
-    } else apply();
+    }
 });
+window.addEventListener('popstate', portalHistoryNavigation.pop);
 
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');

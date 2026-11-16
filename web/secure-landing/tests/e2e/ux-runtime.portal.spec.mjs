@@ -4955,5 +4955,18 @@ for (const paged of [false, true]) {
     await page.locator('[data-ui="photographic-discard-navigation"]').click();
     await expect(scene).toHaveValue('input-0000');
     expect(submissions).toHaveLength(1);
+    await page.locator('[data-view-link="build"]').first().click();
+    await page.locator('[data-view-link="operate"]').first().click();
+    await page.locator('[data-view-link="review"]').first().click();
+    await note.fill('Private draft while going Back');
+    await page.goBack();
+    await expect(page).toHaveURL(/view=review/);
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await expect(note).toHaveValue('Private draft while going Back');
+    await page.goBack();
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(page).toHaveURL(/view=operate/);
+    await page.goForward();
+    await expect(page).toHaveURL(/view=review/);
   });
 }
