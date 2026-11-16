@@ -88,7 +88,7 @@ function inspector(job) {
   };
   const state = { jobs: job ? [job] : [], selectedJobId: job?.id, inspectorTab: "overview" };
   const api = createDeferredOperateSurfaceApi({
-    state, els,
+    state, els, _portalPrivilegesReady: () => true,
     jobProgressSnapshot, renderJobProgress,
     EVENT_SOURCE_READY_STATE_CONNECTING: 0, EVENT_SOURCE_READY_STATE_OPEN: 1, EVENT_SOURCE_READY_STATE_CLOSED: 2,
     _isJobsHydrationPending: () => false, _toggleSurfaceSkeleton() {},

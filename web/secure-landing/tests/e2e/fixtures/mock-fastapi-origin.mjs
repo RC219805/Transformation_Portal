@@ -44,9 +44,11 @@ const PUBLIC_ORIGIN = `http://${HOST}:${PORT}`;
 const SCRIPT_STUB_ROUTES = new Map([
   "/__mock-portal/portal.js",
   "/__mock-portal/portal-build.js",
+  "/__mock-portal/portal-client-recovery.js",
   "/__mock-portal/portal-config-transfer.js",
   "/__mock-portal/portal-profile.js",
   "/__mock-portal/portal-operate.js",
+  "/__mock-portal/portal-operate-tools.js",
   "/__mock-portal/portal-overview.js",
   "/__mock-portal/portal-review.js",
   "/__mock-portal/portal-photographic.js",
@@ -54,6 +56,7 @@ const SCRIPT_STUB_ROUTES = new Map([
 
 const FILE_ROUTES = new Map([
   ["/portal/assets/portal-photographic-workspace.css", { type: "text/css; charset=utf-8", file: "portal-photographic-workspace.css" }],
+  ["/portal/assets/portal-operate-tools.js", { type: "text/javascript; charset=utf-8", file: "portal-operate-tools.js" }],
   ["/portal/assets/portal-photographic.css", { type: "text/css; charset=utf-8", file: "portal-photographic.css" }],
   ["/portal/assets/portal-photographic.js", { type: "text/javascript; charset=utf-8", file: "portal-photographic.js" }],
   ["/__mock-portal/portal-review.css", { type: "text/css; charset=utf-8", file: "portal-review.css" }],
@@ -79,6 +82,7 @@ const PLACEHOLDER_SUBSTITUTIONS = Object.freeze({
   __PORTAL_REVIEW_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-review.css`,
   __PORTAL_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal.js`,
   __PORTAL_BUILD_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-build.js`,
+  __PORTAL_CLIENT_RECOVERY_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-client-recovery.js`,
   __PORTAL_CONFIG_TRANSFER_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-config-transfer.js`,
   __PORTAL_PROFILE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-profile.js`,
   __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-operate.js`,

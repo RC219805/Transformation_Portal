@@ -69,6 +69,10 @@
       "max_bytes": 6000,
       "max_gzip_bytes": 1600
     },
+    "portal-operate-tools.js": {
+      "max_bytes": 6000,
+      "max_gzip_bytes": 3000
+    },
     "portal-config-transfer.js": {
       "max_bytes": 7500,
       "max_gzip_bytes": 2500
@@ -92,6 +96,10 @@
     "portal-photographic-thumbnails.js": {
       "max_bytes": 9000,
       "max_gzip_bytes": 3800
+    },
+    "portal-client-recovery.js": {
+      "max_bytes": 17000,
+      "max_gzip_bytes": 6500
     }
   }
 }

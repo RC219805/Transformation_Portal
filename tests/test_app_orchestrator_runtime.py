@@ -1123,10 +1123,12 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         # Surface-split deferred bundles. Operate, Build, and Profile are real
         # carves; Overview is an intentional placeholder (see commit fe2ed28).
         "portal-operate.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate.js",
+        "portal-operate-tools.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate-tools.js",
         "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
         "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
         "portal-config-transfer.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-config-transfer.js",
+        "portal-client-recovery.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-client-recovery.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -1148,10 +1150,12 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
+        "portal-operate-tools.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
         "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
         "portal-config-transfer.js": "text/javascript; charset=utf-8",
+        "portal-client-recovery.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -1234,6 +1238,7 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
         "/portal/assets/shared-ui-tokens.css",
         "/portal/assets/portal-photographic-support.js",
         "/portal/assets/portal-photographic-editor.js",
+        "/portal/assets/portal-operate-tools.js",
         "/portal/assets/portal-photographic-drafts.js",
         "/portal/assets/portal-photographic-loader.js",
         "/portal/assets/portal-photographic-workspace.js",
@@ -1353,8 +1358,10 @@ def test_portal_rum_tracks_queue_actions_and_sse_reconnects() -> None:
     fetch_sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
     native_sse_body = _extract_js_function_body(content, "startJobEventStream")
 
-    assert "eventType: 'queue_request'" in submit_body
-    assert "metric: 'submit'" in submit_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "eventType: 'queue_request'" in recovery_body
+    assert "metric: 'submit'" in recovery_body
     assert "eventType: 'queue_request'" in cancel_body
     assert "metric: 'cancel'" in cancel_body
     assert "eventType: 'sse_reconnect'" in fetch_sse_body
@@ -1585,7 +1592,9 @@ def test_portal_protected_suppression_reads_managed_error_envelope_details() -> 
     assert "if (_isProtectedFamilySuppressed('jobs_list')) return;" in recover_body
     assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
     assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
-    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in recovery_body
+    assert "_recordProtectedFamilySuppression('jobs_list', nonRetryableDetails);" in recovery_body
 
 
 def test_portal_lux_dispatch_payload_preserves_path_fields_after_canonical_args() -> None:
@@ -1624,11 +1633,13 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     )
     assert "function _stagedUploadsSupportedForState() {" in content
     assert "function _stagedUploadsEnabledForState() {" in content
-    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);" in content
     assert "Staged upload controls are visible for this pipeline but gated for this portal cohort." in content
-    assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
-    assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
-    assert "formData.append('files', file, relativePath);" in content
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    transport = PORTAL_TEMPLATE_SOURCE_PATH.with_name("client-recovery-deferred.js").read_text(encoding="utf-8")
+    assert "headers: (extra, method) => _buildAuthHeaders(extra, method)" in recovery_body
+    assert 'xhr.open("POST", `${host.apiBase || ""}/v1/uploads/staging`);' in transport
+    assert 'form.append("files", file, relativePath)' in transport
     assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
     assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
     assert "function _renderStagedUploadSummary(container, uploadState) {" in content
@@ -4432,9 +4443,9 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
 def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
     content = _portal_bundle_content()
 
-    assert "archive-gate-a (Fixity / Manifest Prep)" in content
-    assert "archive-gate-b (BagIt Build)" in content
-    assert "archive-gate-c (METS Export)" in content
+    assert 'value="archive-gate-a">Fixity and manifest · Gate A' in content
+    assert 'value="archive-gate-b">Build archival package · Gate B' in content
+    assert 'value="archive-gate-c">Export metadata · Gate C' in content
     assert "Rights Manifest JSONL" in content
     assert "Canonical Command" in content
 
@@ -4572,8 +4583,10 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "Execution readiness is still loading." in submit_body
     assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
-    assert "Backend submission failed: ${truncateMiddle(errorMessage, 180)}" in submit_body
-    assert 'createToast(toastMessage, "error");' in submit_body
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "state.jobs.push" not in submit_body
+    assert "state: 'failed'" not in submit_body
+    assert "createToast(error instanceof Error ? error.message : String(error), 'error');" in submit_body
     assert "els.runJobBtn.focus({ preventScroll: true });" in submit_body
     assert "mock simulation" not in submit_body
 
