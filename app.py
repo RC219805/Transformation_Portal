@@ -9554,7 +9554,10 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                         tenant.tenant_id, submission_owner(tenant.tenant_id, verified), "capability-probe"
                     )
                     submission_receipts = True
-                if _env_bool("TP_PHOTO_REVIEW_ENABLED", False) and _env_bool("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", False):
+                if (
+                    _env_bool("TP_PHOTO_REVIEW_ENABLED", False)
+                    and os.getenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "0").strip() == "1"
+                ):
                     from transformation_portal.orchestrator.photographic_review_store import get_review_store
 
                     # Establish the actual projection provider/schema, without
