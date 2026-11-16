@@ -160,7 +160,7 @@ RESOURCE_CONTRACT: dict[str, object] = {
     },
     "schema": "tp.photo.native_resource_contract.v1",
     "sources": {
-        "app.py": "eacf5c6c02d30c09935646018032d54270776ca6b2477fcab5cd795e10599910",
+        "app.py": "3ebe76a2f04dbab854f82d9d6ce0b986b3698cb5930688aeaeef95edb5cb41d4",
         "pyproject.toml": "3dc6e15ace696d01b0be258ae923f9fdca9054ea69bd79b63e19ef9abcc0f9b9",
         "requirements/base.in": "7f11a94ad99d4528b4c2868aa91b926324961d114198ba9955c20e34cb7f9142",
         "src/transformation_portal/api/routes/__init__.py": "266f6ecdf8f1bdb1a9c6ed4956bcacb1dbc73cbae14d4010a6e4b55983d9b0f1",
