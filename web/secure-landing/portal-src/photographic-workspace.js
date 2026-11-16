@@ -52,7 +52,8 @@ export function buildPhotographicDeliveryControls({ nodes, el, input, field, but
 }
 
 export function photographicRegionChange(region, dx, dy, handle, width, height) {
-  if (!Array.isArray(region) || region.length !== 4 || !region.every((value) => Number.isFinite(Number(value)))
+  if (!Array.isArray(region) || region.length !== 4 || !region.every((value) => ["number", "string"].includes(typeof value)
+    && String(value).trim() !== "" && Number.isFinite(Number(value)))
     || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) return null;
   const [left, top, right, bottom] = region.map(Number);
   if (left < 0 || top < 0 || right > 1 || bottom > 1 || left >= right || top >= bottom || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
@@ -89,7 +90,9 @@ export function createPhotographicRegionOverlay(host) {
   }
   function current(expected) {
     const value = context();
-    return enabled && value?.ready && value.visible && !value.blocked && value.key === expected.key && getMaterials()[expected.index] === expected.material;
+    return enabled && value?.ready && value.visible && !value.blocked && value.key === expected.key
+      && getMaterials()[expected.index] === expected.material
+      && photographicRegionChange(expected.material.region, 0, 0, "move", value.width, value.height) !== null;
   }
   function finish(event, restore = false) {
     if (!operation || (event.pointerId !== undefined && operation.pointerId !== event.pointerId)) return;
@@ -105,10 +108,9 @@ export function createPhotographicRegionOverlay(host) {
     layer.style.width = `${image.clientWidth}px`; layer.style.height = `${image.clientHeight}px`;
     for (const row of layer.children) {
       const material = getMaterials()[Number(row.dataset.regionIndex)];
-      const rect = material?.region?.map(Number), crop = value.crop;
-      const valid = photographicRegionChange(rect, 0, 0, "move", value.width, value.height);
-      row.hidden = !valid;
-      if (!valid) continue;
+      const rect = photographicRegionChange(material?.region, 0, 0, "move", value.width, value.height), crop = value.crop;
+      row.hidden = !rect;
+      if (!rect) continue;
       row.style.left = `${(rect[0] * value.width - crop.x) / crop.width * 100}%`;
       row.style.top = `${(rect[1] * value.height - crop.y) / crop.height * 100}%`;
       row.style.width = `${(rect[2] - rect[0]) * value.width / crop.width * 100}%`;
@@ -144,9 +146,11 @@ export function createPhotographicRegionOverlay(host) {
         control.addEventListener("pointerdown", (event) => {
           const value = context(), image = nodes.figures?.[0]?.image;
           if (event.button !== 0 || !enabled || !value?.ready || !value.visible || value.blocked || !image) return;
+          const region = photographicRegionChange(material.region, 0, 0, "move", value.width, value.height);
+          if (!region) return;
           const box = image.getBoundingClientRect(); if (!box.width || !box.height) return;
           event.preventDefault(); event.stopPropagation(); control.focus();
-          operation = { key: value.key, material, index, handle, region: material.region.map(Number),
+          operation = { key: value.key, material, index, handle, region,
             pointerId: event.pointerId, x: event.clientX, y: event.clientY, box, ...value, control };
           layer.dataset.interaction = "dragging";
           control.setPointerCapture(event.pointerId);
