@@ -350,3 +350,64 @@ Expected contract gate outcomes:
 - With `TP_API_KEY` set, `/v1/jobs*` and `/v1/jobs/{id}/events` enforce auth.
 - SSE lifecycle includes `state`, `log`, `progress`, `artifact`, and terminal `done` events.
 - Live smokes (`validate-*`) exercise the running service and browser path; `test-*contract` targets stay fixture/contract-only.
+
+## Optional durable job submission recovery
+
+Apply `make db-upgrade` through `0009_job_submissions` before setting
+`TP_JOB_SUBMISSION_RECOVERY_ENABLED=1`. New keyed admissions require signed
+managed tenant identity, Postgres state, Redis dispatch and the configured
+protected execution root. The flag defaults off. Unkeyed clients retain their
+existing behavior; a keyed request never silently falls back to memory or an
+unkeyed admission. Redis delivery can be deferred through the existing durable
+outbox after admission commits.
+
+Send one opaque `Idempotency-Key` with `POST /v1/jobs` or `POST /v2/jobs`.
+Keys contain 1-64 ASCII letters, digits, periods, underscores, colons or hyphens
+and begin with a letter or digit. Generate a fresh cryptographically random key
+for each intended run. Both API versions share the same request identity.
+The scope includes backend tenant, verified Access email and portal username;
+role changes affect authorization but do not create another owner.
+
+The first accepted request and an identical replay return HTTP 200 with the
+existing `tp.orchestrator.job.v1` envelope. Replay returns the original job ID,
+current canonical dispatch state and an events URL using the requested API
+prefix. Replay checks current authentication, tenant membership and pipeline
+permission, then returns before mutable path, preview, readiness and admission
+capacity checks. API abuse throttling still applies. A different canonical
+request under a consumed key returns HTTP 409 `CONFLICT`. Keys remain consumed
+for the lifetime of the existing dispatch ledger, including after job cleanup;
+replaying a retired job returns HTTP 410 `SUBMISSION_EXPIRED` with its original
+job ID and never creates another run. The immutable admitted plan remains the
+execution authority; the request-intent fingerprint is only a deduplication
+binding. Keyed preparation audit events are not admission evidence; the atomic
+operational admission record binds the actual job and request identity.
+
+Reconcile through GET `/v1/job-submissions/{request_id}` or its `/v2` mirror.
+The typed `tp.orchestrator.job_submission.v1` envelope contains `request_id`,
+`intent_sha256`, `status` (`accepted` or `expired`) and the original `job` brief.
+Expired briefs omit the events URL. A 404 with reason `submission_not_committed`
+means no committed receipt is currently visible to this owner, not proof that
+another in-flight request was rejected. A 503 never means absence. No handler
+automatically repeats a POST. Reconciliation reads and accepted replays remain
+available when the new-admission flag is disabled; retain migrated readers and
+the consumed-key columns when rolling back the UI. Migration downgrade refuses
+to discard consumed keys.
+
+Backend `/portal/bootstrap` additionally returns `recoveryContext` only for a
+valid signed current tenant: schema `tp.portal.recovery_context.v1`, server-owned
+`tenantId`, and opaque composite `ownerId`. This context is not a tenant selector
+or an access grant. Its `jobSubmissionReceipts` capability remains false unless
+the new-admission configuration and provider/schema read succeed. Direct-debug
+and unverifiable identities receive no context. Managed frontdoors must obtain
+this context server-side using their authenticated signed actor boundary.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src:. .venv/bin/python -m pytest tests/orchestrator/test_job_submissions.py tests/api/test_jobs_router_factory.py tests/test_app_route_inventory.py -q
+TP_SUBMISSION_TEST_DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/tp_submissions_test PYTHONPATH=src:. .venv/bin/python -m pytest tests/orchestrator/test_job_submission_services.py -q
+```
+
+The service suite requires a dedicated migrated `*_test` database and truncates
+only that explicitly selected database. Contract tests do not establish hosted
+deployment, native resource qualification or photographic acceptance.

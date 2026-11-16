@@ -72,6 +72,7 @@ from transformation_portal.api.v1 import (
     ReadyResponse,
     UploadStagingEnvelope,
 )
+from transformation_portal.api.v1.jobs import JobSubmissionData, JobSubmissionEnvelope
 from transformation_portal.core.security.frontdoor_identity import (
     ACTOR_ASSERTION_HEADER,
     IdentityAssertionError,
@@ -131,6 +132,15 @@ from transformation_portal.orchestrator.queue.locator import RedisLocatorQueueBr
 from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
 from transformation_portal.orchestrator.storage import get_operational_record_store as _configured_operational_record_store
 from transformation_portal.orchestrator.storage.operational import AdmissionRejected
+from transformation_portal.orchestrator.submissions import (
+    SubmissionConflict,
+    SubmissionIdentity,
+    SubmissionReceipt,
+    submission_intent,
+    submission_owner,
+    validate_submission_key,
+    verified_actor_owner,
+)
 from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_forever
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
@@ -6799,7 +6809,9 @@ def _is_job_events_endpoint(path: str) -> bool:
 
 
 def _is_protected_job_endpoint(path: str) -> bool:
-    return path in {"/v1/jobs", "/v2/jobs"} or path.startswith(("/v1/jobs/", "/v2/jobs/"))
+    return path in {"/v1/jobs", "/v2/jobs"} or path.startswith(
+        ("/v1/jobs/", "/v2/jobs/", "/v1/job-submissions/", "/v2/job-submissions/")
+    )
 
 
 def _is_protected_api_key_endpoint(path: str) -> bool:
@@ -9524,11 +9536,32 @@ async def redirect_legacy_portal_video() -> Response:
 async def portal_bootstrap(request: Request) -> JSONResponse:
     """Expose standalone portal auth mode for direct backend debugging."""
     actor = _portal_actor_from_request(request)
+    recovery_context = None
+    submission_receipts = False
+    if PILOT_CONTROL_PLANE_ENABLED:
+        try:
+            tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context")
+            if denied is None and tenant is not None:
+                verified = _verified_frontdoor_actor(request)
+                recovery_context = {
+                    "schema": "tp.portal.recovery_context.v1",
+                    "tenantId": tenant.tenant_id,
+                    "ownerId": verified_actor_owner(tenant.tenant_id, verified),
+                }
+                if _job_submission_writes_enabled():
+                    # The column read also establishes migration/provider readiness.
+                    await get_operational_record_store().submission_receipt(
+                        tenant.tenant_id, submission_owner(tenant.tenant_id, verified), "capability-probe"
+                    )
+                    submission_receipts = True
+        except Exception:  # noqa: BLE001 - preserve bootstrap, fail closed for new capability
+            LOGGER.warning("durable recovery bootstrap context unavailable", exc_info=True)
     return JSONResponse(
         {
             "authMode": _auth_mode(),
             "csrfToken": None,
             "actor": None,
+            "recoveryContext": recovery_context,
             "features": {
                 "apiKeyInput": True,
                 "directDebug": True,
@@ -9540,6 +9573,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "photographicDeliveryHistory": os.getenv("TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "0").strip() == "1",
                 "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
                 "photographicPagedCatalogue": os.getenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", "0").strip() == "1",
+                "jobSubmissionReceipts": submission_receipts,
             },
         },
         headers={"Cache-Control": "no-store"},
@@ -9910,12 +9944,164 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
     )
 
 
+def _job_submission_writes_enabled() -> bool:
+    """Intent plus configured durable providers; never advertise memory parity."""
+    return (
+        _env_bool("TP_JOB_SUBMISSION_RECOVERY_ENABLED", False)
+        and PILOT_CONTROL_PLANE_ENABLED
+        and os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() == "postgres"
+        and _uses_dispatch_authority()
+        and bool(os.getenv("TP_DATABASE_URL", "").strip())
+        and bool(os.getenv("TP_ORCHESTRATOR_EXECUTION_ROOT", "").strip())
+    )
+
+
+def _submission_conflict_response() -> JSONResponse:
+    return _error_response(
+        409,
+        code="CONFLICT",
+        message="submission key already binds another intent",
+        details={"reason": "submission_intent_conflict"},
+    )
+
+
+def _submission_provider_unavailable() -> JSONResponse:
+    return _error_response(
+        503,
+        code="SERVICE_UNAVAILABLE",
+        message="durable submission recovery is unavailable",
+        details={"reason": "submission_recovery_unavailable"},
+    )
+
+
+async def _submission_response(
+    receipt: SubmissionReceipt, tenant: TenantContext, request: Optional[Request], api_version: str, *, as_lookup: bool
+) -> JSONResponse:
+    denied = await _pilot_enforce_pipeline(tenant, pipeline=receipt.pipeline, action="submission_read", request=request)
+    if denied is not None:
+        return denied
+    if receipt.retired and not as_lookup:
+        return _error_response(
+            410,
+            code="SUBMISSION_EXPIRED",
+            message="the admitted job projection is no longer retained",
+            details={"job_id": receipt.job_id, "request_id": receipt.key, "reason": "submission_expired"},
+        )
+    try:
+        brief = JobBriefData.model_validate({"id": receipt.job_id, "state": receipt.state})
+    except ValidationError:
+        return _repository_unavailable_response()
+    if not receipt.retired:
+        brief.events_url = _job_events_url(receipt.job_id, api_version=api_version)
+    envelope = (
+        JobSubmissionEnvelope(
+            schema="tp.orchestrator.job_submission.v1",
+            success=True,
+            data=JobSubmissionData(
+                request_id=receipt.key,
+                intent_sha256=receipt.intent_sha256,
+                status="expired" if receipt.retired else "accepted",
+                job=brief,
+            ),
+            error=None,
+        )
+        if as_lookup
+        else JobEnvelope(schema="tp.orchestrator.job.v1", success=True, data=brief, error=None)
+    )
+    return JSONResponse(envelope.model_dump(mode="json", by_alias=True, exclude_unset=True))
+
+
+def _submission_owner_from_request(request: Request, tenant: Optional[TenantContext]) -> str:
+    if (
+        tenant is None
+        or not PILOT_CONTROL_PLANE_ENABLED
+        or os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() != "postgres"
+    ):
+        raise IdentityConfigurationError("durable verified submission scope unavailable")
+    return submission_owner(tenant.tenant_id, _verified_frontdoor_actor(request))
+
+
+async def _prepare_submission(
+    request: Optional[Request], payload: Dict[str, Any], tenant: Optional[TenantContext], api_version: str
+) -> tuple[Optional[SubmissionIdentity], Optional[JSONResponse]]:
+    if request is None:
+        # Preserve trusted direct callers that have no HTTP submission identity.
+        return None, None
+    key = request.headers.get("idempotency-key")
+    if key is None:
+        return None, None
+    if tenant is None:
+        return None, _submission_provider_unavailable()
+    try:
+        identity = SubmissionIdentity(
+            validate_submission_key(key), _submission_owner_from_request(request, tenant), submission_intent(payload)
+        )
+    except (IdentityConfigurationError, IdentityAssertionError):
+        return None, _submission_provider_unavailable()
+    except ValueError:
+        return None, _error_response(400, code="INVALID_ARGUMENT", message="invalid submission identity")
+    try:
+        receipt = await get_operational_record_store().submission_receipt(
+            tenant.tenant_id, identity.owner_sha256, identity.key
+        )
+    except Exception:  # noqa: BLE001 - no unkeyed fallback when durable lookup fails
+        LOGGER.exception("durable submission lookup failed")
+        return None, _submission_provider_unavailable()
+    if receipt is not None:
+        denied = await _pilot_enforce_pipeline(tenant, pipeline=receipt.pipeline, action="submission_read", request=request)
+        if denied is not None:
+            return None, denied
+        if receipt.intent_sha256 != identity.intent_sha256:
+            return None, _submission_conflict_response()
+        return None, await _submission_response(receipt, tenant, request, api_version, as_lookup=False)
+    if not _job_submission_writes_enabled():
+        return None, _submission_provider_unavailable()
+    return identity, None
+
+
+async def _get_submission(request: Request, request_id: str, api_version: str) -> JSONResponse:
+    tenant, denied = await _pilot_tenant_from_request(request, action="submission_read")
+    if denied is not None:
+        return denied
+    if tenant is None:
+        return _submission_provider_unavailable()
+    try:
+        key = validate_submission_key(request_id)
+        owner = _submission_owner_from_request(request, tenant)
+    except (IdentityConfigurationError, IdentityAssertionError):
+        return _submission_provider_unavailable()
+    except ValueError:
+        return _error_response(400, code="INVALID_ARGUMENT", message="invalid submission identity")
+    try:
+        receipt = await get_operational_record_store().submission_receipt(tenant.tenant_id, owner, key)
+    except Exception:  # noqa: BLE001 - never interpret provider failure as absence
+        LOGGER.exception("durable submission receipt unavailable")
+        return _submission_provider_unavailable()
+    if receipt is None:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="no committed submission receipt is available",
+            details={"reason": "submission_not_committed"},
+        )
+    return await _submission_response(receipt, tenant, request, api_version, as_lookup=True)
+
+
+async def get_submission_http(request: Request, request_id: str) -> JSONResponse:
+    return await _get_submission(request, request_id, "v1")
+
+
+async def get_submission_v2_http(request: Request, request_id: str) -> JSONResponse:
+    return await _get_submission(request, request_id, "v2")
+
+
 async def create_job(
     payload: Dict[str, Any],
     *,
     portal_actor: Optional[Mapping[str, Any]] = None,
     pilot_tenant: Optional[TenantContext] = None,
     request: Optional[Request] = None,
+    submission: Optional[SubmissionIdentity] = None,
 ) -> JSONResponse:
     return await _create_job(
         payload,
@@ -9923,6 +10109,7 @@ async def create_job(
         portal_actor=portal_actor,
         pilot_tenant=pilot_tenant,
         request=request,
+        submission=submission,
     )
 
 
@@ -9932,6 +10119,7 @@ async def create_job_v2(
     portal_actor: Optional[Mapping[str, Any]] = None,
     pilot_tenant: Optional[TenantContext] = None,
     request: Optional[Request] = None,
+    submission: Optional[SubmissionIdentity] = None,
 ) -> JSONResponse:
     return await _create_job(
         payload,
@@ -9939,6 +10127,7 @@ async def create_job_v2(
         portal_actor=portal_actor,
         pilot_tenant=pilot_tenant,
         request=request,
+        submission=submission,
     )
 
 
@@ -9946,6 +10135,9 @@ async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResp
     tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
     if tenant_error is not None:
         return tenant_error
+    submission, recovered = await _prepare_submission(request, payload, tenant, "v1")
+    if recovered is not None:
+        return recovered
     path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
     if path_error is not None:
         return path_error
@@ -9954,6 +10146,7 @@ async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResp
         portal_actor=_portal_actor_from_request(request),
         pilot_tenant=tenant,
         request=request,
+        **({"submission": submission} if submission is not None else {}),
     )
 
 
@@ -9961,6 +10154,9 @@ async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONR
     tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
     if tenant_error is not None:
         return tenant_error
+    submission, recovered = await _prepare_submission(request, payload, tenant, "v2")
+    if recovered is not None:
+        return recovered
     path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
     if path_error is not None:
         return path_error
@@ -9969,6 +10165,7 @@ async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONR
         portal_actor=_portal_actor_from_request(request),
         pilot_tenant=tenant,
         request=request,
+        **({"submission": submission} if submission is not None else {}),
     )
 
 
@@ -9979,6 +10176,7 @@ async def _create_job(
     portal_actor: Optional[Mapping[str, Any]] = None,
     pilot_tenant: Optional[TenantContext] = None,
     request: Optional[Request] = None,
+    submission: Optional[SubmissionIdentity] = None,
 ) -> JSONResponse:
     try:
         preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
@@ -10117,6 +10315,7 @@ async def _create_job(
             portal_actor=portal_actor,
             request=request,
             api_version=api_version,
+            **({"submission": submission} if submission is not None else {}),
         )
 
     await _cleanup_expired_jobs(_now(), force=False)
@@ -11049,6 +11248,8 @@ app.include_router(
             cancel_job_v2=cancel_job_v2_http,
             job_events=job_events,
             job_events_v2=job_events_v2,
+            get_submission=get_submission_http,
+            get_submission_v2=get_submission_v2_http,
         ),
         job_list_limit=JOB_LIST_LIMIT,
     )
@@ -11366,9 +11567,13 @@ async def _create_distributed_job(
     portal_actor: Any,
     request: Optional[Request],
     api_version: str,
+    submission: Optional[SubmissionIdentity] = None,
 ) -> JSONResponse:
     from transformation_portal.orchestrator.execution_dispatch import prepare_dispatch_plan
     from transformation_portal.orchestrator.execution_workspace import execution_workspace_base
+
+    if submission is not None and (request is None or pilot_tenant is None):
+        return _submission_provider_unavailable()
 
     try:
         execution_workspace_base(require_configured=True)
@@ -11452,9 +11657,9 @@ async def _create_distributed_job(
         )
     audit_response = await _record_pilot_audit(
         action="job_create",
-        decision="accepted",
+        decision="prepared" if submission is not None else "accepted",
         tenant_id=tenant_id,
-        job_id=jid,
+        job_id=None if submission is not None else jid,
         actor=portal_actor,
         request=request,
         details={"pipeline": pipeline},
@@ -11464,8 +11669,13 @@ async def _create_distributed_job(
     job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
     # Workers share authorized roots; no output exists before successful admission.
     attempt_root = trusted_output_dir / ".tp-attempts" / f"{jid}-{uuid.uuid4().hex}"
+    admission_options: Dict[str, Any] = {}
+    if execution_bindings is not None:
+        admission_options["execution_bindings"] = execution_bindings
+    if submission is not None:
+        admission_options["submission"] = submission
     try:
-        await get_operational_record_store().admit(
+        locator = await get_operational_record_store().admit(
             _record_from_job(job),
             plan_bytes,
             tenant_id=tenant_id,
@@ -11473,8 +11683,21 @@ async def _create_distributed_job(
             requested_output_root=str(trusted_output_dir),
             global_limit=MAX_CONCURRENT_JOBS,
             tenant_limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
-            **({"execution_bindings": execution_bindings} if execution_bindings is not None else {}),
+            **admission_options,
         )
+        if submission is not None:
+            receipt = await get_operational_record_store().submission_receipt(
+                tenant_id, submission.owner_sha256, submission.key
+            )
+            if receipt is None or receipt.job_id != locator.job_id:
+                return _repository_unavailable_response()
+            if locator.job_id == jid:
+                _cache_runtime_job(job)
+            with suppress(Exception):
+                await _flush_operational_outbox_best_effort()
+            return await _submission_response(receipt, pilot_tenant, request, api_version, as_lookup=False)
+    except SubmissionConflict:
+        return _submission_conflict_response()
     except AdmissionRejected as exc:
         tenant_limited = exc.scope != "global"
         limit = PILOT_MAX_ACTIVE_JOBS_PER_TENANT if tenant_limited else MAX_CONCURRENT_JOBS
