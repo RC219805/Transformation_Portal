@@ -34,7 +34,7 @@ numpy==2.4.6
     #   pandas
 pandas==3.0.6
     # via -r tools-archive.in
-pycparser==3.11
+pycparser==3.12
     # via
     #   -c all.txt
     #   cffi
