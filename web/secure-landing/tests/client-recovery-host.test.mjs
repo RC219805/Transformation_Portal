@@ -62,6 +62,35 @@ test("bootstrap remembers verified ownership before deferred recovery loads and 
   assert.equal(h._clientRecoveryContext().scope, owner.ownerId);
 });
 
+test('a restored-reference context requirement blocks host controls and stamps until fresh backend context', () => {
+  const state = { portalUi: {}, auth: { mode: 'managed', actor: { accessEmail: 'a@example.test', username: 'alice' },
+    recoveryContextStatus: 'unavailable', recoveryContext: null, features: {} } };
+  let guarded = 0, uploads = 0;
+  const h = vm.createContext({ state, configImportGeneration: 0, els: {}, API_BASE: '', document: { body: { dataset: {} } },
+    _portalPrivilegesReady: () => true, generatePayload: () => ({ pipeline: 'archive-gate-a' }),
+    loadDeferredSurface: (_name, factory) => factory(), _acceptRecoveredJob() {}, _applyStagedUploadResult() {},
+    _syncBootstrapGuardedControls: () => { guarded += 1; }, _syncStagedUploadUi: () => { uploads += 1; },
+  });
+  vm.runInContext(section('function _validRecoveryContext(', 'function _acceptRecoveredJob(')
+    + section('function _loadClientRecoverySurface(', 'function _createDeferredOperateSurfaceHost('), h);
+  assert.equal(h._clientRecoveryContext().ready, true, 'Legacy operation stays available before any retained reference is found');
+  const host = h._loadClientRecoverySurface();
+  host.onState([], true);
+  assert.equal(h._clientRecoveryContext().ready, false);
+  assert.equal(h._clientRecoveryOperationStamp(), '');
+  assert.equal(state.portalUi.recoverySubmissionBlocked, true);
+  assert.equal(state.portalUi.recoveryUploadBlocked, true);
+  assert.equal(h.document.body.dataset.submissionOutcome, 'paused');
+  assert.equal(guarded, 1); assert.equal(uploads, 1);
+  state.auth.recoveryContext = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-a', ownerId: 'a'.repeat(64) };
+  state.auth.recoveryContextStatus = 'ready';
+  assert.equal(h._clientRecoveryContext().ready, true);
+  host.onState([], false);
+  assert.equal(state.portalUi.recoveryContextRequired, false);
+  assert.equal(state.portalUi.recoverySubmissionBlocked, false);
+  assert.equal(state.portalUi.recoveryUploadBlocked, false);
+});
+
 
 test("Review uses the verified backend owner and freezes instead of falling back during outage", () => {
   const owner = { schema: "tp.portal.recovery_context.v1", tenantId: "tenant-a", ownerId: "a".repeat(64) };
@@ -156,7 +185,7 @@ function recoveredJobHostHarness() {
     _clientRecoveryContext: () => ({ ready }),
     deferredReviewSurfaceApi: { hasUnsavedChanges: () => dirty },
     _findJobById: id => state.jobs.find(row => row.id === id),
-    hydrateJobFromServer: data => ({ ...data, logs: [], pipeline: 'archive-gate-b' }),
+    hydrateJobFromServer: data => ({ ...data, logs: [], pipeline: data.pipeline || 'unknown' }),
     scheduleRenderJobQueue: () => scheduled.push(state.selectedJobId),
     createToast: (...args) => notices.push(args), _announcePortalStatus() {},
     emitPortalEvent: (...args) => events.push(args),
@@ -205,4 +234,12 @@ test('recovered-run attachment fails closed during unavailable access or a retai
   assert.equal(h.h._acceptRecoveredJob(job, { automatic: true }), false);
   assert.equal(h.state.selectedJobId, 'existing-job');
   assert.equal(h.state.jobs.length, 0);
+});
+
+test('accepted job hydration and submission telemetry use the captured result pipeline', () => {
+  const h = recoveredJobHostHarness();
+  assert.equal(h.h._acceptRecoveredJob({ id: 'accepted-job', pipeline: 'archive-gate-a' }, { automatic: true }), true);
+  assert.equal(h.state.jobs[0].pipeline, 'archive-gate-a');
+  assert.equal(h.events[0][0], 'job_submitted');
+  assert.equal(h.events[0][1].metadata.pipeline, 'archive-gate-a');
 });
