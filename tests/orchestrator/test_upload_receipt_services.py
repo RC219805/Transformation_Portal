@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import os
 import subprocess
 import sys
@@ -37,6 +38,7 @@ from transformation_portal.orchestrator.upload_receipts import (
     UploadReservation,
     bind_upload_references,
     upload_owner,
+    upload_source_paths,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -62,20 +64,20 @@ async def store(tmp_path, monkeypatch):
     await _SharedEngine.dispose(url)
 
 
-def reservation(root, *, request_id=None, owner="a" * 64, expiry=10.0):
-    batch = "upload_" + uuid.uuid4().hex
+def reservation(root, *, request_id=None, owner="a" * 64, expiry=10.0, batch_id=None):
+    batch = batch_id or "upload_" + uuid.uuid4().hex
     return UploadReservation(
         batch, "tenant_a", owner, request_id or str(uuid.uuid4()), uuid.uuid4().hex, str(root / batch), "staging", 1.0, expiry
     )
 
 
-async def sealed(store, root, **kwargs):
+async def sealed(store, root, *, filename="source.txt", **kwargs):
     item = reservation(root, **kwargs)
     await store.reserve(item)
     initialize_batch(item)
     result = stage_upload_batch(
         upload_root=root,
-        uploads=[IncomingUpload("source.txt", io.BytesIO(b"body"))],
+        uploads=[IncomingUpload(filename, io.BytesIO(b"body"))],
         now=1.0,
         reserved_batch_id=item.batch_id,
         cleanup_on_error=False,
@@ -179,6 +181,166 @@ async def test_retained_jobs_pin_inputs_and_keyless_reference_shares_expiry_lock
                 await bind_upload_references(session, record, item.tenant_id, 2.0)
 
 
+async def test_all_input_and_archive_aliases_pin_distinct_batches_atomically(store, tmp_path):
+    first, first_result, first_digest = await sealed(store, tmp_path, filename="nested/source.txt")
+    second, second_result, second_digest = await sealed(store, tmp_path)
+    await store.complete(first, first_digest, first_result.to_response_data())
+    await store.complete(second, second_digest, second_result.to_response_data())
+    job_id = "job_multi_upload_" + uuid.uuid4().hex[:10]
+    record = JobRecord(
+        id=job_id,
+        created_at=1.0,
+        request={"args": {"archiveRoot": str(second_result.input_dir)}},
+        effective_request={
+            "args": {
+                "input_dir": str(first_result.input_dir / "nested"),
+                "inputDir": str(first_result.input_dir),
+                "archive_root": str(second_result.input_dir),
+            }
+        },
+    )
+    async with store._session() as session:
+        async with session.begin():
+            session.add(
+                JobModel(
+                    id=job_id,
+                    created_at=1.0,
+                    state="succeeded",
+                    progress=100,
+                    request={},
+                    effective_request={},
+                    logs_tail=[],
+                    artifacts={},
+                    run_summary={},
+                )
+            )
+            await session.flush()
+            await bind_upload_references(session, record, first.tenant_id, 2.0)
+    async with store._session() as session:
+        references = (
+            await session.scalars(select(UploadJobReferenceModel).where(UploadJobReferenceModel.job_id == job_id))
+        ).all()
+    assert {row.batch_id for row in references} == {first.batch_id, second.batch_id}
+    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+    assert first_result.input_dir.exists() and second_result.input_dir.exists()
+
+
+async def test_expired_secondary_archive_batch_rolls_back_every_new_reference(store, tmp_path):
+    first, first_result, first_digest = await sealed(store, tmp_path, expiry=10.0, batch_id="upload_aaa_valid")
+    second, second_result, second_digest = await sealed(store, tmp_path, expiry=1.0, batch_id="upload_zzz_expired")
+    await store.complete(first, first_digest, first_result.to_response_data())
+    await store.complete(second, second_digest, second_result.to_response_data())
+    job_id = "job_expired_archive_" + uuid.uuid4().hex[:10]
+    record = JobRecord(
+        id=job_id,
+        created_at=1.0,
+        request={},
+        effective_request={"args": {"input_dir": str(first_result.input_dir), "archiveRoot": str(second_result.input_dir)}},
+    )
+    with pytest.raises(UploadOwnershipLost):
+        async with store._session() as session:
+            async with session.begin():
+                session.add(
+                    JobModel(
+                        id=job_id,
+                        created_at=1.0,
+                        state="queued",
+                        progress=0,
+                        request={},
+                        effective_request={},
+                        logs_tail=[],
+                        artifacts={},
+                        run_summary={},
+                    )
+                )
+                await session.flush()
+                await bind_upload_references(session, record, first.tenant_id, 2.0)
+    async with store._session() as session:
+        assert await session.get(JobModel, job_id) is None
+        assert not (
+            await session.scalars(select(UploadJobReferenceModel).where(UploadJobReferenceModel.job_id == job_id))
+        ).all()
+
+
+async def test_retained_nested_archive_path_protects_ledger_batch_without_new_reference(store, tmp_path):
+    item, result, digest = await sealed(store, tmp_path, filename="nested/source.txt")
+    await store.complete(item, digest, result.to_response_data())
+    assert await cleanup_correlated_batches(store, tmp_path, 20.0, {str(result.input_dir / "nested")}) == []
+    assert result.input_dir.exists()
+
+
+async def test_manifest_in_tracked_batch_metadata_is_pinned_by_legacy_postgres_creation(store, tmp_path):
+    import time
+
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    job_id = "job_metadata_read_" + uuid.uuid4().hex[:10]
+    request = {
+        "pipeline": "lux-depth-v5",
+        "tenant_id": "tenant_a",
+        "args": {"companions_manifest": str(result.baseline_manifest_path)},
+    }
+    await PostgresJobRepository(database_url=store._database_url).create(
+        JobRecord(id=job_id, created_at=time.time(), request=request, effective_request=request)
+    )
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == job_id))
+        ).all() == [item.batch_id]
+
+
+@pytest.mark.parametrize("tamper,expected_status", [("extra_input", 503), ("oversize_metadata", 413)])
+async def test_post_never_commits_ready_before_exact_recoverable_verification(
+    store, tmp_path, monkeypatch, tamper, expected_status
+):
+    from starlette.requests import Request
+
+    import app
+
+    request_id, owner = str(uuid.uuid4()), "a" * 64
+    stream = io.BytesIO(b"body")
+
+    async def context(request, **kwargs):
+        return SimpleNamespace(tenant_id="tenant_a"), owner, store, None
+
+    async def paths(*args, **kwargs):
+        return None
+
+    async def parse(request):
+        return app._ParsedPortalUploadPayload([IncomingUpload("source.txt", stream)], None)
+
+    original = app.stage_upload_batch
+
+    def stage(**kwargs):
+        result = original(**kwargs)
+        if tamper == "extra_input":
+            (result.input_dir / "extra.txt").write_bytes(b"unsealed")
+        else:
+            with result.capture_metadata_path.open("wb") as output:
+                output.truncate(upload_recovery.MAX_RECOVERY_METADATA_BYTES + 1)
+        return result
+
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", paths)
+    monkeypatch.setattr(app, "_parse_portal_upload_multipart", parse)
+    monkeypatch.setattr(app, "stage_upload_batch", stage)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/uploads/staging",
+            "headers": [(b"x-tp-upload-request-id", request_id.encode())],
+        }
+    )
+    response = await app._stage_correlated_portal_upload(request, tmp_path)
+    assert response.status_code == expected_status
+    row = await store.get("tenant_a", owner, request_id)
+    assert row.state == "staging" and row.receipt_sha256 is None and row.response_data is None
+    assert stream.closed
+
+
 async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_changed_bytes(store, tmp_path, monkeypatch):
     import app
 
@@ -219,6 +381,13 @@ async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_change
         actor["username"] = "bob"
         assert (await client.get(url)).json()["data"]["status"] == "unknown"
         actor["username"] = "alice"
+        extra = result.input_dir / "unlisted.txt"
+        extra.write_bytes(b"unsealed")
+        broken = await client.get(url)
+        assert broken.json()["data"]["status"] == "unknown"
+        assert broken.json()["data"]["receipt"] is None
+        extra.unlink()
+        assert (await client.get(url)).json()["data"]["status"] == "ready"
         (result.input_dir / "source.txt").write_bytes(b"else")
         broken = await client.get(url)
         assert broken.json()["data"]["status"] == "unknown"
@@ -384,6 +553,88 @@ async def test_distributed_admission_and_legacy_postgres_creation_pin_tracked_up
             ).all()
         )
     assert sorted(references) == sorted(jobs)
+
+
+async def test_archive_derived_read_default_pins_batch_in_both_postgres_admission_paths(store, tmp_path, monkeypatch):
+    import time
+
+    import app
+    from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths, prepare_dispatch_plan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path, filename="hash_manifest.csv.gz", expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    source = tmp_path / "untracked-input"
+    source.mkdir()
+    for name in ("ALLOWED_INPUT_ROOTS", "ALLOWED_OUTPUT_ROOTS", "ALLOWED_PATH_ROOTS"):
+        monkeypatch.setattr(app, name, [tmp_path])
+    args = {"input_dir": str(source), "output_dir": str(result.input_dir), "archive_command": "fixity-verify"}
+    request = {"pipeline": "archive-gate-a", "args": args, "tenant_id": "tenant_a"}
+    # The request contains no hash_manifest selector. The server command's
+    # existing default points into another tracked batch, which must be pinned.
+    assert not upload_source_paths(request) or all(
+        not path.is_relative_to(result.batch_root) for path in upload_source_paths(request)
+    )
+    command = app._archive_gate_argv("archive-gate-a", args, str(source), str(result.input_dir))
+    reads = archive_command_read_paths("archive-gate-a", command)
+    assert str(result.input_dir / "hash_manifest.csv.gz") in reads
+    plan = prepare_dispatch_plan(request, trusted_argv=command)
+    jobs = []
+    for distributed in [True, False]:
+        job_id = "job_default_archive_" + uuid.uuid4().hex[:10]
+        record = JobRecord(id=job_id, created_at=time.time(), request=request, effective_request=request)
+        if distributed:
+            jobs.append(job_id)
+            await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+                record,
+                plan,
+                tenant_id="tenant_a",
+                output_root=str(result.input_dir),
+                requested_output_root=str(result.input_dir),
+                global_limit=8,
+                tenant_limit=8,
+            )
+        else:
+
+            async def preview(*args, **kwargs):
+                return {"pipeline": "archive-gate-a", "execution_args": request["args"], "readiness": {}, "field_errors": []}
+
+            async def no_error(*args, **kwargs):
+                return None
+
+            async def no_active(*args, **kwargs):
+                return 0
+
+            monkeypatch.setattr(app, "_build_config_preview_threaded", preview)
+            monkeypatch.setattr(app, "_pilot_enforce_pipeline", no_error)
+            monkeypatch.setattr(app, "_enforce_job_readiness_preflight", lambda *args: None)
+            monkeypatch.setattr(app, "_enforce_dispatch_value_preflight", lambda *args: None)
+            monkeypatch.setattr(
+                app, "_enforce_dispatch_filesystem_preflight", lambda *args: SimpleNamespace(output_dir=result.input_dir)
+            )
+            monkeypatch.setattr(app, "_pilot_enforce_dispatch_filesystem_tenant", lambda *args, **kwargs: None)
+            monkeypatch.setattr(app, "_uses_dispatch_authority", lambda: False)
+            monkeypatch.setattr(app, "_job_repository", lambda: PostgresJobRepository(database_url=store._database_url))
+            monkeypatch.setattr(app, "_active_job_count", no_active)
+            monkeypatch.setattr(app, "_pilot_active_job_count_for_tenant", no_active)
+            monkeypatch.setattr(app, "_cleanup_expired_jobs", no_error)
+            monkeypatch.setattr(app, "_record_pilot_audit", no_error)
+            monkeypatch.setattr(app, "_materialize_dispatch_output_dir", lambda *args: None)
+            monkeypatch.setattr(app, "_cache_runtime_job", lambda *args: None)
+            monkeypatch.setattr(app, "_dispatch_job", no_error)
+            response = await app._create_job(
+                {"pipeline": "archive-gate-a", "args": args}, pilot_tenant=SimpleNamespace(tenant_id="tenant_a")
+            )
+            assert response.status_code == 200, response.body
+            jobs.append(json.loads(response.body)["data"]["id"])
+    async with store._session() as session:
+        references = (
+            await session.scalars(
+                select(UploadJobReferenceModel.job_id).where(UploadJobReferenceModel.batch_id == item.batch_id)
+            )
+        ).all()
+    assert set(references) == set(jobs)
 
 
 async def test_bounded_cleanup_cursor_does_not_starve_later_expired_batches(store, tmp_path):

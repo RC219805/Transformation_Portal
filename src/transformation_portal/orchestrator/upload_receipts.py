@@ -18,10 +18,29 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
+from transformation_portal.core.execution_plan import decode_bounded_json_object
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.models import UploadJobReferenceModel, UploadReceiptModel
 from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import PostgresOperationalAuditStore
+
+_ARCHIVE_DEFAULT_COMMANDS = {
+    "archive-gate-a": "fixity-scan",
+    "archive-gate-b": "bag-build",
+    "archive-gate-c": "mets-export",
+}
+_INPUT_PATH_ALIASES = {
+    "input_dir": ("input_dir", "inputDir"),
+    "archive_root": ("archive_root", "archiveRoot"),
+    "companions_manifest": ("companions_manifest",),
+    "materials_manifest": ("materials_manifest",),
+    "sam2_checkpoint_path": ("sam2_checkpoint_path", "sam2CheckpointPath"),
+    "cameras_sidecar_path": ("cameras_sidecar_path", "camerasSidecarPath"),
+    "fastvlm_python_executable": ("fastvlm_python_executable", "fastvlmPythonExecutable"),
+    "fastvlm_mlx_vlm_dir": ("fastvlm_mlx_vlm_dir", "fastvlmMlxVlmDir"),
+    "vlm_captioning_model": ("vlm_captioning_model", "vlmCaptioningModel"),
+}
 
 
 class UploadReceiptConflict(RepositoryError):
@@ -156,7 +175,8 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 )
                 if row is None or row.generation != expected.generation or row.state == "expired" or row.expires_at > now:
                     return None
-                if str(Path(row.batch_root, "input").resolve()) in retained:
+                batch_root = Path(row.batch_root).resolve()
+                if any(Path(path).is_relative_to(batch_root) for path in retained):
                     return None
                 reference = await session.scalar(
                     select(UploadJobReferenceModel.job_id).where(UploadJobReferenceModel.batch_id == row.batch_id).limit(1)
@@ -178,33 +198,131 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 row.state, row.response_data = "expired", None
 
 
-async def bind_upload_references(session: AsyncSession, record: JobRecord, tenant_id: str, now: float | None = None) -> None:
+async def bind_upload_references(
+    session: AsyncSession,
+    record: JobRecord,
+    tenant_id: str,
+    now: float | None = None,
+    *,
+    plan_bytes: bytes | None = None,
+    execution_bindings: bytes | None = None,
+    read_paths: tuple[str, ...] = (),
+) -> None:
     """Called only for NEW jobs inside admission, including keyless requests.
 
     A replay returns before this helper. Row locks serialize new references
     against expiry; foreign keys retain references for the job's lifetime.
     """
-    args = record.effective_request.get("args", {})
-    if not isinstance(args, dict):
-        return
-    raw = args.get("input_dir") or args.get("archive_root") or args.get("inputDir")
-    if not isinstance(raw, str):
-        return
     root = Path(os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal/uploads")))
-    try:
-        parts = Path(raw).resolve().relative_to(root.resolve()).parts
-    except ValueError:
-        return
-    if len(parts) < 2 or not parts[0].startswith("upload_") or parts[1] != "input":
-        return
-    row = await session.scalar(select(UploadReceiptModel).where(UploadReceiptModel.batch_id == parts[0]).with_for_update())
-    if row is None:  # Pre-ledger staged batches retain their existing contracts.
-        return
-    if now is None:
-        clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
-        if clock is None:
-            raise UploadOwnershipLost("upload admission clock is unavailable")
-        now = float(clock)
-    if row.tenant_id != tenant_id or row.state != "ready" or row.expires_at <= now:
-        raise UploadOwnershipLost("staged input is expired, unavailable, or outside this tenant")
-    session.add(UploadJobReferenceModel(batch_id=row.batch_id, job_id=record.id))
+    paths = set(upload_source_paths(record.request, record.effective_request))
+    paths.update(_resolved_source_paths(list(read_paths)))
+    if plan_bytes is not None:
+        paths.update(_admitted_source_paths(plan_bytes, execution_bindings))
+    batches = set()
+    for path in paths:
+        try:
+            parts = path.relative_to(root.resolve()).parts
+        except ValueError:
+            continue
+        if parts and parts[0].startswith("upload_"):
+            batches.add(parts[0])
+    # Every admission takes the same lock order even when a request's input
+    # and archive selectors refer to different batches or use opposite aliases.
+    for batch in sorted(batches):
+        row = await session.scalar(select(UploadReceiptModel).where(UploadReceiptModel.batch_id == batch).with_for_update())
+        if row is None:  # Pre-ledger staged batches retain their existing contracts.
+            continue
+        if now is None:
+            clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
+            if clock is None:
+                raise UploadOwnershipLost("upload admission clock is unavailable")
+            now = float(clock)
+        if row.tenant_id != tenant_id or row.state != "ready" or row.expires_at <= now:
+            raise UploadOwnershipLost("staged input is expired, unavailable, or outside this tenant")
+        session.add(UploadJobReferenceModel(batch_id=row.batch_id, job_id=record.id))
+
+
+def upload_source_paths(*requests: dict[str, Any]) -> tuple[Path, ...]:
+    """Collect explicit read selectors; command output fields never retain a batch."""
+    values: list[Any] = []
+    for request in requests:
+        args = request.get("args") if isinstance(request, dict) else None
+        if not isinstance(args, dict):
+            continue
+        pipeline = request.get("pipeline")
+        names: tuple[str, ...]
+        if isinstance(pipeline, str) and pipeline in {"lux-depth", "lux-depth-v5", "lux-depth-v6"}:
+            names = ("input_dir", "companions_manifest", "materials_manifest")
+        elif pipeline == "lux-depth-v3":
+            names = tuple(
+                name
+                for name in _INPUT_PATH_ALIASES
+                if name not in {"archive_root", "companions_manifest", "materials_manifest"}
+            )
+        elif isinstance(pipeline, str) and pipeline in _ARCHIVE_DEFAULT_COMMANDS:
+            names = ("input_dir",)
+        else:
+            names = ("input_dir", "archive_root")
+        aliases = {name: _INPUT_PATH_ALIASES[name] for name in names}
+        default = _ARCHIVE_DEFAULT_COMMANDS.get(pipeline) if isinstance(pipeline, str) else None
+        if default is not None:
+            command = args.get("archive_command", args.get("archiveCommand", default)) or default
+            operation = ARCHIVE_OPERATIONS.get(command) if isinstance(command, str) else None
+            if operation is not None and operation.pipeline == pipeline:
+                for name in operation.files + operation.directories:
+                    parts = name.split("_")
+                    aliases[name] = (name, parts[0] + "".join(part.title() for part in parts[1:]))
+        values.extend(args.get(name) for names in aliases.values() for name in names)
+    return _resolved_source_paths(values)
+
+
+def _resolved_source_paths(values: list[Any]) -> tuple[Path, ...]:
+    paths = set()
+    for raw in values:
+        if isinstance(raw, str) and raw.strip():
+            try:
+                paths.add(Path(raw.strip()).resolve())
+            except (OSError, RuntimeError, ValueError):
+                continue
+    return tuple(sorted(paths))
+
+
+def _admitted_source_paths(plan_bytes: bytes, execution_bindings: bytes | None) -> tuple[Path, ...]:
+    """Read only the already-validated immutable plan and physical bindings."""
+    plan = decode_bounded_json_object(plan_bytes)
+    values = []
+    selection = plan.get("input_selection")
+    if isinstance(selection, dict):
+        values.append(selection.get("root"))
+    for node in plan.get("nodes", []):
+        configuration = node.get("configuration", {})
+        if plan.get("planned_backend") == "archive":
+            operation = ARCHIVE_OPERATIONS[configuration["operation"]]
+            values.extend(configuration["parameters"].get(name) for name in operation.files + operation.directories)
+        else:
+            values.extend(
+                configuration.get(name)
+                for name in (
+                    "raw_python_executable",
+                    "da3_python_executable",
+                    "depth_pro_python_executable",
+                    "depth_pro_checkpoint_path",
+                    "sam2_checkpoint_path",
+                    "sam_vit_h_checkpoint_path",
+                    "cameras_sidecar_path",
+                )
+            )
+            captioning = configuration.get("captioning")
+            if isinstance(captioning, dict) and captioning.get("enabled"):
+                values.extend(
+                    captioning.get(name)
+                    for name in ("model_path", "review_model_path", "python_executable", "mlx_vlm_dir", "selector")
+                )
+    if execution_bindings is not None:
+        bindings = decode_bounded_json_object(execution_bindings)
+        if bindings.get("schema") == "tp.job.lux_depth.bindings.v1":
+            bindings = bindings["photography_bindings"]
+        values.extend(
+            bindings.get(name) for name in ("input_root", "companion_root", "materials_root", "runtime_python", "raw_python")
+        )
+    return _resolved_source_paths(values)

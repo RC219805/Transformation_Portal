@@ -189,9 +189,11 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 )
 
 if TYPE_CHECKING:
+    from transformation_portal.ingest.upload_staging import StagedUploadResult
     from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
     from transformation_portal.orchestrator.job_execution import JobExecutionService
     from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -3826,21 +3828,9 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
 
 
 def _add_staged_input_dir(retained: set[str], job: Job) -> None:
-    effective_request = (
-        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
-    )
-    if not isinstance(effective_request, dict):
-        return
-    args = effective_request.get("args")
-    if not isinstance(args, dict):
-        return
-    input_dir = args.get("input_dir") or args.get("inputDir")
-    if not input_dir:
-        return
-    try:
-        retained.add(str(Path(os.path.realpath(str(input_dir)))))
-    except (OSError, RuntimeError, ValueError):
-        return
+    from transformation_portal.orchestrator.upload_receipts import upload_source_paths
+
+    retained.update(str(path) for path in upload_source_paths(job.request, job.effective_request))
 
 
 async def _retained_staged_input_dirs() -> Optional[set[str]]:
@@ -9888,14 +9878,16 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
-def _upload_receipt_store():
+def _upload_receipt_store() -> PostgresUploadReceiptStore:
     from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
 
     records = _configured_operational_record_store()
     return PostgresUploadReceiptStore(database_url=records.database_url)
 
 
-async def _upload_receipt_context(request: Request, *, write: bool = False):
+async def _upload_receipt_context(
+    request: Request, *, write: bool = False
+) -> tuple[TenantContext | None, str | None, PostgresUploadReceiptStore | None, JSONResponse | None]:
     from transformation_portal.orchestrator.upload_receipts import upload_owner
 
     if write and not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False):
@@ -9924,6 +9916,7 @@ async def _portal_upload_receipts_capability(request: Request) -> bool:
     tenant, owner, store, error = await _upload_receipt_context(request, write=True)
     if error is not None:
         return False
+    assert tenant is not None and owner is not None and store is not None
     try:
         from transformation_portal.ingest.upload_recovery import UploadBatchLock
 
@@ -9951,7 +9944,12 @@ async def _portal_upload_receipts_capability(request: Request) -> bool:
 
 
 async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -> JSONResponse:
-    from transformation_portal.ingest.upload_recovery import UploadBatchLock, initialize_batch, seal_completion
+    from transformation_portal.ingest.upload_recovery import (
+        UploadBatchLock,
+        initialize_batch,
+        seal_completion,
+        verify_completion,
+    )
     from transformation_portal.orchestrator.photographic_admission import drain_owned
     from transformation_portal.orchestrator.upload_receipts import (
         UploadReceiptConflict,
@@ -9966,6 +9964,7 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
     tenant, owner, store, error = await _upload_receipt_context(request, write=True)
     if error is not None:
         return error
+    assert tenant is not None and owner is not None and store is not None
     path_error = await _pilot_enforce_request_paths(
         tenant, {"args": {"input_dir": str(upload_root)}}, action="upload_stage", request=request
     )
@@ -9997,8 +9996,10 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
         parsed = await _parse_portal_upload_multipart(request)
         paths = parse_client_manifest_relative_paths(parsed.client_manifest_raw, expected_count=len(parsed.uploads))
 
-        async def finish():
-            def stage_and_seal():
+        async def finish() -> StagedUploadResult:
+            assert parsed is not None
+
+            def stage_and_seal() -> tuple[StagedUploadResult, str, dict[str, Any]]:
                 result = stage_upload_batch(
                     upload_root=upload_root,
                     uploads=parsed.uploads,
@@ -10008,10 +10009,12 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
                     reserved_batch_id=batch_id,
                     cleanup_on_error=False,
                 )
-                return result, seal_completion(reservation, result)
+                seal_completion(reservation, result)
+                digest, data = verify_completion(reservation, max_files=PORTAL_UPLOAD_MAX_FILES)
+                return result, digest, data
 
-            result, digest = await asyncio.to_thread(stage_and_seal)
-            await store.complete(reservation, digest, result.to_response_data())
+            result, digest, data = await asyncio.to_thread(stage_and_seal)
+            await store.complete(reservation, digest, data)
             return result
 
         # Disconnects never close the stream or lock while its worker survives.
@@ -10051,6 +10054,7 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
     tenant, owner, store, error = await _upload_receipt_context(request)
     if error is not None:
         return error
+    assert tenant is not None and owner is not None and store is not None
     try:
         reservation = await store.get(tenant.tenant_id, owner, request_id)
         status, data = "unknown", None
@@ -10079,7 +10083,7 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
                             status, data = "unknown", None
                 finally:
                     lock.close()
-        body = UploadReceiptData(request_id=request_id, status=status, receipt=data)
+        body = UploadReceiptData.model_validate({"request_id": request_id, "status": status, "receipt": data})
         return JSONResponse(
             UploadReceiptEnvelope(schema="tp.orchestrator.upload_receipt.v1", success=True, data=body, error=None).model_dump(
                 mode="json", by_alias=True
@@ -10639,7 +10643,15 @@ async def _create_job(
             return audit_response
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
         try:
-            await repo.create(_record_from_job(job))
+            from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+            if isinstance(repo, PostgresJobRepository) and pipeline in ARCHIVE_GATE_PIPELINES:
+                from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
+
+                read_paths = archive_command_read_paths(pipeline, argv)
+                await repo.create(_record_from_job(job), upload_read_paths=read_paths)
+            else:
+                await repo.create(_record_from_job(job))
         except Exception:  # noqa: BLE001 - create failures must fail closed and stay redacted
             LOGGER.exception("job repository create failed for %s", jid)
             if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:

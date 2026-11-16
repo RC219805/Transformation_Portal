@@ -260,7 +260,9 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                 # Flush the parent before adding its foreign-key reference;
                 # publication and the pin still commit in this transaction.
                 await session.flush()
-                await bind_upload_references(session, record, tenant_id, now)
+                await bind_upload_references(
+                    session, record, tenant_id, now, plan_bytes=plan_bytes, execution_bindings=execution_bindings
+                )
                 attempt = DispatchAttemptModel(
                     **{key: value for key, value in locator.to_payload().items() if key != "schema"},
                     output_root=output_root,
