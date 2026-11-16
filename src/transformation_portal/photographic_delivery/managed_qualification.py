@@ -939,17 +939,37 @@ class _ObservedTransport:
                 observer.capture("native_outer_transport_quiescent")
 
 
-def _require_transport_reservation(observer: _Observer, operation: asyncio.Task[Any]) -> None:
+def _require_transport_reservation(
+    observer: _Observer, operation: asyncio.Task[Any], *, queued_thumbnail: asyncio.Task[Any] | None = None
+) -> None:
     snapshot = observer.service.admission.snapshot()
-    if operation.done() or snapshot["memory_reserved_bytes"] != 6 * offline.GIB or snapshot["outstanding"] != 1:
-        raise RuntimeError("Deployed transport released native memory/ticket before outer send became quiescent")
+    queued = queued_thumbnail is not None
+    if (
+        operation.done()
+        or snapshot["memory_reserved_bytes"] != 6 * offline.GIB
+        or snapshot["outstanding"] != 1 + int(queued)
+        or (
+            queued_thumbnail is not None
+            and (queued_thumbnail.done() or snapshot.get("queued") != 1 or snapshot.get("active") != 1)
+        )
+    ):
+        error = RuntimeError("Deployed transport released native memory/ticket before outer send became quiescent")
+        diagnostic = getattr(observer, "record_failure", None)
+        if diagnostic is not None:
+            try:
+                diagnostic("outer transport reservation", operation)
+            except Exception as diagnostic_error:
+                error.add_note(f"Failure telemetry unavailable: {type(diagnostic_error).__name__}")
+        raise error
 
 
-async def _wait_for_owned_transport(observer: _Observer, operation: asyncio.Task[Any]) -> None:
+async def _wait_for_owned_transport(
+    observer: _Observer, operation: asyncio.Task[Any], *, queued_thumbnail: asyncio.Task[Any] | None = None
+) -> None:
     diagnostic = getattr(observer, "record_failure", None)
     await _wait_for_barrier(operation, observer.transport_entered, "outer transport send", on_timeout=diagnostic)
     await _wait_for_barrier(operation, observer.inner_response_returned, "inner response return", on_timeout=diagnostic)
-    _require_transport_reservation(observer, operation)
+    _require_transport_reservation(observer, operation, queued_thumbnail=queued_thumbnail)
     observer.capture("native_outer_transport_holds_reservation_after_inner_return")
 
 
@@ -1320,12 +1340,12 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                 await inspect_while_held("same_tenant_inspection_completed_while_native_held")
                             observer.helper_release.set()
                             if observer.pause_transport:
-                                await _wait_for_owned_transport(observer, operation)
+                                await _wait_for_owned_transport(observer, operation, queued_thumbnail=queued_thumbnail)
                                 if concurrent:
                                     await inspect_while_held(
                                         "same_tenant_inspection_completed_while_outer_transport_blocked", shifted=True
                                     )
-                                    _require_transport_reservation(observer, operation)
+                                    _require_transport_reservation(observer, operation, queued_thumbnail=queued_thumbnail)
                                     if queued_thumbnail is not None:
                                         if queued_thumbnail.done():
                                             raise RuntimeError("Thumbnail bypassed the native bulk/transport reservation")

@@ -16,7 +16,9 @@ from PIL import Image
 from tests.test_managed_materials_qualification import fixture_case  # noqa: F401 - existing retained fixture
 from transformation_portal.orchestrator import photographic_review_service as review
 from transformation_portal.orchestrator.photographic_admission import (
+    PhotographicAdmissionController,
     ReviewAdmissionConfig,
+    ReviewCost,
     current_review_lease,
     operation_cost,
 )
@@ -213,6 +215,69 @@ def test_queue_barrier_requires_observed_scheduling_queue():
     assert not event.is_set()
     state["queued"] = 1
     assert event.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lost_ticket", [None, "native", "thumbnail"])
+async def test_native_outer_transport_keeps_both_owners_with_one_known_queued_thumbnail(lost_ticket):
+    controller = PhotographicAdmissionController(ReviewAdmissionConfig(enabled=True))
+    native_ticket = await controller.begin_request("tenant")
+    thumbnail_ticket = await controller.begin_request("tenant")
+    native_lease = await controller.acquire("tenant", ReviewCost(6 * managed.offline.GIB, 0, interactive=False))
+    finish = asyncio.Event()
+    native = asyncio.create_task(finish.wait())
+    thumbnail = asyncio.create_task(controller.acquire("tenant", operation_cost("thumbnail", controller.config)))
+    observer = SimpleNamespace(service=SimpleNamespace(admission=controller))
+    try:
+        for _ in range(20):
+            if controller.snapshot()["queued"]:
+                break
+            await asyncio.sleep(0)
+        assert controller.snapshot()["queued"] == 1
+        # The baseline probe correctly cannot account for an unannounced
+        # second owner. Mixed mode must identify its known queued request.
+        with pytest.raises(RuntimeError, match="before outer send"):
+            managed._require_transport_reservation(observer, native)
+        managed._require_transport_reservation(observer, native, queued_thumbnail=thumbnail)
+        if lost_ticket is not None:
+            await (native_ticket if lost_ticket == "native" else thumbnail_ticket).release()
+            with pytest.raises(RuntimeError, match="before outer send"):
+                managed._require_transport_reservation(observer, native, queued_thumbnail=thumbnail)
+    finally:
+        thumbnail.cancel()
+        await asyncio.gather(thumbnail, return_exceptions=True)
+        finish.set()
+        await native
+        await native_lease.release()
+        await native_ticket.release()
+        await thumbnail_ticket.release()
+        await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_transport_probe_cannot_substitute_a_completed_thumbnail_for_queued_owner():
+    finish = asyncio.Event()
+    native = asyncio.create_task(finish.wait())
+    thumbnail = asyncio.create_task(asyncio.sleep(0))
+    await thumbnail
+    observer = SimpleNamespace(
+        service=SimpleNamespace(
+            admission=SimpleNamespace(
+                snapshot=lambda: {
+                    "active": 1,
+                    "queued": 1,
+                    "outstanding": 2,
+                    "memory_reserved_bytes": 6 * managed.offline.GIB,
+                }
+            )
+        )
+    )
+    try:
+        with pytest.raises(RuntimeError, match="before outer send"):
+            managed._require_transport_reservation(observer, native, queued_thumbnail=thumbnail)
+    finally:
+        finish.set()
+        await native
 
 
 def test_mixed_pressure_uses_largest_declared_native_vector_instead_of_first_source():
