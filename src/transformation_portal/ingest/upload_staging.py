@@ -461,12 +461,18 @@ def stage_upload_batch(
     capture_metadata_config_path: Path = DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
     capture_metadata_schema_path: Path = DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
     now: float,
+    reserved_batch_id: str | None = None,
+    cleanup_on_error: bool = True,
 ) -> StagedUploadResult:
     if not uploads:
         raise UploadStagingError("files_required", "at least one upload file is required")
 
     upload_root.mkdir(parents=True, exist_ok=True)
-    batch_id = build_batch_id(now)
+    batch_id = reserved_batch_id or build_batch_id(now)
+    if reserved_batch_id is not None and (
+        not reserved_batch_id.startswith("upload_") or "/" in reserved_batch_id or "\\" in reserved_batch_id
+    ):
+        raise UploadStagingError("invalid_batch_id", "invalid server batch ID")
     batch_root = upload_root / batch_id
     input_dir = batch_root / "input"
     portal_dir = batch_root / "_portal"
@@ -583,7 +589,8 @@ def stage_upload_batch(
             warnings=tuple(_deduplicate_warnings(warnings)),
         )
     except Exception:
-        shutil.rmtree(batch_root, ignore_errors=True)
+        if cleanup_on_error:
+            shutil.rmtree(batch_root, ignore_errors=True)
         raise
 
 
@@ -626,6 +633,9 @@ def cleanup_expired_batches(
 
 def _is_managed_staged_batch_dir(batch_dir: Path) -> bool:
     name = str(batch_dir.name or "").strip()
+    if (batch_dir / ".upload-request.v1.json").exists():
+        # Ledger batches require an atomic ownership/reference claim first.
+        return False
     if not name.startswith("upload_"):
         return False
     input_dir = batch_dir / "input"

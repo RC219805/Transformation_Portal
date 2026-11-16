@@ -201,6 +201,58 @@ Notes:
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
 
+
+### Request-correlated upload recovery
+
+Deploy the additive `0010_upload_receipts` migration after
+`0009_job_submissions`, with matching backend and frontdoor code. Enable new
+correlated writes separately with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=1`; the
+default is disabled. The managed capability requires the current signed tenant
+and composite Access-email/portal-username identity plus Postgres operational
+storage. Direct-debug and informational actor headers grant no receipt access.
+
+`POST /v1/uploads/staging` accepts an optional canonical UUID in
+`X-TP-Upload-Request-ID`. Its successful response retains the existing upload
+staging envelope. A duplicate scoped ID returns `409` before multipart parsing
+or another batch; this header does not make upload bodies replayable.
+`GET /v1/uploads/staging/receipts/{request_id}` returns
+`tp.orchestrator.upload_receipt.v1` with `request_id`, `status` (`pending`,
+`ready`, `expired`, or `unknown`) and a staging `receipt` only when verified
+ready. Unknown or missing evidence is not proof that a POST was rejected.
+Every lookup rechecks current tenant/path authority and exact retained bytes.
+
+Recovery covers API-process restart on the same intact filesystem and database.
+It does not promise host/power-loss persistence, storage synchronization, or
+resumption of an incomplete upload. Browser cancellation stops client waiting;
+it does not revoke a running staging thread or delete a completed batch. The
+server retains streams and its stable cross-process lock until the worker and
+completion transaction finish. A sealed filesystem completion can be reconciled
+after a crash before its database-ready update.
+
+The existing TTL and cleanup loop remain in force. Ledger-owned batches require
+an atomic deletion claim under the stable filesystem lock and ledger-row lock.
+Retained job references prevent deletion, including jobs admitted without a
+submission key. Failed deletion remains fenced for retry by the existing loop;
+a stale worker cannot republish ready. Lock identities live outside deletable
+batch directories and are not reused. Do not remove lock files manually.
+
+Rollback disables new writes with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
+restarts the serving process. Keep the additive schema, receipt reads and
+ownership-aware cleanup for outstanding attempts; no down-migration is required.
+A recovered receipt requires explicit operator acceptance before replacing the
+current input path. Never automatically repeat its POST.
+
+Validate the restart/concurrency/fencing lane against a dedicated migrated
+`*_test` Postgres database:
+
+```bash
+TP_UPLOAD_RECEIPT_TEST_DATABASE_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tp_upload_recovery_test make test-upload-recovery-services
+```
+
+The lane covers cancellation ownership, sealed-completion recovery, duplicate
+requests, retained-job pinning and bounded cleanup fairness. It uses no Redis
+queue or model runtime and is not host/power-loss qualification.
+
 ## Local Development
 
 From the repository root, create the local shared environment once. The writer

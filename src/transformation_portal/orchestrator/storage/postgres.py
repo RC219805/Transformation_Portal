@@ -190,6 +190,11 @@ class PostgresJobRepository(JobRepository):
                         absolute_path=str(absolute),
                     )
                 )
+            from transformation_portal.orchestrator.upload_receipts import bind_upload_references
+
+            await bind_upload_references(
+                session, record_snapshot, str(record_snapshot.effective_request.get("tenant_id") or "")
+            )
             try:
                 await session.commit()
             except IntegrityError as exc:

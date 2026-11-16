@@ -282,6 +282,7 @@ class TestSchemaCoverage:
             "tp.orchestrator.presets.v1",
             "tp.orchestrator.readiness.v1",
             "tp.orchestrator.upload_staging.v1",
+            "tp.orchestrator.upload_receipt.v1",
         ],
     )
     def test_every_known_schema_round_trips(self, schema_name: str) -> None:

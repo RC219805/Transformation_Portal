@@ -66,6 +66,36 @@ class PhotographicReviewEventModel(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class UploadReceiptModel(Base):
+    """Request-bound upload ownership survives API process restarts."""
+
+    __tablename__ = "upload_receipts"
+    __table_args__ = (
+        Index("uq_upload_receipt_owner_request", "tenant_id", "owner_sha256", "request_id", unique=True),
+        CheckConstraint("state IN ('staging', 'ready', 'deleting', 'expired')", name="ck_upload_receipt_state"),
+    )
+    batch_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    owner_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    generation: Mapped[str] = mapped_column(String(32), nullable=False)
+    batch_root: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="staging")
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    expires_at: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    receipt_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    cleanup_checked_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    response_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
+
+class UploadJobReferenceModel(Base):
+    """Retained jobs pin their staged input in the admission transaction."""
+
+    __tablename__ = "upload_job_references"
+    batch_id: Mapped[str] = mapped_column(String(64), ForeignKey("upload_receipts.batch_id"), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+
+
 class JobModel(Base):
     """Persistent slice of an orchestrator job."""
 

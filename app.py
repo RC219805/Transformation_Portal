@@ -73,6 +73,7 @@ from transformation_portal.api.v1 import (
     UploadStagingEnvelope,
 )
 from transformation_portal.api.v1.jobs import JobSubmissionData, JobSubmissionEnvelope
+from transformation_portal.api.v1.uploads import UploadReceiptData, UploadReceiptEnvelope
 from transformation_portal.core.security.frontdoor_identity import (
     ACTOR_ASSERTION_HEADER,
     IdentityAssertionError,
@@ -3878,6 +3879,14 @@ async def _cleanup_expired_upload_batches(now: float) -> None:
         ttl_seconds=PORTAL_UPLOAD_TTL_SECONDS,
         retained_input_dirs=retained_input_dirs,
     )
+    if os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() == "postgres":
+        try:
+            from transformation_portal.ingest.upload_recovery import cleanup_correlated_batches
+
+            removed.extend(await cleanup_correlated_batches(_upload_receipt_store(), upload_root, now, retained_input_dirs))
+        except Exception:
+            # Ledger-marked batches never enter legacy filesystem cleanup.
+            LOGGER.exception("Correlated upload cleanup unavailable; ownership remains fenced")
     if removed:
         LOGGER.info("Removed %d expired staged upload batches", len(removed))
 
@@ -6816,7 +6825,7 @@ def _is_protected_job_endpoint(path: str) -> bool:
 
 def _is_protected_api_key_endpoint(path: str) -> bool:
     normalized_path = path.rstrip("/") or "/"
-    if _is_protected_job_endpoint(normalized_path):
+    if _is_protected_job_endpoint(normalized_path) or normalized_path.startswith("/v1/uploads/staging/receipts/"):
         return True
     return normalized_path in {
         "/v1/config-metadata",
@@ -9568,6 +9577,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
                 "reviewSurfaceDeferred": _portal_review_surface_deferred_enabled(None),
                 "stagedUploads": _portal_staged_uploads_enabled(None),
+                "uploadReceipts": await _portal_upload_receipts_capability(request),
                 "rumTelemetry": _portal_rum_enabled(None),
                 "fastVlmCaptioning": _portal_fastvlm_captioning_enabled(actor),
                 "photographicDeliveryHistory": os.getenv("TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "0").strip() == "1",
@@ -9878,6 +9888,209 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
+def _upload_receipt_store():
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
+
+    records = _configured_operational_record_store()
+    return PostgresUploadReceiptStore(database_url=records.database_url)
+
+
+async def _upload_receipt_context(request: Request, *, write: bool = False):
+    from transformation_portal.orchestrator.upload_receipts import upload_owner
+
+    if write and not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False):
+        return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
+    tenant, error = await _pilot_tenant_from_request(request, action="upload_receipt")
+    if error is not None:
+        return None, None, None, error
+    if tenant is None:
+        return None, None, None, _error_response(403, code="FORBIDDEN", message="managed tenant identity is required")
+    try:
+        owner = upload_owner(tenant.tenant_id, _verified_frontdoor_actor(request))
+        store = _upload_receipt_store()
+    except (IdentityAssertionError, IdentityConfigurationError, ValueError, RuntimeError):
+        return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
+    return tenant, owner, store, None
+
+
+async def _portal_upload_receipts_capability(request: Request) -> bool:
+    if (
+        not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False)
+        or not _portal_staged_uploads_enabled(_portal_actor_from_request(request))
+        or not _uses_dispatch_authority()
+        or os.name != "posix"
+    ):
+        return False
+    tenant, owner, store, error = await _upload_receipt_context(request, write=True)
+    if error is not None:
+        return False
+    try:
+        from transformation_portal.ingest.upload_recovery import UploadBatchLock
+
+        root = _resolved_portal_upload_root()
+        path_error = await _pilot_enforce_request_paths(
+            tenant, {"args": {"input_dir": str(root)}}, action="upload_capability", request=request
+        )
+        if path_error is not None:
+            return False
+        # Probe the migrated table and actual configured root's lock semantics.
+        # This reserved probe has no batch directory or upload request identity.
+        await store.get(tenant.tenant_id, owner, "00000000-0000-0000-0000-000000000000")
+        first = UploadBatchLock(root, "upload_capability_probe")
+        try:
+            second = UploadBatchLock(root, "upload_capability_probe")
+            try:
+                return first.acquire() and not second.acquire()
+            finally:
+                second.close()
+        finally:
+            first.close()
+    except Exception:
+        LOGGER.exception("Upload receipt capability unavailable")
+        return False
+
+
+async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -> JSONResponse:
+    from transformation_portal.ingest.upload_recovery import UploadBatchLock, initialize_batch, seal_completion
+    from transformation_portal.orchestrator.photographic_admission import drain_owned
+    from transformation_portal.orchestrator.upload_receipts import (
+        UploadReceiptConflict,
+        UploadReservation,
+        validate_upload_request_id,
+    )
+
+    try:
+        request_id = validate_upload_request_id(request.headers.get("X-TP-Upload-Request-ID", ""))
+    except ValueError:
+        return _error_response(400, code="INVALID_ARGUMENT", message="invalid upload request ID")
+    tenant, owner, store, error = await _upload_receipt_context(request, write=True)
+    if error is not None:
+        return error
+    path_error = await _pilot_enforce_request_paths(
+        tenant, {"args": {"input_dir": str(upload_root)}}, action="upload_stage", request=request
+    )
+    if path_error is not None:
+        return path_error
+    batch_id = "upload_" + uuid.uuid4().hex
+    now = _now()
+    reservation = UploadReservation(
+        batch_id,
+        tenant.tenant_id,
+        owner,
+        request_id,
+        uuid.uuid4().hex,
+        str(upload_root / batch_id),
+        "staging",
+        now,
+        now + PORTAL_UPLOAD_TTL_SECONDS,
+    )
+    lock = None
+    parsed = None
+    try:
+        await store.reserve(reservation)
+        lock = UploadBatchLock(upload_root, batch_id)
+        await drain_owned(asyncio.to_thread(lock.acquire, blocking=True))
+        current = await store.get(tenant.tenant_id, owner, request_id)
+        if current is None or current.generation != reservation.generation or current.state != "staging":
+            raise RuntimeError("upload staging ownership is unavailable")
+        initialize_batch(reservation)
+        parsed = await _parse_portal_upload_multipart(request)
+        paths = parse_client_manifest_relative_paths(parsed.client_manifest_raw, expected_count=len(parsed.uploads))
+
+        async def finish():
+            def stage_and_seal():
+                result = stage_upload_batch(
+                    upload_root=upload_root,
+                    uploads=parsed.uploads,
+                    client_manifest_paths=paths,
+                    capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
+                    now=now,
+                    reserved_batch_id=batch_id,
+                    cleanup_on_error=False,
+                )
+                return result, seal_completion(reservation, result)
+
+            result, digest = await asyncio.to_thread(stage_and_seal)
+            await store.complete(reservation, digest, result.to_response_data())
+            return result
+
+        # Disconnects never close the stream or lock while its worker survives.
+        result = await drain_owned(finish())
+        return JSONResponse(
+            _api_envelope("tp.orchestrator.upload_staging.v1", success=True, data=result.to_response_data(), error=None)
+        )
+    except UploadReceiptConflict:
+        return _error_response(409, code="CONFLICT", message="upload request ID is already reserved")
+    except UploadStagingError as exc:
+        return _error_response(
+            exc.status_code,
+            code=_http_status_error_code(exc.status_code),
+            message=exc.message,
+            details={"field": exc.field, "reason": exc.reason},
+        )
+    except Exception:
+        LOGGER.exception("correlated upload staging failed")
+        return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
+    finally:
+        if parsed is not None:
+            parsed.close()
+        if lock is not None:
+            lock.close()
+
+
+@app.get("/v1/uploads/staging/receipts/{request_id}", response_model=UploadReceiptEnvelope)
+async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONResponse:
+    from transformation_portal.ingest.upload_recovery import UploadBatchLock, verify_completion
+    from transformation_portal.orchestrator.photographic_admission import drain_owned
+    from transformation_portal.orchestrator.upload_receipts import validate_upload_request_id
+
+    try:
+        validate_upload_request_id(request_id)
+    except ValueError:
+        return _error_response(400, code="INVALID_ARGUMENT", message="invalid upload request ID")
+    tenant, owner, store, error = await _upload_receipt_context(request)
+    if error is not None:
+        return error
+    try:
+        reservation = await store.get(tenant.tenant_id, owner, request_id)
+        status, data = "unknown", None
+        if reservation is not None:
+            if reservation.state in {"deleting", "expired"}:
+                status = "expired"
+            else:
+                root = _resolved_portal_upload_root()
+                batch = Path(reservation.batch_root)
+                if batch.parent != root or batch.name != reservation.batch_id:
+                    raise ValueError("configured upload root changed")
+                path_error = await _pilot_enforce_request_paths(
+                    tenant, {"args": {"input_dir": str(batch / "input")}}, action="upload_receipt", request=request
+                )
+                if path_error is not None:
+                    return path_error
+                lock = UploadBatchLock(root, reservation.batch_id)
+                try:
+                    status = "pending"
+                    if lock.acquire():
+                        try:
+                            digest, data = await drain_owned(asyncio.to_thread(verify_completion, reservation))
+                            await store.complete(reservation, digest, data)
+                            status = "ready"
+                        except (OSError, ValueError, KeyError, TypeError):
+                            status, data = "unknown", None
+                finally:
+                    lock.close()
+        body = UploadReceiptData(request_id=request_id, status=status, receipt=data)
+        return JSONResponse(
+            UploadReceiptEnvelope(schema="tp.orchestrator.upload_receipt.v1", success=True, data=body, error=None).model_dump(
+                mode="json", by_alias=True
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+    except Exception:
+        LOGGER.exception("upload receipt lookup failed")
+        return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
+
+
 @app.post("/v1/uploads/staging", response_model=UploadStagingEnvelope)
 async def stage_portal_uploads(request: Request) -> JSONResponse:
     if not _portal_staged_uploads_enabled(_portal_actor_from_request(request)):
@@ -9898,6 +10111,9 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
             details={"path": request.url.path, "reason": "upload_root_invalid"},
         )
 
+    if "X-TP-Upload-Request-ID" in request.headers:
+        return await _stage_correlated_portal_upload(request, upload_root)
+
     parsed_payload: Optional[_ParsedPortalUploadPayload] = None
     try:
         parsed_payload = await _parse_portal_upload_multipart(request)
@@ -9913,15 +10129,19 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
             parsed_payload.client_manifest_raw,
             expected_count=len(parsed_payload.uploads),
         )
-        result = await asyncio.to_thread(
-            stage_upload_batch,
-            upload_root=upload_root,
-            uploads=parsed_payload.uploads,
-            client_manifest_paths=client_manifest_paths,
-            capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
-            capture_metadata_config_path=DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
-            capture_metadata_schema_path=DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
-            now=_now(),
+        from transformation_portal.orchestrator.photographic_admission import drain_owned
+
+        result = await drain_owned(
+            asyncio.to_thread(
+                stage_upload_batch,
+                upload_root=upload_root,
+                uploads=parsed_payload.uploads,
+                client_manifest_paths=client_manifest_paths,
+                capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
+                capture_metadata_config_path=DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
+                capture_metadata_schema_path=DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
+                now=_now(),
+            )
         )
     except UploadStagingError as exc:
         return _error_response(

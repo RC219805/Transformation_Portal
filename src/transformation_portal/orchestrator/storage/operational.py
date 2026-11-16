@@ -255,6 +255,12 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                     }
                 )
                 session.add(model)
+                from transformation_portal.orchestrator.upload_receipts import bind_upload_references
+
+                # Flush the parent before adding its foreign-key reference;
+                # publication and the pin still commit in this transaction.
+                await session.flush()
+                await bind_upload_references(session, record, tenant_id, now)
                 attempt = DispatchAttemptModel(
                     **{key: value for key, value in locator.to_payload().items() if key != "schema"},
                     output_root=output_root,
