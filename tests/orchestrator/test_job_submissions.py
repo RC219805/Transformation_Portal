@@ -242,6 +242,54 @@ async def test_bootstrap_exposes_only_verified_composite_context_without_feature
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("admission", "thumbnails", "signed", "expected"),
+    [
+        (False, False, True, False),
+        (True, False, True, False),
+        (False, True, True, False),
+        (True, True, False, False),
+        (True, True, True, True),
+    ],
+)
+async def test_thumbnail_bootstrap_requires_independent_enablement_and_verified_context(
+    receipts, monkeypatch, admission, thumbnails, signed, expected
+):
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1" if admission else "0")
+    monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "1" if thumbnails else "0")
+    from transformation_portal.orchestrator import photographic_review_store
+
+    monkeypatch.setattr(photographic_review_store, "get_review_store", photographic_review_store.MemoryReviewStore)
+    path = "/portal/bootstrap"
+    headers = _headers("GET", path) if signed else {"x-api-key": "contract-secret"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["features"]["photographicCatalogueThumbnails"] is expected
+
+
+@pytest.mark.asyncio
+async def test_thumbnail_bootstrap_provider_failure_keeps_capability_false(receipts, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from transformation_portal.orchestrator import photographic_review_store
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "1")
+    monkeypatch.setattr(
+        photographic_review_store,
+        "get_review_store",
+        lambda: type("UnavailableStore", (), {"get": AsyncMock(side_effect=RuntimeError("provider unavailable"))})(),
+    )
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200
+    assert response.json()["features"]["photographicCatalogueThumbnails"] is False
+    assert response.json()["recoveryContext"] is not None
+
+
+@pytest.mark.asyncio
 async def test_invalid_canonical_receipt_state_is_a_typed_provider_failure(receipts):
     _seed(receipts, state="not-a-job-state")
     path = "/v1/job-submissions/attempt-1"

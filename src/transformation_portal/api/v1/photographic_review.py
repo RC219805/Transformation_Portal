@@ -185,6 +185,17 @@ class SceneArtifactSummary(BaseModel):
     size_bytes: int | None = Field(ge=1)
 
 
+class SceneThumbnail(BaseModel):
+    """Metadata hint for a separately authorized, fixed-size display read."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    url: str
+    artifact_path: ArtifactPath
+    sha256: Digest | None
+    source_identity_sha256: Digest | None
+    presentation_policy_sha256: Digest | None
+
+
 class SceneSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     scene_id: str
@@ -195,6 +206,7 @@ class SceneSummary(BaseModel):
     variant_count: int = Field(ge=0, le=132)
     variant_paths: list[ArtifactPath] = Field(default_factory=list, max_length=132)
     related_artifacts: list[SceneArtifactSummary]
+    thumbnail: SceneThumbnail | None = None
 
 
 class ScenePage(BaseModel):

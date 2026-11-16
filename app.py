@@ -189,9 +189,11 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 )
 
 if TYPE_CHECKING:
+    from transformation_portal.ingest.upload_staging import StagedUploadResult
     from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
     from transformation_portal.orchestrator.job_execution import JobExecutionService
     from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -9547,6 +9549,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
     actor = _portal_actor_from_request(request)
     recovery_context = None
     submission_receipts = False
+    catalogue_thumbnails = False
     if PILOT_CONTROL_PLANE_ENABLED:
         try:
             tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context")
@@ -9563,6 +9566,13 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                         tenant.tenant_id, submission_owner(tenant.tenant_id, verified), "capability-probe"
                     )
                     submission_receipts = True
+                if _env_bool("TP_PHOTO_REVIEW_ENABLED", False) and _env_bool("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", False):
+                    from transformation_portal.orchestrator.photographic_review_store import get_review_store
+
+                    # Establish the actual projection provider/schema, without
+                    # reading job artifacts or creating a review projection.
+                    await get_review_store().get("thumbnail-capability-probe", tenant.tenant_id)
+                    catalogue_thumbnails = True
         except Exception:  # noqa: BLE001 - preserve bootstrap, fail closed for new capability
             LOGGER.warning("durable recovery bootstrap context unavailable", exc_info=True)
     return JSONResponse(
@@ -9584,6 +9594,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
                 "photographicPagedCatalogue": os.getenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", "0").strip() == "1",
                 "jobSubmissionReceipts": submission_receipts,
+                "photographicCatalogueThumbnails": catalogue_thumbnails,
             },
         },
         headers={"Cache-Control": "no-store"},
@@ -9888,14 +9899,16 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
-def _upload_receipt_store():
+def _upload_receipt_store() -> PostgresUploadReceiptStore:
     from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
 
     records = _configured_operational_record_store()
     return PostgresUploadReceiptStore(database_url=records.database_url)
 
 
-async def _upload_receipt_context(request: Request, *, write: bool = False):
+async def _upload_receipt_context(
+    request: Request, *, write: bool = False
+) -> tuple[TenantContext | None, str | None, PostgresUploadReceiptStore | None, JSONResponse | None]:
     from transformation_portal.orchestrator.upload_receipts import upload_owner
 
     if write and not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False):
@@ -9924,6 +9937,7 @@ async def _portal_upload_receipts_capability(request: Request) -> bool:
     tenant, owner, store, error = await _upload_receipt_context(request, write=True)
     if error is not None:
         return False
+    assert tenant is not None and owner is not None and store is not None
     try:
         from transformation_portal.ingest.upload_recovery import UploadBatchLock
 
@@ -9966,6 +9980,7 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
     tenant, owner, store, error = await _upload_receipt_context(request, write=True)
     if error is not None:
         return error
+    assert tenant is not None and owner is not None and store is not None
     path_error = await _pilot_enforce_request_paths(
         tenant, {"args": {"input_dir": str(upload_root)}}, action="upload_stage", request=request
     )
@@ -9997,8 +10012,10 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
         parsed = await _parse_portal_upload_multipart(request)
         paths = parse_client_manifest_relative_paths(parsed.client_manifest_raw, expected_count=len(parsed.uploads))
 
-        async def finish():
-            def stage_and_seal():
+        async def finish() -> StagedUploadResult:
+            assert parsed is not None
+
+            def stage_and_seal() -> tuple[StagedUploadResult, str]:
                 result = stage_upload_batch(
                     upload_root=upload_root,
                     uploads=parsed.uploads,
@@ -10051,6 +10068,7 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
     tenant, owner, store, error = await _upload_receipt_context(request)
     if error is not None:
         return error
+    assert tenant is not None and owner is not None and store is not None
     try:
         reservation = await store.get(tenant.tenant_id, owner, request_id)
         status, data = "unknown", None
@@ -10079,7 +10097,7 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
                             status, data = "unknown", None
                 finally:
                     lock.close()
-        body = UploadReceiptData(request_id=request_id, status=status, receipt=data)
+        body = UploadReceiptData.model_validate({"request_id": request_id, "status": status, "receipt": data})
         return JSONResponse(
             UploadReceiptEnvelope(schema="tp.orchestrator.upload_receipt.v1", success=True, data=body, error=None).model_dump(
                 mode="json", by_alias=True

@@ -203,7 +203,7 @@ def operation_cost(
         # Original verification snapshots retain read chunks alongside joined
         # bytes. Reserve both complete copies before any source materialization.
         return ReviewCost(256 * MIB + 2 * download_parent_bytes, 0, decode_slots=0, interactive=False)
-    if operation not in {"render", "decision", "catalogue", "revision", "delivery", "quality", "groups"}:
+    if operation not in {"render", "thumbnail", "decision", "catalogue", "revision", "delivery", "quality", "groups"}:
         raise ValueError("Unknown photographic operation")
     pixels = MAX_REVIEW_PIXELS
     native_alpha = True
@@ -217,7 +217,7 @@ def operation_cost(
     ):
         pixels = max(row["width"] * row["height"] for row in inspections)
         native_alpha = any(row["alpha"] for row in inspections)
-    profile = "metadata" if operation in {"decision", "catalogue"} else operation
+    profile = "metadata" if operation in {"decision", "catalogue"} else "render" if operation == "thumbnail" else operation
     # Native/encoded source snapshots, ICC/descriptor copies and output buffers.
     snapshots = 2 * (512 * MIB + 18 * MIB) + 256 * MIB
     coefficients = {"metadata": 64, "render": 64, "revision": 144, "delivery": 128, "quality": 192, "groups": 128}

@@ -24,6 +24,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import asdict
 from pathlib import Path
 from types import CoroutineType, FrameType, GeneratorType
@@ -72,11 +73,21 @@ _MANAGED_MODULES = (
     "transformation_portal.core.execution_plan_v4",
     "transformation_portal.core.execution_plan_v5",
     "transformation_portal.orchestrator.models",
+    "transformation_portal.orchestrator.submissions",
+    "transformation_portal.orchestrator.upload_receipts",
+    "transformation_portal.ingest.upload_recovery",
+    "transformation_portal.ingest.upload_staging",
+    "transformation_portal.api.routes.jobs",
+    "transformation_portal.api.v1.jobs",
+    "transformation_portal.api.v1.uploads",
+    "transformation_portal.api.v1.errors",
+    "transformation_portal.api.v1.schemas",
     "transformation_portal.core.security.frontdoor_identity",
     "transformation_portal.core.security.tenant",
     "transformation_portal.photographic_delivery.native_resource_inputs",
     "transformation_portal.photographic_delivery.native_resources",
 )
+_thumbnail_decode_active: ContextVar[bool] = ContextVar("qualification_thumbnail_decode_active", default=False)
 
 
 def _profile_identity() -> str | None:
@@ -409,6 +420,7 @@ def _configure_worker(root: Path) -> None:
         "TP_ALLOWED_OUTPUT_ROOTS": str(root),
     }
     spec = offline._read_json(root / "specification.json", MAX_REPORT_BYTES)
+    environment["TP_PHOTO_REVIEW_THUMBNAILS_ENABLED"] = "1" if spec.get("concurrent_thumbnails", False) else "0"
     if spec.get("provider", "retained-local") == "canonical-s3":
         services = _canonical_services()
         environment.update(
@@ -546,6 +558,109 @@ def _failure_phase(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class _AdmissionQueueObserved:
+    def __init__(self, service: Any):
+        self.service = service
+
+    def is_set(self) -> bool:
+        return self.service.admission.snapshot()["queued"] > 0
+
+
+def _require_qualification_config(service: Any) -> None:
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig
+
+    if asdict(service.admission.config) != asdict(ReviewAdmissionConfig(enabled=True)):
+        raise ValueError("Managed qualification requires the unchanged governed admission budgets")
+
+
+def _contention_source_index(sources: list[dict[str, Any]]) -> int:
+    """Choose pressure from the declared native allocation vector, not file order."""
+    from transformation_portal.orchestrator.photographic_admission import ReviewAdmissionConfig, operation_cost
+
+    config = ReviewAdmissionConfig(enabled=True)
+    return max(
+        range(len(sources)),
+        key=lambda index: operation_cost(
+            "revision",
+            config,
+            [sources[index]["bound"]],
+            native_materials_regions=len(sources[index]["recipe"]["regions"]),
+        ).memory_bytes,
+    )
+
+
+def _thumbnail_read_evidence(
+    response: Any, hint: dict[str, Any], scene_id: str, catalogue_identity: str, geometry: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate bounded real HTTP bytes; retain only their exact identity metadata."""
+    import io
+    from urllib.parse import unquote
+
+    from PIL import Image
+
+    from transformation_portal.core.image_artifact import validate_source_sha256
+
+    headers = response.headers
+    expected = {
+        "content-type": "image/png",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "x-tp-catalogue-identity-sha256": catalogue_identity,
+        "x-tp-thumbnail-max-edge": "256",
+        "x-tp-thumbnail-max-bytes": "1048576",
+        "x-tp-thumbnail-renderer": "tp.photo.thumbnail.v1",
+        "x-tp-presentation-view": "clip_srgb",
+        "x-tp-display-transform": "linear_srgb_to_8bit_srgb_clip_v1",
+        "x-tp-native-width": str(geometry["width"]),
+        "x-tp-native-height": str(geometry["height"]),
+    }
+    if response.status_code != 200 or any(headers.get(key) != value for key, value in expected.items()):
+        raise ValueError("Mixed thumbnail response changed its fixed variant or catalogue identity")
+    if (
+        unquote(headers.get("x-tp-scene-id", "")) != scene_id
+        or unquote(headers.get("x-tp-artifact-path", "")) != hint["artifact_path"]
+    ):
+        raise ValueError("Mixed thumbnail response selected another scene or artifact")
+    identities = {key: headers.get(key) for key in ("x-tp-source-sha256", "x-tp-source-identity-sha256")}
+    for digest in identities.values():
+        validate_source_sha256(digest)
+    if hint.get("sha256") is not None and identities["x-tp-source-sha256"] != hint["sha256"]:
+        raise ValueError("Mixed thumbnail response changed its source bytes")
+    if (
+        hint.get("source_identity_sha256") is not None
+        and identities["x-tp-source-identity-sha256"] != hint["source_identity_sha256"]
+    ):
+        raise ValueError("Mixed thumbnail response changed its composite source identity")
+    policy = headers.get("x-tp-presentation-policy-sha256")
+    if policy != "none":
+        validate_source_sha256(policy)
+    if hint.get("presentation_policy_sha256") is not None and policy != hint["presentation_policy_sha256"]:
+        raise ValueError("Mixed thumbnail response changed its presentation policy")
+    if not 0 < len(response.content) <= offline.MIB:
+        raise ValueError("Mixed thumbnail response exceeded its fixed byte bound")
+    with Image.open(io.BytesIO(response.content)) as image:
+        image.verify()
+        width, height = image.size
+        if image.format != "PNG" or min(width, height) < 1 or max(width, height) > 256:
+            raise ValueError("Mixed thumbnail response exceeded its fixed PNG geometry")
+    if headers.get("x-tp-thumbnail-width") != str(width) or headers.get("x-tp-thumbnail-height") != str(height):
+        raise ValueError("Mixed thumbnail response geometry headers differ from its PNG")
+    return {
+        "schema": "tp.photo.private_thumbnail_read.v1",
+        "catalogue_identity_sha256": catalogue_identity,
+        "scene_id": scene_id,
+        "artifact_path": hint["artifact_path"],
+        "source_sha256": identities["x-tp-source-sha256"],
+        "source_identity_sha256": identities["x-tp-source-identity-sha256"],
+        "presentation_policy_sha256": policy,
+        "renderer": "tp.photo.thumbnail.v1",
+        "width": width,
+        "height": height,
+        "size_bytes": len(response.content),
+        "sha256": hashlib.sha256(response.content).hexdigest(),
+    }
+
+
 class _Observer:
     """Metadata only; never retain decoded arrays, responses or result buffers."""
 
@@ -554,6 +669,8 @@ class _Observer:
         self.records: list[dict[str, Any]] = []
         self.lock = threading.Lock()
         self.helper_entered, self.helper_release = threading.Event(), threading.Event()
+        self.thumbnail_entered, self.thumbnail_release = threading.Event(), threading.Event()
+        self.pause_thumbnail = False
         self.pause_helper = False
         self.scenario = scenario
         self.publication_entered = asyncio.Event()
@@ -654,6 +771,7 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
     from transformation_portal.orchestrator import photographic_review_service as service
     from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
     from transformation_portal.photographic_delivery import materials
+    from transformation_portal.photographic_delivery.models import DeliveryImage
     from transformation_portal.portal import photographic_review_access as access
 
     load, create, snapshot, verify = (
@@ -666,6 +784,29 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
     write_class = observer.publication_store_type or LocalArtifactStore
     write = write_class.write_immutable_file
     response_call = service._OwnedNativeJSONResponse.__call__
+    display, decode = service._display_with_geometry, DeliveryImage.decode
+
+    def displayed(*args: Any, **kwargs: Any) -> Any:
+        from transformation_portal.orchestrator.photographic_admission import current_review_lease
+
+        lease = current_review_lease.get()
+        active = observer.pause_thumbnail and lease is not None and not lease.cost.interactive
+        token = _thumbnail_decode_active.set(active)
+        try:
+            return display(*args, **kwargs)
+        finally:
+            _thumbnail_decode_active.reset(token)
+
+    def decoded(*args: Any, **kwargs: Any) -> Any:
+        result = decode(*args, **kwargs)
+        if _thumbnail_decode_active.get():
+            # Hold the real decoded raster in its owned worker frame. The
+            # observer copies metadata only; it never caches decoded pixels.
+            observer.capture("thumbnail_decoded_raster_held")
+            observer.thumbnail_entered.set()
+            if not observer.thumbnail_release.wait(30):
+                raise TimeoutError("Concurrent inspection did not release its thumbnail barrier")
+        return result
 
     async def response_returned(*args: Any, **kwargs: Any) -> None:
         try:
@@ -730,6 +871,8 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
         return result
 
     service.load_image, materials.create_materials_revision = loaded, created
+    service._display_with_geometry = displayed
+    setattr(DeliveryImage, "decode", decoded)
     access._publication_snapshot, access._verify_staged = staged, verified
     setattr(write_class, "write_immutable_file", written)
     setattr(service._OwnedNativeJSONResponse, "__call__", response_returned)
@@ -738,10 +881,13 @@ def _observe_operations(observer: _Observer) -> Iterator[None]:
         yield
     finally:
         observer.helper_release.set()
+        observer.thumbnail_release.set()
         observer.publication_release.set()
         observer.transport_release.set()
         observer.transport_cancel_release.set()
         service.load_image, materials.create_materials_revision = load, create
+        service._display_with_geometry = display
+        setattr(DeliveryImage, "decode", decode)
         access._publication_snapshot, access._verify_staged = snapshot, verify
         setattr(write_class, "write_immutable_file", write)
         setattr(service._OwnedNativeJSONResponse, "__call__", response_call)
@@ -919,6 +1065,7 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
     from transformation_portal.orchestrator.storage.postgres import _SharedEngine
 
     service = PhotographicReviewService()
+    _require_qualification_config(service)
     app = _deployed_application(service)
 
     # Request cleanup is unrelated to qualification and must not sweep existing
@@ -967,6 +1114,10 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
     api = app.app
     base = f"/v1/jobs/{job_id}/photographic-review"
     results, version = [], 0
+    thumbnail_evidence = None
+    auxiliary_tasks: list[asyncio.Task[Any]] = []
+    contention_index = _contention_source_index(spec["sources"]) if spec.get("concurrent_thumbnails", False) else 0
+    contention_scene = f"input-{contention_index:04d}"
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=_ObservedTransport(api, observer)), base_url="http://localhost"
     ) as client:
@@ -980,8 +1131,9 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
         async def inspect_while_held(phase: str, *, shifted: bool = False) -> None:
             from urllib.parse import urlencode
 
-            selected = items[-1]
-            geometry = spec["sources"][-1]["bound"]
+            selected_index = contention_index if spec.get("concurrent_thumbnails", False) else len(items) - 1
+            selected = items[selected_index]
+            geometry = spec["sources"][selected_index]["bound"]
             width, height = min(64, geometry["width"]), min(64, geometry["height"])
             # A distinct crop avoids treating the earlier read's cached result
             # as fresh inspection work while the outer transport is blocked.
@@ -1004,6 +1156,47 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
             )
             await asyncio.wait_for(request("GET", target), timeout=10)
             observer.capture(phase, inspection_crop=(x, y, width, height))
+
+        async def thumbnail_request(*, expected_status: int) -> tuple[asyncio.Task[Any], dict[str, Any], str]:
+            from urllib.parse import urlencode
+
+            page_response = await request("GET", base + "/scenes")
+            page = page_response.json()["data"]
+            scene = next(row for row in page["scenes"] if row["scene_id"] == contention_scene)
+            hint = scene["thumbnail"]
+            identity = page["catalogue_identity_sha256"]
+            target = (
+                base
+                + "/thumbnail?"
+                + urlencode({"scene_id": scene["scene_id"], "catalogue_identity_sha256": identity, "view": "clip_srgb"})
+            )
+            task = asyncio.create_task(request("GET", target, expected_status=expected_status))
+            auxiliary_tasks.append(task)
+            return task, hint, identity
+
+        async def measure_thumbnail_contention() -> dict[str, Any]:
+            observer.pause_thumbnail = True
+            task, hint, identity = await thumbnail_request(expected_status=200)
+            try:
+                await _wait_for_barrier(
+                    task, observer.thumbnail_entered, "thumbnail decoded raster", on_timeout=observer.record_failure
+                )
+                await inspect_while_held("same_tenant_inspection_completed_while_thumbnail_raster_held", shifted=True)
+                observer.thumbnail_release.set()
+                response = await task
+                evidence = _thumbnail_read_evidence(
+                    response, hint, contention_scene, identity, spec["sources"][contention_index]["bound"]
+                )
+                evidence["source_index"] = contention_index
+                observer.capture("thumbnail_completed_with_verified_identity", http_status=response.status_code)
+                return evidence
+            finally:
+                observer.thumbnail_release.set()
+                if not task.done():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                auxiliary_tasks.remove(task)
+                observer.pause_thumbnail = False
 
         try:
             unauthorized = await client.get(base)
@@ -1037,12 +1230,29 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                             "recipe": row["recipe"],
                             "preview_only": False,
                         }
-                        concurrent = spec["scenario"] == "success" and spec["concurrent_inspection"] and repeat == index == 0
+                        concurrent = (
+                            spec["scenario"] == "success"
+                            and spec["concurrent_inspection"]
+                            and repeat == 0
+                            and index == contention_index
+                        )
                         observer.pause_helper = concurrent or spec["scenario"] == "cancel_helper"
-                        observer.pause_transport = repeat == index == 0 and spec["scenario"] in {
-                            "success",
-                            "cancel_transport",
-                        }
+                        observer.pause_transport = (
+                            repeat == 0
+                            and index == contention_index
+                            and spec["scenario"]
+                            in {
+                                "success",
+                                "cancel_transport",
+                            }
+                        )
+                        if observer.pause_helper:
+                            observer.helper_entered.clear()
+                            observer.helper_release.clear()
+                        if observer.pause_transport:
+                            observer.transport_entered.clear()
+                            observer.transport_release.clear()
+                            observer.inner_response_returned.clear()
                         operation = asyncio.create_task(
                             request(
                                 "POST",
@@ -1051,6 +1261,7 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                 expected_status=503 if spec["scenario"] == "publication_failure" else 200,
                             )
                         )
+                        queued_thumbnail = None
                         try:
                             if spec["scenario"] in {"cancel_helper", "cancel_publication"}:
                                 if spec["scenario"] == "cancel_helper":
@@ -1097,6 +1308,15 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                     "concurrent inspection",
                                     on_timeout=observer.record_failure,
                                 )
+                                if spec.get("concurrent_thumbnails", False):
+                                    queued_thumbnail, _, _ = await thumbnail_request(expected_status=409)
+                                    await _wait_for_barrier(
+                                        queued_thumbnail,
+                                        _AdmissionQueueObserved(service),
+                                        "thumbnail bulk queue",
+                                        on_timeout=observer.record_failure,
+                                    )
+                                    observer.capture("thumbnail_queued_while_native_held")
                                 await inspect_while_held("same_tenant_inspection_completed_while_native_held")
                             observer.helper_release.set()
                             if observer.pause_transport:
@@ -1106,6 +1326,10 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                                         "same_tenant_inspection_completed_while_outer_transport_blocked", shifted=True
                                     )
                                     _require_transport_reservation(observer, operation)
+                                    if queued_thumbnail is not None:
+                                        if queued_thumbnail.done():
+                                            raise RuntimeError("Thumbnail bypassed the native bulk/transport reservation")
+                                        observer.capture("thumbnail_queued_while_native_transport_held")
                                 if spec["scenario"] == "cancel_transport":
                                     operation.cancel()
                                     await _wait_for_barrier(
@@ -1159,6 +1383,14 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                         results.append({"source_index": index, "repeat": repeat, "revision_id": revision["id"]})
                         del response, revision, operation
                         version += 1
+                        if queued_thumbnail is not None:
+                            stale = await queued_thumbnail
+                            if stale.json().get("error", {}).get("code") != "CATALOGUE_CHANGED":
+                                raise RuntimeError("Queued thumbnail did not reject the superseded catalogue")
+                            observer.capture("thumbnail_stale_catalogue_rejected_after_native_commit", http_status=409)
+                            auxiliary_tasks.remove(queued_thumbnail)
+                            del stale, queued_thumbnail
+                            thumbnail_evidence = await measure_thumbnail_contention()
             state = await get_review_store().get(job_id, tenant)
             if state["decisions"] or state["deliveries"] or len(state["revisions"]) != version:
                 raise RuntimeError("Qualification unexpectedly changed approvals/deliveries or lost a revision")
@@ -1188,6 +1420,19 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                 record["phase"] == "native_outer_transport_holds_reservation_after_inner_return" for record in observer.records
             ):
                 raise RuntimeError("Managed qualification did not prove deployed transport ownership")
+            mixed_verified = thumbnail_evidence is not None and all(
+                any(record["phase"] == phase for record in observer.records)
+                for phase in (
+                    "thumbnail_queued_while_native_held",
+                    "thumbnail_queued_while_native_transport_held",
+                    "thumbnail_stale_catalogue_rejected_after_native_commit",
+                    "thumbnail_decoded_raster_held",
+                    "same_tenant_inspection_completed_while_thumbnail_raster_held",
+                    "thumbnail_completed_with_verified_identity",
+                )
+            )
+            if spec.get("concurrent_thumbnails", False) and not mixed_verified:
+                raise RuntimeError("Managed qualification did not prove mixed thumbnail/native/inspection contention")
             return {
                 "job_id": job_id,
                 "tenant_id": tenant,
@@ -1198,12 +1443,19 @@ async def _managed_run(root: Path, spec: dict[str, Any]) -> dict[str, Any]:
                 "transport_ownership_verified": transport_verified,
                 "provider": spec.get("provider", "retained-local"),
                 "canonical_fixture_import": canonical_import,
+                "mixed_thumbnail_contention_verified": mixed_verified,
+                "thumbnail_read": thumbnail_evidence,
             }
         finally:
             observer.helper_release.set()
             observer.publication_release.set()
             observer.transport_release.set()
             observer.transport_cancel_release.set()
+            observer.thumbnail_release.set()
+            for task in auxiliary_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*auxiliary_tasks, return_exceptions=True)
             await service.close()
             if canonical:
                 await store.close()
@@ -1684,6 +1936,7 @@ def qualify(
     *,
     repeats: int = 3,
     concurrent_inspection: bool = True,
+    concurrent_thumbnails: bool = False,
     preflight_only: bool = False,
     scenario: str = "success",
     provider: str = "retained-local",
@@ -1701,10 +1954,12 @@ def qualify(
         type(repeats) is not int
         or not 1 <= repeats <= 3
         or type(concurrent_inspection) is not bool
+        or type(concurrent_thumbnails) is not bool
         or type(preflight_only) is not bool
         or scenario not in SCENARIOS
         or provider not in PROVIDERS
         or (scenario != "success" and repeats != 1)
+        or (concurrent_thumbnails and (scenario != "success" or not concurrent_inspection))
     ):
         raise ValueError("Managed qualification requires one to three repeats and explicit boolean options")
     from transformation_portal.core.image_artifact import validate_source_sha256
@@ -1752,6 +2007,8 @@ def qualify(
         "source_sha256": [row["bound"]["sha256"] for row in sources],
         "repeats": repeats,
         "scenario": scenario,
+        "concurrent_thumbnails": concurrent_thumbnails,
+        "mixed_contention_source_index": _contention_source_index(sources) if concurrent_thumbnails else None,
         "process_timeout_seconds": process_timeout_seconds,
         "canonical_authority": (
             {key: authority[key] for key in ("plan_sha256", "bindings_sha256", "scope")} if authority is not None else None
@@ -1782,6 +2039,7 @@ def qualify(
         "sources": sources,
         "repeats": repeats,
         "concurrent_inspection": concurrent_inspection,
+        "concurrent_thumbnails": concurrent_thumbnails,
         "scenario": scenario,
         "process_timeout_seconds": process_timeout_seconds,
         "provider": provider,
@@ -1823,6 +2081,8 @@ def qualify(
             measured_reasons = []
             if scenario in {"success", "cancel_transport"} and result.get("transport_ownership_verified") is not True:
                 measured_reasons.append("deployed_transport_ownership_unverified")
+            if concurrent_thumbnails and result.get("mixed_thumbnail_contention_verified") is not True:
+                measured_reasons.append("mixed_thumbnail_contention_unverified")
             if margin > 6 * offline.GIB:
                 measured_reasons.append("measured_margin_exceeds_native_profile")
             if repeatable is False:
@@ -1867,6 +2127,7 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--no-concurrent-inspection", action="store_true")
+    parser.add_argument("--concurrent-thumbnails", action="store_true")
     parser.add_argument("--scenario", choices=sorted(SCENARIOS), default="success")
     parser.add_argument("--provider", choices=sorted(PROVIDERS), default="retained-local")
     parser.add_argument("--canonical-plan", type=Path)
@@ -1881,6 +2142,7 @@ def main() -> int:
         arguments.expected_profile_identity,
         repeats=arguments.repeats,
         concurrent_inspection=not arguments.no_concurrent_inspection,
+        concurrent_thumbnails=arguments.concurrent_thumbnails,
         preflight_only=arguments.preflight_only,
         scenario=arguments.scenario,
         provider=arguments.provider,

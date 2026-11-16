@@ -275,6 +275,17 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert "app.py" in paths
     assert "pyproject.toml" in paths and "requirements/base.in" in paths
     assert {
+        "src/transformation_portal/orchestrator/submissions.py",
+        "src/transformation_portal/orchestrator/upload_receipts.py",
+        "src/transformation_portal/ingest/upload_recovery.py",
+        "src/transformation_portal/ingest/upload_staging.py",
+        "src/transformation_portal/api/routes/jobs.py",
+        "src/transformation_portal/api/v1/jobs.py",
+        "src/transformation_portal/api/v1/uploads.py",
+        "src/transformation_portal/api/v1/errors.py",
+        "src/transformation_portal/api/v1/schemas.py",
+    }.issubset(paths)
+    assert {
         "src/transformation_portal/lux_depth_v4/runtime.py",
         "src/transformation_portal/lux_depth_v4/_bytecode.py",
         "src/transformation_portal/depth/backends/da3_runtime_identity.py",

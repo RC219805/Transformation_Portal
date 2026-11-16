@@ -634,6 +634,69 @@ second source authority. A 50-scene synthetic workflow proves navigation and
 resource behavior; it does not establish photographic improvement or production
 acceptance of a new photographic set.
 
+### Bounded catalogue thumbnails
+
+Deploy matching backend and frontdoor code and complete fresh native CPU/resource
+qualification before setting `TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=1` on the backend.
+This independent backend flag defaults to `0` and also requires
+`TP_PHOTO_REVIEW_ENABLED=1`. Signed bootstrap advertises
+`features.photographicCatalogueThumbnails` only for a current verified tenant
+context, a successful projection-provider/schema read, and both flags enabled.
+Disabling either flag rejects new thumbnail
+reads; existing scene metadata, inspection and approval contracts remain usable.
+
+Each `/scenes` summary adds an optional `thumbnail` metadata hint containing
+`url`, `artifact_path`, nullable `sha256`, nullable `source_identity_sha256` and
+nullable `presentation_policy_sha256`. This remains a metadata-only page: no
+source, header, companion or pixel reads are added. Missing identities never
+grant validation or browser-cache authority.
+
+`GET /v{1,2}/jobs/{id}/photographic-review/thumbnail` requires `scene_id` and the
+page's `catalogue_identity_sha256`, with `view=clip_srgb` (default) or `recorded`.
+The server selects the latest committed revision, otherwise the latest final,
+working master or original, in that order. Callers cannot select a physical
+path, rendition size or storage object. A changed catalogue returns
+`409 CATALOGUE_CHANGED`; discard the page and reload. Recorded presentation
+retains the existing exact-policy validation and unavailable error.
+
+The response is an sRGB PNG with a maximum edge of 256 pixels and a maximum body
+of 1 MiB. It uses `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+Identity headers include `X-TP-Catalogue-Identity-SHA256`, URL-encoded
+`X-TP-Scene-ID` and `X-TP-Artifact-Path`, source byte/composite identities,
+presentation view/policy and display transform. `X-TP-Native-Width/Height` report
+source geometry; `X-TP-Thumbnail-Width/Height` report the bounded rendition.
+`X-TP-Thumbnail-Max-Edge`, `X-TP-Thumbnail-Max-Bytes` and
+`X-TP-Thumbnail-Renderer: tp.photo.thumbnail.v1` identify the fixed variant.
+
+The explicit `thumbnail` operation reserves the full source render memory,
+scratch, decode and I/O vector in the bulk lane. It cannot consume protected
+interactive inspection capacity. Small output dimensions do not authorize a
+cheaper source decode, and no existing ceiling increases. Only complete
+actor/tenant/job/binding/catalogue/source/composite/presentation/view/renderer
+identities may coalesce in-flight reads. Unresolved identities use separate
+admitted reads. Every subscriber revalidates access and catalogue identity after
+rendering; cancellation drains owned workers before releasing capacity. There
+is no backend bitmap cache, publication or approval effect.
+
+Validate with
+`./.venv/bin/pytest tests/orchestrator/test_photographic_thumbnails.py tests/orchestrator/test_photographic_scene_catalogue.py tests/orchestrator/test_photographic_admission.py -q`.
+These tests prove source and resource contracts; fresh retained CPU measurements
+and browser acceptance remain independent release gates.
+
+For fresh private contention evidence, add `--concurrent-thumbnails` to the
+existing managed qualification command for an explicitly authorized retained
+cohort. This opt-in mode requires the success scenario and concurrent
+inspection. It selects the retained source with the largest declared native
+allocation vector for pressure. Only its supervised child enables thumbnail reads. It proves that
+a thumbnail queues behind native work and its owned outer transport, that a
+stale queued catalogue returns 409, and that a refreshed thumbnail retains its
+decoded raster while protected native inspection completes. The report binds
+the real PNG's source/composite/catalogue/renderer identities and keeps only
+bounded metadata. It checks the same memory, scratch, timeout and RSS margins;
+missing mixed-contention evidence cannot qualify the run. Existing native
+profile hashes must be captured and measured from the frozen source closure;
+neither these synthetic tests nor a hash refresh supplies fresh measurements.
+
 ## Inspect the actual version
 
 Choose the scene, primary variant and comparison variant. The workbench can
