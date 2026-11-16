@@ -32,7 +32,7 @@ const job = { id: "job_accepted", state: "queued", events_url: "/v1/jobs/job_acc
 const upload = { batch_id: "batch-one", input_dir: "/authorized/staged", metadata_dir: null,
   summary: { file_count: 1, total_bytes: 4 } };
 const selection = { entries: [{ file: {}, relativePath: "image.jpg", name: "image.jpg", sizeBytes: 4 }], totalBytes: 4 };
-function harness(fetchImpl = async () => { throw new Error("lost"); }, restored = null) {
+function harness(fetchImpl = async () => { throw new Error("lost"); }, restored = null, hostOptions = {}) {
   const timers = clock(), saved = storage(restored), requests = [], accepted = [], applied = [], states = [];
   let serial = 0;
   const context = { ready: true, scope, intent: "private draft", features: { jobSubmissionReceipts: true, uploadReceipts: true } };
@@ -48,7 +48,7 @@ function harness(fetchImpl = async () => { throw new Error("lost"); }, restored 
     uuid: () => id(++serial), timers, now: timers.now, headers: (extra) => ({ ...extra, "X-CSRF-Token": "private token" }),
     fetchImpl: (...args) => { calls.push(args); return fetchImpl(...args); }, xhrFactory: () => new Xhr(),
     formDataFactory: () => ({ append() {} }), acceptJob: (data) => accepted.push(data), applyUpload: (data) => applied.push(data),
-    uploadState: (patch) => states.push(patch),
+    uploadState: (patch) => states.push(patch), ...hostOptions,
   });
   return { api, context, timers, saved, requests, accepted, applied, states, calls };
 }
@@ -180,4 +180,44 @@ test("changed upload context cannot auto-apply late success, and auth loss abort
   await h.api.check(requestId); assert.equal(h.api.accept(requestId), true);
   h.api.upload(selection); h.context.ready = false; h.api.sync();
   assert.equal(h.requests[1].aborted, true); assert.equal(h.applied.length, 1);
+});
+
+
+test("nonretryable frontdoor configuration failures suppress receipt polling and new requests", async () => {
+  let blocked = false;
+  const h = harness(async () => json({ error: { details: { retryable: false } } }, 503), null, {
+    canRequest: () => !blocked,
+    onProtectedFailure: (_type, envelope) => { blocked = envelope.error.details.retryable === false; }
+  });
+  await h.api.submit({ pipeline: "archive-gate-a" }); await flush();
+  assert.equal(h.calls.length, 1); assert.equal(h.api.snapshot()[0].status, "unknown");
+  await h.timers.tick(60000); await h.api.check(h.api.snapshot()[0].request_id);
+  assert.equal(h.calls.length, 1);
+  await assert.rejects(h.api.submit({}));
+  assert.equal(h.calls.length, 1);
+  assert.throws(() => h.api.upload(selection), /configuration requires repair/);
+});
+
+test("Retry-After is honored by automatic and manual reconciliation without another POST", async () => {
+  const h = harness(async (url, options) => options.method === "POST"
+    ? new Response(JSON.stringify({ error: { code: "RATE_LIMITED" } }), { status: 429, headers: { "Retry-After": "60" } })
+    : json({ schema: "tp.orchestrator.job_submission.v1", success: true, data: { request_id: url.split("/").at(-1), status: "accepted", job } }),
+    null, { retryDelay: () => 60000 });
+  await h.api.submit({}); await flush();
+  const attempt = h.api.snapshot()[0];
+  await h.timers.tick(59000); await h.api.check(attempt.request_id);
+  assert.equal(h.calls.length, 1);
+  await h.timers.tick(1000); await h.api.check(attempt.request_id);
+  assert.deepEqual(h.calls.map(([, options]) => options.method), ["POST", "GET"]);
+  assert.deepEqual(h.accepted, [job]);
+});
+
+test("upload configuration failures never cause repeated receipt reads", async () => {
+  let blocked = false;
+  const h = harness(undefined, null, { canRequest: () => !blocked,
+    onProtectedFailure: (_type, envelope) => { blocked = envelope?.error?.details?.retryable === false; } });
+  h.api.upload(selection);
+  Object.assign(h.requests[0], { status: 503, response: { error: { details: { retryable: false } } } });
+  h.requests[0].onload(); await flush(); await h.timers.tick(60000);
+  assert.equal(h.requests.length, 1); assert.equal(h.calls.length, 0);
 });

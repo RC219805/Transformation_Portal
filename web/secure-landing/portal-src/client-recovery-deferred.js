@@ -88,6 +88,11 @@ export function createDeferredClientRecoveryApi(host) {
   const polls = new Map();
   let activeUpload = null, separateConfirmation = "", generation = 0, previousScope = "";
   const context = () => host.context();
+  const canRequest = (type) => host.canRequest?.(type) !== false;
+  function inspectFailure(attempt, response, envelope) {
+    if (response.status === 429) attempt.retryAt = now() + Math.max(0, host.retryDelay?.(response, now()) || 0);
+    if (!response.ok) host.onProtectedFailure?.(attempt.type, envelope);
+  }
   const sameOwner = (attempt) => context().ready && context().scope === attempt.scope;
   const currentIntent = (attempt) => sameOwner(attempt) && attempt.intent === context().intent;
   const headers = (method, extra = {}) => host.headers(extra, method);
@@ -148,6 +153,7 @@ export function createDeferredClientRecoveryApi(host) {
   }
   function newAttempt(type, durable) {
     const current = context();
+    if (!canRequest(type)) throw new Error("Frontdoor configuration requires repair before another request.");
     if (!current.ready || !current.scope) throw new Error("Confirm access before starting work.");
     const requestId = uuid(); if (typeof requestId !== "string" || !UUID.test(requestId)) throw new Error("Secure request identity is unavailable.");
     const reference = { type, request_id: requestId, scope: current.scope, created_at: now() };
@@ -177,10 +183,11 @@ export function createDeferredClientRecoveryApi(host) {
     return forget(attempt);
   }
   async function readReceipt(attempt, timeoutMs = 5000) {
-    if (!sameOwner(attempt) || !attempt.durable) return false;
+    if (!sameOwner(attempt) || !attempt.durable || !canRequest(attempt.type) || now() < (attempt.retryAt || 0)) return false;
     const expectedGeneration = generation;
     const { response, envelope } = await boundedRecoveryJson(fetchImpl, endpoint(attempt), { method: "GET", credentials: "same-origin", headers: headers("GET", { Accept: "application/json" }) }, timeoutMs, timers);
     if (generation !== expectedGeneration || !sameOwner(attempt)) return false;
+    inspectFailure(attempt, response, envelope);
     if (response.status === 401 || response.status === 403) { host.onAuthorizationFailure?.(response.status); return false; }
     if (!response.ok || !envelope?.success || envelope.data?.request_id !== attempt.request_id) return false;
     const receipt = envelope.data;
@@ -209,8 +216,9 @@ export function createDeferredClientRecoveryApi(host) {
     const operation = (async () => {
       do {
         try { if (await readReceipt(attempt, Math.max(1, Math.min(5000, expiresAt - now())))) return true; } catch { /* A failed read never authorizes another POST. */ }
-        if (!automatic || !sameOwner(attempt) || expected !== generation || now() + 2000 >= expiresAt) break;
-        await new Promise((resolve) => { timers.setTimeout(resolve, 2000); });
+        const delay = Math.max(2000, (attempt.retryAt || 0) - now());
+        if (!automatic || !sameOwner(attempt) || !canRequest(attempt.type) || expected !== generation || now() + delay >= expiresAt) break;
+        await new Promise((resolve) => { timers.setTimeout(resolve, delay); });
       } while (now() < expiresAt);
       if (sameOwner(attempt) && attempts.includes(attempt) && !TERMINAL.has(attempt.status)) change(attempt, { status: "unknown", message: "Outcome still unknown. Use Check status; this request will not be repeated." });
       return false;
@@ -236,6 +244,7 @@ export function createDeferredClientRecoveryApi(host) {
         body: JSON.stringify(payload)
       }, 30000, timers);
       metric(response);
+      inspectFailure(attempt, response, envelope);
       if (generation !== attempt.generation || !sameOwner(attempt)) { change(attempt, { status: "unknown", message: "Submission belongs to an earlier access context. Recheck it after access is restored." }); return null; }
       if (response.ok && envelope?.success && envelope.schema === "tp.orchestrator.job.v1" && acceptedJob(envelope.data)) {
         change(attempt, { status: "accepted", result: envelope.data, message: "" });
@@ -297,6 +306,8 @@ export function createDeferredClientRecoveryApi(host) {
       if (finished) return;
       if (!sameOwner(attempt) || generation !== attempt.generation) { unknown("Upload belongs to an earlier access context. Check its receipt after access is restored."); return; }
       const envelope = xhr.response;
+      inspectFailure(attempt, { status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300,
+        headers: { get: (key) => xhr.getResponseHeader?.(key) || null } }, envelope);
       if (xhr.status >= 200 && xhr.status < 300 && envelope?.success && envelope.schema === "tp.orchestrator.upload_staging.v1" && uploadReceipt(envelope.data)) {
         finished = true; clear(); activeUpload = null;
         change(attempt, { status: "ready", result: envelope.data, message: "" });

@@ -339,6 +339,10 @@ const deferredBuildSurfaceBuild = await bundleText(PORTAL_BUILD_SURFACE_ENTRY, {
   minifySyntax: true,
   minifyWhitespace: true
 });
+const clientRecoveryBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/client-recovery-deferred.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-client-recovery.js"), `${clientRecoveryBuild.text.trim()}\n`);
 const configTransferBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/config-transfer-deferred.js"), {
   format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
 });

@@ -5533,6 +5533,7 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
             jobSubmissionReceipts: bootstrap.features?.jobSubmissionReceipts === true,
             uploadReceipts: bootstrap.features?.uploadReceipts === true,
+            photographicCatalogueThumbnails: bootstrap.features?.photographicCatalogueThumbnails === true,
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
@@ -6464,6 +6465,12 @@ function _ensureDeferredReviewSurfaceCss() {
 function _reviewAuthorization() {
     if (state.auth?.logoutPending) return { status: 'revoked', ownerKey: '' };
     const ownerKey = _transientDraftOwnerKey();
+    const established = state.portalUi.recoveryOwner;
+    if (_validRecoveryContext(established)) {
+        const verified = ownerKey && state.auth?.recoveryContextStatus === 'ready'
+            && _validRecoveryContext(state.auth.recoveryContext);
+        return { status: verified ? 'ready' : 'unavailable', ownerKey: established.ownerId };
+    }
     return { status: ownerKey ? 'ready' : 'unavailable', ownerKey };
 }
 
@@ -6699,6 +6706,15 @@ function _acceptRecoveredJob(data) {
 function _loadClientRecoverySurface() {
     return loadDeferredSurface('recovery', () => ({
         context: _clientRecoveryContext,
+        canRequest: (type) => !_isProtectedFamilySuppressed(type === 'upload' ? 'uploads_staging' : 'jobs_list'),
+        retryDelay: (response, now) => portalInternals.parseRateLimitRetryHint(response, now)?.retryAfterMs || 0,
+        onProtectedFailure(type, envelope) {
+            const nonRetryableDetails = _nonRetryableProtectedDetails(envelope);
+            if (!nonRetryableDetails) return false;
+            if (type === 'upload') _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
+            else _recordProtectedFamilySuppression('jobs_list', nonRetryableDetails);
+            return true;
+        },
         headers: (extra, method) => _buildAuthHeaders(extra, method),
         apiBase: API_BASE, document,
         panels: { job: els.submissionRecoveryPanel, upload: els.uploadRecoveryPanel },
@@ -11675,7 +11691,8 @@ function handleJobListClick(event) {
     }
 }
 
-async function submitJob({ separate = false } = {}) {
+async function submitJob(options) {
+    const separate = options?.separate === true;
     if (state.portalUi.dispatchPending) return;
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
     const invalidField = _firstInvalidBuildInput();

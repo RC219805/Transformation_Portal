@@ -30,7 +30,7 @@ test("an established backend owner freezes during context outage instead of fall
 
 test("dispatch delegates only after readiness and never invents a local job for unknown transport", async () => {
   const calls = [], state = { backendOk: true, jobs: [], portalUi: {}, config: {} };
-  const h = vm.createContext({ state, els: {}, generatePayload: () => ({ pipeline: "archive-gate-b" }),
+  const h = vm.createContext({ state, configImportGeneration: 0, els: {}, generatePayload: () => ({ pipeline: "archive-gate-b" }),
     _blockManagedUnavailableAction: () => false, _firstInvalidBuildInput: () => null,
     currentPipelineDispatchStatus: () => "ready", isLuxPipeline: () => false,
     _loadClientRecoverySurface: async () => ({ submit: async (...args) => { calls.push(args); return null; } }),
@@ -46,7 +46,7 @@ test("dispatch delegates only after readiness and never invents a local job for 
 
 test("bootstrap remembers verified ownership before deferred recovery loads and preserves it through outage", () => {
   const state = { portalUi: {}, rum: {}, auth: {} };
-  const h = vm.createContext({ state, els: {}, _portalPrivilegesReady: () => true, generatePayload: () => ({}),
+  const h = vm.createContext({ state, configImportGeneration: 0, els: {}, _portalPrivilegesReady: () => true, generatePayload: () => ({}),
     _rumTelemetryEnabled: () => false, _setBootstrapStatus() {}, _syncApiKeyInputState() {}, _syncBootstrapUi() {},
     portalInternals: { normalizePortalRumTraceparent: () => "" },
   });
@@ -59,4 +59,19 @@ test("bootstrap remembers verified ownership before deferred recovery loads and 
   assert.equal(state.portalUi.recoveryOwner, owner);
   assert.equal(h._clientRecoveryContext().ready, false);
   assert.equal(h._clientRecoveryContext().scope, owner.ownerId);
+});
+
+
+test("Review uses the verified backend owner and freezes instead of falling back during outage", () => {
+  const owner = { schema: "tp.portal.recovery_context.v1", tenantId: "tenant-a", ownerId: "a".repeat(64) };
+  const state = { portalUi: { recoveryOwner: owner }, auth: { recoveryContext: owner, recoveryContextStatus: "ready" } };
+  const h = vm.createContext({ state, _transientDraftOwnerKey: () => "verified-actor-pair" });
+  vm.runInContext(section("function _validRecoveryContext(", "function _clientRecoveryContext(")
+    + section("function _reviewAuthorization(", "function _requestReviewNavigation("), h);
+  assert.equal(h._reviewAuthorization().ownerKey, owner.ownerId);
+  assert.equal(h._reviewAuthorization().status, "ready");
+  state.auth.recoveryContextStatus = "unavailable"; state.auth.recoveryContext = null;
+  assert.equal(h._reviewAuthorization().status, "unavailable");
+  assert.equal(h._reviewAuthorization().ownerKey, owner.ownerId);
+  state.auth.logoutPending = true; assert.equal(h._reviewAuthorization().status, "revoked");
 });

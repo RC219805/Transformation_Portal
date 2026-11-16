@@ -4,7 +4,7 @@ import { buildUpstreamHeaders, buildUpstreamUrl } from "./proxy.js";
 
 export async function backendRecoveryBootstrap(session, traceparent, { fetchImpl = globalThis.fetch, timeoutMs = 2500 } = {}) {
   const unavailable = { recoveryContext: null, recoveryContextStatus: "unavailable",
-    features: { jobSubmissionReceipts: false, uploadReceipts: false } };
+    features: { jobSubmissionReceipts: false, uploadReceipts: false, photographicCatalogueThumbnails: false } };
   const config = getConfig();
   if (!config.pilotControlPlaneEnabled || !config.backendApiKey || !hasIdentitySecret(config.frontdoorIdentitySecret)
     || config.frontdoorIdentitySecret === config.backendApiKey) return unavailable;
@@ -37,7 +37,8 @@ export async function backendRecoveryBootstrap(session, traceparent, { fetchImpl
       || typeof context.tenantId !== "string" || !context.tenantId || context.tenantId.length > 256
       || /[\x00-\x1f\x7f]/.test(context.tenantId)) return unavailable;
     return { recoveryContext: { schema: context.schema, tenantId: context.tenantId, ownerId: context.ownerId }, recoveryContextStatus: "ready",
-      features: { jobSubmissionReceipts: parsed.features?.jobSubmissionReceipts === true, uploadReceipts: parsed.features?.uploadReceipts === true } };
+      features: { jobSubmissionReceipts: parsed.features?.jobSubmissionReceipts === true, uploadReceipts: parsed.features?.uploadReceipts === true,
+        photographicCatalogueThumbnails: parsed.features?.photographicCatalogueThumbnails === true } };
   } catch { return unavailable; }
   finally {
     clearTimeout(timer);

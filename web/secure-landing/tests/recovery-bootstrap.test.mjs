@@ -4,7 +4,7 @@ import { backendRecoveryBootstrap } from "../lib/recovery-bootstrap.js";
 
 const actor = { username: "alice", accessEmail: "alice@example.test", role: "operator" };
 const context = { schema: "tp.portal.recovery_context.v1", tenantId: "tenant-a", ownerId: "a".repeat(64) };
-const unavailable = { recoveryContext: null, recoveryContextStatus: "unavailable", features: { jobSubmissionReceipts: false, uploadReceipts: false } };
+const unavailable = { recoveryContext: null, recoveryContextStatus: "unavailable", features: { jobSubmissionReceipts: false, uploadReceipts: false, photographicCatalogueThumbnails: false } };
 function env(run) {
   const names = ["TP_PILOT_CONTROL_PLANE_ENABLED", "TP_FRONTDOOR_IDENTITY_SECRET", "TP_BACKEND_API_KEY", "TP_FASTAPI_ORIGIN"];
   const previous = names.map((name) => process.env[name]);
@@ -17,7 +17,7 @@ test("recovery bootstrap uses fresh signed server identity and reconstructs only
   let observed;
   const output = await backendRecoveryBootstrap(actor, "", { fetchImpl: async (url, options) => {
     observed = { url, options };
-    return json({ recoveryContext: { ...context, private: "never forward" }, features: { jobSubmissionReceipts: true, uploadReceipts: "true", backendApiKey: "never forward" }, csrfToken: "never forward" });
+    return json({ recoveryContext: { ...context, private: "never forward" }, features: { jobSubmissionReceipts: true, uploadReceipts: "true", photographicCatalogueThumbnails: true, backendApiKey: "never forward" }, csrfToken: "never forward" });
   } });
   assert.equal(observed.url.toString(), "https://backend.example.test/portal/bootstrap");
   assert.equal(observed.options.cache, "no-store"); assert.equal(observed.options.redirect, "manual");
@@ -26,7 +26,7 @@ test("recovery bootstrap uses fresh signed server identity and reconstructs only
   assert.equal(headers.get("cookie"), null); assert.equal(headers.get("x-tp-tenant-id"), null);
   const signed = JSON.parse(Buffer.from(headers.get("x-tp-actor-assertion").split(".")[0], "base64url").toString());
   assert.deepEqual(signed.actor, actor); assert.equal(signed.target, "/portal/bootstrap"); assert.equal(signed.method, "GET");
-  assert.deepEqual(output, { recoveryContext: context, recoveryContextStatus: "ready", features: { jobSubmissionReceipts: true, uploadReceipts: false } });
+  assert.deepEqual(output, { recoveryContext: context, recoveryContextStatus: "ready", features: { jobSubmissionReceipts: true, uploadReceipts: false, photographicCatalogueThumbnails: true } });
   assert.doesNotMatch(JSON.stringify(output), /private|csrf|server-private-key/);
 }));
 

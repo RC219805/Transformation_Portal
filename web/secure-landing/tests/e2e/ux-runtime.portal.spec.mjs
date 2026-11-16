@@ -188,12 +188,16 @@ async function installHydratedPortalRoutes(page, options = {}) {
       authMode: runtime.authMode,
       csrfToken: runtime.authMode === "managed" ? "hydrated-ux-csrf" : null,
       actor: runtime.actor,
+      recoveryContext: options.recoveryContext || null,
+      recoveryContextStatus: options.recoveryContext ? "ready" : "unavailable",
       features: {
         apiKeyInput: runtime.authMode === "direct_debug",
         directDebug: runtime.authMode === "direct_debug",
         artifactViewerModal: true,
         reviewSurfaceDeferred: true,
         stagedUploads: Boolean(options.stagedUploads),
+        jobSubmissionReceipts: options.jobSubmissionReceipts === true,
+        uploadReceipts: options.uploadReceipts === true,
         rumTelemetry: false,
         fastVlmCaptioning: false,
         photographicRecordedPresentation: options.photographicRecordedPresentation === true,
@@ -364,7 +368,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
       runtime.submittedPayloads.push(request.postDataJSON());
       await fulfillJson(route, {
         success: true,
-        data: { id: "job-dispatched", events_url: "/v1/jobs/job-dispatched/events" },
+        schema: "tp.orchestrator.job.v1",
+        data: { id: "job-dispatched", state: "queued", events_url: "/v1/jobs/job-dispatched/events" },
       });
       return;
     }
@@ -2345,7 +2350,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("@portal-browser staged uploads recover from an invalid success receipt without losing draft paths", async ({ page }) => {
+test("@portal-browser invalid upload receipts remain unresolved without losing draft paths or repeating POST", async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });
   let malformedReceipt = true;
   await page.route("**/v1/uploads/staging", async (route) => {
@@ -2365,17 +2370,15 @@ test("@portal-browser staged uploads recover from an invalid success receipt wit
   const originalOutput = await page.locator("#outputDir").inputValue();
   const file = { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("fixture") };
   await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#stagedUploadError")).toContainText("invalid response");
-  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-busy", "false");
-  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeEnabled();
+  await expect(page.locator("#stagedUploadError")).toContainText("outcome is unknown");
+  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-outcome", "outcome_unknown");
+  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeDisabled();
   await expect(page.locator("#inputDir")).toHaveValue(originalInput);
   await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
 
-  await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/batch-photography/input");
-  await expect(page.locator("#stagedUploadError")).toBeEmpty();
-  await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
-  expect(runtime.stagedUploadRequests).toHaveLength(1);
+  await page.locator('[data-ui="upload-recovery-check"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-attempt"]')).toContainText("Receipt recovery is unavailable");
+  expect(runtime.stagedUploadRequests).toHaveLength(0);
   expect(pageErrors).toEqual([]);
 });
 
@@ -4957,3 +4960,70 @@ for (const paged of [false, true]) {
     expect(submissions).toHaveLength(1);
   });
 }
+
+test('@portal-browser a lost submission response reconciles one accepted run without another POST', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { jobSubmissionReceipts: true, recoveryContext: scope, keepEventStreamOpen: true });
+  let posts = 0, requestId = '', releaseReceipt;
+  const receiptGate = new Promise(resolve => { releaseReceipt = resolve; });
+  const job = { id: 'job-receipt-recovered', state: 'queued', events_url: '/v1/jobs/job-receipt-recovered/events',
+    pipeline: 'lux-depth-v3', created_at: '2026-11-16T00:00:00Z', logs_tail: [], artifacts: { items: [] } };
+  await page.route('**/v1/jobs', async route => {
+    if (route.request().method() === 'POST') {
+      posts += 1; requestId = route.request().headers()['idempotency-key'];
+      expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+      await route.abort('connectionfailed'); return;
+    }
+    await fulfillJson(route, { success: true, data: { jobs: posts ? [job] : [] } });
+  });
+  await page.route('**/v1/jobs/job-receipt-recovered', route => fulfillJson(route, { success: true, data: job }));
+  await page.route('**/v1/job-submissions/*', async route => {
+    expect(route.request().method()).toBe('GET'); await receiptGate;
+    await fulfillJson(route, { schema: 'tp.orchestrator.job_submission.v1', success: true,
+      data: { request_id: requestId, intent_sha256: 'b'.repeat(64), status: 'accepted', job } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab4').click();
+  await page.locator('#runJobBtn').click();
+  await expect(page.locator('#submissionRecoveryPanel')).toContainText('Submission outcome unknown');
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  const refs = await page.evaluate(() => JSON.parse(sessionStorage.getItem('tp.portal.recovery_refs.v1')));
+  expect(refs.attempts).toEqual([{ type: 'job', request_id: requestId, scope: scope.ownerId, created_at: expect.any(Number) }]);
+  expect(posts).toBe(1);
+  releaseReceipt();
+  await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
+  await expect(page.locator('[data-ui="queue-row"][data-job-id="job-receipt-recovered"]')).toHaveCount(1);
+  expect(posts).toBe(1);
+});
+
+test('@portal-browser canceling transfer reconciles staging and requires explicit path acceptance', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { stagedUploads: true, uploadReceipts: true, recoveryContext: scope });
+  let posts = 0, requestId = '', releasePost;
+  const postGate = new Promise(resolve => { releasePost = resolve; });
+  const receipt = { batch_id: 'upload-canceled-fixture', input_dir: '/tenant/uploads/canceled-fixture/input',
+    metadata_dir: '/tenant/uploads/canceled-fixture/_portal', artifacts: {},
+    summary: { file_count: 1, total_bytes: 4, warnings: [] } };
+  await page.route('**/v1/uploads/staging', async route => {
+    posts += 1; requestId = route.request().headers()['x-tp-upload-request-id'];
+    expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+    await postGate;
+    try { await fulfillJson(route, { schema: 'tp.orchestrator.upload_staging.v1', success: true, data: receipt }); } catch { /* Canceled client no longer owns the response. */ }
+  });
+  await page.route('**/v1/uploads/staging/receipts/*', route => {
+    expect(route.request().method()).toBe('GET');
+    return fulfillJson(route, { schema: 'tp.orchestrator.upload_receipt.v1', success: true,
+      data: { request_id: requestId, status: 'ready', receipt } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  const beforeInput = await page.locator('#inputDir').inputValue(), beforeOutput = await page.locator('#outputDir').inputValue();
+  await page.locator('#stagedUploadFilesInput').setInputFiles({ name: 'fixture.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('test') });
+  await page.locator('[data-ui="upload-recovery-cancel"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-accept"]')).toBeVisible();
+  await expect(page.locator('#inputDir')).toHaveValue(beforeInput);
+  await page.locator('[data-ui="upload-recovery-accept"]').click();
+  await expect(page.locator('#inputDir')).toHaveValue(receipt.input_dir);
+  await expect(page.locator('#outputDir')).toHaveValue(beforeOutput);
+  expect(posts).toBe(1); releasePost();
+});
