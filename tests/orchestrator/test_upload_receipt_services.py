@@ -189,6 +189,7 @@ async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_change
     monkeypatch.setattr(app, "_upload_receipt_store", lambda: store)
     monkeypatch.setattr(app, "_verified_frontdoor_actor", lambda request: dict(actor))
     monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_now", lambda: 2.0)
     monkeypatch.setattr(app, "API_KEY_SECRET", "upload-test-key")
     monkeypatch.setattr(app, "ENFORCE_JOB_API_KEY", True)
     app.RATE_LIMIT_BUCKETS.clear()
@@ -209,6 +210,12 @@ async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_change
         assert response.status_code == 200, response.text
         assert response.json()["data"]["status"] == "ready"
         assert response.headers["cache-control"] == "no-store"
+        monkeypatch.setattr(app, "_now", lambda: 20.0)
+        expired = await client.get(url)
+        assert expired.json()["data"]["status"] == "expired"
+        assert expired.json()["data"]["receipt"] is None
+        assert result.input_dir.exists()  # Lookup never performs TTL deletion.
+        monkeypatch.setattr(app, "_now", lambda: 2.0)
         actor["username"] = "bob"
         assert (await client.get(url)).json()["data"]["status"] == "unknown"
         actor["username"] = "alice"

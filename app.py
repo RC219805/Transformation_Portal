@@ -10055,7 +10055,7 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
         reservation = await store.get(tenant.tenant_id, owner, request_id)
         status, data = "unknown", None
         if reservation is not None:
-            if reservation.state in {"deleting", "expired"}:
+            if reservation.state in {"deleting", "expired"} or reservation.expires_at <= _now():
                 status = "expired"
             else:
                 root = _resolved_portal_upload_root()
