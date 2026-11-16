@@ -8,6 +8,9 @@ export function createPortalHistoryNavigation(host) {
     history.replaceState({ ...history.state, portalIndex: position }, '');
   }
   function record(replace, state, url) {
+    // The browser may still be on the traversal's destination or source entry.
+    // Background renders must preserve both entries and the pending permission.
+    if (restoring !== null || permitted !== null) return;
     restoring = permitted = null;
     if (!replace) position += 1;
     history[replace ? 'replaceState' : 'pushState']({ ...state, portalIndex: position }, '', url);
