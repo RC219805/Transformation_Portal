@@ -20,6 +20,29 @@ test("authoring identity excludes inspection and presentation context but includ
 
 for (const paged of [false, true]) {
   const mode = paged ? "paged" : "legacy";
+  test(`${mode} frozen source replacement discard reloads the retained job and purges private edits`, async () => {
+    let authorization = { status: "ready", ownerKey: "verified-owner" };
+    const h = fixture({ paged, sceneCount: 2, getReviewAuthorization: () => authorization });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    const control = await note(h, "Private draft for the retired source bytes");
+    authorization = { status: "unavailable", ownerKey: "verified-owner" }; h.api.syncAuthorization();
+    h.scenes[0].variants[0] = { ...h.scenes[0].variants[0], sha256: "e".repeat(64) };
+    authorization = { status: "ready", ownerKey: "verified-owner" }; h.api.syncAuthorization(); await settle();
+    assert.equal(control.value, "Private draft for the retired source bytes");
+    assert.equal(h.root.find("photographic-review").classList.contains("hidden"), true);
+    const before = h.requests.length;
+    await h.root.find("photographic-discard-frozen-draft").trigger();
+    assert.equal(control.value, ""); assert.equal(h.api.hasUnsavedChanges(), false);
+    assert.equal(h.root.find("photographic-review").classList.contains("hidden"), false);
+    assert.match(h.root.find("photographic-decision-status").textContent, /eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/);
+    const reloads = h.requests.slice(before).filter((request) => request.path.endsWith(paged ? "/scene" : "/photographic-review"));
+    assert.ok(reloads.length > 0, "Discard must perform a fresh authorized source read");
+    assert.ok(reloads.every((request) => request.path.startsWith(`/v1/jobs/${h.job.id}/photographic-review`)));
+    assert.equal(h.requests.some((request) => request.path.includes("/jobs//")), false);
+    assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
+    authorization = { status: "revoked" }; h.api.syncAuthorization();
+  });
+
   test(`${mode} temporary auth loss masks drafts until the same owner and source are read again`, async (t) => {
     let authorization = { status: "ready", ownerKey: "verified-owner-and-tenant" }, finish, delay = false;
     const h = fixture({ paged, sceneCount: 2, getReviewAuthorization: () => authorization,

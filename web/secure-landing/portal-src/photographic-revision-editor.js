@@ -186,6 +186,15 @@ export function createPhotographicRevisionEditor(host) {
     Object.entries(nodes.revisionInputs || {}).forEach(([key, control]) => { control.value = String(getDraft()[key]); });
     renderMaterials();
   }
-  const draft = () => ({ mode: native ? "native" : "legacy", adjustments: { ...getDraft() }, regions: getMaterials() });
+  const numeric = (value, min, max) => {
+    const parsed = Number(value);
+    return ["number", "string"].includes(typeof value) && String(value).trim() !== ""
+      && Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : value;
+  };
+  const draft = () => ({ mode: native ? "native" : "legacy",
+    adjustments: { exposure: numeric(getDraft().exposure, -1, 1), warmth: numeric(getDraft().warmth, -0.15, 0.15), saturation: numeric(getDraft().saturation, 0.8, 1.2) },
+    regions: getMaterials().map((material) => ({ ...material, region: material.region.map((value) => numeric(value, 0, 1)),
+      ...(native ? { strength: numeric(material.strength, 0, 0.05) }
+        : { exposure_stops: numeric(material.exposure_stops, -0.5, 0.5), warmth: numeric(material.warmth, -0.1, 0.1), feather: numeric(material.feather, 0.005, 0.1) }) })) });
   return { build, renderMaterials, recipe, matches, sync, reset, draft };
 }

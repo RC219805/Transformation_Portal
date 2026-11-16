@@ -22,6 +22,34 @@ function commitDecision(h, request) {
 for (const paged of [false, true]) {
   const mode = paged ? "paged" : "legacy";
 
+  test(`${mode} valid numeric undo restores a clean revision and permits source navigation`, async () => {
+    const h = fixture({ paged, sceneCount: 2 });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    for (const [field, changed, neutral] of [["exposure", "0.2", "0"], ["warmth", "0.05", "0"], ["saturation", "1.1", "1"]]) {
+      await edit(h, `photographic-revision-${field}`, changed);
+      assert.equal(h.api.hasUnsavedChanges(), true);
+      await edit(h, `photographic-revision-${field}`, neutral);
+      assert.equal(h.api.hasUnsavedChanges(), false, `${field} must compare numeric meaning rather than the input string type`);
+    }
+    await edit(h, "photographic-scene", h.scenes[1].scene_id, "change");
+    assert.equal(selected(h), h.scenes[1].scene_id);
+    assert.equal(h.root.find("photographic-discard-navigation").hidden, true);
+    h.api.show(null, null);
+  });
+
+  test(`${mode} empty and invalid numeric revision values remain unsaved`, async () => {
+    const h = fixture({ paged, sceneCount: 2 });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    for (const value of ["", " ", "invalid", "Infinity", "2"]) {
+      await edit(h, "photographic-revision-exposure", value);
+      assert.equal(h.api.hasUnsavedChanges(), true, `Invalid input ${JSON.stringify(value)} cannot become a neutral number`);
+    }
+    await edit(h, "photographic-scene", h.scenes[1].scene_id, "change");
+    assert.equal(selected(h), h.scenes[0].scene_id);
+    assert.equal(h.root.find("photographic-discard-navigation").hidden, false);
+    await h.root.find("photographic-discard-navigation").trigger(); h.api.show(null, null);
+  });
+
   for (const transition of ["selector", "card", "version"]) {
     test(`${mode} ${transition} navigation cannot transfer a note to another source`, async (t) => {
       const h = fixture({ paged, sceneCount: 2 });
