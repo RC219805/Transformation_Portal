@@ -10683,6 +10683,7 @@ function bindInputs() {
 
     const safeBindText = (el, category, key) => {
         if (!el) return;
+        el.addEventListener('input', () => { configImportGeneration += 1; });
         el.addEventListener('change', (e) => {
             const previousPipeline = state.pipeline;
             if (category) (typeof category === 'function' ? category() : state.config[category])[key] = e.target.value;

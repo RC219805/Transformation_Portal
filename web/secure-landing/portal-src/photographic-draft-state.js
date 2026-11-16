@@ -120,13 +120,15 @@ export function createPhotographicDraftLifecycle(host) {
     nodes.draftStatus = host.el("p", "Saved", "photo-review-help", "photographic-draft-status");
     nodes.draftStatus.setAttribute("role", "status"); nodes.draftStatus.setAttribute("aria-live", "polite");
     nodes.discardNavigation = host.button("Discard unsaved edits and continue", "photographic-discard-navigation", async () => {
-      if (host.blocked() || frozen || !pendingNavigation) return;
+      if (host.blocked() || frozen || discarding || !pendingNavigation) return;
       const action = pendingNavigation.action;
       discarding = true;
+      host.onDiscarding?.();
       try { const result = await action(); if (result !== false) { host.discard?.(); clearNavigation(); } }
-      finally { discarding = false; render(); }
+      finally { discarding = false; host.onDiscarding?.(); render(); }
     });
     nodes.cancelNavigation = host.button("Keep editing", "photographic-cancel-navigation", () => {
+      if (discarding) return;
       clearNavigation(); host.status("Navigation canceled. Your unsaved edits are retained.");
     });
     clearNavigation();
