@@ -245,18 +245,26 @@ async def test_bootstrap_exposes_only_verified_composite_context_without_feature
 @pytest.mark.parametrize(
     ("admission", "thumbnails", "signed", "expected"),
     [
-        (False, False, True, False),
-        (True, False, True, False),
-        (False, True, True, False),
-        (True, True, False, False),
-        (True, True, True, True),
+        (False, None, True, False),
+        (True, None, True, False),
+        (False, "1", True, False),
+        (True, "1", False, False),
+        (True, "1", True, True),
+        (True, " 1 ", True, True),
+        (True, "0", True, False),
+        (True, "true", True, False),
+        (True, "yes", True, False),
+        (True, "on", True, False),
     ],
 )
 async def test_thumbnail_bootstrap_requires_independent_enablement_and_verified_context(
     receipts, monkeypatch, admission, thumbnails, signed, expected
 ):
     monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1" if admission else "0")
-    monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "1" if thumbnails else "0")
+    if thumbnails is None:
+        monkeypatch.delenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", thumbnails)
     from transformation_portal.orchestrator import photographic_review_store
 
     monkeypatch.setattr(photographic_review_store, "get_review_store", photographic_review_store.MemoryReviewStore)
