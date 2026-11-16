@@ -271,16 +271,29 @@ def package_proof_delivery(
     never from recomputing and automatically accepting the current inventory.
     No export/encoder runs. This is an offline integrity gate, not a managed
     approval/revocation service or destination-compliance claim.
+    The complete retained export, including its contact sheet and inventory
+    files, is required; incomplete inventories are never packaged selectively.
     """
     actual = {proof.path: proof.sha256 for proof in prepare_derivative_proofs(inventory_snapshot)}
-    if not isinstance(expected_proofs, Mapping) or dict(expected_proofs) != actual:
+    try:
+        supplied = dict(expected_proofs) if isinstance(expected_proofs, Mapping) else None
+    except TypeError as error:
+        raise ValueError("Expected derivative proofs require a mapping of export paths to SHA-256 identities") from error
+    if supplied is not None:
+        for path, digest in supplied.items():
+            _path(path)
+            _digest(digest)
+    if supplied != actual:
         raise ValueError("Expected derivative proof identities must match every exported product exactly")
     inventory = _snapshot(inventory_snapshot, "tp.photo.delivery_inventory.v1")
     spec = _snapshot(package_spec_snapshot, "tp.delivery.package_spec.v1")
     components = inventory.get("native_components")
     if not isinstance(components, list) or len(components) > 300:
         raise ValueError("Proof inventory requires bounded native components")
-    selected = [*inventory["files"], *components, inventory.get("contact_sheet")]
+    contact = inventory.get("contact_sheet")
+    if not isinstance(contact, dict):
+        raise ValueError("Proof packaging requires the retained export contact sheet")
+    selected = [*inventory["files"], *components, contact]
     required: dict[str, tuple[str, int]] = {}
     for row in selected:
         _file(row)

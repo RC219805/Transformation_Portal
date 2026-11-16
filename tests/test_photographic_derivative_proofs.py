@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import zipfile
+from collections.abc import Mapping
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -183,6 +184,17 @@ def test_ordinary_source_cannot_claim_orphan_native_components(proof_case: dict,
         prepare_derivative_proofs(canonical_bytes(inventory))
 
 
+@pytest.mark.parametrize("descriptor", ["", "a" * 63, "A" * 64, []])
+def test_native_descriptor_binding_requires_a_valid_digest(proof_case: dict, descriptor) -> None:
+    inventory = json.loads(proof_case["inventory"])
+    source = inventory["sources"][0]
+    source["source_bundle"]["descriptor_sha256"] = descriptor
+    for row in inventory["files"]:
+        row["source_bundle"] = source["source_bundle"]
+    with pytest.raises(ValueError):
+        prepare_derivative_proofs(canonical_bytes(inventory))
+
+
 @pytest.mark.parametrize("placement", ["source", "derivative"])
 def test_presentation_binding_must_be_explicit_even_for_legacy_sources(proof_case: dict, placement: str) -> None:
     inventory = json.loads(proof_case["inventory"])
@@ -296,6 +308,47 @@ def test_packaging_requires_the_exact_expected_proof_set(proof_case: dict, kind:
         expected[path] = "f" * 64
     with pytest.raises(ValueError):
         _package(proof_case, expected_proofs=expected)
+    assert list(proof_case["output"].parent.iterdir()) == []
+
+
+def test_malformed_expected_mapping_is_rejected_before_publication(proof_case: dict) -> None:
+    class MalformedExpectedProofs(Mapping):
+        def __getitem__(self, key):
+            return "a" * 64
+
+        def __iter__(self):
+            yield ["nonhashable"]
+
+        def __len__(self):
+            return 1
+
+    with pytest.raises(ValueError):
+        _package(proof_case, expected_proofs=MalformedExpectedProofs())
+    assert list(proof_case["output"].parent.iterdir()) == []
+
+
+def test_non_digest_object_cannot_match_expected_identity_by_custom_equality(proof_case: dict) -> None:
+    class PermissiveDigest:
+        def __eq__(self, other):
+            return True
+
+    expected = _expected(proof_case)
+    expected[next(iter(expected))] = PermissiveDigest()
+    with pytest.raises(ValueError):
+        _package(proof_case, expected_proofs=expected)
+    assert list(proof_case["output"].parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["missing", "null"])
+def test_full_export_package_requires_its_contact_sheet(proof_case: dict, kind: str) -> None:
+    inventory = json.loads(proof_case["inventory"])
+    if kind == "missing":
+        inventory.pop("contact_sheet")
+    else:
+        inventory["contact_sheet"] = None
+    proof_case["inventory"] = canonical_bytes(inventory)
+    with pytest.raises(ValueError, match="contact sheet"):
+        _package(proof_case)
     assert list(proof_case["output"].parent.iterdir()) == []
 
 
