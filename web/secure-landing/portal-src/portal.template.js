@@ -68,6 +68,7 @@ const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_REGISTRY = Object.freeze({
+    recovery: { datasetKey: 'clientRecoveryJsUrl', factoryName: 'createDeferredClientRecoveryApi' },
     operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
     build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
     profile: { datasetKey: 'profileSurfaceJsUrl', factoryName: 'createDeferredProfileSurfaceApi' },
@@ -300,6 +301,8 @@ const els = {
         rightsManifest: _domId('rightsManifestGuidance'),
     },
     inputDirStatus: _domId('inputDirStatus'),
+    submissionRecoveryPanel: _domId('submissionRecoveryPanel'),
+    uploadRecoveryPanel: _domId('uploadRecoveryPanel'),
     stagedUploadShell: _domId('stagedUploadShell'),
     stagedUploadStatus: _domId('stagedUploadStatus'),
     stagedUploadDropzone: _domId('stagedUploadDropzone'),
@@ -5094,6 +5097,7 @@ function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
     const allowedStatuses = new Set(['pending', 'ready', 'degraded', 'unavailable']);
     const nextStatus = allowedStatuses.has(status) ? status : 'pending';
     state.bootstrap.status = nextStatus;
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     state.bootstrap.lastErrorReason = String(reason || '').trim();
     state.bootstrap.lastHttpStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
     state.bootstrap.lastTransitionAt = Date.now();
@@ -5280,8 +5284,11 @@ function _flushBootstrapOnlineFollowup(force = false) {
 function _syncBootstrapGuardedControls() {
     renderWorkspaceGuidance();
     const readiness = _dispatchReadinessSnapshot();
+    if (state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId) {
+        readiness.detail = 'A submission is unresolved. Use Check status or explicitly confirm a separate changed draft.';
+    }
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
-        els.runJobBtn.disabled = !readiness.canRun;
+        els.runJobBtn.disabled = !readiness.canRun || Boolean(state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId);
     }
     if (els.dispatchReadinessReason) {
         _renderBannerDetailWithRetryCountdown(
@@ -5382,15 +5389,16 @@ function _setStagedUploadState(patch = {}) {
 }
 
 function _syncStagedUploadUi() {
-    const visible = _stagedUploadsVisibleForState();
+    const visible = _stagedUploadsVisibleForState() || Boolean(state.portalUi.recoveryUploadPresent);
     const enabled = _stagedUploadsEnabledForState();
     const uploadState = state.portalUi.stagedUpload || {};
-    const busy = Boolean(uploadState.busy);
+    const busy = Boolean(uploadState.busy || state.portalUi.recoveryUploadBlocked);
     const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
     if (els.stagedUploadShell) {
         els.stagedUploadShell.classList.toggle('hidden', !visible);
         els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
         els.stagedUploadShell.dataset.capabilityStatus = enabled ? 'available' : 'gated';
+        els.stagedUploadShell.dataset.outcome = uploadState.status || (state.portalUi.recoveryUploadBlocked ? 'outcome_unknown' : 'idle');
     }
     if (els.stagedUploadStatus) {
         if (!visible) {
@@ -5398,9 +5406,9 @@ function _syncStagedUploadUi() {
         } else if (!enabled) {
             els.stagedUploadStatus.textContent = 'Staged upload controls are visible for this pipeline but gated for this portal cohort.';
         } else if (uploadState.error) {
-            els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
+            els.stagedUploadStatus.textContent = String(uploadState.error);
         } else if (busy) {
-            els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
+            els.stagedUploadStatus.textContent = uploadState.status === 'staging' ? 'Files transferred. The server is validating and staging them.' : state.portalUi.recoveryUploadBlocked && !uploadState.busy ? 'Upload outcome unknown. Use Check status before staging another batch.' : 'Transferring selected files…';
         } else if (uploadState.summary) {
             els.stagedUploadStatus.textContent = 'Staged uploads are ready. Review the receipt below before dispatching the next run.';
         } else {
@@ -5430,7 +5438,7 @@ function _syncStagedUploadUi() {
     }
     if (els.stagedUploadProgressLabel) {
         if (busy) {
-            els.stagedUploadProgressLabel.textContent = `${progressPercent}% uploaded`;
+            els.stagedUploadProgressLabel.textContent = !uploadState.busy ? 'Staging outcome unknown; check the receipt.' : uploadState.status === 'staging' ? 'Files transferred; validating and staging…' : `${progressPercent}% of file bytes transferred`;
         } else if (uploadState.summary) {
             els.stagedUploadProgressLabel.textContent = 'Upload complete.';
         } else {
@@ -5499,6 +5507,9 @@ function _syncBootstrapUi() {
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
     configImportGeneration += 1;
     const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
+    if (bootstrap.recoveryContextStatus === 'ready' && _validRecoveryContext(bootstrap.recoveryContext)) {
+        state.portalUi.recoveryOwner = bootstrap.recoveryContext;
+    }
     const nextStatus = ['pending', 'ready', 'degraded', 'unavailable'].includes(String(options.status || ''))
         ? String(options.status)
         : 'ready';
@@ -5512,12 +5523,16 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
         logoutPending: false,
+        recoveryContext: bootstrap.recoveryContextStatus === 'ready' ? bootstrap.recoveryContext : null,
+        recoveryContextStatus: bootstrap.recoveryContextStatus || 'unavailable',
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
+            jobSubmissionReceipts: bootstrap.features?.jobSubmissionReceipts === true,
+            uploadReceipts: bootstrap.features?.uploadReceipts === true,
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
@@ -5784,6 +5799,7 @@ function _handlePortalLogout() {
     if (state.auth.logoutPending) return;
     state.auth.logoutPending = true;
     deferredReviewSurfaceApi?.syncAuthorization?.();
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (els.logoutBtn) els.logoutBtn.disabled = true;
     const logoutStartedAt = _portalRumNow();
     _queueClientLogoutRumSample('logout_submit_attempt', 1);
@@ -6063,106 +6079,13 @@ function _submitStagedUploadSelection(fileList) {
     });
     _syncStagedUploadUi();
 
-    const formData = new FormData();
-    selection.entries.forEach(({ file, relativePath }) => {
-        formData.append('files', file, relativePath);
+    void _loadClientRecoverySurface().then((api) => {
+        if (!api) throw new Error('Upload recovery controls could not load. No upload was sent.');
+        api.upload(selection);
+    }).catch((error) => {
+        _setStagedUploadState({ busy: false, status: 'idle', error: error.message, receipt: null });
+        _syncStagedUploadUi();
     });
-    formData.append(
-        'client_manifest',
-        JSON.stringify({
-            schema: 'tp.portal.upload_manifest.v1',
-            files: selection.entries.map((entry) => ({
-                relative_path: entry.relativePath,
-                size_bytes: entry.sizeBytes,
-                name: entry.name,
-            })),
-        })
-    );
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE}/v1/uploads/staging`);
-    xhr.responseType = 'json';
-    Object.entries(headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && value) {
-            xhr.setRequestHeader(key, value);
-        }
-    });
-
-    xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        const progressPercent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
-        _setStagedUploadState({
-            progressPercent,
-            status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
-        });
-        _syncStagedUploadUi();
-    };
-
-    xhr.onerror = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Network failure interrupted the staged upload.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Network failure interrupted the staged upload.', 'error');
-    };
-
-    xhr.onabort = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Staged upload canceled before completion.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Staged upload canceled before completion.', 'error');
-    };
-
-    xhr.onload = () => {
-        const payload = xhr.response && typeof xhr.response === 'object'
-            ? xhr.response
-            : (() => {
-                try {
-                    return JSON.parse(xhr.responseText || '{}');
-                } catch (_err) {
-                    return {};
-                }
-            })();
-        let invalidResponse = false;
-        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
-            try {
-                _applyStagedUploadResult(payload.data);
-                return;
-            } catch (_err) {
-                invalidResponse = true;
-            }
-        }
-
-        const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
-        if (nonRetryableDetails) {
-            _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
-        }
-        const errorMessage = invalidResponse
-            ? 'Staged upload returned an invalid response. Try staging the files again.'
-            : _stagedUploadErrorMessage(payload);
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: errorMessage,
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast(errorMessage, 'error');
-    };
-
-    xhr.send(formData);
 }
 
 function resumeBlockedJobStreamsAfterAuthUpdate() {
@@ -6729,6 +6652,81 @@ async function loadDeferredSurface(name, hostFactory) {
     return entry.loadPromise;
 }
 
+// Only opaque receipt references enter tab storage. Draft payloads stay page-local.
+function _validRecoveryContext(value) {
+    return value?.schema === 'tp.portal.recovery_context.v1'
+        && typeof value.ownerId === 'string' && /^[a-f0-9]{64}$/.test(value.ownerId)
+        && typeof value.tenantId === 'string' && value.tenantId.length > 0 && value.tenantId.length <= 256 && !/[\x00-\x1f\x7f]/.test(value.tenantId);
+}
+
+function _clientRecoveryContext() {
+    const supplied = state.auth?.recoveryContext;
+    const valid = _validRecoveryContext(supplied);
+    if (valid) state.portalUi.recoveryOwner = supplied;
+    const established = state.portalUi.recoveryOwner;
+    const ready = _portalPrivilegesReady() && !state.auth?.logoutPending && (!established || valid);
+    return {
+        ready,
+        scope: established?.ownerId || JSON.stringify([state.auth?.mode, state.auth?.actor?.accessEmail, state.auth?.actor?.username]),
+        intent: JSON.stringify(generatePayload()),
+        features: state.auth?.features || {}
+    };
+}
+
+function _acceptRecoveredJob(data) {
+    let job = _findJobById(data.id);
+    if (!job) {
+        job = hydrateJobFromServer(data);
+        state.jobs.push(job);
+    }
+    state.selectedJobId = job.id;
+    state.portalUi.lastSelectedJobId = job.id;
+    state.portalUi.dispatchHandoffJobId = job.id;
+    if (els.logPane) els.logPane.textContent = job.logs.join('\n');
+    if (els.runJobBtn) {
+        els.runJobBtn.dataset.action = 'open-live-job';
+        els.runJobBtn.dataset.jobId = job.id;
+        els.runJobBtn.textContent = 'Open Live Job';
+    }
+    scheduleRenderJobQueue();
+    createToast(`Run accepted: ${job.id}. Open the live job to monitor progress.`, 'success');
+    _announcePortalStatus('dispatch', 'Run accepted. Open Live Job to monitor progress.', { force: true });
+    void emitPortalEvent('job_submitted', { surface: 'dispatch', metadata: { job_id: job.id, pipeline: job.pipeline } });
+    if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) startJobEventStream(job, data.events_url);
+    void refreshJobStatus(job);
+}
+
+function _loadClientRecoverySurface() {
+    return loadDeferredSurface('recovery', () => ({
+        context: _clientRecoveryContext,
+        headers: (extra, method) => _buildAuthHeaders(extra, method),
+        apiBase: API_BASE, document,
+        panels: { job: els.submissionRecoveryPanel, upload: els.uploadRecoveryPanel },
+        acceptJob: _acceptRecoveredJob,
+        applyUpload: _applyStagedUploadResult,
+        uploadState: (patch) => { _setStagedUploadState(patch); _syncStagedUploadUi(); },
+        submitSeparateIntent: () => void submitJob({ separate: true }),
+        onAuthorizationFailure: () => void loadPortalBootstrap({ isRetryAttempt: true }),
+        onSubmissionMetric: (sample) => _queuePortalRumSample({
+            eventType: 'queue_request', metric: 'submit', value: sample.durationMs, unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            metadata: { outcome: sample.outcome, ...(sample.status ? { status: sample.status } : {}) }
+        }),
+        onState: (attempts) => {
+            if (document.body) document.body.dataset.submissionOutcome = attempts.filter((row) => row.type === 'job').at(-1)?.status || 'idle';
+            const unresolved = (type) => attempts.some((row) => row.type === type && !['accepted', 'ready', 'expired', 'rejected'].includes(row.status));
+            const blocked = unresolved('job');
+            if (state.portalUi.recoverySubmissionBlocked !== blocked) {
+                state.portalUi.recoverySubmissionBlocked = blocked;
+                _syncBootstrapGuardedControls();
+            }
+            state.portalUi.recoveryUploadBlocked = unresolved('upload');
+            state.portalUi.recoveryUploadPresent = attempts.some((row) => row.type === 'upload');
+            _syncStagedUploadUi();
+        }
+    }));
+}
+
 function _createDeferredOperateSurfaceHost() {
     return {
         state,
@@ -6860,6 +6858,7 @@ function _deferredBuildSurfaceApi() {
 }
 
 function _loadDeferredBuildSurface() {
+    void _loadClientRecoverySurface();
     return loadDeferredSurface('build', _createDeferredBuildSurfaceHost);
 }
 
@@ -10450,6 +10449,7 @@ function renderPreRunDiagnostics(payload) {
 }
 
 function renderCLI() {
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (!els.cliPreview) return;
     const payload = generatePayload();
     const preview = _currentPreviewForPayload(payload);
@@ -11675,7 +11675,7 @@ function handleJobListClick(event) {
     }
 }
 
-async function submitJob() {
+async function submitJob({ separate = false } = {}) {
     if (state.portalUi.dispatchPending) return;
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
     const invalidField = _firstInvalidBuildInput();
@@ -11770,119 +11770,12 @@ async function submitJob() {
     state.portalUi.dispatchPending = true;
     renderWorkspaceGuidance();
 
-    const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
-    const localId = `job_${randomId}`;
-
-    const job = {
-        id: localId,
-        pipeline: payload.pipeline,
-        state: 'queued',
-        progress: 0,
-        logs: [],
-        artifacts: [],
-        error: null,
-        eventSource: null,
-        fetchAbortController: null,
-        eventStreamUrl: null,
-        usesFetchSse: false,
-        sseRetry: { attempt: 0, timer: null },
-        reconnectBlocked: false,
-        lastEventAt: 0,
-        mockInterval: null,
-        startedAt: 0,
-        finishedAt: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        timeline: [],
-        transportWarnings: [],
-        progressMilestones: []
-    };
-    _reconcileJobTimeline(job);
-    state.jobs.push(job);
-    state.selectedJobId = job.id;
-    if (els.logPane) els.logPane.textContent = '';
-    if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
-    scheduleRenderJobQueue();
-    const initLine = `[INFO] Initializing ${payload.pipeline}...`;
-    appendJobLog(job, initLine);
-    logToPane(job.id, initLine);
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const requestStartedAt = _portalRumNow();
-    let queueRumRecorded = false;
     try {
-        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
-            traceparent: requestTraceparent
-        });
-        const res = await fetch(`${API_BASE}/v1/jobs`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
-        _queuePortalRumSample({
-            eventType: 'queue_request',
-            metric: 'submit',
-            value: _portalRumNow() - requestStartedAt,
-            unit: 'ms',
-            traceparent: requestTraceparent,
-            metadata: {
-                outcome: res.ok ? 'ok' : 'error',
-                status: res.status
-            }
-        });
-        queueRumRecorded = true;
-        if (!res.ok) {
-            const parsedError = await extractApiError(res);
-            if (parsedError.error) job.error = parsedError.error;
-            throw new Error(parsedError.message);
-        }
-        const data = await res.json();
-
-        job.id = data.data.id;
-        state.selectedJobId = job.id;
-        state.portalUi.lastSelectedJobId = String(job.id || '');
-        scheduleRenderJobQueue();
-        state.portalUi.dispatchHandoffJobId = String(job.id || '');
-        if (els.runJobBtn) {
-            els.runJobBtn.dataset.action = 'open-live-job';
-            els.runJobBtn.dataset.jobId = String(job.id || '');
-            els.runJobBtn.textContent = 'Open Live Job';
-        }
-        createToast(`Job dispatched: ${job.id}. Open the live job to monitor progress.`, 'success');
-        _announcePortalStatus('dispatch', `Job ${job.id} was dispatched. Open Live Job to monitor progress.`, { force: true });
-        void emitPortalEvent('job_submitted', {
-            surface: 'dispatch',
-            metadata: {
-                job_id: String(job.id || ''),
-                pipeline: String(job.pipeline || payload.pipeline || '')
-            }
-        });
-
-        startJobEventStream(job, data.data.events_url);
-    } catch (err) {
-        if (!queueRumRecorded) {
-            _queuePortalRumSample({
-                eventType: 'queue_request',
-                metric: 'submit',
-                value: _portalRumNow() - requestStartedAt,
-                unit: 'ms',
-                traceparent: requestTraceparent,
-                metadata: {
-                    outcome: 'error'
-                }
-            });
-        }
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        job.state = 'failed';
-        job.finishedAt = Date.now();
-        appendJobLog(job, `[ERROR] ${errorMessage}`);
-        _reconcileJobTimeline(job);
-        scheduleRenderJobQueue();
-        const toastMessage = errorMessage
-            ? `Backend submission failed: ${truncateMiddle(errorMessage, 180)}`
-            : 'Backend submission failed.';
-        createToast(toastMessage, "error");
-        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+        const api = await _loadClientRecoverySurface();
+        if (!api) throw new Error('Submission recovery controls could not load. No request was sent.');
+        await api.submit(payload, { separate });
+    } catch (error) {
+        createToast(error instanceof Error ? error.message : String(error), 'error');
     } finally {
         state.portalUi.dispatchPending = false;
         if (els.runJobBtn) {

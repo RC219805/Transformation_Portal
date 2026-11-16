@@ -29,6 +29,7 @@ function uploadHarness() {
     _isProtectedFamilySuppressed: () => false,
     _collectStagedUploadSelection: () => ({ entries: [{ file: {}, relativePath: "image.jpg", sizeBytes: 4, name: "image.jpg" }], totalBytes: 4 }),
     _setStagedUploadState: (patch) => Object.assign(state.upload, patch),
+    _loadClientRecoverySurface: async () => ({ upload: (selection) => requests.push(selection) }),
     _syncStagedUploadUi() {},
     _portalRumTraceparent() {},
     portalInternals: { createChildTraceparent() {} },
@@ -43,30 +44,24 @@ function uploadHarness() {
   return { context, state, requests, toasts };
 }
 
-test("malformed staged-upload successes release busy controls and preserve draft paths for a retry", () => {
-  for (const data of [{}, { input_dir: "   " }, { input_dir: {} }]) {
-    const h = uploadHarness();
-    h.context._submitStagedUploadSelection([]);
-    assert.equal(h.state.upload.busy, true);
-    Object.assign(h.requests[0], { status: 200, response: { success: true, data } });
-    assert.doesNotThrow(() => h.requests[0].onload());
-    assert.equal(h.state.upload.busy, false);
-    assert.equal(h.state.upload.status, "idle");
-    assert.match(h.state.upload.error, /invalid response/i);
-    assert.equal(h.state.config.inputDir, "/original");
-    assert.equal(h.state.config.outputDir, "/output");
+test("upload selection delegates once to receipt recovery while retaining current paths", async () => {
+  const h = uploadHarness();
+  h.context._submitStagedUploadSelection([]);
+  await Promise.resolve();
+  assert.equal(h.state.upload.busy, true);
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.requests[0].entries[0].relativePath, "image.jpg");
+  assert.equal(h.state.config.inputDir, "/original");
+  assert.equal(h.state.config.outputDir, "/output");
+});
 
-    h.context._submitStagedUploadSelection([]);
-    Object.assign(h.requests[1], { status: 200, response: { success: true, data: {
-      input_dir: "/staged/input", batch_id: "batch-retry", summary: { file_count: 1, total_bytes: 4 },
-    } } });
-    h.requests[1].onload();
-    assert.equal(h.state.upload.busy, false);
-    assert.equal(h.state.upload.status, "ready");
-    assert.equal(h.state.upload.error, "");
-    assert.equal(h.state.config.inputDir, "/staged/input");
-    assert.equal(h.state.config.outputDir, "/output");
-  }
+test("a verified explicit upload apply changes only the input directory", () => {
+  const h = uploadHarness();
+  h.context._applyStagedUploadResult({ input_dir: "/staged/input", batch_id: "batch-one", summary: { file_count: 1, total_bytes: 4 } });
+  assert.equal(h.state.upload.busy, false);
+  assert.equal(h.state.upload.status, "ready");
+  assert.equal(h.state.config.inputDir, "/staged/input");
+  assert.equal(h.state.config.outputDir, "/output");
 });
 
 function clipboardHarness(copy) {

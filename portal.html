@@ -790,6 +790,7 @@ Contract notes:
                                         </div>
                                         <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
                                     </div>
+                                    <div id="uploadRecoveryPanel" data-ui="upload-recovery" class="mt-3" hidden></div>
                                     <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true" role="status"></div>
                                     <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive" role="alert"></p>
                                     <input type="file" id="stagedUploadFilesInput" class="hidden" multiple aria-label="Choose staged upload files" aria-describedby="stagedUploadStatus stagedUploadError" aria-errormessage="stagedUploadError" />
@@ -1567,6 +1568,7 @@ Contract notes:
                             <button id="runJobBtn" type="button" class="dispatch-primary-action hero-action hero-action-primary mt-4 w-full disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason" aria-busy="false">
                                 Execute Job
                             </button>
+                            <div id="submissionRecoveryPanel" data-ui="submission-recovery" class="mt-3" hidden></div>
                             <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">
                                 Once dispatch unlocks, use <span class="kbd">Ctrl/⌘ + Enter</span> to execute without leaving the keyboard.
                             </p>
