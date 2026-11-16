@@ -9390,7 +9390,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "e3893c60ba00bd77a9091de145bbb45e25ab44da",
+      "source_commit": "e7d1c1225bf9dd0d319a6fa91d9e24de38543dc7",
       "content_sha256": "5cfaf1b087a546a8f7887e6613182b0519349c500ff8e04face5a1b9b10066ab",
       "source_references": [
         "web/secure-landing/app/v1/[...path]/route.js",
@@ -14771,7 +14771,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "e3893c60ba00bd77a9091de145bbb45e25ab44da",
+      "source_commit": "e7d1c1225bf9dd0d319a6fa91d9e24de38543dc7",
       "content_sha256": "976e4bde0610d85d9464e7c99de232d8e8d17024a122c86e46f047623a433e6e",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
@@ -14811,7 +14811,7 @@
         "src/transformation_portal/orchestrator/storage/operational.py": "b49d3ba939e904521ecd7fd876f5fc9081bf6be92c7455f4d8eb092e2d937527",
         "portal.html": "417f8c38f0553b7a9ec2d82e7f06240ebd3e983b8ee06ea9819f868b3ad9bc28",
         "web/secure-landing/portal-src/internal/photography-unified.js": "1623ae318be12ce309312d4b429255720f966fe86357c42e138a16af7da21ca7",
-        "web/secure-landing/portal-src/portal.template.js": "a9e40aec09eb90e33e4e3a814e21e93b8507a4855285010c84ba9c757c8cc68f"
+        "web/secure-landing/portal-src/portal.template.js": "0ecac3927f61973321fbc66b4765e9efdfeec6883f767b3692dc3d817dcd5381"
       },
       "validation_commands": [
         "make test-lux-depth-contract",
@@ -14864,7 +14864,7 @@
       ],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "e3893c60ba00bd77a9091de145bbb45e25ab44da",
+      "source_commit": "e7d1c1225bf9dd0d319a6fa91d9e24de38543dc7",
       "content_sha256": "bcf729e6295961b97ace5ae40962cbd5001e896ee4aac097bce7685fae5bbcf9",
       "source_references": [
         "src/transformation_portal/lux_depth_v5/__main__.py",
@@ -14899,7 +14899,7 @@
         "src/transformation_portal/orchestrator/photography_adapter.py": "4eeca7ad8c9708a0c12b89ff660f21abd93419010ed4b526e98be752e380d683",
         "portal.html": "417f8c38f0553b7a9ec2d82e7f06240ebd3e983b8ee06ea9819f868b3ad9bc28",
         "web/secure-landing/portal-src/internal/photography.js": "343227abefa1751b53b3855b047c1a6346f10aae3d8496914d138634be154eb3",
-        "web/secure-landing/portal-src/portal.template.js": "a9e40aec09eb90e33e4e3a814e21e93b8507a4855285010c84ba9c757c8cc68f",
+        "web/secure-landing/portal-src/portal.template.js": "0ecac3927f61973321fbc66b4765e9efdfeec6883f767b3692dc3d817dcd5381",
         "tests/lux_depth_v5/test_preview.py": "5603b39c9328dbd4aa30cbf063f3c615aaa86d617e87926548bee30915ffad69",
         "tests/lux_depth_v5/test_pipeline.py": "f836f85c0cafb12c55cf68ce547d4682e4c0bbfc6cbcd30f7f5288619f7af745",
         "tests/orchestrator/test_managed_photography_api.py": "4c9265b65315d7b5e19704ec7bbff490d18ba9da06267f9094923e1c6f9f1e7a",
@@ -14928,7 +14928,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "e3893c60ba00bd77a9091de145bbb45e25ab44da",
+      "source_commit": "e7d1c1225bf9dd0d319a6fa91d9e24de38543dc7",
       "content_sha256": "d94d7bb7a80acf1a10138c8fd8af77bf0c8077e12ac7b716d31821f9bd59e91e",
       "source_references": [
         "Makefile",
@@ -15037,7 +15037,7 @@
         "src/transformation_portal/orchestrator/job_execution.py": "3ad91cc3162d41c297a09f8366fd7fd9dd973b1f62dbc0efa53539c3fe7bb88e",
         "portal.html": "417f8c38f0553b7a9ec2d82e7f06240ebd3e983b8ee06ea9819f868b3ad9bc28",
         "web/secure-landing/portal-src/internal/photography-v6.js": "cef21ea2c26e449684c7f3f16a058b1f4487cd059f4a9f089fc9341fce3ea63e",
-        "web/secure-landing/portal-src/portal.template.js": "a9e40aec09eb90e33e4e3a814e21e93b8507a4855285010c84ba9c757c8cc68f",
+        "web/secure-landing/portal-src/portal.template.js": "0ecac3927f61973321fbc66b4765e9efdfeec6883f767b3692dc3d817dcd5381",
         "tests/lux_depth_v6/test_managed.py": "8ebb4d3d933aed7a2a91de0422aad5462242700cf1f6c472b74679501c93df65",
         "tests/orchestrator/test_managed_v6_api.py": "7ff1f2a24dcbdebe13c171aed4256b7312643e4866e3425e6aee0a27278376d9",
         "tests/orchestrator/test_managed_v6_execution.py": "8353b73e6263d84706aacccb83a842f18f0f1d53edd176b6961f9e5a5b7564c7",
@@ -15241,7 +15241,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "e3893c60ba00bd77a9091de145bbb45e25ab44da",
+      "source_commit": "e7d1c1225bf9dd0d319a6fa91d9e24de38543dc7",
       "content_sha256": "26a43bb88b291941144db58f26c92f5e166f5a2d44ed72a7351aeeda4e9cdf09",
       "source_references": [
         "app.py",
@@ -15393,7 +15393,7 @@
         "web/secure-landing/portal-src/build-surface-deferred.js": "bc9a851c2e375a9fc5d68997a750e0cbdf83070feac215af4e38be2193caf87b",
         "web/secure-landing/portal-src/internal/photographic-profiles.js": "a3a47598808d61b68cdec5b75d0320e42c4145b51ce9d0efc0cee2073e0d40b1",
         "web/secure-landing/portal-src/photographic-review.js": "018094c755f88ce807113f79d3d823c5f07d877fdbd415af5469665f1d98b841",
-        "web/secure-landing/portal-src/portal.template.js": "a9e40aec09eb90e33e4e3a814e21e93b8507a4855285010c84ba9c757c8cc68f",
+        "web/secure-landing/portal-src/portal.template.js": "0ecac3927f61973321fbc66b4765e9efdfeec6883f767b3692dc3d817dcd5381",
         "web/secure-landing/package.json": "805fd2408f550d631634fc60f5c11e67a608d66fe3cbf2b8a6328d758d0fec61",
         "config/portal_asset_budgets.json": "097f87a67c3ef697f94923f8ac227d2c4ef3b8f1c00c1685a35252e9a1afbc00",
         "tests/orchestrator/test_photographic_review_access.py": "ce26e93505e14b904d6330f14c0a1bd07fd06408bb3880e4931938f06d276848",

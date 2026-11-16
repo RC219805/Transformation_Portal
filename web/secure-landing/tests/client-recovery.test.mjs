@@ -94,9 +94,79 @@ test("lost job response reconciles with GET only and attaches exactly one accept
   assert.equal(await h.api.submit({ pipeline: "lux-depth-v3" }), null);
   await flush();
   assert.deepEqual(h.calls.map(([, options]) => options.method), ["POST", "GET"]);
-  assert.deepEqual(h.accepted, [job]); assert.deepEqual(h.api.snapshot(), []);
+  assert.deepEqual(h.accepted, [{ ...job, pipeline: "lux-depth-v3" }]); assert.deepEqual(h.api.snapshot(), []);
   assert.deepEqual(JSON.parse(h.saved.raw()).attempts, []);
 });
+
+for (const type of ['job', 'upload']) {
+  test(`restored ${type} digest references block both POST types until backend ownership is verified`, async () => {
+    const context = { ready: true, scope: '["managed","alice@example.test","alice"]', intent: 'private draft', draftGeneration: 0,
+      features: { jobSubmissionReceipts: false, uploadReceipts: false } };
+    const required = [];
+    const raw = JSON.stringify({ schema: 'tp.portal.recovery_refs.v1', tab_id: id(1),
+      attempts: [{ type, request_id: id(2), scope, created_at: 0 }] });
+    const h = harness(async () => json(type === 'job'
+      ? { schema: 'tp.orchestrator.job_submission.v1', success: true, data: { request_id: id(2), status: 'accepted', job } }
+      : { schema: 'tp.orchestrator.upload_receipt.v1', success: true, data: { request_id: id(2), status: 'ready', receipt: upload } }), raw,
+    { context: () => context, onState: (_state, needsContext) => required.push(needsContext) });
+    assert.equal(required.at(-1), true);
+    await assert.rejects(h.api.submit({}), /Confirm access/);
+    assert.throws(() => h.api.upload(selection), /Confirm access/);
+    await h.api.check(id(2));
+    assert.equal(h.calls.length, 0); assert.equal(h.requests.length, 0);
+    assert.equal(h.saved.raw(), raw, 'Unverifiable actor names cannot clear or rewrite another scoped reference');
+    context.scope = scope; h.api.sync();
+    assert.equal(required.at(-1), false);
+    assert.equal(h.api.snapshot()[0].restored, true);
+    assert.equal(h.api.snapshot()[0].status, 'unknown');
+    await h.api.check(id(2));
+    assert.equal(h.accepted.length, 0); assert.equal(h.applied.length, 0);
+    assert.equal(h.api.accept(id(2)), true);
+    assert.deepEqual(h.calls.map(([, options]) => options.method), ['GET']);
+    assert.deepEqual(JSON.parse(h.saved.raw()).attempts, []);
+  });
+}
+
+test('legacy sessions without durable references retain their existing keyless request path', async () => {
+  const context = { ready: true, scope: '["managed","alice@example.test","alice"]', intent: 'legacy draft', draftGeneration: 0, features: {} };
+  const required = [];
+  const h = harness(async () => json({ schema: 'tp.orchestrator.job.v1', success: true, data: job }), null,
+    { context: () => context, onState: (_state, needsContext) => required.push(needsContext) });
+  await h.api.submit({ pipeline: 'archive-gate-a' });
+  assert.equal(required.at(-1), false);
+  assert.equal(h.calls[0][1].headers['Idempotency-Key'], undefined);
+  assert.equal(h.accepted[0].pipeline, 'archive-gate-a');
+  h.api.upload(selection);
+  assert.equal(h.requests[0].headers['X-TP-Upload-Request-ID'], undefined);
+  Object.assign(h.requests[0], { status: 200, response: { schema: 'tp.orchestrator.upload_staging.v1', success: true, data: upload } });
+  h.requests[0].onload();
+  assert.deepEqual(h.applied, [upload]);
+});
+
+for (const reconciled of [false, true]) {
+  test(`${reconciled ? 'reconciled' : 'normal'} accepted jobs use the captured submitted pipeline after draft changes`, async () => {
+    let complete;
+    const h = harness((_url, options) => {
+      if (reconciled && options.method === 'POST') throw new Error('lost after commit');
+      return new Promise(resolve => { complete = resolve; });
+    });
+    const payload = { pipeline: 'archive-gate-a', args: { input_dir: '/source' } };
+    const posting = h.api.submit(payload);
+    await flush();
+    payload.pipeline = 'archive-gate-b'; h.context.intent = 'new workflow draft'; h.context.draftGeneration += 1;
+    complete(json(reconciled
+      ? { schema: 'tp.orchestrator.job_submission.v1', success: true, data: { request_id: id(2), status: 'accepted', job } }
+      : { schema: 'tp.orchestrator.job.v1', success: true, data: job }));
+    await posting; await flush();
+    assert.equal(h.accepted.length, 0);
+    assert.equal(h.api.snapshot()[0].result.pipeline, 'archive-gate-a');
+    assert.equal(h.api.accept(id(2)), true);
+    assert.equal(h.accepted[0].pipeline, 'archive-gate-a');
+    assert.equal(JSON.parse(h.calls[0][1].body).pipeline, 'archive-gate-a');
+    assert.doesNotMatch(h.saved.raw(), /archive-gate|source|workflow/);
+    assert.equal(h.calls.filter(([, options]) => options.method === 'POST').length, 1);
+  });
+}
 
 test("malformed success never invents a queued/failed run; unchanged and restored attempts cannot repost", async () => {
   const h = harness(async (_, options) => options.method === "POST" ? json({ success: true, data: { id: "unverified" } }) : json({ success: false }, 404));
@@ -253,6 +323,24 @@ test("changed upload context cannot auto-apply late success, and auth loss abort
   await h.api.check(requestId); assert.equal(h.api.accept(requestId), true);
   h.api.upload(selection); h.context.ready = false; h.api.sync();
   assert.equal(h.requests[1].aborted, true); assert.equal(h.applied.length, 1);
+});
+
+test('upload edit-undo ABA retains its ready receipt until explicit input acceptance', () => {
+  const h = harness();
+  const requestId = h.api.upload(selection), original = h.context.intent;
+  h.context.intent = 'temporary edit'; h.context.draftGeneration += 1; h.api.sync();
+  h.context.intent = original; h.context.draftGeneration += 1; h.api.sync();
+  Object.assign(h.requests[0], { status: 200, response: { schema: 'tp.orchestrator.upload_staging.v1', success: true, data: upload } });
+  h.requests[0].onload();
+  assert.equal(h.applied.length, 0);
+  assert.equal(h.api.snapshot()[0].status, 'ready');
+  assert.deepEqual(h.api.snapshot()[0].result, upload);
+  assert.equal(h.states.at(-1).status, 'recovery_ready');
+  assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+  assert.equal(h.api.accept(requestId), true);
+  assert.deepEqual(h.applied, [upload]);
+  assert.deepEqual(JSON.parse(h.saved.raw()).attempts, []);
+  assert.equal(h.requests.length, 1); assert.equal(h.calls.length, 0);
 });
 
 

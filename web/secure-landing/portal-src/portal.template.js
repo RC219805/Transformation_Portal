@@ -6667,7 +6667,8 @@ function _clientRecoveryContext() {
     const valid = _validRecoveryContext(supplied);
     if (valid) state.portalUi.recoveryOwner = supplied;
     const established = state.portalUi.recoveryOwner;
-    const ready = _portalPrivilegesReady() && !state.auth?.logoutPending && (!established || valid);
+    const ready = _portalPrivilegesReady() && !state.auth?.logoutPending
+        && (!(established || state.portalUi.recoveryContextRequired) || valid);
     return {
         ready,
         scope: established?.ownerId || JSON.stringify([state.auth?.mode, state.auth?.actor?.accessEmail, state.auth?.actor?.username]),
@@ -6704,8 +6705,9 @@ function _acceptRecoveredJob(data, options = {}) {
         els.runJobBtn.textContent = 'Open Live Job';
     }
     scheduleRenderJobQueue();
-    createToast(`Run accepted: ${job.id}. Open the live job to monitor progress.`, 'success');
-    _announcePortalStatus('dispatch', 'Run accepted. Open Live Job to monitor progress.', { force: true });
+    const message = `Run accepted: ${job.id}. Open Live Job.`;
+    createToast(message, 'success');
+    _announcePortalStatus('dispatch', message, { force: true });
     void emitPortalEvent('job_submitted', { surface: 'dispatch', metadata: { job_id: job.id, pipeline: job.pipeline } });
     if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) startJobEventStream(job, data.events_url);
     void refreshJobStatus(job);
@@ -6737,15 +6739,16 @@ function _loadClientRecoverySurface() {
             traceparent: _portalRumTraceparent(),
             metadata: { outcome: sample.outcome, ...(sample.status ? { status: sample.status } : {}) }
         }),
-        onState: (attempts) => {
-            if (document.body) document.body.dataset.submissionOutcome = attempts.filter((row) => row.type === 'job').at(-1)?.status || 'idle';
+        onState: (attempts, needsContext = false) => {
+            state.portalUi.recoveryContextRequired = needsContext;
+            if (document.body) document.body.dataset.submissionOutcome = needsContext ? 'paused' : attempts.filter((row) => row.type === 'job').at(-1)?.status || 'idle';
             const unresolved = (type) => attempts.some((row) => row.type === type && !['accepted', 'ready', 'expired', 'rejected'].includes(row.status));
-            const blocked = unresolved('job');
+            const blocked = needsContext || unresolved('job');
             if (state.portalUi.recoverySubmissionBlocked !== blocked) {
                 state.portalUi.recoverySubmissionBlocked = blocked;
                 _syncBootstrapGuardedControls();
             }
-            state.portalUi.recoveryUploadBlocked = unresolved('upload');
+            state.portalUi.recoveryUploadBlocked = needsContext || unresolved('upload');
             state.portalUi.recoveryUploadPresent = attempts.some((row) => row.type === 'upload');
             _syncStagedUploadUi();
         }
