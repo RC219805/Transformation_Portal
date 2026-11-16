@@ -6,13 +6,16 @@ import asyncio
 import hashlib
 import io
 import json
+import os
 import threading
 import uuid
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
 from transformation_portal.ingest.upload_recovery import (
     MARKER_FILENAME,
     UploadBatchLock,
@@ -20,9 +23,21 @@ from transformation_portal.ingest.upload_recovery import (
     seal_completion,
     verify_completion,
 )
-from transformation_portal.ingest.upload_staging import IncomingUpload, cleanup_expired_batches, stage_upload_batch
+from transformation_portal.ingest.upload_staging import (
+    IncomingUpload,
+    UploadStagingError,
+    cleanup_expired_batches,
+    stage_upload_batch,
+)
 from transformation_portal.orchestrator.photographic_admission import drain_owned
-from transformation_portal.orchestrator.upload_receipts import UploadReservation, upload_owner, validate_upload_request_id
+from transformation_portal.orchestrator.storage.base import JobRecord
+from transformation_portal.orchestrator.upload_receipts import (
+    UploadReservation,
+    bind_upload_references,
+    upload_owner,
+    upload_source_paths,
+    validate_upload_request_id,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -92,7 +107,7 @@ def test_receipt_without_completion_seal_cannot_recover_ready(tmp_path):
         reserved_batch_id=item.batch_id,
         cleanup_on_error=False,
     )
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ValueError, match="incomplete"):
         verify_completion(item)
 
 
@@ -229,3 +244,196 @@ def test_nonready_observations_cannot_include_upload_paths(tmp_path, status):
         UploadReceiptData(request_id=item.request_id, status=status, receipt=result.to_response_data())
     with pytest.raises(ValidationError):
         UploadReceiptData(request_id=item.request_id, status="ready", receipt=None)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "extra_file",
+        "empty_directory",
+        "extra_symlink",
+        "linked_ancestor",
+        "linked_source",
+        "linked_marker",
+        "linked_seal",
+        "hardlinked_source",
+        "extra_root",
+        "extra_metadata",
+    ],
+)
+def test_completion_requires_exact_independent_inventory_at_every_level(tmp_path, mutation):
+    from transformation_portal.ingest.upload_recovery import SEAL_FILENAME
+
+    item, result = sealed(tmp_path)
+    source = result.input_dir / "nested/test.txt"
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"original")
+    if mutation == "extra_file":
+        (result.input_dir / "unlisted.txt").write_bytes(b"not sealed")
+    elif mutation == "empty_directory":
+        (result.input_dir / "unlisted").mkdir()
+    elif mutation == "extra_symlink":
+        (result.input_dir / "unlisted.txt").symlink_to(outside)
+    elif mutation == "linked_ancestor":
+        (result.input_dir / "nested").rename(result.input_dir / "actual")
+        (result.input_dir / "nested").symlink_to("actual", target_is_directory=True)
+    elif mutation == "linked_source":
+        source.unlink()
+        source.symlink_to(outside)
+    elif mutation == "hardlinked_source":
+        source.unlink()
+        os.link(outside, source)
+    elif mutation in {"linked_marker", "linked_seal"}:
+        path = Path(item.batch_root) / MARKER_FILENAME if mutation == "linked_marker" else result.portal_dir / SEAL_FILENAME
+        outside.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(outside)
+    elif mutation == "extra_root":
+        (Path(item.batch_root) / "tmp").mkdir()
+    else:
+        (result.portal_dir / "unlisted.json").write_bytes(b"{}")
+    with pytest.raises((ValueError, OSError)):
+        verify_completion(item)
+
+
+def test_recovery_uses_sealed_count_and_existing_configured_file_limit(tmp_path):
+    item = reservation(tmp_path)
+    initialize_batch(item)
+    count = 4097  # A supported configured writer limit, not a new default.
+    result = stage_upload_batch(
+        upload_root=tmp_path,
+        uploads=[IncomingUpload(f"file-{index:04d}.txt", io.BytesIO(b"x")) for index in range(count)],
+        now=1.0,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    seal_completion(item, result)
+    assert verify_completion(item, max_files=count)[1]["summary"]["file_count"] == count
+    assert verify_completion(item)[1] == result.to_response_data()  # GET survives later config reduction.
+    with pytest.raises(ValueError, match="inventory"):
+        verify_completion(item, max_files=256)
+
+
+@pytest.mark.parametrize("location", ["input", "metadata", "root"])
+def test_completion_rejects_inventory_added_during_source_verification(tmp_path, monkeypatch, location):
+    from transformation_portal.ingest import upload_recovery
+
+    item, result = sealed(tmp_path)
+    original = upload_recovery._source_digest
+
+    def digest(*args):
+        value = original(*args)
+        directory = {"input": result.input_dir, "metadata": result.portal_dir, "root": result.batch_root}[location]
+        (directory / "unlisted.txt").write_bytes(b"changed during verification")
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_source_digest", digest)
+    with pytest.raises(ValueError, match="directory changed"):
+        verify_completion(item)
+
+
+def test_metadata_capacity_is_checked_before_a_completion_can_be_sealed(tmp_path):
+    from transformation_portal.ingest.upload_recovery import MAX_RECOVERY_METADATA_BYTES
+
+    item, result = sealed(tmp_path)
+    with result.capture_metadata_path.open("wb") as stream:
+        stream.truncate(MAX_RECOVERY_METADATA_BYTES + 1)
+    with pytest.raises(UploadStagingError) as error:
+        seal_completion(item, result)
+    assert error.value.status_code == 413 and error.value.reason == "upload_recovery_metadata_limit"
+
+
+@pytest.mark.parametrize("pipeline", ["lux-depth", "lux-depth-v5", "lux-depth-v6"])
+def test_photographic_manifests_retain_their_batches_without_output_paths(tmp_path, pipeline):
+    args = {name: str(tmp_path / name) for name in ("input_dir", "companions_manifest", "materials_manifest", "output_dir")}
+    paths = upload_source_paths({"pipeline": pipeline, "args": args})
+    assert set(paths) == {Path(args[name]) for name in ("input_dir", "companions_manifest", "materials_manifest")}
+
+
+def test_read_selector_contract_tracks_current_frontdoor_path_aliases(tmp_path):
+    import app
+    from transformation_portal.orchestrator import upload_receipts
+
+    assert upload_receipts._ARCHIVE_DEFAULT_COMMANDS == app.ARCHIVE_GATE_DEFAULT_COMMANDS
+    for canonical, aliases, scope in app.PATH_FIELD_SPECS:
+        if scope != app.PATH_SCOPE_INPUT:
+            continue
+        if canonical in {"policy_yaml", "rights_jsonl"}:
+            command = "rights-apply" if canonical == "policy_yaml" else "manifest-build"
+            request = {"pipeline": "archive-gate-a", "args": {"archive_command": command}}
+        elif canonical in {"companions_manifest", "materials_manifest"}:
+            request = {"pipeline": "lux-depth-v5", "args": {}}
+        elif canonical == "archive_root":
+            request = {"pipeline": "archive-gate-a", "args": {}}
+        else:
+            request = {"pipeline": "lux-depth-v3", "args": {}}
+        for alias in aliases:
+            request["args"] = {**request["args"], alias: str(tmp_path / alias)}
+            assert tmp_path / alias in upload_source_paths(request), alias
+
+
+@pytest.mark.parametrize("command", tuple(ARCHIVE_OPERATIONS))
+def test_archive_selector_roles_include_every_read_alias_and_exclude_outputs(tmp_path, command):
+    from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
+
+    operation = ARCHIVE_OPERATIONS[command]
+    args = {"archive_command": command, "input_dir": str(tmp_path / "input")}
+    expected = {tmp_path / "input"}
+    for name in operation.files + operation.directories + operation.outputs:
+        parts = name.split("_")
+        alias = parts[0] + "".join(part.title() for part in parts[1:])
+        args[alias] = str(tmp_path / name)
+        if name not in operation.outputs:
+            expected.add(tmp_path / name)
+    assert set(upload_source_paths({"pipeline": operation.pipeline, "args": args})) == expected
+
+
+@pytest.mark.asyncio
+async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(tmp_path, monkeypatch):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", str(tmp_path))
+    first, second = tmp_path / "upload_aaa" / "input", tmp_path / "upload_zzz" / "input"
+    record = JobRecord(
+        id="job",
+        created_at=1.0,
+        request={"args": {"inputDir": str(second), "archiveRoot": str(first / "nested")}},
+        effective_request={"args": {"input_dir": str(first), "archive_root": str(second / "nested")}},
+    )
+
+    class Session:
+        def __init__(self):
+            self.locked, self.references = [], []
+
+        async def scalar(self, statement):
+            batch = statement.compile().params["batch_id_1"]
+            self.locked.append(batch)
+            return SimpleNamespace(batch_id=batch, tenant_id="tenant_a", state="ready", expires_at=10.0)
+
+        def add(self, row):
+            self.references.append(row)
+
+    session = Session()
+    await bind_upload_references(session, record, "tenant_a", now=2.0)
+    assert session.locked == ["upload_aaa", "upload_zzz"]
+    assert [(row.batch_id, row.job_id) for row in session.references] == [("upload_aaa", "job"), ("upload_zzz", "job")]
+    assert len(upload_source_paths(record.request, record.effective_request)) == 4
+
+
+def test_retained_scan_preserves_all_aliases_even_when_effective_request_exists(tmp_path):
+    import app
+
+    retained = set()
+    paths = [tmp_path / name for name in ("input-snake", "input-camel", "archive-snake", "archive-camel")]
+    job = SimpleNamespace(
+        request={"args": {"inputDir": str(paths[1]), "archiveRoot": str(paths[3])}},
+        effective_request={"args": {"input_dir": str(paths[0]), "archive_root": str(paths[2])}},
+    )
+    app._add_staged_input_dir(retained, job)
+    assert retained == {str(path.resolve()) for path in paths}
+
+
+def test_legacy_nested_archive_selector_keeps_its_entire_staged_batch(tmp_path):
+    result = stage_upload_batch(
+        upload_root=tmp_path, uploads=[IncomingUpload("nested/source.txt", io.BytesIO(b"body"))], now=1.0
+    )
+    assert cleanup_expired_batches(tmp_path, now=1e12, ttl_seconds=1, retained_input_dirs=[result.input_dir / "nested"]) == []
+    assert result.input_dir.exists()

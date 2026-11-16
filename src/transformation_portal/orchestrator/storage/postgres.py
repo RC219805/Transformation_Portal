@@ -158,7 +158,7 @@ class PostgresJobRepository(JobRepository):
         async with factory() as session:
             yield session
 
-    async def create(self, record: JobRecord) -> None:
+    async def create(self, record: JobRecord, *, upload_read_paths: tuple[str, ...] = ()) -> None:
         record_snapshot = record.copy()
         async with self._session() as session:
             session.add(
@@ -193,7 +193,10 @@ class PostgresJobRepository(JobRepository):
             from transformation_portal.orchestrator.upload_receipts import bind_upload_references
 
             await bind_upload_references(
-                session, record_snapshot, str(record_snapshot.effective_request.get("tenant_id") or "")
+                session,
+                record_snapshot,
+                str(record_snapshot.effective_request.get("tenant_id") or ""),
+                read_paths=upload_read_paths,
             )
             try:
                 await session.commit()

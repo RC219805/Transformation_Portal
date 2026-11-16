@@ -220,6 +220,12 @@ or another batch; this header does not make upload bodies replayable.
 `ready`, `expired`, or `unknown`) and a staging `receipt` only when verified
 ready. Unknown or missing evidence is not proof that a POST was rejected.
 Every lookup rechecks current tenant/path authority and exact retained bytes.
+Before publishing ready, the writer verifies the same completion seal and exact
+input inventory used by lookup. Unexpected entries, symlinks and multiply-linked
+files fail closed. Recovery metadata retains its 4 MiB per-file ceiling; uploads
+whose metadata exceeds that ceiling return `413` without publishing ready. The
+writer uses the configured upload file limit; later lookup uses the exact sealed
+count, so reducing that setting does not invalidate an accepted receipt.
 
 Recovery covers API-process restart on the same intact filesystem and database.
 It does not promise host/power-loss persistence, storage synchronization, or
@@ -232,7 +238,14 @@ after a crash before its database-ready update.
 The existing TTL and cleanup loop remain in force. Ledger-owned batches require
 an atomic deletion claim under the stable filesystem lock and ledger-row lock.
 Retained job references prevent deletion, including jobs admitted without a
-submission key. Failed deletion remains fenced for retry by the existing loop;
+submission key. Admission pins every distinct staged batch named by read inputs,
+including input/archive aliases, photographic manifests and sidecars, and nested
+or metadata paths, from both the submitted and effective request. Frozen plans
+and physical bindings retain their exact read locators; legacy archive admission
+also retains the read defaults from its server-built command. Command output
+fields never pin a batch. Admission locks batches in a stable order in the same
+transaction. Cleanup also protects retained nested selectors. Failed deletion
+remains fenced for retry by the existing loop;
 a stale worker cannot republish ready. Lock identities live outside deletable
 batch directories and are not reused. Do not remove lock files manually.
 

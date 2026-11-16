@@ -617,9 +617,8 @@ def cleanup_expired_batches(
                 continue
             if not _is_managed_staged_batch_dir(batch_dir):
                 continue
-            input_dir = batch_dir / "input"
-            input_dir_real = str(Path(os.path.realpath(input_dir)))
-            if input_dir_real in retained:
+            batch_root_real = Path(os.path.realpath(batch_dir))
+            if any(Path(path).is_relative_to(batch_root_real) for path in retained):
                 continue
             age_seconds = now - batch_dir.stat().st_mtime
             if age_seconds < ttl_seconds:

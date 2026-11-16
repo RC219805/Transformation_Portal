@@ -3828,21 +3828,9 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
 
 
 def _add_staged_input_dir(retained: set[str], job: Job) -> None:
-    effective_request = (
-        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
-    )
-    if not isinstance(effective_request, dict):
-        return
-    args = effective_request.get("args")
-    if not isinstance(args, dict):
-        return
-    input_dir = args.get("input_dir") or args.get("inputDir")
-    if not input_dir:
-        return
-    try:
-        retained.add(str(Path(os.path.realpath(str(input_dir)))))
-    except (OSError, RuntimeError, ValueError):
-        return
+    from transformation_portal.orchestrator.upload_receipts import upload_source_paths
+
+    retained.update(str(path) for path in upload_source_paths(job.request, job.effective_request))
 
 
 async def _retained_staged_input_dirs() -> Optional[set[str]]:
@@ -9965,7 +9953,12 @@ async def _portal_upload_receipts_capability(request: Request) -> bool:
 
 
 async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -> JSONResponse:
-    from transformation_portal.ingest.upload_recovery import UploadBatchLock, initialize_batch, seal_completion
+    from transformation_portal.ingest.upload_recovery import (
+        UploadBatchLock,
+        initialize_batch,
+        seal_completion,
+        verify_completion,
+    )
     from transformation_portal.orchestrator.photographic_admission import drain_owned
     from transformation_portal.orchestrator.upload_receipts import (
         UploadReceiptConflict,
@@ -10015,7 +10008,7 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
         async def finish() -> StagedUploadResult:
             assert parsed is not None
 
-            def stage_and_seal() -> tuple[StagedUploadResult, str]:
+            def stage_and_seal() -> tuple[StagedUploadResult, str, dict[str, Any]]:
                 result = stage_upload_batch(
                     upload_root=upload_root,
                     uploads=parsed.uploads,
@@ -10025,10 +10018,12 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
                     reserved_batch_id=batch_id,
                     cleanup_on_error=False,
                 )
-                return result, seal_completion(reservation, result)
+                seal_completion(reservation, result)
+                digest, data = verify_completion(reservation, max_files=PORTAL_UPLOAD_MAX_FILES)
+                return result, digest, data
 
-            result, digest = await asyncio.to_thread(stage_and_seal)
-            await store.complete(reservation, digest, result.to_response_data())
+            result, digest, data = await asyncio.to_thread(stage_and_seal)
+            await store.complete(reservation, digest, data)
             return result
 
         # Disconnects never close the stream or lock while its worker survives.
@@ -10657,7 +10652,15 @@ async def _create_job(
             return audit_response
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
         try:
-            await repo.create(_record_from_job(job))
+            from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+            if isinstance(repo, PostgresJobRepository) and pipeline in ARCHIVE_GATE_PIPELINES:
+                from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
+
+                read_paths = archive_command_read_paths(pipeline, argv)
+                await repo.create(_record_from_job(job), upload_read_paths=read_paths)
+            else:
+                await repo.create(_record_from_job(job))
         except Exception:  # noqa: BLE001 - create failures must fail closed and stay redacted
             LOGGER.exception("job repository create failed for %s", jid)
             if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
