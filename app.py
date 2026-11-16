@@ -10246,7 +10246,12 @@ def _submission_owner_from_request(request: Request, tenant: Optional[TenantCont
 
 
 async def _prepare_submission(
-    request: Optional[Request], payload: Dict[str, Any], tenant: Optional[TenantContext], api_version: str
+    request: Optional[Request],
+    payload: Dict[str, Any],
+    tenant: Optional[TenantContext],
+    api_version: str,
+    *,
+    prepared: Optional[SubmissionIdentity] = None,
 ) -> tuple[Optional[SubmissionIdentity], Optional[JSONResponse]]:
     if request is None:
         # Preserve trusted direct callers that have no HTTP submission identity.
@@ -10256,6 +10261,11 @@ async def _prepare_submission(
         return None, None
     if tenant is None:
         return None, _submission_provider_unavailable()
+    denied = await _pilot_enforce_pipeline(
+        tenant, pipeline=str(payload.get("pipeline") or "").strip(), action="job_create", request=request
+    )
+    if denied is not None:
+        return None, denied
     try:
         identity = SubmissionIdentity(
             validate_submission_key(key), _submission_owner_from_request(request, tenant), submission_intent(payload)
@@ -10264,6 +10274,8 @@ async def _prepare_submission(
         return None, _submission_provider_unavailable()
     except ValueError:
         return None, _error_response(400, code="INVALID_ARGUMENT", message="invalid submission identity")
+    if prepared is not None and prepared != identity:
+        return None, _error_response(400, code="INVALID_ARGUMENT", message="submission identity does not match request")
     try:
         receipt = await get_operational_record_store().submission_receipt(
             tenant.tenant_id, identity.owner_sha256, identity.key
@@ -10402,6 +10414,22 @@ async def _create_job(
     request: Optional[Request] = None,
     submission: Optional[SubmissionIdentity] = None,
 ) -> JSONResponse:
+    if request is not None and request.headers.get("idempotency-key") is not None:
+        # A receipt can commit between the route lookup and this entry. Rebind
+        # the original intent and current signed scope before mutable previews.
+        tenant, denied = await _pilot_tenant_from_request(request, action="job_create")
+        if denied is not None:
+            return denied
+        submission, recovered = await _prepare_submission(request, payload, tenant, api_version, prepared=submission)
+        if recovered is not None:
+            return recovered
+        pilot_tenant = tenant
+        portal_actor = _portal_actor_from_request(request)
+        path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
+        if path_error is not None:
+            return path_error
+    elif submission is not None:
+        return _submission_provider_unavailable()
     try:
         preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
         if portal_actor is not None:

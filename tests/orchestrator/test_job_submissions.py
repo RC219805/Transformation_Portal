@@ -11,9 +11,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from starlette.requests import Request
 
 import app as application
 from transformation_portal.orchestrator.submissions import (
+    SubmissionIdentity,
     SubmissionReceipt,
     submission_intent,
     submission_owner,
@@ -131,6 +133,185 @@ async def test_replay_returns_canonical_state_before_paths_preview_readiness_and
         "error": None,
         "data": {"id": "job_original", "state": "succeeded", "events_url": f"/{version}/jobs/job_original/events"},
     }
+
+
+def _direct_request(version="v1", *, actor=None, key="attempt-1"):
+    path = f"/{version}/jobs"
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "query_string": b"",
+            "headers": [
+                (name.lower().encode(), value.encode()) for name, value in _headers("POST", path, actor=actor, key=key).items()
+            ],
+        }
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("prepared", [False, True])
+async def test_direct_entry_repeats_receipt_lookup_before_mutable_checks(receipts, monkeypatch, version, prepared):
+    _seed(receipts, state="succeeded")
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("direct accepted replay must not re-enter mutable admission")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", forbidden)
+    identity = SubmissionIdentity("attempt-1", submission_owner("tenant_a", ACTOR), submission_intent(BODY))
+    response = await getattr(application, "create_job" if version == "v1" else "create_job_v2")(
+        BODY, request=_direct_request(version), **({"submission": identity} if prepared else {})
+    )
+    assert response.status_code == 200
+    assert json.loads(response.body)["data"] == {
+        "id": "job_original",
+        "state": "succeeded",
+        "events_url": f"/{version}/jobs/job_original/events",
+    }
+
+
+@pytest.mark.asyncio
+async def test_route_to_direct_entry_receipt_commit_race_replays_before_preview(receipts, monkeypatch):
+    monkeypatch.setenv("TP_JOB_SUBMISSION_RECOVERY_ENABLED", "1")
+    checked = []
+
+    async def commit_after_route_lookup(*_args, **_kwargs):
+        checked.append("paths")
+        _seed(receipts, state="running")
+        return None
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("receipt committed after route lookup must replay before preview")
+
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", commit_after_route_lookup)
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    path = "/v1/jobs"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.post(path, json=BODY, headers=_headers("POST", path, key="attempt-1"))
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == "job_original"
+    assert checked == ["paths"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", ["key", "owner", "intent"])
+async def test_direct_entry_rejects_prepared_identity_not_bound_to_original_request(receipts, monkeypatch, changed):
+    _seed(receipts)
+    fields = {
+        "key": "attempt-1",
+        "owner_sha256": submission_owner("tenant_a", ACTOR),
+        "intent_sha256": submission_intent(BODY),
+    }
+    fields[{"key": "key", "owner": "owner_sha256", "intent": "intent_sha256"}[changed]] = (
+        "other-key" if changed == "key" else "a" * 64
+    )
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("mismatched prepared identity must fail before mutable admission")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    response = await application.create_job(BODY, request=_direct_request(), submission=SubmissionIdentity(**fields))
+    assert response.status_code == 400
+    assert json.loads(response.body)["error"]["code"] == "INVALID_ARGUMENT"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("revoked", ["actor", "tenant", "pipeline"])
+async def test_direct_entry_rechecks_current_authority_before_receipt_replay(receipts, monkeypatch, revoked):
+    _seed(receipts)
+    request = _direct_request()
+    tenant, denied = await application._pilot_tenant_from_request(request, action="job_create")
+    assert denied is None
+    if revoked == "actor":
+        request = _direct_request(actor={**ACTOR, "accessEmail": "revoked@example.com"})
+    elif revoked == "tenant":
+        monkeypatch.setattr(application, "PILOT_ACTOR_TENANTS_JSON", '{"shared@example.com":"tenant_b"}')
+    else:
+        monkeypatch.setattr(application, "PILOT_ALLOWED_PIPELINES", {"archive-gate-a"})
+        monkeypatch.setattr(application, "_PILOT_TENANT_MANAGER", None)
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("revoked authority must fail before mutable admission")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    response = await application.create_job(BODY, request=request, pilot_tenant=tenant, portal_actor=ACTOR)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_direct_new_key_retains_path_authority_before_preview(receipts, monkeypatch):
+    monkeypatch.setenv("TP_JOB_SUBMISSION_RECOVERY_ENABLED", "1")
+    called = []
+
+    async def denied(*_args, **_kwargs):
+        called.append("paths")
+        return application._error_response(403, code="FORBIDDEN", message="path not allowed")
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("new keyed work must authorize paths before preview")
+
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", denied)
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    response = await application.create_job(BODY, request=_direct_request())
+    assert response.status_code == 403 and called == ["paths"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entry", [None, "keyless"])
+async def test_trusted_direct_and_keyless_entries_keep_existing_preview_validation(monkeypatch, entry):
+    seen = []
+
+    async def preview(payload, **kwargs):
+        seen.append((payload, kwargs))
+        raise ValueError("unsupported pipeline")
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("keyless trusted entry must not require submission scope")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", preview)
+    monkeypatch.setattr(application, "_prepare_submission", forbidden)
+    monkeypatch.setattr(application, "_pilot_tenant_from_request", forbidden)
+    payload = {"pipeline": "unsupported", "args": {}}
+    response = await application.create_job(payload, request=_direct_request(key=None) if entry else None)
+    assert response.status_code == 400
+    assert json.loads(response.body)["error"]["code"] == "INVALID_ARGUMENT"
+    assert seen == [(payload, {"archive_index_scan_mode": "full"})]
+
+
+@pytest.mark.asyncio
+async def test_direct_keyed_entry_requires_signed_actor_before_replay(receipts, monkeypatch):
+    _seed(receipts)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/jobs",
+            "query_string": b"",
+            "headers": [(b"idempotency-key", b"attempt-1"), (b"x-api-key", b"contract-secret")],
+        }
+    )
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("unsigned direct entry must not reach mutable admission")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    response = await application.create_job(BODY, request=request)
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_prepared_identity_without_request_fails_closed_before_preview(monkeypatch):
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("a prepared identity without a signed request must not reach preview")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    response = await application.create_job(
+        BODY, submission=SubmissionIdentity("attempt-1", submission_owner("tenant_a", ACTOR), submission_intent(BODY))
+    )
+    assert response.status_code == 503
 
 
 @pytest.mark.asyncio
