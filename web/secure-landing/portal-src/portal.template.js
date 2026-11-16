@@ -3077,9 +3077,9 @@ const BUILD_STEP_CONTENT = Object.freeze({
     lux: [
         {
             label: 'Configure',
-            meta: 'Pipeline and preset posture.',
+            meta: 'Choose a workflow and preset.',
             title: '1. Configure the draft',
-            summary: 'Choose a pipeline and preset for your next run.'
+            summary: 'Choose a workflow and preset for your next run.'
         },
         {
             label: 'Paths',
@@ -3095,7 +3095,7 @@ const BUILD_STEP_CONTENT = Object.freeze({
         },
         {
             label: 'Dispatch',
-            meta: 'Primary review, launch, and parity tools.',
+            meta: 'Check readiness, then start the run.',
             title: '4. Review and dispatch',
             summary: 'Check the preview and resolve any issues before starting the run.'
         }
@@ -3123,7 +3123,7 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Stage',
             meta: 'Select the archive stage.',
             title: '1. Select the archive stage',
-            summary: 'Pick the archive stage from the connection card, then continue into stage-specific inputs.'
+            summary: 'Choose an archive workflow, then provide its required inputs.'
         },
         {
             label: 'Paths',
@@ -6705,6 +6705,8 @@ async function loadDeferredSurface(name, hostFactory) {
 function _createDeferredOperateSurfaceHost() {
     return {
         state,
+        copyToClipboard,
+        maxLogLines: MAX_JOB_LOG_LINES,
         els,
         portalRenderScheduler,
         EVENT_SOURCE_READY_STATE_CONNECTING,
@@ -6940,8 +6942,7 @@ function selectJob(jobId) {
         void refreshJobStatus(job);
     }
     if (job && els.logPane) {
-        els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-        els.logPane.scrollTop = els.logPane.scrollHeight;
+        _deferredOperateSurfaceApi()?.renderLogs?.();
     }
     renderReviewSurfaces();
     if (state.currentView === 'operate') {
@@ -7151,8 +7152,7 @@ async function _fetchJobStatus(job) {
         if (!_syncHydratedJob(job, hydrated, rawJob)) return;
         job.logsLoadStatus = 'ready';
         if (state.selectedJobId === job.id && els.logPane) {
-            els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-            els.logPane.scrollTop = els.logPane.scrollHeight;
+            _deferredOperateSurfaceApi()?.renderLogs?.();
             if (!_isJobStreamRecoverable(job) && els.logStatusIndicator) {
                 els.logStatusIndicator.classList.add('hidden');
             }
@@ -10946,8 +10946,7 @@ function handleArtifactRailKeydown(event) {
 function logToPane(jobId, line) {
     if (state.selectedJobId === jobId || !state.selectedJobId) {
         if (els.logPane) {
-            els.logPane.textContent += line + '\n';
-            els.logPane.scrollTop = els.logPane.scrollHeight;
+            _deferredOperateSurfaceApi()?.renderLogs?.();
         }
     }
 }
@@ -12339,7 +12338,7 @@ if (els.copyRunCardFingerprintBtn) {
 }
 
 if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
-    if (els.logPane) els.logPane.textContent = '';
+    _deferredOperateSurfaceApi()?.clearLogs?.();
 });
 if (els.runJobBtn) els.runJobBtn.addEventListener('click', _handleRunJobAction);
 if (els.refreshHealthBtn) {
