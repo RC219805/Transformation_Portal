@@ -6564,14 +6564,14 @@ async function _loadDeferredReviewSurface() {
     deferredReviewSurfaceLoadPromise = import(moduleUrl)
         .then((module) => {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
-                throw new Error('Review module factory missing');
+                throw new Error('Review factory missing');
             }
             _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
             return deferredReviewSurfaceApi;
         })
         .catch((error) => {
-            console.error('Failed to load deferred review surface', error);
+            console.error('Review load failed', error);
             _noteDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = null;
             return null;
@@ -8705,7 +8705,7 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('config_metadata', res);
-            throw new Error(`config metadata fetch failed (${res.status})`);
+            throw new Error(`Metadata ${res.status}`);
         }
         const payload = await res.json();
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
@@ -9765,7 +9765,7 @@ async function fetchPresetsForPipeline(pipelineName, silent = false) {
         const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('presets', res);
-            throw new Error(`preset fetch failed (${res.status})`);
+            throw new Error(`Presets ${res.status}`);
         }
         const payload = await res.json();
         const presets = parsePresetsResponse(payload, pipelineName)
@@ -9804,10 +9804,10 @@ async function fetchReadiness(silent = false) {
         const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('readiness', res);
-            throw new Error(`readiness fetch failed (${res.status})`);
+            throw new Error(`Readiness ${res.status}`);
         }
         const payload = await res.json();
-        if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
+        if (!payload || payload.success !== true || !payload.data) throw new Error('Invalid readiness');
         state.readiness = {
             server: payload.data.server || {},
             pipelines: payload.data.pipelines || {}
