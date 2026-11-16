@@ -1606,7 +1606,7 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     )
     assert "function _stagedUploadsSupportedForState() {" in content
     assert "function _stagedUploadsEnabledForState() {" in content
-    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);" in content
     assert "Staged upload controls are visible for this pipeline but gated for this portal cohort." in content
     recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
     transport = PORTAL_TEMPLATE_SOURCE_PATH.with_name("client-recovery-deferred.js").read_text(encoding="utf-8")

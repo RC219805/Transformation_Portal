@@ -5371,15 +5371,6 @@ function _stagedUploadsEnabledForState() {
     );
 }
 
-function _stagedUploadsVisibleForState() {
-    return _stagedUploadsSupportedForState();
-}
-
-function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
-    const message = String(payload?.error?.message || '').trim();
-    return message || fallback;
-}
-
 function _setStagedUploadState(patch = {}) {
     state.portalUi.stagedUpload = {
         ...(state.portalUi.stagedUpload || {}),
@@ -5388,7 +5379,7 @@ function _setStagedUploadState(patch = {}) {
 }
 
 function _syncStagedUploadUi() {
-    const visible = _stagedUploadsVisibleForState() || Boolean(state.portalUi.recoveryUploadPresent);
+    const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);
     const enabled = _stagedUploadsEnabledForState();
     const uploadState = state.portalUi.stagedUpload || {};
     const busy = Boolean(uploadState.busy || state.portalUi.recoveryUploadBlocked);
@@ -6022,7 +6013,7 @@ function _applyStagedUploadResult(result) {
         busy: false,
         progressPercent: 100,
         status: 'ready',
-        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated with receipt-backed operator detail.`,
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
         error: '',
         lastBatchId: String(result?.batch_id || ''),
         fileCount,
@@ -6695,7 +6686,7 @@ function _clientRecoveryOperationStamp(payload) {
 function _acceptRecoveredJob(data, options = {}) {
     if (!_clientRecoveryContext().ready || (options.automatic && state.currentView !== 'build')) return false;
     if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
-        createToast('Save or explicitly discard Review edits, then Open recovered run. The accepted receipt is retained.', 'info');
+        createToast('Save or discard Review edits before opening this run.', 'info');
         return false;
     }
     let job = _findJobById(data.id);

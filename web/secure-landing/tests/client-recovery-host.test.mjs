@@ -190,7 +190,7 @@ test('explicit recovered-run Open preserves dirty Review until Save or discard h
   assert.equal(h.state.selectedJobId, 'existing-job');
   assert.equal(h.state.jobs.length, 0);
   assert.equal(h.events.length, 0);
-  assert.match(h.notices[0][0], /Save or explicitly discard Review edits/);
+  assert.match(h.notices[0][0], /Save or discard Review edits/);
   h.dirty(false);
   assert.equal(h.h._acceptRecoveredJob(job, { automatic: false }), true);
   assert.equal(h.state.selectedJobId, job.id);
