@@ -4882,7 +4882,10 @@ test("@portal-browser direct-debug photographic thumbnails and clicked downloads
 
 test('@portal-browser UX05 Build keeps workflow values and usable fields across the desktop split', async ({ page }) => {
   await installHydratedPortalRoutes(page);
-  await gotoHydratedPortal(page, '/portal?view=build');
+  await gotoHydratedPortal(page, '/portal?view=overview');
+  await expect(page.locator('#resumeDraftBtn')).toHaveAccessibleName('Resume Build draft');
+  await page.locator('#resumeDraftBtn').click();
+  await expect(page.locator('body')).toHaveAttribute('data-console-view', 'build');
   await expect(page.locator('#pipelineSelect optgroup')).toHaveCount(2);
   await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth-v3');
   await expect(page.locator('#pipelineSelect option[value="lux-depth-v3"]')).toHaveText('Photo enhancement · Production V3');
