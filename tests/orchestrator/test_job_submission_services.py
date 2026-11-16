@@ -19,6 +19,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 
 from tests.core.test_execution_plan import _valid_payload
@@ -32,24 +33,33 @@ from transformation_portal.orchestrator.submissions import SubmissionConflict, S
 pytestmark = pytest.mark.integration
 
 
+async def _clear_submission_tables(connection):
+    # Recheck the actual database on the connection performing each truncate.
+    # URL query parameters and routing proxies cannot establish this authority.
+    database = await connection.scalar(text("SELECT current_database()"))
+    if not isinstance(database, str) or not database.endswith("_test"):
+        raise RuntimeError("refusing to truncate a database without the _test suffix")
+    await connection.execute(
+        text(
+            "TRUNCATE jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, "
+            "dispatch_plans, operational_records, operational_outbox, committed_generations "
+            "RESTART IDENTITY CASCADE"
+        )
+    )
+
+
 @pytest_asyncio.fixture
 async def store():
     url = os.getenv("TP_SUBMISSION_TEST_DATABASE_URL", "")
     if not url:
         pytest.skip("dedicated migrated TP_SUBMISSION_TEST_DATABASE_URL is required")
-    if not url.rsplit("/", 1)[-1].endswith("_test"):
+    if not (make_url(url).database or "").endswith("_test"):
         pytest.fail("refusing to truncate a database without the _test suffix")
     engine, _ = await _SharedEngine.get(url)
 
     async def clear():
         async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "TRUNCATE jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, "
-                    "dispatch_plans, operational_records, operational_outbox, committed_generations "
-                    "RESTART IDENTITY CASCADE"
-                )
-            )
+            await _clear_submission_tables(connection)
 
     await clear()
     try:
