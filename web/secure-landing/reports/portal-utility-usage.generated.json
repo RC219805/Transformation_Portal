@@ -1855,6 +1855,7 @@
         "portal.html",
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/build-surface-deferred.js",
+        "web/secure-landing/portal-src/config-transfer-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/profile-surface-deferred.js"
       ],
@@ -2152,6 +2153,7 @@
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/photographic-review.js",
+        "web/secure-landing/portal-src/photographic-workspace.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2257,6 +2259,8 @@
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/photographic-review.js",
         "web/secure-landing/portal-src/photographic-revision-editor.js",
+        "web/secure-landing/portal-src/photographic-thumbnails.js",
+        "web/secure-landing/portal-src/photographic-workspace.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/profile-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
@@ -2264,6 +2268,7 @@
       "cssFile": "utilities.required.css",
       "cssOwners": [
         "web/secure-landing/portal-src/styles/components/responsive-layout.css",
+        "web/secure-landing/portal-src/styles/photographic-workspace.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"

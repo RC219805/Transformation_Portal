@@ -1,3 +1,4 @@
+import { createPhotographicRegionOverlay } from "./photographic-workspace.js";
 import { photographicRecipe, photographicPreviewMatches } from "./photographic-review-support.js";
 
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -9,8 +10,9 @@ export function createPhotographicRevisionEditor(host) {
   let eligible = false;
   let blocked = false;
   let nextRegion = 1;
+  let overlay = null, regionInputs = [];
   const globalEdits = () => Number(getDraft().exposure) !== 0 || Number(getDraft().warmth) !== 0 || Number(getDraft().saturation) !== 1;
-  const changed = () => { resetPreview(); syncControls(); };
+  const changed = () => { resetPreview(); host.onEdit?.(); syncControls(); };
 
   function syncControls() {
     if (!nodes.nativeMaterials) return;
@@ -31,6 +33,7 @@ export function createPhotographicRevisionEditor(host) {
     nodes.addRegion.disabled = blocked || (native && !eligible) || getMaterials().length >= (native ? 4 : 16);
     nodes.previewRevision.disabled = blocked || (native && !eligible);
     if (native && !eligible) nodes.commitRevision.disabled = true;
+    overlay?.sync();
   }
 
   function build() {
@@ -84,12 +87,16 @@ export function createPhotographicRevisionEditor(host) {
     nodes.materialsDiagnostics = el("div", "", "photo-review-help", "photographic-materials-diagnostics");
     section.append(controls, nodes.materialsHelp,
       nodes.nativeMaterialsHelp, nodes.addRegion, nodes.materials, nodes.variantPreview, nodes.revisionReceipt, nodes.materialsDiagnostics);
+    overlay = createPhotographicRegionOverlay({ nodes, el, button, getMaterials, changed, status,
+      context: () => ({ ...host.regionContext?.(), blocked: blocked || (native && !eligible) }),
+      syncNumeric: () => regionInputs.forEach(({ control, material, position }) => { control.value = String(material.region[position]); }) });
+    section.append(overlay.toggle, overlay.help);
     return section;
   }
 
   function renderMaterials() {
     if (!nodes.materials) return;
-    nodes.materials.replaceChildren();
+    nodes.materials.replaceChildren(); regionInputs = [];
     getMaterials().forEach((material, index) => {
       const controls = el("fieldset", "", "photo-review-material-region");
       controls.append(el("legend", `Local region ${index + 1}`));
@@ -107,6 +114,7 @@ export function createPhotographicRevisionEditor(host) {
       for (const [position, label] of ["Left", "Top", "Right", "Bottom"].entries()) {
         const control = input(`photographic-material-${label.toLowerCase()}`, "number", String(material.region[position]));
         control.min = "0"; control.max = "1"; control.step = "0.01";
+        regionInputs.push({ control, material, position });
         control.addEventListener("input", () => { material.region[position] = control.value; changed(); });
         controls.append(field(`${label} (0–1)`, control));
       }
@@ -124,7 +132,7 @@ export function createPhotographicRevisionEditor(host) {
       }));
       nodes.materials.append(controls);
     });
-    syncControls();
+    syncControls(); overlay?.render();
   }
 
   function recipe() {
@@ -133,15 +141,16 @@ export function createPhotographicRevisionEditor(host) {
     if (globalEdits()) throw new Error("Native Materials requires neutral global adjustments.");
     const materials = getMaterials();
     if (!materials.length || materials.length > 4) throw new Error("Native Materials requires one to four explicit regions.");
-    const number = (value, min, max) => {
+    const bounded = (value, min, max) => {
       const result = Number(value);
       if (String(value).trim() === "" || !Number.isFinite(result) || result < min || result > max) throw new Error("Native material values are outside the supported range.");
-      return Math.round(result * 10000) / 10000;
+      return result;
     };
+    const number = (...args) => Math.round(bounded(...args) * 10000) / 10000;
     const strengths = new Map();
     const regions = materials.map((material) => {
       if (!LABELS.includes(material.label)) throw new Error("Choose a supported material label.");
-      const region = material.region.map((value) => number(value, 0, 1));
+      const region = material.region.map((value) => bounded(value, 0, 1));
       if (region.length !== 4 || region[0] >= region[2] || region[1] >= region[3]) throw new Error("Material regions require positive area.");
       const strength = number(material.strength, 0, 0.05);
       if (strengths.has(material.label) && strengths.get(material.label) !== strength) throw new Error("Regions with the same material label require the same strength.");
@@ -186,5 +195,15 @@ export function createPhotographicRevisionEditor(host) {
     Object.entries(nodes.revisionInputs || {}).forEach(([key, control]) => { control.value = String(getDraft()[key]); });
     renderMaterials();
   }
-  return { build, renderMaterials, recipe, matches, sync, reset };
+  const numeric = (value, min, max) => {
+    const parsed = Number(value);
+    return ["number", "string"].includes(typeof value) && String(value).trim() !== ""
+      && Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : value;
+  };
+  const draft = () => ({ mode: native ? "native" : "legacy",
+    adjustments: { exposure: numeric(getDraft().exposure, -1, 1), warmth: numeric(getDraft().warmth, -0.15, 0.15), saturation: numeric(getDraft().saturation, 0.8, 1.2) },
+    regions: getMaterials().map((material) => ({ ...material, region: material.region.map((value) => numeric(value, 0, 1)),
+      ...(native ? { strength: numeric(material.strength, 0, 0.05) }
+        : { exposure_stops: numeric(material.exposure_stops, -0.5, 0.5), warmth: numeric(material.warmth, -0.1, 0.1), feather: numeric(material.feather, 0.005, 0.1) }) })) });
+  return { build, renderMaterials, recipe, matches, sync, reset, draft, syncOverlay: () => overlay?.sync() };
 }

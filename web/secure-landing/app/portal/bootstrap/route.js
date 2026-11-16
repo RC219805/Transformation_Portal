@@ -5,6 +5,7 @@ import { audit } from "../../../lib/audit.js";
 import { isPortalRumEnabled } from "../../../lib/config.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
 import { stableRolloutBucket } from "../../../lib/rollout.js";
+import { backendRecoveryBootstrap } from "../../../lib/recovery-bootstrap.js";
 import {
   auditManagedSurfaceFailure,
   buildManagedBootstrapFailure,
@@ -111,6 +112,7 @@ export async function GET(request) {
     return response;
   }
   const { session } = authState;
+  const recovery = await backendRecoveryBootstrap(session, requestTraceparent);
   audit("portal_bootstrap", {
     username: session.username,
     accessEmail: session.accessEmail,
@@ -128,7 +130,10 @@ export async function GET(request) {
           role: session.role,
           accessEmail: session.accessEmail
         },
+        recoveryContext: recovery.recoveryContext,
+        recoveryContextStatus: recovery.recoveryContextStatus,
         features: {
+          ...recovery.features,
           apiKeyInput: false,
           directDebug: false,
           artifactViewerModal: resolveArtifactViewerModal(session),

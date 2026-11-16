@@ -192,7 +192,7 @@
     object-fit: contain;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
     .photo-review {
         padding: 0.7rem;
     }

@@ -52,6 +52,7 @@ Both versions use the existing `ApiEnvelope` with schema
 | `GET` at the prefix | Current scenes, variants, properties, decisions, presets and review version |
 | `GET /scenes` | Metadata-only scene pages, recorded review filters and related artifact summaries |
 | `GET /scene` | Verified photographic detail for one selected scene |
+| `GET /thumbnail` | Source-bound page navigation PNG, maximum edge 256 pixels and 1 MiB |
 | `GET /render` | Bounded fit view, maximum edge 1,600 pixels |
 | `GET /native-crop` | Exact source-grid crop, each dimension at most 2,048 pixels |
 | `GET /quality` | Reference-relative advisory diagnostics |
@@ -600,13 +601,31 @@ retains its 32-scene limit and response contract. Larger jobs return
 The workbench offers one card per scene, expandable related variants, filters,
 previous/next scene, Next unreviewed and deterministic page navigation. A decision
 shows its reviewer and date. Scene-card arrow keys move focus; native-view arrow
-keys retain their pixel-pan meaning. Unsaved notes or revision adjustments block
-navigation until explicitly discarded or saved. Selected scene/version,
+keys retain their pixel-pan meaning. Unsaved notes, lighting edits and revision
+adjustments block source-changing navigation until explicitly discarded or saved.
+This also covers artifact/job navigation and background catalogue replacement;
+temporary job hydration retains the current draft. Selected scene/version,
 comparison, presentation and ROI survive reload within bounded actor/job-scoped
 session metadata. No images, API keys, storage locations or filesystem authority
 are persisted. The artifact rail follows the selected published scene, while a
 revision retains its own exact relative selector. A selected display or cached
 image never grants approval, and no bulk approval shortcut is added.
+
+Authoring drafts remain in memory and bind to the exact actor, job, scene and
+source identity. Comparison modes, pan, zoom, inspection crops and presentation
+selection preserve those edits and do not change approval scope. Notes remain
+editable during a save: its response acknowledges only the submitted edit
+generation, preserving newer text. An uncertain save requires GET reconciliation
+before another mutation. Leave/reload warnings are best effort; unsaved notes,
+lighting edits and adjustment drafts are not recovered after a completed reload
+or crash.
+
+Temporary authentication uncertainty masks the private workbench and blocks
+mutations while retaining its bounded in-memory draft. Fresh authentication and
+an authorized read of the same source are required before revealing it. Explicit
+logout, a confirmed owner change or confirmed access revocation clears the
+private draft. A masked draft can be explicitly discarded before leaving for
+sign-in; recovering access never replays a POST.
 
 The 64-scene contract also applies to approved-source selectors, labels and
 lighting-group membership. Six export presets, 64 delivery records, 128 saved
@@ -697,6 +716,35 @@ missing mixed-contention evidence cannot qualify the run. Existing native
 profile hashes must be captured and measured from the frozen source closure;
 neither these synthetic tests nor a hash refresh supplies fresh measurements.
 
+## Review workspace and page thumbnails
+
+At widths of 1,200 pixels and above, the workspace places the photograph rail,
+inspection canvas and decision tools side by side. Tablet layouts place the
+decision tools below the canvas; smaller screens stack the workspace. Open
+**Image evidence and source properties** or **Lighting reference and quality
+signals** for their additional controls. Scene/version selection, comparison
+modes and native inspection remain available. The delivery summary shows the
+approved and excluded counts, selected products, set name and verified ZIP
+destination; export still revalidates every selected source.
+
+Paged thumbnails require the backend's `photographicCatalogueThumbnails`
+capability. Deploy the matching backend and enable both
+`TP_PHOTO_REVIEW_ENABLED=1` and the independent, default-off
+`TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=1`; the authenticated backend must also verify
+the managed context and review store. Thumbnail hints in scene metadata alone
+do not enable requests. Without the capability, scene cards retain their text
+and navigation controls.
+
+The browser loads only visible cards from the current page, with at most two
+thumbnail requests at once and no adjacent-scene detail prefetch. Each verified
+PNG is at most 256 pixels on its longest edge and 1 MiB; thumbnails remain
+8-bit display aids, not precision or approval authority. The page-thumbnail
+cache is bounded to 16 entries and 16 MiB. Responses without complete indexed
+source and presentation identities are not reused across page renders. A failed
+thumbnail leaves its scene card navigable; a changed catalogue requires Refresh.
+Scope changes abort requests and release image URLs. Image bytes remain in
+memory and never enter browser storage.
+
 ## Inspect the actual version
 
 Choose the scene, primary variant and comparison variant. The workbench can
@@ -728,9 +776,10 @@ and the crop/pan controls. Existing portal routes, selectors and managed session
 behavior remain in use.
 
 Fit/native previews use an actor/job/source/presentation-scoped blob cache bounded to 12
-entries and 40 MiB. Contact-sheet thumbnails load lazily and retain at most 64
-entries of at most 1 MiB each. Scope changes abort outstanding requests and
-release their object URLs; no image bytes or API keys enter browser storage.
+entries and 40 MiB. Legacy unpaged contact-sheet thumbnails load lazily and retain
+at most 64 entries of at most 1 MiB each; paged thumbnails use the smaller bounds
+described above. Scope changes abort outstanding requests and release their
+object URLs; no image bytes or API keys enter browser storage.
 
 ## Recorded photographic presentation
 
@@ -962,6 +1011,16 @@ is bounded to ±0.5 EV, local RGB gains to 0.9–1.1, and overlapping adjustment
 have a bounded combined gain. These are manual regions, not inferred semantic
 masks. Preview the exact recipe before saving. Recipe/hash, reference identity,
 input/output hashes, precision and preview render remain in the receipt.
+
+In Side by side inspection, move a numbered region by dragging its rectangle or
+resize it with a corner handle. Arrow keys move the focused handle by one source
+pixel; Shift moves it by ten. Escape restores the rectangle from before the
+current drag. Left, Top, Right and Bottom numeric fields remain available, and
+**Hide region overlays** hides the handles without removing the recipe. Fit
+views and native crops share the same normalized source coordinates; resizing
+keeps a minimum one-source-pixel rectangle within the image. Wipe and blink hide
+the overlays. These controls edit the existing manual rectangle recipe and
+require the same source-bound preview before a revision can be saved.
 
 For representative evaluation, register exact, aligned reference/candidate
 TIFF/PNG/JPEG files outside Git using `tp.property.quality_evalset.v1`. Pairs
@@ -1227,7 +1286,8 @@ treat these dated measurements as performance acceptance.
 For the focused frontend units, from `web/secure-landing`:
 
 ```bash
-node --test tests/photographic-review.test.mjs tests/portal-photographic-profiles.test.mjs
+node --test tests/photographic-review.test.mjs tests/portal-photographic-profiles.test.mjs \
+  tests/photographic-workspace.test.mjs tests/photographic-thumbnails.test.mjs
 ```
 
 The real-HTTP browser fixture uses synthetic disposable photographs and actual

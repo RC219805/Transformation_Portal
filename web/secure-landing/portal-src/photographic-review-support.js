@@ -1,3 +1,5 @@
+import { photographicReviewAttribution } from "./photographic-draft-state.js";
+export { photographicReviewAttribution, photographicPageReview } from "./photographic-draft-state.js";
 const SHA256 = /^[a-f0-9]{64}$/;
 const DECISIONS = new Set(["selected", "needs_revision", "approved"]);
 const ROLES = Object.freeze({ original: "Original", final: "Final", previous_revision: "Previous revision", working_master: "Native working master" });
@@ -54,11 +56,12 @@ export function photographicAssetUrl(raw, jobId, origin = globalThis.location?.o
 }
 
 export function photographicRecipe({ exposure = 0, warmth = 0, saturation = 1, materials = [] } = {}) {
-  const numeric = (value, min, max, label) => {
+  const bounded = (value, min, max, label) => {
     const number = Number(value);
     if (!Number.isFinite(number) || number < min || number > max) throw new Error(`${label} is outside the supported range.`);
-    return Math.round(number * 10000) / 10000;
+    return number;
   };
+  const numeric = (...args) => Math.round(bounded(...args) * 10000) / 10000;
   const balance = numeric(warmth, -0.15, 0.15, "Warmth");
   const materialNames = new Set();
   if (!Array.isArray(materials) || materials.length > 16) throw new Error("At most 16 material regions are supported.");
@@ -66,7 +69,7 @@ export function photographicRecipe({ exposure = 0, warmth = 0, saturation = 1, m
     const name = String(material.name || "").trim();
     if (!name || materialNames.has(name.toLowerCase())) throw new Error("Material regions require unique names.");
     materialNames.add(name.toLowerCase());
-    const region = (material.region || []).map((value) => numeric(value, 0, 1, `Region ${index + 1}`));
+    const region = (material.region || []).map((value) => bounded(value, 0, 1, `Region ${index + 1}`));
     if (region.length !== 4 || region[0] >= region[2] || region[1] >= region[3]) throw new Error("Material regions require a positive-area normalized rectangle.");
     const regionWarmth = numeric(material.warmth || 0, -0.1, 0.1, "Material warmth");
     return { name, region, exposure_stops: numeric(material.exposure_stops, -0.5, 0.5, "Material exposure"),
@@ -106,27 +109,6 @@ const relative = (value) => {
     && !value.split("/").some((part) => !part || part === ".." || part === ".");
 };
 
-export function photographicReviewAttribution(recorded) {
-  const actor = typeof recorded?.actor === "object" ? recorded.actor?.display_name || recorded.actor?.username || recorded.actor?.id : recorded?.actor;
-  const date = recorded?.created_at ? new Date(typeof recorded.created_at === "number" ? recorded.created_at * 1000 : recorded.created_at).toLocaleString() : "Date not recorded";
-  return `${actor || "Reviewer not recorded"} · ${date}`;
-}
-
-export function photographicPageReview(loaded, page) {
-  const paths = new Set((loaded.scenes || []).flatMap((scene) => scene.variants || []).map((variant) => variant.artifact_path));
-  const recordedScenes = new Map();
-  for (const row of page.decisions || []) {
-    if (!row.scene_id || row.status !== "approved" || !SHA256.test(row.sha256 || "")) continue;
-    if (!recordedScenes.has(row.scene_id)) recordedScenes.set(row.scene_id, { scene_id: row.scene_id, label: row.label || row.scene_id, variants: [] });
-    recordedScenes.get(row.scene_id).variants.push({ ...row, role: row.role || "previous_revision" });
-  }
-  const scenes = (loaded.scenes || []).map((scene) => ({ ...scene,
-    railPaths: scene.variants.filter((variant) => ["final", "previous_revision"].includes(variant.role)).map((variant) => variant.artifact_path) }));
-  return { review: { ...loaded, scenes, decisions: [...(page.decisions || []).filter((row) => !paths.has(row.artifact_path)), ...(loaded.decisions || [])] }, recordedScenes };
-}
-
-// Persist selectors and view settings only. The server still authorizes every
-// detail, image and mutation; neither bytes nor credentials enter this store.
 export function photographicSelectionStorage(storage) {
   function clean(value) {
     if (!value || typeof value !== "object" || !relative(value.sceneId) || !value.sceneId) return null;
@@ -189,7 +171,7 @@ export function createPhotographicPagedCatalogue(host) {
     if (action) void run(async () => { discarding = true; try { return await action(); } finally { discarding = false; } });
   });
   discard.hidden = true;
-  controls.append(field("Review status", filterControl), field("Sort photographs", sortControl), previousScene, nextScene, nextUnreviewed, previousPage, nextPage, discard, pageStatus);
+  controls.append(field("Review status", filterControl), field("Sort photographs", sortControl), previousScene, nextScene, nextUnreviewed, previousPage, nextPage, ...(host.navigation ? [] : [discard]), pageStatus);
   function handleKeydown(event) {
     if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(String(event.target.tagName).toUpperCase())) return;
     if (!["ArrowLeft", "ArrowRight"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -224,6 +206,7 @@ export function createPhotographicPagedCatalogue(host) {
     } }
   }
   function retainEdits(action) {
+    if (host.retainNavigation) return host.retainNavigation(() => run(action));
     if (hasEdits() && !discarding) {
       pendingNavigation = action; discard.hidden = false;
       status("Unsaved edits are retained. Save or explicitly discard them to continue.", true);
@@ -232,6 +215,7 @@ export function createPhotographicPagedCatalogue(host) {
     return false;
   }
   async function navigate(action) {
+    if (host.navigation) return busy || locked ? false : host.navigation(() => run(action));
     if (busy || locked || retainEdits(action)) return false;
     return run(action);
   }
@@ -263,12 +247,13 @@ export function createPhotographicPagedCatalogue(host) {
     if (generation !== expected) return false;
     if (nextPage.state_version < requiredVersion) throw new Error("Review is stale. Refresh review.");
     if (detail && detail.state_version !== nextPage.state_version) throw new Error("Photograph detail and page versions differ. Refresh review.");
+    if (host.canApply && !host.canApply(detail || { scenes: [] }, id, requestedPath)) return false;
     const selected = selection();
     if (selected.sceneId && (selected.sceneId !== id || (selected.primaryPath && !detail?.scenes[0].variants.some((variant) => variant.artifact_path === selected.primaryPath)))
       && retainEdits(() => refresh(id, { filter: nextFilter, sort: nextSort, artifactPath: requestedPath }))) return false;
     page = nextPage; cursor = nextCursor; previous = nextPrevious; filter = nextFilter; sort = nextSort;
     pendingNavigation = null; discard.hidden = true;
-    apply(detail || { ...page, scenes: [] }, { page, sceneChanged: selection().sceneId !== id, requestedPath, discardEdits: discarding });
+    apply(detail || { ...page, scenes: [] }, { page, sceneChanged: selection().sceneId !== id, requestedPath, discardEdits: discarding || host.discarding?.() });
     renderState(); return true;
   }
   async function refresh(id = selection().sceneId, options = {}) {
@@ -362,6 +347,7 @@ export function createPhotographicPagedCatalogue(host) {
     const focused = container.ownerDocument?.activeElement;
     const restoreFocus = focused?.dataset?.ui === "photographic-contact-item" && container.contains(focused);
     container.replaceChildren();
+    const cards = [];
     for (const scene of page?.scenes || []) {
       const card = el("article", "", "photo-review-contact-item"); card.dataset.sceneId = scene.scene_id;
       const control = button("", "photographic-contact-item", () => void navigate(() => choose(scene.scene_id)));
@@ -377,9 +363,10 @@ export function createPhotographicPagedCatalogue(host) {
       }
       disclosure.append(el("p", "Recorded metadata; sources are checked when opened or exported.", "photo-review-help"));
       card.append(disclosure); if (scene.scene_id === selectedId) selectedCard?.(card, scene);
-      container.append(card);
+      container.append(card); cards.push({ scene, control });
       if (restoreFocus && scene.scene_id === selectedId) control.focus();
     }
+    host.onCards?.(page, cards);
     renderState();
   }
   renderState();

@@ -67,6 +67,38 @@
     "portal-photographic.css": {
       "repo_path": "public/portal-assets/portal-photographic.css",
       "media_type": "text/css; charset=utf-8"
+    },
+    "portal-operate-tools.js": {
+      "repo_path": "public/portal-assets/portal-operate-tools.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-config-transfer.js": {
+      "repo_path": "public/portal-assets/portal-config-transfer.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic-drafts.js": {
+      "repo_path": "public/portal-assets/portal-photographic-drafts.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic-loader.js": {
+      "repo_path": "public/portal-assets/portal-photographic-loader.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic-workspace.js": {
+      "repo_path": "public/portal-assets/portal-photographic-workspace.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic-workspace.css": {
+      "repo_path": "public/portal-assets/portal-photographic-workspace.css",
+      "media_type": "text/css; charset=utf-8"
+    },
+    "portal-photographic-thumbnails.js": {
+      "repo_path": "public/portal-assets/portal-photographic-thumbnails.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-client-recovery.js": {
+      "repo_path": "public/portal-assets/portal-client-recovery.js",
+      "media_type": "text/javascript; charset=utf-8"
     }
   }
 }

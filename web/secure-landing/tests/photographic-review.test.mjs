@@ -6,6 +6,7 @@ import {
 } from "../portal-src/photographic-review.js";
 import { photographicDeliveryAttempt } from "../portal-src/photographic-delivery-history.js";
 import { createPhotographicRevisionEditor } from "../portal-src/photographic-revision-editor.js";
+import { createPhotographicReviewElements } from "../portal-src/photographic-draft-state.js";
 
 const SHA = "a".repeat(64);
 const ORIGINAL_SHA = "b".repeat(64);
@@ -516,6 +517,50 @@ test("explicit local material rectangles stay bounded and retain their own sourc
     { name: "Sky", region: [0, 0, 1, 1], exposure_stops: 0, feather: 0.2 },
   ]) assert.throws(() => photographicRecipe({ materials: [material] }));
 });
+
+for (const width of [30000, 65536]) {
+  test(`local adjustment recipes preserve single-pixel rectangle coordinates on a ${width}px source`, () => {
+    const original = [0.25, 0.25, 0.75, 0.75];
+    const moved = [original[0] + 1 / width, original[1], original[2] + 1 / width, original[3]];
+    const narrow = [original[2] - 1 / width, original[1], original[2], original[3]];
+    const serialize = region => JSON.parse(JSON.stringify(photographicRecipe({ exposure: 0.051234,
+      materials: [{ name: 'Source rectangle', region, exposure_stops: 0.123456, feather: 0.030051 }] })));
+    const recipe = serialize(moved);
+    assert.deepEqual(recipe.materials[0].region, moved);
+    assert.notDeepEqual(recipe.materials[0].region, original);
+    assert.deepEqual(serialize(narrow).materials[0].region, narrow);
+    assert.equal(recipe.exposure_stops, 0.0512);
+    assert.equal(recipe.materials[0].exposure_stops, 0.1235);
+    assert.equal(recipe.materials[0].feather, 0.0301);
+    assert.throws(() => serialize([0.75, 0.25, 0.75, 0.75]), /positive-area/);
+    assert.throws(() => serialize([-1 / width, 0.25, 0.75, 0.75]), /outside/);
+  });
+
+  test(`native Materials recipes preserve single-pixel rectangle coordinates on a ${width}px source`, () => {
+    const nodes = {}, materials = [];
+    const elements = createPhotographicReviewElements({ createElement: tag => new Element(tag) });
+    const editor = createPhotographicRevisionEditor({ nodes, ...elements,
+      getDraft: () => ({ exposure: 0, warmth: 0, saturation: 1 }), getMaterials: () => materials,
+      status() {}, resetPreview() {}, revise() {} });
+    editor.build();
+    editor.sync({ enabled: true }, { bit_depth: 16 }, false);
+    nodes.nativeMaterials.value = 'native'; nodes.nativeMaterials.listeners.change();
+    const original = [0.25, 0.25, 0.75, 0.75];
+    const moved = [original[0] + 1 / width, original[1], original[2] + 1 / width, original[3]];
+    materials.push({ id: 'region-1', label: 'stone', region: moved, strength: 0.030051 });
+    const recipe = JSON.parse(JSON.stringify(editor.recipe()));
+    assert.deepEqual(recipe.regions[0].region, moved);
+    assert.notDeepEqual(recipe.regions[0].region, original);
+    assert.equal(recipe.regions[0].strength, 0.0301);
+    const narrow = [original[2] - 1 / width, original[1], original[2], original[3]];
+    materials[0].region = narrow;
+    assert.deepEqual(JSON.parse(JSON.stringify(editor.recipe())).regions[0].region, narrow);
+    materials[0].region = [0.75, 0.25, 0.75, 0.75];
+    assert.throws(() => editor.recipe(), /positive area/);
+    materials[0].region = [-1 / width, 0.25, 0.75, 0.75];
+    assert.throws(() => editor.recipe(), /outside/);
+  });
+}
 
 test("original inspection cannot be approved or silently reused as an export master", async () => {
   const h = fixture();

@@ -20,16 +20,21 @@ export function createLazyPhotographicReview(host) {
   }
   function loadCss() {
     if (host.loadPhotographicCss) return host.loadPhotographicCss();
-    const href = assetUrl(String(doc?.body?.dataset?.photographicReviewCssUrl || ""), "portal-photographic.css");
-    if (doc.querySelector('link[data-ui="photographic-review-css"]')) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const link = doc.createElement("link");
-      link.rel = "stylesheet"; link.href = href; link.dataset.ui = "photographic-review-css";
-      const timer = setTimeout(() => { link.remove(); reject(new Error("Photographic review styles timed out.")); }, 15000);
-      link.onload = () => { clearTimeout(timer); resolve(); };
-      link.onerror = () => { clearTimeout(timer); link.remove(); reject(new Error("Photographic review styles are unavailable.")); };
-      doc.head.append(link);
-    });
+    return Promise.all([
+      ["photographicReviewCssUrl", "portal-photographic.css", "photographic-review-css"],
+      ["photographicWorkspaceCssUrl", "portal-photographic-workspace.css", "photographic-workspace-css"],
+    ].map(([key, filename, ui]) => {
+      const href = assetUrl(String(doc?.body?.dataset?.[key] || ""), filename);
+      if (doc.querySelector(`link[data-ui="${ui}"]`)) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const link = doc.createElement("link");
+        link.rel = "stylesheet"; link.href = href; link.dataset.ui = ui;
+        const timer = setTimeout(() => { link.remove(); reject(new Error("Photographic review styles timed out.")); }, 15000);
+        link.onload = () => { clearTimeout(timer); resolve(); };
+        link.onerror = () => { clearTimeout(timer); link.remove(); reject(new Error("Photographic review styles are unavailable.")); };
+        doc.head.append(link);
+      });
+    }));
   }
   function show(job, artifact) {
     context = { job, artifact };
@@ -59,5 +64,7 @@ export function createLazyPhotographicReview(host) {
       if (notice) { notice.hidden = false; notice.textContent = "Photographic review could not load. Existing artifact inspection remains available; return to Review to retry."; }
     }).finally(() => { loading = null; });
   }
-  return { show };
+  return { show, hasUnsavedChanges: () => api?.hasUnsavedChanges() || false,
+    requestNavigation: (action, options) => api ? api.requestNavigation(action, options) : action(),
+    syncAuthorization: () => api?.syncAuthorization() };
 }

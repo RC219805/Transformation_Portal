@@ -15,3 +15,4 @@ export * from "./photography-unified.js";
 export * from "./latest-request.js";
 export * from "./job-progress.js";
 export * from "./build-guidance.js";
+export * from "./history-navigation.js";
