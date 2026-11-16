@@ -4,17 +4,30 @@ import { createPortalHistoryNavigation } from '../portal-src/internal/history-na
 
 function fixture() {
   const entries = [{ url: 'build', state: null }];
-  let index = 0, dirty = false, pending, applied = [];
+  let index = 0, dirty = false, pending, afterTraversal, prompts = 0, applied = [];
+  const traversals = [];
   const history = {
     get state() { return entries[index].state; },
     replaceState(state, _title, url) { entries[index] = { state, url: url || entries[index].url }; },
     pushState(state, _title, url) { entries.splice(++index); entries.push({ state, url }); },
-    go(offset) { queueMicrotask(() => { index += offset; router.pop({ state: entries[index].state }); }); },
+    go(offset) {
+      traversals.push(offset);
+      queueMicrotask(() => {
+        index += offset;
+        const after = afterTraversal; afterTraversal = null;
+        router.pop({ state: entries[index].state }); after?.();
+      });
+    },
   };
   const router = createPortalHistoryNavigation({ history, hasEdits: () => dirty,
-    requestNavigation: action => { pending = action; }, apply: () => applied.push(entries[index].url) });
-  return { router, entries, history, applied, dirty: value => { dirty = value; },
-    current: () => entries[index].url, discard() { dirty = false; const action = pending; pending = null; action(); },
+    requestNavigation: action => { prompts += 1; pending = action; }, apply: () => applied.push(entries[index].url) });
+  return { router, entries, history, applied, traversals, dirty: value => { dirty = value; },
+    current: () => entries[index].url, discard({ clearEdits = true } = {}) {
+      if (clearEdits) dirty = false;
+      const action = pending; pending = null; action();
+    },
+    afterNextTraversal: action => { afterTraversal = action; },
+    hasPrompt: () => !!pending, promptCount: () => prompts,
     cancel() { pending = null; } };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -39,6 +52,37 @@ test('multi-entry traversal restores position until explicit discard', async () 
   h.dirty(true); h.history.go(-2); await settle(); assert.equal(h.current(), 'review');
   h.discard(); await settle(); assert.equal(h.current(), 'build');
   assert.deepEqual(h.applied, ['build']);
+});
+
+for (const offset of [-1, -2]) test(`a background Review replacement while restoring dirty Back by ${-offset} entries preserves history and its discard prompt`, async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate', jobId: 'job-a' }, 'operate');
+  h.router.record(false, { view: 'review', jobId: 'job-a' }, 'review');
+  const original = structuredClone(h.entries), target = offset === -1 ? 'operate' : 'build';
+  h.dirty(true);
+  h.afterNextTraversal(() => h.router.record(true, { view: 'review', jobId: 'job-b' }, 'review-background'));
+  h.history.go(offset); await settle();
+  assert.equal(h.current(), 'review'); assert.equal(h.hasPrompt(), true); assert.equal(h.promptCount(), 1);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset]);
+  h.discard({ clearEdits: false }); await settle();
+  assert.equal(h.current(), target); assert.deepEqual(h.applied, [target]);
+  assert.equal(h.hasPrompt(), false); assert.equal(h.promptCount(), 1);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset, offset]);
+});
+
+for (const offset of [-1, -2]) test(`a background Review replacement cannot revoke permitted Back by ${-offset} entries`, async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate', jobId: 'job-a' }, 'operate');
+  h.router.record(false, { view: 'review', jobId: 'job-a' }, 'review');
+  const original = structuredClone(h.entries), target = offset === -1 ? 'operate' : 'build';
+  h.dirty(true); h.history.go(offset); await settle();
+  assert.equal(h.current(), 'review'); assert.equal(h.hasPrompt(), true);
+  h.discard({ clearEdits: false });
+  h.router.record(true, { view: 'review', jobId: 'job-b' }, 'review-background');
+  await settle();
+  assert.equal(h.current(), target); assert.deepEqual(h.applied, [target]);
+  assert.equal(h.hasPrompt(), false); assert.equal(h.promptCount(), 1);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset, offset]);
 });
 
 test('replacements preserve index and view/job metadata without adding entries', () => {
