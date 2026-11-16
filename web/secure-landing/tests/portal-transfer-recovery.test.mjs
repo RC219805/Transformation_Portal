@@ -30,6 +30,7 @@ function uploadHarness() {
     _collectStagedUploadSelection: () => ({ entries: [{ file: {}, relativePath: "image.jpg", sizeBytes: 4, name: "image.jpg" }], totalBytes: 4 }),
     _setStagedUploadState: (patch) => Object.assign(state.upload, patch),
     _loadClientRecoverySurface: async () => ({ upload: (selection) => requests.push(selection) }),
+    _clientRecoveryOperationStamp: () => "current-upload-operation",
     _syncStagedUploadUi() {},
     _portalRumTraceparent() {},
     portalInternals: { createChildTraceparent() {} },

@@ -6067,6 +6067,11 @@ function _submitStagedUploadSelection(fileList) {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp();
+    if (!operationStamp) {
+        createToast('Confirm workspace access before staging uploads. No upload was sent.', 'error');
+        return;
+    }
     _setStagedUploadState({
         busy: true,
         progressPercent: 0,
@@ -6081,6 +6086,7 @@ function _submitStagedUploadSelection(fileList) {
 
     void _loadClientRecoverySurface().then((api) => {
         if (!api) throw new Error('Upload recovery controls could not load. No upload was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('The workspace changed before upload started. Select files again from the current draft. No upload was sent.');
         api.upload(selection);
     }).catch((error) => {
         _setStagedUploadState({ busy: false, status: 'idle', error: error.message, receipt: null });
@@ -6675,11 +6681,23 @@ function _clientRecoveryContext() {
         ready,
         scope: established?.ownerId || JSON.stringify([state.auth?.mode, state.auth?.actor?.accessEmail, state.auth?.actor?.username]),
         intent: JSON.stringify(generatePayload()),
+        draftGeneration: configImportGeneration,
         features: state.auth?.features || {}
     };
 }
 
-function _acceptRecoveredJob(data) {
+function _clientRecoveryOperationStamp(payload) {
+    const current = _clientRecoveryContext();
+    return current.ready && (!payload || current.intent === JSON.stringify(payload))
+        ? JSON.stringify([current.scope, configImportGeneration, current.intent]) : '';
+}
+
+function _acceptRecoveredJob(data, options = {}) {
+    if (!_clientRecoveryContext().ready || (options.automatic && state.currentView !== 'build')) return false;
+    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
+        createToast('Save or explicitly discard Review edits, then Open recovered run. The accepted receipt is retained.', 'info');
+        return false;
+    }
     let job = _findJobById(data.id);
     if (!job) {
         job = hydrateJobFromServer(data);
@@ -6700,6 +6718,7 @@ function _acceptRecoveredJob(data) {
     void emitPortalEvent('job_submitted', { surface: 'dispatch', metadata: { job_id: job.id, pipeline: job.pipeline } });
     if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) startJobEventStream(job, data.events_url);
     void refreshJobStatus(job);
+    return true;
 }
 
 function _loadClientRecoverySurface() {
@@ -11778,6 +11797,11 @@ async function submitJob(options) {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp(payload);
+    if (!operationStamp) {
+        createToast('Confirm the current draft and workspace access before submitting. No request was sent.', 'error');
+        return;
+    }
     if (els.runJobBtn) {
         els.runJobBtn.disabled = true;
         els.runJobBtn.textContent = "Dispatching...";
@@ -11789,6 +11813,7 @@ async function submitJob(options) {
     try {
         const api = await _loadClientRecoverySurface();
         if (!api) throw new Error('Submission recovery controls could not load. No request was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('The workspace changed before submission started. Review the current draft again. No request was sent.');
         await api.submit(payload, { separate });
     } catch (error) {
         createToast(error instanceof Error ? error.message : String(error), 'error');

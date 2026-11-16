@@ -158,7 +158,7 @@ export function createDeferredClientRecoveryApi(host) {
     const requestId = uuid(); if (typeof requestId !== "string" || !UUID.test(requestId)) throw new Error("Secure request identity is unavailable.");
     const reference = { type, request_id: requestId, scope: current.scope, created_at: now() };
     if (durable && (!DIGEST.test(current.scope) || !store.add(reference))) throw new Error("Recovery storage is unavailable or full. No request was sent.");
-    const attempt = { ...reference, intent: current.intent, durable, status: "posting", restored: false, generation };
+    const attempt = { ...reference, intent: current.intent, draftGeneration: current.draftGeneration, durable, status: "posting", restored: false, generation };
     attempts.push(attempt); render(); return attempt;
   }
   function acceptedJob(value) {
@@ -172,11 +172,14 @@ export function createDeferredClientRecoveryApi(host) {
       && value.summary && Number.isSafeInteger(value.summary.file_count) && value.summary.file_count > 0
       && Number.isSafeInteger(value.summary.total_bytes) && value.summary.total_bytes >= 0;
   }
-  function accept(id) {
+  function accept(id, automatic = false) {
     const attempt = attempts.find((row) => row.request_id === id);
     if (!attempt || !sameOwner(attempt)) return false;
     try {
-      if (attempt.status === "accepted" && acceptedJob(attempt.result)) host.acceptJob(attempt.result);
+      if (attempt.status === "accepted" && acceptedJob(attempt.result)) {
+        if (automatic && (!currentIntent(attempt) || attempt.draftGeneration !== context().draftGeneration)) return false;
+        if (host.acceptJob(attempt.result, { automatic }) !== true) return false;
+      }
       else if (attempt.status === "ready" && uploadReceipt(attempt.result)) host.applyUpload(attempt.result);
       else return false;
     } catch { change(attempt, { message: "The recovered result could not be applied. Check the current draft and try the explicit recovery action again." }); return false; }
@@ -194,7 +197,7 @@ export function createDeferredClientRecoveryApi(host) {
     if (attempt.type === "job" && envelope.schema === "tp.orchestrator.job_submission.v1") {
       if (receipt.status === "accepted" && acceptedJob(receipt.job)) {
         change(attempt, { status: "accepted", result: receipt.job, message: "" });
-        if (!attempt.restored && currentIntent(attempt)) accept(attempt.request_id);
+        if (!attempt.restored) accept(attempt.request_id, true);
         return true;
       }
       if (receipt.status === "expired") { change(attempt, { status: "expired", message: "Submission receipt expired. Inspect retained runs before starting another run." }); return true; }
@@ -244,11 +247,11 @@ export function createDeferredClientRecoveryApi(host) {
         body: JSON.stringify(payload)
       }, 30000, timers);
       metric(response);
-      inspectFailure(attempt, response, envelope);
       if (generation !== attempt.generation || !sameOwner(attempt)) { change(attempt, { status: "unknown", message: "Submission belongs to an earlier access context. Recheck it after access is restored." }); return null; }
+      inspectFailure(attempt, response, envelope);
       if (response.ok && envelope?.success && envelope.schema === "tp.orchestrator.job.v1" && acceptedJob(envelope.data)) {
         change(attempt, { status: "accepted", result: envelope.data, message: "" });
-        if (currentIntent(attempt)) accept(attempt.request_id);
+        accept(attempt.request_id, true);
         return envelope.data;
       }
       if (response.status >= 400 && response.status < 500 && ![408, 409, 410, 429].includes(response.status)) {

@@ -35,7 +35,7 @@ const selection = { entries: [{ file: {}, relativePath: "image.jpg", name: "imag
 function harness(fetchImpl = async () => { throw new Error("lost"); }, restored = null, hostOptions = {}) {
   const timers = clock(), saved = storage(restored), requests = [], accepted = [], applied = [], states = [];
   let serial = 0;
-  const context = { ready: true, scope, intent: "private draft", features: { jobSubmissionReceipts: true, uploadReceipts: true } };
+  const context = { ready: true, scope, intent: "private draft", draftGeneration: 0, features: { jobSubmissionReceipts: true, uploadReceipts: true } };
   class Xhr {
     constructor() { this.upload = {}; this.headers = {}; requests.push(this); }
     open(method, url) { this.method = method; this.url = url; }
@@ -47,7 +47,7 @@ function harness(fetchImpl = async () => { throw new Error("lost"); }, restored 
   const api = createDeferredClientRecoveryApi({ context: () => context, sessionStorage: saved,
     uuid: () => id(++serial), timers, now: timers.now, headers: (extra) => ({ ...extra, "X-CSRF-Token": "private token" }),
     fetchImpl: (...args) => { calls.push(args); return fetchImpl(...args); }, xhrFactory: () => new Xhr(),
-    formDataFactory: () => ({ append() {} }), acceptJob: (data) => accepted.push(data), applyUpload: (data) => applied.push(data),
+    formDataFactory: () => ({ append() {} }), acceptJob: (data) => { accepted.push(data); return true; }, applyUpload: (data) => applied.push(data),
     uploadState: (patch) => states.push(patch), ...hostOptions,
   });
   return { api, context, timers, saved, requests, accepted, applied, states, calls };
@@ -134,6 +134,79 @@ test("access loss and actor change mask results and prohibit stale response atta
   h.context.scope = scope; h.api.sync();
   await assert.rejects(h.api.submit({}, { separate: true }), /unresolved/);
 });
+
+test("a stale job POST failure cannot suppress the next actor's requests", async () => {
+  let complete, blocked = false, inspected = 0;
+  const h = harness(() => h.calls.length === 1 ? new Promise(resolve => { complete = resolve; })
+    : json({ schema: "tp.orchestrator.job.v1", success: true, data: job }), null, {
+    canRequest: () => !blocked,
+    onProtectedFailure: () => { inspected += 1; blocked = true; }
+  });
+  const posting = h.api.submit({ actor: "a" });
+  h.context.scope = "b".repeat(64); h.api.sync();
+  complete(json({ error: { details: { retryable: false } } }, 503));
+  await posting;
+  assert.equal(inspected, 0); assert.equal(blocked, false);
+  assert.deepEqual(await h.api.submit({ actor: "b" }), job);
+  assert.equal(h.calls.filter(([, options]) => options.method === "POST").length, 2);
+  assert.deepEqual(h.accepted, [job]);
+});
+
+test("a job POST failure from before an access outage cannot suppress recovered access", async () => {
+  let complete, inspected = 0;
+  const h = harness(() => new Promise(resolve => { complete = resolve; }), null, {
+    onProtectedFailure: () => { inspected += 1; }
+  });
+  const posting = h.api.submit({});
+  h.context.ready = false; h.api.sync();
+  h.context.ready = true; h.api.sync();
+  complete(json({ error: { details: { retryable: false } } }, 503));
+  await posting;
+  assert.equal(inspected, 0);
+  assert.equal(h.api.snapshot()[0].status, "unknown");
+  assert.equal(h.calls.length, 1);
+});
+
+for (const outcome of [false, undefined, Promise.resolve(true)]) {
+  test(`accepted job receipt survives a host result of ${outcome instanceof Promise ? "Promise" : outcome}`, async () => {
+    let apply = false;
+    const modes = [], h = harness(async () => json({ schema: "tp.orchestrator.job.v1", success: true, data: job }), null, {
+      acceptJob: (_data, options) => { modes.push(options.automatic); return apply ? true : outcome; }
+    });
+    await h.api.submit({});
+    assert.equal(h.api.snapshot()[0].status, "accepted");
+    assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+    assert.equal(h.api.accept(id(2)), false);
+    assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+    apply = true;
+    assert.equal(h.api.accept(id(2)), true);
+    assert.deepEqual(h.api.snapshot(), []);
+    assert.deepEqual(JSON.parse(h.saved.raw()).attempts, []);
+    assert.deepEqual(modes, [true, false, false]);
+  });
+}
+
+for (const reconciled of [false, true]) {
+  test(`job ${reconciled ? "GET reconciliation" : "POST success"} preserves its receipt after a same-intent draft ABA`, async () => {
+    let complete;
+    const h = harness((_url, options) => {
+      if (reconciled && options.method === "POST") throw new Error("lost after commit");
+      return new Promise(resolve => { complete = resolve; });
+    });
+    const posting = h.api.submit({});
+    await flush();
+    h.context.draftGeneration += 2;
+    complete(json(reconciled ? { schema: "tp.orchestrator.job_submission.v1", success: true,
+      data: { request_id: id(2), status: "accepted", job } } : { schema: "tp.orchestrator.job.v1", success: true, data: job }));
+    await posting; await flush();
+    assert.equal(h.accepted.length, 0);
+    assert.equal(h.api.snapshot()[0].status, "accepted");
+    assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+    assert.equal(h.api.accept(id(2)), true);
+    assert.deepEqual(h.accepted, [job]);
+    assert.equal(h.calls.filter(([, options]) => options.method === "POST").length, 1);
+  });
+}
 
 test("upload progress is transport-only, with separate 90 second idle and 120 second staging limits", async () => {
   const h = harness(async () => json({ success: false }, 404));
