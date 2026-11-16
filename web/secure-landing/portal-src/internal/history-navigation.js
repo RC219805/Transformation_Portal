@@ -17,26 +17,29 @@ export function createPortalHistoryNavigation(host) {
   }
   function pop(event) {
     const target = event.state?.portalIndex;
-    // Entries outside this router remain browser-owned. Cross-document leaves
-    // also retain the native beforeunload warning and source-level draft guards.
-    if (!Number.isSafeInteger(target)) { host.apply(); return; }
     if (restoring !== null) {
-      if (target !== position) { history.go(position - target); return; }
+      restoring.distance += restoring.step;
+      if (target !== position) { history.go(restoring.step); return; }
       const destination = restoring;
       restoring = null;
       host.requestNavigation(() => {
-        permitted = destination;
-        history.go(destination - position);
+        permitted = destination.target;
+        history.go(-destination.distance);
       });
       return;
     }
+    // Entries outside this router remain browser-owned. Cross-document leaves
+    // also retain the native beforeunload warning and source-level draft guards.
+    if (!Number.isSafeInteger(target)) { host.apply(); return; }
     // Native fragment entries inherit their route index without leaving it.
     if (target === position) { host.apply(); return; }
     if (target === permitted || !host.hasEdits()) {
       permitted = null; position = target; host.apply(); return;
     }
-    restoring = target;
-    history.go(position - target);
+    // Fragments can share a route index. Count physical steps back to the
+    // retained route so discard replays the exact requested destination.
+    restoring = { target, step: Math.sign(position - target), distance: 0 };
+    history.go(restoring.step);
   }
   return { record, pop };
 }
