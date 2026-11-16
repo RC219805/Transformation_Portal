@@ -19,6 +19,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from sqlalchemy import delete, select, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from transformation_portal.ingest import upload_recovery
 from transformation_portal.ingest.upload_recovery import (
@@ -44,24 +46,42 @@ from transformation_portal.orchestrator.upload_receipts import (
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
+def _validate_upload_test_database_url(url):
+    try:
+        database = make_url(url).database
+    except (ArgumentError, TypeError) as error:
+        raise RuntimeError("refusing to alter a database without _test suffix") from error
+    if not isinstance(database, str) or not database.endswith("_test"):
+        raise RuntimeError("refusing to alter a database without _test suffix")
+
+
+async def _clear_upload_tables(session):
+    # The URL alone cannot prove where a routing proxy opened this transaction.
+    database = await session.scalar(text("SELECT current_database()"))
+    if not isinstance(database, str) or not database.endswith("_test"):
+        raise RuntimeError("refusing to alter a database without _test suffix")
+    await session.execute(
+        text(
+            "TRUNCATE upload_job_references, upload_receipts, jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, dispatch_plans, operational_records, operational_outbox, committed_generations RESTART IDENTITY CASCADE"
+        )
+    )
+
+
 @pytest.fixture
 async def store(tmp_path, monkeypatch):
     url = os.getenv("TP_UPLOAD_RECEIPT_TEST_DATABASE_URL")
     if not url:
         pytest.skip("dedicated migrated Postgres upload receipt database required")
-    if not url.rsplit("/", 1)[-1].endswith("_test"):
-        pytest.fail("refusing to alter a database without _test suffix")
+    _validate_upload_test_database_url(url)
     item = PostgresUploadReceiptStore(database_url=url)
-    async with item._session() as session:
-        async with session.begin():
-            await session.execute(
-                text(
-                    "TRUNCATE upload_job_references, upload_receipts, jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, dispatch_plans, operational_records, operational_outbox, committed_generations RESTART IDENTITY CASCADE"
-                )
-            )
-    monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", str(tmp_path))
-    yield item
-    await _SharedEngine.dispose(url)
+    try:
+        async with item._session() as session:
+            async with session.begin():
+                await _clear_upload_tables(session)
+        monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", str(tmp_path))
+        yield item
+    finally:
+        await _SharedEngine.dispose(url)
 
 
 def reservation(root, *, request_id=None, owner="a" * 64, expiry=10.0, batch_id=None):

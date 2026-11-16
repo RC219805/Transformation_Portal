@@ -15230,7 +15230,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "9aa499fc552fb55fe6de039d7451ce42316feb5a",
+      "source_commit": "46bc243b9404479ad0c68e7940b6717ba1e1cad4",
       "content_sha256": "5c3f6bcfb3d74fa32e3026de022c2231281acd33dae16c5590ce9419145b314d",
       "source_references": [
         "app.py",
@@ -15435,7 +15435,7 @@
         "tests/test_native_materials_qualification.py": "c046c848714d7045786529bbfb70e15c57de87a973d836dd743de0f18d5b50aa",
         "src/transformation_portal/photographic_delivery/native_resource_inputs.py": "c3f54ee98615c6741c33e52ea8ecf1b3a34f21d942a76c850f7d16712a9c484d",
         "src/transformation_portal/photographic_delivery/native_resources.py": "a5212d35bf7c316a2c76f5aa49ffc0b0b627a5d30914f5eac53cf0e16bf18a97",
-        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "fa4747b90807a021a483b8aa9713f922148b0e6a81bd1deeb0ddc97779034e0f",
+        "src/transformation_portal/photographic_delivery/native_resource_contract.py": "d73c6f254decd7edb54ccbcf364e664f94f75928c98c478495184146210b943e",
         "src/transformation_portal/photographic_delivery/managed_qualification.py": "3acd347b819da989d5b1e4d1fc170b7e38b5cf2b44f513bbbbc7e56fad9751b9",
         "src/transformation_portal/orchestrator/storage/postgres.py": "1665e6aca258435f1b28df1aff47537ebc6ffb5a4dcd165bf76112d2bffc7704",
         "tests/test_native_resource_inputs.py": "d4eeb1a9c9040129376c1f9cb38ffe003e4a7f9fee75c89af38023c3be46ef97",
