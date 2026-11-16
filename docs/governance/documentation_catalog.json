@@ -4286,7 +4286,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "02451b901838ec1ca0a18d9dfc05bc85c624c9956b61e14b6f374fc9d1963c19",
       "source_references": [
         "app.py",
@@ -4860,7 +4860,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "71fa63f4f654afa8aa2bd1e0ce856b2643dbdb98d83628a7cad84bf0117414e2",
       "source_references": [
         "app.py",
@@ -9390,7 +9390,7 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "8ee06d4fab54aa144b38a2cd59738dcfb3a76ca1d2b751f5fe0a35d0f507c46e",
       "source_references": [
         "web/secure-landing/app/v1/[...path]/route.js",
@@ -14760,7 +14760,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "976e4bde0610d85d9464e7c99de232d8e8d17024a122c86e46f047623a433e6e",
       "source_references": [
         "src/transformation_portal/lux_depth/__init__.py",
@@ -14917,7 +14917,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "d94d7bb7a80acf1a10138c8fd8af77bf0c8077e12ac7b716d31821f9bd59e91e",
       "source_references": [
         "Makefile",
@@ -15230,7 +15230,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "859b6b88dc2d05ec7382c5dcd8b068182a0908eb",
+      "source_commit": "95e274577005357b6475c5a8338c84159556e988",
       "content_sha256": "941da93e49807b2736d46bade4ea7edc7fb3af849e29f1bf062cc0fe91150648",
       "source_references": [
         "app.py",
