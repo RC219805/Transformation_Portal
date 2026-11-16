@@ -10,7 +10,7 @@ export function createPhotographicRevisionEditor(host) {
   let blocked = false;
   let nextRegion = 1;
   const globalEdits = () => Number(getDraft().exposure) !== 0 || Number(getDraft().warmth) !== 0 || Number(getDraft().saturation) !== 1;
-  const changed = () => { resetPreview(); syncControls(); };
+  const changed = () => { resetPreview(); host.onEdit?.(); syncControls(); };
 
   function syncControls() {
     if (!nodes.nativeMaterials) return;
@@ -186,5 +186,6 @@ export function createPhotographicRevisionEditor(host) {
     Object.entries(nodes.revisionInputs || {}).forEach(([key, control]) => { control.value = String(getDraft()[key]); });
     renderMaterials();
   }
-  return { build, renderMaterials, recipe, matches, sync, reset };
+  const draft = () => ({ mode: native ? "native" : "legacy", adjustments: { ...getDraft() }, regions: getMaterials() });
+  return { build, renderMaterials, recipe, matches, sync, reset, draft };
 }

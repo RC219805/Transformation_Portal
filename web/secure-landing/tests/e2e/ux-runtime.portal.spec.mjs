@@ -162,7 +162,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor)\.js(?:\?.*)?$/, async (route) => {
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor|drafts|loader)\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/javascript; charset=utf-8",
@@ -3288,6 +3288,7 @@ for (const workflow of ['process', 'infer']) {
 }
 
 test('@portal-browser Unified request imports select their workflow and reject unknown workflow values', async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
   const runtime = await installHydratedPortalRoutes(page, { previewForPayload: (payload) =>
     payload.pipeline === 'lux-depth' && !['process', 'infer'].includes(payload.args.workflow)
       ? { ...EMPTY_PREVIEW, field_errors: [{ field: 'workflow', code: 'invalid_argument', message: 'Choose process or infer.' }] }
@@ -4874,3 +4875,85 @@ test("@portal-browser direct-debug photographic thumbnails and clicked downloads
     expect(await page.evaluate(() => [localStorage.getItem("tp_api_key"), sessionStorage.getItem("tp_api_key")])).toEqual([null, null]);
   } finally { releaseDownload(); }
 });
+
+
+test('@portal-browser rejected configuration imports preserve the active draft and preview', async ({ page }) => {
+  await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  const previousPipeline = await page.locator('#pipelineSelect').inputValue();
+  const before = await page.evaluate(() => sessionStorage.getItem('tp_portal_transient_draft'));
+  for (const payload of [{ pipeline: 'archive-gate-a', args: 'bad' }, { schema: 'tp.portal.export.v99', args: {} }]) {
+    await page.locator('#fileInput').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(payload)) });
+    await expect(page.getByText('Invalid JSON file.', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('#pipelineSelect')).toHaveValue(previousPipeline);
+    expect(await page.evaluate(() => sessionStorage.getItem('tp_portal_transient_draft'))).toEqual(before);
+  }
+});
+
+for (const paged of [false, true]) {
+  test(`@portal-browser ${paged ? 'paged' : 'legacy'} authoring drafts survive guarded navigation and a delayed save`, async ({ page }) => {
+    const jobId = `job-draft-correctness-${paged}`, base = `/v1/jobs/${jobId}/photographic-review`;
+    const scenes = [0, 1].map(index => ({ scene_id: `input-000${index}`, label: `Room ${index + 1}`,
+      variants: [{ role: 'final', artifact_path: `input-000${index}/delivery.tif`, sha256: String(index + 1).repeat(64),
+        width: 80, height: 60, bit_depth: 16, color_profile: 'sRGB' }] }));
+    const artifacts = scenes.map(scene => ({ path: scene.variants[0].artifact_path, relative_path: scene.variants[0].artifact_path,
+      name: 'delivery.tif', media_kind: 'image', artifact_type: 'image', content_type: 'image/tiff', size_bytes: 100,
+      sha256: scene.variants[0].sha256, browser_previewable: false }));
+    await installHydratedPortalRoutes(page, { jobs: [{ id: jobId, pipeline: 'lux-depth', state: 'succeeded', progress: 100,
+      created_at: '2026-11-16T00:00:00Z', artifacts: { items: artifacts } }], photographicPagedCatalogue: paged });
+    let version = 0, finish = null;
+    const decisions = [], submissions = [], catalogue = 'c'.repeat(64), png = await photographicFixturePng(80, 60);
+    await page.route(`**${base}**`, async route => {
+      const request = route.request(), url = new URL(request.url());
+      const common = { state_version: version, decisions, groups: [], presets: [] };
+      if (request.method() === 'POST' && url.pathname.endsWith('/decisions')) {
+        const body = request.postDataJSON(); submissions.push(body);
+        await new Promise(resolve => { finish = resolve; }); finish = null;
+        decisions.push({ ...body, scene_id: scenes.find(scene => scene.variants[0].artifact_path === body.artifact_path).scene_id });
+        version += 1;
+        await fulfillJson(route, { success: true, data: { state_version: version } }); return;
+      }
+      if (url.pathname.endsWith('/scenes')) {
+        await fulfillJson(route, { success: true, data: { ...common, schema: 'tp.photo.scene_page.v1',
+          catalogue_identity_sha256: catalogue, scenes: scenes.map(scene => ({ scene_id: scene.scene_id, label: scene.label,
+            review_status: 'unreviewed', source_validation: 'not_checked', variant_count: 1,
+            variant_paths: [scene.variants[0].artifact_path], related_artifacts: [] })),
+          total_scenes: 2, total_filtered: 2, limit: 8, filter: 'all', sort: 'scene_id', next_cursor: null } }); return;
+      }
+      if (url.pathname.endsWith('/scene')) {
+        await fulfillJson(route, { success: true, data: { ...common, schema: 'tp.photo.scene_detail.v1',
+          catalogue_identity_sha256: catalogue, scenes: scenes.filter(scene => scene.scene_id === url.searchParams.get('scene_id')) } }); return;
+      }
+      if (url.pathname === base) { await fulfillJson(route, { success: true, data: { ...common, scenes } }); return; }
+      const source = scenes.flatMap(scene => scene.variants).find(variant => variant.artifact_path === url.searchParams.get('artifact_path'));
+      await route.fulfill({ status: 200, contentType: 'image/png', body: png,
+        headers: { 'Cache-Control': 'no-store', 'X-TP-Source-SHA256': source?.sha256 || scenes[0].variants[0].sha256 } });
+    });
+    await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+    const scene = page.locator('[data-ui="photographic-scene"]'), note = page.locator('[data-ui="photographic-decision-note"]');
+    await expect(scene).toHaveValue('input-0000');
+    await note.fill('A source-bound note');
+    await scene.selectOption('input-0001');
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await expect(scene).toHaveValue('input-0000');
+    await expect(note).toHaveValue('A source-bound note');
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await page.locator('[data-ui="photographic-decision-approved"]').click();
+    await expect.poll(() => submissions.length).toBe(1);
+    await expect(note).toBeEnabled(); await note.fill('Newer note while saving');
+    finish();
+    await expect(page.locator('[data-ui="photographic-draft-status"]')).toContainText('Unsaved');
+    await expect(note).toHaveValue('Newer note while saving');
+    expect(submissions[0]).toMatchObject({ artifact_path: 'input-0000/delivery.tif', note: 'A source-bound note' });
+    await scene.selectOption('input-0001');
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(scene).toHaveValue('input-0001'); await expect(note).toHaveValue('');
+    await page.locator('[data-ui="photographic-lighting-group"]').fill('Unsaved room B lighting');
+    await scene.selectOption('input-0000');
+    await expect(scene).toHaveValue('input-0001');
+    await expect(page.locator('[data-ui="photographic-lighting-group"]')).toHaveValue('Unsaved room B lighting');
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(scene).toHaveValue('input-0000');
+    expect(submissions).toHaveLength(1);
+  });
+}
