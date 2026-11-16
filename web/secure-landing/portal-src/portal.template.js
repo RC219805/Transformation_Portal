@@ -1407,8 +1407,8 @@ function _readTransientPortalDraft() {
     };
 }
 
-function _persistTransientPortalDraft() {
-    configImportGeneration += 1;
+function _persistTransientPortalDraft(edit = true) {
+    if (edit) configImportGeneration += 1;
     if (pendingLegacyTransientDraft) return false;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return false;
@@ -1441,7 +1441,7 @@ function _cancelScheduledTransientPortalDraftPersist() {
 
 function _flushPendingTransientPortalDraftPersist() {
     _cancelScheduledTransientPortalDraftPersist();
-    return _persistTransientPortalDraft();
+    return _persistTransientPortalDraft(false);
 }
 
 function _scheduleTransientPortalDraftPersist(options) {
@@ -1453,7 +1453,7 @@ function _scheduleTransientPortalDraftPersist(options) {
     const commitSnapshot = () => {
         transientDraftPersistTimerId = null;
         transientDraftPersistIdleId = null;
-        _persistTransientPortalDraft();
+        _persistTransientPortalDraft(false);
     };
     const scheduleCommit = () => {
         transientDraftPersistTimerId = null;
@@ -6060,7 +6060,7 @@ function _submitStagedUploadSelection(fileList) {
 
     const operationStamp = _clientRecoveryOperationStamp();
     if (!operationStamp) {
-        createToast('Confirm workspace access before staging uploads. No upload was sent.', 'error');
+        createToast('Confirm access before staging. No upload was sent.', 'error');
         return;
     }
     _setStagedUploadState({
@@ -6077,7 +6077,7 @@ function _submitStagedUploadSelection(fileList) {
 
     void _loadClientRecoverySurface().then((api) => {
         if (!api) throw new Error('Upload recovery controls could not load. No upload was sent.');
-        if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('The workspace changed before upload started. Select files again from the current draft. No upload was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('Workspace changed. Select files again. No upload was sent.');
         api.upload(selection);
     }).catch((error) => {
         _setStagedUploadState({ busy: false, status: 'idle', error: error.message, receipt: null });
@@ -6722,8 +6722,7 @@ function _loadClientRecoverySurface() {
         onProtectedFailure(type, envelope) {
             const nonRetryableDetails = _nonRetryableProtectedDetails(envelope);
             if (!nonRetryableDetails) return false;
-            if (type === 'upload') _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
-            else _recordProtectedFamilySuppression('jobs_list', nonRetryableDetails);
+            _recordProtectedFamilySuppression(type === 'upload' ? 'uploads_staging' : 'jobs_list', nonRetryableDetails);
             return true;
         },
         headers: (extra, method) => _buildAuthHeaders(extra, method),
@@ -6839,6 +6838,7 @@ function _configImportSnapshot() {
 function _createConfigTransferHost() {
     return {
         state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike,
+        configTemplate: portalInternals.createPortalConfigState,
         supportedPipelines: CONFIG_PREVIEW_SUPPORTED_PIPELINES,
         snapshot: _configImportSnapshot,
         migrate: (args) => _migrateDeprecatedLuxOutputConfig(args, false),
@@ -6853,6 +6853,7 @@ function _createConfigTransferHost() {
             state.pipeline = next.pipeline;
             state.config = next.config;
             state.portalUi.activeProfileName = '';
+            if (els.profileSelect) els.profileSelect.value = '';
             state.portalUi.debugBundleAcknowledged = false;
             state.portalUi.debugBundleGuardrailSeen = false;
             updateUIFromState();
@@ -11792,7 +11793,7 @@ async function submitJob(options) {
 
     const operationStamp = _clientRecoveryOperationStamp(payload);
     if (!operationStamp) {
-        createToast('Confirm the current draft and workspace access before submitting. No request was sent.', 'error');
+        createToast('Confirm the draft and access. No request was sent.', 'error');
         return;
     }
     if (els.runJobBtn) {
@@ -11806,7 +11807,7 @@ async function submitJob(options) {
     try {
         const api = await _loadClientRecoverySurface();
         if (!api) throw new Error('Submission recovery controls could not load. No request was sent.');
-        if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('The workspace changed before submission started. Review the current draft again. No request was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('Workspace changed. Review the draft. No request was sent.');
         await api.submit(payload, { separate });
     } catch (error) {
         createToast(error instanceof Error ? error.message : String(error), 'error');

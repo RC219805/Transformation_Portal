@@ -8,6 +8,87 @@ async function note(h, text) {
   control.value = text; await control.trigger("input"); return control;
 }
 
+for (const initialFailure of [false, true]) {
+  test(`initial legacy source read keeps authoring disabled${initialFailure ? ' after failure' : ''}`, async () => {
+    let finish, delayed = true;
+    const h = fixture({ paged: false, extraFetch: (request) => delayed && request.path.endsWith('/photographic-review')
+      ? new Promise(resolve => { finish = resolve; }) : null });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    const control = h.root.find('photographic-decision-note');
+    assert.equal(control.disabled, true);
+    assert.equal(h.root.find('photographic-lighting-group').disabled, true);
+    assert.equal(h.root.find('photographic-revision-exposure').disabled, true);
+    delayed = false;
+    finish(initialFailure ? error('UNAVAILABLE', 'Initial read failed', 503)
+      : json({ state_version: h.server.stateVersion, scenes: h.scenes, decisions: h.server.decisions, groups: [], presets: [] }));
+    await settle();
+    if (initialFailure) {
+      assert.equal(control.disabled, true); assert.equal(h.root.find('photographic-lighting-group').disabled, true);
+      await h.api.refresh(); await settle();
+    }
+    assert.equal(control.disabled, false);
+    await note(h, 'An edit bound to the first verified source');
+    assert.equal(h.api.hasUnsavedChanges(), true);
+    await h.api.requestNavigation(() => h.api.show(null, null), { leave: true });
+    await h.root.find('photographic-discard-navigation').trigger();
+  });
+}
+
+for (const paged of [false, true]) {
+  for (const outcome of ['ready', 'empty', 404, 422, 503]) {
+    test(`${paged ? 'paged' : 'legacy'} history cannot reveal a frozen note during ${outcome} source reauthorization`, async () => {
+      let authorization = { status: 'ready', ownerKey: 'owner' }, delayed = false, finish;
+      const h = fixture({ paged, getReviewAuthorization: () => authorization, extraFetch: (request, response) => {
+        if (request.path.endsWith('/deliveries')) return json({ items: [{ id: 'delivery-one', intent: { property_name: 'Committed property' } }], next_cursor: null });
+        if (delayed && request.path.endsWith(paged ? '/scene' : '/photographic-review')) {
+          return new Promise(resolve => { finish = () => resolve(typeof outcome === 'number' ? error('UNAVAILABLE', 'Source unavailable', outcome)
+            : json(outcome === 'empty' ? { ...response.detail('input-0000'), scenes: [] }
+              : paged ? response.detail('input-0000') : { state_version: h.server.stateVersion, scenes: h.scenes, decisions: h.server.decisions, groups: [], presets: [] })); });
+        }
+        return null;
+      } });
+      h.state.auth.features.photographicDeliveryHistory = true;
+      h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+      const control = await note(h, 'A withheld private note');
+      authorization = { status: 'unavailable', ownerKey: 'owner' }; h.api.syncAuthorization();
+      delayed = true; authorization = { status: 'ready', ownerKey: 'owner' }; h.api.syncAuthorization(); await settle();
+      assert.ok(finish); assert.ok(h.root.find('photographic-delivery-history-entry'));
+      assert.equal(h.root.find('photographic-review').classList.contains('hidden'), true);
+      assert.equal(control.value, 'A withheld private note');
+      finish(); await settle();
+      assert.equal(h.root.find('photographic-review').classList.contains('hidden'), outcome !== 'ready');
+      assert.equal(control.value, 'A withheld private note');
+      authorization = { status: 'revoked' }; h.api.syncAuthorization();
+    });
+  }
+  for (const image of ['fit', 'native']) {
+    for (const status of [401, 403]) {
+      test(`${paged ? 'paged' : 'legacy'} ${image} image ${status} masks drafts and requests access verification`, async () => {
+        let authorization = { status: 'ready', ownerKey: 'owner' }, denied = false;
+        const failures = [];
+        const h = fixture({ paged, getReviewAuthorization: () => authorization,
+          onReviewAuthorizationFailure: (...args) => { failures.push(args); authorization = { status: 'unavailable', ownerKey: 'owner' }; },
+          extraFetch: request => denied && request.path.endsWith(image === 'native' ? '/native-crop' : '/render')
+            ? error('UNAUTHORIZED', 'Image access lost', status) : null });
+        h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+        const control = await note(h, 'Retain this private image-review note');
+        denied = true;
+        if (image === 'native') {
+          const inspection = h.root.find('photographic-inspection'); inspection.value = 'native'; await inspection.trigger('change');
+        } else {
+          h.scenes[0].variants[0].presentation_policy_sha256 = 'a'.repeat(64);
+          await h.api.refresh(); await settle();
+        }
+        assert.ok(failures.some(([code, details]) => code === status && details.confirmed === false));
+        assert.equal(h.root.find('photographic-review').classList.contains('hidden'), true);
+        assert.equal(control.disabled, true); assert.equal(control.value, 'Retain this private image-review note');
+        assert.equal(h.requests.some(request => request.options.method === 'POST'), false);
+        authorization = { status: 'revoked' }; h.api.syncAuthorization();
+      });
+    }
+  }
+}
+
 test("authoring identity excludes inspection and presentation context but includes the complete source", () => {
   const source = { artifact_path: "master.tif", sha256: "a".repeat(64), source_identity_sha256: "b".repeat(64) };
   const key = photographicDraftSourceKey("owner", "job", "scene", source);
