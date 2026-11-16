@@ -198,8 +198,13 @@ test("@portal-browser paged thumbnails keep two request slots, never prefetch ad
   const failed = page.locator('[data-scene-id="scene-3"] [data-ui="photographic-contact-item"]');
   await failed.scrollIntoViewIfNeeded(); await expect(failed).toHaveAttribute("data-thumbnail-state", "failed");
   await failed.click(); await expect(page.locator('[data-ui="photographic-scene"]')).toHaveValue("scene-3");
+  const rail = page.locator('[data-ui="photographic-contact-sheet"]');
+  await rail.evaluate((node) => { node.scrollTop = node.scrollHeight; });
+  await expect.poll(() => rail.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
   await page.locator('[data-ui="photographic-page-next"]').click();
   await expect(page.locator('[data-ui="photographic-scene"]')).toHaveValue("scene-8");
+  await expect.poll(() => rail.evaluate((node) => node.scrollTop)).toBe(0);
+  await expect(page.locator('[data-scene-id="scene-8"] [data-ui="photographic-contact-item"]')).toBeInViewport({ ratio: 1 });
   await expect(page.locator('[data-ui="photographic-page-thumbnail"]').first()).toBeVisible();
   expect(state.peakThumbnails()).toBeLessThanOrEqual(2);
   expect(state.detailRequests).toEqual(["scene-0", "scene-3", "scene-8"]);

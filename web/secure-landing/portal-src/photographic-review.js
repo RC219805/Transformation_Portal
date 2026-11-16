@@ -150,8 +150,9 @@ export function createPhotographicReview(host) {
     const scene = loaded.scenes?.find((row) => row.scene_id === id) || loaded.scenes?.[0];
     const variant = scene?.variants?.find((row) => row.artifact_path === path)
       || scene?.variants?.find((row) => row.role === "final") || scene?.variants?.[0];
+    if (lifecycle.frozen() && !variant) return false;
     if (drafts.key() && photographicDraftSourceKey(actorScope, jobId, scene?.scene_id || "", variant) !== drafts.key()
-      && retainNavigation(retry)) return false;
+      && (lifecycle.frozen() || retainNavigation(retry))) return false;
     return true;
   }
   function notifySelection() {
@@ -570,7 +571,7 @@ export function createPhotographicReview(host) {
           enabled: state.auth?.features?.photographicCatalogueThumbnails === true,
           view: recordedPresentationEnabled() && presentationView === "recorded" ? "recorded" : "clip_srgb" }),
         onAuthorizationFailure: (code) => { lifecycle.pause(); host.onReviewAuthorizationFailure?.(code); },
-        onCatalogueChanged: () => status("Photograph catalogue changed. Refresh review before loading more thumbnails.", true) });
+        onCatalogueChanged: () => status("Catalogue changed. Refresh review.", true) });
       return pageThumbnails;
     }).catch(() => { pageThumbnailsLoading = null; return null; });
     void pageThumbnailsLoading.then((api) => { if (sequence === thumbnailRender) api?.render(page, cards); });
