@@ -68,12 +68,15 @@ const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_REGISTRY = Object.freeze({
+    recovery: { datasetKey: 'clientRecoveryJsUrl', factoryName: 'createDeferredClientRecoveryApi' },
     operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
     build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
     profile: { datasetKey: 'profileSurfaceJsUrl', factoryName: 'createDeferredProfileSurfaceApi' },
+    configTransfer: { datasetKey: 'configTransferJsUrl', factoryName: 'createDeferredConfigTransferApi' },
     overview: { datasetKey: 'overviewSurfaceJsUrl', factoryName: 'createDeferredOverviewSurfaceApi' },
 });
 const _deferredSurfaceState = new Map();
+let configImportGeneration = 0;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -298,6 +301,8 @@ const els = {
         rightsManifest: _domId('rightsManifestGuidance'),
     },
     inputDirStatus: _domId('inputDirStatus'),
+    submissionRecoveryPanel: _domId('submissionRecoveryPanel'),
+    uploadRecoveryPanel: _domId('uploadRecoveryPanel'),
     stagedUploadShell: _domId('stagedUploadShell'),
     stagedUploadStatus: _domId('stagedUploadStatus'),
     stagedUploadDropzone: _domId('stagedUploadDropzone'),
@@ -1075,7 +1080,7 @@ function _activeRouteContext(jobId = '') {
         };
     }
     const selectedArtifact = _selectedArtifactForJob(selected);
-    const artifactPath = photographicSelectionFor(state, selected, fallbackArtifactPath)?.artifactPath
+    const artifactPath = photographicSelectionFor(state, selected, fallbackArtifactPath, _reviewAuthorization().ownerKey)?.artifactPath
         || _normalizeArtifactRoutePath(_artifactRouteKey(selectedArtifact));
     const compareCandidate = findCompareArtifact(
         selectedArtifact,
@@ -1236,8 +1241,7 @@ function _syncConsoleRoute(replace = false) {
     const nextHref = `${url.pathname}${url.search}${url.hash}`;
     const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextHref === currentHref) return;
-    const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
+    portalHistoryNavigation.record(replace, { view: state.currentView, jobId: state.selectedJobId || '' }, nextHref);
 }
 
 function _managedReturnToPath() {
@@ -1250,7 +1254,7 @@ function _managedLoginUrlForCurrentRoute() {
     return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;
 }
 
-function _migrateDeprecatedLuxOutputConfig(config) {
+function _migrateDeprecatedLuxOutputConfig(config, notify = true) {
     if (config !== Object(config)) return config;
     const emits = Object(config.emits);
     let deprecated = false;
@@ -1289,7 +1293,7 @@ function _migrateDeprecatedLuxOutputConfig(config) {
             config[outputDepthKey] = legacy16 ? 16 : 8;
         }
     }
-    if (deprecated) createToast('[deprecated_output_flag] Report on; no marketing.');
+    if (deprecated && notify) createToast('[deprecated_output_flag] Report on; no marketing.');
     return config;
 }
 
@@ -1404,6 +1408,7 @@ function _readTransientPortalDraft() {
 }
 
 function _persistTransientPortalDraft() {
+    configImportGeneration += 1;
     if (pendingLegacyTransientDraft) return false;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return false;
@@ -1440,6 +1445,7 @@ function _flushPendingTransientPortalDraftPersist() {
 }
 
 function _scheduleTransientPortalDraftPersist(options) {
+    configImportGeneration += 1;
     const settings = options && typeof options === 'object' ? options : {};
     if (settings.immediate) return _flushPendingTransientPortalDraftPersist();
     _cancelScheduledTransientPortalDraftPersist();
@@ -2195,7 +2201,8 @@ function handleOperatorActionClick(event) {
             break;
         case 'restore_access':
             _flushPendingTransientPortalDraftPersist();
-            window.location.assign(_managedLoginUrlForCurrentRoute());
+            const signIn = () => window.location.assign(_managedLoginUrlForCurrentRoute());
+            if (!_requestReviewNavigation(signIn)) signIn();
             break;
         default:
             break;
@@ -2964,6 +2971,7 @@ function applyConsoleViewLayout() {
 }
 
 function navigateConsoleView(viewName, options = {}) {
+    if (!options.reviewConfirmed && _requestReviewNavigation(() => navigateConsoleView(viewName, { ...options, reviewConfirmed: true }))) return;
     const replace = Boolean(options.replace);
     const shouldFocus = options.focus !== false;
     deferredProfileOpenIntent += 1;
@@ -5088,12 +5096,14 @@ function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
     const allowedStatuses = new Set(['pending', 'ready', 'degraded', 'unavailable']);
     const nextStatus = allowedStatuses.has(status) ? status : 'pending';
     state.bootstrap.status = nextStatus;
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     state.bootstrap.lastErrorReason = String(reason || '').trim();
     state.bootstrap.lastHttpStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
     state.bootstrap.lastTransitionAt = Date.now();
     if (document.body) {
         document.body.dataset.bootstrapStatus = nextStatus;
     }
+    deferredReviewSurfaceApi?.syncAuthorization?.();
 }
 
 function _trackBootstrapRequest(controller, timeoutId) {
@@ -5273,8 +5283,11 @@ function _flushBootstrapOnlineFollowup(force = false) {
 function _syncBootstrapGuardedControls() {
     renderWorkspaceGuidance();
     const readiness = _dispatchReadinessSnapshot();
+    if (state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId) {
+        readiness.detail = 'A submission is unresolved. Use Check status or explicitly confirm a separate changed draft.';
+    }
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
-        els.runJobBtn.disabled = !readiness.canRun;
+        els.runJobBtn.disabled = !readiness.canRun || Boolean(state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId);
     }
     if (els.dispatchReadinessReason) {
         _renderBannerDetailWithRetryCountdown(
@@ -5358,15 +5371,6 @@ function _stagedUploadsEnabledForState() {
     );
 }
 
-function _stagedUploadsVisibleForState() {
-    return _stagedUploadsSupportedForState();
-}
-
-function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
-    const message = String(payload?.error?.message || '').trim();
-    return message || fallback;
-}
-
 function _setStagedUploadState(patch = {}) {
     state.portalUi.stagedUpload = {
         ...(state.portalUi.stagedUpload || {}),
@@ -5375,15 +5379,16 @@ function _setStagedUploadState(patch = {}) {
 }
 
 function _syncStagedUploadUi() {
-    const visible = _stagedUploadsVisibleForState();
+    const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);
     const enabled = _stagedUploadsEnabledForState();
     const uploadState = state.portalUi.stagedUpload || {};
-    const busy = Boolean(uploadState.busy);
+    const busy = Boolean(uploadState.busy || state.portalUi.recoveryUploadBlocked);
     const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
     if (els.stagedUploadShell) {
         els.stagedUploadShell.classList.toggle('hidden', !visible);
         els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
         els.stagedUploadShell.dataset.capabilityStatus = enabled ? 'available' : 'gated';
+        els.stagedUploadShell.dataset.outcome = uploadState.status || (state.portalUi.recoveryUploadBlocked ? 'outcome_unknown' : 'idle');
     }
     if (els.stagedUploadStatus) {
         if (!visible) {
@@ -5391,9 +5396,9 @@ function _syncStagedUploadUi() {
         } else if (!enabled) {
             els.stagedUploadStatus.textContent = 'Staged upload controls are visible for this pipeline but gated for this portal cohort.';
         } else if (uploadState.error) {
-            els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
+            els.stagedUploadStatus.textContent = String(uploadState.error);
         } else if (busy) {
-            els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
+            els.stagedUploadStatus.textContent = uploadState.status === 'staging' ? 'Files transferred. The server is validating and staging them.' : state.portalUi.recoveryUploadBlocked && !uploadState.busy ? 'Upload outcome unknown. Use Check status before staging another batch.' : 'Transferring selected files…';
         } else if (uploadState.summary) {
             els.stagedUploadStatus.textContent = 'Staged uploads are ready. Review the receipt below before dispatching the next run.';
         } else {
@@ -5423,7 +5428,7 @@ function _syncStagedUploadUi() {
     }
     if (els.stagedUploadProgressLabel) {
         if (busy) {
-            els.stagedUploadProgressLabel.textContent = `${progressPercent}% uploaded`;
+            els.stagedUploadProgressLabel.textContent = !uploadState.busy ? 'Staging outcome unknown; check the receipt.' : uploadState.status === 'staging' ? 'Files transferred; validating and staging…' : `${progressPercent}% of file bytes transferred`;
         } else if (uploadState.summary) {
             els.stagedUploadProgressLabel.textContent = 'Upload complete.';
         } else {
@@ -5490,7 +5495,11 @@ function _syncBootstrapUi() {
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
+    configImportGeneration += 1;
     const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
+    if (bootstrap.recoveryContextStatus === 'ready' && _validRecoveryContext(bootstrap.recoveryContext)) {
+        state.portalUi.recoveryOwner = bootstrap.recoveryContext;
+    }
     const nextStatus = ['pending', 'ready', 'degraded', 'unavailable'].includes(String(options.status || ''))
         ? String(options.status)
         : 'ready';
@@ -5504,12 +5513,17 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
         logoutPending: false,
+        recoveryContext: bootstrap.recoveryContextStatus === 'ready' ? bootstrap.recoveryContext : null,
+        recoveryContextStatus: bootstrap.recoveryContextStatus || 'unavailable',
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
+            jobSubmissionReceipts: bootstrap.features?.jobSubmissionReceipts === true,
+            uploadReceipts: bootstrap.features?.uploadReceipts === true,
+            photographicCatalogueThumbnails: bootstrap.features?.photographicCatalogueThumbnails === true,
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
@@ -5775,6 +5789,8 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
 function _handlePortalLogout() {
     if (state.auth.logoutPending) return;
     state.auth.logoutPending = true;
+    deferredReviewSurfaceApi?.syncAuthorization?.();
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (els.logoutBtn) els.logoutBtn.disabled = true;
     const logoutStartedAt = _portalRumNow();
     _queueClientLogoutRumSample('logout_submit_attempt', 1);
@@ -5997,7 +6013,7 @@ function _applyStagedUploadResult(result) {
         busy: false,
         progressPercent: 100,
         status: 'ready',
-        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated with receipt-backed operator detail.`,
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
         error: '',
         lastBatchId: String(result?.batch_id || ''),
         fileCount,
@@ -6042,6 +6058,11 @@ function _submitStagedUploadSelection(fileList) {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp();
+    if (!operationStamp) {
+        createToast('Confirm workspace access before staging uploads. No upload was sent.', 'error');
+        return;
+    }
     _setStagedUploadState({
         busy: true,
         progressPercent: 0,
@@ -6054,106 +6075,14 @@ function _submitStagedUploadSelection(fileList) {
     });
     _syncStagedUploadUi();
 
-    const formData = new FormData();
-    selection.entries.forEach(({ file, relativePath }) => {
-        formData.append('files', file, relativePath);
+    void _loadClientRecoverySurface().then((api) => {
+        if (!api) throw new Error('Upload recovery controls could not load. No upload was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('The workspace changed before upload started. Select files again from the current draft. No upload was sent.');
+        api.upload(selection);
+    }).catch((error) => {
+        _setStagedUploadState({ busy: false, status: 'idle', error: error.message, receipt: null });
+        _syncStagedUploadUi();
     });
-    formData.append(
-        'client_manifest',
-        JSON.stringify({
-            schema: 'tp.portal.upload_manifest.v1',
-            files: selection.entries.map((entry) => ({
-                relative_path: entry.relativePath,
-                size_bytes: entry.sizeBytes,
-                name: entry.name,
-            })),
-        })
-    );
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE}/v1/uploads/staging`);
-    xhr.responseType = 'json';
-    Object.entries(headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && value) {
-            xhr.setRequestHeader(key, value);
-        }
-    });
-
-    xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        const progressPercent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
-        _setStagedUploadState({
-            progressPercent,
-            status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
-        });
-        _syncStagedUploadUi();
-    };
-
-    xhr.onerror = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Network failure interrupted the staged upload.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Network failure interrupted the staged upload.', 'error');
-    };
-
-    xhr.onabort = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Staged upload canceled before completion.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Staged upload canceled before completion.', 'error');
-    };
-
-    xhr.onload = () => {
-        const payload = xhr.response && typeof xhr.response === 'object'
-            ? xhr.response
-            : (() => {
-                try {
-                    return JSON.parse(xhr.responseText || '{}');
-                } catch (_err) {
-                    return {};
-                }
-            })();
-        let invalidResponse = false;
-        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
-            try {
-                _applyStagedUploadResult(payload.data);
-                return;
-            } catch (_err) {
-                invalidResponse = true;
-            }
-        }
-
-        const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
-        if (nonRetryableDetails) {
-            _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
-        }
-        const errorMessage = invalidResponse
-            ? 'Staged upload returned an invalid response. Try staging the files again.'
-            : _stagedUploadErrorMessage(payload);
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: errorMessage,
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast(errorMessage, 'error');
-    };
-
-    xhr.send(formData);
 }
 
 function resumeBlockedJobStreamsAfterAuthUpdate() {
@@ -6455,7 +6384,7 @@ function _selectedArtifactForJob(job) {
     const normalizedJobId = _normalizeSelectedJobId(job.id);
     const ranked = rankArtifactsForDisplay(job.artifacts);
     const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[normalizedJobId]);
-    const photograph = photographicSelectionFor(state, job, selectedPath);
+    const photograph = photographicSelectionFor(state, job, selectedPath, _reviewAuthorization().ownerKey);
     const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === (photograph?.railPath || selectedPath));
     if (selectedPath && !selected) {
         delete state.artifactUi.compareByJob[normalizedJobId];
@@ -6529,6 +6458,25 @@ function _ensureDeferredReviewSurfaceCss() {
     return true;
 }
 
+function _reviewAuthorization() {
+    if (state.auth?.logoutPending) return { status: 'revoked', ownerKey: '' };
+    const ownerKey = _transientDraftOwnerKey();
+    const established = state.portalUi.recoveryOwner;
+    if (_validRecoveryContext(established)) {
+        const verified = ownerKey && state.auth?.recoveryContextStatus === 'ready'
+            && _validRecoveryContext(state.auth.recoveryContext);
+        return { status: verified ? 'ready' : 'unavailable', ownerKey: established.ownerId };
+    }
+    return { status: ownerKey ? 'ready' : 'unavailable', ownerKey };
+}
+
+function _requestReviewNavigation(action) {
+    if (!deferredReviewSurfaceApi?.hasUnsavedChanges?.()) return false;
+    if (state.portalUi?.artifactViewer?.open) _closeArtifactViewer(false);
+    void deferredReviewSurfaceApi.requestNavigation(action, { leave: true });
+    return true;
+}
+
 function _createDeferredReviewSurfaceHost() {
     return {
         state,
@@ -6541,6 +6489,11 @@ function _createDeferredReviewSurfaceHost() {
         getReadableError,
         createToast,
         emitPortalEvent,
+        getReviewAuthorization: _reviewAuthorization,
+        requestReviewNavigation: _requestReviewNavigation,
+        onReviewAuthorizationFailure: (_status, detail = {}) => {
+            if (!detail.confirmed) void loadPortalBootstrap({ isRetryAttempt: true });
+        },
         _isJobsHydrationPending,
         _toggleSurfaceSkeleton,
         _resetArtifactActionButtons,
@@ -6702,6 +6655,103 @@ async function loadDeferredSurface(name, hostFactory) {
     return entry.loadPromise;
 }
 
+// Only opaque receipt references enter tab storage. Draft payloads stay page-local.
+function _validRecoveryContext(value) {
+    return value?.schema === 'tp.portal.recovery_context.v1'
+        && typeof value.ownerId === 'string' && /^[a-f0-9]{64}$/.test(value.ownerId)
+        && typeof value.tenantId === 'string' && value.tenantId.length > 0 && value.tenantId.length <= 256 && !/[\x00-\x1f\x7f]/.test(value.tenantId);
+}
+
+function _clientRecoveryContext() {
+    const supplied = state.auth?.recoveryContext;
+    const valid = _validRecoveryContext(supplied);
+    if (valid) state.portalUi.recoveryOwner = supplied;
+    const established = state.portalUi.recoveryOwner;
+    const ready = _portalPrivilegesReady() && !state.auth?.logoutPending && (!established || valid);
+    return {
+        ready,
+        scope: established?.ownerId || JSON.stringify([state.auth?.mode, state.auth?.actor?.accessEmail, state.auth?.actor?.username]),
+        intent: JSON.stringify(generatePayload()),
+        draftGeneration: configImportGeneration,
+        features: state.auth?.features || {}
+    };
+}
+
+function _clientRecoveryOperationStamp(payload) {
+    const current = _clientRecoveryContext();
+    return current.ready && (!payload || current.intent === JSON.stringify(payload))
+        ? JSON.stringify([current.scope, configImportGeneration, current.intent]) : '';
+}
+
+function _acceptRecoveredJob(data, options = {}) {
+    if (!_clientRecoveryContext().ready || (options.automatic && state.currentView !== 'build')) return false;
+    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
+        createToast('Save or discard Review edits before opening this run.', 'info');
+        return false;
+    }
+    let job = _findJobById(data.id);
+    if (!job) {
+        job = hydrateJobFromServer(data);
+        state.jobs.push(job);
+    }
+    state.selectedJobId = job.id;
+    state.portalUi.lastSelectedJobId = job.id;
+    state.portalUi.dispatchHandoffJobId = job.id;
+    if (els.logPane) els.logPane.textContent = job.logs.join('\n');
+    if (els.runJobBtn) {
+        els.runJobBtn.dataset.action = 'open-live-job';
+        els.runJobBtn.dataset.jobId = job.id;
+        els.runJobBtn.textContent = 'Open Live Job';
+    }
+    scheduleRenderJobQueue();
+    createToast(`Run accepted: ${job.id}. Open the live job to monitor progress.`, 'success');
+    _announcePortalStatus('dispatch', 'Run accepted. Open Live Job to monitor progress.', { force: true });
+    void emitPortalEvent('job_submitted', { surface: 'dispatch', metadata: { job_id: job.id, pipeline: job.pipeline } });
+    if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) startJobEventStream(job, data.events_url);
+    void refreshJobStatus(job);
+    return true;
+}
+
+function _loadClientRecoverySurface() {
+    return loadDeferredSurface('recovery', () => ({
+        context: _clientRecoveryContext,
+        canRequest: (type) => !_isProtectedFamilySuppressed(type === 'upload' ? 'uploads_staging' : 'jobs_list'),
+        retryDelay: (response, now) => portalInternals.parseRateLimitRetryHint(response, now)?.retryAfterMs || 0,
+        onProtectedFailure(type, envelope) {
+            const nonRetryableDetails = _nonRetryableProtectedDetails(envelope);
+            if (!nonRetryableDetails) return false;
+            if (type === 'upload') _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
+            else _recordProtectedFamilySuppression('jobs_list', nonRetryableDetails);
+            return true;
+        },
+        headers: (extra, method) => _buildAuthHeaders(extra, method),
+        apiBase: API_BASE, document,
+        panels: { job: els.submissionRecoveryPanel, upload: els.uploadRecoveryPanel },
+        acceptJob: _acceptRecoveredJob,
+        applyUpload: _applyStagedUploadResult,
+        uploadState: (patch) => { _setStagedUploadState(patch); _syncStagedUploadUi(); },
+        submitSeparateIntent: () => void submitJob({ separate: true }),
+        onAuthorizationFailure: () => void loadPortalBootstrap({ isRetryAttempt: true }),
+        onSubmissionMetric: (sample) => _queuePortalRumSample({
+            eventType: 'queue_request', metric: 'submit', value: sample.durationMs, unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            metadata: { outcome: sample.outcome, ...(sample.status ? { status: sample.status } : {}) }
+        }),
+        onState: (attempts) => {
+            if (document.body) document.body.dataset.submissionOutcome = attempts.filter((row) => row.type === 'job').at(-1)?.status || 'idle';
+            const unresolved = (type) => attempts.some((row) => row.type === type && !['accepted', 'ready', 'expired', 'rejected'].includes(row.status));
+            const blocked = unresolved('job');
+            if (state.portalUi.recoverySubmissionBlocked !== blocked) {
+                state.portalUi.recoverySubmissionBlocked = blocked;
+                _syncBootstrapGuardedControls();
+            }
+            state.portalUi.recoveryUploadBlocked = unresolved('upload');
+            state.portalUi.recoveryUploadPresent = attempts.some((row) => row.type === 'upload');
+            _syncStagedUploadUi();
+        }
+    }));
+}
+
 function _createDeferredOperateSurfaceHost() {
     return {
         state,
@@ -6778,6 +6828,39 @@ function _primeDeferredOperateSurface() {
     void _loadDeferredOperateSurface();
 }
 
+function _configImportSnapshot() {
+    const owner = _transientDraftOwnerKey();
+    return !owner || pendingLegacyTransientDraft ? '' : JSON.stringify([owner, configImportGeneration, state.pipeline, state.config, state.portalUi.activeProfileName]);
+}
+
+function _createConfigTransferHost() {
+    return {
+        state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike,
+        supportedPipelines: CONFIG_PREVIEW_SUPPORTED_PIPELINES,
+        snapshot: _configImportSnapshot,
+        migrate: (args) => _migrateDeprecatedLuxOutputConfig(args, false),
+        notify: createToast,
+        async confirmReplacement() {
+            const profile = await _loadDeferredProfileSurface();
+            if (!profile) return false;
+            return !profile.syncDraftState().hasProtectedChanges
+                || window.confirm('Discard the current unsaved Build changes and import this configuration?');
+        },
+        commit(next) {
+            state.pipeline = next.pipeline;
+            state.config = next.config;
+            state.portalUi.activeProfileName = '';
+            state.portalUi.debugBundleAcknowledged = false;
+            state.portalUi.debugBundleGuardrailSeen = false;
+            updateUIFromState();
+            _persistTransientPortalDraft();
+            void fetchPresetsForPipeline(state.pipeline, true);
+            void fetchConfigMetadata(state.pipeline, true);
+            createToast('Configuration imported.', 'success');
+        }
+    };
+}
+
 function _createDeferredBuildSurfaceHost() {
     return {
         state,
@@ -6802,6 +6885,7 @@ function _deferredBuildSurfaceApi() {
 }
 
 function _loadDeferredBuildSurface() {
+    void _loadClientRecoverySurface();
     return loadDeferredSurface('build', _createDeferredBuildSurfaceHost);
 }
 
@@ -6933,7 +7017,9 @@ function renderArtifactPanel() {
     _renderDeferredReviewSurfaceFallback(jobsLoading);
 }
 
-function selectJob(jobId) {
+function selectJob(jobId, reviewConfirmed = false) {
+    if (!reviewConfirmed && jobId !== state.selectedJobId
+        && _requestReviewNavigation(() => selectJob(jobId, true))) return;
     const previousJobId = state.selectedJobId;
     state.selectedJobId = jobId;
     _rememberSelectedJob(jobId);
@@ -10388,6 +10474,7 @@ function renderPreRunDiagnostics(payload) {
 }
 
 function renderCLI() {
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (!els.cliPreview) return;
     const payload = generatePayload();
     const preview = _currentPreviewForPayload(payload);
@@ -11612,7 +11699,8 @@ function handleJobListClick(event) {
     }
 }
 
-async function submitJob() {
+async function submitJob(options) {
+    const separate = options?.separate === true;
     if (state.portalUi.dispatchPending) return;
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
     const invalidField = _firstInvalidBuildInput();
@@ -11699,6 +11787,11 @@ async function submitJob() {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp(payload);
+    if (!operationStamp) {
+        createToast('Confirm the current draft and workspace access before submitting. No request was sent.', 'error');
+        return;
+    }
     if (els.runJobBtn) {
         els.runJobBtn.disabled = true;
         els.runJobBtn.textContent = "Dispatching...";
@@ -11707,119 +11800,13 @@ async function submitJob() {
     state.portalUi.dispatchPending = true;
     renderWorkspaceGuidance();
 
-    const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
-    const localId = `job_${randomId}`;
-
-    const job = {
-        id: localId,
-        pipeline: payload.pipeline,
-        state: 'queued',
-        progress: 0,
-        logs: [],
-        artifacts: [],
-        error: null,
-        eventSource: null,
-        fetchAbortController: null,
-        eventStreamUrl: null,
-        usesFetchSse: false,
-        sseRetry: { attempt: 0, timer: null },
-        reconnectBlocked: false,
-        lastEventAt: 0,
-        mockInterval: null,
-        startedAt: 0,
-        finishedAt: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        timeline: [],
-        transportWarnings: [],
-        progressMilestones: []
-    };
-    _reconcileJobTimeline(job);
-    state.jobs.push(job);
-    state.selectedJobId = job.id;
-    if (els.logPane) els.logPane.textContent = '';
-    if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
-    scheduleRenderJobQueue();
-    const initLine = `[INFO] Initializing ${payload.pipeline}...`;
-    appendJobLog(job, initLine);
-    logToPane(job.id, initLine);
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const requestStartedAt = _portalRumNow();
-    let queueRumRecorded = false;
     try {
-        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
-            traceparent: requestTraceparent
-        });
-        const res = await fetch(`${API_BASE}/v1/jobs`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
-        _queuePortalRumSample({
-            eventType: 'queue_request',
-            metric: 'submit',
-            value: _portalRumNow() - requestStartedAt,
-            unit: 'ms',
-            traceparent: requestTraceparent,
-            metadata: {
-                outcome: res.ok ? 'ok' : 'error',
-                status: res.status
-            }
-        });
-        queueRumRecorded = true;
-        if (!res.ok) {
-            const parsedError = await extractApiError(res);
-            if (parsedError.error) job.error = parsedError.error;
-            throw new Error(parsedError.message);
-        }
-        const data = await res.json();
-
-        job.id = data.data.id;
-        state.selectedJobId = job.id;
-        state.portalUi.lastSelectedJobId = String(job.id || '');
-        scheduleRenderJobQueue();
-        state.portalUi.dispatchHandoffJobId = String(job.id || '');
-        if (els.runJobBtn) {
-            els.runJobBtn.dataset.action = 'open-live-job';
-            els.runJobBtn.dataset.jobId = String(job.id || '');
-            els.runJobBtn.textContent = 'Open Live Job';
-        }
-        createToast(`Job dispatched: ${job.id}. Open the live job to monitor progress.`, 'success');
-        _announcePortalStatus('dispatch', `Job ${job.id} was dispatched. Open Live Job to monitor progress.`, { force: true });
-        void emitPortalEvent('job_submitted', {
-            surface: 'dispatch',
-            metadata: {
-                job_id: String(job.id || ''),
-                pipeline: String(job.pipeline || payload.pipeline || '')
-            }
-        });
-
-        startJobEventStream(job, data.data.events_url);
-    } catch (err) {
-        if (!queueRumRecorded) {
-            _queuePortalRumSample({
-                eventType: 'queue_request',
-                metric: 'submit',
-                value: _portalRumNow() - requestStartedAt,
-                unit: 'ms',
-                traceparent: requestTraceparent,
-                metadata: {
-                    outcome: 'error'
-                }
-            });
-        }
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        job.state = 'failed';
-        job.finishedAt = Date.now();
-        appendJobLog(job, `[ERROR] ${errorMessage}`);
-        _reconcileJobTimeline(job);
-        scheduleRenderJobQueue();
-        const toastMessage = errorMessage
-            ? `Backend submission failed: ${truncateMiddle(errorMessage, 180)}`
-            : 'Backend submission failed.';
-        createToast(toastMessage, "error");
-        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+        const api = await _loadClientRecoverySurface();
+        if (!api) throw new Error('Submission recovery controls could not load. No request was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('The workspace changed before submission started. Review the current draft again. No request was sent.');
+        await api.submit(payload, { separate });
+    } catch (error) {
+        createToast(error instanceof Error ? error.message : String(error), 'error');
     } finally {
         state.portalUi.dispatchPending = false;
         if (els.runJobBtn) {
@@ -12021,181 +12008,17 @@ if (els.stagedUploadDropzone) {
 }
 
 if (els.importBtn) els.importBtn.addEventListener('click', () => els.fileInput.click());
-if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+if (els.fileInput) els.fileInput.addEventListener('change', async (event) => {
+    configImportGeneration += 1;
+    const file = event.target.files[0];
+    const expected = _configImportSnapshot();
     try {
-        const data = JSON.parse(await file.text());
-        if (data.pipeline) state.pipeline = data.pipeline;
-        if (data.args) {
-            _migrateDeprecatedLuxOutputConfig(data.args);
-            const c = state.config;
-            if (state.pipeline === 'lux-depth') {
-                c.photographyUnified = portalInternals.unifiedPhotographyConfigFromArgs(data.args, c.photographyUnified);
-            } else if (state.pipeline === 'lux-depth-v6') {
-                c.photographyV6 = portalInternals.photographyV6ConfigFromArgs(data.args, c.photographyV6);
-            } else if (state.pipeline === 'lux-depth-v5') {
-                c.photography = portalInternals.photographyConfigFromArgs(data.args, c.photography);
-            }
-            if ('emit_master16' in data.args) c.emit_master16 = data.args.emit_master16;
-            c.inputDir = data.args.archive_root || data.args.input_dir || c.inputDir;
-            c.outputDir = data.args.output_dir || c.outputDir;
-            c.preset = data.args.preset || c.preset;
-            c.qualityTier = _resolveQualityTier(data.args.quality_tier || c.qualityTier);
-            c.depthBackend = _resolveDepthBackend(data.args.depth_backend || c.depthBackend);
-            c.modelKey = _resolveDa3ModelKey(data.args.model_key || c.modelKey);
-            c.depthDevice = data.args.depth_device || c.depthDevice;
-            c.segmentation = c.segmentation || {};
-            c.segmentation.enable = parseBoolLike(data.args.enable_segmentation, c.segmentation.enable);
-            c.segmentation.backend = _resolveSegmentationBackend(data.args.segmentation_backend || c.segmentation.backend);
-            c.segmentation.sam2ModelSize = _resolveSam2ModelSize(data.args.sam2_model_size || c.segmentation.sam2ModelSize);
-            c.segmentation.sam2CheckpointPath = _textOrFallback(
-                data.args.sam2_checkpoint_path,
-                c.segmentation.sam2CheckpointPath
-            );
-            c.segmentation.sam2TilingEnabled = parseBoolLike(
-                data.args.sam2_tiling_enabled,
-                c.segmentation.sam2TilingEnabled
-            );
-            c.segmentation.sam2TileSizePx = _parsePositiveIntOrNull(data.args.sam2_tile_size_px) || c.segmentation.sam2TileSizePx;
-            c.segmentation.sam2OverlapPx =
-                _parseNonNegativeIntOrNull(data.args.sam2_overlap_px) ?? c.segmentation.sam2OverlapPx;
-            c.segmentation.sam2GlobalPassLongestSide =
-                _parsePositiveIntOrNull(data.args.sam2_global_pass_longest_side) || c.segmentation.sam2GlobalPassLongestSide;
-            c.segmentation.sam2MaxConcurrency =
-                _parsePositiveIntOrNull(data.args.sam2_max_concurrency) || c.segmentation.sam2MaxConcurrency;
-            c.segmentation.sam2PointsPerSide =
-                _parsePositiveIntOrNull(data.args.sam2_points_per_side) || c.segmentation.sam2PointsPerSide;
-            c.segmentation.sam2PointsPerBatch =
-                _parsePositiveIntOrNull(data.args.sam2_points_per_batch) || c.segmentation.sam2PointsPerBatch;
-            c.segmentation.sam2PredIouThresh =
-                _parseProbabilityOrNull(data.args.sam2_pred_iou_thresh) ?? c.segmentation.sam2PredIouThresh;
-            c.segmentation.sam2StabilityScoreThresh =
-                _parseProbabilityOrNull(data.args.sam2_stability_score_thresh) ?? c.segmentation.sam2StabilityScoreThresh;
-            c.segmentation.sam2CropNLayers =
-                _parseNonNegativeIntOrNull(data.args.sam2_crop_n_layers) ?? c.segmentation.sam2CropNLayers;
-            c.segmentation.strict = parseBoolLike(data.args.strict_segmentation, c.segmentation.strict);
-
-            c.flags.materials = parseBoolLike(data.args.materials_v3, c.flags.materials);
-            c.flags.pbr = parseBoolLike(data.args.pbr, c.flags.pbr);
-            c.flags.cache = parseBoolLike(data.args.cache_depth, c.flags.cache);
-            c.flags.overwrite = parseBoolLike(data.args.overwrite, c.flags.overwrite);
-            c.flags.enableV2 = parseBoolLike(data.args.enable_v2, c.flags.enableV2);
-            c.flags.saveFloatDepth = parseBoolLike(data.args.save_float_depth, c.flags.saveFloatDepth);
-            c.flags.forceDepth = parseBoolLike(data.args.force_depth, c.flags.forceDepth);
-            c.flags.strictInputs = parseBoolLike(data.args.strict_inputs, c.flags.strictInputs);
-            c.flags.verifyImages = parseBoolLike(data.args.verify_images, c.flags.verifyImages);
-            c.flags.allowSemanticFallback = parseBoolLike(
-                data.args.allow_semantic_fallback,
-                c.flags.allowSemanticFallback
-            );
-            c.flags.verbose = parseBoolLike(data.args.verbose, c.flags.verbose);
-            c.flags.quiet = parseBoolLike(data.args.quiet, c.flags.quiet);
-            _normalizeVerboseQuietFlags(c.flags, true);
-            c.v2Preset = data.args.v2_preset || c.v2Preset;
-            if ('v2_input_color' in data.args) c.v2InputColor = data.args.v2_input_color;
-
-            c.outputBitDepth = Number(
-                data.args.output_bit_depth ?? data.args.outputBitDepth ?? c.outputBitDepth
-            ) === 8 ? 8 : 16;
-            c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
-            c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
-            c.emits.runCardIncludeProofs = parseBoolLike(
-                data.args.run_card_include_proofs,
-                c.emits.runCardIncludeProofs
-            );
-
-            c.gate = c.gate || {};
-            c.gate.archiveIndex = _textOrFallback(
-                data.args.archive_index,
-                c.gate.archiveIndex
-            );
-            c.gate.manifestJsonl = _textOrFallback(
-                data.args.manifest_jsonl,
-                c.gate.manifestJsonl
-            );
-            c.licenses.nonCommercialOk = parseBoolLike(
-                data.args.non_commercial_ok,
-                c.licenses.nonCommercialOk
-            );
-            c.licenses.acceptApple = parseBoolLike(
-                data.args.accept_apple_depth_pro_research_license,
-                c.licenses.acceptApple
-            );
-            c.licenses.acceptResearchTools = parseBoolLike(
-                data.args.accept_research_tools_license,
-                c.licenses.acceptResearchTools
-            );
-
-            c.reconstruction = c.reconstruction || {};
-            c.reconstruction.enable = parseBoolLike(
-                data.args.enable_reconstruction,
-                c.reconstruction.enable
-            );
-            c.reconstruction.groupingMode = _resolveGroupingMode(
-                data.args.grouping_mode || c.reconstruction.groupingMode
-            );
-            c.reconstruction.camerasSidecarPath = _textOrFallback(
-                data.args.cameras_sidecar_path,
-                c.reconstruction.camerasSidecarPath
-            );
-            c.reconstruction.iterations = _parsePositiveIntOrNull(
-                data.args.reconstruction_iterations
-            ) || c.reconstruction.iterations;
-            c.reconstruction.tier = _textOrFallback(
-                data.args.reconstruction_tier,
-                c.reconstruction.tier
-            );
-            c.reconstruction.emitSceneDebugBundle = parseBoolLike(
-                data.args.emit_scene_debug_bundle,
-                c.reconstruction.emitSceneDebugBundle
-            );
-
-            c.raw = c.raw || {};
-            c.raw.ingestMode = _textOrFallback(data.args.raw_ingest_mode, c.raw.ingestMode);
-            c.raw.wbMode = _textOrFallback(data.args.raw_wb_mode, c.raw.wbMode);
-            c.raw.demosaic = _textOrFallback(data.args.raw_demosaic, c.raw.demosaic);
-
-            c.captioning = c.captioning || {};
-            c.captioning.enableFastVlm = parseBoolLike(
-                data.args.vlm_captioning_enabled,
-                c.captioning.enableFastVlm
-            );
-            c.captioning.model = _textOrFallback(data.args.vlm_captioning_model, c.captioning.model);
-            c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(
-                data.args.vlm_captioning_proxy_format || c.captioning.proxyFormat
-            );
-            c.captioning.maxSidePx =
-                _parsePositiveIntOrNull(data.args.vlm_captioning_max_side_px) || c.captioning.maxSidePx;
-            c.captioning.timeoutSeconds =
-                _parsePositiveIntOrNull(data.args.fastvlm_timeout_seconds) || c.captioning.timeoutSeconds;
-            c.captioning.pythonExecutable = _textOrFallback(
-                data.args.fastvlm_python_executable,
-                c.captioning.pythonExecutable
-            );
-            c.captioning.mlxVlmDir = _textOrFallback(
-                data.args.fastvlm_mlx_vlm_dir,
-                c.captioning.mlxVlmDir
-            );
-
-            c.runtime = c.runtime || {};
-            c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || '';
-            c.runtime.maxWorkersMode = c.runtime.maxWorkers === '' ? 'auto' : 'fixed';
-            c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(data.args.max_gpu_workers) || '';
-            c.runtime.maxGpuWorkersMode = c.runtime.maxGpuWorkers === '' ? 'auto' : 'fixed';
-            c.runtime.logLevel = _textOrFallback(data.args.log_level, c.runtime.logLevel);
-        }
-        state.portalUi.debugBundleAcknowledged = false;
-        state.portalUi.debugBundleGuardrailSeen = false;
-        updateUIFromState();
-        _persistTransientPortalDraft();
-        void fetchPresetsForPipeline(state.pipeline, true);
-        void fetchConfigMetadata(state.pipeline, true);
-        createToast("Configuration imported.", "success");
-    } catch (err) {
-        createToast("Invalid JSON file.", "error");
+        if (!file || !expected) return;
+        const api = await loadDeferredSurface('configTransfer', _createConfigTransferHost);
+        if (api) await api.importFile(file, expected);
+    } finally {
+        event.target.value = '';
     }
-    els.fileInput.value = "";
 });
 
 if (els.copyCliBtn) els.copyCliBtn.addEventListener('click', async () => {
@@ -12243,13 +12066,14 @@ if (els.artifactThumbnailRail) {
         const path = String(button.dataset.artifactPath || '').trim();
         if (!path) return;
         const shouldRestoreFocus = event.detail === 0;
-        _rememberArtifactSelection(String(selectedJob.id || ''), path);
-        renderReviewSurfaces();
-        if (shouldRestoreFocus) {
-            requestAnimationFrame(() => {
+        const select = () => {
+            _rememberArtifactSelection(String(selectedJob.id || ''), path);
+            renderReviewSurfaces();
+            if (shouldRestoreFocus) requestAnimationFrame(() => {
                 _focusArtifactRailButton(path);
             });
-        }
+        };
+        if (!_requestReviewNavigation(select)) select();
     });
     els.artifactThumbnailRail.addEventListener('keydown', handleArtifactRailKeydown);
 }
@@ -12972,8 +12796,13 @@ portalRenderSurfaces.register('jobQueue', {
     }
 });
 
+window.addEventListener('beforeunload', (event) => {
+    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+});
 window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
-window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('beforeunload', _flushPortalRumOnPagehide);
 window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
@@ -12984,11 +12813,17 @@ window.addEventListener('pageshow', () => {
 window.addEventListener('focus', () => {
     reconcileBuildSurfaceFromDom();
 });
-window.addEventListener('popstate', () => {
-    applyConsoleRouteFromLocation(true);
-    portalRenderSurfaces.render('jobQueue', state);
-    _focusConsoleViewHeading(state.currentView);
+const portalHistoryNavigation = portalInternals.createPortalHistoryNavigation({
+    history: window.history,
+    hasEdits: () => Boolean(deferredReviewSurfaceApi?.hasUnsavedChanges?.()),
+    requestNavigation: (action) => deferredReviewSurfaceApi.requestNavigation(action, { leave: true }),
+    apply: () => {
+        applyConsoleRouteFromLocation(true);
+        portalRenderSurfaces.render('jobQueue', state);
+        _focusConsoleViewHeading(state.currentView);
+    }
 });
+window.addEventListener('popstate', portalHistoryNavigation.pop);
 
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');

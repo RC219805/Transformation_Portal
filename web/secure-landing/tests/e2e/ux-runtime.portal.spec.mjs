@@ -162,7 +162,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route(/\/(?:portal\/assets|__mock-portal)\/(?:portal-photographic-(?:support|editor)|portal-operate-tools)\.js(?:\?.*)?$/, async (route) => {
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/(?:portal-photographic-(?:support|editor|drafts|loader)|portal-operate-tools)\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/javascript; charset=utf-8",
@@ -188,12 +188,16 @@ async function installHydratedPortalRoutes(page, options = {}) {
       authMode: runtime.authMode,
       csrfToken: runtime.authMode === "managed" ? "hydrated-ux-csrf" : null,
       actor: runtime.actor,
+      recoveryContext: options.recoveryContext || null,
+      recoveryContextStatus: options.recoveryContext ? "ready" : "unavailable",
       features: {
         apiKeyInput: runtime.authMode === "direct_debug",
         directDebug: runtime.authMode === "direct_debug",
         artifactViewerModal: true,
         reviewSurfaceDeferred: true,
         stagedUploads: Boolean(options.stagedUploads),
+        jobSubmissionReceipts: options.jobSubmissionReceipts === true,
+        uploadReceipts: options.uploadReceipts === true,
         rumTelemetry: false,
         fastVlmCaptioning: false,
         photographicRecordedPresentation: options.photographicRecordedPresentation === true,
@@ -364,7 +368,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
       runtime.submittedPayloads.push(request.postDataJSON());
       await fulfillJson(route, {
         success: true,
-        data: { id: "job-dispatched", events_url: "/v1/jobs/job-dispatched/events" },
+        schema: "tp.orchestrator.job.v1",
+        data: { id: "job-dispatched", state: "queued", events_url: "/v1/jobs/job-dispatched/events" },
       });
       return;
     }
@@ -2345,7 +2350,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("@portal-browser staged uploads recover from an invalid success receipt without losing draft paths", async ({ page }) => {
+test("@portal-browser invalid upload receipts remain unresolved without losing draft paths or repeating POST", async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });
   let malformedReceipt = true;
   await page.route("**/v1/uploads/staging", async (route) => {
@@ -2365,17 +2370,15 @@ test("@portal-browser staged uploads recover from an invalid success receipt wit
   const originalOutput = await page.locator("#outputDir").inputValue();
   const file = { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("fixture") };
   await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#stagedUploadError")).toContainText("invalid response");
-  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-busy", "false");
-  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeEnabled();
+  await expect(page.locator("#stagedUploadError")).toContainText("outcome is unknown");
+  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-outcome", "outcome_unknown");
+  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeDisabled();
   await expect(page.locator("#inputDir")).toHaveValue(originalInput);
   await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
 
-  await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/batch-photography/input");
-  await expect(page.locator("#stagedUploadError")).toBeEmpty();
-  await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
-  expect(runtime.stagedUploadRequests).toHaveLength(1);
+  await page.locator('[data-ui="upload-recovery-check"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-attempt"]')).toContainText("Receipt recovery is unavailable");
+  expect(runtime.stagedUploadRequests).toHaveLength(0);
   expect(pageErrors).toEqual([]);
 });
 
@@ -3288,6 +3291,7 @@ for (const workflow of ['process', 'infer']) {
 }
 
 test('@portal-browser Unified request imports select their workflow and reject unknown workflow values', async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
   const runtime = await installHydratedPortalRoutes(page, { previewForPayload: (payload) =>
     payload.pipeline === 'lux-depth' && !['process', 'infer'].includes(payload.args.workflow)
       ? { ...EMPTY_PREVIEW, field_errors: [{ field: 'workflow', code: 'invalid_argument', message: 'Choose process or infer.' }] }
@@ -5006,4 +5010,165 @@ test('@portal-browser UX08 loaded log tools pause follow and export the complete
   await page.locator('#clearLogsBtn').click();
   await expect(pane).toBeEmpty();
   await expect(page.locator('#downloadLoadedLogsBtn')).toBeDisabled();
+});
+
+test('@portal-browser rejected configuration imports preserve the active draft and preview', async ({ page }) => {
+  await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=build');
+  const previousPipeline = await page.locator('#pipelineSelect').inputValue();
+  const before = await page.evaluate(() => sessionStorage.getItem('tp_portal_transient_draft'));
+  for (const payload of [{ pipeline: 'archive-gate-a', args: 'bad' }, { schema: 'tp.portal.export.v99', args: {} }]) {
+    await page.locator('#fileInput').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(payload)) });
+    await expect(page.getByText('Invalid JSON file.', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('#pipelineSelect')).toHaveValue(previousPipeline);
+    expect(await page.evaluate(() => sessionStorage.getItem('tp_portal_transient_draft'))).toEqual(before);
+  }
+});
+
+for (const paged of [false, true]) {
+  test(`@portal-browser ${paged ? 'paged' : 'legacy'} authoring drafts survive guarded navigation and a delayed save`, async ({ page }) => {
+    const jobId = `job-draft-correctness-${paged}`, base = `/v1/jobs/${jobId}/photographic-review`;
+    const scenes = [0, 1].map(index => ({ scene_id: `input-000${index}`, label: `Room ${index + 1}`,
+      variants: [{ role: 'final', artifact_path: `input-000${index}/delivery.tif`, sha256: String(index + 1).repeat(64),
+        width: 80, height: 60, bit_depth: 16, color_profile: 'sRGB' }] }));
+    const artifacts = scenes.map(scene => ({ path: scene.variants[0].artifact_path, relative_path: scene.variants[0].artifact_path,
+      name: 'delivery.tif', media_kind: 'image', artifact_type: 'image', content_type: 'image/tiff', size_bytes: 100,
+      sha256: scene.variants[0].sha256, browser_previewable: false }));
+    await installHydratedPortalRoutes(page, { jobs: [{ id: jobId, pipeline: 'lux-depth', state: 'succeeded', progress: 100,
+      created_at: '2026-11-16T00:00:00Z', artifacts: { items: artifacts } }], photographicPagedCatalogue: paged });
+    let version = 0, finish = null;
+    const decisions = [], submissions = [], catalogue = 'c'.repeat(64), png = await photographicFixturePng(80, 60);
+    await page.route(`**${base}**`, async route => {
+      const request = route.request(), url = new URL(request.url());
+      const common = { state_version: version, decisions, groups: [], presets: [] };
+      if (request.method() === 'POST' && url.pathname.endsWith('/decisions')) {
+        const body = request.postDataJSON(); submissions.push(body);
+        await new Promise(resolve => { finish = resolve; }); finish = null;
+        decisions.push({ ...body, scene_id: scenes.find(scene => scene.variants[0].artifact_path === body.artifact_path).scene_id });
+        version += 1;
+        await fulfillJson(route, { success: true, data: { state_version: version } }); return;
+      }
+      if (url.pathname.endsWith('/scenes')) {
+        await fulfillJson(route, { success: true, data: { ...common, schema: 'tp.photo.scene_page.v1',
+          catalogue_identity_sha256: catalogue, scenes: scenes.map(scene => ({ scene_id: scene.scene_id, label: scene.label,
+            review_status: 'unreviewed', source_validation: 'not_checked', variant_count: 1,
+            variant_paths: [scene.variants[0].artifact_path], related_artifacts: [] })),
+          total_scenes: 2, total_filtered: 2, limit: 8, filter: 'all', sort: 'scene_id', next_cursor: null } }); return;
+      }
+      if (url.pathname.endsWith('/scene')) {
+        await fulfillJson(route, { success: true, data: { ...common, schema: 'tp.photo.scene_detail.v1',
+          catalogue_identity_sha256: catalogue, scenes: scenes.filter(scene => scene.scene_id === url.searchParams.get('scene_id')) } }); return;
+      }
+      if (url.pathname === base) { await fulfillJson(route, { success: true, data: { ...common, scenes } }); return; }
+      const source = scenes.flatMap(scene => scene.variants).find(variant => variant.artifact_path === url.searchParams.get('artifact_path'));
+      await route.fulfill({ status: 200, contentType: 'image/png', body: png,
+        headers: { 'Cache-Control': 'no-store', 'X-TP-Source-SHA256': source?.sha256 || scenes[0].variants[0].sha256 } });
+    });
+    await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+    const scene = page.locator('[data-ui="photographic-scene"]'), note = page.locator('[data-ui="photographic-decision-note"]');
+    await expect(scene).toHaveValue('input-0000');
+    await note.fill('A source-bound note');
+    await scene.selectOption('input-0001');
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await expect(scene).toHaveValue('input-0000');
+    await expect(note).toHaveValue('A source-bound note');
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await page.locator('[data-ui="photographic-decision-approved"]').click();
+    await expect.poll(() => submissions.length).toBe(1);
+    await expect(note).toBeEnabled(); await note.fill('Newer note while saving');
+    finish();
+    await expect(page.locator('[data-ui="photographic-draft-status"]')).toContainText('Unsaved');
+    await expect(note).toHaveValue('Newer note while saving');
+    expect(submissions[0]).toMatchObject({ artifact_path: 'input-0000/delivery.tif', note: 'A source-bound note' });
+    await scene.selectOption('input-0001');
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(scene).toHaveValue('input-0001'); await expect(note).toHaveValue('');
+    await page.locator('[data-ui="photographic-lighting-group"]').fill('Unsaved room B lighting');
+    await scene.selectOption('input-0000');
+    await expect(scene).toHaveValue('input-0001');
+    await expect(page.locator('[data-ui="photographic-lighting-group"]')).toHaveValue('Unsaved room B lighting');
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(scene).toHaveValue('input-0000');
+    expect(submissions).toHaveLength(1);
+    await page.locator('[data-view-link="build"]').first().click();
+    await page.locator('[data-view-link="operate"]').first().click();
+    await page.locator('[data-view-link="review"]').first().click();
+    await note.fill('Private draft while going Back');
+    await page.goBack();
+    await expect(page).toHaveURL(/view=review/);
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await expect(note).toHaveValue('Private draft while going Back');
+    await page.goBack();
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(page).toHaveURL(/view=operate/);
+    await page.goForward();
+    await expect(page).toHaveURL(/view=review/);
+  });
+}
+
+test('@portal-browser a lost submission response reconciles one accepted run without another POST', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { jobSubmissionReceipts: true, recoveryContext: scope, keepEventStreamOpen: true });
+  let posts = 0, requestId = '', releaseReceipt;
+  const receiptGate = new Promise(resolve => { releaseReceipt = resolve; });
+  const job = { id: 'job-receipt-recovered', state: 'queued', events_url: '/v1/jobs/job-receipt-recovered/events',
+    pipeline: 'lux-depth-v3', created_at: '2026-11-16T00:00:00Z', logs_tail: [], artifacts: { items: [] } };
+  await page.route('**/v1/jobs', async route => {
+    if (route.request().method() === 'POST') {
+      posts += 1; requestId = route.request().headers()['idempotency-key'];
+      expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+      await route.abort('connectionfailed'); return;
+    }
+    await fulfillJson(route, { success: true, data: { jobs: posts ? [job] : [] } });
+  });
+  await page.route('**/v1/jobs/job-receipt-recovered', route => fulfillJson(route, { success: true, data: job }));
+  await page.route('**/v1/job-submissions/*', async route => {
+    expect(route.request().method()).toBe('GET'); await receiptGate;
+    await fulfillJson(route, { schema: 'tp.orchestrator.job_submission.v1', success: true,
+      data: { request_id: requestId, intent_sha256: 'b'.repeat(64), status: 'accepted', job } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab4').click();
+  await page.locator('#runJobBtn').click();
+  await expect(page.locator('#submissionRecoveryPanel')).toContainText('Submission outcome unknown');
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  const refs = await page.evaluate(() => JSON.parse(sessionStorage.getItem('tp.portal.recovery_refs.v1')));
+  expect(refs.attempts).toEqual([{ type: 'job', request_id: requestId, scope: scope.ownerId, created_at: expect.any(Number) }]);
+  expect(posts).toBe(1);
+  releaseReceipt();
+  await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
+  await expect(page.locator('[data-ui="queue-row"][data-job-id="job-receipt-recovered"]')).toHaveCount(1);
+  expect(posts).toBe(1);
+});
+
+test('@portal-browser canceling transfer reconciles staging and requires explicit path acceptance', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { stagedUploads: true, uploadReceipts: true, recoveryContext: scope });
+  let posts = 0, requestId = '', releasePost;
+  const postGate = new Promise(resolve => { releasePost = resolve; });
+  const receipt = { batch_id: 'upload-canceled-fixture', input_dir: '/tenant/uploads/canceled-fixture/input',
+    metadata_dir: '/tenant/uploads/canceled-fixture/_portal', artifacts: {},
+    summary: { file_count: 1, total_bytes: 4, warnings: [] } };
+  await page.route('**/v1/uploads/staging', async route => {
+    posts += 1; requestId = route.request().headers()['x-tp-upload-request-id'];
+    expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+    await postGate;
+    try { await fulfillJson(route, { schema: 'tp.orchestrator.upload_staging.v1', success: true, data: receipt }); } catch { /* Canceled client no longer owns the response. */ }
+  });
+  await page.route('**/v1/uploads/staging/receipts/*', route => {
+    expect(route.request().method()).toBe('GET');
+    return fulfillJson(route, { schema: 'tp.orchestrator.upload_receipt.v1', success: true,
+      data: { request_id: requestId, status: 'ready', receipt } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  const beforeInput = await page.locator('#inputDir').inputValue(), beforeOutput = await page.locator('#outputDir').inputValue();
+  await page.locator('#stagedUploadFilesInput').setInputFiles({ name: 'fixture.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('test') });
+  await page.locator('[data-ui="upload-recovery-cancel"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-accept"]')).toBeVisible();
+  await expect(page.locator('#inputDir')).toHaveValue(beforeInput);
+  await page.locator('[data-ui="upload-recovery-accept"]').click();
+  await expect(page.locator('#inputDir')).toHaveValue(receipt.input_dir);
+  await expect(page.locator('#outputDir')).toHaveValue(beforeOutput);
+  expect(posts).toBe(1); releasePost();
 });

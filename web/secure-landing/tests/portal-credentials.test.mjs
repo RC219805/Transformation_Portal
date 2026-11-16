@@ -29,6 +29,7 @@ function credentialHarness({ deniedStore = "", denyGetter = false } = {}) {
   const context = vm.createContext({
     state,
     els: { apiKeyInput: { value: "" }, logoutBtn: { hidden: true } },
+    configImportGeneration: 0,
     API_KEY_STORAGE_KEY: "tp_api_key",
     SAFE_HTTP_METHODS: new Set(["GET", "HEAD", "OPTIONS"]),
     portalInternals: { isManagedAuthMode, normalizePortalRumTraceparent: () => "" },

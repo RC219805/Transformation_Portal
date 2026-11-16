@@ -251,9 +251,11 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
   }
   assert.match(profile, /state\.config = copyDraftConfig\(profiles\[name\]\.config\)/);
   assert.match(portal, /\[deprecated_output_flag\] Report on; no marketing\./);
-  assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(data\.args\)/);
+  assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(args, false\)/);
+  const configTransfer = readFileSync(new URL('../portal-src/config-transfer-deferred.js', import.meta.url), 'utf8');
+  assert.match(configTransfer, /host\.migrate\(data\.args\)/);
   assert.match(
-    portal,
+    configTransfer,
     /data\.args\.output_bit_depth \?\? data\.args\.outputBitDepth \?\? c\.outputBitDepth/,
   );
 

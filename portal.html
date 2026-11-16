@@ -42,6 +42,8 @@ Contract notes:
     data-review-surface-css-url="__PORTAL_REVIEW_CSS_URL__"
     data-operate-surface-js-url="__PORTAL_OPERATE_JS_URL__"
     data-build-surface-js-url="__PORTAL_BUILD_JS_URL__"
+    data-client-recovery-js-url="__PORTAL_CLIENT_RECOVERY_JS_URL__"
+    data-config-transfer-js-url="__PORTAL_CONFIG_TRANSFER_JS_URL__"
     data-profile-surface-js-url="__PORTAL_PROFILE_JS_URL__"
     data-overview-surface-js-url="__PORTAL_OVERVIEW_JS_URL__"
     class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300"
@@ -794,6 +796,7 @@ Contract notes:
                                         </div>
                                         <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
                                     </div>
+                                    <div id="uploadRecoveryPanel" data-ui="upload-recovery" class="mt-3" hidden></div>
                                     <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true" role="status"></div>
                                     <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive" role="alert"></p>
                                     <input type="file" id="stagedUploadFilesInput" class="hidden" multiple aria-label="Choose staged upload files" aria-describedby="stagedUploadStatus stagedUploadError" aria-errormessage="stagedUploadError" />
@@ -1571,6 +1574,7 @@ Contract notes:
                             <button id="runJobBtn" type="button" class="dispatch-primary-action hero-action hero-action-primary mt-4 w-full disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason" aria-busy="false">
                                 Execute Job
                             </button>
+                            <div id="submissionRecoveryPanel" data-ui="submission-recovery" class="mt-3" hidden></div>
                             <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">
                                 Once dispatch unlocks, use <span class="kbd">Ctrl/⌘ + Enter</span> to execute without leaving the keyboard.
                             </p>
