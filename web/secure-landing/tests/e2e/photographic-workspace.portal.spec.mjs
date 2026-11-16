@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { crc32, deflateSync } from "node:zlib";
 import { expectNoHorizontalOverflow, expectNoWcagViolations } from "./helpers/accessibility.mjs";
+import { installThumbnailFetchOwnership } from "./helpers/thumbnail-fetch-ownership.mjs";
 
 const assets = new URL("../../../../public/portal-assets/", import.meta.url);
 const diagnostics = new WeakMap();
@@ -27,7 +28,11 @@ test.beforeEach(({ page }) => {
   });
 });
 test.afterEach(async ({ page }, info) => {
-  if (info.status !== info.expectedStatus) await info.attach("workspace diagnostics", { contentType: "application/json", body: Buffer.from(JSON.stringify(diagnostics.get(page))) });
+  if (info.status !== info.expectedStatus) {
+    const detail = diagnostics.get(page);
+    detail.thumbnailFetchOwnership = await page.evaluate(() => globalThis.__tpThumbnailFetchOwnership || null).catch(() => null);
+    await info.attach("workspace diagnostics", { contentType: "application/json", body: Buffer.from(JSON.stringify(detail)) });
+  }
 });
 function png(width, height) {
   const chunk = (name, body) => {
@@ -67,6 +72,7 @@ async function workspace(page, { thumbnails = false, sceneCount = 1 } = {}) {
   page.on("requestfailed", (request) => trackThumbnail(request, "failed"));
   Object.assign(diagnostics.get(page), { thumbnailTransport, thumbnailHandlers, thumbnailLifecycle });
   const saved = { state_version: 1, catalogue_identity_sha256: catalogue, decisions: [], groups: [], presets: [{ schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg", intended_use: "Website", long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, render: "perceptual_srgb", shoulder: 0.8 }] };
+  await page.addInitScript(installThumbnailFetchOwnership);
   await page.addInitScript(() => { sessionStorage.clear(); localStorage.removeItem("tp_portal_transient_draft"); });
   await page.route(/\/(?:__mock-portal|portal\/assets)\/portal(?:-[a-z0-9-]+)?\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({ contentType: "text/javascript", body: await readFile(new URL(new URL(route.request().url()).pathname.split("/").pop(), assets)) });
@@ -206,8 +212,9 @@ test("@portal-browser paged thumbnails keep two request slots, never prefetch ad
   const state = await workspace(page, { thumbnails: true, sceneCount: 12 });
   await expect(page.locator('[data-ui="photographic-page-thumbnail"]').first()).toBeVisible();
   await expect.poll(() => state.thumbnailRequests.length).toBeGreaterThan(0);
-  expect(state.thumbnailTransport.peak).toBeGreaterThan(0);
-  expect(state.thumbnailTransport.peak).toBeLessThanOrEqual(2);
+  const clientOwnership = () => page.evaluate(() => globalThis.__tpThumbnailFetchOwnership);
+  expect((await clientOwnership()).peak).toBeGreaterThan(0);
+  expect((await clientOwnership()).peak).toBeLessThanOrEqual(2);
   expect(state.detailRequests).toEqual(["scene-0"]);
   expect(state.thumbnailRequests.every((row) => Number(row.id.split("-")[1]) < 8)).toBe(true);
   const failed = page.locator('[data-scene-id="scene-3"] [data-ui="photographic-contact-item"]');
@@ -222,10 +229,16 @@ test("@portal-browser paged thumbnails keep two request slots, never prefetch ad
   await expect(page.locator('[data-scene-id="scene-8"] [data-ui="photographic-contact-item"]')).toBeInViewport({ ratio: 1 });
   await expect(page.locator('[data-ui="photographic-page-thumbnail"]').first()).toBeVisible();
   await expect.poll(() => state.thumbnailTransport.active).toBe(0);
-  expect(state.thumbnailTransport.peak).toBeLessThanOrEqual(2);
+  await expect.poll(async () => (await clientOwnership()).active).toBe(0);
+  const ownership = await clientOwnership();
+  // Enforce the client's two owned fetches through abort/body completion.
+  // Browser protocol terminal notifications can arrive after that ownership ends.
+  expect(ownership.started).toBeGreaterThan(0);
+  expect(ownership.peak).toBeGreaterThan(0);
+  expect(ownership.peak).toBeLessThanOrEqual(2);
   expect(state.detailRequests).toEqual(["scene-0", "scene-3", "scene-8"]);
   expect(state.thumbnailRequests.every((row) => row.view === "clip_srgb" && row.catalogue === "c".repeat(64))).toBe(true);
   await info.attach("thumbnail request lifecycle", { contentType: "application/json", body: Buffer.from(JSON.stringify({
-    transport: state.thumbnailTransport, delayedHandlers: state.thumbnailHandlers, events: state.thumbnailLifecycle,
+    clientOwnership: ownership, transport: state.thumbnailTransport, delayedHandlers: state.thumbnailHandlers, events: state.thumbnailLifecycle,
   })) });
 });
