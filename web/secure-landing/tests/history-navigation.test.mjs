@@ -56,6 +56,95 @@ test('multi-entry traversal restores position until explicit discard', async () 
   assert.deepEqual(h.applied, ['build']);
 });
 
+test('Back across an earlier fragment replays the requested physical destination after cancel and discard', async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate' }, 'operate');
+  h.fragment('operate#main-content');
+  h.router.record(false, { view: 'review' }, 'review');
+  const original = structuredClone(h.entries);
+  h.dirty(true); h.history.go(-3); await settle();
+  assert.equal(h.current(), 'review'); assert.equal(h.hasPrompt(), true);
+  assert.deepEqual(h.applied, []); assert.deepEqual(h.entries, original);
+  h.cancel();
+  h.history.go(-3); await settle(); h.discard(); await settle();
+  assert.equal(h.current(), 'build'); assert.deepEqual(h.applied, ['build']);
+  assert.equal(h.hasPrompt(), false); assert.deepEqual(h.entries, original);
+  assert.equal(h.traversals.includes(0), false);
+  h.history.go(3); await settle(); assert.equal(h.current(), 'review');
+});
+
+test('restoring and permitted fragment-spanning traversal retain the target during background replacements', async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate' }, 'operate');
+  h.fragment('operate#main-content');
+  h.router.record(false, { view: 'review' }, 'review');
+  const original = structuredClone(h.entries);
+  h.dirty(true);
+  h.afterNextTraversal(() => h.router.record(true, { view: 'review' }, 'review-background'));
+  h.history.go(-3); await settle();
+  assert.equal(h.current(), 'review'); assert.equal(h.promptCount(), 1);
+  assert.deepEqual(h.entries, original);
+  h.discard({ clearEdits: false });
+  h.router.record(true, { view: 'review' }, 'review-background');
+  await settle();
+  assert.equal(h.current(), 'build'); assert.deepEqual(h.applied, ['build']);
+  assert.equal(h.promptCount(), 1); assert.equal(h.hasPrompt(), false);
+  assert.deepEqual(h.entries, original); assert.equal(h.traversals.includes(0), false);
+});
+
+test('a router push after Forward truncation still counts an intervening fragment during dirty Back', async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate' }, 'operate');
+  h.router.record(false, { view: 'review' }, 'old-review');
+  h.history.go(-1); await settle();
+  h.fragment('operate#main-content');
+  h.router.record(false, { view: 'review' }, 'new-review');
+  const original = structuredClone(h.entries);
+  h.applied.length = 0; h.dirty(true);
+  h.history.go(-3); await settle();
+  assert.equal(h.current(), 'new-review'); assert.equal(h.hasPrompt(), true);
+  h.discard(); await settle();
+  assert.equal(h.current(), 'build'); assert.deepEqual(h.applied, ['build']);
+  assert.deepEqual(h.entries, original);
+  assert.equal(h.entries.some(row => row.url === 'old-review'), false);
+  assert.equal(h.traversals.includes(0), false);
+});
+
+for (const fragments of [1, 3]) test(`dirty Forward restores and replays across ${fragments} physical fragment entries`, async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'review' }, 'first-review');
+  h.router.record(false, { view: 'operate' }, 'operate');
+  for (let n = 0; n < fragments; n += 1) h.fragment(`operate#${n % 2 ? 'alternate' : 'main-content'}`);
+  h.router.record(false, { view: 'review' }, 'last-review');
+  const distance = fragments + 2;
+  h.history.go(-distance); await settle();
+  assert.equal(h.current(), 'first-review');
+  h.applied.length = 0; h.dirty(true);
+  const original = structuredClone(h.entries);
+  h.history.go(distance); await settle();
+  assert.equal(h.current(), 'first-review'); assert.equal(h.hasPrompt(), true);
+  assert.deepEqual(h.applied, []); assert.deepEqual(h.entries, original);
+  h.cancel();
+  h.history.go(distance); await settle(); h.discard(); await settle();
+  assert.equal(h.current(), 'last-review'); assert.deepEqual(h.applied, ['last-review']);
+  assert.equal(h.hasPrompt(), false); assert.deepEqual(h.entries, original);
+  assert.equal(h.traversals.includes(0), false);
+});
+
+test('restoration counts an intermediate browser-owned fragment without applying its route', async () => {
+  const h = fixture();
+  h.router.record(false, { view: 'operate' }, 'operate');
+  h.history.pushState(null, '', 'operate#main-content');
+  h.router.record(false, { view: 'review' }, 'review');
+  const original = structuredClone(h.entries);
+  h.dirty(true); h.history.go(-3); await settle();
+  assert.equal(h.current(), 'review'); assert.equal(h.hasPrompt(), true);
+  assert.deepEqual(h.applied, []);
+  h.discard(); await settle();
+  assert.equal(h.current(), 'build'); assert.deepEqual(h.applied, ['build']);
+  assert.deepEqual(h.entries, original); assert.equal(h.traversals.includes(0), false);
+});
+
 test('dirty fragment Back stays on Review without reloading and preserves the next owned Back guard', async () => {
   const h = fixture();
   h.router.record(false, { view: 'operate' }, 'operate');
@@ -104,11 +193,12 @@ for (const offset of [-1, -2]) test(`a background Review replacement while resto
   h.afterNextTraversal(() => h.router.record(true, { view: 'review', jobId: 'job-b' }, 'review-background'));
   h.history.go(offset); await settle();
   assert.equal(h.current(), 'review'); assert.equal(h.hasPrompt(), true); assert.equal(h.promptCount(), 1);
-  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset]);
+  const walk = Array(-offset).fill(1);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, ...walk]);
   h.discard({ clearEdits: false }); await settle();
   assert.equal(h.current(), target); assert.deepEqual(h.applied, [target]);
   assert.equal(h.hasPrompt(), false); assert.equal(h.promptCount(), 1);
-  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset, offset]);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, ...walk, offset]);
 });
 
 for (const offset of [-1, -2]) test(`a background Review replacement cannot revoke permitted Back by ${-offset} entries`, async () => {
@@ -123,7 +213,7 @@ for (const offset of [-1, -2]) test(`a background Review replacement cannot revo
   await settle();
   assert.equal(h.current(), target); assert.deepEqual(h.applied, [target]);
   assert.equal(h.hasPrompt(), false); assert.equal(h.promptCount(), 1);
-  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, -offset, offset]);
+  assert.deepEqual(h.entries, original); assert.deepEqual(h.traversals, [offset, ...Array(-offset).fill(1), offset]);
 });
 
 test('replacements preserve index and view/job metadata without adding entries', () => {

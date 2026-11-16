@@ -5106,6 +5106,37 @@ for (const paged of [false, true]) {
     await expect(page).toHaveURL(/view=operate/);
     await page.goForward();
     await expect(page).toHaveURL(/view=review/);
+
+    await page.locator('[data-view-link="build"]').first().click();
+    await expect(page).toHaveURL(/view=build/);
+    const buildUrl = page.url();
+    await page.locator('[data-view-link="operate"]').first().click();
+    await expect(page).toHaveURL(/view=operate/);
+    const beforeFragment = await page.evaluate(() => history.length);
+    await page.locator('a[href="#main-content"]').focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => history.length)).toBe(beforeFragment + 1);
+    await page.locator('[data-view-link="review"]').first().click();
+    await expect(page).toHaveURL(/view=review/);
+    await expect(note).toBeEnabled();
+    const reviewUrl = page.url();
+    const documentMarker = await page.evaluate(() => window.__tpFragmentHistoryDocument = crypto.randomUUID());
+    await note.fill('Private draft across an earlier fragment');
+    await page.evaluate(() => history.go(-3));
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await expect(page).toHaveURL(reviewUrl);
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await expect(note).toHaveValue('Private draft across an earlier fragment');
+    await expect(page).toHaveURL(reviewUrl);
+    await page.evaluate(() => history.go(-3));
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(page).toHaveURL(buildUrl);
+    expect(await page.evaluate(() => window.__tpFragmentHistoryDocument)).toBe(documentMarker);
+    await page.evaluate(() => history.go(3));
+    await expect(page).toHaveURL(reviewUrl);
+    await expect(note).not.toHaveValue('Private draft across an earlier fragment');
+    expect(submissions).toHaveLength(1);
   });
 }
 
