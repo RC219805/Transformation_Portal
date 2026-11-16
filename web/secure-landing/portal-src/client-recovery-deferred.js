@@ -87,7 +87,11 @@ export function createDeferredClientRecoveryApi(host) {
   const attempts = store.entries().map((reference) => ({ ...reference, status: "unknown", restored: true, durable: true, automatic: false }));
   const polls = new Map();
   let activeUpload = null, separateConfirmation = "", generation = 0, previousScope = "";
-  const context = () => host.context();
+  const needsVerifiedContext = () => attempts.some((attempt) => attempt.durable) && !DIGEST.test(host.context().scope);
+  const context = () => {
+    const current = host.context();
+    return needsVerifiedContext() ? { ...current, ready: false } : current;
+  };
   const canRequest = (type) => host.canRequest?.(type) !== false;
   function inspectFailure(attempt, response, envelope) {
     if (response.status === 429) attempt.retryAt = now() + Math.max(0, host.retryDelay?.(response, now()) || 0);
@@ -95,6 +99,7 @@ export function createDeferredClientRecoveryApi(host) {
   }
   const sameOwner = (attempt) => context().ready && context().scope === attempt.scope;
   const currentIntent = (attempt) => sameOwner(attempt) && attempt.intent === context().intent;
+  const unchangedDraft = (attempt) => currentIntent(attempt) && attempt.draftGeneration === context().draftGeneration;
   const headers = (method, extra = {}) => host.headers(extra, method);
   const endpoint = (attempt) => `${host.apiBase || ""}/v1/${attempt.type === "job" ? "job-submissions" : "uploads/staging/receipts"}/${attempt.request_id}`;
 
@@ -104,7 +109,7 @@ export function createDeferredClientRecoveryApi(host) {
       ({ type, request_id, status: current.ready ? status : "paused", restored: !!restored, canceled: !!canceled, result: current.ready ? result : null, message: current.ready ? message : "Recovery paused while access is checked." }));
   }
   function render() {
-    const state = snapshot(); host.onState?.(state);
+    const state = snapshot(); host.onState?.(state, needsVerifiedContext());
     if (!host.document || !host.panels) return;
     const focused = host.document.activeElement;
     const focusId = focused?.dataset?.recoveryRequestId, focusAction = focused?.dataset?.ui;
@@ -166,6 +171,9 @@ export function createDeferredClientRecoveryApi(host) {
       && ["queued", "running", "succeeded", "partial", "failed", "canceled", "worker_lost"].includes(value.state)
       && typeof value.events_url === "string" && value.events_url === `/v1/jobs/${value.id}/events`;
   }
+  function jobResult(attempt, value) {
+    return attempt.pipeline ? { ...value, pipeline: attempt.pipeline } : value;
+  }
   function uploadReceipt(value) {
     return value && typeof value.batch_id === "string" && value.batch_id.length > 0 && value.batch_id.length <= 128
       && typeof value.input_dir === "string" && value.input_dir.trim() && value.input_dir.length <= 4096
@@ -177,7 +185,7 @@ export function createDeferredClientRecoveryApi(host) {
     if (!attempt || !sameOwner(attempt)) return false;
     try {
       if (attempt.status === "accepted" && acceptedJob(attempt.result)) {
-        if (automatic && (!currentIntent(attempt) || attempt.draftGeneration !== context().draftGeneration)) return false;
+        if (automatic && !unchangedDraft(attempt)) return false;
         if (host.acceptJob(attempt.result, { automatic }) !== true) return false;
       }
       else if (attempt.status === "ready" && uploadReceipt(attempt.result)) host.applyUpload(attempt.result);
@@ -196,7 +204,7 @@ export function createDeferredClientRecoveryApi(host) {
     const receipt = envelope.data;
     if (attempt.type === "job" && envelope.schema === "tp.orchestrator.job_submission.v1") {
       if (receipt.status === "accepted" && acceptedJob(receipt.job)) {
-        change(attempt, { status: "accepted", result: receipt.job, message: "" });
+        change(attempt, { status: "accepted", result: jobResult(attempt, receipt.job), message: "" });
         if (!attempt.restored) accept(attempt.request_id, true);
         return true;
       }
@@ -236,6 +244,7 @@ export function createDeferredClientRecoveryApi(host) {
       render(); throw new Error("Submission outcome is unresolved. Check status before submitting this draft again.");
     }
     const attempt = newAttempt("job", current.features.jobSubmissionReceipts === true);
+    attempt.pipeline = typeof payload?.pipeline === "string" ? payload.pipeline : null;
     const startedAt = now(); let metricRecorded = false;
     function metric(response) {
       metricRecorded = true;
@@ -250,9 +259,10 @@ export function createDeferredClientRecoveryApi(host) {
       if (generation !== attempt.generation || !sameOwner(attempt)) { change(attempt, { status: "unknown", message: "Submission belongs to an earlier access context. Recheck it after access is restored." }); return null; }
       inspectFailure(attempt, response, envelope);
       if (response.ok && envelope?.success && envelope.schema === "tp.orchestrator.job.v1" && acceptedJob(envelope.data)) {
-        change(attempt, { status: "accepted", result: envelope.data, message: "" });
+        const result = jobResult(attempt, envelope.data);
+        change(attempt, { status: "accepted", result, message: "" });
         accept(attempt.request_id, true);
-        return envelope.data;
+        return result;
       }
       if (response.status >= 400 && response.status < 500 && ![408, 409, 410, 429].includes(response.status)) {
         change(attempt, { status: "rejected", message: String(envelope?.error?.message || "Submission was rejected.").slice(0, 240) });
@@ -314,7 +324,7 @@ export function createDeferredClientRecoveryApi(host) {
       if (xhr.status >= 200 && xhr.status < 300 && envelope?.success && envelope.schema === "tp.orchestrator.upload_staging.v1" && uploadReceipt(envelope.data)) {
         finished = true; clear(); activeUpload = null;
         change(attempt, { status: "ready", result: envelope.data, message: "" });
-        if (!attempt.canceled && currentIntent(attempt)) accept(attempt.request_id);
+        if (!attempt.canceled && unchangedDraft(attempt)) accept(attempt.request_id);
         else host.uploadState({ busy: false, status: "recovery_ready", error: "Apply the recovered input explicitly.", receipt: null });
       } else if (xhr.status >= 400 && xhr.status < 500 && ![408, 409, 429].includes(xhr.status)) {
         finished = true; clear(); activeUpload = null;
@@ -343,7 +353,7 @@ export function createDeferredClientRecoveryApi(host) {
         delete attempt.result; attempt.status = "unknown"; attempt.restored = true;
       }
       if (current.ready && previousScope && previousScope !== current.scope) {
-        for (const attempt of attempts) if (attempt.scope !== current.scope) { delete attempt.intent; delete attempt.result; attempt.restored = true; if (["posting", "accepted", "ready"].includes(attempt.status)) attempt.status = "unknown"; }
+        for (const attempt of attempts) if (attempt.scope !== current.scope) { delete attempt.intent; delete attempt.pipeline; delete attempt.result; attempt.restored = true; if (["posting", "accepted", "ready"].includes(attempt.status)) attempt.status = "unknown"; }
       }
     }
     if (current.ready) previousScope = current.scope;

@@ -8,6 +8,7 @@ function fixture(options = {}) {
   let owner = 'managed:alice', generation = 0;
   const notices = [], commits = [];
   const host = { state, portalInternals: {}, supportedPipelines: new Set(['lux-depth-v3', 'archive-gate-a']),
+    configTemplate: createPortalConfigState,
     snapshot: () => JSON.stringify([owner, generation, state]),
     migrate: () => {}, notify: (...args) => notices.push(args),
     confirmReplacement: async () => true,
@@ -89,4 +90,48 @@ test('normalization failure only changes the candidate', async () => {
   const h = fixture({ migrate: args => { args.archive_root = 'changed'; throw new Error('migration failed'); } });
   const before = structuredClone(h.state);
   assert.equal(await h.api.importFile(file(payload)), false); assert.deepEqual(h.state, before);
+});
+
+for (const field of ['input_dir', 'archive_root', 'output_dir', 'preset', 'depth_device', 'v2_input_color', 'sam2_checkpoint_path']) {
+  test(`object-valued ${field} is rejected before replacing any draft state`, async () => {
+    const h = fixture(), before = structuredClone(h.state);
+    assert.equal(await h.api.importFile(file({ ...payload, args: { [field]: { toString: null } } })), false);
+    assert.deepEqual(h.state, before); assert.equal(h.commits.length, 0);
+    assert.deepEqual(h.notices, [['Invalid JSON file.', 'error']]);
+  });
+}
+
+for (const field of ['input_dir', 'archive_root', 'output_dir', 'preset', 'depth_device', 'v2_input_color']) {
+  for (const value of [0, 7, false, true, [], { toString: null }]) {
+    test(`invalid primitive/container type for ${field} is rejected atomically: ${JSON.stringify(value)}`, async () => {
+      const h = fixture(), before = structuredClone(h.state);
+      assert.equal(await h.api.importFile(file({ args: { [field]: value } })), false);
+      assert.deepEqual(h.state, before); assert.equal(h.commits.length, 0);
+    });
+  }
+}
+
+test('canonical field types preserve numeric imports after an editable numeric control held text', async () => {
+  const h = fixture(); h.state.config.reconstruction.iterations = '1200';
+  assert.equal(await h.api.importFile(file({ args: { reconstruction_iterations: '1000', max_workers: 2 } })), true);
+  assert.equal(h.state.config.reconstruction.iterations, 1000);
+  assert.equal(h.state.config.runtime.maxWorkers, 2);
+});
+
+test('the detached import preserves all existing boolean flag mappings', async () => {
+  const h = fixture();
+  assert.equal(await h.api.importFile(file({ args: { materials_v3: false, pbr: false, cache_depth: false, overwrite: true,
+    enable_v2: true, save_float_depth: true, force_depth: true, strict_inputs: true, verify_images: true,
+    allow_semantic_fallback: true, verbose: true, quiet: false } })), true);
+  assert.deepEqual(h.state.config.flags, { materials: false, pbr: false, cache: false, overwrite: true, enableV2: true,
+    saveFloatDepth: true, forceDepth: true, strictInputs: true, verifyImages: true, allowSemanticFallback: true,
+    verbose: true, quiet: false });
+});
+
+test('final configuration normalization finishes on the detached candidate', async () => {
+  let calls = 0;
+  const h = fixture({ migrate: value => { calls += 1; if (calls === 2) { value.inputDir = '/candidate-only'; throw new Error('normalization failed'); } } });
+  const before = structuredClone(h.state);
+  assert.equal(await h.api.importFile(file(payload)), false);
+  assert.equal(calls, 2); assert.deepEqual(h.state, before); assert.equal(h.commits.length, 0);
 });

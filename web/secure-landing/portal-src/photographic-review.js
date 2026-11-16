@@ -109,7 +109,7 @@ export function createPhotographicReview(host) {
     scope: () => ({ jobId, owner: actorScope, generation: scopeGeneration }), blocked: () => pending || navigating,
     parent: () => els.artifactShellContent, hide: () => panel?.classList.add("hidden"),
     purge: purgePrivateReview, reload: () => load(true), restoreContext: () => show(context.job, context.artifact),
-    resume: () => { panel?.classList.remove("hidden"); setPending(false); render(); },
+    resume: () => { setPanelVisible(); setPending(false); render(); },
     discard: () => { resetAuthoringDraft(); render(); },
     pause: () => {
       scopeGeneration += 1; dataRequest += 1; historyRequest += 1;
@@ -120,6 +120,7 @@ export function createPhotographicReview(host) {
   const retainNavigation = (action) => lifecycle.retain(action);
   const clearPendingNavigation = () => lifecycle.clearNavigation();
   const syncAuthorization = () => lifecycle.syncAuthorization();
+  function setPanelVisible(visible = true) { panel?.classList.toggle("hidden", !visible || lifecycle.frozen()); }
   function authorization() {
     return host.getReviewAuthorization?.() || {
       status: state.auth?.mode === "managed_unavailable" ? "unavailable" : "ready",
@@ -193,7 +194,7 @@ export function createPhotographicReview(host) {
     if (deliverySources.some((source) => !data.decisions.some((row) => row.status === "approved" && photographicDecisionMatches(row, source)))) {
       clearDownload(); deliverySources = []; nodes.deliveryResult.textContent = "A delivery approval changed. Recheck the selected versions and create a newly verified bundle.";
     }
-    if (!lifecycle.frozen()) panel.classList.remove("hidden");
+    setPanelVisible();
     if (!data.scenes.length) {
       nodes.figures.forEach(({ image, caption }) => { image.removeAttribute("src"); caption.textContent = ""; });
       nodes.scene.replaceChildren(); nodes.primary.replaceChildren(); nodes.compare.replaceChildren(); nodes.note.value = "";
@@ -263,7 +264,7 @@ export function createPhotographicReview(host) {
   function currentScene() { return data?.scenes.find((scene) => scene.scene_id === sceneId) || null; }
   function currentVariant(path = primaryPath) { return currentScene()?.variants.find((variant) => variant.artifact_path === path) || null; }
   function decision(variant) { return data?.decisions.find((item) => photographicDecisionMatches(item, variant)) || null; }
-  function mutationBlocked() { return lifecycle.frozen() || lifecycle.requiresReconciliation() || pending || navigating || (pagedCatalogueEnabled() && !pager.current()); }
+  function mutationBlocked() { return !drafts.key() || !currentVariant() || lifecycle.frozen() || lifecycle.requiresReconciliation() || pending || navigating || (pagedCatalogueEnabled() && !pager.current()); }
   function setPending(value) {
     pending = value;
     pager?.lock(value);
@@ -272,7 +273,7 @@ export function createPhotographicReview(host) {
     if (nodes.refresh) nodes.refresh.disabled = value || navigating;
     if (nodes.commitRevision) nodes.commitRevision.disabled = blocked || !variantPreview;
     nodes.decisions?.querySelectorAll("[data-decision]").forEach((control) => { control.disabled = blocked || currentVariant()?.role === "original"; });
-    if (nodes.note) nodes.note.disabled = lifecycle.frozen() || navigating;
+    if (nodes.note) nodes.note.disabled = !drafts.key() || !currentVariant() || lifecycle.frozen() || navigating;
     if (nodes.groupName) nodes.groupName.disabled = blocked;
     if (nodes.scene) nodes.scene.setAttribute("aria-disabled", String(blocked));
     if (nodes.primary) nodes.primary.setAttribute("aria-disabled", String(blocked));
@@ -286,6 +287,13 @@ export function createPhotographicReview(host) {
     if (nodes.commitRevision) nodes.commitRevision.disabled = true;
   }
 
+  function checkAuthorizationFailure(response) {
+    if (response.status !== 401 && response.status !== 403) return;
+    const confirmed = response.status === 403 && lifecycle.reauthorizing();
+    if (confirmed) lifecycle.revoke(); else lifecycle.pause();
+    host.onReviewAuthorizationFailure?.(response.status, { confirmed });
+    throw new Error("Review access must be verified before continuing.");
+  }
   async function request(path = "", body = null, timeout = 20000) {
     if (lifecycle.frozen() && !lifecycle.reauthorizing()) throw new Error("Review access must be verified before continuing.");
     if (authorization().status !== "ready") throw new Error("Review access is unavailable.");
@@ -305,12 +313,7 @@ export function createPhotographicReview(host) {
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) throw new DOMException("Review selection changed.", "AbortError");
-      if (response.status === 401 || response.status === 403) {
-        const confirmed = response.status === 403 && lifecycle.reauthorizing();
-        if (confirmed) lifecycle.revoke(); else lifecycle.pause();
-        host.onReviewAuthorizationFailure?.(response.status, { confirmed });
-        throw new Error("Review access must be checked again. Unsaved changes remain private in this tab.");
-      }
+      checkAuthorizationFailure(response);
       checkRateLimit(response);
       const payload = await response.json();
       if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) throw new Error("Review selection changed.");
@@ -502,16 +505,16 @@ export function createPhotographicReview(host) {
         deliverySources = [];
       }
       if (!currentVariant()) chooseVariants();
-      if (!data.scenes.length) { panel.classList.toggle("hidden", !deliveryHistory.length); return true; }
-      if (!lifecycle.frozen()) panel.classList.remove("hidden");
+      if (!data.scenes.length) { setPanelVisible(Boolean(deliveryHistory.length)); setPending(pending); return true; }
+      setPanelVisible();
       render();
       lifecycle.reconciled(); setPending(pending);
       status(force ? "Review refreshed from verified artifacts and saved decisions." : "Review loaded. A saved approval applies only to the exact SHA-256 displayed here.");
       return true;
     } catch (error) {
       if (expectedJob !== jobId || sequence !== dataRequest || error.name === "AbortError") return false;
-      if (error.httpStatus === 404 || error.httpStatus === 422) { panel.classList.toggle("hidden", !deliveryHistory.length); return false; }
-      if (!lifecycle.frozen()) panel.classList.remove("hidden");
+      if (error.httpStatus === 404 || error.httpStatus === 422) { setPanelVisible(Boolean(deliveryHistory.length)); setPending(pending); return false; }
+      setPanelVisible(); setPending(pending);
       status(error.message, true);
       return false;
     }
@@ -784,6 +787,7 @@ export function createPhotographicReview(host) {
           headers: _buildAuthHeaders({ Accept: "image/png" }, "GET"), credentials: "same-origin", signal: controller.signal,
         });
         if (requestJob !== jobId || requestActor !== actorScope || requestGeneration !== scopeGeneration) return null;
+        checkAuthorizationFailure(response);
         checkRateLimit(response);
         if (!response.ok) throw new Error(`${native ? "Native crop" : "Fit preview"} unavailable (${response.status}); retained metadata remains available.`);
         if (!/^image\/png(?:;|$)/i.test(response.headers.get("Content-Type") || "")
@@ -888,15 +892,15 @@ export function createPhotographicReview(host) {
     const expectedJob = jobId;
     const expectedGeneration = scopeGeneration;
     const expectedSource = sourceKey();
-    const form = path === "/decisions" ? "note" : path === "/lighting-groups" ? "lighting" : "revision";
-    const submitted = drafts.capture(form, form === "note" ? body.note : form === "lighting" ? { ...lightingValue(), name: nodes.groupName.value.trim() } : editor.draft());
+    const form = path === "/decisions" ? "note" : path === "/lighting-groups" ? "lighting" : path === "/revisions" ? "revision" : null;
+    const submitted = form ? drafts.capture(form, form === "note" ? body.note : form === "lighting" ? { ...lightingValue(), name: nodes.groupName.value.trim() } : editor.draft()) : null;
     lifecycle.save("saving");
     setPending(true);
     try {
       const result = await request(path, { ...body, expected_version: data.state_version }, timeout);
       if (jobId !== expectedJob || scopeGeneration !== expectedGeneration) return null;
       if (sourceKey() !== expectedSource) return null;
-      const unchanged = drafts.acknowledge(submitted);
+      const unchanged = submitted && drafts.acknowledge(submitted);
       if (form === "lighting" && unchanged) nodes.groupName.value = submitted.value.name;
       if (form === "revision" && unchanged) { resetRecipe(); drafts.acknowledge(drafts.capture("revision", editor.draft())); }
       if (!await load(false, result.state_version)) throw new Error("Change saved. Refresh review before continuing.");
@@ -1086,7 +1090,7 @@ export function createPhotographicReview(host) {
 
   function renderDeliveryHistory() {
     nodes.deliveryHistory.replaceChildren();
-    if (deliveryHistory.length) panel.classList.remove("hidden");
+    if (deliveryHistory.length) setPanelVisible();
     for (const entry of deliveryHistory) {
       const row = el("article", "", "photo-review-help", "photographic-delivery-history-entry");
       row.dataset.deliveryId = String(entry.id || "");
@@ -1348,7 +1352,7 @@ export function createPhotographicReview(host) {
       deliveryOutcome = deliveryAttempt ? "outcome_unknown" : "idle";
       nodes.deliveryResult.replaceChildren(); renderDeliveryHistory();
     }
-    panel.classList.remove("hidden");
+    setPanelVisible(); setPending(pending);
     void load();
     void loadDeliveryHistory();
     return true;
