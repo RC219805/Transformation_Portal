@@ -415,6 +415,14 @@ must include the Ubuntu ML matrix and its reconstruction golden test. Do not
 narrow the package extras merely to repair CI; those remain compatibility
 metadata for operator-managed environments.
 
+The shared installer's explicit `--cpu` option is Linux x86_64-only and selects
+`torch==2.13.0+cpu`/`torchvision==0.28.0+cpu` from the official PyTorch CPU index.
+It rejects `TP_CI_ML_LOCKFILE` before installation and verifies the exact CPU
+pair again after metadata extras. Nightly's four CPU lanes and default-off
+manual `install_only` job use `scripts/ci/install_nightly_dependencies.sh`.
+Install-only qualification checks dependency consistency and imports without
+running suites or models; it is not golden, performance, or runtime acceptance.
+
 ### For Contributors
 
 #### Installing Development Environment

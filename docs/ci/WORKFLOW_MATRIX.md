@@ -8,7 +8,7 @@
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,466 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,508 lines total
 - **Required PR check snapshot (2026-11-15 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy. The Code Quality setup API currently reports that the feature is unavailable; configured severity is not proof of analysis or zero findings.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
@@ -34,7 +34,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 228 | **Keep** — Dependabot supplement; scheduled. |
 | 11 | `dependency-pinning-check.yml` | Dependency Pinning Check | push, PR | Job fails on drift | 46 | **Keep** — focused exact-pin drift guard for requirements and the dependency-pinning validator; the same check also runs through `make ci`, but this workflow surfaces supply-chain drift quickly on scoped changes. |
 | 12 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 63 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
-| 13 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 457 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
+| 13 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 499 | **Keep** — owns stress, evidence-gated broad benchmarks, memory leak, advisory core requirement-spec audit with fail-closed report validation, full integration; default-off manual install-only mode qualifies the shared CPU dependency path without suites/models. |
 | 14 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
 | 15 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 219 | **Keep** — schedule-only by design; runs the Lux perf smoke harness against committed baselines (`tests/benchmarks/baselines/`) and is green only when `scripts/ci/check_performance_evidence.py` proves the required tests executed and the four artifacts were produced (repair 1.6-a, #2062); the gate's exit code also classifies regression (valid evidence, failed baseline-writer comparison) vs failed (invalid evidence, or a non-writer suite failure); distinct from nightly benchmarks. |
 | 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 657 | **Keep** — APEX-specific matrix runner with synthetic PR/push evidence and real scheduled/manual backend runs. Standalone domain. |
