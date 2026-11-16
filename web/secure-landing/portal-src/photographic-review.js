@@ -148,8 +148,9 @@ export function createPhotographicReview(host) {
     const scene = loaded.scenes?.find((row) => row.scene_id === id) || loaded.scenes?.[0];
     const variant = scene?.variants?.find((row) => row.artifact_path === path)
       || scene?.variants?.find((row) => row.role === "final") || scene?.variants?.[0];
+    if (lifecycle.frozen() && !variant) return false;
     if (drafts.key() && photographicDraftSourceKey(actorScope, jobId, scene?.scene_id || "", variant) !== drafts.key()
-      && retainNavigation(retry)) return false;
+      && (lifecycle.frozen() || retainNavigation(retry))) return false;
     return true;
   }
   function notifySelection() {
