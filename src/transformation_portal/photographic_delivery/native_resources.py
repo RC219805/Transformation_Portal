@@ -120,6 +120,7 @@ _SOURCE_PATHS = (
     "src/transformation_portal/core/security/fs_guard.py",
     "src/transformation_portal/core/security/path_safety.py",
     "src/transformation_portal/core/execution_plan.py",
+    "src/transformation_portal/core/archive_execution_plan.py",
     "src/transformation_portal/core/execution_plan_v2.py",
     "src/transformation_portal/core/execution_plan_v3.py",
     "src/transformation_portal/core/execution_plan_v4.py",

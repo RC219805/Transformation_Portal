@@ -71,6 +71,7 @@ _MANAGED_MODULES = (
     "transformation_portal.orchestrator.photography_adapter",
     "transformation_portal.orchestrator.photography_v6_adapter",
     "transformation_portal.core.execution_plan_v4",
+    "transformation_portal.core.archive_execution_plan",
     "transformation_portal.core.execution_plan_v5",
     "transformation_portal.orchestrator.models",
     "transformation_portal.orchestrator.submissions",

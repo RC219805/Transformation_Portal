@@ -268,6 +268,8 @@ def test_native_runtime_revalidates_compiled_binary_hashes_without_package_chang
 
 @pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_source_closure_excludes_only_pure_data_authority_and_includes_loader():
+    from transformation_portal.photographic_delivery import managed_qualification
+
     paths = resources._SOURCE_PATHS
     assert "src/transformation_portal/photographic_delivery/native_resources.py" in paths
     assert "src/transformation_portal/photographic_delivery/native_resource_inputs.py" in paths
@@ -275,6 +277,7 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert "app.py" in paths
     assert "pyproject.toml" in paths and "requirements/base.in" in paths
     assert {
+        "src/transformation_portal/core/archive_execution_plan.py",
         "src/transformation_portal/orchestrator/submissions.py",
         "src/transformation_portal/orchestrator/upload_receipts.py",
         "src/transformation_portal/ingest/upload_recovery.py",
@@ -285,6 +288,7 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
         "src/transformation_portal/api/v1/errors.py",
         "src/transformation_portal/api/v1/schemas.py",
     }.issubset(paths)
+    assert "transformation_portal.core.archive_execution_plan" in managed_qualification._MANAGED_MODULES
     assert {
         "src/transformation_portal/lux_depth_v4/runtime.py",
         "src/transformation_portal/lux_depth_v4/_bytecode.py",
@@ -492,7 +496,11 @@ def test_native_declaration_source_hashes_do_not_discover_python_modules(monkeyp
 
 
 def _historical_runtime_requirements():
-    runtime = resources.RESOURCE_CONTRACT["runtime"]
+    # The current recaptured contract may now include the security floor.
+    # Construct the historical missing-package condition explicitly instead of
+    # coupling these regression tests to the currently selected capsule.
+    runtime = copy.deepcopy(resources.RESOURCE_CONTRACT["runtime"])
+    runtime["packages"].pop("markdown-it-py", None)
     assert set(resources._PACKAGES).issubset(runtime["packages"])
     environment = {
         "implementation_name": "cpython",
@@ -528,6 +536,9 @@ def test_historical_native_contract_rejects_current_markdown_security_floor():
 
 def test_historical_native_profile_missing_markdown_selects_fallback(evidence, monkeypatch):
     runtime, current_requirements = _historical_runtime_requirements()
+    historical_contract = copy.deepcopy(resources.RESOURCE_CONTRACT)
+    historical_contract["runtime"] = copy.deepcopy(runtime)
+    monkeypatch.setattr(resources, "RESOURCE_CONTRACT", historical_contract)
     historical_runtime = copy.deepcopy(runtime)
     historical_sources = dict(resources.RESOURCE_CONTRACT["sources"])
     active_requirements = tuple(value for value in current_requirements if canonicalize_name(value.name) != "markdown-it-py")
