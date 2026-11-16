@@ -129,13 +129,16 @@ export function createPhotographicReview(host) {
     requests.forEach((controller) => controller.abort()); requests.clear();
     stopBlink(); releaseImages(); imageRequest += 1; pager?.reset();
     data = null; jobId = ""; actorScope = ""; deliveryActorScope = ""; inventoryKey = ""; primaryPath = comparePath = sceneId = "";
-    inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); deliverySelections.clear(); presetEdits.clear();
+    inspectedScenes.clear(); recordedScenes.clear(); deliveryIdentities.clear(); deliverySelections.clear(); presetEdits.clear(); sceneLabels.clear();
     deliverySources = []; selectedPresets.clear(); deliveryAttempt = null; deliveryHistory = []; deliveryCursor = null;
     recoveryStorageBlocked = false; deliveryOutcome = "idle";
     resetAuthoringDraft(); clearPendingNavigation(); pending = false;
     if (nodes.note) nodes.note.value = "";
     if (nodes.groupName) nodes.groupName.value = "";
-    if (nodes.reference) nodes.reference.replaceChildren();
+    if (nodes.property) nodes.property.value = "Property";
+    for (const key of ["reference", "scene", "primary", "compare"]) {
+      if (nodes[key]) { nodes[key].replaceChildren(); nodes[key].value = ""; }
+    }
     if (nodes.contact) nodes.contact.replaceChildren();
     nodes.figures?.forEach(({ image, caption }) => { image.removeAttribute("src"); caption.textContent = ""; });
     panel?.classList.add("hidden");

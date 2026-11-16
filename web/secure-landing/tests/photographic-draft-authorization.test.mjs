@@ -95,12 +95,26 @@ for (const boundary of ["different owner", "revoked"]) {
     const h = fixture({ getReviewAuthorization: () => authorization });
     h.api.show(h.job, h.scenes[0].variants[0]); await settle();
     const control = await note(h, "Never show this to another actor");
+    const property = h.root.find("photographic-property-name");
+    property.value = "Private unsent property name";
+    const label = h.root.find("photographic-scene-delivery-label"), originalLabel = label.value;
+    label.value = "Private scene delivery label"; await label.trigger("input");
     authorization = boundary === "revoked" ? { status: "revoked" } : { status: "ready", ownerKey: "owner-two" };
     h.api.syncAuthorization(); await settle();
     assert.equal(control.value, "");
     assert.equal(h.api.hasUnsavedChanges(), false);
     assert.equal(h.root.find("photographic-review").classList.contains("hidden"), true);
+    assert.equal(property.value, "Property");
+    for (const ui of ["photographic-reference", "photographic-scene", "photographic-primary", "photographic-comparison"]) {
+      const selector = h.root.find(ui);
+      assert.equal(selector.children.length, 0, `${ui} must remove private options`);
+      assert.equal(selector.value, "", `${ui} must remove the private selected value`);
+    }
     assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
+    authorization = { status: "ready", ownerKey: "owner-two" };
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    assert.equal(property.value, "Property");
+    assert.equal(h.root.find("photographic-scene-delivery-label").value, originalLabel, "The next owner cannot inherit private label edits");
     h.api.show(null, null);
   });
 }
