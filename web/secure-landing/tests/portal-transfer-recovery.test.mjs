@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { createDeferredConfigTransferApi } from "../portal-src/config-transfer-deferred.js";
+import { createPortalConfigState } from "../portal-src/internal/state.js";
 
 const source = readFileSync(new URL("../portal-src/portal.template.js", import.meta.url), "utf8");
 function section(start, end) {
@@ -99,4 +101,61 @@ test("clipboard fallback reports success only after the browser confirms the cop
   await h.context.copyToClipboard("operator command");
   assert.deepEqual(h.toasts, [["Copied to clipboard.", "success"]]);
   assert.equal(h.children.size, 0);
+});
+
+function importHostHarness() {
+  const state = { pipeline: 'lux-depth-v3', config: createPortalConfigState(), portalUi: { activeProfileName: 'Saved profile', buildStep: 1 } };
+  const timers = new Map(), idle = new Map(), saves = [], notices = [];
+  let nextTimer = 0;
+  const context = vm.createContext({
+    state, els: { profileSelect: { value: 'Saved profile' } }, configImportGeneration: 0, pendingLegacyTransientDraft: null,
+    transientDraftPersistTimerId: null, transientDraftPersistIdleId: null,
+    TRANSIENT_DRAFT_SCHEMA: 'draft', TRANSIENT_DRAFT_STORAGE_KEY: 'draft', TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS: 10,
+    sessionStorage: { setItem: (...args) => saves.push(args) },
+    window: { setTimeout: cb => { timers.set(++nextTimer, cb); return nextTimer; }, clearTimeout: id => timers.delete(id),
+      requestIdleCallback: cb => { idle.set(++nextTimer, cb); return nextTimer; }, cancelIdleCallback: id => idle.delete(id), confirm: () => true },
+    portalInternals: { createPortalConfigState }, CONFIG_PREVIEW_SUPPORTED_PIPELINES: new Set(['lux-depth-v3','archive-gate-a']),
+    _transientDraftOwnerKey: () => 'managed-owner', _copyTransientDraftConfig: (value = state.config) => structuredClone(value),
+    resolveBuildStep: value => value, _migrateDeprecatedLuxOutputConfig: value => value,
+    _loadDeferredProfileSurface: async () => ({ syncDraftState: () => ({ hasProtectedChanges: false }) }),
+    updateUIFromState() {}, fetchPresetsForPipeline() {}, fetchConfigMetadata() {}, createToast: (...args) => notices.push(args),
+    _normalizeVerboseQuietFlags() {}, parseBoolLike: (value, fallback) => typeof value === 'boolean' ? value : fallback,
+    _parseNonNegativeIntOrNull: () => null, _parsePositiveIntOrNull: () => null, _parseProbabilityOrNull: () => null,
+    _textOrFallback: (value, fallback) => value || fallback,
+    ...Object.fromEntries(['Da3ModelKey','DepthBackend','GroupingMode','QualityTier','RunCardVersion','Sam2ModelSize','SegmentationBackend','VlmCaptioningProxyFormat'].map(name => [`_resolve${name}`, value => value])),
+  });
+  vm.runInContext(section('function _persistTransientPortalDraft(', 'function _applyTransientPortalDraft('), context);
+  vm.runInContext(section('function _configImportSnapshot(', 'function _createDeferredBuildSurfaceHost('), context);
+  const host = context._createConfigTransferHost();
+  return { context, state, saves, notices, api: createDeferredConfigTransferApi(host),
+    flush: () => { for (const cb of [...timers.values()]) cb(); timers.clear(); for (const cb of [...idle.values()]) cb(); idle.clear(); } };
+}
+
+for (const phase of ['module loading', 'file loading']) {
+  test(`pending autosave during ${phase} does not invalidate an otherwise current import`, async () => {
+    const h = importHostHarness(); h.context._scheduleTransientPortalDraftPersist();
+    const expected = h.context._configImportSnapshot();
+    let finish;
+    if (phase === 'module loading') h.flush();
+    const result = h.api.importFile({ size: 100, text: () => new Promise(resolve => { finish = resolve; }) }, expected);
+    if (phase === 'file loading') h.flush();
+    assert.equal(h.context._configImportSnapshot(), expected);
+    finish(JSON.stringify({ args: { input_dir: '/imported/input' } }));
+    assert.equal(await result, true);
+    assert.equal(h.state.config.inputDir, '/imported/input');
+    assert.equal(h.state.portalUi.activeProfileName, '');
+    assert.equal(h.context.els.profileSelect.value, '', 'Import must clear the selected profile as well as its state');
+  });
+}
+
+test('a real edit and undo still supersede a pending import', async () => {
+  const h = importHostHarness(), original = h.state.config.inputDir;
+  let finish;
+  const result = h.api.importFile({ size: 100, text: () => new Promise(resolve => { finish = resolve; }) });
+  h.state.config.inputDir = '/edited'; h.context._scheduleTransientPortalDraftPersist();
+  h.state.config.inputDir = original; h.context._scheduleTransientPortalDraftPersist(); h.flush();
+  finish(JSON.stringify({ args: { input_dir: '/stale/import' } }));
+  assert.equal(await result, false);
+  assert.equal(h.state.config.inputDir, original); assert.equal(h.state.portalUi.activeProfileName, 'Saved profile');
+  assert.equal(h.context.els.profileSelect.value, 'Saved profile');
 });

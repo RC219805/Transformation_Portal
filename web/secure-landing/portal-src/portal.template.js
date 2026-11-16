@@ -1404,8 +1404,8 @@ function _readTransientPortalDraft() {
     };
 }
 
-function _persistTransientPortalDraft() {
-    configImportGeneration += 1;
+function _persistTransientPortalDraft(edit = true) {
+    if (edit) configImportGeneration += 1;
     if (pendingLegacyTransientDraft) return false;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return false;
@@ -1438,7 +1438,7 @@ function _cancelScheduledTransientPortalDraftPersist() {
 
 function _flushPendingTransientPortalDraftPersist() {
     _cancelScheduledTransientPortalDraftPersist();
-    return _persistTransientPortalDraft();
+    return _persistTransientPortalDraft(false);
 }
 
 function _scheduleTransientPortalDraftPersist(options) {
@@ -1450,7 +1450,7 @@ function _scheduleTransientPortalDraftPersist(options) {
     const commitSnapshot = () => {
         transientDraftPersistTimerId = null;
         transientDraftPersistIdleId = null;
-        _persistTransientPortalDraft();
+        _persistTransientPortalDraft(false);
     };
     const scheduleCommit = () => {
         transientDraftPersistTimerId = null;
@@ -6810,6 +6810,7 @@ function _configImportSnapshot() {
 function _createConfigTransferHost() {
     return {
         state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike,
+        configTemplate: portalInternals.createPortalConfigState,
         supportedPipelines: CONFIG_PREVIEW_SUPPORTED_PIPELINES,
         snapshot: _configImportSnapshot,
         migrate: (args) => _migrateDeprecatedLuxOutputConfig(args, false),
@@ -6824,6 +6825,7 @@ function _createConfigTransferHost() {
             state.pipeline = next.pipeline;
             state.config = next.config;
             state.portalUi.activeProfileName = '';
+            if (els.profileSelect) els.profileSelect.value = '';
             state.portalUi.debugBundleAcknowledged = false;
             state.portalUi.debugBundleGuardrailSeen = false;
             updateUIFromState();

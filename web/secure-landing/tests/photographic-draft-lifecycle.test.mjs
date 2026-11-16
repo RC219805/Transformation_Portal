@@ -162,6 +162,35 @@ test("saving a note does not discard an unrelated lighting draft", async (t) => 
   assert.equal(selected(h), h.scenes[0].scene_id);
 });
 
+for (const paged of [false, true]) {
+  for (const httpStatus of [200, 503]) {
+  test(`${paged ? 'paged' : 'legacy'} history-disabled export ${httpStatus} preserves the unrelated revision draft`, async () => {
+    const h = fixture({ paged, sceneCount: 2, extraFetch: request => {
+      if (!request.path.endsWith('/delivery')) return null;
+      if (httpStatus === 503) return error('UNAVAILABLE', 'Export outcome unknown', 503);
+      h.server.stateVersion += 1;
+      return json({ state_version: h.server.stateVersion, sha256: 'a'.repeat(64), filename: 'delivery.zip', size_bytes: 10,
+        download_url: `/v1/jobs/${h.job.id}/artifacts/delivery.zip` });
+    } });
+    h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+    const revision = await edit(h, 'photographic-revision-exposure', '0.2');
+    const preset = h.root.find('photographic-preset'); preset.checked = true; await preset.trigger('change');
+    await h.root.find('photographic-deliver-approved').trigger();
+    assert.equal(requested(h, '/delivery').length, 1);
+    assert.equal(revision.value, '0.2'); assert.equal(h.api.hasUnsavedChanges(), true);
+    if (httpStatus === 503) {
+      await h.root.find('photographic-deliver-approved').trigger();
+      assert.equal(requested(h, '/delivery').length, 1, 'Unknown export cannot replay before GET reconciliation');
+      await h.api.refresh(); await settle();
+      assert.equal(revision.value, '0.2');
+    }
+    await edit(h, 'photographic-scene', h.scenes[1].scene_id, 'change');
+    assert.equal(selected(h), h.scenes[0].scene_id);
+    await h.root.find('photographic-discard-navigation').trigger(); h.api.show(null, null);
+  });
+  }
+}
+
 test("an uncertain save requires a fresh read before another explicit mutation", async (t) => {
   let unavailable = true;
   const h = fixture({ extraFetch: (request) => unavailable && request.path.endsWith("/decisions")
