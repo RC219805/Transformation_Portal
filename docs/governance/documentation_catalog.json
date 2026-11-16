@@ -15241,7 +15241,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "05ab3a5d819223182cd1a6e2fa44f2667e00e418",
+      "source_commit": "766821a30575637ace51c0f6579d0dd8e9bb5233",
       "content_sha256": "26a43bb88b291941144db58f26c92f5e166f5a2d44ed72a7351aeeda4e9cdf09",
       "source_references": [
         "app.py",
@@ -15392,7 +15392,7 @@
         "src/transformation_portal/schemas/execution/plan.v1.schema.json": "529ded285d39b9de1688c6e2a118b2b14486dff2d77a278b854145d781f8feb4",
         "web/secure-landing/portal-src/build-surface-deferred.js": "bc9a851c2e375a9fc5d68997a750e0cbdf83070feac215af4e38be2193caf87b",
         "web/secure-landing/portal-src/internal/photographic-profiles.js": "a3a47598808d61b68cdec5b75d0320e42c4145b51ce9d0efc0cee2073e0d40b1",
-        "web/secure-landing/portal-src/photographic-review.js": "b47b7941d384738d726c88e63e586f60a3ddcaccfa0403b5c78d69b6bc51a3e6",
+        "web/secure-landing/portal-src/photographic-review.js": "44dddbe0e667b9bed2e01a742edcd14fabfb8d395f12a574a0f796f59e1bf246",
         "web/secure-landing/portal-src/portal.template.js": "f78ec78cc3d8e3898d54545442576de7526f5454e15d4d862810e2d831600882",
         "web/secure-landing/package.json": "805fd2408f550d631634fc60f5c11e67a608d66fe3cbf2b8a6328d758d0fec61",
         "config/portal_asset_budgets.json": "097f87a67c3ef697f94923f8ac227d2c4ef3b8f1c00c1685a35252e9a1afbc00",
@@ -15411,7 +15411,7 @@
         "tools/ad_editorial_post_pipeline.py": "ea15d11bc549a896600bbc20e2de4aa2a684e265fa2bd096fca4d5157d666612",
         "tests/test_ad_editorial_post_pipeline_paths.py": "7eb292203176ab569471e1e7242622ca64c250ea9aab2d1c5eddd6cdef88da2d",
         "tests/orchestrator/test_photographic_review_thread_ownership.py": "51c7bd8d2076f82fd6536c1e637f053339ec462cc4f564d85551440fb5c3036c",
-        "public/portal-assets/portal-photographic.js": "b6a63f1ff45f0e1baec5085da2164040f6abfd3b1427069c6dd9556a7be07c67",
+        "public/portal-assets/portal-photographic.js": "ea204112a84afc50a0de5a38befffed8b2c2cb89fc99da35324b120c33436c69",
         "public/portal-assets/portal-photographic.css": "3098222f83f5358e1148996272a56261ae441aba249a24f76801bc38cfe87c75",
         "config/portal_asset_manifest.json": "f0b0eef51a084762b85f88157df917b3a39dcae43752632114478aab85ffbdbc",
         "src/transformation_portal/lux_depth_v3/orchestrator.py": "31d1ea5ee94f136f75f241035be2673fc57c234bba9c8586f94ea52765d33db6",
@@ -15486,7 +15486,7 @@
         "tests/materials_v4/test_region_mask_hash.py": "e8ee8ba1c255b48f575b0ead81dda53e9043ef799c6f40429e65b3f7d236ede7",
         "web/secure-landing/portal-src/photographic-draft-state.js": "f46cf2caadc38598457957c7d3e76b125d3ccd853dcdc57fbe706d77c44fa9ed",
         "web/secure-landing/portal-src/photographic-review-loader.js": "dd7f9926d2a83d8822aa2a6be56fbc81412d689a31fcd2d379b7d0570f8e4ff9",
-        "web/secure-landing/tests/photographic-draft-authorization.test.mjs": "66b2702704b1ac58cb71758b508543504f50602ee59f33ef72355ed08f5bab59",
+        "web/secure-landing/tests/photographic-draft-authorization.test.mjs": "84f227a0c7d3b0fda2b6fa55dc4bbac8a6d6a1ac9de2e321d3e464a7aef5fa03",
         "web/secure-landing/tests/photographic-draft-lifecycle.test.mjs": "494dfc86146bb10aef392d3806c3768aea85da97f9320f7f6e83b99f1edcd120"
       },
       "validation_commands": [
