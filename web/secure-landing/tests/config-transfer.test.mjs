@@ -17,7 +17,7 @@ function fixture(options = {}) {
     _parsePositiveIntOrNull: (value) => Number(value) > 0 ? Number(value) : null,
     _parseNonNegativeIntOrNull: (value) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null,
     _parseProbabilityOrNull: () => null,
-    _textOrFallback: (value, fallback) => value || fallback,
+    _textOrFallback: (value, fallback = '') => String(value ?? '').trim() || String(fallback ?? '').trim(),
     parseBoolLike: (value, fallback) => typeof value === 'boolean' ? value : fallback,
     ...Object.fromEntries(['Da3ModelKey','DepthBackend','GroupingMode','QualityTier','RunCardVersion','Sam2ModelSize','SegmentationBackend','VlmCaptioningProxyFormat'].map(name => [`_resolve${name}`, value => value])),
     ...options,
@@ -53,6 +53,17 @@ test('current export and unversioned legacy arguments commit a detached candidat
     assert.equal(h.state.config.outputDir, '/authorized/output');
     assert.equal(h.state.config.flags.overwrite, false);
     assert.notEqual(original.inputDir, '/authorized/input');
+  }
+});
+
+test('raw text imports preserve existing whitespace semantics', async () => {
+  for (const [field, path] of [
+    ['input_dir', ['inputDir']], ['archive_root', ['inputDir']], ['output_dir', ['outputDir']],
+    ['preset', ['preset']], ['depth_device', ['depthDevice']], ['v2_preset', ['v2Preset']],
+  ]) {
+    const h = fixture(), value = '  retained import text  ';
+    assert.equal(await h.api.importFile(file({ args: { [field]: value } })), true);
+    assert.equal(path.reduce((current, key) => current[key], h.state.config), value, field);
   }
 });
 
@@ -109,6 +120,42 @@ for (const field of ['input_dir', 'archive_root', 'output_dir', 'preset', 'depth
       assert.deepEqual(h.state, before); assert.equal(h.commits.length, 0);
     });
   }
+}
+
+const normalizedTextFields = [
+  ['sam2_checkpoint_path', ['segmentation', 'sam2CheckpointPath'], '/models/sam2.pt'],
+  ['archive_index', ['gate', 'archiveIndex'], '/input/index.json'],
+  ['manifest_jsonl', ['gate', 'manifestJsonl'], '/input/rights.jsonl'],
+  ['cameras_sidecar_path', ['reconstruction', 'camerasSidecarPath'], '/input/cameras.json'],
+  ['reconstruction_tier', ['reconstruction', 'tier'], 'apex_research'],
+  ['raw_ingest_mode', ['raw', 'ingestMode'], 'auto'],
+  ['raw_wb_mode', ['raw', 'wbMode'], 'camera'],
+  ['raw_demosaic', ['raw', 'demosaic'], 'AHD'],
+  ['vlm_captioning_model', ['captioning', 'model'], 'default'],
+  ['fastvlm_python_executable', ['captioning', 'pythonExecutable'], '/runtime/python'],
+  ['fastvlm_mlx_vlm_dir', ['captioning', 'mlxVlmDir'], '/runtime/mlx-vlm'],
+  ['log_level', ['runtime', 'logLevel'], 'INFO'],
+];
+
+for (const [field, path, legacy] of normalizedTextFields) {
+  for (const value of [0, 7, false, true, [], {}]) {
+    test(`raw ${field} rejects ${JSON.stringify(value)} before text coercion`, async () => {
+      const h = fixture(), before = structuredClone(h.state);
+      assert.equal(await h.api.importFile(file({ args: { [field]: value } })), false);
+      assert.deepEqual(h.state, before); assert.equal(h.commits.length, 0);
+      assert.deepEqual(h.notices, [['Invalid JSON file.', 'error']]);
+    });
+  }
+  test(`${field} preserves trimmed legacy strings and optional text fallbacks`, async () => {
+    const h = fixture();
+    assert.equal(await h.api.importFile(file({ args: { [field]: `  ${legacy}  ` } })), true);
+    const read = () => path.reduce((value, key) => value[key], h.state.config);
+    assert.equal(read(), legacy);
+    for (const value of [undefined, null, '', '   ']) {
+      assert.equal(await h.api.importFile(file({ args: { [field]: value } })), true);
+      assert.equal(read(), legacy);
+    }
+  });
 }
 
 test('canonical field types preserve numeric imports after an editable numeric control held text', async () => {

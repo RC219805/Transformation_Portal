@@ -35,29 +35,42 @@ for (const initialFailure of [false, true]) {
 }
 
 for (const paged of [false, true]) {
-  for (const outcome of ['ready', 'empty', 404, 422, 503]) {
-    test(`${paged ? 'paged' : 'legacy'} history cannot reveal a frozen note during ${outcome} source reauthorization`, async () => {
+  for (const history of [false, true]) for (const edited of [false, true]) for (const outcome of ['ready', 'empty', 404, 422, 503]) {
+    test(`${paged ? 'paged' : 'legacy'} ${history ? 'history' : 'source'} cannot reveal a frozen ${edited ? 'edited' : 'saved'} note during ${outcome} reauthorization`, async () => {
       let authorization = { status: 'ready', ownerKey: 'owner' }, delayed = false, finish;
       const h = fixture({ paged, getReviewAuthorization: () => authorization, extraFetch: (request, response) => {
         if (request.path.endsWith('/deliveries')) return json({ items: [{ id: 'delivery-one', intent: { property_name: 'Committed property' } }], next_cursor: null });
-        if (delayed && request.path.endsWith(paged ? '/scene' : '/photographic-review')) {
+        if (delayed && request.path.endsWith(paged ? outcome === 'empty' ? '/scenes' : '/scene' : '/photographic-review')) {
           return new Promise(resolve => { finish = () => resolve(typeof outcome === 'number' ? error('UNAVAILABLE', 'Source unavailable', outcome)
-            : json(outcome === 'empty' ? { ...response.detail('input-0000'), scenes: [] }
+            : json(outcome === 'empty' ? paged
+              ? { ...response.page(new URLSearchParams()), scenes: [], decisions: [], total_scenes: 0, total_filtered: 0, next_cursor: null }
+              : { state_version: h.server.stateVersion, scenes: [], decisions: [], groups: [], presets: [] }
               : paged ? response.detail('input-0000') : { state_version: h.server.stateVersion, scenes: h.scenes, decisions: h.server.decisions, groups: [], presets: [] })); });
         }
         return null;
       } });
-      h.state.auth.features.photographicDeliveryHistory = true;
+      const source = h.scenes[0].variants[0], savedNote = 'A saved private note';
+      h.server.decisions.push({ ...source, scene_id: h.scenes[0].scene_id, source_identity_sha256: source.sha256, status: 'selected', note: savedNote });
+      h.state.auth.features.photographicDeliveryHistory = history;
       h.api.show(h.job, h.scenes[0].variants[0]); await settle();
-      const control = await note(h, 'A withheld private note');
+      const privateNote = edited ? 'A withheld private note' : savedNote;
+      const control = edited ? await note(h, privateNote) : h.root.find('photographic-decision-note');
+      assert.equal(control.value, privateNote); assert.equal(h.api.hasUnsavedChanges(), edited);
       authorization = { status: 'unavailable', ownerKey: 'owner' }; h.api.syncAuthorization();
       delayed = true; authorization = { status: 'ready', ownerKey: 'owner' }; h.api.syncAuthorization(); await settle();
-      assert.ok(finish); assert.ok(h.root.find('photographic-delivery-history-entry'));
+      assert.ok(finish); if (history) assert.ok(h.root.find('photographic-delivery-history-entry'));
       assert.equal(h.root.find('photographic-review').classList.contains('hidden'), true);
-      assert.equal(control.value, 'A withheld private note');
+      assert.equal(control.value, privateNote); assert.equal(control.disabled, true);
       finish(); await settle();
       assert.equal(h.root.find('photographic-review').classList.contains('hidden'), outcome !== 'ready');
-      assert.equal(control.value, 'A withheld private note');
+      assert.equal(control.value, privateNote); assert.equal(control.disabled, outcome !== 'ready');
+      if (outcome !== 'ready') {
+        delayed = false; h.api.syncAuthorization(); await settle();
+        assert.equal(h.root.find('photographic-review').classList.contains('hidden'), false);
+        assert.equal(control.value, privateNote); assert.equal(control.disabled, false);
+      }
+      assert.equal(h.api.hasUnsavedChanges(), edited);
+      assert.equal(h.requests.some(request => request.options.method === 'POST'), false);
       authorization = { status: 'revoked' }; h.api.syncAuthorization();
     });
   }
