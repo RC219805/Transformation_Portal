@@ -52,7 +52,20 @@ async function workspace(page, { thumbnails = false, sceneCount = 1 } = {}) {
       relative_path: row.variants[0].artifact_path, media_kind: "image", artifact_type: "image", previewable: false, browser_previewable: false,
       url: `/v1/jobs/job-workspace/artifacts/${row.variants[0].artifact_path}`, size_bytes: 2048, content_type: "image/tiff" })) } };
   const catalogue = "c".repeat(64), mutations = [], thumbnailRequests = [], detailRequests = [];
-  let activeThumbnails = 0, peakThumbnails = 0;
+  const liveThumbnails = new Set(), thumbnailLifecycle = [], thumbnailTransport = { active: 0, peak: 0 };
+  const thumbnailHandlers = { active: 0, peak: 0 };
+  const trackThumbnail = (request, event) => {
+    const url = new URL(request.url());
+    if (!url.pathname.endsWith("/photographic-review/thumbnail")) return;
+    if (event === "request") liveThumbnails.add(request); else liveThumbnails.delete(request);
+    thumbnailTransport.active = liveThumbnails.size;
+    thumbnailTransport.peak = Math.max(thumbnailTransport.peak, liveThumbnails.size);
+    thumbnailLifecycle.push({ event, sceneId: url.searchParams.get("scene_id"), active: liveThumbnails.size });
+  };
+  page.on("request", (request) => trackThumbnail(request, "request"));
+  page.on("requestfinished", (request) => trackThumbnail(request, "finished"));
+  page.on("requestfailed", (request) => trackThumbnail(request, "failed"));
+  Object.assign(diagnostics.get(page), { thumbnailTransport, thumbnailHandlers, thumbnailLifecycle });
   const saved = { state_version: 1, catalogue_identity_sha256: catalogue, decisions: [], groups: [], presets: [{ schema: "tp.photo.export_preset.v1", name: "website", format: "jpeg", intended_use: "Website", long_edge: 2560, jpeg_quality: 92, sharpen_amount: 0.2, render: "perceptual_srgb", shoulder: 0.8 }] };
   await page.addInitScript(() => { sessionStorage.clear(); localStorage.removeItem("tp_portal_transient_draft"); });
   await page.route(/\/(?:__mock-portal|portal\/assets)\/portal(?:-[a-z0-9-]+)?\.js(?:\?.*)?$/, async (route) => {
@@ -81,8 +94,9 @@ async function workspace(page, { thumbnails = false, sceneCount = 1 } = {}) {
     if (path.endsWith("/thumbnail")) {
       const id = url.searchParams.get("scene_id"), source = scenes.find((row) => row.scene_id === id)?.variants[0];
       thumbnailRequests.push({ id, catalogue: url.searchParams.get("catalogue_identity_sha256"), view: url.searchParams.get("view") });
-      activeThumbnails += 1; peakThumbnails = Math.max(peakThumbnails, activeThumbnails);
-      await new Promise((resolve) => setTimeout(resolve, 80)); activeThumbnails -= 1;
+      // Delayed mock work can drain after browser cancellation; count it separately from live requests.
+      thumbnailHandlers.active += 1; thumbnailHandlers.peak = Math.max(thumbnailHandlers.peak, thumbnailHandlers.active);
+      await new Promise((resolve) => setTimeout(resolve, 80)); thumbnailHandlers.active -= 1;
       if (id === "scene-3") return route.fulfill({ status: 503, body: "Injected thumbnail failure" });
       return route.fulfill({ contentType: "image/png", body: png(256, 128), headers: {
         "X-TP-Catalogue-Identity-SHA256": catalogue, "X-TP-Scene-ID": encodeURIComponent(id), "X-TP-Artifact-Path": encodeURIComponent(source.artifact_path),
@@ -106,7 +120,7 @@ async function workspace(page, { thumbnails = false, sceneCount = 1 } = {}) {
   await page.goto(`/portal?view=review&job=${job.id}`);
   await expect(page.locator('[data-ui="photographic-workspace"]')).toBeVisible();
   await expect(page.locator('[data-ui="photographic-primary-image"]')).toBeVisible();
-  return { mutations, thumbnailRequests, detailRequests, peakThumbnails: () => peakThumbnails };
+  return { mutations, thumbnailRequests, detailRequests, thumbnailTransport, thumbnailHandlers, thumbnailLifecycle };
 }
 
 for (const [width, height] of [[1440, 1000], [900, 1000], [390, 844]]) {
@@ -187,12 +201,13 @@ test("@portal-browser pointer and keyboard region edits share source-normalized 
   await expect(page.locator('[data-ui="photographic-create-revision"]')).toBeDisabled();
 });
 
-test("@portal-browser paged thumbnails keep two request slots, never prefetch adjacent detail and retain failed-card navigation", async ({ page }) => {
+test("@portal-browser paged thumbnails keep two request slots, never prefetch adjacent detail and retain failed-card navigation", async ({ page }, info) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   const state = await workspace(page, { thumbnails: true, sceneCount: 12 });
   await expect(page.locator('[data-ui="photographic-page-thumbnail"]').first()).toBeVisible();
   await expect.poll(() => state.thumbnailRequests.length).toBeGreaterThan(0);
-  expect(state.peakThumbnails()).toBeLessThanOrEqual(2);
+  expect(state.thumbnailTransport.peak).toBeGreaterThan(0);
+  expect(state.thumbnailTransport.peak).toBeLessThanOrEqual(2);
   expect(state.detailRequests).toEqual(["scene-0"]);
   expect(state.thumbnailRequests.every((row) => Number(row.id.split("-")[1]) < 8)).toBe(true);
   const failed = page.locator('[data-scene-id="scene-3"] [data-ui="photographic-contact-item"]');
@@ -206,7 +221,11 @@ test("@portal-browser paged thumbnails keep two request slots, never prefetch ad
   await expect.poll(() => rail.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(page.locator('[data-scene-id="scene-8"] [data-ui="photographic-contact-item"]')).toBeInViewport({ ratio: 1 });
   await expect(page.locator('[data-ui="photographic-page-thumbnail"]').first()).toBeVisible();
-  expect(state.peakThumbnails()).toBeLessThanOrEqual(2);
+  await expect.poll(() => state.thumbnailTransport.active).toBe(0);
+  expect(state.thumbnailTransport.peak).toBeLessThanOrEqual(2);
   expect(state.detailRequests).toEqual(["scene-0", "scene-3", "scene-8"]);
   expect(state.thumbnailRequests.every((row) => row.view === "clip_srgb" && row.catalogue === "c".repeat(64))).toBe(true);
+  await info.attach("thumbnail request lifecycle", { contentType: "application/json", body: Buffer.from(JSON.stringify({
+    transport: state.thumbnailTransport, delayedHandlers: state.thumbnailHandlers, events: state.thumbnailLifecycle,
+  })) });
 });
