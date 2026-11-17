@@ -9931,11 +9931,11 @@ async def _portal_upload_receipts_capability(request: Request) -> bool:
         or os.name != "posix"
     ):
         return False
-    tenant, owner, store, error = await _upload_receipt_context(request, write=True)
-    if error is not None:
-        return False
-    assert tenant is not None and owner is not None and store is not None
     try:
+        tenant, owner, store, error = await _upload_receipt_context(request, write=True)
+        if error is not None:
+            return False
+        assert tenant is not None and owner is not None and store is not None
         from transformation_portal.ingest.upload_recovery import UploadBatchLock
 
         root = _resolved_portal_upload_root()

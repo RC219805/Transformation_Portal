@@ -646,3 +646,155 @@ def test_deleting_retry_never_weakens_root_or_existing_marker_ownership(tmp_path
         assert result.input_dir.exists()
     finally:
         lock.close()
+
+
+def test_verification_rejects_an_earlier_file_rewritten_while_a_later_file_is_hashed(tmp_path, monkeypatch):
+    from transformation_portal.ingest import upload_recovery
+
+    item = reservation(tmp_path)
+    initialize_batch(item)
+    result = stage_upload_batch(
+        upload_root=tmp_path,
+        uploads=[IncomingUpload("a.txt", io.BytesIO(b"original")), IncomingUpload("b.txt", io.BytesIO(b"original"))],
+        now=item.created_at,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    seal_completion(item, result)
+    original = upload_recovery._source_digest
+    verified = []
+
+    def digest(directory_fd, name, size):
+        value = original(directory_fd, name, size)
+        verified.append(name)
+        if len(verified) == 2:
+            (result.input_dir / verified[0]).write_bytes(b"modified")
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_source_digest", digest)
+    with pytest.raises(ValueError, match="changed"):
+        verify_completion(item)
+    assert len(verified) == 2
+
+
+def test_source_identities_are_rechecked_at_the_end_of_complete_verification(tmp_path, monkeypatch):
+    from transformation_portal.ingest import upload_recovery
+
+    item, result = sealed(tmp_path)
+    original = upload_recovery._verify_input_inventory
+
+    def inventory(*args, **kwargs):
+        value = original(*args, **kwargs)
+        (result.input_dir / "nested/test.txt").write_bytes(b"modified")
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_verify_input_inventory", inventory)
+    with pytest.raises(ValueError, match="changed"):
+        verify_completion(item)
+
+
+@pytest.mark.parametrize("metadata", ["marker", "seal", "baseline", "capture", "receipt"])
+def test_metadata_identities_survive_until_the_end_of_source_verification(tmp_path, monkeypatch, metadata):
+    from transformation_portal.ingest import upload_recovery
+
+    item, result = sealed(tmp_path)
+    paths = {
+        "marker": result.batch_root / MARKER_FILENAME,
+        "seal": result.portal_dir / upload_recovery.SEAL_FILENAME,
+        "baseline": result.baseline_manifest_path,
+        "capture": result.capture_metadata_path,
+        "receipt": result.upload_receipt_path,
+    }
+    target = paths[metadata]
+    original = upload_recovery._source_digest
+
+    def digest(*args, **kwargs):
+        value = original(*args, **kwargs)
+        target.write_bytes(target.read_bytes() + b" ")
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_source_digest", digest)
+    with pytest.raises(ValueError, match="changed"):
+        verify_completion(item)
+
+
+def test_verified_nested_directory_cannot_be_replaced_by_a_link_during_later_hashing(tmp_path, monkeypatch):
+    from transformation_portal.ingest import upload_recovery
+
+    item = reservation(tmp_path)
+    initialize_batch(item)
+    result = stage_upload_batch(
+        upload_root=tmp_path,
+        uploads=[
+            IncomingUpload("one/deep/a.txt", io.BytesIO(b"original")),
+            IncomingUpload("two/deep/b.txt", io.BytesIO(b"original")),
+        ],
+        now=item.created_at,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    seal_completion(item, result)
+    original = upload_recovery._source_digest
+    verified = []
+
+    def digest(directory_fd, name, size):
+        value = original(directory_fd, name, size)
+        verified.append(name)
+        if len(verified) == 2:
+            earlier = result.input_dir / ("one" if verified[0] == "a.txt" else "two") / "deep"
+            outside = tmp_path / "retained-directory"
+            earlier.rename(outside)
+            earlier.symlink_to(outside, target_is_directory=True)
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_source_digest", digest)
+    with pytest.raises(ValueError, match="changed"):
+        verify_completion(item)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["dangling_symlink", "hardlink", "acquire_oserror", "acquire_valueerror"])
+async def test_one_unavailable_cleanup_lock_does_not_starve_later_batches(tmp_path, monkeypatch, caplog, failure):
+    from transformation_portal.ingest import upload_recovery
+
+    bad, bad_result = sealed(tmp_path)
+    good, good_result = sealed(tmp_path)
+    lock_path = tmp_path / ".upload-locks" / (bad.batch_id + ".lock")
+    if failure == "dangling_symlink":
+        lock_path.parent.mkdir()
+        lock_path.symlink_to(tmp_path / "missing-lock")
+    else:
+        lock = UploadBatchLock(tmp_path, bad.batch_id)
+        lock.close()
+        if failure == "hardlink":
+            os.link(lock_path, tmp_path / "second-lock-name")
+        else:
+            inode = lock_path.stat().st_ino
+            acquire = UploadBatchLock.acquire
+
+            def failing_acquire(lock, *args, **kwargs):
+                if os.fstat(lock.fd).st_ino == inode:
+                    raise (OSError if failure == "acquire_oserror" else ValueError)("lock unavailable")
+                return acquire(lock, *args, **kwargs)
+
+            monkeypatch.setattr(UploadBatchLock, "acquire", failing_acquire)
+
+    class Store:
+        def __init__(self):
+            self.claimed, self.finished = [], []
+
+        async def cleanup_candidates(self, now):
+            return [bad, good]
+
+        async def claim_deletion(self, expected, now, retained):
+            self.claimed.append(expected.batch_id)
+            return replace(expected, state="deleting", generation=uuid.uuid4().hex)
+
+        async def finish_deletion(self, expected):
+            self.finished.append(expected.batch_id)
+
+    store = Store()
+    assert await upload_recovery.cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [good.batch_id]
+    assert store.claimed == store.finished == [good.batch_id]
+    assert bad_result.input_dir.exists() and not good_result.batch_root.exists()
+    assert bad.batch_id in caplog.text
