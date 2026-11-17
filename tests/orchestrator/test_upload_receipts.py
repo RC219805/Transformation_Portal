@@ -217,6 +217,137 @@ async def test_exact_receipt_read_remains_api_key_protected(monkeypatch):
         assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["before_read", "during_verification"])
+async def test_expired_receipt_read_never_returns_recovered_paths(tmp_path, monkeypatch, phase):
+    from starlette.requests import Request
+
+    import app
+    from transformation_portal.ingest import upload_recovery
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired
+
+    item = reservation(tmp_path) if phase == "before_read" else sealed(tmp_path)[0]
+    clock = [11.0 if phase == "before_read" else 9.0]
+    completions = []
+
+    class Store:
+        async def get(self, *_args):
+            return item
+
+        async def complete(self, *args):
+            assert phase == "during_verification" and clock[0] >= item.expires_at
+            completions.append(args)
+            raise UploadReceiptExpired("staged upload expired")
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id=item.tenant_id), item.owner_sha256, Store(), None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_verify = upload_recovery.verify_completion
+
+    def verify(*args):
+        assert phase == "during_verification", "expired staging without a seal must not inspect the filesystem"
+        result = original_verify(*args)
+        clock[0] = 11.0
+        return result
+
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_now", lambda: clock[0])
+    monkeypatch.setattr(upload_recovery, "verify_completion", verify)
+    request = Request({"type": "http", "method": "GET", "path": "/v1/uploads/staging/receipts/" + item.request_id})
+    response = await app.get_portal_upload_receipt(request, item.request_id)
+    assert response.status_code == 200
+    assert json.loads(response.body)["data"] == {"request_id": item.request_id, "status": "expired", "receipt": None}
+    assert response.headers["cache-control"] == "no-store"
+    assert len(completions) == (phase == "during_verification")
+    assert item.state == "staging"
+    if phase == "before_read":
+        assert not Path(item.batch_root).exists()
+    else:
+        assert Path(item.batch_root).is_dir()
+
+
+@pytest.mark.asyncio
+async def test_upload_completion_past_ttl_is_typed_without_replaying_or_deleting_body(tmp_path, monkeypatch):
+    from starlette.requests import Request
+
+    import app
+    from transformation_portal.ingest import upload_recovery
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired
+
+    clock = [1.0]
+    stream = io.BytesIO(b"upload bytes")
+    parsed = app._ParsedPortalUploadPayload([IncomingUpload("test.txt", stream)], None)
+    calls = []
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            self.current = item
+            calls.append("reserve")
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, item, *_args):
+            assert clock[0] >= item.expires_at
+            calls.append("complete")
+            raise UploadReceiptExpired("staged upload expired")
+
+    store = Store()
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    async def parse(*_args):
+        calls.append("parse")
+        return parsed
+
+    original_verify = upload_recovery.verify_completion
+
+    def verify(*args, **kwargs):
+        result = original_verify(*args, **kwargs)
+        clock[0] = 12.0
+        return result
+
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_multipart", parse)
+    monkeypatch.setattr(app, "PORTAL_UPLOAD_TTL_SECONDS", 10)
+    monkeypatch.setattr(app, "_now", lambda: clock[0])
+    monkeypatch.setattr(upload_recovery, "verify_completion", verify)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/uploads/staging",
+            "headers": [(b"x-tp-upload-request-id", str(uuid.uuid4()).encode())],
+        }
+    )
+    response = await app._stage_correlated_portal_upload(request, tmp_path)
+    assert response.status_code == 409
+    body = json.loads(response.body)
+    assert body["error"]["code"] == "CONFLICT"
+    assert body["error"]["details"]["reason"] == "upload_expired"
+    assert body["data"] is None
+    assert calls == ["reserve", "parse", "complete"]
+    assert stream.closed and store.current.state == "staging"
+    assert Path(store.current.batch_root).is_dir()
+    lock = UploadBatchLock(tmp_path, store.current.batch_id)
+    try:
+        assert lock.acquire(), "the completed worker must release its lock without deleting the fenced batch"
+    finally:
+        lock.close()
+
+
 def test_durable_seal_digest_rejects_rewritten_source_and_resealed_inventory(tmp_path):
     item, result = sealed(tmp_path)
     original_digest, _ = verify_completion(item)
@@ -390,13 +521,7 @@ async def test_trusted_direct_admission_cannot_omit_tenant_scope_for_a_tracked_b
             self.references = []
 
         async def scalar(self, statement):
-            return SimpleNamespace(
-                batch_id="upload_tracked",
-                batch_root=str(tmp_path / "upload_tracked"),
-                tenant_id="tenant_a",
-                state="ready",
-                expires_at=10.0,
-            )
+            return 2.0
 
         async def scalars(self, statement):
             return SimpleNamespace(
@@ -416,7 +541,7 @@ async def test_trusted_direct_admission_cannot_omit_tenant_scope_for_a_tracked_b
 
     session = Session()
     with pytest.raises(UploadOwnershipLost, match="outside this tenant"):
-        await bind_upload_references(session, record, tenant_id, now=2.0)
+        await bind_upload_references(session, record, tenant_id)
     assert not session.references
 
 
@@ -522,11 +647,8 @@ async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(
             self.selection = None
 
         async def scalar(self, statement):
-            batch = statement.compile().params["batch_id_1"]
-            self.locked.append(batch)
-            return SimpleNamespace(
-                batch_id=batch, batch_root=str(tmp_path / batch), tenant_id="tenant_a", state="ready", expires_at=10.0
-            )
+            assert self.locked == ["upload_aaa", "upload_zzz"], "sample expiry only after every matching row is locked"
+            return 2.0
 
         async def scalars(self, statement):
             self.selection = str(statement)
@@ -544,7 +666,7 @@ async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(
             self.references.append(row)
 
     session = Session()
-    await bind_upload_references(session, record, "tenant_a", now=2.0)
+    await bind_upload_references(session, record, "tenant_a")
     assert session.locked == ["upload_aaa", "upload_zzz"]
     assert [(row.batch_id, row.job_id) for row in session.references] == [("upload_aaa", "job"), ("upload_zzz", "job")]
     assert len(upload_source_paths(record.request, record.effective_request)) == 4
