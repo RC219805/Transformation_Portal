@@ -260,7 +260,20 @@ and must be ready and unexpired; trusted and keyless calls do not bypass this
 requirement. Frozen plans
 and physical bindings retain their exact read locators; legacy archive admission
 also retains the read defaults from its server-built command. Command output
-fields never pin a batch. Admission locks batches in a stable order in the same
+fields never pin a batch. For frozen Materials constituents, the read-set pass
+snapshots only SHA/size-bound evidence JSON within existing `MaterialLimits`
+(at most 1 MiB per descriptor) and frozen resource bounds. It runs before global
+capacity locks; accepted submission replays return before these reads. The API
+drains the background read after cancellation. This pass does not open or decode
+NPY masks or initialize models.
+
+Older retained jobs without exact frozen read-set references conservatively
+retain the parent namespace of a recognized `materials_manifest`. That
+retention-only fallback can overretain batches until job removal and cannot
+reconstruct historical mask inputs. New admissions use the precise frozen read
+set.
+
+Admission locks batches in a stable order in the same
 transaction. Cleanup also protects retained nested and ancestor selectors.
 Failed deletion remains fenced for retry by the existing loop, including a
 partial deletion that removed its marker. Such a retry requires the ledger's
