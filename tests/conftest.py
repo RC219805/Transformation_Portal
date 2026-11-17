@@ -34,6 +34,26 @@ from typing import Any
 
 import pytest
 
+# Native thread pools (OpenMP, OpenBLAS, MKL, numexpr, Accelerate) default to one
+# thread per core *per process*. Under pytest-xdist every worker starts its own
+# pool, so `-n auto` oversubscribes the machine by a factor of the core count
+# and spin-waiting makes small numeric kernels pathologically slow (a KMeans
+# fit on a few thousand pixels goes from ~0.1s to several seconds). CI pins
+# these to 1 in the workflow environment; mirror that for local xdist workers.
+# setdefault keeps any explicit operator choice, and this must run before numpy
+# is imported below so the BLAS runtime reads it at load time.
+_NATIVE_THREAD_POOL_ENV = (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+)
+
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    for _thread_env_name in _NATIVE_THREAD_POOL_ENV:
+        os.environ.setdefault(_thread_env_name, "1")
+
 
 def pytest_configure(config):
     """Configure pytest session.

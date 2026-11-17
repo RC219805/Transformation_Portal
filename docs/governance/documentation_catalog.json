@@ -17220,8 +17220,8 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "60ab90f6298b62c12c726a694953bff4ec0dbd1f",
-      "content_sha256": "32947ad38c2f77e443c3a6657768189620fc3bb53a6841b117de27c5d15625e8",
+      "source_commit": "9e2e25e7869c57cc2f8d189851dfe3db8f183d0c",
+      "content_sha256": "3a1a266137cf5a96654379890a5929f887a5bde6b700816a547ca79d3ac6443d",
       "source_references": [
         "pyproject.toml",
         ".github/workflows/build.yml",

@@ -331,6 +331,18 @@ make test-full
 pytest -v tests/ -ra --maxfail=5
 ```
 
+`make test-full` runs under pytest-xdist when it is installed. Inside xdist
+workers `tests/conftest.py` defaults the native thread-pool variables
+(`OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`,
+`NUMEXPR_NUM_THREADS`, `VECLIB_MAXIMUM_THREADS`) to `1`, matching the CI test
+environment, so parallel workers do not oversubscribe the machine with one
+BLAS/OpenMP pool per worker. Export a variable explicitly to override it.
+
+The full suite also skips, rather than fails, tests whose preconditions the
+host cannot provide: chmod-based denial tests when POSIX mode bits are not
+enforced for the current user (root, `CAP_DAC_OVERRIDE`), and `ml`-marked
+tests when torch is not installed.
+
 ### Benchmarks (opt-in)
 
 ```bash
