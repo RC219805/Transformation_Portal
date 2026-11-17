@@ -71,9 +71,11 @@ const DEFERRED_SURFACE_REGISTRY = Object.freeze({
     operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
     build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
     profile: { datasetKey: 'profileSurfaceJsUrl', factoryName: 'createDeferredProfileSurfaceApi' },
+    configTransfer: { datasetKey: 'configTransferJsUrl', factoryName: 'createDeferredConfigTransferApi' },
     overview: { datasetKey: 'overviewSurfaceJsUrl', factoryName: 'createDeferredOverviewSurfaceApi' },
 });
 const _deferredSurfaceState = new Map();
+let configImportGeneration = 0;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -1075,7 +1077,7 @@ function _activeRouteContext(jobId = '') {
         };
     }
     const selectedArtifact = _selectedArtifactForJob(selected);
-    const artifactPath = photographicSelectionFor(state, selected, fallbackArtifactPath)?.artifactPath
+    const artifactPath = photographicSelectionFor(state, selected, fallbackArtifactPath, _reviewAuthorization().ownerKey)?.artifactPath
         || _normalizeArtifactRoutePath(_artifactRouteKey(selectedArtifact));
     const compareCandidate = findCompareArtifact(
         selectedArtifact,
@@ -1236,8 +1238,7 @@ function _syncConsoleRoute(replace = false) {
     const nextHref = `${url.pathname}${url.search}${url.hash}`;
     const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextHref === currentHref) return;
-    const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
+    portalHistoryNavigation.record(replace, { view: state.currentView, jobId: state.selectedJobId || '' }, nextHref);
 }
 
 function _managedReturnToPath() {
@@ -1250,7 +1251,7 @@ function _managedLoginUrlForCurrentRoute() {
     return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;
 }
 
-function _migrateDeprecatedLuxOutputConfig(config) {
+function _migrateDeprecatedLuxOutputConfig(config, notify = true) {
     if (config !== Object(config)) return config;
     const emits = Object(config.emits);
     let deprecated = false;
@@ -1289,7 +1290,7 @@ function _migrateDeprecatedLuxOutputConfig(config) {
             config[outputDepthKey] = legacy16 ? 16 : 8;
         }
     }
-    if (deprecated) createToast('[deprecated_output_flag] Report on; no marketing.');
+    if (deprecated && notify) createToast('[deprecated_output_flag] Report on; no marketing.');
     return config;
 }
 
@@ -1403,7 +1404,8 @@ function _readTransientPortalDraft() {
     };
 }
 
-function _persistTransientPortalDraft() {
+function _persistTransientPortalDraft(edit = true) {
+    if (edit) configImportGeneration += 1;
     if (pendingLegacyTransientDraft) return false;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return false;
@@ -1436,10 +1438,11 @@ function _cancelScheduledTransientPortalDraftPersist() {
 
 function _flushPendingTransientPortalDraftPersist() {
     _cancelScheduledTransientPortalDraftPersist();
-    return _persistTransientPortalDraft();
+    return _persistTransientPortalDraft(false);
 }
 
 function _scheduleTransientPortalDraftPersist(options) {
+    configImportGeneration += 1;
     const settings = options && typeof options === 'object' ? options : {};
     if (settings.immediate) return _flushPendingTransientPortalDraftPersist();
     _cancelScheduledTransientPortalDraftPersist();
@@ -1447,7 +1450,7 @@ function _scheduleTransientPortalDraftPersist(options) {
     const commitSnapshot = () => {
         transientDraftPersistTimerId = null;
         transientDraftPersistIdleId = null;
-        _persistTransientPortalDraft();
+        _persistTransientPortalDraft(false);
     };
     const scheduleCommit = () => {
         transientDraftPersistTimerId = null;
@@ -2195,7 +2198,8 @@ function handleOperatorActionClick(event) {
             break;
         case 'restore_access':
             _flushPendingTransientPortalDraftPersist();
-            window.location.assign(_managedLoginUrlForCurrentRoute());
+            const signIn = () => window.location.assign(_managedLoginUrlForCurrentRoute());
+            if (!_requestReviewNavigation(signIn)) signIn();
             break;
         default:
             break;
@@ -2964,6 +2968,7 @@ function applyConsoleViewLayout() {
 }
 
 function navigateConsoleView(viewName, options = {}) {
+    if (!options.reviewConfirmed && _requestReviewNavigation(() => navigateConsoleView(viewName, { ...options, reviewConfirmed: true }))) return;
     const replace = Boolean(options.replace);
     const shouldFocus = options.focus !== false;
     deferredProfileOpenIntent += 1;
@@ -5094,6 +5099,7 @@ function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
     if (document.body) {
         document.body.dataset.bootstrapStatus = nextStatus;
     }
+    deferredReviewSurfaceApi?.syncAuthorization?.();
 }
 
 function _trackBootstrapRequest(controller, timeoutId) {
@@ -5490,6 +5496,7 @@ function _syncBootstrapUi() {
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
+    configImportGeneration += 1;
     const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
     const nextStatus = ['pending', 'ready', 'degraded', 'unavailable'].includes(String(options.status || ''))
         ? String(options.status)
@@ -5775,6 +5782,7 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
 function _handlePortalLogout() {
     if (state.auth.logoutPending) return;
     state.auth.logoutPending = true;
+    deferredReviewSurfaceApi?.syncAuthorization?.();
     if (els.logoutBtn) els.logoutBtn.disabled = true;
     const logoutStartedAt = _portalRumNow();
     _queueClientLogoutRumSample('logout_submit_attempt', 1);
@@ -6455,7 +6463,7 @@ function _selectedArtifactForJob(job) {
     const normalizedJobId = _normalizeSelectedJobId(job.id);
     const ranked = rankArtifactsForDisplay(job.artifacts);
     const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[normalizedJobId]);
-    const photograph = photographicSelectionFor(state, job, selectedPath);
+    const photograph = photographicSelectionFor(state, job, selectedPath, _reviewAuthorization().ownerKey);
     const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === (photograph?.railPath || selectedPath));
     if (selectedPath && !selected) {
         delete state.artifactUi.compareByJob[normalizedJobId];
@@ -6529,6 +6537,19 @@ function _ensureDeferredReviewSurfaceCss() {
     return true;
 }
 
+function _reviewAuthorization() {
+    if (state.auth?.logoutPending) return { status: 'revoked', ownerKey: '' };
+    const ownerKey = _transientDraftOwnerKey();
+    return { status: ownerKey ? 'ready' : 'unavailable', ownerKey };
+}
+
+function _requestReviewNavigation(action) {
+    if (!deferredReviewSurfaceApi?.hasUnsavedChanges?.()) return false;
+    if (state.portalUi?.artifactViewer?.open) _closeArtifactViewer(false);
+    void deferredReviewSurfaceApi.requestNavigation(action, { leave: true });
+    return true;
+}
+
 function _createDeferredReviewSurfaceHost() {
     return {
         state,
@@ -6541,6 +6562,11 @@ function _createDeferredReviewSurfaceHost() {
         getReadableError,
         createToast,
         emitPortalEvent,
+        getReviewAuthorization: _reviewAuthorization,
+        requestReviewNavigation: _requestReviewNavigation,
+        onReviewAuthorizationFailure: (_status, detail = {}) => {
+            if (!detail.confirmed) void loadPortalBootstrap({ isRetryAttempt: true });
+        },
         _isJobsHydrationPending,
         _toggleSurfaceSkeleton,
         _resetArtifactActionButtons,
@@ -6776,6 +6802,41 @@ function _primeDeferredOperateSurface() {
     void _loadDeferredOperateSurface();
 }
 
+function _configImportSnapshot() {
+    const owner = _transientDraftOwnerKey();
+    return !owner || pendingLegacyTransientDraft ? '' : JSON.stringify([owner, configImportGeneration, state.pipeline, state.config, state.portalUi.activeProfileName]);
+}
+
+function _createConfigTransferHost() {
+    return {
+        state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike,
+        configTemplate: portalInternals.createPortalConfigState,
+        supportedPipelines: CONFIG_PREVIEW_SUPPORTED_PIPELINES,
+        snapshot: _configImportSnapshot,
+        migrate: (args) => _migrateDeprecatedLuxOutputConfig(args, false),
+        notify: createToast,
+        async confirmReplacement() {
+            const profile = await _loadDeferredProfileSurface();
+            if (!profile) return false;
+            return !profile.syncDraftState().hasProtectedChanges
+                || window.confirm('Discard the current unsaved Build changes and import this configuration?');
+        },
+        commit(next) {
+            state.pipeline = next.pipeline;
+            state.config = next.config;
+            state.portalUi.activeProfileName = '';
+            if (els.profileSelect) els.profileSelect.value = '';
+            state.portalUi.debugBundleAcknowledged = false;
+            state.portalUi.debugBundleGuardrailSeen = false;
+            updateUIFromState();
+            _persistTransientPortalDraft();
+            void fetchPresetsForPipeline(state.pipeline, true);
+            void fetchConfigMetadata(state.pipeline, true);
+            createToast('Configuration imported.', 'success');
+        }
+    };
+}
+
 function _createDeferredBuildSurfaceHost() {
     return {
         state,
@@ -6931,7 +6992,9 @@ function renderArtifactPanel() {
     _renderDeferredReviewSurfaceFallback(jobsLoading);
 }
 
-function selectJob(jobId) {
+function selectJob(jobId, reviewConfirmed = false) {
+    if (!reviewConfirmed && jobId !== state.selectedJobId
+        && _requestReviewNavigation(() => selectJob(jobId, true))) return;
     const previousJobId = state.selectedJobId;
     state.selectedJobId = jobId;
     _rememberSelectedJob(jobId);
@@ -10620,6 +10683,7 @@ function bindInputs() {
 
     const safeBindText = (el, category, key) => {
         if (!el) return;
+        el.addEventListener('input', () => { configImportGeneration += 1; });
         el.addEventListener('change', (e) => {
             const previousPipeline = state.pipeline;
             if (category) (typeof category === 'function' ? category() : state.config[category])[key] = e.target.value;
@@ -12022,181 +12086,17 @@ if (els.stagedUploadDropzone) {
 }
 
 if (els.importBtn) els.importBtn.addEventListener('click', () => els.fileInput.click());
-if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+if (els.fileInput) els.fileInput.addEventListener('change', async (event) => {
+    configImportGeneration += 1;
+    const file = event.target.files[0];
+    const expected = _configImportSnapshot();
     try {
-        const data = JSON.parse(await file.text());
-        if (data.pipeline) state.pipeline = data.pipeline;
-        if (data.args) {
-            _migrateDeprecatedLuxOutputConfig(data.args);
-            const c = state.config;
-            if (state.pipeline === 'lux-depth') {
-                c.photographyUnified = portalInternals.unifiedPhotographyConfigFromArgs(data.args, c.photographyUnified);
-            } else if (state.pipeline === 'lux-depth-v6') {
-                c.photographyV6 = portalInternals.photographyV6ConfigFromArgs(data.args, c.photographyV6);
-            } else if (state.pipeline === 'lux-depth-v5') {
-                c.photography = portalInternals.photographyConfigFromArgs(data.args, c.photography);
-            }
-            if ('emit_master16' in data.args) c.emit_master16 = data.args.emit_master16;
-            c.inputDir = data.args.archive_root || data.args.input_dir || c.inputDir;
-            c.outputDir = data.args.output_dir || c.outputDir;
-            c.preset = data.args.preset || c.preset;
-            c.qualityTier = _resolveQualityTier(data.args.quality_tier || c.qualityTier);
-            c.depthBackend = _resolveDepthBackend(data.args.depth_backend || c.depthBackend);
-            c.modelKey = _resolveDa3ModelKey(data.args.model_key || c.modelKey);
-            c.depthDevice = data.args.depth_device || c.depthDevice;
-            c.segmentation = c.segmentation || {};
-            c.segmentation.enable = parseBoolLike(data.args.enable_segmentation, c.segmentation.enable);
-            c.segmentation.backend = _resolveSegmentationBackend(data.args.segmentation_backend || c.segmentation.backend);
-            c.segmentation.sam2ModelSize = _resolveSam2ModelSize(data.args.sam2_model_size || c.segmentation.sam2ModelSize);
-            c.segmentation.sam2CheckpointPath = _textOrFallback(
-                data.args.sam2_checkpoint_path,
-                c.segmentation.sam2CheckpointPath
-            );
-            c.segmentation.sam2TilingEnabled = parseBoolLike(
-                data.args.sam2_tiling_enabled,
-                c.segmentation.sam2TilingEnabled
-            );
-            c.segmentation.sam2TileSizePx = _parsePositiveIntOrNull(data.args.sam2_tile_size_px) || c.segmentation.sam2TileSizePx;
-            c.segmentation.sam2OverlapPx =
-                _parseNonNegativeIntOrNull(data.args.sam2_overlap_px) ?? c.segmentation.sam2OverlapPx;
-            c.segmentation.sam2GlobalPassLongestSide =
-                _parsePositiveIntOrNull(data.args.sam2_global_pass_longest_side) || c.segmentation.sam2GlobalPassLongestSide;
-            c.segmentation.sam2MaxConcurrency =
-                _parsePositiveIntOrNull(data.args.sam2_max_concurrency) || c.segmentation.sam2MaxConcurrency;
-            c.segmentation.sam2PointsPerSide =
-                _parsePositiveIntOrNull(data.args.sam2_points_per_side) || c.segmentation.sam2PointsPerSide;
-            c.segmentation.sam2PointsPerBatch =
-                _parsePositiveIntOrNull(data.args.sam2_points_per_batch) || c.segmentation.sam2PointsPerBatch;
-            c.segmentation.sam2PredIouThresh =
-                _parseProbabilityOrNull(data.args.sam2_pred_iou_thresh) ?? c.segmentation.sam2PredIouThresh;
-            c.segmentation.sam2StabilityScoreThresh =
-                _parseProbabilityOrNull(data.args.sam2_stability_score_thresh) ?? c.segmentation.sam2StabilityScoreThresh;
-            c.segmentation.sam2CropNLayers =
-                _parseNonNegativeIntOrNull(data.args.sam2_crop_n_layers) ?? c.segmentation.sam2CropNLayers;
-            c.segmentation.strict = parseBoolLike(data.args.strict_segmentation, c.segmentation.strict);
-
-            c.flags.materials = parseBoolLike(data.args.materials_v3, c.flags.materials);
-            c.flags.pbr = parseBoolLike(data.args.pbr, c.flags.pbr);
-            c.flags.cache = parseBoolLike(data.args.cache_depth, c.flags.cache);
-            c.flags.overwrite = parseBoolLike(data.args.overwrite, c.flags.overwrite);
-            c.flags.enableV2 = parseBoolLike(data.args.enable_v2, c.flags.enableV2);
-            c.flags.saveFloatDepth = parseBoolLike(data.args.save_float_depth, c.flags.saveFloatDepth);
-            c.flags.forceDepth = parseBoolLike(data.args.force_depth, c.flags.forceDepth);
-            c.flags.strictInputs = parseBoolLike(data.args.strict_inputs, c.flags.strictInputs);
-            c.flags.verifyImages = parseBoolLike(data.args.verify_images, c.flags.verifyImages);
-            c.flags.allowSemanticFallback = parseBoolLike(
-                data.args.allow_semantic_fallback,
-                c.flags.allowSemanticFallback
-            );
-            c.flags.verbose = parseBoolLike(data.args.verbose, c.flags.verbose);
-            c.flags.quiet = parseBoolLike(data.args.quiet, c.flags.quiet);
-            _normalizeVerboseQuietFlags(c.flags, true);
-            c.v2Preset = data.args.v2_preset || c.v2Preset;
-            if ('v2_input_color' in data.args) c.v2InputColor = data.args.v2_input_color;
-
-            c.outputBitDepth = Number(
-                data.args.output_bit_depth ?? data.args.outputBitDepth ?? c.outputBitDepth
-            ) === 8 ? 8 : 16;
-            c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
-            c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
-            c.emits.runCardIncludeProofs = parseBoolLike(
-                data.args.run_card_include_proofs,
-                c.emits.runCardIncludeProofs
-            );
-
-            c.gate = c.gate || {};
-            c.gate.archiveIndex = _textOrFallback(
-                data.args.archive_index,
-                c.gate.archiveIndex
-            );
-            c.gate.manifestJsonl = _textOrFallback(
-                data.args.manifest_jsonl,
-                c.gate.manifestJsonl
-            );
-            c.licenses.nonCommercialOk = parseBoolLike(
-                data.args.non_commercial_ok,
-                c.licenses.nonCommercialOk
-            );
-            c.licenses.acceptApple = parseBoolLike(
-                data.args.accept_apple_depth_pro_research_license,
-                c.licenses.acceptApple
-            );
-            c.licenses.acceptResearchTools = parseBoolLike(
-                data.args.accept_research_tools_license,
-                c.licenses.acceptResearchTools
-            );
-
-            c.reconstruction = c.reconstruction || {};
-            c.reconstruction.enable = parseBoolLike(
-                data.args.enable_reconstruction,
-                c.reconstruction.enable
-            );
-            c.reconstruction.groupingMode = _resolveGroupingMode(
-                data.args.grouping_mode || c.reconstruction.groupingMode
-            );
-            c.reconstruction.camerasSidecarPath = _textOrFallback(
-                data.args.cameras_sidecar_path,
-                c.reconstruction.camerasSidecarPath
-            );
-            c.reconstruction.iterations = _parsePositiveIntOrNull(
-                data.args.reconstruction_iterations
-            ) || c.reconstruction.iterations;
-            c.reconstruction.tier = _textOrFallback(
-                data.args.reconstruction_tier,
-                c.reconstruction.tier
-            );
-            c.reconstruction.emitSceneDebugBundle = parseBoolLike(
-                data.args.emit_scene_debug_bundle,
-                c.reconstruction.emitSceneDebugBundle
-            );
-
-            c.raw = c.raw || {};
-            c.raw.ingestMode = _textOrFallback(data.args.raw_ingest_mode, c.raw.ingestMode);
-            c.raw.wbMode = _textOrFallback(data.args.raw_wb_mode, c.raw.wbMode);
-            c.raw.demosaic = _textOrFallback(data.args.raw_demosaic, c.raw.demosaic);
-
-            c.captioning = c.captioning || {};
-            c.captioning.enableFastVlm = parseBoolLike(
-                data.args.vlm_captioning_enabled,
-                c.captioning.enableFastVlm
-            );
-            c.captioning.model = _textOrFallback(data.args.vlm_captioning_model, c.captioning.model);
-            c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(
-                data.args.vlm_captioning_proxy_format || c.captioning.proxyFormat
-            );
-            c.captioning.maxSidePx =
-                _parsePositiveIntOrNull(data.args.vlm_captioning_max_side_px) || c.captioning.maxSidePx;
-            c.captioning.timeoutSeconds =
-                _parsePositiveIntOrNull(data.args.fastvlm_timeout_seconds) || c.captioning.timeoutSeconds;
-            c.captioning.pythonExecutable = _textOrFallback(
-                data.args.fastvlm_python_executable,
-                c.captioning.pythonExecutable
-            );
-            c.captioning.mlxVlmDir = _textOrFallback(
-                data.args.fastvlm_mlx_vlm_dir,
-                c.captioning.mlxVlmDir
-            );
-
-            c.runtime = c.runtime || {};
-            c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || '';
-            c.runtime.maxWorkersMode = c.runtime.maxWorkers === '' ? 'auto' : 'fixed';
-            c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(data.args.max_gpu_workers) || '';
-            c.runtime.maxGpuWorkersMode = c.runtime.maxGpuWorkers === '' ? 'auto' : 'fixed';
-            c.runtime.logLevel = _textOrFallback(data.args.log_level, c.runtime.logLevel);
-        }
-        state.portalUi.debugBundleAcknowledged = false;
-        state.portalUi.debugBundleGuardrailSeen = false;
-        updateUIFromState();
-        _persistTransientPortalDraft();
-        void fetchPresetsForPipeline(state.pipeline, true);
-        void fetchConfigMetadata(state.pipeline, true);
-        createToast("Configuration imported.", "success");
-    } catch (err) {
-        createToast("Invalid JSON file.", "error");
+        if (!file || !expected) return;
+        const api = await loadDeferredSurface('configTransfer', _createConfigTransferHost);
+        if (api) await api.importFile(file, expected);
+    } finally {
+        event.target.value = '';
     }
-    els.fileInput.value = "";
 });
 
 if (els.copyCliBtn) els.copyCliBtn.addEventListener('click', async () => {
@@ -12244,13 +12144,14 @@ if (els.artifactThumbnailRail) {
         const path = String(button.dataset.artifactPath || '').trim();
         if (!path) return;
         const shouldRestoreFocus = event.detail === 0;
-        _rememberArtifactSelection(String(selectedJob.id || ''), path);
-        renderReviewSurfaces();
-        if (shouldRestoreFocus) {
-            requestAnimationFrame(() => {
+        const select = () => {
+            _rememberArtifactSelection(String(selectedJob.id || ''), path);
+            renderReviewSurfaces();
+            if (shouldRestoreFocus) requestAnimationFrame(() => {
                 _focusArtifactRailButton(path);
             });
-        }
+        };
+        if (!_requestReviewNavigation(select)) select();
     });
     els.artifactThumbnailRail.addEventListener('keydown', handleArtifactRailKeydown);
 }
@@ -12973,8 +12874,13 @@ portalRenderSurfaces.register('jobQueue', {
     }
 });
 
+window.addEventListener('beforeunload', (event) => {
+    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+});
 window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
-window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('beforeunload', _flushPortalRumOnPagehide);
 window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
@@ -12985,11 +12891,18 @@ window.addEventListener('pageshow', () => {
 window.addEventListener('focus', () => {
     reconcileBuildSurfaceFromDom();
 });
-window.addEventListener('popstate', () => {
-    applyConsoleRouteFromLocation(true);
-    portalRenderSurfaces.render('jobQueue', state);
-    _focusConsoleViewHeading(state.currentView);
+const portalHistoryNavigation = portalInternals.createPortalHistoryNavigation({
+    history: window.history,
+    location: window.location,
+    hasEdits: () => Boolean(deferredReviewSurfaceApi?.hasUnsavedChanges?.()),
+    requestNavigation: (action) => deferredReviewSurfaceApi.requestNavigation(action, { leave: true }),
+    apply: () => {
+        applyConsoleRouteFromLocation(true);
+        portalRenderSurfaces.render('jobQueue', state);
+        _focusConsoleViewHeading(state.currentView);
+    }
 });
+window.addEventListener('popstate', portalHistoryNavigation.pop);
 
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
