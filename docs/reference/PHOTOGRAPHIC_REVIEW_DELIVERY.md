@@ -600,13 +600,31 @@ retains its 32-scene limit and response contract. Larger jobs return
 The workbench offers one card per scene, expandable related variants, filters,
 previous/next scene, Next unreviewed and deterministic page navigation. A decision
 shows its reviewer and date. Scene-card arrow keys move focus; native-view arrow
-keys retain their pixel-pan meaning. Unsaved notes or revision adjustments block
-navigation until explicitly discarded or saved. Selected scene/version,
+keys retain their pixel-pan meaning. Unsaved notes, lighting edits and revision
+adjustments block source-changing navigation until explicitly discarded or saved.
+This also covers artifact/job navigation and background catalogue replacement;
+temporary job hydration retains the current draft. Selected scene/version,
 comparison, presentation and ROI survive reload within bounded actor/job-scoped
 session metadata. No images, API keys, storage locations or filesystem authority
 are persisted. The artifact rail follows the selected published scene, while a
 revision retains its own exact relative selector. A selected display or cached
 image never grants approval, and no bulk approval shortcut is added.
+
+Authoring drafts remain in memory and bind to the exact actor, job, scene and
+source identity. Comparison modes, pan, zoom, inspection crops and presentation
+selection preserve those edits and do not change approval scope. Notes remain
+editable during a save: its response acknowledges only the submitted edit
+generation, preserving newer text. An uncertain save requires GET reconciliation
+before another mutation. Leave/reload warnings are best effort; unsaved notes,
+lighting edits and adjustment drafts are not recovered after a completed reload
+or crash.
+
+Temporary authentication uncertainty masks the private workbench and blocks
+mutations while retaining its bounded in-memory draft. Fresh authentication and
+an authorized read of the same source are required before revealing it. Explicit
+logout, a confirmed owner change or confirmed access revocation clears the
+private draft. A masked draft can be explicitly discarded before leaving for
+sign-in; recovering access never replays a POST.
 
 The 64-scene contract also applies to approved-source selectors, labels and
 lighting-group membership. Six export presets, 64 delivery records, 128 saved

@@ -108,7 +108,9 @@ def seal_completion(reservation: UploadReservation, result: StagedUploadResult) 
     }
     raw = canonicalize_json(payload)
     if len(raw) > MAX_RECOVERY_METADATA_BYTES:
-        raise ValueError("upload completion seal exceeds metadata bound")
+        raise UploadStagingError(
+            "upload_recovery_metadata_limit", "staged upload metadata exceeds recovery capacity", status_code=413
+        )
     _write_bytes_atomic(metadata / SEAL_FILENAME, raw)
     return hashlib.sha256(raw).hexdigest()
 
@@ -340,19 +342,18 @@ def delete_owned_batch(reservation: UploadReservation, upload_root: Path) -> Non
         # Both incomplete and ready batches are ledger-owned. The caller has
         # already fenced every completion and retained reference transaction.
         marker_path = root / MARKER_FILENAME
-        if marker_path.exists():
+        if marker_path.exists() or marker_path.is_symlink():
             marker = json.loads(_read(marker_path))
-            if (
-                marker.get("batch_id") != reservation.batch_id
-                or marker.get("request_id") != reservation.request_id
-                or marker.get("owner_sha256") != reservation.owner_sha256
+            if not isinstance(marker, dict) or any(
+                marker.get(field) != getattr(reservation, field)
+                for field in ("batch_id", "tenant_id", "request_id", "owner_sha256", "batch_root")
             ):
                 raise ValueError("upload cleanup ownership changed")
-        elif reservation.receipt_sha256 is not None or reservation.response_data is not None:
-            raise ValueError("completed upload lost its ownership marker")
-        # A crash between mkdir and the initial atomic marker rename leaves
-        # no marker. The ledger's never-reused server locator still owns that
-        # incomplete directory; no ready job could have referenced it.
+        elif reservation.state != "deleting":
+            raise ValueError("markerless upload deletion requires fenced ownership")
+        # The caller holds the stable lock and a deleting ledger generation.
+        # An interrupted rmtree may already have removed the marker; its
+        # never-reused locator still belongs to that durable deletion claim.
         shutil.rmtree(root)
 
 
