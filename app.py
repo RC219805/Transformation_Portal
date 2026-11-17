@@ -1395,6 +1395,7 @@ async def _pilot_tenant_from_request(
     request: Optional[Request],
     *,
     action: str,
+    materialize: bool = True,
 ) -> Tuple[Optional[TenantContext], Optional[JSONResponse]]:
     if not PILOT_CONTROL_PLANE_ENABLED:
         return None, None
@@ -1423,10 +1424,19 @@ async def _pilot_tenant_from_request(
         )
 
     try:
-        manager = _pilot_tenant_manager()
-        tenant = manager.get_tenant(tenant_id)
+        manager = _pilot_tenant_manager() if materialize else _PILOT_TENANT_MANAGER
+        tenant = manager.get_tenant(tenant_id) if manager is not None else None
         if tenant is None:
-            tenant = manager.create_tenant(tenant_id, policy=_pilot_tenant_policy())
+            if materialize:
+                assert manager is not None
+                tenant = manager.create_tenant(tenant_id, policy=_pilot_tenant_policy())
+            else:
+                # Verified read scope does not provision mutable storage.
+                tenant = TenantContext(
+                    tenant_id=tenant_id,
+                    workspace_root=PILOT_TENANT_WORKSPACE_ROOT,
+                    cas_root=PILOT_TENANT_CAS_ROOT,
+                )
     except TenantError:
         return None, await _pilot_tenant_error(
             action=action,
@@ -1444,11 +1454,19 @@ async def _pilot_enforce_pipeline(
     pipeline: str,
     action: str,
     request: Optional[Request],
+    materialize: bool = True,
 ) -> Optional[JSONResponse]:
     if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
         return None
     try:
-        _pilot_tenant_manager().enforce_node_type(tenant.tenant_id, pipeline)
+        if materialize:
+            _pilot_tenant_manager().enforce_node_type(tenant.tenant_id, pipeline)
+        else:
+            policy = _PILOT_TENANT_MANAGER.get_policy(tenant.tenant_id) if _PILOT_TENANT_MANAGER is not None else None
+            if policy is None:
+                policy = _pilot_tenant_policy()
+            if policy.allowed_node_types and pipeline not in policy.allowed_node_types:
+                raise TenantError(f"Node type not allowed for tenant {tenant.tenant_id}: {pipeline}")
     except TenantError:
         return await _pilot_tenant_error(
             action=action,
@@ -9539,7 +9557,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
     submission_receipts = False
     if PILOT_CONTROL_PLANE_ENABLED:
         try:
-            tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context")
+            tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context", materialize=False)
             if denied is None and tenant is not None:
                 verified = _verified_frontdoor_actor(request)
                 recovery_context = {
@@ -10201,7 +10219,9 @@ def _submission_provider_unavailable() -> JSONResponse:
 async def _submission_response(
     receipt: SubmissionReceipt, tenant: TenantContext, request: Optional[Request], api_version: str, *, as_lookup: bool
 ) -> JSONResponse:
-    denied = await _pilot_enforce_pipeline(tenant, pipeline=receipt.pipeline, action="submission_read", request=request)
+    denied = await _pilot_enforce_pipeline(
+        tenant, pipeline=receipt.pipeline, action="submission_read", request=request, materialize=False
+    )
     if denied is not None:
         return denied
     if receipt.retired and not as_lookup:
@@ -10262,7 +10282,7 @@ async def _prepare_submission(
     if tenant is None:
         return None, _submission_provider_unavailable()
     denied = await _pilot_enforce_pipeline(
-        tenant, pipeline=str(payload.get("pipeline") or "").strip(), action="job_create", request=request
+        tenant, pipeline=str(payload.get("pipeline") or "").strip(), action="job_create", request=request, materialize=False
     )
     if denied is not None:
         return None, denied
@@ -10284,7 +10304,9 @@ async def _prepare_submission(
         LOGGER.exception("durable submission lookup failed")
         return None, _submission_provider_unavailable()
     if receipt is not None:
-        denied = await _pilot_enforce_pipeline(tenant, pipeline=receipt.pipeline, action="submission_read", request=request)
+        denied = await _pilot_enforce_pipeline(
+            tenant, pipeline=receipt.pipeline, action="submission_read", request=request, materialize=False
+        )
         if denied is not None:
             return None, denied
         if receipt.intent_sha256 != identity.intent_sha256:
@@ -10296,7 +10318,7 @@ async def _prepare_submission(
 
 
 async def _get_submission(request: Request, request_id: str, api_version: str) -> JSONResponse:
-    tenant, denied = await _pilot_tenant_from_request(request, action="submission_read")
+    tenant, denied = await _pilot_tenant_from_request(request, action="submission_read", materialize=False)
     if denied is not None:
         return denied
     if tenant is None:
@@ -10368,12 +10390,18 @@ async def create_job_v2(
 
 
 async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
-    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+    tenant, tenant_error = await _pilot_tenant_from_request(
+        request, action="job_create", materialize=request is None or request.headers.get("idempotency-key") is None
+    )
     if tenant_error is not None:
         return tenant_error
     submission, recovered = await _prepare_submission(request, payload, tenant, "v1")
     if recovered is not None:
         return recovered
+    if submission is not None:
+        tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+        if tenant_error is not None:
+            return tenant_error
     path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
     if path_error is not None:
         return path_error
@@ -10387,12 +10415,18 @@ async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResp
 
 
 async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
-    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+    tenant, tenant_error = await _pilot_tenant_from_request(
+        request, action="job_create", materialize=request is None or request.headers.get("idempotency-key") is None
+    )
     if tenant_error is not None:
         return tenant_error
     submission, recovered = await _prepare_submission(request, payload, tenant, "v2")
     if recovered is not None:
         return recovered
+    if submission is not None:
+        tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+        if tenant_error is not None:
+            return tenant_error
     path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)
     if path_error is not None:
         return path_error
@@ -10417,12 +10451,15 @@ async def _create_job(
     if request is not None and request.headers.get("idempotency-key") is not None:
         # A receipt can commit between the route lookup and this entry. Rebind
         # the original intent and current signed scope before mutable previews.
-        tenant, denied = await _pilot_tenant_from_request(request, action="job_create")
+        tenant, denied = await _pilot_tenant_from_request(request, action="job_create", materialize=False)
         if denied is not None:
             return denied
         submission, recovered = await _prepare_submission(request, payload, tenant, api_version, prepared=submission)
         if recovered is not None:
             return recovered
+        tenant, denied = await _pilot_tenant_from_request(request, action="job_create")
+        if denied is not None:
+            return denied
         pilot_tenant = tenant
         portal_actor = _portal_actor_from_request(request)
         path_error = await _pilot_enforce_request_paths(tenant, payload, action="job_create", request=request)

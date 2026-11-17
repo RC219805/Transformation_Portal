@@ -1313,7 +1313,8 @@ export function createDeferredReviewSurfaceApi(host) {
     renderArtifactViewer();
   }
 
-  function _navigateArtifactViewerSelection(direction) {
+  function _navigateArtifactViewerSelection(direction, confirmed = false) {
+    if (!confirmed && host.requestReviewNavigation?.(() => _navigateArtifactViewerSelection(direction, true))) return false;
     const context = _artifactViewerContext();
     if (!context.job || !context.artifact) return false;
     const nextIndex = context.index + Number(direction || 0);
@@ -1499,6 +1500,9 @@ export function createDeferredReviewSurfaceApi(host) {
   }
 
   return {
+    hasUnsavedChanges: () => photographicReview.hasUnsavedChanges(),
+    requestNavigation: (action, options) => photographicReview.requestNavigation(action, options),
+    syncAuthorization: () => photographicReview.syncAuthorization(),
     renderArtifactPanel,
     renderArtifactViewer,
     _artifactViewerContext,

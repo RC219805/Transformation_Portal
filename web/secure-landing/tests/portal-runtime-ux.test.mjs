@@ -251,10 +251,11 @@ test("deprecated Lux output keys migrate out of drafts, profiles, payloads, and 
   }
   assert.match(profile, /state\.config = copyDraftConfig\(profiles\[name\]\.config\)/);
   assert.match(portal, /\[deprecated_output_flag\] Report on; no marketing\./);
-  assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(data\.args\)/);
+  assert.match(portal, /_migrateDeprecatedLuxOutputConfig\(args, false\)/);
+  const configTransfer = readFileSync(new URL('../portal-src/config-transfer-deferred.js', import.meta.url), 'utf8');
   assert.match(
-    portal,
-    /data\.args\.output_bit_depth \?\? data\.args\.outputBitDepth \?\? c\.outputBitDepth/,
+    configTransfer,
+    /const \{ pipeline = state\.pipeline, args \} = data;[\s\S]*host\.migrate\(args\)[\s\S]*args\.output_bit_depth \?\? args\.outputBitDepth \?\? c\.outputBitDepth/,
   );
 
   const canonicalArgs = between(portal, "function buildCanonicalLuxDepthArgs", "function generatePayload");

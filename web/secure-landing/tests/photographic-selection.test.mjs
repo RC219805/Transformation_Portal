@@ -19,6 +19,15 @@ test("original and published rail selectors retain one exact actor/job-scoped ph
   assert.equal(photographicSelectionFor(state, { ...job }, selected.artifactPath), selected);
 });
 
+test("verified authoring ownership preserves rail identity across role and token refresh", () => {
+  const { state, job, selected } = fixture();
+  selected.actorScope = 'verified-composite-owner';
+  state.auth.actor.role = 'reviewer';
+  state.auth.csrfToken = 'new-token';
+  assert.equal(photographicSelectionFor(state, job, selected.artifactPath, 'verified-composite-owner'), selected);
+  assert.notEqual(photographicSelectionFor(state, job, selected.artifactPath, 'other-owner'), selected);
+});
+
 test("another rail choice cannot inherit the previous photo's version", () => {
   const { state, job } = fixture();
   assert.deepEqual(photographicSelectionFor(state, job, "v6/input-0031/delivery.tif"), {
