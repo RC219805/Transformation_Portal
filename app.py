@@ -10167,7 +10167,7 @@ async def create_job_v2(
 
 async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     tenant, tenant_error = await _pilot_tenant_from_request(
-        request, action="job_create", materialize=request.headers.get("idempotency-key") is None
+        request, action="job_create", materialize=request is None or request.headers.get("idempotency-key") is None
     )
     if tenant_error is not None:
         return tenant_error
@@ -10192,7 +10192,7 @@ async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResp
 
 async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     tenant, tenant_error = await _pilot_tenant_from_request(
-        request, action="job_create", materialize=request.headers.get("idempotency-key") is None
+        request, action="job_create", materialize=request is None or request.headers.get("idempotency-key") is None
     )
     if tenant_error is not None:
         return tenant_error

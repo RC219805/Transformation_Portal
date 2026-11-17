@@ -147,6 +147,22 @@ async def test_new_and_keyless_http_work_still_requires_tenant_provisioning(rece
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_http_wrapper_without_request_retains_typed_authority_failure(receipts, monkeypatch, version):
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("a wrapper without a signed request must fail before preview")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    wrapper = application.create_job_http if version == "v1" else application.create_job_v2_http
+    response = await wrapper(request=None, payload=BODY)
+    assert response.status_code == 401
+    assert json.loads(response.body)["error"]["details"]["reason"] == "authenticated_actor_required"
+    assert mkdirs == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["replay", "lookup"])
 @pytest.mark.parametrize("policy_source", ["configured", "cached"])
 async def test_read_only_receipts_still_enforce_current_pipeline_policy(receipts, monkeypatch, operation, policy_source):
