@@ -78,6 +78,7 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/ready"): "healthcheck",
     ("GET", "/v1/config-metadata"): "config",
     ("POST", "/v1/config-preview"): "config",
+    ("GET", "/v1/job-submissions/{request_id}"): "jobs",
     ("GET", "/v1/jobs"): "jobs",
     ("POST", "/v1/jobs"): "jobs",
     ("GET", "/v1/jobs/{job_id}"): "jobs",
@@ -98,6 +99,7 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/v1/jobs/{job_id}/photographic-review/native-crop"): "jobs",
     ("GET", "/v1/jobs/{job_id}/photographic-review/quality"): "jobs",
     ("GET", "/v1/jobs/{job_id}/photographic-review/render"): "jobs",
+    ("GET", "/v1/jobs/{job_id}/photographic-review/thumbnail"): "jobs",
     ("POST", "/v1/jobs/{job_id}/photographic-review/revisions"): "jobs",
     ("POST", "/v1/portal/events"): "portal_telemetry",
     ("POST", "/v1/portal/rum"): "portal_telemetry",
@@ -105,6 +107,8 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/v1/presets"): "presets",
     ("GET", "/v1/readiness"): "readiness",
     ("POST", "/v1/uploads/staging"): "uploads",
+    ("GET", "/v1/uploads/staging/receipts/{request_id}"): "uploads",
+    ("GET", "/v2/job-submissions/{request_id}"): "jobs",
     ("GET", "/v2/jobs"): "jobs",
     ("POST", "/v2/jobs"): "jobs",
     ("GET", "/v2/jobs/{job_id}"): "jobs",
@@ -123,6 +127,7 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/v2/jobs/{job_id}/photographic-review/native-crop"): "jobs",
     ("GET", "/v2/jobs/{job_id}/photographic-review/quality"): "jobs",
     ("GET", "/v2/jobs/{job_id}/photographic-review/render"): "jobs",
+    ("GET", "/v2/jobs/{job_id}/photographic-review/thumbnail"): "jobs",
     ("POST", "/v2/jobs/{job_id}/photographic-review/revisions"): "jobs",
 }
 

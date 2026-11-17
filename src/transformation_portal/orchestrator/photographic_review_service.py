@@ -63,6 +63,7 @@ from transformation_portal.orchestrator.photographic_scene_catalogue import (
     catalogue_changed,
     scene_page,
     scene_snapshot,
+    thumbnail_source,
 )
 
 if TYPE_CHECKING:
@@ -81,6 +82,9 @@ _Result = TypeVar("_Result")
 
 MAX_IMAGE_BYTES = 512 * 1024**2
 MAX_BUNDLE_BYTES = 16 * 1024**3
+THUMBNAIL_MAX_EDGE = 256
+THUMBNAIL_MAX_BYTES = 1024**2
+THUMBNAIL_RENDERER = "tp.photo.thumbnail.v1"
 LOGGER = logging.getLogger(__name__)
 HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
@@ -838,6 +842,13 @@ async def load_image(context: ReviewContext, ref: JsonObject) -> DeliveryImage:
 def _display(
     image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int = 1600, view: str = "clip_srgb"
 ) -> tuple[bytes, int, int]:
+    raw, width, height, _, _ = _display_with_geometry(image, crop, max_edge, view)
+    return raw, width, height
+
+
+def _display_with_geometry(
+    image: DeliveryImage, crop: NativeCrop | None = None, max_edge: int = 1600, view: str = "clip_srgb"
+) -> tuple[bytes, int, int, int, int]:
     import numpy as np
     from PIL import Image
 
@@ -898,7 +909,7 @@ def _display(
     with Image.fromarray(samples) as output:
         buffer = io.BytesIO()
         output.save(buffer, format="PNG", icc_profile=output_srgb_icc())
-    return buffer.getvalue(), samples.shape[1], samples.shape[0]
+    return buffer.getvalue(), samples.shape[1], samples.shape[0], width, height
 
 
 def _metadata(image: DeliveryImage) -> JsonObject:
@@ -1109,6 +1120,11 @@ class PhotographicReviewService:
         """Authorize before queueing; reserve once through all IO and publication."""
         if method == self.revision and args:
             self._validate_native_revision(args[0])
+        if method == self.thumbnail:
+            if os.getenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "0").strip() != "1":
+                raise ReviewOverload("thumbnail_feature_disabled")
+            if not self.admission.config.enabled:
+                raise ReviewOverload("thumbnail_admission_required")
         if not self.admission.config.enabled:
             if context.discover_scene_references is not None and method.__name__ != "catalogue":
                 context = await self._discover_selected(context, method.__name__, args)
@@ -1118,7 +1134,24 @@ class PhotographicReviewService:
         transferred = False
         try:
             await self.revalidate(context)
-            if operation == "render" and context.binding_identity is not None:
+            thumbnail_key = await self._thumbnail_key(context, args, kwargs) if operation == "thumbnail" else None
+            if thumbnail_key is not None:
+
+                async def shared_thumbnail() -> Any:
+                    return await self._execute_reserved(context, method, *args, **kwargs)
+
+                try:
+                    result = await self.admission.coalesce(thumbnail_key, shared_thumbnail)
+                except ReviewAccessError as error:
+                    if error.status not in {401, 403}:
+                        raise
+                    await self.revalidate(context)
+                    result = await self._execute_reserved(context, method, *args, **kwargs)
+                await self.revalidate(context)
+                # Each subscriber rechecks its own current catalogue after the
+                # shared bytes exist. No leader authorizes another response.
+                await self._thumbnail_target(context, args[0], args[1])
+            elif operation == "render" and context.binding_identity is not None:
                 state = await self.state(context)
                 key = (
                     context.tenant_id,
@@ -1269,7 +1302,7 @@ class PhotographicReviewService:
                 return replace(context, references=await context.discover_references())
             return context
         state = await self.state(context)
-        if operation == "scene_detail":
+        if operation in {"scene_detail", "thumbnail"}:
             index = await self._scene_index(context)
             identity, scenes = scene_snapshot(context, index, state)
             if identity != args[1]:
@@ -1360,6 +1393,67 @@ class PhotographicReviewService:
                     del candidates, matches
         await self.revalidate(context)
         return replace(context, references=references)
+
+    async def _thumbnail_target(self, context: ReviewContext, scene_id: str, identity: str) -> JsonObject:
+        """Bind a server-selected variant to this exact metadata snapshot."""
+        state = await self.state(context)
+        index = await self._scene_index(context)
+        current, _ = scene_snapshot(context, index, state)
+        if current != identity:
+            raise catalogue_changed()
+        selected = thumbnail_source(index, state, scene_id)
+        if selected is None:
+            raise ReviewAccessError("Photographic scene not found", status=404, code="NOT_FOUND")
+        revised = [ref for ref in revision_refs(state) if ref["artifact_path"] == selected["artifact_path"]]
+        if revised:
+            selected = revised[-1]
+            # A validated committed receipt establishes policy presence or
+            # explicit absence. Metadata-only index rows may know neither.
+            selected.setdefault("presentation_policy_sha256", None)
+        return selected
+
+    async def _thumbnail_key(
+        self, context: ReviewContext, args: tuple[Any, ...], kwargs: JsonObject
+    ) -> tuple[Any, ...] | None:
+        selected = await self._thumbnail_target(context, args[0], args[1])
+        identity = source_identity(selected)
+        sha = selected.get("sha256")
+
+        def valid_digest(value: Any) -> bool:
+            return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+        if (
+            context.binding_identity is None
+            or not valid_digest(sha)
+            or not valid_digest(identity)
+            or (selected.get("role") == "working_master" and not selected.get("native"))
+            or "presentation_policy_sha256" not in selected
+        ):
+            # Legacy/unresolved composite identities are private admitted reads,
+            # never shared using a path or a guessed source identity.
+            return None
+        try:
+            presentation_policy(selected)
+        except ReviewAccessError:
+            # Discovery and the private admitted read still validate malformed
+            # or incomplete policy authority; it cannot share a render group.
+            return None
+        return (
+            context.tenant_id,
+            context.job_id,
+            context.binding_identity,
+            canonicalize_json(context.actor),
+            args[0],
+            args[1],
+            selected["artifact_path"],
+            sha,
+            identity,
+            canonicalize_json(selected),
+            kwargs.get("view", "clip_srgb"),
+            THUMBNAIL_RENDERER,
+            THUMBNAIL_MAX_EDGE,
+            THUMBNAIL_MAX_BYTES,
+        )
 
     async def _scene_index(self, context: ReviewContext) -> list[JsonObject]:
         if context.discover_scene_index is not None:
@@ -1731,6 +1825,23 @@ class PhotographicReviewService:
         await self.revalidate(context)
         if await self.state(context) != state:
             raise catalogue_changed()
+        for scene in result["scenes"]:
+            selected = thumbnail_source(index, state, scene["scene_id"])
+            scene["thumbnail"] = (
+                {
+                    "url": base_url(context) + "/thumbnail",
+                    "artifact_path": selected["artifact_path"],
+                    "sha256": selected.get("sha256"),
+                    "source_identity_sha256": (
+                        selected.get("source_identity_sha256")
+                        if selected.get("role") == "working_master"
+                        else source_identity(selected)
+                    ),
+                    "presentation_policy_sha256": selected.get("presentation_policy_sha256"),
+                }
+                if selected is not None
+                else None
+            )
         return {
             **result,
             "presets": [preset.to_payload() for preset in destination_presets()],
@@ -1866,6 +1977,81 @@ class PhotographicReviewService:
                 for product in products
             ]
         }
+
+    async def thumbnail(
+        self, context: ReviewContext, scene_id: str, catalogue_identity_sha256: str, view: str = "clip_srgb"
+    ) -> Response:
+        """A bounded display derivative, with no approval or precision authority."""
+        image = raw = None
+        try:
+            lease = current_review_lease.get()
+            if (
+                lease is None
+                or not self.admission.owns_lease(lease)
+                or lease.tenant_id != context.tenant_id
+                or lease.cost.interactive
+            ):
+                raise ReviewOverload("thumbnail_reservation_required")
+            required = self._resource_cost(context, {}, "thumbnail", (), None)
+            if any(
+                getattr(lease.cost, field) < getattr(required, field)
+                for field in ("memory_bytes", "scratch_bytes", "decode_slots", "io_slots", "max_pixels")
+            ):
+                raise ReviewOverload("thumbnail_reservation_incomplete")
+            selected = await self._thumbnail_target(context, scene_id, catalogue_identity_sha256)
+            state = await self.state(context)
+            matches = [
+                ref
+                for ref in [*context.references, *revision_refs(state)]
+                if ref["artifact_path"] == selected["artifact_path"]
+            ]
+            if len(matches) != 1:
+                raise ReviewAccessError("Photographic thumbnail source is unavailable", status=404, code="NOT_FOUND")
+            ref = matches[0]
+            if selected.get("sha256") not in {None, ref.get("sha256")}:
+                raise catalogue_changed()
+            if selected.get("source_identity_sha256") not in {None, source_identity(ref)}:
+                raise catalogue_changed()
+            if selected.get("presentation_policy_sha256") not in {None, ref.get("presentation_policy_sha256")}:
+                raise catalogue_changed()
+            async with self.expensive:
+                image = await load_image(context, ref)
+                raw, width, height, native_width, native_height = await _owned_thread(
+                    _display_with_geometry, image, None, THUMBNAIL_MAX_EDGE, view
+                )
+            if len(raw) > THUMBNAIL_MAX_BYTES or max(width, height) > THUMBNAIL_MAX_EDGE:
+                raise ReviewOverload("thumbnail_response_limit", status=413)
+            await self.revalidate(context)
+            await self._thumbnail_target(context, scene_id, catalogue_identity_sha256)
+            return Response(
+                raw,
+                media_type="image/png",
+                headers={
+                    **HEADERS,
+                    "X-TP-Source-SHA256": image.source_sha256,
+                    "X-TP-Source-Identity-SHA256": image.source_identity_sha256,
+                    "X-TP-Catalogue-Identity-SHA256": catalogue_identity_sha256,
+                    "X-TP-Scene-ID": quote(scene_id, safe=""),
+                    "X-TP-Artifact-Path": quote(ref["artifact_path"], safe=""),
+                    "X-TP-Native-Width": str(native_width),
+                    "X-TP-Native-Height": str(native_height),
+                    "X-TP-Thumbnail-Width": str(width),
+                    "X-TP-Thumbnail-Height": str(height),
+                    "X-TP-Thumbnail-Max-Edge": str(THUMBNAIL_MAX_EDGE),
+                    "X-TP-Thumbnail-Max-Bytes": str(THUMBNAIL_MAX_BYTES),
+                    "X-TP-Thumbnail-Renderer": THUMBNAIL_RENDERER,
+                    "X-TP-Display-Transform": (
+                        "linear_srgb_to_8bit_srgb_clip_v1" if view == "clip_srgb" else "recorded_presentation_to_8bit_srgb_v1"
+                    ),
+                    "X-TP-Presentation-View": view,
+                    "X-TP-Presentation-Policy-SHA256": image.presentation.sha256 if image.presentation is not None else "none",
+                },
+            )
+        except BaseException:
+            await drain_owned(asyncio.sleep(0))
+            raise
+        finally:
+            del image, raw
 
     async def render(
         self,

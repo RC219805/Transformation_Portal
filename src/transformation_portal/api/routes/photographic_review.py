@@ -169,6 +169,16 @@ def create_photographic_review_router(runtime: ReviewRuntime) -> APIRouter:
             view=view,
         )
 
+    @versioned.get("/thumbnail")
+    async def thumbnail(
+        request: Request,
+        job_id: str,
+        scene_id: Annotated[str, Query(min_length=1, max_length=1024)],
+        catalogue_identity_sha256: HashQuery,
+        view: Literal["recorded", "clip_srgb"] = "clip_srgb",
+    ) -> Response:
+        return await invoke(request, job_id, service.thumbnail, scene_id, catalogue_identity_sha256, view=view)
+
     @versioned.get("/native-crop")
     async def crop(
         request: Request,

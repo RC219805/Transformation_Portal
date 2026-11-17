@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, Request
 from starlette.responses import Response
 
 from transformation_portal.api.v1 import (
@@ -19,6 +19,7 @@ from transformation_portal.api.v1 import (
     JobsListEnvelope,
     JobStatusEnvelope,
 )
+from transformation_portal.api.v1.jobs import JobSubmissionEnvelope
 
 DEFAULT_JOB_LIST_LIMIT = 200
 
@@ -41,18 +42,36 @@ class JobRouteHandlers:
     cancel_job_v2: Callable[[Request, str], Awaitable[Response]]
     job_events: Callable[[Request, str], Awaitable[Response]]
     job_events_v2: Callable[[Request, str], Awaitable[Response]]
+    get_submission: Callable[[Request, str], Awaitable[Response]]
+    get_submission_v2: Callable[[Request, str], Awaitable[Response]]
 
 
 def create_jobs_router(handlers: JobRouteHandlers, *, job_list_limit: int = DEFAULT_JOB_LIST_LIMIT) -> APIRouter:
     """Create the dual-version jobs router without owning route behavior."""
     router = APIRouter()
 
+    @router.get("/v1/job-submissions/{request_id}", response_model=JobSubmissionEnvelope)
+    async def get_submission(request: Request, request_id: str) -> Response:
+        return await handlers.get_submission(request, request_id)
+
+    @router.get("/v2/job-submissions/{request_id}", response_model=JobSubmissionEnvelope)
+    async def get_submission_v2(request: Request, request_id: str) -> Response:
+        return await handlers.get_submission_v2(request, request_id)
+
     @router.post("/v1/jobs", response_model=JobEnvelope)
-    async def create_job_http(request: Request, payload: dict[str, Any]) -> Response:
+    async def create_job_http(
+        request: Request,
+        payload: dict[str, Any],
+        _idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> Response:
         return await handlers.create_job_http(request, payload)
 
     @router.post("/v2/jobs", response_model=JobEnvelope)
-    async def create_job_v2_http(request: Request, payload: dict[str, Any]) -> Response:
+    async def create_job_v2_http(
+        request: Request,
+        payload: dict[str, Any],
+        _idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> Response:
         return await handlers.create_job_v2_http(request, payload)
 
     @router.get("/v1/jobs", response_model=JobsListEnvelope)

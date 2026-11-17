@@ -131,6 +131,17 @@ class JobsListData(BaseModel):
     returned: int
 
 
+class JobSubmissionData(BaseModel):
+    """Exact owner-scoped admission receipt, never an execution permission."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    intent_sha256: str
+    status: Literal["accepted", "expired"]
+    job: JobBriefData
+
+
 class JobCreateRequest(BaseModel):
     """Typed request body for ``POST /v[12]/jobs``.
 
@@ -164,6 +175,8 @@ JobStatusEnvelope = ApiEnvelope[JobStatusData]
 JobsListEnvelope = ApiEnvelope[JobsListData]
 """Convenience alias for the typed envelope wrapping ``JobsListData``."""
 
+JobSubmissionEnvelope = ApiEnvelope[JobSubmissionData]
+
 __all__ = [
     "JobBriefData",
     "JobCreateRequest",
@@ -173,4 +186,6 @@ __all__ = [
     "JobState",
     "JobStatusData",
     "JobStatusEnvelope",
+    "JobSubmissionData",
+    "JobSubmissionEnvelope",
 ]

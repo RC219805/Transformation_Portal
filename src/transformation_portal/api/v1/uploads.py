@@ -1,28 +1,17 @@
-"""Typed response models for the orchestrator's upload staging route.
+"""Typed upload staging and exact request-observation envelopes.
 
-One route gets a ``response_model=`` annotation in PR E of the Phase 1.2
-sequence:
-
-- ``POST /v1/uploads/staging`` → ``ApiEnvelope[UploadStagingData]``
-  (``tp.orchestrator.upload_staging.v1``)
-
-The route handler returns ``JSONResponse(_api_envelope(...))`` directly, so
-``response_model`` is **OpenAPI-only** — no runtime serialisation by FastAPI.
-The wire shape is produced by ``StagedUploadResult.to_response_data()`` in
-``src/transformation_portal/ingest/upload_staging.py:154``; the models here
-mirror that output field-for-field.
-
-The nested ``artifacts`` and ``summary`` dicts have stable, closed shapes
-in the current implementation. They are modelled as explicit sub-classes
-(rather than ``dict[str, Any]``) because ``to_response_data`` constructs them
-from typed dataclass attributes — their keys are unlikely to churn.
-``extra="allow"`` is still set on all three models so future additions to
-``to_response_data`` don't require an immediate model bump.
+POST /v1/uploads/staging preserves tp.orchestrator.upload_staging.v1 and
+its existing extensible nested payload. GET /v1/uploads/staging/receipts/
+{request_id} adds tp.orchestrator.upload_receipt.v1. Its closed observation
+contains upload paths only after an exact retained completion is verified.
+The GET handler constructs this model before producing its JSON response.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from transformation_portal.api.v1.envelopes import ApiEnvelope
 
@@ -85,7 +74,27 @@ UploadStagingEnvelope = ApiEnvelope[UploadStagingData]
 
 __all__ = [
     "UploadArtifacts",
+    "UploadReceiptData",
+    "UploadReceiptEnvelope",
     "UploadStagingData",
     "UploadStagingEnvelope",
     "UploadSummary",
 ]
+
+
+class UploadReceiptData(BaseModel):
+    """A request-correlated observation; missing evidence is not rejection."""
+
+    model_config = ConfigDict(extra="forbid")
+    request_id: str
+    status: Literal["pending", "ready", "expired", "unknown"]
+    receipt: UploadStagingData | None = None
+
+    @model_validator(mode="after")
+    def validate_ready_receipt(self) -> UploadReceiptData:
+        if (self.status == "ready") != (self.receipt is not None):
+            raise ValueError("Only a ready upload observation may contain its receipt")
+        return self
+
+
+UploadReceiptEnvelope = ApiEnvelope[UploadReceiptData]

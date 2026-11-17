@@ -17,6 +17,7 @@ SchemaName = Literal[
     "tp.orchestrator.config_preview.v1",
     "tp.orchestrator.error.v1",
     "tp.orchestrator.job.v1",
+    "tp.orchestrator.job_submission.v1",
     "tp.orchestrator.job_status.v1",
     "tp.orchestrator.jobs.v1",
     "tp.orchestrator.portal_event.v1",
@@ -25,6 +26,7 @@ SchemaName = Literal[
     "tp.orchestrator.presets.v1",
     "tp.orchestrator.readiness.v1",
     "tp.orchestrator.upload_staging.v1",
+    "tp.orchestrator.upload_receipt.v1",
     "tp.photographic_review.v1",
 ]
 """Closed set of orchestrator v1 wire-contract identifiers."""

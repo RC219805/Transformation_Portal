@@ -282,8 +282,9 @@ async def test_admission_reserves_both_scopes_before_atomic_copied_record_and_ou
     evidence = next(model for model in session.added if isinstance(model, OperationalRecordModel))
     assert hashlib.sha256(evidence.canonical_bytes).hexdigest() == evidence.digest
     locks = [query for query in session.trace if "FOR UPDATE" in query]
-    assert len(locks) == 2
+    assert len(locks) == 3
     assert "= 'global'" in locks[0] and "= 'tenant:tenant'" in locks[1]
+    assert "FROM upload_receipts" in locks[2] and "ORDER BY upload_receipts.batch_id" in locks[2]
     assert session.trace[-1] == "COMMIT"
 
 
