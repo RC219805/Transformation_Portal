@@ -80,7 +80,7 @@ def _check_exiftool_available() -> bool:
             check=False,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -100,7 +100,7 @@ def get_exiftool_version() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+    except (OSError, subprocess.TimeoutExpired) as e:
         logger.debug(f"Failed to get exiftool version: {e}")
     return None
 
@@ -279,7 +279,7 @@ def get_toolchain_versions() -> Dict[str, Optional[str]]:
                 versions["imagemagick_version"] = None
         else:
             versions["imagemagick_version"] = None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         versions["imagemagick_version"] = None
 
     return versions
@@ -308,7 +308,7 @@ def get_git_commit_sha(repo_root: Optional[Path] = None) -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+    except (OSError, subprocess.TimeoutExpired) as e:
         logger.debug(f"Failed to get git commit SHA: {e}")
 
     return None

@@ -19,6 +19,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.lux_depth_v3 import provenance as provenance_module
 from transformation_portal.lux_depth_v3.provenance import (
     PROVENANCE_SCHEMA_VERSION,
     ExiftoolNotFoundError,
@@ -146,6 +147,14 @@ def valid_provenance_metadata(
 # =============================================================================
 
 
+_UNUSABLE_TOOL_OS_ERRORS = [
+    PermissionError(13, "Permission denied", "exiftool"),
+    NotADirectoryError(20, "Not a directory", "exiftool"),
+    OSError(8, "Exec format error", "exiftool"),
+]
+_UNUSABLE_TOOL_OS_ERROR_IDS = ["unsearchable-path-entry", "path-entry-is-a-file", "exec-format-error"]
+
+
 class TestExiftoolAvailability:
     """Test exiftool detection and version extraction."""
 
@@ -172,6 +181,26 @@ class TestExiftoolAvailability:
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("exiftool", 5)):
             version = get_exiftool_version()
             assert version is None
+
+    @pytest.mark.parametrize("error", _UNUSABLE_TOOL_OS_ERRORS, ids=_UNUSABLE_TOOL_OS_ERROR_IDS)
+    def test_optional_tool_probes_treat_any_os_error_as_unavailable(self, error: OSError, tmp_path: Path):
+        """A tool the process cannot execute is "unavailable", never a crash.
+
+        ``subprocess.run`` only raises ``FileNotFoundError`` when every PATH
+        entry is searchable. A service account that inherits a PATH containing
+        a directory it cannot traverse gets ``PermissionError`` for a tool that
+        is simply not installed, and a PATH entry that is a regular file yields
+        ``NotADirectoryError``. Availability probes must degrade on all of them.
+        """
+        with patch("subprocess.run", side_effect=error):
+            assert provenance_module._check_exiftool_available() is False
+            assert get_exiftool_version() is None
+            assert get_git_commit_sha(tmp_path) is None
+            versions = get_toolchain_versions()
+
+        assert versions["exiftool_version"] is None
+        assert versions["imagemagick_version"] is None
+        assert versions["python_version"]
 
 
 # =============================================================================
@@ -745,6 +774,38 @@ class TestProvenanceCapture:
 
             assert provenance.exif == {}  # No EXIF extracted
             assert provenance.input.file_sha256  # But hash still computed
+
+    @pytest.mark.parametrize("error", _UNUSABLE_TOOL_OS_ERRORS, ids=_UNUSABLE_TOOL_OS_ERROR_IDS)
+    def test_capture_provenance_best_effort_survives_unexecutable_tools(
+        self,
+        sample_tiff_image: Path,
+        error: OSError,
+    ):
+        """Best-effort capture must not fail the image when optional tools cannot be executed."""
+        with patch("subprocess.run", side_effect=error):
+            provenance = capture_provenance(
+                image_path=sample_tiff_image,
+                config_fingerprint="sha256:abc123",
+                require_exiftool=False,
+            )
+
+        assert provenance.exif == {}
+        assert provenance.input.file_sha256
+        assert provenance.toolchain["exiftool_version"] is None
+        assert provenance.ingest_context.git_commit_sha is None
+
+    def test_capture_provenance_required_exiftool_fails_closed_when_unexecutable(
+        self,
+        sample_tiff_image: Path,
+    ):
+        """Audit-grade capture still hard-fails with the actionable exiftool error."""
+        with patch("subprocess.run", side_effect=PermissionError(13, "Permission denied", "exiftool")):
+            with pytest.raises(ExiftoolNotFoundError):
+                capture_provenance(
+                    image_path=sample_tiff_image,
+                    config_fingerprint="sha256:abc123",
+                    require_exiftool=True,
+                )
 
     def test_capture_provenance_deterministic_hash(
         self,

@@ -81,7 +81,7 @@ def _check_exiftool_available() -> bool:
             timeout=5,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -100,7 +100,7 @@ def _get_exiftool_version() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
     return None
 
@@ -193,7 +193,7 @@ def _get_git_commit() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     return None
@@ -251,7 +251,7 @@ def _capture_toolchain_versions() -> List[ToolchainVersion]:
                                 path=None,
                             )
                         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     # libraw (via rawpy - optional)
