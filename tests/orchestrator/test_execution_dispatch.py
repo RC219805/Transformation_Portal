@@ -21,6 +21,7 @@ from transformation_portal.core.execution_plan import (
 )
 from transformation_portal.orchestrator.execution_dispatch import (
     _archive_command,
+    archive_command_read_paths,
     command_from_dispatch_plan,
     execute_dispatch_plan,
     prepare_dispatch_plan,
@@ -54,6 +55,22 @@ def _request(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation_name: st
     request = {"pipeline": operation.pipeline, "args": args, "tenant_id": "tenant-one"}
     command = app._archive_gate_argv(operation.pipeline, args, str(inputs), str(output))
     return request, command
+
+
+@pytest.mark.parametrize("operation_name", tuple(ARCHIVE_OPERATIONS))
+def test_legacy_archive_read_locators_use_exact_command_roles_without_output_constraints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation_name: str
+) -> None:
+    request, command = _request(tmp_path, monkeypatch, operation_name)
+    operation = ARCHIVE_OPERATIONS[operation_name]
+    for name in operation.outputs:
+        flag = "--" + name.replace("_", "-")
+        command[command.index(flag) + 1] = str(tmp_path / "separate-authorized-output" / name)
+    assert set(archive_command_read_paths(operation.pipeline, command)) == {
+        request["args"][name] for name in operation.files + operation.directories
+    }
+    with pytest.raises(ValueError, match="does not match"):
+        archive_command_read_paths("different-pipeline", command)
 
 
 @pytest.mark.parametrize("operation_name", tuple(ARCHIVE_OPERATIONS))
