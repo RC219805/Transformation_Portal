@@ -124,9 +124,11 @@ test("late responses cannot paint a changed owner, and malformed/decoder-failed 
   const failed = cards(snapshot); bad.api.render(snapshot, failed); await settle();
   assert.equal(failed[0].control.dataset.thumbnailState, "failed"); assert.equal(failed[0].control.disabled, undefined);
   const indexed = indexedPage(0, 1), good = harness(async (url) => response(proof(url), { "X-TP-Presentation-Policy-SHA256": "b".repeat(64) })), decoded = cards(indexed);
-  good.api.render(indexed, decoded); await settle(); decoded[0].control.children[0].onerror();
+  good.api.render(indexed, decoded); await settle(); const originalUrl = decoded[0].control.children[0].src; decoded[0].control.children[0].onerror();
   assert.equal(decoded[0].control.dataset.thumbnailState, "failed"); assert.equal(good.api.stats().bytes, 0); assert.equal(good.revoked.length, 1);
+  assert.deepEqual(good.revoked, [originalUrl], "Replacing a cached URL with failure revokes its exact previous URL once");
   good.api.render(indexed, cards(indexed)); await settle(); assert.equal(good.calls.length, 1, "A failed indexed card does not retry on unrelated rerenders");
+  good.api.reset(); assert.deepEqual(good.revoked, [originalUrl], "Reset cannot revoke an already replaced URL twice");
 });
 
 test("IntersectionObserver queues only intersecting cards from the current page", async () => {
@@ -140,6 +142,34 @@ test("IntersectionObserver queues only intersecting cards from the current page"
   observer.callback([{ isIntersecting: true, target: observer.targets[2] }]); await settle();
   assert.equal(h.calls.length, 1); assert.match(h.calls[0][0], /scene_id=room-2/);
   h.api.reset();
+});
+
+test("a delayed replacement-image observer reuses an indexed fetch that completed after rerender", async (t) => {
+  const observers = [], pending = [];
+  class Observer {
+    constructor(callback) { this.callback = callback; this.targets = []; observers.push(this); }
+    observe(node) { this.targets.push(node); } unobserve() {} disconnect() { this.targets = []; }
+  }
+  const h = harness((url, options) => new Promise((resolve, reject) => {
+    pending.push(() => resolve(response(proof(url), { "X-TP-Presentation-Policy-SHA256": "b".repeat(64) })));
+    options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  }), { IntersectionObserver: Observer });
+  t.after(() => h.api.reset());
+  const snapshot = indexedPage(0, 1), first = cards(snapshot);
+  h.api.render(snapshot, first);
+  observers[0].callback([{ isIntersecting: true, target: observers[0].targets[0] }]); await settle();
+  assert.equal(h.calls.length, 1);
+  const replacement = cards(snapshot); h.api.render(snapshot, replacement);
+  const observer = observers.at(-1), image = observer.targets[0];
+  pending[0](); await settle();
+  assert.equal(replacement[0].control.dataset.thumbnailState, "ready");
+  const originalUrl = image.src;
+  observer.callback([{ isIntersecting: true, target: image }]); await settle();
+  assert.equal(h.calls.length, 1, "The later observer callback cannot create another source render");
+  assert.equal(h.created.length, 1); assert.equal(image.src, originalUrl);
+  assert.deepEqual(h.api.stats(), { entries: 1, cachedEntries: 1, bytes: 33, running: 0, queued: 0 });
+  assert.deepEqual(h.revoked, []);
+  h.api.reset(); assert.deepEqual(h.revoked, [originalUrl], "Every created blob URL remains owned by reset cleanup");
 });
 
 test("the response deadline includes a stalled body and the streaming byte limit rejects overflow", async () => {

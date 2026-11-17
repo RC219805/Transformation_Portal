@@ -57,7 +57,8 @@ export function photographicRegionChange(region, dx, dy, handle, width, height) 
     || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) return null;
   const [left, top, right, bottom] = region.map(Number);
   if (left < 0 || top < 0 || right > 1 || bottom > 1 || left >= right || top >= bottom || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
-  const bound = (value, low, high) => Math.max(low, Math.min(high, value));
+  // Tiny numeric regions can leave no room for an anchored one-pixel resize.
+  const bound = (value, low, high) => low > high ? null : Math.max(low, Math.min(high, value));
   let result;
   if (handle === "move") {
     dx = bound(dx, -left, 1 - right); dy = bound(dy, -top, 1 - bottom);
@@ -68,7 +69,7 @@ export function photographicRegionChange(region, dx, dy, handle, width, height) 
       handle.includes("e") ? bound(right + dx, left + 1 / width, 1) : right,
       handle.includes("s") ? bound(bottom + dy, top + 1 / height, 1) : bottom];
   } else return null;
-  return result;
+  return result.includes(null) ? null : result;
 }
 
 export function createPhotographicRegionOverlay(host) {
@@ -145,7 +146,7 @@ export function createPhotographicRegionOverlay(host) {
         });
         control.addEventListener("pointerdown", (event) => {
           const value = context(), image = nodes.figures?.[0]?.image;
-          if (event.button !== 0 || !enabled || !value?.ready || !value.visible || value.blocked || !image) return;
+          if (operation || event.isPrimary === false || event.button !== 0 || !enabled || !value?.ready || !value.visible || value.blocked || !image) return;
           const region = photographicRegionChange(material.region, 0, 0, "move", value.width, value.height);
           if (!region) return;
           const box = image.getBoundingClientRect(); if (!box.width || !box.height) return;
