@@ -176,6 +176,7 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         tenant_limit: int,
         execution_bindings: bytes | None = None,
         submission: SubmissionIdentity | None = None,
+        upload_read_base: Path | None = None,
     ) -> DispatchLocator:
         from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, is_unified_bindings
 
@@ -261,7 +262,12 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                 # publication and the pin still commit in this transaction.
                 await session.flush()
                 await bind_upload_references(
-                    session, record, tenant_id, now, plan_bytes=plan_bytes, execution_bindings=execution_bindings
+                    session,
+                    record,
+                    tenant_id,
+                    plan_bytes=plan_bytes,
+                    execution_bindings=execution_bindings,
+                    upload_read_base=upload_read_base,
                 )
                 attempt = DispatchAttemptModel(
                     **{key: value for key, value in locator.to_payload().items() if key != "schema"},
