@@ -5,12 +5,13 @@ export function createPortalHistoryNavigation(host) {
   function routeUrl(value = host.location?.href) {
     if (typeof value !== 'string') return undefined;
     try {
-      const base = new URL(host.location?.href || '/', 'https://portal.invalid/');
-      const url = new URL(value, base); url.hash = '';
+      const url = new URL(value, host.location?.href || 'https://portal.invalid/'); url.hash = '';
       return url.href;
     } catch { return undefined; }
   }
   let position = Number.isSafeInteger(history.state?.portalIndex) ? history.state.portalIndex : 0;
+  // Unknown forks must stay after every owned entry observed on this page.
+  let sequence = position;
   let restoring = null, permitted = null, unowned = null;
   let retainedState = { ...history.state, portalIndex: position };
   let retainedUrl = routeUrl();
@@ -22,26 +23,34 @@ export function createPortalHistoryNavigation(host) {
     // Background renders must preserve both entries and the pending permission.
     if (restoring !== null || permitted !== null) return;
     const actualUrl = routeUrl();
-    if (actualUrl !== undefined && retainedUrl !== undefined && actualUrl !== retainedUrl && unowned === null) unowned = {};
-    if (replace && unowned !== null) { retainedUrl = routeUrl(url); return; }
+    if (actualUrl !== undefined && retainedUrl !== undefined && actualUrl !== retainedUrl && (unowned === null || unowned.active)) unowned = {};
+    if (replace && unowned !== null) {
+      // Accepted active routes may synchronize selection without inventing an
+      // index. Pending or canceled destinations retain the replacement fence.
+      if (unowned.active) history.replaceState(history.state, '', url);
+      retainedUrl = routeUrl(url); return;
+    }
     restoring = permitted = null;
     const wasUnowned = unowned !== null;
     unowned = null;
     if (!replace) {
       // Adopt a native fragment before leaving it, while its source is known.
       if (!wasUnowned && !Number.isSafeInteger(history.state?.portalIndex)) history.replaceState(retainedState, '');
-      position += 1;
+      position = ++sequence;
     }
     retainedState = { ...state, portalIndex: position };
     history[replace ? 'replaceState' : 'pushState'](retainedState, '', url);
     retainedUrl = routeUrl(url);
   }
   function applyTarget(target, state) {
+    retainedUrl = routeUrl();
     if (Number.isSafeInteger(target)) {
       position = target; retainedState = state; permitted = null; unowned = null;
-    } else unowned = {};
-    retainedUrl = routeUrl();
-    return host.apply();
+    } else unowned = { active: retainedUrl !== undefined };
+    try { return host.apply(); } catch (error) {
+      if (unowned !== null) unowned = {};
+      throw error;
+    }
   }
   function confirmTarget(target, state) {
     const fence = {};
@@ -53,6 +62,7 @@ export function createPortalHistoryNavigation(host) {
   }
   function pop(event) {
     const target = event.state?.portalIndex;
+    if (Number.isSafeInteger(target)) sequence = Math.max(sequence, target);
     if (restoring !== null) {
       restoring.distance += restoring.step;
       if (target !== position || routeUrl() !== retainedUrl) { history.go(restoring.step); return; }
@@ -66,7 +76,7 @@ export function createPortalHistoryNavigation(host) {
     }
     const sameSource = retainedUrl !== undefined && routeUrl() === retainedUrl;
     if (!Number.isSafeInteger(target)) {
-      if (unowned === null && sameSource) { host.apply(); return; }
+      if ((unowned === null || unowned.active) && sameSource) { host.apply(); return; }
       // A pre-router entry has no trustworthy direction. Retain authoring and
       // leave its browser-owned URL untouched until explicit discard. Cancel
       // keeps replacement syncs fenced even though that URL can remain visible.
