@@ -1112,6 +1112,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.js",
         "portal-photographic-support.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-support.js",
         "portal-photographic-editor.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-editor.js",
+        "portal-photographic-drafts.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-drafts.js",
+        "portal-photographic-loader.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-loader.js",
         "portal-photographic.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.css",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         # Surface-split deferred bundles. Operate, Build, and Profile are real
@@ -1120,6 +1122,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
         "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
+        "portal-config-transfer.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-config-transfer.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -1133,12 +1136,15 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic.js": "text/javascript; charset=utf-8",
         "portal-photographic-support.js": "text/javascript; charset=utf-8",
         "portal-photographic-editor.js": "text/javascript; charset=utf-8",
+        "portal-photographic-drafts.js": "text/javascript; charset=utf-8",
+        "portal-photographic-loader.js": "text/javascript; charset=utf-8",
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
         "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
+        "portal-config-transfer.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -1206,6 +1212,8 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
         "/portal/assets/shared-ui-tokens.css",
         "/portal/assets/portal-photographic-support.js",
         "/portal/assets/portal-photographic-editor.js",
+        "/portal/assets/portal-photographic-drafts.js",
+        "/portal/assets/portal-photographic-loader.js",
     }
     for asset_url in bundled_asset_urls:
         asset_name = _portal_asset_name(asset_url)
@@ -1837,9 +1845,9 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "buildStep: resolveBuildStep(state.portalUi.buildStep)" in persist_body
     assert "window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);" in schedule_body
     assert "window.requestIdleCallback" in schedule_body
-    assert "_persistTransientPortalDraft();" in schedule_body
+    assert "_persistTransientPortalDraft(false);" in schedule_body
     assert "_cancelScheduledTransientPortalDraftPersist();" in flush_body
-    assert "return _persistTransientPortalDraft();" in flush_body
+    assert "return _persistTransientPortalDraft(false);" in flush_body
     assert "API_KEY_STORAGE_KEY" not in persist_body
     assert "csrfToken" not in persist_body
     assert "state.jobs" not in persist_body
@@ -3099,7 +3107,7 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     assert "delete emits[nestedField];" in migrate_output_body
     assert "'[deprecated_output_flag] Report on; no marketing.'" in migrate_output_body
     assert "return _migrateDeprecatedLuxOutputConfig(copied);" in copy_draft_body
-    assert "if (deprecated) createToast(" in migrate_output_body
+    assert "if (deprecated && notify) createToast(" in migrate_output_body
     assert "const profiles = getProfiles();" in apply_profile_body
     assert "state.config = copyDraftConfig(profiles[name].config);" in apply_profile_body
     assert "config: _copyTransientDraftConfig(config)" in read_draft_body
@@ -8241,3 +8249,14 @@ def test_late_connecting_client_synthesizes_done_after_done_published_at() -> No
         orchestrator_app.EVENT_SUBSCRIBERS.pop(job.id, None)
 
     asyncio.run(scenario())
+
+
+def test_photographic_draft_and_loader_imports_bind_manifest_bytes() -> None:
+    for asset_name, parents in (
+        ("portal-photographic-drafts.js", ("portal-photographic.js", "portal-photographic-support.js")),
+        ("portal-photographic-loader.js", ("portal-review.js",)),
+    ):
+        asset = orchestrator_app.PORTAL_ASSET_PATHS[asset_name]
+        fingerprint = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
+        for parent in parents:
+            assert f"./{asset_name}?v={fingerprint}" in orchestrator_app.PORTAL_ASSET_PATHS[parent].read_text()

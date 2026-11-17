@@ -59,5 +59,7 @@ export function createLazyPhotographicReview(host) {
       if (notice) { notice.hidden = false; notice.textContent = "Photographic review could not load. Existing artifact inspection remains available; return to Review to retry."; }
     }).finally(() => { loading = null; });
   }
-  return { show };
+  return { show, hasUnsavedChanges: () => api?.hasUnsavedChanges() || false,
+    requestNavigation: (action, options) => api ? api.requestNavigation(action, options) : action(),
+    syncAuthorization: () => api?.syncAuthorization() };
 }

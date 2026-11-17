@@ -252,7 +252,22 @@ const internalBuild = await bundleText(PORTAL_INTERNAL_ENTRY, {
   metafile: emitMetafile,
   minify: true
 });
+const photographicLoaderBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/photographic-review-loader.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+const photographicLoaderText = `${photographicLoaderBuild.text.trim()}\n`;
+const photographicLoaderHash = createHash("sha256").update(photographicLoaderText).digest("hex").slice(0, 12);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-loader.js"), photographicLoaderText);
+const photographicLoaderPlugin = {
+  name: "photographic-loader-asset",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /^\.\/photographic-review-loader\.js$/ }, () => ({
+      path: `./portal-photographic-loader.js?v=${photographicLoaderHash}`, external: true
+    }));
+  }
+};
 const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY, {
+  plugins: [photographicLoaderPlugin],
   format: "esm",
   keepNames: true,
   metafile: emitMetafile,
@@ -260,9 +275,24 @@ const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY,
   minifySyntax: true,
   minifyWhitespace: true
 });
+const photographicDraftBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/photographic-draft-state.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+const photographicDraftText = `${photographicDraftBuild.text.trim()}\n`;
+const photographicDraftHash = createHash("sha256").update(photographicDraftText).digest("hex").slice(0, 12);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-photographic-drafts.js"), photographicDraftText);
+const photographicDraftPlugin = {
+  name: "photographic-draft-asset",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /^\.\/photographic-draft-state\.js$/ }, () => ({
+      path: `./portal-photographic-drafts.js?v=${photographicDraftHash}`, external: true
+    }));
+  }
+};
 const photographicSupportBuild = await bundleText(PORTAL_PHOTOGRAPHIC_SUPPORT_ENTRY, {
   format: "esm", keepNames: true, metafile: emitMetafile,
-  minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+  minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true,
+  plugins: [photographicDraftPlugin]
 });
 // Bind the dependent module to its exact bytes, including across deployments.
 // It is requested only when the photographic viewer itself is opened.
@@ -286,7 +316,7 @@ const photographicEditorHash = createHash("sha256").update(photographicEditorTex
 const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
   format: "esm", keepNames: true, metafile: emitMetafile,
   minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true,
-  plugins: [photographicSupportPlugin, {
+  plugins: [photographicSupportPlugin, photographicDraftPlugin, {
     name: "photographic-editor-asset",
     setup(buildApi) {
       buildApi.onResolve({ filter: /^\.\/photographic-revision-editor\.js$/ }, () => ({
@@ -309,6 +339,10 @@ const deferredBuildSurfaceBuild = await bundleText(PORTAL_BUILD_SURFACE_ENTRY, {
   minifySyntax: true,
   minifyWhitespace: true
 });
+const configTransferBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/config-transfer-deferred.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-config-transfer.js"), `${configTransferBuild.text.trim()}\n`);
 const deferredProfileSurfaceBuild = await bundleText(PORTAL_PROFILE_SURFACE_ENTRY, {
   format: "esm",
   metafile: emitMetafile,
