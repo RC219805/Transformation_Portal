@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { recoveryStateSummary } from "../portal-src/client-recovery-deferred.js";
 
 const source = readFileSync(new URL("../portal-src/portal.template.js", import.meta.url), "utf8");
 function section(start, end) {
@@ -75,7 +76,7 @@ test('a restored-reference context requirement blocks host controls and stamps u
     + section('function _loadClientRecoverySurface(', 'function _createDeferredOperateSurfaceHost('), h);
   assert.equal(h._clientRecoveryContext().ready, true, 'Legacy operation stays available before any retained reference is found');
   const host = h._loadClientRecoverySurface();
-  host.onState([], true);
+  host.onState([], true, recoveryStateSummary([], true));
   assert.equal(h._clientRecoveryContext().ready, false);
   assert.equal(h._clientRecoveryOperationStamp(), '');
   assert.equal(state.portalUi.recoverySubmissionBlocked, true);
@@ -85,7 +86,7 @@ test('a restored-reference context requirement blocks host controls and stamps u
   state.auth.recoveryContext = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-a', ownerId: 'a'.repeat(64) };
   state.auth.recoveryContextStatus = 'ready';
   assert.equal(h._clientRecoveryContext().ready, true);
-  host.onState([], false);
+  host.onState([], false, recoveryStateSummary([], false));
   assert.equal(state.portalUi.recoveryContextRequired, false);
   assert.equal(state.portalUi.recoverySubmissionBlocked, false);
   assert.equal(state.portalUi.recoveryUploadBlocked, false);

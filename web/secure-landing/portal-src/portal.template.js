@@ -5187,9 +5187,9 @@ function _recordProtectedFamilySuppression(family, payload) {
     try {
         // eslint-disable-next-line no-console
         console.warn(
-            `[portal] suppressing further requests to ${family}: reason=${detail.reason || 'config_failure'} ` +
+            `[portal] ${family} suppressed: reason=${detail.reason || 'config_failure'} ` +
             `upstreamStatus=${detail.upstreamStatus || 'unknown'}. ` +
-            `Resolve frontdoor configuration (TP_BACKEND_API_KEY / backend TP_API_KEY).`
+            `Check TP_BACKEND_API_KEY / TP_API_KEY.`
         );
     } catch {
         // logging is best-effort
@@ -6076,7 +6076,7 @@ function _submitStagedUploadSelection(fileList) {
     _syncStagedUploadUi();
 
     void _loadClientRecoverySurface().then((api) => {
-        if (!api) throw new Error('Upload recovery controls could not load. No upload was sent.');
+        if (!api) throw new Error('Recovery controls unavailable. No upload was sent.');
         if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('Workspace changed. Select files again. No upload was sent.');
         api.upload(selection);
     }).catch((error) => {
@@ -6113,7 +6113,7 @@ async function copyToClipboard(text) {
             document.body.appendChild(ta);
             try {
                 ta.select();
-                if (!document.execCommand("copy")) throw new Error('clipboard_copy_rejected');
+                if (!document.execCommand("copy")) throw new Error('Copy rejected');
             } finally {
                 document.body.removeChild(ta);
             }
@@ -6564,14 +6564,14 @@ async function _loadDeferredReviewSurface() {
     deferredReviewSurfaceLoadPromise = import(moduleUrl)
         .then((module) => {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
-                throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
+                throw new Error('Missing review factory');
             }
             _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
             return deferredReviewSurfaceApi;
         })
         .catch((error) => {
-            console.error('Failed to load deferred review surface', error);
+            console.error('Review load failed', error);
             _noteDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = null;
             return null;
@@ -6632,14 +6632,14 @@ async function loadDeferredSurface(name, hostFactory) {
         .then((module) => {
             const factory = module?.[descriptor.factoryName];
             if (typeof factory !== 'function') {
-                throw new Error(`Deferred surface "${name}" missing factory ${descriptor.factoryName}`);
+                throw new Error(`Missing ${name}: ${descriptor.factoryName}`);
             }
             entry.lastFailureAt = 0;
             entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
             return entry.api;
         })
         .catch((error) => {
-            console.error(`Failed to load deferred surface "${name}"`, error);
+            console.error(`Surface ${name} failed`, error);
             const now = Date.now();
             entry.lastFailureAt = now;
             if ((now - entry.lastToastAt) >= DEFERRED_SURFACE_RETRY_WINDOW_MS) {
@@ -6738,17 +6738,15 @@ function _loadClientRecoverySurface() {
             traceparent: _portalRumTraceparent(),
             metadata: { outcome: sample.outcome, ...(sample.status ? { status: sample.status } : {}) }
         }),
-        onState: (attempts, needsContext = false) => {
+        onState: (_attempts, needsContext = false, { outcome, jobBlocked, uploadBlocked, uploadPresent }) => {
             state.portalUi.recoveryContextRequired = needsContext;
-            if (document.body) document.body.dataset.submissionOutcome = needsContext ? 'paused' : attempts.filter((row) => row.type === 'job').at(-1)?.status || 'idle';
-            const unresolved = (type) => attempts.some((row) => row.type === type && !['accepted', 'ready', 'expired', 'rejected'].includes(row.status));
-            const blocked = needsContext || unresolved('job');
-            if (state.portalUi.recoverySubmissionBlocked !== blocked) {
-                state.portalUi.recoverySubmissionBlocked = blocked;
+            if (document.body) document.body.dataset.submissionOutcome = outcome;
+            if (state.portalUi.recoverySubmissionBlocked !== jobBlocked) {
+                state.portalUi.recoverySubmissionBlocked = jobBlocked;
                 _syncBootstrapGuardedControls();
             }
-            state.portalUi.recoveryUploadBlocked = needsContext || unresolved('upload');
-            state.portalUi.recoveryUploadPresent = attempts.some((row) => row.type === 'upload');
+            state.portalUi.recoveryUploadBlocked = uploadBlocked;
+            state.portalUi.recoveryUploadPresent = uploadPresent;
             _syncStagedUploadUi();
         }
     }));
@@ -8705,13 +8703,13 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('config_metadata', res);
-            throw new Error(`config metadata fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
             ? payload.data
             : null;
-        if (!data) throw new Error('invalid config metadata payload');
+        if (!data) throw new Error('Invalid response');
         if (state.pipeline !== pipelineName) return;
         state.metadata = {
             pipeline: String(data.pipeline || pipelineName),
@@ -8890,7 +8888,7 @@ async function _fetchConfigPreview(payload, request) {
         const data = response?.success === true && response?.data && typeof response.data === 'object'
             ? response.data
             : null;
-        if (!data) throw new Error('invalid config preview payload');
+        if (!data) throw new Error('Invalid response');
         if (!request.isCurrent() || _configPreviewRequestKey(generatePayload()) !== requestKey) {
             return;
         }
@@ -9765,7 +9763,7 @@ async function fetchPresetsForPipeline(pipelineName, silent = false) {
         const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('presets', res);
-            throw new Error(`preset fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
         const presets = parsePresetsResponse(payload, pipelineName)
@@ -9804,10 +9802,10 @@ async function fetchReadiness(silent = false) {
         const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('readiness', res);
-            throw new Error(`readiness fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
-        if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
+        if (!payload || payload.success !== true || !payload.data) throw new Error('Invalid response');
         state.readiness = {
             server: payload.data.server || {},
             pipelines: payload.data.pipelines || {}
@@ -11074,7 +11072,7 @@ async function checkBackend(force = false) {
             }
             _flushBootstrapOnlineFollowup(force);
         } else {
-            throw new Error('backend not ready');
+            throw new Error('offline');
         }
     } catch {
         state.backendOk = false;
@@ -11807,7 +11805,7 @@ async function submitJob(options) {
 
     try {
         const api = await _loadClientRecoverySurface();
-        if (!api) throw new Error('Submission recovery controls could not load. No request was sent.');
+        if (!api) throw new Error('Recovery controls unavailable. No request was sent.');
         if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('Workspace changed. Review the draft. No request was sent.');
         await api.submit(payload, { separate });
     } catch (error) {
@@ -12820,6 +12818,7 @@ window.addEventListener('focus', () => {
 });
 const portalHistoryNavigation = portalInternals.createPortalHistoryNavigation({
     history: window.history,
+    location: window.location,
     hasEdits: () => Boolean(deferredReviewSurfaceApi?.hasUnsavedChanges?.()),
     requestNavigation: (action) => deferredReviewSurfaceApi.requestNavigation(action, { leave: true }),
     apply: () => {

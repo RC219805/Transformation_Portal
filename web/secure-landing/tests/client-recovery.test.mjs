@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDeferredClientRecoveryApi, createRecoveryReferenceStore, boundedRecoveryJson } from "../portal-src/client-recovery-deferred.js";
+import { createDeferredClientRecoveryApi, createRecoveryReferenceStore, boundedRecoveryJson, recoveryStateSummary } from "../portal-src/client-recovery-deferred.js";
 
 const scope = "a".repeat(64);
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -52,6 +52,31 @@ function harness(fetchImpl = async () => { throw new Error("lost"); }, restored 
   });
   return { api, context, timers, saved, requests, accepted, applied, states, calls };
 }
+
+test("recovery summary preserves empty defaults, context blocking, latest-job order and settled uploads", () => {
+  assert.deepEqual(recoveryStateSummary([]), { outcome: "idle", jobBlocked: false, uploadBlocked: false, uploadPresent: false });
+  assert.deepEqual(recoveryStateSummary([], true), { outcome: "paused", jobBlocked: true, uploadBlocked: true, uploadPresent: false });
+  const attempts = [{ type: "job", status: "unknown" }, { type: "upload", status: "ready" }, { type: "job", status: "accepted" }];
+  const before = structuredClone(attempts);
+  assert.deepEqual(recoveryStateSummary(attempts), { outcome: "accepted", jobBlocked: true, uploadBlocked: false, uploadPresent: true });
+  assert.deepEqual(attempts, before);
+});
+
+for (const status of ["accepted", "ready", "expired", "rejected", "posting", "pending", "unknown", "paused"]) {
+  test(`recovery summary retains both request blocking boundaries for ${status}`, () => {
+    const settled = ["accepted", "ready", "expired", "rejected"].includes(status);
+    assert.deepEqual(recoveryStateSummary([{ type: "job", status }, { type: "upload", status }]),
+      { outcome: status, jobBlocked: !settled, uploadBlocked: !settled, uploadPresent: true });
+  });
+}
+
+test("onState adds the derived view without changing the existing snapshot or context arguments", () => {
+  const calls = [];
+  const h = harness(undefined, null, { onState: (...args) => calls.push(args) });
+  const [snapshot, needsContext, view] = calls.at(-1);
+  assert.deepEqual(snapshot, h.api.snapshot()); assert.equal(needsContext, false);
+  assert.deepEqual(view, recoveryStateSummary(snapshot, needsContext));
+});
 
 test("tab references retain only bounded opaque actor-scoped identities", async () => {
   const h = harness(() => new Promise(() => {}));

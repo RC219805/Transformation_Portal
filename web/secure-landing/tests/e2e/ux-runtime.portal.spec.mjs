@@ -5107,6 +5107,7 @@ for (const paged of [false, true]) {
     await page.goForward();
     await expect(page).toHaveURL(/view=review/);
 
+    const earlierReviewUrl = page.url();
     await page.locator('[data-view-link="build"]').first().click();
     await expect(page).toHaveURL(/view=build/);
     const buildUrl = page.url();
@@ -5116,6 +5117,7 @@ for (const paged of [false, true]) {
     await page.locator('a[href="#main-content"]').focus();
     await page.keyboard.press('Enter');
     await expect.poll(() => page.evaluate(() => history.length)).toBe(beforeFragment + 1);
+    const fragmentUrl = page.url();
     await page.locator('[data-view-link="review"]').first().click();
     await expect(page).toHaveURL(/view=review/);
     await expect(note).toBeEnabled();
@@ -5136,6 +5138,28 @@ for (const paged of [false, true]) {
     await page.evaluate(() => history.go(3));
     await expect(page).toHaveURL(reviewUrl);
     await expect(note).not.toHaveValue('Private draft across an earlier fragment');
+    await note.fill('Private draft before direct fragment Back');
+    await page.evaluate(() => history.go(-1));
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await expect(page).toHaveURL(reviewUrl);
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await expect(note).toHaveValue('Private draft before direct fragment Back');
+    await page.evaluate(() => history.go(-1));
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(page).toHaveURL(fragmentUrl);
+    await page.evaluate(() => history.go(-3));
+    await expect(page).toHaveURL(earlierReviewUrl);
+    await expect(note).toBeEnabled();
+    await note.fill('Private draft before direct fragment Forward');
+    await page.evaluate(() => history.go(3));
+    await expect(page.locator('[data-ui="photographic-discard-navigation"]')).toBeVisible();
+    await expect(page).toHaveURL(earlierReviewUrl);
+    await page.locator('[data-ui="photographic-cancel-navigation"]').click();
+    await expect(note).toHaveValue('Private draft before direct fragment Forward');
+    await page.evaluate(() => history.go(3));
+    await page.locator('[data-ui="photographic-discard-navigation"]').click();
+    await expect(page).toHaveURL(fragmentUrl);
+    expect(await page.evaluate(() => window.__tpFragmentHistoryDocument)).toBe(documentMarker);
     expect(submissions).toHaveLength(1);
   });
 }
