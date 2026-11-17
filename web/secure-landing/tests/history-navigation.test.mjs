@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { createPortalHistoryNavigation } from '../portal-src/internal/history-navigation.js';
+import { createPortalRouteHelpers } from '../portal-src/internal/routing.js';
 
-function fixture({ initialEntries = [{ url: 'build', state: null }], initialIndex = 0, withLocation = true } = {}) {
+function fixture({ initialEntries = [{ url: 'build', state: null }], initialIndex = 0, withLocation = true, locationHref } = {}) {
   const entries = structuredClone(initialEntries);
   let index = initialIndex, dirty = false, pending, afterTraversal, prompts = 0, applied = [];
   const traversals = [];
@@ -21,7 +24,7 @@ function fixture({ initialEntries = [{ url: 'build', state: null }], initialInde
     },
   };
   const router = createPortalHistoryNavigation({ history, hasEdits: () => dirty,
-    ...(withLocation ? { location: { get href() { return entries[index].url; } } } : {}),
+    ...(withLocation ? { location: { get href() { return locationHref ?? new URL(entries[index].url, 'https://portal.invalid/').href; } } } : {}),
     requestNavigation: action => { prompts += 1; pending = action; }, apply: () => applied.push(entries[index].url) });
   return { router, entries, history, applied, traversals, dirty: value => { dirty = value; },
     fragment: url => history.pushState({ ...history.state }, '', url),
@@ -34,6 +37,197 @@ function fixture({ initialEntries = [{ url: 'build', state: null }], initialInde
     cancel() { pending = null; } };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function routeHostFixture({ throwAfterApply = false } = {}) {
+  const origin = 'https://portal.test';
+  const entries = [
+    { url: `${origin}/portal?view=build`, state: { view: 'build', portalIndex: 0 } },
+    { url: `${origin}/portal?view=review&job=job-a`, state: { view: 'review', jobId: 'job-a', portalIndex: 1 } },
+  ];
+  let index = 1, dirty = false, pending, applied = 0, hostRoute;
+  const location = Object.fromEntries(['href', 'pathname', 'search', 'hash'].map(key => [key, null]));
+  for (const key of Object.keys(location)) Object.defineProperty(location, key, {
+    get: () => key === 'href' ? entries[index].url : new URL(entries[index].url)[key],
+  });
+  const history = {
+    get state() { return entries[index].state; },
+    replaceState(state, _title, url) {
+      entries[index] = { state, url: url === undefined ? location.href : new URL(url, location.href).href };
+    },
+    pushState(state, _title, url) {
+      const next = { state, url: new URL(url, location.href).href };
+      entries.splice(++index); entries.push(next);
+    },
+    go(offset) {
+      assert.notEqual(offset, 0);
+      queueMicrotask(() => { index += offset; router.pop({ state: history.state }); });
+    },
+  };
+  const router = createPortalHistoryNavigation({ history, location, hasEdits: () => dirty,
+    requestNavigation: action => { pending = action; },
+    apply: () => {
+      applied += 1; hostRoute.applyConsoleRouteFromLocation(true);
+      if (throwAfterApply) throw new Error('host render failed');
+    },
+  });
+  const state = { currentView: 'review', selectedJobId: 'job-a', jobs: [
+    { id: 'job-a', logsLoadStatus: 'ready', logs: [] }, { id: 'job-b', logsLoadStatus: 'ready', logs: [] },
+  ] };
+  const routeContexts = {};
+  const context = {
+    window: { location }, state, portalHistoryNavigation: router,
+    portalRoute: createPortalRouteHelpers({ location }), deferredProfileOpenIntent: 0,
+    resolveConsoleView: value => value,
+    _normalizeSelectedJobId: value => String(value || ''),
+    _normalizeArtifactRoutePath: value => String(value || ''),
+    _normalizeCompareQueryValue: value => value === '1',
+    _activeRouteContext: jobId => routeContexts[jobId] || { artifactPath: '', compareEnabled: false },
+    _preferredSelectedJobId: () => 'job-a',
+    _rememberSelectedJob() {}, _rememberArtifactSelection() {}, _rememberComparePreference() {},
+    _primeDeferredReviewSurface() {}, _primeDeferredOperateSurface() {}, _primeDeferredBuildSurface() {},
+    applyConsoleViewLayout() {}, els: {}, _isJobStreamRecoverable: () => false,
+    renderReviewSurfaces() {}, setInspectorTab() {}, updateConsoleViewContext() {},
+    emitPortalEvent() {}, scheduleRenderJobQueue() {},
+    _requestReviewNavigation(action) { if (!dirty) return false; pending = action; return true; },
+  };
+  const source = readFileSync(new URL('../portal-src/portal.template.js', import.meta.url), 'utf8');
+  const section = (start, end) => {
+    const first = source.indexOf(start), last = source.indexOf(end, first);
+    assert.ok(first >= 0 && last > first);
+    return source.slice(first, last);
+  };
+  hostRoute = vm.runInNewContext(section('function _routeUrlForView(', 'function _managedReturnToPath(')
+    + section('function applyConsoleRouteFromLocation(', 'function setupSectionRail(')
+    + section('function selectJob(', 'function hydrateJobFromServer(')
+    + '\n({ applyConsoleRouteFromLocation, sync: _syncConsoleRoute, selectJob })', context);
+  return { router, history, entries, state, location, hostRoute, routeContexts, dirty: value => { dirty = value; },
+    applied: () => applied, hasPrompt: () => !!pending,
+    discard() { dirty = false; const action = pending; pending = null; return action(); },
+    cancel() { pending = null; },
+  };
+}
+
+for (const browserState of [null, {}]) test(`an accepted unindexed Operate route synchronizes its selected job without stamping an index (${JSON.stringify(browserState)})`, () => {
+  const h = routeHostFixture();
+  h.history.pushState(browserState, '', '/portal?view=operate');
+  h.router.pop({ state: null });
+  assert.equal(h.state.currentView, 'operate'); assert.equal(h.state.selectedJobId, 'job-a');
+  assert.equal(h.location.search, '?view=operate&job=job-a');
+  assert.equal(h.history.state, browserState);
+  h.hostRoute.selectJob('job-b');
+  assert.equal(h.state.selectedJobId, 'job-b');
+  assert.equal(h.location.search, '?view=operate&job=job-b', 'A later accepted queue selection synchronizes the active route');
+  assert.equal(h.history.state, browserState);
+});
+
+test('active unindexed inspection synchronization preserves the browser state and selected job', () => {
+  const h = routeHostFixture(); h.history.pushState({}, '', '/portal?view=review');
+  h.router.pop({ state: null });
+  h.routeContexts['job-a'] = { artifactPath: 'output/final.png', compareEnabled: true };
+  h.hostRoute.sync(true);
+  assert.equal(h.location.search, '?view=review&job=job-a&artifact=output%2Ffinal.png&compare=1');
+  assert.equal(h.history.state.portalIndex, undefined);
+});
+
+for (const replace of [false, true]) test(`external ${replace ? 'replacement' : 'push'} from active unindexed authoring fences the new destination before a render`, () => {
+  const h = routeHostFixture(); h.history.pushState({}, '', '/portal?view=operate');
+  h.router.pop({ state: null });
+  h.history[replace ? 'replaceState' : 'pushState'](null, '', '/portal?view=review&job=other');
+  const original = structuredClone(h.entries);
+  h.hostRoute.sync(true);
+  assert.equal(h.location.search, '?view=review&job=other'); assert.deepEqual(h.entries, original);
+  h.dirty(true); h.router.pop({ state: null });
+  assert.equal(h.hasPrompt(), true); assert.equal(h.applied(), 1);
+  h.cancel(); h.hostRoute.sync(true);
+  assert.deepEqual(h.entries, original);
+});
+
+test('an active unindexed job selection still obeys the existing dirty draft guard', () => {
+  const h = routeHostFixture(); h.history.pushState({}, '', '/portal?view=operate');
+  h.router.pop({ state: null }); h.dirty(true);
+  h.hostRoute.selectJob('job-b');
+  assert.equal(h.hasPrompt(), true); assert.equal(h.state.selectedJobId, 'job-a');
+  assert.equal(h.location.search, '?view=operate&job=job-a');
+  h.cancel(); assert.equal(h.state.selectedJobId, 'job-a');
+  h.hostRoute.selectJob('job-b'); h.discard();
+  assert.equal(h.state.selectedJobId, 'job-b'); assert.equal(h.location.search, '?view=operate&job=job-b');
+  assert.equal(h.history.state.portalIndex, undefined);
+});
+
+test('dirty active unindexed Review keeps hash-only Back and Forward within the same authoring source', async () => {
+  const h = routeHostFixture(); h.history.pushState({}, '', '/portal?view=review');
+  h.router.pop({ state: null }); h.dirty(true);
+  h.history.pushState(null, '', '/portal?view=review&job=job-a#main-content');
+  h.router.pop({ state: null });
+  assert.equal(h.hasPrompt(), false); assert.equal(h.state.selectedJobId, 'job-a');
+  h.history.go(-1); await settle();
+  assert.equal(h.hasPrompt(), false); assert.equal(h.location.hash, '');
+  h.history.go(1); await settle();
+  assert.equal(h.hasPrompt(), false); assert.equal(h.location.hash, '#main-content');
+  assert.equal(h.applied(), 4); assert.equal(h.history.state, null);
+});
+
+for (const browserState of [null, {}]) test(`a dirty unknown route canonicalizes only after explicit discard (${JSON.stringify(browserState)})`, () => {
+  const h = routeHostFixture(); h.dirty(true);
+  h.history.pushState(browserState, '', '/portal?view=operate');
+  h.router.pop({ state: null });
+  assert.equal(h.hasPrompt(), true); assert.equal(h.applied(), 0);
+  h.hostRoute.sync(true); h.cancel(); h.hostRoute.sync(true);
+  assert.equal(h.location.search, '?view=operate'); assert.equal(h.history.state, browserState);
+  h.router.pop({ state: null }); h.discard();
+  assert.equal(h.applied(), 1); assert.equal(h.location.search, '?view=operate&job=job-a');
+  assert.equal(h.history.state, browserState);
+});
+
+test('an unknown canonical route remains unindexed and guards a newly edited return to the owned source', async () => {
+  const h = routeHostFixture(); h.history.pushState({}, '', '/portal?view=operate');
+  h.router.pop({ state: null });
+  assert.equal(h.location.search, '?view=operate&job=job-a');
+  h.dirty(true); h.history.go(-1); await settle();
+  assert.equal(h.hasPrompt(), true); assert.equal(h.applied(), 1);
+  assert.equal(h.entries[2].state.portalIndex, undefined);
+  h.cancel(); h.hostRoute.sync(true);
+  assert.equal(h.location.search, '?view=review&job=job-a');
+  assert.equal(h.entries[2].url, 'https://portal.test/portal?view=operate&job=job-a');
+});
+
+test('a throwing authorized host apply cannot leave later background synchronization enabled', () => {
+  const h = routeHostFixture({ throwAfterApply: true });
+  h.history.pushState({}, '', '/portal?view=operate');
+  assert.throws(() => h.router.pop({ state: null }), /host render failed/);
+  assert.equal(h.location.search, '?view=operate&job=job-a');
+  h.state.selectedJobId = 'background-job'; h.hostRoute.sync(true);
+  assert.equal(h.location.search, '?view=operate&job=job-a');
+  assert.equal(h.history.state.portalIndex, undefined);
+});
+
+for (const initialIndex of [0, 3]) test(`an unknown fork after Back and a forward jump advances the ${initialIndex ? 'initial' : 'observed'} owned sequence`, async () => {
+  const h = fixture({ initialEntries: [
+    { url: 'build', state: { view: 'build', portalIndex: 0 } },
+    { url: 'operate', state: { view: 'operate', portalIndex: 5 } },
+    { url: 'browser-review', state: null },
+    { url: 'old-review', state: { view: 'review', portalIndex: 7 } },
+  ], initialIndex });
+  if (initialIndex === 0) { h.history.go(3); await settle(); }
+  h.history.go(-3); await settle();
+  h.history.go(2); await settle();
+  assert.equal(h.current(), 'browser-review');
+  h.router.record(false, { view: 'review' }, 'new-review');
+  assert.equal(h.history.state.portalIndex, 8);
+  assert.equal(h.entries[2].state, null);
+  assert.equal(h.entries.some(entry => entry.url === 'old-review'), false);
+  const original = structuredClone(h.entries);
+  h.applied.length = 0; h.dirty(true); h.history.go(-2); await settle();
+  assert.equal(h.current(), 'new-review'); assert.equal(h.hasPrompt(), true);
+  assert.deepEqual(h.applied, []); h.cancel();
+  h.history.go(-2); await settle(); h.discard(); await settle();
+  assert.equal(h.current(), 'operate'); assert.deepEqual(h.applied, ['operate']);
+  h.applied.length = 0; h.dirty(true); h.history.go(2); await settle();
+  assert.equal(h.current(), 'operate'); assert.equal(h.hasPrompt(), true);
+  h.discard(); await settle();
+  assert.equal(h.current(), 'new-review'); assert.deepEqual(h.applied, ['new-review']);
+  assert.deepEqual(h.entries, original); assert.equal(h.traversals.includes(0), false);
+});
 
 test('cancelled Back preserves Operate and the complete forward history', async () => {
   const h = fixture();
@@ -187,16 +381,16 @@ for (const offset of [-1, 1]) test(`pre-router unknown ${offset < 0 ? 'Back' : '
   assert.equal(h.traversals.includes(0), false);
 });
 
-test('explicit discard applies an unknown destination once while preserving its replacement fence', async () => {
+test('explicit discard applies an unknown destination once and canonicalizes it without assigning an index', async () => {
   const h = fixture({ initialEntries: [{ url: 'operate#main-content', state: null }, { url: 'review', state: null }], initialIndex: 1 });
   h.dirty(true); h.history.go(-1); await settle();
   h.discard();
   assert.deepEqual(h.applied, ['operate#main-content']);
   h.router.record(true, { view: 'operate' }, 'operate-current');
-  assert.deepEqual(h.entries[0], { url: 'operate#main-content', state: null });
+  assert.deepEqual(h.entries[0], { url: 'operate-current', state: null });
   h.history.go(1); await settle();
   h.router.record(true, { view: 'review' }, 'review-current');
-  assert.equal(h.current(), 'review-current'); assert.equal(h.entries[0].url, 'operate#main-content');
+  assert.equal(h.current(), 'review-current'); assert.equal(h.entries[0].url, 'operate-current');
   assert.deepEqual(h.traversals, [-1, 1]);
 });
 
@@ -239,6 +433,17 @@ test('a caller without a location seam keeps an unknown destination fenced after
   h.discard(); h.router.record(true, { view: 'operate' }, 'operate-background');
   assert.deepEqual(h.applied, ['operate#main-content']);
   assert.deepEqual(h.entries[0], { url: 'operate#main-content', state: null });
+});
+
+test('an invalid relative location seam cannot authorize or index an unknown destination', async () => {
+  const h = fixture({ locationHref: 'portal?view=review',
+    initialEntries: [{ url: 'operate#main-content', state: null }, { url: 'review', state: null }], initialIndex: 1 });
+  h.dirty(true); h.history.go(-1); await settle();
+  assert.equal(h.hasPrompt(), true); assert.deepEqual(h.applied, []);
+  h.discard(); h.router.record(true, { view: 'operate' }, 'operate-background');
+  assert.deepEqual(h.applied, ['operate#main-content']);
+  assert.deepEqual(h.entries[0], { url: 'operate#main-content', state: null });
+  assert.deepEqual(h.traversals, [-1]);
 });
 
 test('canceling owned Back retains the source URL identity for a later unknown destination', async () => {
@@ -290,11 +495,11 @@ test('same-index entries with different artifact URLs require explicit discard w
   assert.equal(h.traversals.includes(0), false);
 });
 
-test('a fenced replacement updates active authoring URL without stamping the browser destination', async () => {
+test('a pending replacement updates active authoring URL without stamping the browser destination', async () => {
   const a = 'https://portal.test/portal?view=review&job=a';
   const b = 'https://portal.test/portal?view=review&job=b';
   const h = fixture({ initialEntries: [{ url: a, state: { portalIndex: 0 } }, { url: b + '&raw=1', state: null }] });
-  h.history.go(1); await settle();
+  h.dirty(true); h.history.go(1); await settle(); h.cancel();
   h.router.record(true, { view: 'review', jobId: 'a' }, a);
   assert.deepEqual(h.entries[1], { url: b + '&raw=1', state: null });
   h.dirty(true); h.history.go(-1); await settle();

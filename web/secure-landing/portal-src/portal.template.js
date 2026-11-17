@@ -3087,25 +3087,25 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Configure',
             meta: 'Choose a workflow and preset.',
             title: '1. Configure the draft',
-            summary: 'Choose a workflow and preset for your next run.'
+            summary: 'Choose a workflow and preset.'
         },
         {
             label: 'Paths',
             meta: 'Inputs, outputs, and roots.',
             title: '2. Set paths',
-            summary: 'Choose the source folder and where to save your outputs.'
+            summary: 'Choose source and output folders.'
         },
         {
             label: 'Outputs',
             meta: 'Deliverables, posture, and readiness.',
             title: '3. Choose your outputs',
-            summary: 'Select the depth model, output format, and optional deliverables.'
+            summary: 'Select the depth model, format, and optional outputs.'
         },
         {
             label: 'Dispatch',
             meta: 'Check readiness, then start the run.',
             title: '4. Review and dispatch',
-            summary: 'Check the preview and resolve any issues before starting the run.'
+            summary: 'Resolve preview issues before starting the run.'
         }
     ],
     photographyUnified: [
@@ -3131,25 +3131,25 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Stage',
             meta: 'Select the archive stage.',
             title: '1. Select the archive stage',
-            summary: 'Choose an archive workflow, then provide its required inputs.'
+            summary: 'Choose an archive workflow and its required inputs.'
         },
         {
             label: 'Paths',
             meta: 'Required stage files.',
             title: '2. Provide stage inputs',
-            summary: 'Supply the archive root, archive index, or rights manifest required for the selected stage.'
+            summary: 'Provide the required archive root, index, or rights manifest.'
         },
         {
             label: 'Readiness',
             meta: 'Review governance signals.',
             title: '3. Review readiness',
-            summary: 'Confirm the stage-specific readiness checks before moving to dispatch.'
+            summary: 'Confirm stage readiness before dispatch.'
         },
         {
             label: 'Dispatch',
             meta: 'Canonical command and launch.',
             title: '4. Dispatch archive job',
-            summary: 'Review the canonical command, warnings, and launch the archive job.'
+            summary: 'Review the canonical command and warnings, then launch.'
         }
     ]
 });
