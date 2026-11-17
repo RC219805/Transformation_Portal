@@ -49,6 +49,18 @@ class UploadOwnershipLost(RepositoryError):
     """A completion or recovery no longer owns the ledger generation."""
 
 
+class UploadReceiptExpired(UploadOwnershipLost):
+    """A current locked receipt crossed its retained upload lifetime."""
+
+
+async def _upload_now(session: AsyncSession) -> float:
+    """Sample authoritative time after acquiring every relevant row lock."""
+    clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
+    if clock is None:
+        raise UploadOwnershipLost("upload clock is unavailable")
+    return float(clock)
+
+
 def validate_upload_request_id(value: str) -> str:
     """Require one canonical UUID, bounded before any filesystem work."""
     try:
@@ -130,6 +142,8 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 )
                 if row is None or row.generation != expected.generation or row.state not in {"staging", "ready"}:
                     raise UploadOwnershipLost("staged upload ownership was revoked")
+                if row.expires_at <= await _upload_now(session):
+                    raise UploadReceiptExpired("staged upload lifetime expired")
                 if row.state == "ready" and (row.receipt_sha256 != receipt_sha256 or row.response_data != data):
                     raise UploadOwnershipLost("sealed upload differs from its recorded completion")
                 row.state, row.receipt_sha256, row.response_data = "ready", receipt_sha256, data
@@ -200,7 +214,6 @@ async def bind_upload_references(
     session: AsyncSession,
     record: JobRecord,
     tenant_id: str,
-    now: float | None = None,
     *,
     plan_bytes: bytes | None = None,
     execution_bindings: bytes | None = None,
@@ -244,12 +257,10 @@ async def bind_upload_references(
             select(UploadReceiptModel).where(or_(*overlaps)).order_by(UploadReceiptModel.batch_id).with_for_update()
         )
     ).all()
+    if not rows:
+        return
+    now = await _upload_now(session)
     for row in rows:
-        if now is None:
-            clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
-            if clock is None:
-                raise UploadOwnershipLost("upload admission clock is unavailable")
-            now = float(clock)
         if row.tenant_id != tenant_id or row.state != "ready" or row.expires_at <= now:
             raise UploadOwnershipLost("staged input is expired, unavailable, or outside this tenant")
         session.add(UploadJobReferenceModel(batch_id=row.batch_id, job_id=record.id))

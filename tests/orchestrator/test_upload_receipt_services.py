@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -85,10 +86,19 @@ async def store(tmp_path, monkeypatch):
         await _SharedEngine.dispose(url)
 
 
-def reservation(root, *, request_id=None, owner="a" * 64, expiry=10.0, batch_id=None):
+def reservation(root, *, request_id=None, owner="a" * 64, expiry=None, batch_id=None):
     batch = batch_id or "upload_" + uuid.uuid4().hex
+    now = time.time()
     return UploadReservation(
-        batch, "tenant_a", owner, request_id or str(uuid.uuid4()), uuid.uuid4().hex, str(root / batch), "staging", 1.0, expiry
+        batch,
+        "tenant_a",
+        owner,
+        request_id or str(uuid.uuid4()),
+        uuid.uuid4().hex,
+        str(root / batch),
+        "staging",
+        now,
+        now + 3600 if expiry is None else expiry,
     )
 
 
@@ -99,12 +109,54 @@ async def sealed(store, root, *, filename="source.txt", **kwargs):
     result = stage_upload_batch(
         upload_root=root,
         uploads=[IncomingUpload(filename, io.BytesIO(b"body"))],
-        now=1.0,
+        now=item.created_at,
         reserved_batch_id=item.batch_id,
         cleanup_on_error=False,
     )
     digest = seal_completion(item, result)
     return item, result, digest
+
+
+async def _expire_receipt(store, item):
+    async with store._session() as session:
+        async with session.begin():
+            row = await session.get(UploadReceiptModel, item.batch_id, with_for_update=True)
+            row.expires_at = float(await session.scalar(text("SELECT extract(epoch FROM clock_timestamp())"))) - 1
+
+
+async def _expire_while_operation_waits_on_upload_row(store, item, operation):
+    """Observe a real Postgres lock wait, then cross TTL before releasing it."""
+    task = None
+    try:
+        async with store._session() as session:
+            async with session.begin():
+                row = await session.get(UploadReceiptModel, item.batch_id, with_for_update=True)
+                task = asyncio.create_task(operation())
+
+                async def wait_for_lock():
+                    while True:
+                        await session.execute(text("SELECT pg_stat_clear_snapshot()"))
+                        blocked = await session.scalar(
+                            text(
+                                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                                "WHERE datname = current_database() AND pid <> pg_backend_pid() "
+                                "AND wait_event_type = 'Lock' AND query LIKE '%upload_receipts%')"
+                            )
+                        )
+                        if blocked:
+                            return
+                        if task.done():
+                            await task
+                            pytest.fail("upload operation did not wait for its row lock")
+                        await asyncio.sleep(0.01)
+
+                await asyncio.wait_for(wait_for_lock(), 5)
+                row.expires_at = float(await session.scalar(text("SELECT extract(epoch FROM clock_timestamp())")))
+        return await asyncio.wait_for(task, 5)
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
 async def test_concurrent_duplicate_attempts_reserve_one_batch_and_never_replay(store, tmp_path):
@@ -157,11 +209,11 @@ async def test_live_filesystem_owner_blocks_ttl_even_after_deadline(store, tmp_p
     await store.reserve(item)
     initialize_batch(item)
     try:
-        assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+        assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
         assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "staging"
     finally:
         lock.close()
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [item.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == [item.batch_id]
     assert not Path(item.batch_root).exists()
     with pytest.raises(UploadOwnershipLost):
         await store.complete(item, "c" * 64, {})
@@ -171,13 +223,13 @@ async def test_failed_delete_stays_fenced_and_existing_cleanup_retries(store, tm
     item, result, digest = await sealed(store, tmp_path)
     original = upload_recovery.delete_owned_batch
     monkeypatch.setattr(upload_recovery, "delete_owned_batch", lambda *args: (_ for _ in ()).throw(PermissionError("busy")))
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
     current = await store.get(item.tenant_id, item.owner_sha256, item.request_id)
     assert current.state == "deleting" and current.generation != item.generation
     with pytest.raises(UploadOwnershipLost):
         await store.complete(item, digest, result.to_response_data())
     monkeypatch.setattr(upload_recovery, "delete_owned_batch", original)
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [item.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == [item.batch_id]
     assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
 
 
@@ -202,17 +254,17 @@ async def test_retained_jobs_pin_inputs_and_keyless_reference_shares_expiry_lock
                 )
             )
             await session.flush()
-            await bind_upload_references(session, record, item.tenant_id, 2.0)
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+            await bind_upload_references(session, record, item.tenant_id)
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
     assert result.input_dir.exists()
     async with store._session() as session:
         async with session.begin():
             await session.execute(delete(JobModel).where(JobModel.id == job_id))
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [item.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == [item.batch_id]
     with pytest.raises(UploadOwnershipLost):
         async with store._session() as session:
             async with session.begin():
-                await bind_upload_references(session, record, item.tenant_id, 2.0)
+                await bind_upload_references(session, record, item.tenant_id)
 
 
 async def test_all_input_and_archive_aliases_pin_distinct_batches_atomically(store, tmp_path):
@@ -249,21 +301,22 @@ async def test_all_input_and_archive_aliases_pin_distinct_batches_atomically(sto
                 )
             )
             await session.flush()
-            await bind_upload_references(session, record, first.tenant_id, 2.0)
+            await bind_upload_references(session, record, first.tenant_id)
     async with store._session() as session:
         references = (
             await session.scalars(select(UploadJobReferenceModel).where(UploadJobReferenceModel.job_id == job_id))
         ).all()
     assert {row.batch_id for row in references} == {first.batch_id, second.batch_id}
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
     assert first_result.input_dir.exists() and second_result.input_dir.exists()
 
 
 async def test_expired_secondary_archive_batch_rolls_back_every_new_reference(store, tmp_path):
-    first, first_result, first_digest = await sealed(store, tmp_path, expiry=10.0, batch_id="upload_aaa_valid")
-    second, second_result, second_digest = await sealed(store, tmp_path, expiry=1.0, batch_id="upload_zzz_expired")
+    first, first_result, first_digest = await sealed(store, tmp_path, batch_id="upload_aaa_valid")
+    second, second_result, second_digest = await sealed(store, tmp_path, batch_id="upload_zzz_expired")
     await store.complete(first, first_digest, first_result.to_response_data())
     await store.complete(second, second_digest, second_result.to_response_data())
+    await _expire_receipt(store, second)
     job_id = "job_expired_archive_" + uuid.uuid4().hex[:10]
     record = JobRecord(
         id=job_id,
@@ -288,7 +341,7 @@ async def test_expired_secondary_archive_batch_rolls_back_every_new_reference(st
                     )
                 )
                 await session.flush()
-                await bind_upload_references(session, record, first.tenant_id, 2.0)
+                await bind_upload_references(session, record, first.tenant_id)
     async with store._session() as session:
         assert await session.get(JobModel, job_id) is None
         assert not (
@@ -299,7 +352,7 @@ async def test_expired_secondary_archive_batch_rolls_back_every_new_reference(st
 async def test_retained_nested_archive_path_protects_ledger_batch_without_new_reference(store, tmp_path):
     item, result, digest = await sealed(store, tmp_path, filename="nested/source.txt")
     await store.complete(item, digest, result.to_response_data())
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, {str(result.input_dir / "nested")}) == []
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, {str(result.input_dir / "nested")}) == []
     assert result.input_dir.exists()
 
 
@@ -390,7 +443,7 @@ async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_change
     monkeypatch.setattr(app, "_upload_receipt_store", lambda: store)
     monkeypatch.setattr(app, "_verified_frontdoor_actor", lambda request: dict(actor))
     monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
-    monkeypatch.setattr(app, "_now", lambda: 2.0)
+    monkeypatch.setattr(app, "_now", time.time)
     monkeypatch.setattr(app, "API_KEY_SECRET", "upload-test-key")
     monkeypatch.setattr(app, "ENFORCE_JOB_API_KEY", True)
     app.RATE_LIMIT_BUCKETS.clear()
@@ -411,12 +464,12 @@ async def test_get_recovers_seal_database_gap_but_rejects_other_owner_and_change
         assert response.status_code == 200, response.text
         assert response.json()["data"]["status"] == "ready"
         assert response.headers["cache-control"] == "no-store"
-        monkeypatch.setattr(app, "_now", lambda: 20.0)
+        monkeypatch.setattr(app, "_now", lambda: item.expires_at + 1)
         expired = await client.get(url)
         assert expired.json()["data"]["status"] == "expired"
         assert expired.json()["data"]["receipt"] is None
         assert result.input_dir.exists()  # Lookup never performs TTL deletion.
-        monkeypatch.setattr(app, "_now", lambda: 2.0)
+        monkeypatch.setattr(app, "_now", time.time)
         actor["username"] = "bob"
         assert (await client.get(url)).json()["data"]["status"] == "unknown"
         actor["username"] = "alice"
@@ -747,7 +800,8 @@ async def test_bounded_cleanup_cursor_does_not_starve_later_expired_batches(stor
     for item in items:
         await store.reserve(item)
     checked = []
-    for now in [20.0, 21.0, 22.0]:
+    expired = max(item.expires_at for item in items) + 1
+    for now in [expired, expired + 1, expired + 2]:
         candidates = await store.cleanup_candidates(now, limit=1)
         assert len(candidates) == 1
         checked.append(candidates[0].batch_id)
@@ -760,7 +814,7 @@ async def test_cleanup_recovers_crash_between_directory_creation_and_initial_mar
     root = Path(item.batch_root)
     root.mkdir()
     (root / ".initial-marker.tmp").write_bytes(b"interrupted")
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [item.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == [item.batch_id]
     assert not root.exists()
     assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
 
@@ -873,8 +927,9 @@ async def test_recursive_read_rejects_any_unavailable_or_unscoped_batch_atomical
 async def test_ancestor_read_ignores_deleted_tombstone_but_explicit_expired_descendant_still_rejects(store, tmp_path):
     import time
 
-    retired, old_result, digest = await sealed(store, tmp_path, expiry=time.time() - 100)
+    retired, old_result, digest = await sealed(store, tmp_path)
     await store.complete(retired, digest, old_result.to_response_data())
+    await _expire_receipt(store, retired)
     assert await cleanup_correlated_batches(store, tmp_path, time.time(), set()) == [retired.batch_id]
     assert not old_result.batch_root.exists()
     live, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600)
@@ -916,7 +971,7 @@ async def test_retained_directory_overlap_protects_ledger_batches_without_pinnin
     item, result, digest = await sealed(store, tmp_path)
     await store.complete(item, digest, result.to_response_data())
     selector = {"root": tmp_path, "ancestor": tmp_path.parent, "sibling": tmp_path / "unrelated"}[retained]
-    removed = await cleanup_correlated_batches(store, tmp_path, 20.0, {str(selector)})
+    removed = await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, {str(selector)})
     assert removed == ([item.batch_id] if retained == "sibling" else [])
     assert result.input_dir.exists() is (retained != "sibling")
 
@@ -936,7 +991,7 @@ async def test_partial_completed_batch_deletion_retries_after_marker_and_seal_ar
         return original(path, *args, **kwargs)
 
     monkeypatch.setattr(upload_recovery.shutil, "rmtree", partial)
-    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
     fenced = await store.get(item.tenant_id, item.owner_sha256, item.request_id)
     assert fenced.state == "deleting" and fenced.generation != item.generation
     assert result.input_dir.exists()
@@ -944,7 +999,7 @@ async def test_partial_completed_batch_deletion_retries_after_marker_and_seal_ar
         await store.complete(item, digest, result.to_response_data())
     with pytest.raises(UploadOwnershipLost):
         await _create_upload_read_job(store, tmp_path, result.input_dir)
-    assert await cleanup_correlated_batches(store, tmp_path, 21.0, set()) == [item.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7201, set()) == [item.batch_id]
     assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
     assert not result.batch_root.exists()
 
@@ -960,3 +1015,78 @@ async def test_filesystem_root_ancestor_read_pins_the_live_ledger_batch(store, t
         assert (
             await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
         ).all() == [item.batch_id]
+
+
+@pytest.mark.parametrize("state", ["staging", "ready"])
+async def test_completion_checks_current_expiry_after_waiting_for_its_row_lock(store, tmp_path, state):
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired
+
+    item, result, digest = await sealed(store, tmp_path)
+    if state == "ready":
+        await store.complete(item, digest, result.to_response_data())
+    before = await store.get(item.tenant_id, item.owner_sha256, item.request_id)
+    with pytest.raises(UploadReceiptExpired):
+        await _expire_while_operation_waits_on_upload_row(
+            store, item, lambda: store.complete(item, digest, result.to_response_data())
+        )
+    after = await store.get(item.tenant_id, item.owner_sha256, item.request_id)
+    assert after.state == before.state
+    assert after.generation == before.generation
+    assert after.receipt_sha256 == before.receipt_sha256 and after.response_data == before.response_data
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_admission_checks_current_expiry_after_waiting_for_all_upload_row_locks(store, tmp_path, distributed):
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    with pytest.raises(UploadOwnershipLost, match="expired"):
+        await _expire_while_operation_waits_on_upload_row(
+            store,
+            item,
+            lambda: _create_upload_read_job(store, tmp_path, result.input_dir, distributed=distributed),
+        )
+    async with store._session() as session:
+        for table in (
+            "jobs",
+            "upload_job_references",
+            "admission_capacity",
+            "dispatch_plans",
+            "dispatch_attempts",
+            "operational_records",
+            "operational_outbox",
+        ):
+            assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 0, table
+    assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "ready"
+    assert result.input_dir.exists()
+
+
+async def test_accepted_submission_replay_survives_upload_expiry_without_new_admission(store, tmp_path):
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.submissions import SubmissionIdentity, submission_intent
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    request = {"pipeline": "lux-depth-v3", "tenant_id": item.tenant_id, "args": {"input_dir": str(result.input_dir)}}
+    record = JobRecord(
+        id="job_replay_" + uuid.uuid4().hex[:10], created_at=time.time(), request=request, effective_request=request
+    )
+    submission = SubmissionIdentity(str(uuid.uuid4()), "a" * 64, submission_intent(request))
+    operational = PostgresOperationalRecordStore(database_url=store._database_url)
+    plan = CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+    options = {
+        "tenant_id": item.tenant_id,
+        "output_root": str(tmp_path / "output"),
+        "requested_output_root": str(tmp_path / "output"),
+        "global_limit": 1,
+        "tenant_limit": 1,
+        "submission": submission,
+    }
+    accepted = await operational.admit(record, plan, **options)
+    await _expire_receipt(store, item)
+    replay = await operational.admit(replace(record, id="job_not_created"), plan, **options)
+    assert replay == accepted
+    async with store._session() as session:
+        for table in ("jobs", "upload_job_references", "dispatch_attempts", "operational_outbox"):
+            assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 1, table

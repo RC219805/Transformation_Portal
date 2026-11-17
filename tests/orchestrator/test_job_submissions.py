@@ -697,6 +697,73 @@ async def test_optional_upload_capability_requires_current_tenant_identity(recei
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "GET"])
+@pytest.mark.parametrize("failure", ["tenant_storage", "receipt_store"])
+async def test_upload_receipt_routes_contain_provider_context_failures(receipts, monkeypatch, tmp_path, method, failure):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1" if method == "POST" else "0")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path)
+    if failure == "tenant_storage":
+        mkdirs = _deny_tenant_mkdir(monkeypatch)
+    else:
+
+        def unavailable_store():
+            raise OSError("upload receipt provider unavailable")
+
+        monkeypatch.setattr(application, "_upload_receipt_store", unavailable_store)
+
+    async def unexpected_parse(*_args, **_kwargs):
+        pytest.fail("context failure must not parse or replay an upload body")
+
+    monkeypatch.setattr(application, "_parse_portal_upload_multipart", unexpected_parse)
+    request_id = "11111111-1111-4111-8111-111111111111"
+    path = "/v1/uploads/staging" if method == "POST" else f"/v1/uploads/staging/receipts/{request_id}"
+    headers = _headers(method, path)
+    if method == "POST":
+        headers["X-TP-Upload-Request-ID"] = request_id
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.request(method, path, headers=headers)
+    assert response.status_code == 503, response.text
+    assert response.json()["schema"] == "tp.orchestrator.error.v1"
+    assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+    if failure == "tenant_storage":
+        assert mkdirs
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "GET"])
+@pytest.mark.parametrize("denial", ["membership", "selector"])
+async def test_upload_receipt_routes_preserve_signed_tenant_denials(receipts, monkeypatch, tmp_path, method, denial):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path)
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+
+    def unexpected_store():
+        pytest.fail("tenant denial must precede receipt provider access")
+
+    monkeypatch.setattr(application, "_upload_receipt_store", unexpected_store)
+    request_id = "11111111-1111-4111-8111-111111111111"
+    path = "/v1/uploads/staging" if method == "POST" else f"/v1/uploads/staging/receipts/{request_id}"
+    actor = {**ACTOR, "accessEmail": "not-a-member@example.com"} if denial == "membership" else ACTOR
+    headers = _headers(method, path, actor=actor)
+    if denial == "selector":
+        headers[application.PILOT_TENANT_HEADER] = "tenant_b"
+    if method == "POST":
+        headers["X-TP-Upload-Request-ID"] = request_id
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.request(method, path, headers=headers)
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+    assert mkdirs == []
+    assert application._PILOT_TENANT_MANAGER is None
+
+
+@pytest.mark.asyncio
 async def test_optional_upload_capability_remains_available_after_successful_probe(receipts, monkeypatch, tmp_path):
     monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
     monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
