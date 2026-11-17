@@ -10724,7 +10724,7 @@ async def _create_job(
             from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
 
             if isinstance(repo, PostgresJobRepository):
-                read_paths = ()
+                read_paths: tuple[str, ...] = ()
                 if pipeline in ARCHIVE_GATE_PIPELINES:
                     from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
 
