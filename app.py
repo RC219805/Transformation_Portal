@@ -9910,15 +9910,15 @@ async def _upload_receipt_context(
 
     if write and not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False):
         return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
-    tenant, error = await _pilot_tenant_from_request(request, action="upload_receipt")
-    if error is not None:
-        return None, None, None, error
-    if tenant is None:
-        return None, None, None, _error_response(403, code="FORBIDDEN", message="managed tenant identity is required")
     try:
+        tenant, error = await _pilot_tenant_from_request(request, action="upload_receipt")
+        if error is not None:
+            return None, None, None, error
+        if tenant is None:
+            return None, None, None, _error_response(403, code="FORBIDDEN", message="managed tenant identity is required")
         owner = upload_owner(tenant.tenant_id, _verified_frontdoor_actor(request))
         store = _upload_receipt_store()
-    except (IdentityAssertionError, IdentityConfigurationError, ValueError, RuntimeError):
+    except (IdentityAssertionError, IdentityConfigurationError, ValueError, RuntimeError, OSError):
         return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
     return tenant, owner, store, None
 
@@ -9971,6 +9971,7 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
     from transformation_portal.orchestrator.photographic_admission import drain_owned
     from transformation_portal.orchestrator.upload_receipts import (
         UploadReceiptConflict,
+        UploadReceiptExpired,
         UploadReservation,
         validate_upload_request_id,
     )
@@ -10040,6 +10041,8 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
         return JSONResponse(
             _api_envelope("tp.orchestrator.upload_staging.v1", success=True, data=result.to_response_data(), error=None)
         )
+    except UploadReceiptExpired:
+        return _error_response(409, code="CONFLICT", message="staged upload expired", details={"reason": "upload_expired"})
     except UploadReceiptConflict:
         return _error_response(409, code="CONFLICT", message="upload request ID is already reserved")
     except UploadStagingError as exc:
@@ -10063,7 +10066,7 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
 async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONResponse:
     from transformation_portal.ingest.upload_recovery import UploadBatchLock, verify_completion
     from transformation_portal.orchestrator.photographic_admission import drain_owned
-    from transformation_portal.orchestrator.upload_receipts import validate_upload_request_id
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired, validate_upload_request_id
 
     try:
         validate_upload_request_id(request_id)
@@ -10097,6 +10100,8 @@ async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONRe
                             digest, data = await drain_owned(asyncio.to_thread(verify_completion, reservation))
                             await store.complete(reservation, digest, data)
                             status = "ready"
+                        except UploadReceiptExpired:
+                            status, data = "expired", None
                         except (OSError, ValueError, KeyError, TypeError):
                             status, data = "unknown", None
                 finally:
