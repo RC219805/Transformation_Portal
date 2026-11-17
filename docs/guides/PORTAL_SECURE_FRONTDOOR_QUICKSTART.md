@@ -253,7 +253,9 @@ submission key. Admission pins every distinct staged batch named by read inputs,
 including input/archive aliases, photographic manifests and sidecars, nested or
 metadata paths, and ancestor directories, from both the submitted and effective
 request. Matching uses absolute server-owned ledger locators, independent of
-the process working directory. Tracked inputs require verified tenant scope
+the process working directory. Portal-relative read selectors resolve against
+the server application's `REPO_ROOT`; client root fields and headers cannot
+replace that base. Tracked inputs require verified tenant scope
 and must be ready and unexpired; trusted and keyless calls do not bypass this
 requirement. Frozen plans
 and physical bindings retain their exact read locators; legacy archive admission
