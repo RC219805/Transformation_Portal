@@ -7,14 +7,12 @@ It does not establish storage synchronization or host/power-loss durability.
 from __future__ import annotations
 
 import hashlib
-import os
-import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,7 +105,7 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 result = await session.scalar(
                     insert(UploadReceiptModel)
                     .values(**{name: getattr(reservation, name) for name in reservation.__dataclass_fields__})
-                    .on_conflict_do_nothing()
+                    .on_conflict_do_nothing(index_elements=["tenant_id", "owner_sha256", "request_id"])
                     .returning(UploadReceiptModel.batch_id)
                 )
                 if result is None:
@@ -176,7 +174,7 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 if row is None or row.generation != expected.generation or row.state == "expired" or row.expires_at > now:
                     return None
                 batch_root = Path(row.batch_root).resolve()
-                if any(Path(path).is_relative_to(batch_root) for path in retained):
+                if any(path.is_relative_to(batch_root) or batch_root.is_relative_to(path) for path in map(Path, retained)):
                     return None
                 reference = await session.scalar(
                     select(UploadJobReferenceModel.job_id).where(UploadJobReferenceModel.batch_id == row.batch_id).limit(1)
@@ -212,26 +210,41 @@ async def bind_upload_references(
 
     A replay returns before this helper. Row locks serialize new references
     against expiry; foreign keys retain references for the job's lifetime.
+    Tracked batches require tenant scope even for trusted/direct callers.
     """
-    root = Path(os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal/uploads")))
     paths = set(upload_source_paths(record.request, record.effective_request))
     paths.update(_resolved_source_paths(list(read_paths)))
     if plan_bytes is not None:
         paths.update(_admitted_source_paths(plan_bytes, execution_bindings))
-    batches = set()
-    for path in paths:
-        try:
-            parts = path.relative_to(root.resolve()).parts
-        except ValueError:
-            continue
-        if parts and parts[0].startswith("upload_"):
-            batches.add(parts[0])
+    if not paths:
+        return
+    overlaps = []
+    for path in sorted(paths):
+        value = str(path)
+        prefix = value.rstrip("/") + "/"
+        # Ledger locators are server-owned absolute paths. Compare complete
+        # segments literally, including '%' and '_', without a CWD/env anchor.
+        # Expired tombstones cannot block an ancestor forever after deletion,
+        # but an explicit read inside one must still fail admission.
+        overlaps.extend(
+            (
+                UploadReceiptModel.batch_root == value,
+                func.left(literal(value), func.length(UploadReceiptModel.batch_root) + 1)
+                == UploadReceiptModel.batch_root + "/",
+                and_(
+                    UploadReceiptModel.state != "expired",
+                    func.left(UploadReceiptModel.batch_root, len(prefix)) == prefix,
+                ),
+            )
+        )
     # Every admission takes the same lock order even when a request's input
     # and archive selectors refer to different batches or use opposite aliases.
-    for batch in sorted(batches):
-        row = await session.scalar(select(UploadReceiptModel).where(UploadReceiptModel.batch_id == batch).with_for_update())
-        if row is None:  # Pre-ledger staged batches retain their existing contracts.
-            continue
+    rows = (
+        await session.scalars(
+            select(UploadReceiptModel).where(or_(*overlaps)).order_by(UploadReceiptModel.batch_id).with_for_update()
+        )
+    ).all()
+    for row in rows:
         if now is None:
             clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
             if clock is None:

@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,7 +21,7 @@ import httpx
 import pytest
 from sqlalchemy import delete, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, IntegrityError
 
 from transformation_portal.ingest import upload_recovery
 from transformation_portal.ingest.upload_recovery import (
@@ -30,7 +31,7 @@ from transformation_portal.ingest.upload_recovery import (
     seal_completion,
 )
 from transformation_portal.ingest.upload_staging import IncomingUpload, stage_upload_batch
-from transformation_portal.orchestrator.models import JobModel, UploadJobReferenceModel
+from transformation_portal.orchestrator.models import JobModel, UploadJobReferenceModel, UploadReceiptModel
 from transformation_portal.orchestrator.storage.base import JobRecord
 from transformation_portal.orchestrator.storage.postgres import _SharedEngine
 from transformation_portal.orchestrator.upload_receipts import (
@@ -113,6 +114,19 @@ async def test_concurrent_duplicate_attempts_reserve_one_batch_and_never_replay(
     assert sum(result is None for result in results) == 1
     assert sum(isinstance(result, UploadReceiptConflict) for result in results) == 1
     await store.reserve(reservation(tmp_path, request_id=request_id, owner="b" * 64))
+
+
+async def test_unrelated_batch_primary_key_collision_is_not_a_request_identity_conflict(store, tmp_path):
+    first = reservation(tmp_path)
+    second = reservation(tmp_path, batch_id=first.batch_id)
+    await store.reserve(first)
+    with pytest.raises(IntegrityError) as error:
+        await store.reserve(second)
+    assert error.value.orig.sqlstate == "23505"
+    assert await store.get(first.tenant_id, first.owner_sha256, first.request_id) == first
+    assert await store.get(second.tenant_id, second.owner_sha256, second.request_id) is None
+    with pytest.raises(UploadReceiptConflict):
+        await store.reserve(reservation(tmp_path, request_id=first.request_id))
 
 
 async def test_committed_reservation_is_visible_in_a_fresh_python_process(store, tmp_path):
@@ -311,7 +325,7 @@ async def test_manifest_in_tracked_batch_metadata_is_pinned_by_legacy_postgres_c
         ).all() == [item.batch_id]
 
 
-@pytest.mark.parametrize("tamper,expected_status", [("extra_input", 503), ("oversize_metadata", 413)])
+@pytest.mark.parametrize("tamper,expected_status", [("extra_input", 503), ("oversize_metadata", 413), ("oversize_seal", 413)])
 async def test_post_never_commits_ready_before_exact_recoverable_verification(
     store, tmp_path, monkeypatch, tamper, expected_status
 ):
@@ -337,9 +351,11 @@ async def test_post_never_commits_ready_before_exact_recoverable_verification(
         result = original(**kwargs)
         if tamper == "extra_input":
             (result.input_dir / "extra.txt").write_bytes(b"unsealed")
-        else:
+        elif tamper == "oversize_metadata":
             with result.capture_metadata_path.open("wb") as output:
                 output.truncate(upload_recovery.MAX_RECOVERY_METADATA_BYTES + 1)
+        else:
+            return replace(result, warnings=("x" * upload_recovery.MAX_RECOVERY_METADATA_BYTES,))
         return result
 
     monkeypatch.setattr(app, "_upload_receipt_context", context)
@@ -358,6 +374,9 @@ async def test_post_never_commits_ready_before_exact_recoverable_verification(
     assert response.status_code == expected_status
     row = await store.get("tenant_a", owner, request_id)
     assert row.state == "staging" and row.receipt_sha256 is None and row.response_data is None
+    if expected_status == 413:
+        assert json.loads(response.body)["error"]["details"]["reason"] == "upload_recovery_metadata_limit"
+        assert not (Path(row.batch_root) / "_portal" / upload_recovery.SEAL_FILENAME).exists()
     assert stream.closed
 
 
@@ -575,6 +594,72 @@ async def test_distributed_admission_and_legacy_postgres_creation_pin_tracked_up
     assert sorted(references) == sorted(jobs)
 
 
+@pytest.mark.parametrize("distributed", [True, False])
+async def test_tracked_upload_without_tenant_scope_rolls_back_all_admission_effects(store, tmp_path, distributed):
+    import time
+
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    job_id = "job_unscoped_" + uuid.uuid4().hex[:10]
+    record = JobRecord(
+        id=job_id,
+        created_at=time.time(),
+        request={"pipeline": "lux-depth-v3"},
+        effective_request={"pipeline": "lux-depth-v3", "tenant_id": "", "args": {"input_dir": str(result.input_dir)}},
+    )
+    expected_error = ValueError if distributed else UploadOwnershipLost
+    expected_message = "invalid locator tenant_id" if distributed else "outside this tenant"
+    with pytest.raises(expected_error, match=expected_message):
+        if distributed:
+            plan = CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+            await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+                record,
+                plan,
+                tenant_id="",
+                output_root=str(tmp_path / "output"),
+                requested_output_root=str(tmp_path / "output"),
+                global_limit=8,
+                tenant_limit=8,
+            )
+        else:
+            await PostgresJobRepository(database_url=store._database_url).create(record)
+    async with store._session() as session:
+        for table in (
+            "jobs",
+            "upload_job_references",
+            "admission_capacity",
+            "dispatch_plans",
+            "dispatch_attempts",
+            "operational_records",
+            "operational_outbox",
+        ):
+            assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 0, table
+    assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "ready"
+    assert result.input_dir.exists()
+
+
+async def test_legacy_keyless_unscoped_job_still_accepts_a_preledger_staged_batch(store, tmp_path):
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    result = stage_upload_batch(upload_root=tmp_path, uploads=[IncomingUpload("source.txt", io.BytesIO(b"body"))], now=1.0)
+    record = JobRecord(
+        id="job_preledger_" + uuid.uuid4().hex[:10],
+        created_at=1.0,
+        request={"pipeline": "lux-depth-v3"},
+        effective_request={"pipeline": "lux-depth-v3", "args": {"input_dir": str(result.input_dir)}},
+    )
+    await PostgresJobRepository(database_url=store._database_url).create(record)
+    async with store._session() as session:
+        assert await session.get(JobModel, record.id) is not None
+        assert await session.scalar(text("SELECT count(*) FROM upload_receipts")) == 0
+        assert await session.scalar(text("SELECT count(*) FROM upload_job_references")) == 0
+
+
 async def test_archive_derived_read_default_pins_batch_in_both_postgres_admission_paths(store, tmp_path, monkeypatch):
     import time
 
@@ -678,3 +763,200 @@ async def test_cleanup_recovers_crash_between_directory_creation_and_initial_mar
     assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == [item.batch_id]
     assert not root.exists()
     assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
+
+
+async def _create_upload_read_job(store, root, source, *, tenant_id="tenant_a", distributed=False):
+    import time
+
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    request = {"pipeline": "lux-depth-v3", "tenant_id": tenant_id, "args": {"input_dir": str(source)}}
+    record = JobRecord(
+        id="job_overlap_" + uuid.uuid4().hex[:10], created_at=time.time(), request=request, effective_request=request
+    )
+    if distributed:
+        plan = CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+        await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+            record,
+            plan,
+            tenant_id=tenant_id,
+            output_root=str(root / "output"),
+            requested_output_root=str(root / "output"),
+            global_limit=8,
+            tenant_limit=8,
+        )
+    else:
+        await PostgresJobRepository(database_url=store._database_url).create(record)
+    return record
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_relative_upload_root_uses_reserved_absolute_identity_after_cwd_changes(
+    store, tmp_path, monkeypatch, distributed
+):
+    import time
+
+    import app
+
+    repo, cwd = tmp_path / "repo", tmp_path / "cwd"
+    repo.mkdir()
+    cwd.mkdir()
+    root = repo / "relative-uploads"
+    root.mkdir()
+    monkeypatch.setattr(app, "REPO_ROOT", repo)
+    monkeypatch.setattr(app, "ALLOWED_INPUT_ROOTS", [repo])
+    monkeypatch.setattr(app, "PORTAL_UPLOAD_ROOT", Path("relative-uploads"))
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", "relative-uploads")
+    monkeypatch.chdir(cwd)
+    assert app._resolved_portal_upload_root() == root
+    item, result, digest = await sealed(store, root, expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    record = await _create_upload_read_job(store, tmp_path, result.input_dir, distributed=distributed)
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [item.batch_id]
+    assert await cleanup_correlated_batches(store, root, time.time() + 7200, set()) == []
+    assert result.input_dir.exists()
+
+
+@pytest.mark.parametrize("ancestor", [False, True])
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_recursive_root_and_ancestor_reads_pin_every_live_batch(store, tmp_path, ancestor, distributed):
+    import time
+
+    first, first_result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600, batch_id="upload_aaa")
+    await store.complete(first, digest, first_result.to_response_data())
+    second, second_result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600, batch_id="upload_zzz")
+    await store.complete(second, digest, second_result.to_response_data())
+    record = await _create_upload_read_job(store, tmp_path, tmp_path.parent if ancestor else tmp_path, distributed=distributed)
+    async with store._session() as session:
+        references = (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all()
+    assert set(references) == {first.batch_id, second.batch_id}
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
+
+
+@pytest.mark.parametrize("invalid", ["foreign", "staging", "deleting", "missing_tenant"])
+async def test_recursive_read_rejects_any_unavailable_or_unscoped_batch_atomically(store, tmp_path, invalid):
+    import time
+
+    first, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600, batch_id="upload_aaa_valid")
+    await store.complete(first, digest, result.to_response_data())
+    second, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600, batch_id="upload_zzz_invalid")
+    if invalid != "staging":
+        await store.complete(second, digest, result.to_response_data())
+    if invalid == "foreign":
+        async with store._session() as session:
+            async with session.begin():
+                (await session.get(UploadReceiptModel, second.batch_id)).tenant_id = "tenant_b"
+    elif invalid == "deleting":
+        assert await store.claim_deletion(second, time.time() + 7200, set()) is not None
+    with pytest.raises(UploadOwnershipLost, match="outside this tenant"):
+        await _create_upload_read_job(store, tmp_path, tmp_path, tenant_id="" if invalid == "missing_tenant" else "tenant_a")
+    async with store._session() as session:
+        for table in (
+            "jobs",
+            "upload_job_references",
+            "admission_capacity",
+            "dispatch_attempts",
+            "operational_records",
+            "operational_outbox",
+        ):
+            assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 0, table
+
+
+async def test_ancestor_read_ignores_deleted_tombstone_but_explicit_expired_descendant_still_rejects(store, tmp_path):
+    import time
+
+    retired, old_result, digest = await sealed(store, tmp_path, expiry=time.time() - 100)
+    await store.complete(retired, digest, old_result.to_response_data())
+    assert await cleanup_correlated_batches(store, tmp_path, time.time(), set()) == [retired.batch_id]
+    assert not old_result.batch_root.exists()
+    live, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600)
+    await store.complete(live, digest, result.to_response_data())
+    record = await _create_upload_read_job(store, tmp_path, tmp_path)
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [live.batch_id]
+    with pytest.raises(UploadOwnershipLost):
+        await _create_upload_read_job(store, tmp_path, old_result.input_dir)
+    async with store._session() as session:
+        assert await session.scalar(text("SELECT count(*) FROM jobs")) == 1
+
+
+@pytest.mark.parametrize("name,sibling_name", [("literal_%", "literal_ab"), ("uploads", "uploads-other")])
+async def test_ledger_overlap_is_segment_and_literal_safe_for_ancestor_selectors(store, tmp_path, name, sibling_name):
+    import time
+
+    root, sibling = tmp_path / name, tmp_path / sibling_name
+    root.mkdir()
+    sibling.mkdir()
+    item, result, digest = await sealed(store, root, expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    foreign, other_result, digest = await sealed(store, sibling, expiry=time.time() + 3600)
+    await store.complete(foreign, digest, other_result.to_response_data())
+    async with store._session() as session:
+        async with session.begin():
+            (await session.get(UploadReceiptModel, foreign.batch_id)).tenant_id = "tenant_b"
+    record = await _create_upload_read_job(store, tmp_path, root)
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [item.batch_id]
+
+
+@pytest.mark.parametrize("retained", ["root", "ancestor", "sibling"])
+async def test_retained_directory_overlap_protects_ledger_batches_without_pinning_siblings(store, tmp_path, retained):
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    selector = {"root": tmp_path, "ancestor": tmp_path.parent, "sibling": tmp_path / "unrelated"}[retained]
+    removed = await cleanup_correlated_batches(store, tmp_path, 20.0, {str(selector)})
+    assert removed == ([item.batch_id] if retained == "sibling" else [])
+    assert result.input_dir.exists() is (retained != "sibling")
+
+
+async def test_partial_completed_batch_deletion_retries_after_marker_and_seal_are_removed(store, tmp_path, monkeypatch):
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    original = upload_recovery.shutil.rmtree
+    interrupted = []
+
+    def partial(path, *args, **kwargs):
+        if Path(path) == result.batch_root and not interrupted:
+            interrupted.append(True)
+            (result.batch_root / upload_recovery.MARKER_FILENAME).unlink()
+            (result.portal_dir / upload_recovery.SEAL_FILENAME).unlink()
+            raise PermissionError("interrupted after ownership-file removal")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(upload_recovery.shutil, "rmtree", partial)
+    assert await cleanup_correlated_batches(store, tmp_path, 20.0, set()) == []
+    fenced = await store.get(item.tenant_id, item.owner_sha256, item.request_id)
+    assert fenced.state == "deleting" and fenced.generation != item.generation
+    assert result.input_dir.exists()
+    with pytest.raises(UploadOwnershipLost):
+        await store.complete(item, digest, result.to_response_data())
+    with pytest.raises(UploadOwnershipLost):
+        await _create_upload_read_job(store, tmp_path, result.input_dir)
+    assert await cleanup_correlated_batches(store, tmp_path, 21.0, set()) == [item.batch_id]
+    assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
+    assert not result.batch_root.exists()
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_filesystem_root_ancestor_read_pins_the_live_ledger_batch(store, tmp_path, distributed):
+    import time
+
+    item, result, digest = await sealed(store, tmp_path, expiry=time.time() + 3600)
+    await store.complete(item, digest, result.to_response_data())
+    record = await _create_upload_read_job(store, tmp_path, Path(tmp_path.anchor), distributed=distributed)
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [item.batch_id]
