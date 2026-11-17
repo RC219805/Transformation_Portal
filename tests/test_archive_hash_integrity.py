@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import requires_enforced_posix_permissions
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 HASH_TOOL = PROJECT_ROOT / "tools" / "archive_hash_manifest.py"
 VERIFY_TOOL = PROJECT_ROOT / "tools" / "verify_hash_manifest.py"
@@ -390,10 +392,8 @@ def test_hash_tool_strict_identity_fails_on_duplicate_identity_keys() -> None:
         assert not (strict_out / "hash_manifest.csv.gz").exists()
 
 
+@requires_enforced_posix_permissions
 def test_verify_detects_unreadable_file() -> None:
-    if os.name == "nt":
-        pytest.skip("chmod-based unreadable test is not stable on Windows")
-
     with tempfile.TemporaryDirectory() as tmpdir:
         temp = Path(tmpdir)
         archive_root = _copy_fixture_archive(temp)

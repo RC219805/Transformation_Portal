@@ -519,6 +519,8 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
 
 def test_da3_worker_inference_propagates_non_commercial_ack(monkeypatch, tmp_path):
     """Worker subprocess config should preserve parent non-commercial acknowledgement."""
+    # _run_inference seeds torch before the (faked) engine is constructed.
+    pytest.importorskip("torch")
     import transformation_portal.depth.backends.da3_worker as da3_worker
     import transformation_portal.lux_depth_v3.inference as inference_module
 

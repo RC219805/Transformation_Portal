@@ -53,6 +53,10 @@ except ImportError:
     MPS_AVAILABLE = False
     CUDA_AVAILABLE = False
 
+# EfficientSAMBackend.load() needs a real torch even on the heuristic path, so
+# tests that load it must skip (not error) in the torch-free core environment.
+requires_torch = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required to load the EfficientSAM backend")
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -115,6 +119,7 @@ def fixture_config_strict():
 @pytest.fixture(name="efficientsam_heuristic_backend")
 def fixture_efficientsam_heuristic_backend(monkeypatch):
     """Fast unit-test backend: force heuristic path to avoid real SAM inference."""
+    pytest.importorskip("torch", reason="PyTorch required to load the EfficientSAM backend")
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
     monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", False)
@@ -423,6 +428,7 @@ def test_efficientsam_backend_invalid_input(efficientsam_heuristic_backend):
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_cpu_device():
     """Test that EfficientSAMBackend works on CPU."""
     backend = EfficientSAMBackend()
@@ -461,6 +467,7 @@ def test_efficientsam_backend_cuda_device():
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_auto_device():
     """Test that EfficientSAMBackend auto-detects device."""
     backend = EfficientSAMBackend()
@@ -1237,6 +1244,7 @@ def test_heuristic_segmentation_detects_materials(efficientsam_heuristic_backend
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_lazy_loading(sample_image):
     """Test that model is loaded lazily on first inference."""
     backend = EfficientSAMBackend()
@@ -1452,6 +1460,7 @@ def test_confidence_scores_in_valid_range(sample_image, efficientsam_heuristic_b
 
 
 @pytest.mark.ml
+@requires_torch
 def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch):
     """Heuristic fallback should return 0.5 confidence to indicate uncertainty.
 

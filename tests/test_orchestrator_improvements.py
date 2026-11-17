@@ -20,6 +20,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from tests.conftest import requires_enforced_posix_permissions
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.manifest import (
     BackendSelectionMetadata,
@@ -1665,6 +1666,7 @@ class TestPreparedManifestReuseEvidence:
         evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
         verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
 
+    @requires_enforced_posix_permissions
     def test_prepared_consumer_cannot_replace_and_restore_private_snapshot_path(self, tmp_path: Path) -> None:
         import stat
 
@@ -1728,6 +1730,78 @@ class TestPreparedManifestReuseEvidence:
         assert mutation_denied == [True]
         assert not consumed_bytes
         assert observed_directory_modes == [(0o500, 0o500)]
+        assert len(observed_snapshot_roots) == 1
+        assert not observed_snapshot_roots[0].exists()
+        assert not held_path.exists()
+
+    def test_prepared_consumer_bypassing_snapshot_seal_fails_closed(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The sealed directory modes are cooperative; inode rebinding is the backstop.
+
+        A same-privilege consumer can chmod the private snapshot directories
+        writable again (root and CAP_DAC_OVERRIDE processes are never denied in
+        the first place). Swapping the snapshot out and restoring the original
+        inode must still be detected by ``_validate_prepared_input_snapshot`` so
+        the item fails closed instead of publishing evidence for tampered input.
+        """
+        import logging
+        import os
+
+        from PIL import Image
+
+        from transformation_portal.lux_depth_v3.execution_evidence import ExecutionEvidenceError
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        image_dir = input_root / "nested"
+        image_dir.mkdir(parents=True)
+        image_path = image_dir / "prepared.png"
+        Image.new("RGB", (8, 8), color=(1, 2, 3)).save(image_path)
+        prepared = prepare_lux_execution(
+            EnhanceConfig(depth_backend="synthetic", enable_v2=False, emit_run_card=False),
+            input_root,
+            [image_path],
+        )
+        output_root = tmp_path / "output"
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+        replacement_path = tmp_path / "replacement.png"
+        Image.new("RGB", (8, 8), color=(9, 8, 7)).save(replacement_path)
+        replacement_bytes = replacement_path.read_bytes()
+        held_path = tmp_path / "held-snapshot.png"
+        tampered: list[bool] = []
+        observed_snapshot_roots: list[Path] = []
+
+        def tamper_with_snapshot(*, image_input, **_kwargs):
+            snapshot_path = Path(image_input.path)
+            snapshot_root = orchestrator._active_prepared_input_snapshot_root
+            assert snapshot_root is not None
+            observed_snapshot_roots.append(snapshot_root)
+            current = snapshot_path.parent
+            while True:
+                os.chmod(current, 0o700)
+                if current == snapshot_root:
+                    break
+                current = current.parent
+            snapshot_path.replace(held_path)
+            snapshot_path.write_bytes(replacement_bytes)
+            snapshot_path.unlink()
+            held_path.replace(snapshot_path)
+            tampered.append(True)
+            return {"status": "skipped"}, 0.0, None
+
+        with (
+            patch.object(orchestrator, "_run_v2_stage", side_effect=tamper_with_snapshot),
+            caplog.at_level(logging.ERROR, logger="transformation_portal.lux_depth_v3.orchestrator"),
+            pytest.raises(ExecutionEvidenceError, match="upstream_failed"),
+        ):
+            orchestrator.enhance_batch(input_root, input_files=[image_path])
+
+        assert tampered == [True]
+        assert "Prepared input snapshot changed during execution" in caplog.text
         assert len(observed_snapshot_roots) == 1
         assert not observed_snapshot_roots[0].exists()
         assert not held_path.exists()
