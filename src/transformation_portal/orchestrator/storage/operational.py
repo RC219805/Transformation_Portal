@@ -33,6 +33,12 @@ from transformation_portal.orchestrator.models import (
 )
 from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import PostgresOperationalAuditStore, append_event_in_session
+from transformation_portal.orchestrator.submissions import (
+    SubmissionConflict,
+    SubmissionIdentity,
+    SubmissionReceipt,
+    submission_intent,
+)
 
 GENERATION_CLEANUP_RECHECK_SECONDS = 3600.0
 
@@ -118,6 +124,46 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
             api_version=attempt.api_version,
         )
 
+    @staticmethod
+    async def _submission_attempt(
+        session: AsyncSession, tenant_id: str, owner_sha256: str, key: str
+    ) -> DispatchAttemptModel | None:
+        return await session.scalar(
+            select(DispatchAttemptModel).where(
+                DispatchAttemptModel.tenant_id == tenant_id,
+                DispatchAttemptModel.submission_owner_sha256 == owner_sha256,
+                DispatchAttemptModel.submission_key == key,
+            )
+        )
+
+    async def submission_receipt(self, tenant_id: str, owner_sha256: str, key: str) -> SubmissionReceipt | None:
+        """Read current canonical state; projection retirement never frees a key."""
+        async with self._session() as session:
+            row = (
+                await session.execute(
+                    select(DispatchAttemptModel, JobModel.id)
+                    .outerjoin(JobModel, JobModel.id == DispatchAttemptModel.job_id)
+                    .where(
+                        DispatchAttemptModel.tenant_id == tenant_id,
+                        DispatchAttemptModel.submission_owner_sha256 == owner_sha256,
+                        DispatchAttemptModel.submission_key == key,
+                    )
+                )
+            ).one_or_none()
+            if row is None:
+                return None
+            attempt, projection_id = row
+            if attempt.submission_intent_sha256 is None or attempt.submission_pipeline is None:
+                raise RepositoryError("incomplete canonical submission identity")
+            return SubmissionReceipt(
+                key=key,
+                intent_sha256=attempt.submission_intent_sha256,
+                job_id=attempt.job_id,
+                pipeline=attempt.submission_pipeline,
+                state=attempt.state,
+                retired=projection_id is None,
+            )
+
     async def admit(
         self,
         record: JobRecord,
@@ -129,6 +175,7 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         global_limit: int,
         tenant_limit: int,
         execution_bindings: bytes | None = None,
+        submission: SubmissionIdentity | None = None,
     ) -> DispatchLocator:
         from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings, is_unified_bindings
 
@@ -163,6 +210,23 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
         )
         async with self._session() as session:
             async with session.begin():
+                if submission is not None:
+                    # Serialize independent first requests before capacity checks.
+                    # A hash collision only serializes unrelated keys; the unique
+                    # index and full tuple comparison remain the actual authority.
+                    lock = int.from_bytes(
+                        hashlib.sha256(canonicalize_json([tenant_id, submission.owner_sha256, submission.key])).digest()[:8],
+                        "big",
+                        signed=True,
+                    )
+                    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock})
+                    prior = await self._submission_attempt(session, tenant_id, submission.owner_sha256, submission.key)
+                    if prior is not None:
+                        if prior.submission_intent_sha256 != submission.intent_sha256:
+                            raise SubmissionConflict("Submission key already binds another intent")
+                        return self._locator(prior)
+                    if submission.intent_sha256 != submission_intent(record.request):
+                        raise RepositoryError("submission fingerprint differs from admitted request")
                 capacities = await self._capacities(session, tenant_id, (global_limit, tenant_limit))
                 for capacity in capacities:
                     if capacity.active >= capacity.limit:
@@ -197,6 +261,10 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                     requested_output_root=requested_output_root,
                     execution_bindings=execution_bindings,
                     execution_bindings_digest=bindings_digest,
+                    submission_key=None if submission is None else submission.key,
+                    submission_owner_sha256=None if submission is None else submission.owner_sha256,
+                    submission_intent_sha256=None if submission is None else submission.intent_sha256,
+                    submission_pipeline=None if submission is None else record.effective_request["pipeline"],
                     state="queued",
                     admitted_at=now,
                     lease_epoch=0,
@@ -214,6 +282,18 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                         "output_root": output_root,
                         "requested_output_root": requested_output_root,
                         **({"execution_bindings_digest": bindings_digest} if bindings_digest is not None else {}),
+                        **(
+                            {
+                                "submission": {
+                                    "schema": "tp.job_submission.identity.v1",
+                                    "key": submission.key,
+                                    "owner_sha256": submission.owner_sha256,
+                                    "intent_sha256": submission.intent_sha256,
+                                }
+                            }
+                            if submission is not None
+                            else {}
+                        ),
                     },
                 )
                 session.add(

@@ -17,6 +17,7 @@ SchemaName = Literal[
     "tp.orchestrator.config_preview.v1",
     "tp.orchestrator.error.v1",
     "tp.orchestrator.job.v1",
+    "tp.orchestrator.job_submission.v1",
     "tp.orchestrator.job_status.v1",
     "tp.orchestrator.jobs.v1",
     "tp.orchestrator.portal_event.v1",

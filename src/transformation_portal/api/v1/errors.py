@@ -61,6 +61,7 @@ ErrorCode = Literal[
     "RESOURCE_EXHAUSTED",
     "REVIEW_CONFLICT",
     "SERVICE_UNAVAILABLE",
+    "SUBMISSION_EXPIRED",
     "UNAUTHORIZED",
     # Job-runner failure codes (set on job.error by app.py's runner exception
     # handlers; surface inside the data payload of a job_status envelope, not
