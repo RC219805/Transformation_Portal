@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createPhotographicDraftLifecycle } from "../portal-src/photographic-draft-state.js";
 
 import { fixture, settle, json, error, selected, requested, NEXT_CATALOGUE_SHA } from "./helpers/photographic-review-fixture.mjs";
 
@@ -18,6 +19,25 @@ function commitDecision(h, request) {
   h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
   return json({ saved: true, state_version: h.server.stateVersion });
 }
+
+test("incidental authoring idle preserves reconciliation until a fresh read, purge or job teardown", () => {
+  let jobId = "retained-job";
+  const nodes = { draftStatus: { dataset: {} } };
+  const lifecycle = createPhotographicDraftLifecycle({ nodes, hasEdits: () => false,
+    scope: () => ({ jobId }), purge: () => { jobId = ""; } });
+  for (const settle of ['fresh read', 'purge', 'teardown']) {
+    jobId = "retained-job";
+    lifecycle.save("unknown"); lifecycle.save("idle");
+    assert.equal(lifecycle.requiresReconciliation(), true);
+    assert.equal(nodes.draftStatus.dataset.state, "unknown");
+    if (settle === 'fresh read') lifecycle.reconciled();
+    else if (settle === 'purge') lifecycle.revoke();
+    else { jobId = ""; lifecycle.save("idle"); }
+    assert.equal(lifecycle.requiresReconciliation(), false, settle);
+    lifecycle.save("idle");
+    assert.equal(nodes.draftStatus.dataset.state, "saved", settle);
+  }
+});
 
 for (const paged of [false, true]) {
   const mode = paged ? "paged" : "legacy";
@@ -259,4 +279,45 @@ test("an uncertain save requires a fresh read before another explicit mutation",
   assert.equal(save.disabled, false);
   await save.trigger();
   assert.equal(requested(h, "/decisions").length, 2);
+});
+
+test("legacy unknown export survives confirmed source discard until a successful fresh catalogue GET", async () => {
+  let failRefresh = false;
+  const h = fixture({ paged: false, sceneCount: 2, extraFetch: request => {
+    if (request.path.endsWith('/delivery')) return error('UNAVAILABLE', 'Export outcome unknown', 503);
+    if (failRefresh && request.path.endsWith('/photographic-review')) return error('UNAVAILABLE', 'Refresh unavailable', 503);
+    return null;
+  } });
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const revision = await edit(h, 'photographic-revision-exposure', '0.2');
+  const preset = h.root.find('photographic-preset'); preset.checked = true; await preset.trigger('change');
+  const deliver = h.root.find('photographic-deliver-approved');
+  await deliver.trigger();
+  assert.equal(requested(h, '/delivery').length, 1);
+  assert.equal(revision.value, '0.2'); assert.equal(h.api.hasUnsavedChanges(), true);
+  const reads = requested(h, '/photographic-review').length;
+  await edit(h, 'photographic-scene', h.scenes[1].scene_id, 'change');
+  assert.equal(selected(h), h.scenes[0].scene_id);
+  await h.root.find('photographic-discard-navigation').trigger();
+  assert.equal(selected(h), h.scenes[1].scene_id);
+  assert.equal(h.api.hasUnsavedChanges(), false, 'Only the explicitly discarded authoring work is cleared');
+  assert.equal(Number(revision.value), 0);
+  assert.equal(requested(h, '/photographic-review').length, reads, 'Legacy scene navigation has not reconciled the export');
+  assert.equal(deliver.disabled, true);
+  await deliver.trigger();
+  assert.equal(requested(h, '/delivery').length, 1, 'Discard must not authorize another export POST');
+  failRefresh = true;
+  assert.equal(await h.api.refresh(), false); await settle();
+  assert.equal(deliver.disabled, true);
+  await deliver.trigger();
+  assert.equal(requested(h, '/delivery').length, 1, 'A failed GET cannot settle an uncertain export');
+  failRefresh = false;
+  assert.equal(await h.api.refresh(), true); await settle();
+  assert.equal(deliver.disabled, false);
+  assert.equal(requested(h, '/delivery').length, 1, 'Fresh GET reconciliation never replays the POST');
+  await deliver.trigger();
+  assert.equal(requested(h, '/delivery').length, 2, 'A later export still requires an explicit action');
+  assert.equal(h.root.find('photographic-draft-status').dataset.state, 'unknown');
+  h.api.show(null, null);
+  assert.equal(h.root.find('photographic-draft-status').dataset.state, 'saved', 'Job teardown clears the page-local outcome guard');
 });

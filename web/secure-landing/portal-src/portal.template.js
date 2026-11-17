@@ -12893,6 +12893,7 @@ window.addEventListener('focus', () => {
 });
 const portalHistoryNavigation = portalInternals.createPortalHistoryNavigation({
     history: window.history,
+    location: window.location,
     hasEdits: () => Boolean(deferredReviewSurfaceApi?.hasUnsavedChanges?.()),
     requestNavigation: (action) => deferredReviewSurfaceApi.requestNavigation(action, { leave: true }),
     apply: () => {
