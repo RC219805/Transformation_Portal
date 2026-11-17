@@ -59,6 +59,8 @@ export function createPhotographicThumbnails(host) {
   }
   function keep(key, entry, reusable = true) {
     const target = reusable ? cache : ephemeral;
+    const previous = target.get(key);
+    if (previous?.url && previous.url !== entry.url) urls.revokeObjectURL(previous.url);
     target.delete(key); target.set(key, entry);
     let bytes = entries().reduce((total, row) => total + row.bytes, 0);
     while (cache.size + ephemeral.size > MAX_ENTRIES || bytes > MAX_CACHE_BYTES) {
@@ -146,6 +148,7 @@ export function createPhotographicThumbnails(host) {
     }
   }
   function queue(binding) {
+    if (cache.has(binding.key)) { const entry = cache.get(binding.key); keep(binding.key, entry); paint(binding, entry); return; }
     if (ephemeral.has(binding.key)) { paint(binding, ephemeral.get(binding.key)); return; }
     if (!tasks.has(binding.key)) tasks.set(binding.key, { key: binding.key, expected: binding.expected, generation, renderVersion, volatile: !immutable(binding.expected), queued: true, started: false });
     pump();
@@ -182,7 +185,7 @@ export function createPhotographicThumbnails(host) {
       const binding = { key, expected: verified, image, status, control }; bindings.push(binding);
       image.onerror = () => {
         image.style.visibility = "hidden"; status.textContent = "Preview unavailable. Open photograph."; control.dataset.thumbnailState = "failed";
-        const bad = cache.get(key) || ephemeral.get(key); if (bad?.url === image.src) { urls.revokeObjectURL(bad.url); keep(key, { failed: true, bytes: 0, url: null }, immutable(verified)); }
+        const bad = cache.get(key) || ephemeral.get(key); if (bad?.url === image.src) keep(key, { failed: true, bytes: 0, url: null }, immutable(verified));
       };
       if (cache.has(key)) { const entry = cache.get(key); keep(key, entry); paint(binding, entry); }
       else if (catalogueNotified) paint(binding, { failed: true });

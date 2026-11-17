@@ -16,6 +16,29 @@ test("resizing enforces positive source-pixel area and never crosses the opposit
   }
 });
 
+const tinyEdgeRegions = [
+  ["right", [0.9999, 0.25, 1, 0.75], "se"],
+  ["bottom", [0.25, 0.9999, 0.75, 1], "se"],
+  ["left", [0, 0.25, 0.0001, 0.75], "nw"],
+  ["top", [0.25, 0, 0.75, 0.0001], "nw"],
+  ["bottom-right corner", [0.9999, 0.9999, 1, 1], "se"],
+];
+for (const [edge, initial, handle] of tinyEdgeRegions) {
+  test(`an impossible minimum-size resize at the ${edge} source edge leaves the numeric region unchanged`, () => {
+    const region = [...initial];
+    for (const [dx, dy] of [[0, 0], [1 / 2000, 1 / 1000], [-10 / 2000, -10 / 1000]]) {
+      assert.equal(photographicRegionChange(region, dx, dy, handle, 2000, 1000), null);
+      assert.deepEqual(region, initial);
+    }
+  });
+}
+
+test("a tiny region can still expand from an anchor with enough source space", () => {
+  const region = [0.9999, 0.9999, 1, 1];
+  assert.deepEqual(photographicRegionChange(region, 0, 0, "nw", 2000, 1000), [1 - 1 / 2000, 1 - 1 / 1000, 1, 1]);
+  assert.deepEqual(photographicRegionChange(region, 0, 0, "move", 2000, 1000), region);
+});
+
 test("keyboard increments represent source pixels for fit and native image contexts", () => {
   const initial = [0.25, 0.25, 0.75, 0.75];
   assert.deepEqual(photographicRegionChange(initial, 1 / 8000, 0, "move", 8000, 6000), [0.250125, 0.25, 0.750125, 0.75]);
@@ -46,7 +69,7 @@ test("delivery summary exposes excluded count, products, set name and real downl
   for (const expected of ["2 approved sources of 10", "8 excluded", "3 selected", "website, print", "Hill House", "ZIP download", "contact sheet", "revalidated"]) assert.ok(summary.includes(expected));
 });
 
-function overlayHarness(native = false) {
+function overlayHarness(native = false, handle = "move") {
   const body = new Element("body"), document = { body, activeElement: body };
   body.ownerDocument = document;
   const el = (tag, text = "", className = "", ui = "") => {
@@ -62,10 +85,29 @@ function overlayHarness(native = false) {
     button: (text, ui, action) => { const button = el("button", text, "", ui); button.addEventListener("click", action); return button; },
     getMaterials: () => materials, context: () => context, changed: () => { edits += 1; }, syncNumeric: () => { numeric += 1; } });
   api.render();
-  const control = viewport.find("photographic-region-move"), captures = new Set();
+  const control = viewport.find(`photographic-region-${handle}`), captures = new Set();
   control.setPointerCapture = (id) => captures.add(id); control.hasPointerCapture = (id) => captures.has(id); control.releasePointerCapture = (id) => captures.delete(id);
   const event = (type, patch = {}) => control.listeners[type]({ preventDefault() {}, stopPropagation() {}, pointerId: 1, button: 0, clientX: 100, clientY: 100, ...patch });
   return { api, context, materials, image, control, event, captures, layer: viewport.find("photographic-region-overlay"), counts: () => ({ edits, numeric }) };
+}
+
+for (const native of [false, true]) {
+  test(`${native ? "native crop" : "fit preview"} impossible edge resizes preserve pointer and keyboard drafts at full precision`, () => {
+    for (const [edge, initial, handle] of tinyEdgeRegions) {
+      const h = overlayHarness(native, handle);
+      const exact = initial.map((value) => value === 0.9999 ? "0.999900123456789" : value);
+      h.materials[0].region = [...exact]; h.api.sync();
+      assert.equal(h.layer.children[0].hidden, false, edge);
+      h.event("pointerdown"); h.event("pointermove");
+      h.event("pointermove", { clientX: 110, clientY: 110 }); h.event("pointerup");
+      h.event("keydown", { key: "ArrowRight" });
+      h.event("keydown", { key: "ArrowUp", shiftKey: true });
+      assert.deepEqual(h.materials[0].region, exact, edge);
+      assert.deepEqual(h.counts(), { edits: 0, numeric: 0 }, edge);
+      assert.equal(h.layer.children[0].hidden, false, edge);
+      assert.equal(h.captures.size, 0, edge);
+    }
+  });
 }
 
 test("invalid numeric edges stay untouched by overlay gestures until explicit repair", () => {
@@ -101,6 +143,35 @@ for (const native of [false, true]) test(`${native ? "native crop" : "fit previe
   assert.deepEqual(h.materials[0].region, [0.25, 0.25, 0.75, 0.75]); assert.equal(h.captures.size, 0);
   h.event("pointerup"); assert.deepEqual(h.counts(), { edits: 2, numeric: 2 });
 });
+
+test("a non-primary pointer cannot start a region drag", () => {
+  const h = overlayHarness();
+  h.event("pointerdown", { pointerId: 2, isPrimary: false });
+  h.event("pointermove", { pointerId: 2, clientX: 200 });
+  h.event("pointerup", { pointerId: 2 });
+  assert.deepEqual(h.materials[0].region, [0.25, 0.25, 0.75, 0.75]);
+  assert.equal(h.captures.size, 0); assert.equal(h.layer.dataset.interaction, "idle");
+  assert.deepEqual(h.counts(), { edits: 0, numeric: 0 });
+});
+
+for (const secondaryIsPrimary of [false, true]) for (const finish of ["Escape", "pointercancel"]) {
+  test(`an overlapping pointer primary=${secondaryIsPrimary} cannot replace capture or ${finish} restoration`, () => {
+    const h = overlayHarness(), initial = [...h.materials[0].region];
+    h.event("pointerdown", { isPrimary: true }); h.event("pointermove", { clientX: 110 });
+    const edited = [...h.materials[0].region];
+    h.event("pointerdown", { pointerId: 2, isPrimary: secondaryIsPrimary, clientX: 110 });
+    h.event("pointermove", { pointerId: 2, clientX: 300 });
+    h.event("pointerup", { pointerId: 2 }); h.event("pointercancel", { pointerId: 2 });
+    assert.deepEqual(h.materials[0].region, edited); assert.deepEqual([...h.captures], [1]);
+    assert.equal(h.layer.dataset.interaction, "dragging"); assert.deepEqual(h.counts(), { edits: 1, numeric: 1 });
+    h.event("pointermove", { clientX: 120 });
+    assert.deepEqual(h.materials[0].region, [0.275, 0.25, 0.775, 0.75]);
+    if (finish === "Escape") h.event("keydown", { key: "Escape", pointerId: undefined });
+    else h.event("pointercancel");
+    assert.deepEqual(h.materials[0].region, initial); assert.equal(h.captures.size, 0);
+    assert.equal(h.layer.dataset.interaction, "idle"); assert.deepEqual(h.counts(), { edits: 3, numeric: 3 });
+  });
+}
 
 test("a source-context change or pending mutation prevents stale pointer/keyboard writes", () => {
   const h = overlayHarness(); h.event("keydown", { key: "ArrowRight", ctrlKey: true }); assert.equal(h.counts().edits, 0);

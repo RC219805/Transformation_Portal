@@ -2,6 +2,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const DIGEST = /^[0-9a-f]{64}$/;
 const STORAGE_KEY = "tp.portal.recovery_refs.v1";
 const TERMINAL = new Set(["accepted", "ready", "expired", "rejected"]);
+export function recoveryStateSummary(attempts, needsContext = false) {
+  const unresolved = (type) => attempts.some((row) => row.type === type && !TERMINAL.has(row.status));
+  return {
+    outcome: needsContext ? "paused" : attempts.filter((row) => row.type === "job").at(-1)?.status || "idle",
+    jobBlocked: needsContext || unresolved("job"),
+    uploadBlocked: needsContext || unresolved("upload"),
+    uploadPresent: attempts.some((row) => row.type === "upload"),
+  };
+}
 function validReference(row) {
   return row && Object.keys(row).sort().join(",") === "created_at,request_id,scope,type" && ["job", "upload"].includes(row.type)
     && typeof row.request_id === "string" && UUID.test(row.request_id) && typeof row.scope === "string" && DIGEST.test(row.scope)
@@ -109,7 +118,8 @@ export function createDeferredClientRecoveryApi(host) {
       ({ type, request_id, status: current.ready ? status : "paused", restored: !!restored, canceled: !!canceled, result: current.ready ? result : null, message: current.ready ? message : "Recovery paused while access is checked." }));
   }
   function render() {
-    const state = snapshot(); host.onState?.(state, needsVerifiedContext());
+    const state = snapshot(), needsContext = needsVerifiedContext();
+    host.onState?.(state, needsContext, recoveryStateSummary(state, needsContext));
     if (!host.document || !host.panels) return;
     const focused = host.document.activeElement;
     const focusId = focused?.dataset?.recoveryRequestId, focusAction = focused?.dataset?.ui;
