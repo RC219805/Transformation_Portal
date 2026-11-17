@@ -642,6 +642,89 @@ async def test_thumbnail_bootstrap_provider_failure_keeps_capability_false(recei
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["tenant_storage", "receipt_store"])
+async def test_optional_upload_capability_failure_preserves_signed_bootstrap(receipts, monkeypatch, failure):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    if failure == "tenant_storage":
+        mkdirs = _deny_tenant_mkdir(monkeypatch)
+    else:
+
+        def unavailable_store():
+            raise OSError("optional upload receipt provider unavailable")
+
+        monkeypatch.setattr(application, "_upload_receipt_store", unavailable_store)
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["features"]["uploadReceipts"] is False
+    assert result["features"]["jobSubmissionReceipts"] is False
+    assert result["recoveryContext"] == {
+        "schema": "tp.portal.recovery_context.v1",
+        "tenantId": "tenant_a",
+        "ownerId": verified_actor_owner("tenant_a", ACTOR),
+    }
+    assert response.headers["cache-control"] == "no-store"
+    if failure == "tenant_storage":
+        assert mkdirs, "The enabled probe must encounter the failing tenant storage"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verified", [False, True])
+async def test_optional_upload_capability_requires_current_tenant_identity(receipts, monkeypatch, verified):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = "/portal/bootstrap"
+    headers = (
+        _headers("GET", path, actor={**ACTOR, "accessEmail": "not-a-member@example.com"})
+        if verified
+        else {"x-api-key": "contract-secret", "x-tp-actor": ACTOR["username"]}
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["features"]["uploadReceipts"] is False
+    assert response.json()["recoveryContext"] is None
+    assert mkdirs == []
+    assert application._PILOT_TENANT_MANAGER is None
+
+
+@pytest.mark.asyncio
+async def test_optional_upload_capability_remains_available_after_successful_probe(receipts, monkeypatch, tmp_path):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    calls = []
+
+    class Store:
+        async def get(self, tenant_id, owner, request_id):
+            calls.append((tenant_id, owner, request_id))
+            return None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(application, "_upload_receipt_store", Store)
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path / "uploads")
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", authorized)
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200
+    assert response.json()["features"]["uploadReceipts"] is True
+    assert len(calls) == 1
+    assert calls[0][0] == "tenant_a"
+    assert calls[0][2] == "00000000-0000-0000-0000-000000000000"
+
+
+@pytest.mark.asyncio
 async def test_invalid_canonical_receipt_state_is_a_typed_provider_failure(receipts):
     _seed(receipts, state="not-a-job-state")
     path = "/v1/job-submissions/attempt-1"
