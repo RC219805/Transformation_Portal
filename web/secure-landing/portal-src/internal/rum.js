@@ -1,6 +1,6 @@
 import { generateTraceparent, normalizeTraceparent } from "../../lib/trace.js";
 
-export const PORTAL_RUM_EVENT_TYPES = Object.freeze([
+export const PORTAL_RUM_EVENT_TYPES = /* @__PURE__ */ Object.freeze([
   "portal_shell_rendered",
   "bootstrap_ready",
   "first_view_interactive",

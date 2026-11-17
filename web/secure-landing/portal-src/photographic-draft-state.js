@@ -137,7 +137,7 @@ export function createPhotographicDraftLifecycle(host) {
     frozen: () => frozen, reauthorizing: () => reauthorizing, discarding: () => discarding,
     requiresReconciliation: () => saveState === "unknown",
     reconciled() { if (saveState === "unknown") { saveState = "idle"; render(); } },
-    save(value) { saveState = value; render(); } };
+    save(value) { if (value !== "idle" || saveState !== "unknown" || !host.scope().jobId) saveState = value; render(); } };
 }
 
 export function photographicReviewAttribution(recorded) {
