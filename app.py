@@ -3569,7 +3569,7 @@ async def _parse_portal_upload_multipart(request: Request) -> _ParsedPortalUploa
                 buffer.extend(chunk)
             _advance(eof=False)
         _advance(eof=True)
-    except Exception:
+    except BaseException:
         _cleanup()
         raise
 
@@ -3848,24 +3848,21 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
 def _add_staged_input_dir(retained: set[str], job: Job) -> None:
     from transformation_portal.orchestrator.upload_receipts import upload_source_paths
 
-    retained.update(str(path) for path in upload_source_paths(job.request, job.effective_request))
+    retained.update(str(path) for path in upload_source_paths(job.request, job.effective_request, upload_read_base=REPO_ROOT))
 
 
 async def _retained_staged_input_dirs() -> Optional[set[str]]:
     retained: set[str] = set()
-    for job in list(JOBS.values()):
-        _add_staged_input_dir(retained, job)
-
     try:
+        for job in list(JOBS.values()):
+            _add_staged_input_dir(retained, job)
         records, _ = await _job_repository().list(limit=None)
-    except Exception:  # noqa: BLE001 - upload cleanup must not block on repo errors
-        LOGGER.exception("job repository retained upload scan failed")
+        for record in records:
+            job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
+            _add_staged_input_dir(retained, job)
+    except Exception:  # noqa: BLE001 - incomplete retained scans must prevent cleanup
+        LOGGER.exception("retained upload scan failed")
         return None
-
-    for record in records:
-        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
-        _add_staged_input_dir(retained, job)
-
     return retained
 
 
@@ -10064,7 +10061,18 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
             message=exc.message,
             details={"field": exc.field, "reason": exc.reason},
         )
-    except Exception:
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # ASGI receive task groups may wrap a single stream-limit rejection.
+        failure: BaseException = exc
+        while isinstance(failure, BaseExceptionGroup):
+            members = getattr(failure, "exceptions")
+            if len(members) != 1:
+                break
+            failure = members[0]
+        if isinstance(failure, HTTPException):
+            raise failure
         LOGGER.exception("correlated upload staging failed")
         return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
     finally:
@@ -10727,11 +10735,13 @@ async def _create_job(
         try:
             from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
 
-            if isinstance(repo, PostgresJobRepository) and pipeline in ARCHIVE_GATE_PIPELINES:
-                from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
+            if isinstance(repo, PostgresJobRepository):
+                read_paths = ()
+                if pipeline in ARCHIVE_GATE_PIPELINES:
+                    from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
 
-                read_paths = archive_command_read_paths(pipeline, argv)
-                await repo.create(_record_from_job(job), upload_read_paths=read_paths)
+                    read_paths = archive_command_read_paths(pipeline, argv)
+                await repo.create(_record_from_job(job), upload_read_paths=read_paths, upload_read_base=REPO_ROOT)
             else:
                 await repo.create(_record_from_job(job))
         except Exception:  # noqa: BLE001 - create failures must fail closed and stay redacted
@@ -11997,6 +12007,7 @@ async def _create_distributed_job(
             requested_output_root=str(trusted_output_dir),
             global_limit=MAX_CONCURRENT_JOBS,
             tenant_limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+            upload_read_base=REPO_ROOT,
             **admission_options,
         )
         if submission is not None:

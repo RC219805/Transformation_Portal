@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, event, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, IntegrityError
 
@@ -33,7 +33,7 @@ from transformation_portal.ingest.upload_recovery import (
 )
 from transformation_portal.ingest.upload_staging import IncomingUpload, stage_upload_batch
 from transformation_portal.orchestrator.models import JobModel, UploadJobReferenceModel, UploadReceiptModel
-from transformation_portal.orchestrator.storage.base import JobRecord
+from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import _SharedEngine
 from transformation_portal.orchestrator.upload_receipts import (
     PostgresUploadReceiptStore,
@@ -819,7 +819,9 @@ async def test_cleanup_recovers_crash_between_directory_creation_and_initial_mar
     assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
 
 
-async def _create_upload_read_job(store, root, source, *, tenant_id="tenant_a", distributed=False):
+async def _create_upload_read_job(
+    store, root, source, *, tenant_id="tenant_a", distributed=False, upload_read_base=None, client_base=None
+):
     import time
 
     from tests.core.test_execution_plan import _valid_payload
@@ -828,6 +830,10 @@ async def _create_upload_read_job(store, root, source, *, tenant_id="tenant_a", 
     from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
 
     request = {"pipeline": "lux-depth-v3", "tenant_id": tenant_id, "args": {"input_dir": str(source)}}
+    if client_base is not None:
+        request["upload_read_base"] = str(client_base)
+        request["args"]["upload_read_base"] = str(client_base)
+    options = {} if upload_read_base is None else {"upload_read_base": upload_read_base}
     record = JobRecord(
         id="job_overlap_" + uuid.uuid4().hex[:10], created_at=time.time(), request=request, effective_request=request
     )
@@ -841,9 +847,10 @@ async def _create_upload_read_job(store, root, source, *, tenant_id="tenant_a", 
             requested_output_root=str(root / "output"),
             global_limit=8,
             tenant_limit=8,
+            **options,
         )
     else:
-        await PostgresJobRepository(database_url=store._database_url).create(record)
+        await PostgresJobRepository(database_url=store._database_url).create(record, **options)
     return record
 
 
@@ -1090,3 +1097,226 @@ async def test_accepted_submission_replay_survives_upload_expiry_without_new_adm
     async with store._session() as session:
         for table in ("jobs", "upload_job_references", "dispatch_attempts", "operational_outbox"):
             assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 1, table
+
+
+async def _admission_snapshot(store):
+    tables = (
+        "jobs",
+        "upload_receipts",
+        "upload_job_references",
+        "admission_capacity",
+        "dispatch_plans",
+        "dispatch_attempts",
+        "operational_records",
+        "operational_outbox",
+    )
+    async with store._session() as session:
+        return {
+            table: (
+                await session.scalars(text(f"SELECT to_jsonb(item) FROM {table} AS item ORDER BY to_jsonb(item)::text"))
+            ).all()
+            for table in tables
+        }
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+@pytest.mark.parametrize("read_mode", ["request", "trusted_read_paths"])
+async def test_duplicate_job_creation_translates_upload_query_autoflush_and_preserves_original(
+    store, tmp_path, distributed, read_mode
+):
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    original = await _create_upload_read_job(store, tmp_path, result.input_dir, distributed=distributed)
+    before = await _admission_snapshot(store)
+    request = {
+        "pipeline": "lux-depth-v3",
+        "tenant_id": item.tenant_id,
+        "args": {"input_dir": str(result.input_dir)} if read_mode == "request" else {},
+    }
+    duplicate = replace(original, state="failed", request=request, effective_request=request)
+    paths = (str(result.input_dir),) if read_mode == "trusted_read_paths" else ()
+    with pytest.raises(RepositoryError, match="job id already exists") as error:
+        await PostgresJobRepository(database_url=store._database_url).create(duplicate, upload_read_paths=paths)
+    assert isinstance(error.value.__cause__, IntegrityError)
+    assert await _admission_snapshot(store) == before
+
+
+async def test_duplicate_operational_admission_rolls_back_before_upload_binding(store, tmp_path):
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    original = await _create_upload_read_job(store, tmp_path, result.input_dir, distributed=True)
+    before = await _admission_snapshot(store)
+    plan = CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+    with pytest.raises(IntegrityError):
+        await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+            replace(original, run_summary={"uncommitted": True}),
+            plan,
+            tenant_id=item.tenant_id,
+            output_root=str(tmp_path / "other-output"),
+            requested_output_root=str(tmp_path / "other-output"),
+            global_limit=8,
+            tenant_limit=8,
+        )
+    assert await _admission_snapshot(store) == before
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_relative_v3_reads_use_only_the_explicit_server_base_and_protect_retention(
+    store, tmp_path, monkeypatch, distributed
+):
+    import app
+
+    repo, cwd = tmp_path / "repo", tmp_path / "cwd"
+    repo.mkdir()
+    cwd.mkdir()
+    upload_root = repo / "uploads"
+    upload_root.mkdir()
+    item, result, digest = await sealed(store, upload_root)
+    await store.complete(item, digest, result.to_response_data())
+    monkeypatch.setattr(app, "REPO_ROOT", repo)
+    monkeypatch.setattr(app, "ALLOWED_INPUT_ROOTS", [repo])
+    monkeypatch.setattr(app, "ALLOWED_OUTPUT_ROOTS", [repo])
+    monkeypatch.chdir(cwd)
+    relative = str(result.input_dir.relative_to(repo))
+    payload = {"pipeline": "lux-depth-v3", "args": {"input_dir": relative, "output_dir": "output"}}
+    preview = app._build_config_preview(payload, readiness_snapshot={"runnable": False, "blocking_reasons": []})
+    displayed = preview["execution_args"]["input_dir"]
+    assert not Path(displayed).is_absolute()
+    assert app._validate_path_against_roots(displayed, [repo]) == str(result.input_dir)
+    record = await _create_upload_read_job(
+        store, tmp_path, displayed, distributed=distributed, upload_read_base=repo, client_base=cwd
+    )
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [item.batch_id]
+    assert await cleanup_correlated_batches(store, upload_root, time.time() + 7200, set()) == []
+    # Older retained jobs may have no ledger reference. Their stored relative
+    # selectors must use the same server base before either cleanup path runs.
+    async with store._session() as session:
+        async with session.begin():
+            await session.execute(delete(UploadJobReferenceModel).where(UploadJobReferenceModel.job_id == record.id))
+    retained = set()
+    app._add_staged_input_dir(retained, app._job_from_record(record))
+    assert str(result.input_dir) in retained
+    assert await cleanup_correlated_batches(store, upload_root, time.time() + 7200, retained) == []
+    assert result.input_dir.exists()
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_relative_read_without_server_base_rejects_client_base_and_rolls_back(store, tmp_path, monkeypatch, distributed):
+    repo, cwd = tmp_path / "repo", tmp_path / "cwd"
+    repo.mkdir()
+    cwd.mkdir()
+    item, result, digest = await sealed(store, repo)
+    await store.complete(item, digest, result.to_response_data())
+    monkeypatch.chdir(cwd)
+    before = await _admission_snapshot(store)
+    with pytest.raises(UploadOwnershipLost, match="server-owned base"):
+        await _create_upload_read_job(
+            store, tmp_path, result.input_dir.relative_to(repo), distributed=distributed, client_base=repo
+        )
+    assert await _admission_snapshot(store) == before
+
+
+@pytest.mark.parametrize("base", [Path("relative"), "/invalid\x00base"])
+async def test_invalid_explicit_upload_read_base_fails_closed_before_admission(store, tmp_path, base):
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    before = await _admission_snapshot(store)
+    with pytest.raises(UploadOwnershipLost, match="server-owned base"):
+        await _create_upload_read_job(store, tmp_path, result.input_dir, upload_read_base=base)
+    assert await _admission_snapshot(store) == before
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_relative_upload_base_never_grants_foreign_tenant_admission(store, tmp_path, monkeypatch, distributed):
+    repo, cwd = tmp_path / "repo", tmp_path / "cwd"
+    repo.mkdir()
+    cwd.mkdir()
+    item, result, digest = await sealed(store, repo)
+    await store.complete(item, digest, result.to_response_data())
+    monkeypatch.chdir(cwd)
+    before = await _admission_snapshot(store)
+    with pytest.raises(UploadOwnershipLost, match="outside this tenant"):
+        await _create_upload_read_job(
+            store,
+            tmp_path,
+            result.input_dir.relative_to(repo),
+            tenant_id="tenant_b",
+            distributed=distributed,
+            upload_read_base=repo,
+        )
+    assert await _admission_snapshot(store) == before
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_relative_read_resolution_error_rolls_back_without_touching_retained_files(
+    store, tmp_path, monkeypatch, distributed
+):
+    repo, cwd = tmp_path / "repo", tmp_path / "cwd"
+    repo.mkdir()
+    cwd.mkdir()
+    item, result, digest = await sealed(store, repo)
+    await store.complete(item, digest, result.to_response_data())
+    (repo / "loop").symlink_to(repo / "loop")
+    monkeypatch.chdir(cwd)
+    before = await _admission_snapshot(store)
+    with pytest.raises(UploadOwnershipLost, match="resolution is unavailable"):
+        await _create_upload_read_job(store, tmp_path, "loop/source", distributed=distributed, upload_read_base=repo)
+    assert await _admission_snapshot(store) == before
+    assert result.input_dir.exists()
+
+
+async def test_upload_admission_selects_only_four_lock_fields_without_loading_receipt_payload(store, tmp_path):
+    from sqlalchemy.exc import InvalidRequestError
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    statements, selected = [], []
+    engine, _ = await _SharedEngine.get(store._database_url)
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _many):
+        if "FROM upload_receipts" in statement and "FOR UPDATE" in statement:
+            statements.append(statement)
+
+    class Session:
+        async def scalars(self, statement):
+            async with store._session() as session:
+                rows = (await session.scalars(statement)).all()
+                selected.extend(rows)
+                for row in rows:
+                    assert set(inspect(row).attrs.keys()) - set(inspect(row).unloaded) == {
+                        "batch_id",
+                        "tenant_id",
+                        "state",
+                        "expires_at",
+                    }
+                    with pytest.raises(InvalidRequestError):
+                        _ = row.response_data
+                return SimpleNamespace(all=lambda: rows)
+
+        async def scalar(self, statement):
+            async with store._session() as session:
+                return await session.scalar(statement)
+
+        def add(self, _reference):
+            pass
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        request = {"pipeline": "lux-depth-v3", "args": {"input_dir": str(result.input_dir)}}
+        await bind_upload_references(
+            Session(), JobRecord(id="projection", created_at=time.time(), request=request), item.tenant_id
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    assert len(selected) == len(statements) == 1
+    projection = statements[0].split("FROM upload_receipts", 1)[0]
+    assert "response_data" not in projection and "batch_root" not in projection
