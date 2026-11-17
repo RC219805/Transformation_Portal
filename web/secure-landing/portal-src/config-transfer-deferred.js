@@ -5,7 +5,7 @@ export function createDeferredConfigTransferApi(host) {
     const { state, portalInternals, _normalizeVerboseQuietFlags, _parseNonNegativeIntOrNull, _parsePositiveIntOrNull, _parseProbabilityOrNull, _resolveDa3ModelKey, _resolveDepthBackend, _resolveGroupingMode, _resolveQualityTier, _resolveRunCardVersion, _resolveSam2ModelSize, _resolveSegmentationBackend, _resolveVlmCaptioningProxyFormat, _textOrFallback, parseBoolLike } = host;
     let readIntent = 0;
     function text(value, fallback, normalize) {
-        if (value != null && typeof value !== 'string') throw new Error('Invalid import.');
+        if (value != null && typeof value !== 'string') throw new Error();
         return normalize ? _textOrFallback(value, fallback) : value || fallback;
     }
     function validateFields(next, previous) {
@@ -16,24 +16,25 @@ export function createDeferredConfigTransferApi(host) {
                 valid = !Array.isArray(value) && expected !== null && typeof expected === 'object';
                 if (valid) validateFields(value, expected);
             } else if (typeof expected === 'number') {
-                valid = ['number', 'string'].includes(typeof value) && String(value).trim() !== '' && Number.isFinite(Number(value));
+                valid = (typeof value === 'number' || typeof value === 'string') && String(value).trim() !== '' && Number.isFinite(Number(value));
             } else if (key === 'maxWorkers' || key === 'maxGpuWorkers') {
                 valid = value === '' || Number.isSafeInteger(value) && value > 0;
             }
-            if (!valid) throw new Error('Invalid import.');
+            if (!valid) throw new Error();
         }
     }
     function candidate(data) {
         if (!data || typeof data !== 'object' || Array.isArray(data)
             || (data.schema !== undefined && data.schema !== 'tp.portal.export.v1')
             || !data.args || typeof data.args !== 'object' || Array.isArray(data.args)) {
-            throw new Error('Invalid import.');
+            throw new Error();
         }
-        const pipeline = data.pipeline === undefined ? state.pipeline : data.pipeline;
-        if (typeof pipeline !== 'string' || !host.supportedPipelines.has(pipeline)) throw new Error('Invalid import.');
+        const { pipeline = state.pipeline, args } = data;
+        if (typeof pipeline !== 'string' || !host.supportedPipelines.has(pipeline)) throw new Error();
+        // importFile already parsed detached JSON; only the live draft needs copying.
         const c = JSON.parse(JSON.stringify(state.config));
-        data = JSON.parse(JSON.stringify(data));
-        const args = data.args;
+        if (typeof args.output_bit_depth !== 'number') text(args.output_bit_depth);
+        if (typeof args.outputBitDepth !== 'number') text(args.outputBitDepth);
         host.migrate(args);
             if (pipeline === 'lux-depth') {
                 c.photographyUnified = portalInternals.unifiedPhotographyConfigFromArgs(args, c.photographyUnified);
@@ -46,14 +47,14 @@ export function createDeferredConfigTransferApi(host) {
             c.inputDir = text(args.archive_root, text(args.input_dir, c.inputDir));
             c.outputDir = text(args.output_dir, c.outputDir);
             c.preset = text(args.preset, c.preset);
-            c.qualityTier = _resolveQualityTier(args.quality_tier || c.qualityTier);
-            c.depthBackend = _resolveDepthBackend(args.depth_backend || c.depthBackend);
-            c.modelKey = _resolveDa3ModelKey(args.model_key || c.modelKey);
+            c.qualityTier = _resolveQualityTier(text(args.quality_tier, c.qualityTier));
+            c.depthBackend = _resolveDepthBackend(text(args.depth_backend, c.depthBackend));
+            c.modelKey = _resolveDa3ModelKey(text(args.model_key, c.modelKey));
             c.depthDevice = text(args.depth_device, c.depthDevice);
             c.segmentation = c.segmentation || {};
             c.segmentation.enable = parseBoolLike(args.enable_segmentation, c.segmentation.enable);
-            c.segmentation.backend = _resolveSegmentationBackend(args.segmentation_backend || c.segmentation.backend);
-            c.segmentation.sam2ModelSize = _resolveSam2ModelSize(args.sam2_model_size || c.segmentation.sam2ModelSize);
+            c.segmentation.backend = _resolveSegmentationBackend(text(args.segmentation_backend, c.segmentation.backend));
+            c.segmentation.sam2ModelSize = _resolveSam2ModelSize(text(args.sam2_model_size, c.segmentation.sam2ModelSize));
             c.segmentation.sam2CheckpointPath = text(
                 args.sam2_checkpoint_path,
                 c.segmentation.sam2CheckpointPath, true
@@ -95,7 +96,7 @@ export function createDeferredConfigTransferApi(host) {
                 args.output_bit_depth ?? args.outputBitDepth ?? c.outputBitDepth
             ) === 8 ? 8 : 16;
             c.emits.runCard = parseBoolLike(args.emit_run_card, c.emits.runCard);
-            c.emits.runCardVersion = _resolveRunCardVersion(args.run_card_version || c.emits.runCardVersion);
+            c.emits.runCardVersion = _resolveRunCardVersion(text(args.run_card_version, c.emits.runCardVersion));
             c.emits.runCardIncludeProofs = parseBoolLike(
                 args.run_card_include_proofs,
                 c.emits.runCardIncludeProofs
@@ -129,7 +130,7 @@ export function createDeferredConfigTransferApi(host) {
                 c.reconstruction.enable
             );
             c.reconstruction.groupingMode = _resolveGroupingMode(
-                args.grouping_mode || c.reconstruction.groupingMode
+                text(args.grouping_mode, c.reconstruction.groupingMode)
             );
             c.reconstruction.camerasSidecarPath = text(
                 args.cameras_sidecar_path,
@@ -159,7 +160,7 @@ export function createDeferredConfigTransferApi(host) {
             );
             c.captioning.model = text(args.vlm_captioning_model, c.captioning.model, true);
             c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(
-                args.vlm_captioning_proxy_format || c.captioning.proxyFormat
+                text(args.vlm_captioning_proxy_format, c.captioning.proxyFormat)
             );
             c.captioning.maxSidePx =
                 _parsePositiveIntOrNull(args.vlm_captioning_max_side_px) || c.captioning.maxSidePx;
@@ -189,7 +190,7 @@ export function createDeferredConfigTransferApi(host) {
         if (!file) return false;
         let next;
         try {
-            if (!Number.isFinite(file.size) || file.size > MAX_CONFIG_IMPORT_BYTES || file.size < 0) throw new Error('Invalid import.');
+            if (!Number.isFinite(file.size) || file.size > MAX_CONFIG_IMPORT_BYTES || file.size < 0) throw new Error();
             next = candidate(JSON.parse(await file.text()));
         } catch {
             host.notify('Invalid JSON file.', 'error');
@@ -197,8 +198,7 @@ export function createDeferredConfigTransferApi(host) {
         }
         const current = () => intent === readIntent && expected && expected === host.snapshot();
         if (!current()) return false;
-        const allowed = await host.confirmReplacement();
-        if (!allowed || !current()) return false;
+        if (!(await host.confirmReplacement()) || !current()) return false;
         host.commit(next);
         return true;
     }
