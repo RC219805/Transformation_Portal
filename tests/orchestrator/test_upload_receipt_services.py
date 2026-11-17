@@ -33,7 +33,7 @@ from transformation_portal.ingest.upload_recovery import (
 )
 from transformation_portal.ingest.upload_staging import IncomingUpload, stage_upload_batch
 from transformation_portal.orchestrator.models import JobModel, UploadJobReferenceModel, UploadReceiptModel
-from transformation_portal.orchestrator.storage.base import JobRecord
+from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import _SharedEngine
 from transformation_portal.orchestrator.upload_receipts import (
     PostgresUploadReceiptStore,
@@ -1090,3 +1090,70 @@ async def test_accepted_submission_replay_survives_upload_expiry_without_new_adm
     async with store._session() as session:
         for table in ("jobs", "upload_job_references", "dispatch_attempts", "operational_outbox"):
             assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 1, table
+
+
+async def _admission_snapshot(store):
+    tables = (
+        "jobs",
+        "upload_receipts",
+        "upload_job_references",
+        "admission_capacity",
+        "dispatch_plans",
+        "dispatch_attempts",
+        "operational_records",
+        "operational_outbox",
+    )
+    async with store._session() as session:
+        return {
+            table: (
+                await session.scalars(text(f"SELECT to_jsonb(item) FROM {table} AS item ORDER BY to_jsonb(item)::text"))
+            ).all()
+            for table in tables
+        }
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+@pytest.mark.parametrize("read_mode", ["request", "trusted_read_paths"])
+async def test_duplicate_job_creation_translates_upload_query_autoflush_and_preserves_original(
+    store, tmp_path, distributed, read_mode
+):
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    original = await _create_upload_read_job(store, tmp_path, result.input_dir, distributed=distributed)
+    before = await _admission_snapshot(store)
+    request = {
+        "pipeline": "lux-depth-v3",
+        "tenant_id": item.tenant_id,
+        "args": {"input_dir": str(result.input_dir)} if read_mode == "request" else {},
+    }
+    duplicate = replace(original, state="failed", request=request, effective_request=request)
+    paths = (str(result.input_dir),) if read_mode == "trusted_read_paths" else ()
+    with pytest.raises(RepositoryError, match="job id already exists") as error:
+        await PostgresJobRepository(database_url=store._database_url).create(duplicate, upload_read_paths=paths)
+    assert isinstance(error.value.__cause__, IntegrityError)
+    assert await _admission_snapshot(store) == before
+
+
+async def test_duplicate_operational_admission_rolls_back_before_upload_binding(store, tmp_path):
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    original = await _create_upload_read_job(store, tmp_path, result.input_dir, distributed=True)
+    before = await _admission_snapshot(store)
+    plan = CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+    with pytest.raises(IntegrityError):
+        await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+            replace(original, run_summary={"uncommitted": True}),
+            plan,
+            tenant_id=item.tenant_id,
+            output_root=str(tmp_path / "other-output"),
+            requested_output_root=str(tmp_path / "other-output"),
+            global_limit=8,
+            tenant_limit=8,
+        )
+    assert await _admission_snapshot(store) == before
