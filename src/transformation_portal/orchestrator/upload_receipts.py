@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
 from transformation_portal.core.execution_plan import decode_bounded_json_object
@@ -22,6 +23,8 @@ from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.models import UploadJobReferenceModel, UploadReceiptModel
 from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import PostgresOperationalAuditStore
+from transformation_portal.portal import path_security
+from transformation_portal.vlm_captioning.fastvlm_runtime import FASTVLM_CHECKPOINT_DIRS
 
 _ARCHIVE_DEFAULT_COMMANDS = {
     "archive-gate-a": "fixity-scan",
@@ -47,6 +50,18 @@ class UploadReceiptConflict(RepositoryError):
 
 class UploadOwnershipLost(RepositoryError):
     """A completion or recovery no longer owns the ledger generation."""
+
+
+class UploadReceiptExpired(UploadOwnershipLost):
+    """A current locked receipt crossed its retained upload lifetime."""
+
+
+async def _upload_now(session: AsyncSession) -> float:
+    """Sample authoritative time after acquiring every relevant row lock."""
+    clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
+    if clock is None:
+        raise UploadOwnershipLost("upload clock is unavailable")
+    return float(clock)
 
 
 def validate_upload_request_id(value: str) -> str:
@@ -130,6 +145,8 @@ class PostgresUploadReceiptStore(PostgresOperationalAuditStore):
                 )
                 if row is None or row.generation != expected.generation or row.state not in {"staging", "ready"}:
                     raise UploadOwnershipLost("staged upload ownership was revoked")
+                if row.expires_at <= await _upload_now(session):
+                    raise UploadReceiptExpired("staged upload lifetime expired")
                 if row.state == "ready" and (row.receipt_sha256 != receipt_sha256 or row.response_data != data):
                     raise UploadOwnershipLost("sealed upload differs from its recorded completion")
                 row.state, row.receipt_sha256, row.response_data = "ready", receipt_sha256, data
@@ -200,11 +217,11 @@ async def bind_upload_references(
     session: AsyncSession,
     record: JobRecord,
     tenant_id: str,
-    now: float | None = None,
     *,
     plan_bytes: bytes | None = None,
     execution_bindings: bytes | None = None,
     read_paths: tuple[str, ...] = (),
+    upload_read_base: Path | None = None,
 ) -> None:
     """Called only for NEW jobs inside admission, including keyless requests.
 
@@ -212,10 +229,10 @@ async def bind_upload_references(
     against expiry; foreign keys retain references for the job's lifetime.
     Tracked batches require tenant scope even for trusted/direct callers.
     """
-    paths = set(upload_source_paths(record.request, record.effective_request))
-    paths.update(_resolved_source_paths(list(read_paths)))
+    paths = set(upload_source_paths(record.request, record.effective_request, upload_read_base=upload_read_base))
+    paths.update(_resolved_source_paths(list(read_paths), upload_read_base=upload_read_base))
     if plan_bytes is not None:
-        paths.update(_admitted_source_paths(plan_bytes, execution_bindings))
+        paths.update(_admitted_source_paths(plan_bytes, execution_bindings, upload_read_base=upload_read_base))
     if not paths:
         return
     overlaps = []
@@ -241,22 +258,37 @@ async def bind_upload_references(
     # and archive selectors refer to different batches or use opposite aliases.
     rows = (
         await session.scalars(
-            select(UploadReceiptModel).where(or_(*overlaps)).order_by(UploadReceiptModel.batch_id).with_for_update()
+            select(UploadReceiptModel)
+            .options(
+                load_only(
+                    UploadReceiptModel.batch_id,
+                    UploadReceiptModel.tenant_id,
+                    UploadReceiptModel.state,
+                    UploadReceiptModel.expires_at,
+                    raiseload=True,
+                )
+            )
+            .where(or_(*overlaps))
+            .order_by(UploadReceiptModel.batch_id)
+            .with_for_update()
         )
     ).all()
+    if not rows:
+        return
+    now = await _upload_now(session)
     for row in rows:
-        if now is None:
-            clock = await session.scalar(select(func.extract("epoch", func.clock_timestamp())))
-            if clock is None:
-                raise UploadOwnershipLost("upload admission clock is unavailable")
-            now = float(clock)
         if row.tenant_id != tenant_id or row.state != "ready" or row.expires_at <= now:
             raise UploadOwnershipLost("staged input is expired, unavailable, or outside this tenant")
         session.add(UploadJobReferenceModel(batch_id=row.batch_id, job_id=record.id))
 
 
-def upload_source_paths(*requests: dict[str, Any]) -> tuple[Path, ...]:
-    """Collect explicit read selectors; command output fields never retain a batch."""
+def upload_source_paths(*requests: dict[str, Any], upload_read_base: Path | None = None) -> tuple[Path, ...]:
+    """Collect read selectors using only an explicit server-owned relative base.
+
+    Absolute reads need no base. Missing or failed relative resolution cannot
+    silently authorize an unpinned job or discard retained cleanup protection.
+    Command output fields never retain a batch.
+    """
     values: list[Any] = []
     for request in requests:
         args = request.get("args") if isinstance(request, dict) else None
@@ -285,22 +317,48 @@ def upload_source_paths(*requests: dict[str, Any]) -> tuple[Path, ...]:
                 for name in operation.files + operation.directories:
                     parts = name.split("_")
                     aliases[name] = (name, parts[0] + "".join(part.title() for part in parts[1:]))
-        values.extend(args.get(name) for names in aliases.values() for name in names)
-    return _resolved_source_paths(values)
+        for field, names in aliases.items():
+            for name in names:
+                value = args.get(name)
+                if field != "vlm_captioning_model" or not _caption_role(value):
+                    values.append(value)
+    return _resolved_source_paths(values, upload_read_base=upload_read_base)
 
 
-def _resolved_source_paths(values: list[Any]) -> tuple[Path, ...]:
+def _caption_role(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower() in FASTVLM_CHECKPOINT_DIRS
+
+
+def _resolved_source_paths(values: list[Any], *, upload_read_base: Path | None = None) -> tuple[Path, ...]:
+    values = [value.strip() for value in values if isinstance(value, str) and value.strip()]
+    if not values:
+        return ()
+    base = None
+    if upload_read_base is not None:
+        try:
+            base = Path(upload_read_base)
+            if not base.is_absolute():
+                raise ValueError("upload read base must be absolute")
+            base = base.resolve()
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            raise UploadOwnershipLost("upload reads require an absolute server-owned base") from error
     paths = set()
     for raw in values:
-        if isinstance(raw, str) and raw.strip():
-            try:
-                paths.add(Path(raw.strip()).resolve())
-            except (OSError, RuntimeError, ValueError):
-                continue
+        if not Path(raw).is_absolute() and base is None:
+            raise UploadOwnershipLost("relative upload reads require an explicit server-owned base")
+        try:
+            resolved = path_security._resolve_untrusted_request_path(raw, repo_root=base)
+            # Preserve loop/error detection after shared resolution has produced
+            # an absolute path; this never consults a process or module CWD.
+            paths.add(resolved.resolve())
+        except (OSError, RuntimeError, ValueError) as error:
+            raise UploadOwnershipLost("upload read path resolution is unavailable") from error
     return tuple(sorted(paths))
 
 
-def _admitted_source_paths(plan_bytes: bytes, execution_bindings: bytes | None) -> tuple[Path, ...]:
+def _admitted_source_paths(
+    plan_bytes: bytes, execution_bindings: bytes | None, *, upload_read_base: Path | None = None
+) -> tuple[Path, ...]:
     """Read only the already-validated immutable plan and physical bindings."""
     plan = decode_bounded_json_object(plan_bytes)
     values = []
@@ -328,9 +386,10 @@ def _admitted_source_paths(plan_bytes: bytes, execution_bindings: bytes | None) 
             captioning = configuration.get("captioning")
             if isinstance(captioning, dict) and captioning.get("enabled"):
                 values.extend(
-                    captioning.get(name)
-                    for name in ("model_path", "review_model_path", "python_executable", "mlx_vlm_dir", "selector")
+                    captioning.get(name) for name in ("model_path", "review_model_path", "python_executable", "mlx_vlm_dir")
                 )
+                if not _caption_role(captioning.get("selector")):
+                    values.append(captioning.get("selector"))
     if execution_bindings is not None:
         bindings = decode_bounded_json_object(execution_bindings)
         if bindings.get("schema") == "tp.job.lux_depth.bindings.v1":
@@ -338,4 +397,4 @@ def _admitted_source_paths(plan_bytes: bytes, execution_bindings: bytes | None) 
         values.extend(
             bindings.get(name) for name in ("input_root", "companion_root", "materials_root", "runtime_python", "raw_python")
         )
-    return _resolved_source_paths(values)
+    return _resolved_source_paths(values, upload_read_base=upload_read_base)

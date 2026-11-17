@@ -239,6 +239,13 @@ server retains streams and its stable cross-process lock until the worker and
 completion transaction finish. A sealed filesystem completion can be reconciled
 after a crash before its database-ready update.
 
+Completion and new job admission check expiry against fresh database time after
+acquiring the matching ledger-row locks. Expiry at that check prevents
+publishing ready or admitting a new job. Receipt lookup returns the existing `expired`
+status with a null receipt; a staging POST whose completion expires returns
+`409 CONFLICT` with `details.reason=upload_expired`. These responses do not
+authorize automatically repeating an upload POST.
+
 The existing TTL and cleanup loop remain in force. Ledger-owned batches require
 an atomic deletion claim under the stable filesystem lock and ledger-row lock.
 Retained job references prevent deletion, including jobs admitted without a
@@ -246,7 +253,9 @@ submission key. Admission pins every distinct staged batch named by read inputs,
 including input/archive aliases, photographic manifests and sidecars, nested or
 metadata paths, and ancestor directories, from both the submitted and effective
 request. Matching uses absolute server-owned ledger locators, independent of
-the process working directory. Tracked inputs require verified tenant scope
+the process working directory. Portal-relative read selectors resolve against
+the server application's `REPO_ROOT`; client root fields and headers cannot
+replace that base. Tracked inputs require verified tenant scope
 and must be ready and unexpired; trusted and keyless calls do not bypass this
 requirement. Frozen plans
 and physical bindings retain their exact read locators; legacy archive admission

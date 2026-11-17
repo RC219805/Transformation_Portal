@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import uuid
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -62,6 +63,223 @@ def sealed(root: Path):
     )
     seal_completion(item, result)
     return item, result
+
+
+def partial_multipart(boundary: bytes) -> bytes:
+    return (
+        b"--" + boundary + b'\r\nContent-Disposition: form-data; name="files"; filename="one.txt"'
+        b"\r\nContent-Type: application/octet-stream\r\n\r\nfirst\r\n--"
+        + boundary
+        + b'\r\nContent-Disposition: form-data; name="files"; filename="two.txt"'
+        b"\r\nContent-Type: application/octet-stream\r\n\r\npartial"
+    )
+
+
+@pytest.fixture
+def relative_read_app(tmp_path, monkeypatch):
+    import app
+    from tests.core.test_execution_plan import _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+    from transformation_portal.orchestrator import execution_dispatch
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    repo_root, cwd, client_root = (tmp_path / name for name in ("repo", "cwd", "client-root"))
+    source = repo_root / "uploads" / "upload_relative" / "input"
+    source.mkdir(parents=True)
+    (repo_root / "output").mkdir()
+    cwd.mkdir()
+    client_root.mkdir()
+    calls, commands = [], []
+    repository = PostgresJobRepository(database_url="postgresql+asyncpg://unused/read_anchor_test")
+
+    async def create(record, **kwargs):
+        calls.append(("legacy", record, kwargs))
+
+    class Store:
+        async def admit(self, record, _plan, **kwargs):
+            calls.append(("distributed", record, kwargs))
+            return SimpleNamespace(job_id=record.id)
+
+    async def no_error(*_args, **_kwargs):
+        return None
+
+    async def no_active(*_args, **_kwargs):
+        return 0
+
+    async def dispatch(_job, argv, **_kwargs):
+        commands.append(argv)
+
+    def prepare_plan(_request, *, trusted_argv):
+        # Runtime/model preparation is outside this path-authority fixture.
+        assert Path(trusted_argv[trusted_argv.index("--input-dir") + 1]) == source
+        return CanonicalExecutionPlan.from_payload(_valid_payload()).to_canonical_json().encode()
+
+    monkeypatch.setattr(app, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(app, "PILOT_CONTROL_PLANE_ENABLED", False)
+    monkeypatch.setattr(app, "PILOT_MAX_ACTIVE_JOBS_PER_TENANT", 8)
+    monkeypatch.setattr(app, "MAX_CONCURRENT_JOBS", 8)
+    for name in ("ALLOWED_INPUT_ROOTS", "ALLOWED_OUTPUT_ROOTS", "ALLOWED_PATH_ROOTS"):
+        monkeypatch.setattr(app, name, [repo_root])
+    monkeypatch.chdir(cwd)
+    monkeypatch.setenv("TP_ORCHESTRATOR_EXECUTION_ROOT", str(repo_root / "execution"))
+    monkeypatch.setattr(app, "_evaluate_pipeline_readiness", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(app, "_enforce_job_readiness_preflight", lambda *_args: None)
+    monkeypatch.setattr(app, "_active_job_count", no_active)
+    monkeypatch.setattr(app, "_pilot_active_job_count_for_tenant", no_active)
+    monkeypatch.setattr(app, "_cleanup_expired_jobs", no_error)
+    monkeypatch.setattr(app, "_record_pilot_audit", no_error)
+    monkeypatch.setattr(app, "_cache_runtime_job", lambda *_args: None)
+    monkeypatch.setattr(app, "_dispatch_job", dispatch)
+    monkeypatch.setattr(app, "_flush_operational_outbox_best_effort", no_error)
+    monkeypatch.setattr(app, "_job_repository", lambda: repository)
+    monkeypatch.setattr(repository, "create", create)
+    monkeypatch.setattr(app, "get_operational_record_store", Store)
+    monkeypatch.setattr(execution_dispatch, "prepare_dispatch_plan", prepare_plan)
+    payload = {
+        "pipeline": "lux-depth-v3",
+        "upload_read_base": str(client_root),
+        "args": {
+            "input_dir": "./uploads/upload_relative/input",
+            "output_dir": "./output",
+            "enable_segmentation": False,
+            "enable_reconstruction": False,
+            "upload_read_base": str(client_root),
+            "repo_root": str(client_root),
+        },
+    }
+    return SimpleNamespace(app=app, root=repo_root, source=source, client_root=client_root, payload=payload, calls=calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_real_relative_preview_forwards_server_anchor_to_every_postgres_path(
+    relative_read_app, monkeypatch, distributed
+):
+    from starlette.requests import Request
+
+    case = relative_read_app
+    monkeypatch.setattr(case.app, "_uses_dispatch_authority", lambda: distributed)
+    preview = case.app._build_config_preview(case.payload)
+    assert preview["field_errors"] == []
+    assert preview["execution_args"]["input_dir"] == "./uploads/upload_relative/input"
+    argv = case.app._argv_from_request(case.payload, execution_args=preview["execution_args"])
+    assert Path(argv[argv.index("--input-dir") + 1]) == case.source
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/jobs",
+            "headers": [(b"x-tp-upload-read-base", str(case.client_root).encode())],
+        }
+    )
+    response = await case.app._create_job(case.payload, pilot_tenant=SimpleNamespace(tenant_id="tenant_a"), request=request)
+    assert response.status_code == 200, response.body
+    assert len(case.calls) == 1
+    mode, record, options = case.calls[0]
+    assert mode == ("distributed" if distributed else "legacy")
+    assert record.effective_request["args"]["input_dir"] == "./uploads/upload_relative/input"
+    assert options.get("upload_read_base") == case.root
+    assert options["upload_read_base"] != case.client_root
+
+
+def test_retained_relative_preview_uses_server_anchor_and_ignores_client_roots(relative_read_app):
+    case = relative_read_app
+    preview = case.app._build_config_preview(case.payload)
+    job = case.app.Job(
+        id="job_retained",
+        created_at=1.0,
+        request=case.payload,
+        effective_request={"pipeline": "lux-depth-v3", "args": preview["execution_args"]},
+    )
+    retained = set()
+    case.app._add_staged_input_dir(retained, job)
+    assert str(case.source) in retained
+    assert not any(Path(path).is_relative_to(case.client_root) for path in retained)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("distributed", [False, True])
+async def test_client_anchor_spoof_cannot_authorize_relative_escape(relative_read_app, monkeypatch, distributed):
+    from starlette.requests import Request
+
+    case = relative_read_app
+    monkeypatch.setattr(case.app, "_uses_dispatch_authority", lambda: distributed)
+    (case.client_root / "private").mkdir()
+    case.payload["args"]["input_dir"] = "../client-root/private"
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/jobs",
+            "headers": [(b"x-tp-upload-read-base", str(case.client_root).encode())],
+        }
+    )
+    response = await case.app._create_job(case.payload, pilot_tenant=SimpleNamespace(tenant_id="tenant_a"), request=request)
+    assert response.status_code == 400
+    assert case.calls == []
+
+
+def test_client_root_field_cannot_replace_missing_server_base_for_a_real_relative_path(tmp_path):
+    with pytest.raises(UploadOwnershipLost):
+        upload_source_paths({"args": {"input_dir": "default", "upload_read_base": str(tmp_path)}})
+
+
+def caption_selector_paths(field, value, **kwargs):
+    if field == "selector":
+        from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths
+
+        plan = {"nodes": [{"configuration": {"captioning": {"enabled": True, "selector": value}}}]}
+        return _admitted_source_paths(json.dumps(plan).encode(), None, **kwargs)
+    return upload_source_paths({"pipeline": "lux-depth-v3", "args": {field: value}}, **kwargs)
+
+
+@pytest.mark.parametrize("field", ["vlm_captioning_model", "vlmCaptioningModel", "selector"])
+@pytest.mark.parametrize("role", ["default", "review"])
+def test_closed_caption_roles_are_symbolic_only_in_caption_selector_fields(monkeypatch, field, role):
+    from transformation_portal.orchestrator import upload_receipts
+    from transformation_portal.vlm_captioning.fastvlm_runtime import FASTVLM_CHECKPOINT_DIRS
+
+    assert role in FASTVLM_CHECKPOINT_DIRS
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("a closed caption role must not resolve a physical path or require a base")
+
+    monkeypatch.setattr(upload_receipts, "Path", unexpected)
+    assert caption_selector_paths(field, role) == ()
+
+
+@pytest.mark.parametrize("field", ["vlm_captioning_model", "vlmCaptioningModel", "selector"])
+@pytest.mark.parametrize("value", ["./caption-model", "unknown-caption-role"])
+def test_relative_caption_paths_and_unknown_roles_require_server_base(tmp_path, field, value):
+    with pytest.raises(UploadOwnershipLost, match="explicit server-owned base"):
+        caption_selector_paths(field, value)
+    assert caption_selector_paths(field, value, upload_read_base=tmp_path) == ((tmp_path / value).resolve(),)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("runtime", [False, True])
+async def test_unresolvable_retained_upload_path_stops_all_cleanup(relative_read_app, monkeypatch, runtime):
+    case = relative_read_app
+    (case.root / "loop").symlink_to("loop", target_is_directory=True)
+    payload = {"pipeline": "lux-depth-v3", "args": {"input_dir": "./loop/input"}}
+    record = JobRecord(id="job_retained_loop", created_at=1.0, request=payload, effective_request=payload)
+
+    class Repository:
+        async def list(self, **_kwargs):
+            return ([] if runtime else [record]), 0
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("unresolvable retained paths must prevent both legacy and ledger cleanup")
+
+    jobs = {record.id: case.app._job_from_record(record)} if runtime else {}
+    monkeypatch.setattr(case.app, "JOBS", jobs)
+    monkeypatch.setattr(case.app, "_job_repository", Repository)
+    monkeypatch.setattr(case.app, "_resolved_portal_upload_root", lambda: case.root / "uploads")
+    monkeypatch.setattr(case.app, "cleanup_expired_batches", unexpected)
+    monkeypatch.setattr(case.app, "_upload_receipt_store", unexpected)
+    monkeypatch.setenv("TP_ORCHESTRATOR_STATE_BACKEND", "postgres")
+    assert await case.app._retained_staged_input_dirs() is None
+    await case.app._cleanup_expired_upload_batches(1e12)
 
 
 def test_upload_owner_is_composite_and_role_independent():
@@ -215,6 +433,330 @@ async def test_exact_receipt_read_remains_api_key_protected(monkeypatch):
         response = await client.get("/v1/uploads/staging/receipts/" + str(uuid.uuid4()))
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["before_read", "during_verification"])
+async def test_expired_receipt_read_never_returns_recovered_paths(tmp_path, monkeypatch, phase):
+    from starlette.requests import Request
+
+    import app
+    from transformation_portal.ingest import upload_recovery
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired
+
+    item = reservation(tmp_path) if phase == "before_read" else sealed(tmp_path)[0]
+    clock = [11.0 if phase == "before_read" else 9.0]
+    completions = []
+
+    class Store:
+        async def get(self, *_args):
+            return item
+
+        async def complete(self, *args):
+            assert phase == "during_verification" and clock[0] >= item.expires_at
+            completions.append(args)
+            raise UploadReceiptExpired("staged upload expired")
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id=item.tenant_id), item.owner_sha256, Store(), None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_verify = upload_recovery.verify_completion
+
+    def verify(*args):
+        assert phase == "during_verification", "expired staging without a seal must not inspect the filesystem"
+        result = original_verify(*args)
+        clock[0] = 11.0
+        return result
+
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_now", lambda: clock[0])
+    monkeypatch.setattr(upload_recovery, "verify_completion", verify)
+    request = Request({"type": "http", "method": "GET", "path": "/v1/uploads/staging/receipts/" + item.request_id})
+    response = await app.get_portal_upload_receipt(request, item.request_id)
+    assert response.status_code == 200
+    assert json.loads(response.body)["data"] == {"request_id": item.request_id, "status": "expired", "receipt": None}
+    assert response.headers["cache-control"] == "no-store"
+    assert len(completions) == (phase == "during_verification")
+    assert item.state == "staging"
+    if phase == "before_read":
+        assert not Path(item.batch_root).exists()
+    else:
+        assert Path(item.batch_root).is_dir()
+
+
+@pytest.mark.asyncio
+async def test_upload_completion_past_ttl_is_typed_without_replaying_or_deleting_body(tmp_path, monkeypatch):
+    from starlette.requests import Request
+
+    import app
+    from transformation_portal.ingest import upload_recovery
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired
+
+    clock = [1.0]
+    stream = io.BytesIO(b"upload bytes")
+    parsed = app._ParsedPortalUploadPayload([IncomingUpload("test.txt", stream)], None)
+    calls = []
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            self.current = item
+            calls.append("reserve")
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, item, *_args):
+            assert clock[0] >= item.expires_at
+            calls.append("complete")
+            raise UploadReceiptExpired("staged upload expired")
+
+    store = Store()
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    async def parse(*_args):
+        calls.append("parse")
+        return parsed
+
+    original_verify = upload_recovery.verify_completion
+
+    def verify(*args, **kwargs):
+        result = original_verify(*args, **kwargs)
+        clock[0] = 12.0
+        return result
+
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_multipart", parse)
+    monkeypatch.setattr(app, "PORTAL_UPLOAD_TTL_SECONDS", 10)
+    monkeypatch.setattr(app, "_now", lambda: clock[0])
+    monkeypatch.setattr(upload_recovery, "verify_completion", verify)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/uploads/staging",
+            "headers": [(b"x-tp-upload-request-id", str(uuid.uuid4()).encode())],
+        }
+    )
+    response = await app._stage_correlated_portal_upload(request, tmp_path)
+    assert response.status_code == 409
+    body = json.loads(response.body)
+    assert body["error"]["code"] == "CONFLICT"
+    assert body["error"]["details"]["reason"] == "upload_expired"
+    assert body["data"] is None
+    assert calls == ["reserve", "parse", "complete"]
+    assert stream.closed and store.current.state == "staging"
+    assert Path(store.current.batch_root).is_dir()
+    lock = UploadBatchLock(tmp_path, store.current.batch_id)
+    try:
+        assert lock.acquire(), "the completed worker must release its lock without deleting the fenced batch"
+    finally:
+        lock.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["body_limit", "direct_http", "provider", "mixed_group"])
+async def test_correlated_chunked_upload_preserves_http_limit_and_resource_cleanup(tmp_path, monkeypatch, failure):
+    import httpx
+
+    import app
+
+    calls = []
+    streams = []
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            calls.append("reserve")
+            if failure == "provider":
+                raise RuntimeError("receipt provider unavailable")
+            if failure == "mixed_group":
+                raise ExceptionGroup(
+                    "multiple request failures",
+                    [app.HTTPException(status_code=413), RuntimeError("receipt provider unavailable")],
+                )
+            self.current = item
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, *_args):
+            pytest.fail("an oversized body must not publish ready")
+
+    store = Store()
+
+    async def context(request, **_kwargs):
+        assert "content-length" not in request.headers
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_headers = app._parse_portal_upload_part_headers
+
+    def track_headers(*args):
+        part = original_headers(*args)
+        if part.file_stream is not None:
+            streams.append(part.file_stream)
+        return part
+
+    def unexpected_staging(*_args, **_kwargs):
+        pytest.fail("the failed request must not start a staging worker")
+
+    async def direct_http_rejection(*_args):
+        raise app.HTTPException(status_code=413, detail="request body rejected")
+
+    boundary = b"tp-chunked-limit"
+    first = partial_multipart(boundary)
+
+    async def chunks():
+        yield first
+        yield b"x" * 64
+        yield b"\r\n--" + boundary + b"--\r\n"
+
+    monkeypatch.setattr(app, "API_KEY_SECRET", "upload-test-key")
+    monkeypatch.setattr(app, "ENFORCE_JOB_API_KEY", True)
+    monkeypatch.setattr(app, "RATE_LIMIT_PER_MINUTE", 0)
+    monkeypatch.setattr(app, "MAX_UPLOAD_REQUEST_BYTES", len(first) + 16)
+    monkeypatch.setattr(app, "_portal_staged_uploads_enabled", lambda _actor: True)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_part_headers", track_headers)
+    monkeypatch.setattr(app, "stage_upload_batch", unexpected_staging)
+    if failure == "direct_http":
+        monkeypatch.setattr(app, "_parse_portal_upload_multipart", direct_http_rejection)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app.app), base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/uploads/staging",
+            content=chunks(),
+            headers={
+                "x-api-key": "upload-test-key",
+                "X-TP-Upload-Request-ID": str(uuid.uuid4()),
+                "content-type": "multipart/form-data; boundary=" + boundary.decode(),
+            },
+        )
+    expected_status = 413 if failure in {"body_limit", "direct_http"} else 503
+    assert response.status_code == expected_status
+    assert response.json()["schema"] == "tp.orchestrator.error.v1"
+    assert response.json()["error"]["code"] == ("REQUEST_TOO_LARGE" if expected_status == 413 else "SERVICE_UNAVAILABLE")
+    assert response.json()["data"] is None
+    assert calls == ["reserve"]
+    if failure in {"provider", "mixed_group"}:
+        assert streams == [] and store.current is None
+    else:
+        assert len(streams) == (2 if failure == "body_limit" else 0)
+        assert all(stream.closed for stream in streams)
+        assert store.current.state == "staging" and store.current.receipt_sha256 is None
+        assert Path(store.current.batch_root).is_dir()
+        lock = UploadBatchLock(tmp_path, store.current.batch_id)
+        try:
+            assert lock.acquire(), "parser failure must release the drained request's stable batch lock"
+        finally:
+            lock.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("correlated", [False, True])
+async def test_cancelled_multipart_request_closes_custom_spools_before_staging(tmp_path, monkeypatch, correlated):
+    from starlette.requests import Request
+
+    import app
+
+    streams = []
+    waiting = asyncio.Event()
+    blocked = asyncio.Event()
+    received = False
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            self.current = item
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, *_args):
+            pytest.fail("a cancelled parser must not publish ready")
+
+    store = Store()
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_headers = app._parse_portal_upload_part_headers
+
+    def track_headers(*args):
+        part = original_headers(*args)
+        if part.file_stream is not None:
+            streams.append(part.file_stream)
+        return part
+
+    def unexpected_staging(*_args, **_kwargs):
+        pytest.fail("cancellation before multipart completion must not start a worker")
+
+    async def receive():
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": partial_multipart(b"cancel-test"), "more_body": True}
+        waiting.set()
+        await blocked.wait()
+        pytest.fail("the upload request should be cancelled while awaiting its body")
+
+    monkeypatch.setattr(app, "_portal_staged_uploads_enabled", lambda _actor: True)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_part_headers", track_headers)
+    monkeypatch.setattr(app, "stage_upload_batch", unexpected_staging)
+    headers = [(b"content-type", b"multipart/form-data; boundary=cancel-test")]
+    if correlated:
+        headers.append((b"x-tp-upload-request-id", str(uuid.uuid4()).encode()))
+    request = Request({"type": "http", "method": "POST", "path": "/v1/uploads/staging", "headers": headers}, receive)
+    task = asyncio.create_task(app.stage_portal_uploads(request))
+    try:
+        await asyncio.wait_for(waiting.wait(), 5)
+        assert len(streams) == 2 and all(not stream.closed for stream in streams)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await request.close()
+        assert all(stream.closed for stream in streams)
+        if correlated:
+            assert store.current.state == "staging" and store.current.receipt_sha256 is None
+            assert Path(store.current.batch_root).is_dir()
+            lock = UploadBatchLock(tmp_path, store.current.batch_id)
+            try:
+                assert lock.acquire(), "request cancellation must release its drained batch lock"
+            finally:
+                lock.close()
+        else:
+            assert store.current is None
+    finally:
+        if not task.done():
+            task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        for stream in streams:
+            stream.close()
 
 
 def test_durable_seal_digest_rejects_rewritten_source_and_resealed_inventory(tmp_path):
@@ -390,13 +932,7 @@ async def test_trusted_direct_admission_cannot_omit_tenant_scope_for_a_tracked_b
             self.references = []
 
         async def scalar(self, statement):
-            return SimpleNamespace(
-                batch_id="upload_tracked",
-                batch_root=str(tmp_path / "upload_tracked"),
-                tenant_id="tenant_a",
-                state="ready",
-                expires_at=10.0,
-            )
+            return 2.0
 
         async def scalars(self, statement):
             return SimpleNamespace(
@@ -416,7 +952,7 @@ async def test_trusted_direct_admission_cannot_omit_tenant_scope_for_a_tracked_b
 
     session = Session()
     with pytest.raises(UploadOwnershipLost, match="outside this tenant"):
-        await bind_upload_references(session, record, tenant_id, now=2.0)
+        await bind_upload_references(session, record, tenant_id)
     assert not session.references
 
 
@@ -522,11 +1058,8 @@ async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(
             self.selection = None
 
         async def scalar(self, statement):
-            batch = statement.compile().params["batch_id_1"]
-            self.locked.append(batch)
-            return SimpleNamespace(
-                batch_id=batch, batch_root=str(tmp_path / batch), tenant_id="tenant_a", state="ready", expires_at=10.0
-            )
+            assert self.locked == ["upload_aaa", "upload_zzz"], "sample expiry only after every matching row is locked"
+            return 2.0
 
         async def scalars(self, statement):
             self.selection = str(statement)
@@ -544,7 +1077,7 @@ async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(
             self.references.append(row)
 
     session = Session()
-    await bind_upload_references(session, record, "tenant_a", now=2.0)
+    await bind_upload_references(session, record, "tenant_a")
     assert session.locked == ["upload_aaa", "upload_zzz"]
     assert [(row.batch_id, row.job_id) for row in session.references] == [("upload_aaa", "job"), ("upload_zzz", "job")]
     assert len(upload_source_paths(record.request, record.effective_request)) == 4

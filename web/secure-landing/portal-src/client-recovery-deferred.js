@@ -166,6 +166,9 @@ export function createDeferredClientRecoveryApi(host) {
     if (attempt.durable && !store.remove(attempt.request_id)) { change(attempt, { message: "The completed recovery reference could not be cleared. Check status before new work." }); return false; }
     const index = attempts.indexOf(attempt); if (index >= 0) attempts.splice(index, 1); render(); return true;
   }
+  function releaseRejectedReference(attempt, status) {
+    if (attempt.durable && ![401, 403, 410].includes(status) && store.remove(attempt.request_id)) attempt.durable = false;
+  }
   function newAttempt(type, durable) {
     const current = context();
     if (!canRequest(type)) throw new Error("Frontdoor configuration requires repair before another request.");
@@ -275,6 +278,7 @@ export function createDeferredClientRecoveryApi(host) {
         return result;
       }
       if (response.status >= 400 && response.status < 500 && ![408, 409, 410, 429].includes(response.status)) {
+        releaseRejectedReference(attempt, response.status);
         change(attempt, { status: "rejected", message: String(envelope?.error?.message || "Submission was rejected.").slice(0, 240) });
         if (response.status === 401 || response.status === 403) host.onAuthorizationFailure?.(response.status);
         return null;
@@ -338,6 +342,7 @@ export function createDeferredClientRecoveryApi(host) {
         else host.uploadState({ busy: false, status: "recovery_ready", error: "Apply the recovered input explicitly.", receipt: null });
       } else if (xhr.status >= 400 && xhr.status < 500 && ![408, 409, 429].includes(xhr.status)) {
         finished = true; clear(); activeUpload = null;
+        releaseRejectedReference(attempt, xhr.status);
         host.uploadState({ busy: false, status: "rejected", error: "Staging rejected this upload. Existing paths were preserved.", receipt: null });
         change(attempt, { status: "rejected", message: "Staging rejected this upload. Existing paths were preserved." });
         if (xhr.status === 401 || xhr.status === 403) host.onAuthorizationFailure?.(xhr.status);
