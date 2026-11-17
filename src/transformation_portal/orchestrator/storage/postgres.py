@@ -158,7 +158,9 @@ class PostgresJobRepository(JobRepository):
         async with factory() as session:
             yield session
 
-    async def create(self, record: JobRecord, *, upload_read_paths: tuple[str, ...] = ()) -> None:
+    async def create(
+        self, record: JobRecord, *, upload_read_paths: tuple[str, ...] = (), upload_read_base: Path | None = None
+    ) -> None:
         record_snapshot = record.copy()
         async with self._session() as session:
             session.add(
@@ -198,6 +200,7 @@ class PostgresJobRepository(JobRepository):
                     record_snapshot,
                     str(record_snapshot.effective_request.get("tenant_id") or ""),
                     read_paths=upload_read_paths,
+                    upload_read_base=upload_read_base,
                 )
                 await session.commit()
             except IntegrityError as exc:
