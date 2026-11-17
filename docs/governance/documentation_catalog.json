@@ -9300,7 +9300,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "b949f9e83ed03e7ed3808d0002a366389eae29de",
+      "source_commit": "abaf7a777a66bba3e4483856c50a33f89ca98bd6",
       "content_sha256": "2a6f2bea011393d405ada181fd9b4274ddb807d8b73a8fcd72330c596c982490",
       "source_references": [
         "Makefile",
@@ -9308,7 +9308,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
+        "Makefile": "8b1142bc9087d03a790984cba842ee371d31584b78cfbe4409cc9f4c38cb39af",
         "requirements/base.txt": "b6d6509cb5c95081d96a50d39a84872f630535b3aba3516c753de27e342d38a7",
         "requirements/dev.txt": "8e98985c880679c0e91e63319da57e40baa553f3962cea01b87523b97e423ff9"
       },
@@ -9374,13 +9374,13 @@
       "successors": [],
       "review_status": "inherited-classification",
       "evidence_tier": "inventory-only",
-      "source_commit": "868a8732f67bd9489aafd4ac5d8db5d870a01ead",
-      "content_sha256": "78693818348ff430d22a057761ce88e760d879eee19ad1050970de84231ec846",
       "source_references": [],
-      "source_sha256": {},
       "validation_commands": [],
       "prior_classification": "canonical",
-      "prior_review_status": "source-reviewed changes"
+      "prior_review_status": "source-reviewed changes",
+      "source_commit": "6e26ebb140dc13ac31f12667acb367693095e592",
+      "content_sha256": "72e79daa2ddd8e0e879a01413795da87f2c34c6741a8ad84668622f37524de03",
+      "source_sha256": {}
     },
     {
       "path": "docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md",
@@ -9746,7 +9746,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "b949f9e83ed03e7ed3808d0002a366389eae29de",
+      "source_commit": "abaf7a777a66bba3e4483856c50a33f89ca98bd6",
       "content_sha256": "e06f97c74909e60c951910a60cce133f4908fcff07b7d98b0830a916361a2217",
       "source_references": [
         "Makefile",
@@ -9754,7 +9754,7 @@
         "requirements/dev.txt"
       ],
       "source_sha256": {
-        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
+        "Makefile": "8b1142bc9087d03a790984cba842ee371d31584b78cfbe4409cc9f4c38cb39af",
         "requirements/base.txt": "b6d6509cb5c95081d96a50d39a84872f630535b3aba3516c753de27e342d38a7",
         "requirements/dev.txt": "8e98985c880679c0e91e63319da57e40baa553f3962cea01b87523b97e423ff9"
       },
@@ -17745,7 +17745,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "ec1fb16c91f4bb42db1c4ffe02cc34c441667f6a",
+      "source_commit": "abaf7a777a66bba3e4483856c50a33f89ca98bd6",
       "content_sha256": "3e417d0be2625c824dcc84321fe2ae6367fab2e26142ec272b28bcb29165615e",
       "source_references": [
         "requirements/Makefile",
@@ -17757,7 +17757,7 @@
       ],
       "source_sha256": {
         "requirements/Makefile": "44ac19bfcbd5a3f27c3ed93e58c015259b48e753d73b4848ca398bdc6782fc7b",
-        "Makefile": "c6951aa1928a3c230d19a9eb0820697c7fe73720c3a1bf177212bfda9382aed3",
+        "Makefile": "8b1142bc9087d03a790984cba842ee371d31584b78cfbe4409cc9f4c38cb39af",
         "scripts/setup/editorial_runtime.py": "159f6be6c8e2e90e0239f8936c4908ae73391ae85b3876c9097c688b7664316b",
         "requirements/editorial.in": "8fd92b51faf9e52e52a3bf283647557f93f9ec9e5188bac955abdc99df1030de",
         "requirements/locks/editorial-darwin-arm64-py312.txt": "95ba4c05ab7ef133b460596944bc26ac749f3385a7fbc31019379b01beeacfff",

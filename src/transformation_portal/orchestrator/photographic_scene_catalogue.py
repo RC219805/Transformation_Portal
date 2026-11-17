@@ -22,6 +22,17 @@ PAGE_LIMIT = 16
 DECISION_FIELDS = ("artifact_path", "sha256", "source_identity_sha256", "status", "note", "actor", "created_at")
 
 
+def thumbnail_source(references: list[JsonObject], state: JsonObject, scene_id: str) -> JsonObject | None:
+    """Select a server-owned variant using metadata alone, without granting access."""
+    revisions = [entry["variant"] for entry in state.get("revisions", []) if entry["variant"]["scene_id"] == scene_id]
+    variants = [ref for ref in references if ref["scene_id"] == scene_id and not ref.get("related_only")]
+    finals = [ref for ref in variants if ref.get("role") not in {"original", "working_master"}]
+    native = [ref for ref in variants if ref.get("role") == "working_master"]
+    originals = [ref for ref in variants if ref.get("role") == "original"]
+    selected = revisions or finals or native or originals
+    return selected[-1] if selected else None
+
+
 def catalogue_changed() -> ReviewAccessError:
     return ReviewAccessError("Photographic catalogue changed; refresh the scene list", code="CATALOGUE_CHANGED")
 

@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse, Response
 
 from transformation_portal.api.routes.jobs import DEFAULT_JOB_LIST_LIMIT, JobRouteHandlers, create_jobs_router
 from transformation_portal.api.v1 import JobEnvelope, JobsListEnvelope, JobStatusEnvelope
+from transformation_portal.api.v1.jobs import JobSubmissionEnvelope
 
 pytestmark = [pytest.mark.unit]
 
@@ -66,6 +67,12 @@ class _RecordingHandlers:
     async def job_events_v2(self, request: Request, job_id: str) -> Response:
         return self._record("job_events_v2", path=request.url.path, job_id=job_id)
 
+    async def get_submission(self, request: Request, request_id: str) -> Response:
+        return self._record("get_submission", path=request.url.path, request_id=request_id)
+
+    async def get_submission_v2(self, request: Request, request_id: str) -> Response:
+        return self._record("get_submission_v2", path=request.url.path, request_id=request_id)
+
 
 def _build_handlers(recording: _RecordingHandlers) -> JobRouteHandlers:
     return JobRouteHandlers(
@@ -83,6 +90,8 @@ def _build_handlers(recording: _RecordingHandlers) -> JobRouteHandlers:
         cancel_job_v2=recording.cancel_job_v2,
         job_events=recording.job_events,
         job_events_v2=recording.job_events_v2,
+        get_submission=recording.get_submission,
+        get_submission_v2=recording.get_submission_v2,
     )
 
 
@@ -120,9 +129,12 @@ def test_jobs_router_pins_paths_methods_endpoint_names_and_response_models() -> 
         JobEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobBriefData_"},
         JobsListEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobsListData_"},
         JobStatusEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobStatusData_"},
+        JobSubmissionEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobSubmissionData_"},
         None: {},
     }
     expected = {
+        ("GET", "/v1/job-submissions/{request_id}"): ("get_submission", JobSubmissionEnvelope),
+        ("GET", "/v2/job-submissions/{request_id}"): ("get_submission_v2", JobSubmissionEnvelope),
         ("POST", "/v1/jobs"): ("create_job_http", JobEnvelope),
         ("POST", "/v2/jobs"): ("create_job_v2_http", JobEnvelope),
         ("GET", "/v1/jobs"): ("list_jobs", JobsListEnvelope),
@@ -151,7 +163,7 @@ def test_jobs_router_pins_paths_methods_endpoint_names_and_response_models() -> 
         assert tracked[route]["responses"]["200"]["content"]["application/json"]["schema"] == schema_refs[response_model]
 
     for (method, path), (endpoint_name, _response_model) in expected.items():
-        values = {"job_id": "job-1", "artifact_path": "nested/report.json"}
+        values = {"job_id": "job-1", "artifact_path": "nested/report.json", "request_id": "attempt-1"}
         expected_path = path.format(**values)
         route_values = {name: value for name, value in values.items() if "{" + name + "}" in path}
         assert str(test_app.url_path_for(endpoint_name, **route_values)) == expected_path

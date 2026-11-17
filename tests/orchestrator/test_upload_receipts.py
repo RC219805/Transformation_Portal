@@ -1,0 +1,648 @@
+"""Source-bound upload recovery contracts without service substitution."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import io
+import json
+import os
+import threading
+import uuid
+from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
+from transformation_portal.ingest.upload_recovery import (
+    MARKER_FILENAME,
+    UploadBatchLock,
+    initialize_batch,
+    seal_completion,
+    verify_completion,
+)
+from transformation_portal.ingest.upload_staging import (
+    IncomingUpload,
+    UploadStagingError,
+    cleanup_expired_batches,
+    stage_upload_batch,
+)
+from transformation_portal.orchestrator.photographic_admission import drain_owned
+from transformation_portal.orchestrator.storage.base import JobRecord
+from transformation_portal.orchestrator.upload_receipts import (
+    UploadOwnershipLost,
+    UploadReservation,
+    bind_upload_references,
+    upload_owner,
+    upload_source_paths,
+    validate_upload_request_id,
+)
+
+pytestmark = pytest.mark.unit
+
+
+def reservation(root: Path, *, owner: str = "a" * 64) -> UploadReservation:
+    batch = "upload_" + uuid.uuid4().hex
+    return UploadReservation(
+        batch, "tenant_a", owner, str(uuid.uuid4()), uuid.uuid4().hex, str(root / batch), "staging", 1.0, 10.0
+    )
+
+
+def sealed(root: Path):
+    item = reservation(root)
+    initialize_batch(item)
+    result = stage_upload_batch(
+        upload_root=root,
+        uploads=[IncomingUpload("nested/test.txt", io.BytesIO(b"original"))],
+        now=item.created_at,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    seal_completion(item, result)
+    return item, result
+
+
+def test_upload_owner_is_composite_and_role_independent():
+    actor = {"accessEmail": "Shared@example.test", "username": "Alice", "role": "operator"}
+    assert upload_owner("tenant_a", actor) == upload_owner("tenant_a", {**actor, "role": "admin"})
+    assert upload_owner("tenant_a", actor) != upload_owner("tenant_a", {**actor, "username": "bob"})
+    assert upload_owner("tenant_a", actor) != upload_owner("tenant_b", actor)
+    with pytest.raises(ValueError):
+        upload_owner("tenant_a", {"username": "alice"})
+
+
+@pytest.mark.parametrize(
+    "bad", ["", "../upload", "A" * 100, str(uuid.uuid4()).upper(), "00000000-0000-0000-0000-000000000000/"]
+)
+def test_request_id_is_bounded_canonical_uuid(bad):
+    with pytest.raises(ValueError):
+        validate_upload_request_id(bad)
+
+
+def test_completion_seal_binds_request_generation_and_all_retained_source_bytes(tmp_path):
+    item, result = sealed(tmp_path)
+    digest, data = verify_completion(item)
+    assert len(digest) == 64
+    assert data == result.to_response_data()
+    for wrong in [
+        replace(item, request_id=str(uuid.uuid4())),
+        replace(item, generation=uuid.uuid4().hex),
+        replace(item, owner_sha256="b" * 64),
+    ]:
+        with pytest.raises(ValueError):
+            verify_completion(wrong)
+    (result.input_dir / "nested/test.txt").write_bytes(b"modified")
+    with pytest.raises(ValueError, match="source changed"):
+        verify_completion(item)
+
+
+def test_receipt_without_completion_seal_cannot_recover_ready(tmp_path):
+    item = reservation(tmp_path)
+    initialize_batch(item)
+    stage_upload_batch(
+        upload_root=tmp_path,
+        uploads=[IncomingUpload("test.txt", io.BytesIO(b"body"))],
+        now=1.0,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    with pytest.raises(ValueError, match="incomplete"):
+        verify_completion(item)
+
+
+def test_legacy_cleanup_never_deletes_ledger_marked_ready_or_partial_batch(tmp_path):
+    item, _ = sealed(tmp_path)
+    partial = reservation(tmp_path)
+    initialize_batch(partial)
+    assert (Path(partial.batch_root) / MARKER_FILENAME).is_file()
+    assert cleanup_expired_batches(tmp_path, now=1e12, ttl_seconds=1, retained_input_dirs=[]) == []
+    assert Path(item.batch_root).exists() and Path(partial.batch_root).exists()
+
+
+def test_external_batch_lock_is_exclusive_and_survives_batch_removal(tmp_path):
+    item = reservation(tmp_path)
+    first, second = UploadBatchLock(tmp_path, item.batch_id), UploadBatchLock(tmp_path, item.batch_id)
+    try:
+        assert first.acquire()
+        assert not second.acquire()
+        assert not Path(item.batch_root).exists()
+        first.close()
+        assert second.acquire()
+    finally:
+        first.close()
+        second.close()
+
+
+def test_symlinked_lock_directory_is_rejected(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / ".upload-locks").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        UploadBatchLock(tmp_path, reservation(tmp_path).batch_id)
+
+
+@pytest.mark.asyncio
+async def test_cancelled_owner_waits_for_thread_before_stream_or_lock_release(tmp_path):
+    entered, finish = threading.Event(), threading.Event()
+    stream = io.BytesIO(b"body")
+    item = reservation(tmp_path)
+    lock = UploadBatchLock(tmp_path, item.batch_id)
+    assert lock.acquire()
+
+    def work():
+        entered.set()
+        assert finish.wait(timeout=5)
+        assert not stream.closed
+        assert stream.read() == b"body"
+
+    async def owner():
+        try:
+            await drain_owned(asyncio.to_thread(work))
+        finally:
+            stream.close()
+            lock.close()
+
+    task = asyncio.create_task(owner())
+    await asyncio.to_thread(entered.wait, 5)
+    task.cancel()
+    await asyncio.sleep(0)
+    task.cancel()
+    await asyncio.sleep(0)
+    assert not task.done() and not stream.closed
+    contender = UploadBatchLock(tmp_path, item.batch_id)
+    try:
+        assert not contender.acquire()
+        finish.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert stream.closed
+        assert contender.acquire()
+    finally:
+        finish.set()
+        contender.close()
+
+
+@pytest.mark.asyncio
+async def test_receipt_writes_fail_closed_without_flag_or_managed_tenant(monkeypatch):
+    from starlette.requests import Request
+
+    import app
+
+    request = Request({"type": "http", "method": "POST", "path": "/v1/uploads/staging", "headers": []})
+    monkeypatch.delenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", raising=False)
+    assert (await app._upload_receipt_context(request, write=True))[-1].status_code == 503
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+
+    async def no_managed_tenant(*args, **kwargs):
+        return None, None
+
+    monkeypatch.setattr(app, "_pilot_tenant_from_request", no_managed_tenant)
+    assert (await app._upload_receipt_context(request, write=True))[-1].status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_exact_receipt_read_remains_api_key_protected(monkeypatch):
+    import httpx
+
+    import app
+
+    monkeypatch.setattr(app, "API_KEY_SECRET", "upload-test-key")
+    monkeypatch.setattr(app, "ENFORCE_JOB_API_KEY", True)
+    app.RATE_LIMIT_BUCKETS.clear()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app.app), base_url="http://testserver") as client:
+        response = await client.get("/v1/uploads/staging/receipts/" + str(uuid.uuid4()))
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+def test_durable_seal_digest_rejects_rewritten_source_and_resealed_inventory(tmp_path):
+    item, result = sealed(tmp_path)
+    original_digest, _ = verify_completion(item)
+    frozen = replace(item, receipt_sha256=original_digest)
+    source = result.input_dir / "nested/test.txt"
+    source.write_bytes(b"modified")
+    baseline = json.loads(result.baseline_manifest_path.read_bytes())
+    baseline["records"][0]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+    baseline["records"][0]["size_bytes"] = len(source.read_bytes())
+    result.baseline_manifest_path.write_text(json.dumps(baseline))
+    # A coherent rewrite of on-disk metadata still cannot change the database
+    # completion identity pinned before the ready response.
+    seal_completion(item, result)
+    with pytest.raises(ValueError, match="durable seal digest"):
+        verify_completion(frozen)
+
+
+@pytest.mark.parametrize("status", ["pending", "unknown", "expired"])
+def test_nonready_observations_cannot_include_upload_paths(tmp_path, status):
+    from pydantic import ValidationError
+
+    from transformation_portal.api.v1.uploads import UploadReceiptData
+
+    item, result = sealed(tmp_path)
+    with pytest.raises(ValidationError):
+        UploadReceiptData(request_id=item.request_id, status=status, receipt=result.to_response_data())
+    with pytest.raises(ValidationError):
+        UploadReceiptData(request_id=item.request_id, status="ready", receipt=None)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "extra_file",
+        "empty_directory",
+        "extra_symlink",
+        "linked_ancestor",
+        "linked_source",
+        "linked_marker",
+        "linked_seal",
+        "hardlinked_source",
+        "extra_root",
+        "extra_metadata",
+    ],
+)
+def test_completion_requires_exact_independent_inventory_at_every_level(tmp_path, mutation):
+    from transformation_portal.ingest.upload_recovery import SEAL_FILENAME
+
+    item, result = sealed(tmp_path)
+    source = result.input_dir / "nested/test.txt"
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"original")
+    if mutation == "extra_file":
+        (result.input_dir / "unlisted.txt").write_bytes(b"not sealed")
+    elif mutation == "empty_directory":
+        (result.input_dir / "unlisted").mkdir()
+    elif mutation == "extra_symlink":
+        (result.input_dir / "unlisted.txt").symlink_to(outside)
+    elif mutation == "linked_ancestor":
+        (result.input_dir / "nested").rename(result.input_dir / "actual")
+        (result.input_dir / "nested").symlink_to("actual", target_is_directory=True)
+    elif mutation == "linked_source":
+        source.unlink()
+        source.symlink_to(outside)
+    elif mutation == "hardlinked_source":
+        source.unlink()
+        os.link(outside, source)
+    elif mutation in {"linked_marker", "linked_seal"}:
+        path = Path(item.batch_root) / MARKER_FILENAME if mutation == "linked_marker" else result.portal_dir / SEAL_FILENAME
+        outside.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(outside)
+    elif mutation == "extra_root":
+        (Path(item.batch_root) / "tmp").mkdir()
+    else:
+        (result.portal_dir / "unlisted.json").write_bytes(b"{}")
+    with pytest.raises((ValueError, OSError)):
+        verify_completion(item)
+
+
+def test_recovery_uses_sealed_count_and_existing_configured_file_limit(tmp_path):
+    item = reservation(tmp_path)
+    initialize_batch(item)
+    count = 4097  # A supported configured writer limit, not a new default.
+    result = stage_upload_batch(
+        upload_root=tmp_path,
+        uploads=[IncomingUpload(f"file-{index:04d}.txt", io.BytesIO(b"x")) for index in range(count)],
+        now=1.0,
+        reserved_batch_id=item.batch_id,
+        cleanup_on_error=False,
+    )
+    seal_completion(item, result)
+    assert verify_completion(item, max_files=count)[1]["summary"]["file_count"] == count
+    assert verify_completion(item)[1] == result.to_response_data()  # GET survives later config reduction.
+    with pytest.raises(ValueError, match="inventory"):
+        verify_completion(item, max_files=256)
+
+
+@pytest.mark.parametrize("location", ["input", "metadata", "root"])
+def test_completion_rejects_inventory_added_during_source_verification(tmp_path, monkeypatch, location):
+    from transformation_portal.ingest import upload_recovery
+
+    item, result = sealed(tmp_path)
+    original = upload_recovery._source_digest
+
+    def digest(*args):
+        value = original(*args)
+        directory = {"input": result.input_dir, "metadata": result.portal_dir, "root": result.batch_root}[location]
+        (directory / "unlisted.txt").write_bytes(b"changed during verification")
+        return value
+
+    monkeypatch.setattr(upload_recovery, "_source_digest", digest)
+    with pytest.raises(ValueError, match="directory changed"):
+        verify_completion(item)
+
+
+def test_metadata_capacity_is_checked_before_a_completion_can_be_sealed(tmp_path):
+    from transformation_portal.ingest.upload_recovery import MAX_RECOVERY_METADATA_BYTES
+
+    item, result = sealed(tmp_path)
+    with result.capture_metadata_path.open("wb") as stream:
+        stream.truncate(MAX_RECOVERY_METADATA_BYTES + 1)
+    with pytest.raises(UploadStagingError) as error:
+        seal_completion(item, result)
+    assert error.value.status_code == 413 and error.value.reason == "upload_recovery_metadata_limit"
+
+
+def test_completion_seal_capacity_is_a_typed_rejection_without_a_published_seal(tmp_path):
+    from transformation_portal.ingest.upload_recovery import MAX_RECOVERY_METADATA_BYTES, SEAL_FILENAME
+
+    item, result = sealed(tmp_path)
+    seal_path = result.portal_dir / SEAL_FILENAME
+    seal_path.unlink()
+    oversized = replace(result, warnings=("x" * MAX_RECOVERY_METADATA_BYTES,))
+    assert all(path.stat().st_size < MAX_RECOVERY_METADATA_BYTES for path in result.portal_dir.iterdir())
+    with pytest.raises(UploadStagingError) as error:
+        seal_completion(item, oversized)
+    assert error.value.status_code == 413 and error.value.reason == "upload_recovery_metadata_limit"
+    assert not seal_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_empty_upload_read_set_never_touches_filesystem_or_database(monkeypatch):
+    import tempfile
+
+    from transformation_portal.orchestrator import upload_receipts
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("an empty upload read set must not inspect filesystem paths")
+
+    class Session:
+        async def scalar(self, statement):
+            pytest.fail("an empty upload read set must not query receipt rows")
+
+        async def scalars(self, statement):
+            pytest.fail("an empty upload read set must not query receipt rows")
+
+    monkeypatch.setattr(upload_receipts, "Path", unexpected)
+    monkeypatch.setattr(tempfile, "gettempdir", unexpected)
+    await bind_upload_references(Session(), JobRecord(id="job", created_at=1.0, request={}), "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tenant_id", [None, ""])
+async def test_trusted_direct_admission_cannot_omit_tenant_scope_for_a_tracked_batch(tmp_path, monkeypatch, tenant_id):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", str(tmp_path))
+    record = JobRecord(id="job", created_at=1.0, request={"args": {"input_dir": str(tmp_path / "upload_tracked" / "input")}})
+
+    class Session:
+        def __init__(self):
+            self.references = []
+
+        async def scalar(self, statement):
+            return SimpleNamespace(
+                batch_id="upload_tracked",
+                batch_root=str(tmp_path / "upload_tracked"),
+                tenant_id="tenant_a",
+                state="ready",
+                expires_at=10.0,
+            )
+
+        async def scalars(self, statement):
+            return SimpleNamespace(
+                all=lambda: [
+                    SimpleNamespace(
+                        batch_id="upload_tracked",
+                        batch_root=str(tmp_path / "upload_tracked"),
+                        tenant_id="tenant_a",
+                        state="ready",
+                        expires_at=10.0,
+                    )
+                ]
+            )
+
+        def add(self, row):
+            self.references.append(row)
+
+    session = Session()
+    with pytest.raises(UploadOwnershipLost, match="outside this tenant"):
+        await bind_upload_references(session, record, tenant_id, now=2.0)
+    assert not session.references
+
+
+@pytest.mark.asyncio
+async def test_reservation_conflict_target_only_covers_the_scoped_request_identity(tmp_path, monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy.dialects import postgresql
+
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
+
+    item = reservation(tmp_path)
+    statements = []
+
+    class Session:
+        @asynccontextmanager
+        async def begin(self):
+            yield self
+
+        async def scalar(self, statement):
+            statements.append(str(statement.compile(dialect=postgresql.dialect())))
+            return item.batch_id
+
+    @asynccontextmanager
+    async def session():
+        yield Session()
+
+    store = PostgresUploadReceiptStore(database_url="postgresql+asyncpg://unused/unused_test")
+    monkeypatch.setattr(store, "_session", session)
+    await store.reserve(item)
+    assert len(statements) == 1
+    assert "ON CONFLICT (tenant_id, owner_sha256, request_id) DO NOTHING" in statements[0]
+
+
+@pytest.mark.parametrize("pipeline", ["lux-depth", "lux-depth-v5", "lux-depth-v6"])
+def test_photographic_manifests_retain_their_batches_without_output_paths(tmp_path, pipeline):
+    args = {name: str(tmp_path / name) for name in ("input_dir", "companions_manifest", "materials_manifest", "output_dir")}
+    paths = upload_source_paths({"pipeline": pipeline, "args": args})
+    assert set(paths) == {Path(args[name]) for name in ("input_dir", "companions_manifest", "materials_manifest")}
+
+
+def test_read_selector_contract_tracks_current_frontdoor_path_aliases(tmp_path):
+    import app
+    from transformation_portal.orchestrator import upload_receipts
+
+    assert upload_receipts._ARCHIVE_DEFAULT_COMMANDS == app.ARCHIVE_GATE_DEFAULT_COMMANDS
+    for canonical, aliases, scope in app.PATH_FIELD_SPECS:
+        if scope != app.PATH_SCOPE_INPUT:
+            continue
+        if canonical in {"policy_yaml", "rights_jsonl"}:
+            command = "rights-apply" if canonical == "policy_yaml" else "manifest-build"
+            request = {"pipeline": "archive-gate-a", "args": {"archive_command": command}}
+        elif canonical in {"companions_manifest", "materials_manifest"}:
+            request = {"pipeline": "lux-depth-v5", "args": {}}
+        elif canonical == "archive_root":
+            request = {"pipeline": "archive-gate-a", "args": {}}
+        else:
+            request = {"pipeline": "lux-depth-v3", "args": {}}
+        for alias in aliases:
+            request["args"] = {**request["args"], alias: str(tmp_path / alias)}
+            assert tmp_path / alias in upload_source_paths(request), alias
+
+
+@pytest.mark.parametrize("command", tuple(ARCHIVE_OPERATIONS))
+def test_archive_selector_roles_include_every_read_alias_and_exclude_outputs(tmp_path, command):
+    from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
+
+    operation = ARCHIVE_OPERATIONS[command]
+    args = {"archive_command": command, "input_dir": str(tmp_path / "input")}
+    expected = {tmp_path / "input"}
+    for name in operation.files + operation.directories + operation.outputs:
+        parts = name.split("_")
+        alias = parts[0] + "".join(part.title() for part in parts[1:])
+        args[alias] = str(tmp_path / name)
+        if name not in operation.outputs:
+            expected.add(tmp_path / name)
+    assert set(upload_source_paths({"pipeline": operation.pipeline, "args": args})) == expected
+
+
+@pytest.mark.asyncio
+async def test_all_distinct_input_alias_batches_are_locked_once_in_stable_order(tmp_path, monkeypatch):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_ROOT", str(tmp_path))
+    first, second = tmp_path / "upload_aaa" / "input", tmp_path / "upload_zzz" / "input"
+    record = JobRecord(
+        id="job",
+        created_at=1.0,
+        request={"args": {"inputDir": str(second), "archiveRoot": str(first / "nested")}},
+        effective_request={"args": {"input_dir": str(first), "archive_root": str(second / "nested")}},
+    )
+    original_resolve = Path.resolve
+    resolved_roots = []
+
+    def resolve(path, *args, **kwargs):
+        if path == tmp_path:
+            resolved_roots.append(path)
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+
+    class Session:
+        def __init__(self):
+            self.locked, self.references = [], []
+            self.selection = None
+
+        async def scalar(self, statement):
+            batch = statement.compile().params["batch_id_1"]
+            self.locked.append(batch)
+            return SimpleNamespace(
+                batch_id=batch, batch_root=str(tmp_path / batch), tenant_id="tenant_a", state="ready", expires_at=10.0
+            )
+
+        async def scalars(self, statement):
+            self.selection = str(statement)
+            self.locked.extend(["upload_aaa", "upload_zzz"])
+            return SimpleNamespace(
+                all=lambda: [
+                    SimpleNamespace(
+                        batch_id=batch, batch_root=str(tmp_path / batch), tenant_id="tenant_a", state="ready", expires_at=10.0
+                    )
+                    for batch in self.locked
+                ]
+            )
+
+        def add(self, row):
+            self.references.append(row)
+
+    session = Session()
+    await bind_upload_references(session, record, "tenant_a", now=2.0)
+    assert session.locked == ["upload_aaa", "upload_zzz"]
+    assert [(row.batch_id, row.job_id) for row in session.references] == [("upload_aaa", "job"), ("upload_zzz", "job")]
+    assert len(upload_source_paths(record.request, record.effective_request)) == 4
+    assert not resolved_roots, "admission must use absolute ledger identities, independent of the configured root"
+    assert "ORDER BY upload_receipts.batch_id" in session.selection and "FOR UPDATE" in session.selection
+
+
+def test_retained_scan_preserves_all_aliases_even_when_effective_request_exists(tmp_path):
+    import app
+
+    retained = set()
+    paths = [tmp_path / name for name in ("input-snake", "input-camel", "archive-snake", "archive-camel")]
+    job = SimpleNamespace(
+        request={"args": {"inputDir": str(paths[1]), "archiveRoot": str(paths[3])}},
+        effective_request={"args": {"input_dir": str(paths[0]), "archive_root": str(paths[2])}},
+    )
+    app._add_staged_input_dir(retained, job)
+    assert retained == {str(path.resolve()) for path in paths}
+
+
+def test_legacy_nested_archive_selector_keeps_its_entire_staged_batch(tmp_path):
+    result = stage_upload_batch(
+        upload_root=tmp_path, uploads=[IncomingUpload("nested/source.txt", io.BytesIO(b"body"))], now=1.0
+    )
+    assert cleanup_expired_batches(tmp_path, now=1e12, ttl_seconds=1, retained_input_dirs=[result.input_dir / "nested"]) == []
+    assert result.input_dir.exists()
+
+
+@pytest.mark.parametrize("retained", ["root", "ancestor", "sibling"])
+def test_retained_directory_overlap_protects_legacy_batches_without_pinning_siblings(tmp_path, retained):
+    result = stage_upload_batch(upload_root=tmp_path, uploads=[IncomingUpload("source.txt", io.BytesIO(b"body"))], now=1.0)
+    selector = {"root": tmp_path, "ancestor": tmp_path.parent, "sibling": tmp_path / "unrelated"}[retained]
+    removed = cleanup_expired_batches(tmp_path, now=1e12, ttl_seconds=1, retained_input_dirs=[selector])
+    assert removed == ([result.batch_id] if retained == "sibling" else [])
+    assert result.input_dir.exists() is (retained != "sibling")
+
+
+@pytest.mark.parametrize("lock_kind", ["regular", "dangling_symlink"])
+def test_legacy_cleanup_never_claims_a_markerless_batch_with_permanent_ledger_lock_identity(tmp_path, lock_kind):
+    from transformation_portal.ingest.upload_recovery import SEAL_FILENAME
+
+    item, result = sealed(tmp_path)
+    (result.batch_root / MARKER_FILENAME).unlink()
+    (result.portal_dir / SEAL_FILENAME).unlink()
+    if lock_kind == "regular":
+        lock = UploadBatchLock(tmp_path, item.batch_id)
+        lock.close()
+    else:
+        directory = tmp_path / ".upload-locks"
+        directory.mkdir()
+        (directory / (item.batch_id + ".lock")).symlink_to(tmp_path / "missing-lock-target")
+    assert cleanup_expired_batches(tmp_path, now=1e12, ttl_seconds=1, retained_input_dirs=[]) == []
+    assert result.input_dir.exists()
+
+
+@pytest.mark.parametrize("state", ["ready", "staging"])
+def test_markerless_deletion_requires_a_fenced_deleting_ledger_state(tmp_path, state):
+    from transformation_portal.ingest.upload_recovery import delete_owned_batch
+
+    item, result = sealed(tmp_path)
+    digest, data = verify_completion(item)
+    (result.batch_root / MARKER_FILENAME).unlink()
+    item = replace(
+        item,
+        state=state,
+        receipt_sha256=digest if state == "ready" else None,
+        response_data=data if state == "ready" else None,
+    )
+    lock = UploadBatchLock(tmp_path, item.batch_id)
+    assert lock.acquire()
+    try:
+        with pytest.raises(ValueError):
+            delete_owned_batch(item, tmp_path)
+        assert result.input_dir.exists()
+    finally:
+        lock.close()
+
+
+@pytest.mark.parametrize("mutation", ["mismatched_marker", "symlink_root", "wrong_root"])
+def test_deleting_retry_never_weakens_root_or_existing_marker_ownership(tmp_path, mutation):
+    from transformation_portal.ingest import upload_recovery
+
+    item, result = sealed(tmp_path)
+    digest, data = verify_completion(item)
+    item = replace(item, state="deleting", receipt_sha256=digest, response_data=data)
+    if mutation == "mismatched_marker":
+        marker = result.batch_root / MARKER_FILENAME
+        payload = json.loads(marker.read_bytes())
+        marker.write_bytes(upload_recovery.canonicalize_json({**payload, "owner_sha256": "b" * 64}))
+    elif mutation == "symlink_root":
+        outside = tmp_path / "outside"
+        result.batch_root.rename(outside)
+        result.batch_root.symlink_to(outside, target_is_directory=True)
+    lock = UploadBatchLock(tmp_path, item.batch_id)
+    assert lock.acquire()
+    try:
+        with pytest.raises(ValueError):
+            upload_recovery.delete_owned_batch(item, tmp_path / "wrong" if mutation == "wrong_root" else tmp_path)
+        assert result.input_dir.exists()
+    finally:
+        lock.close()

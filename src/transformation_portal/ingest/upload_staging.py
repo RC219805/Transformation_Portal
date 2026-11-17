@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -461,12 +462,18 @@ def stage_upload_batch(
     capture_metadata_config_path: Path = DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
     capture_metadata_schema_path: Path = DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
     now: float,
+    reserved_batch_id: str | None = None,
+    cleanup_on_error: bool = True,
 ) -> StagedUploadResult:
     if not uploads:
         raise UploadStagingError("files_required", "at least one upload file is required")
 
     upload_root.mkdir(parents=True, exist_ok=True)
-    batch_id = build_batch_id(now)
+    batch_id = reserved_batch_id or build_batch_id(now)
+    if reserved_batch_id is not None and (
+        not reserved_batch_id.startswith("upload_") or "/" in reserved_batch_id or "\\" in reserved_batch_id
+    ):
+        raise UploadStagingError("invalid_batch_id", "invalid server batch ID")
     batch_root = upload_root / batch_id
     input_dir = batch_root / "input"
     portal_dir = batch_root / "_portal"
@@ -583,7 +590,8 @@ def stage_upload_batch(
             warnings=tuple(_deduplicate_warnings(warnings)),
         )
     except Exception:
-        shutil.rmtree(batch_root, ignore_errors=True)
+        if cleanup_on_error:
+            shutil.rmtree(batch_root, ignore_errors=True)
         raise
 
 
@@ -602,7 +610,7 @@ def cleanup_expired_batches(
     except OSError:
         return []
 
-    retained = {str(Path(os.path.realpath(str(path)))) for path in retained_input_dirs if str(path).strip()}
+    retained = {Path(os.path.realpath(str(path))) for path in retained_input_dirs if str(path).strip()}
     removed: list[str] = []
     for batch_dir in upload_root.iterdir():
         try:
@@ -610,9 +618,8 @@ def cleanup_expired_batches(
                 continue
             if not _is_managed_staged_batch_dir(batch_dir):
                 continue
-            input_dir = batch_dir / "input"
-            input_dir_real = str(Path(os.path.realpath(input_dir)))
-            if input_dir_real in retained:
+            batch_root_real = Path(os.path.realpath(batch_dir))
+            if any(path.is_relative_to(batch_root_real) or batch_root_real.is_relative_to(path) for path in retained):
                 continue
             age_seconds = now - batch_dir.stat().st_mtime
             if age_seconds < ttl_seconds:
@@ -626,8 +633,33 @@ def cleanup_expired_batches(
 
 def _is_managed_staged_batch_dir(batch_dir: Path) -> bool:
     name = str(batch_dir.name or "").strip()
+    try:
+        (batch_dir / ".upload-request.v1.json").lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        # Ledger batches require an atomic ownership/reference claim first.
+        return False
     if not name.startswith("upload_"):
         return False
+    # Permanent external lock identities outlive markers and partial deletion.
+    # A linked/invalid lock directory or any lock entry (even a dangling link)
+    # is not legacy-cleanup authority. Other filesystem errors fail closed in
+    # the caller, rather than turning an unreadable identity into absence.
+    lock_directory = batch_dir.parent / ".upload-locks"
+    try:
+        lock_info = lock_directory.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if not stat.S_ISDIR(lock_info.st_mode):
+            return False
+        try:
+            (lock_directory / (name + ".lock")).lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            return False
     input_dir = batch_dir / "input"
     portal_dir = batch_dir / "_portal"
     if not input_dir.is_dir() or not portal_dir.is_dir():
