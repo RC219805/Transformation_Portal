@@ -192,13 +192,13 @@ class PostgresJobRepository(JobRepository):
                 )
             from transformation_portal.orchestrator.upload_receipts import bind_upload_references
 
-            await bind_upload_references(
-                session,
-                record_snapshot,
-                str(record_snapshot.effective_request.get("tenant_id") or ""),
-                read_paths=upload_read_paths,
-            )
             try:
+                await bind_upload_references(
+                    session,
+                    record_snapshot,
+                    str(record_snapshot.effective_request.get("tenant_id") or ""),
+                    read_paths=upload_read_paths,
+                )
                 await session.commit()
             except IntegrityError as exc:
                 await session.rollback()

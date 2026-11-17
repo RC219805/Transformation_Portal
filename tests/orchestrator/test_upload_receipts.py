@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import uuid
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -62,6 +63,16 @@ def sealed(root: Path):
     )
     seal_completion(item, result)
     return item, result
+
+
+def partial_multipart(boundary: bytes) -> bytes:
+    return (
+        b"--" + boundary + b'\r\nContent-Disposition: form-data; name="files"; filename="one.txt"'
+        b"\r\nContent-Type: application/octet-stream\r\n\r\nfirst\r\n--"
+        + boundary
+        + b'\r\nContent-Disposition: form-data; name="files"; filename="two.txt"'
+        b"\r\nContent-Type: application/octet-stream\r\n\r\npartial"
+    )
 
 
 def test_upload_owner_is_composite_and_role_independent():
@@ -346,6 +357,199 @@ async def test_upload_completion_past_ttl_is_typed_without_replaying_or_deleting
         assert lock.acquire(), "the completed worker must release its lock without deleting the fenced batch"
     finally:
         lock.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["body_limit", "direct_http", "provider", "mixed_group"])
+async def test_correlated_chunked_upload_preserves_http_limit_and_resource_cleanup(tmp_path, monkeypatch, failure):
+    import httpx
+
+    import app
+
+    calls = []
+    streams = []
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            calls.append("reserve")
+            if failure == "provider":
+                raise RuntimeError("receipt provider unavailable")
+            if failure == "mixed_group":
+                raise ExceptionGroup(
+                    "multiple request failures",
+                    [app.HTTPException(status_code=413), RuntimeError("receipt provider unavailable")],
+                )
+            self.current = item
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, *_args):
+            pytest.fail("an oversized body must not publish ready")
+
+    store = Store()
+
+    async def context(request, **_kwargs):
+        assert "content-length" not in request.headers
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_headers = app._parse_portal_upload_part_headers
+
+    def track_headers(*args):
+        part = original_headers(*args)
+        if part.file_stream is not None:
+            streams.append(part.file_stream)
+        return part
+
+    def unexpected_staging(*_args, **_kwargs):
+        pytest.fail("the failed request must not start a staging worker")
+
+    async def direct_http_rejection(*_args):
+        raise app.HTTPException(status_code=413, detail="request body rejected")
+
+    boundary = b"tp-chunked-limit"
+    first = partial_multipart(boundary)
+
+    async def chunks():
+        yield first
+        yield b"x" * 64
+        yield b"\r\n--" + boundary + b"--\r\n"
+
+    monkeypatch.setattr(app, "API_KEY_SECRET", "upload-test-key")
+    monkeypatch.setattr(app, "ENFORCE_JOB_API_KEY", True)
+    monkeypatch.setattr(app, "RATE_LIMIT_PER_MINUTE", 0)
+    monkeypatch.setattr(app, "MAX_UPLOAD_REQUEST_BYTES", len(first) + 16)
+    monkeypatch.setattr(app, "_portal_staged_uploads_enabled", lambda _actor: True)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_part_headers", track_headers)
+    monkeypatch.setattr(app, "stage_upload_batch", unexpected_staging)
+    if failure == "direct_http":
+        monkeypatch.setattr(app, "_parse_portal_upload_multipart", direct_http_rejection)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app.app), base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/uploads/staging",
+            content=chunks(),
+            headers={
+                "x-api-key": "upload-test-key",
+                "X-TP-Upload-Request-ID": str(uuid.uuid4()),
+                "content-type": "multipart/form-data; boundary=" + boundary.decode(),
+            },
+        )
+    expected_status = 413 if failure in {"body_limit", "direct_http"} else 503
+    assert response.status_code == expected_status
+    assert response.json()["schema"] == "tp.orchestrator.error.v1"
+    assert response.json()["error"]["code"] == ("REQUEST_TOO_LARGE" if expected_status == 413 else "SERVICE_UNAVAILABLE")
+    assert response.json()["data"] is None
+    assert calls == ["reserve"]
+    if failure in {"provider", "mixed_group"}:
+        assert streams == [] and store.current is None
+    else:
+        assert len(streams) == (2 if failure == "body_limit" else 0)
+        assert all(stream.closed for stream in streams)
+        assert store.current.state == "staging" and store.current.receipt_sha256 is None
+        assert Path(store.current.batch_root).is_dir()
+        lock = UploadBatchLock(tmp_path, store.current.batch_id)
+        try:
+            assert lock.acquire(), "parser failure must release the drained request's stable batch lock"
+        finally:
+            lock.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("correlated", [False, True])
+async def test_cancelled_multipart_request_closes_custom_spools_before_staging(tmp_path, monkeypatch, correlated):
+    from starlette.requests import Request
+
+    import app
+
+    streams = []
+    waiting = asyncio.Event()
+    blocked = asyncio.Event()
+    received = False
+
+    class Store:
+        current = None
+
+        async def reserve(self, item):
+            self.current = item
+
+        async def get(self, *_args):
+            return self.current
+
+        async def complete(self, *_args):
+            pytest.fail("a cancelled parser must not publish ready")
+
+    store = Store()
+
+    async def context(*_args, **_kwargs):
+        return SimpleNamespace(tenant_id="tenant_a"), "a" * 64, store, None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    original_headers = app._parse_portal_upload_part_headers
+
+    def track_headers(*args):
+        part = original_headers(*args)
+        if part.file_stream is not None:
+            streams.append(part.file_stream)
+        return part
+
+    def unexpected_staging(*_args, **_kwargs):
+        pytest.fail("cancellation before multipart completion must not start a worker")
+
+    async def receive():
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": partial_multipart(b"cancel-test"), "more_body": True}
+        waiting.set()
+        await blocked.wait()
+        pytest.fail("the upload request should be cancelled while awaiting its body")
+
+    monkeypatch.setattr(app, "_portal_staged_uploads_enabled", lambda _actor: True)
+    monkeypatch.setattr(app, "_resolved_portal_upload_root", lambda: tmp_path)
+    monkeypatch.setattr(app, "_upload_receipt_context", context)
+    monkeypatch.setattr(app, "_pilot_enforce_request_paths", authorized)
+    monkeypatch.setattr(app, "_parse_portal_upload_part_headers", track_headers)
+    monkeypatch.setattr(app, "stage_upload_batch", unexpected_staging)
+    headers = [(b"content-type", b"multipart/form-data; boundary=cancel-test")]
+    if correlated:
+        headers.append((b"x-tp-upload-request-id", str(uuid.uuid4()).encode()))
+    request = Request({"type": "http", "method": "POST", "path": "/v1/uploads/staging", "headers": headers}, receive)
+    task = asyncio.create_task(app.stage_portal_uploads(request))
+    try:
+        await asyncio.wait_for(waiting.wait(), 5)
+        assert len(streams) == 2 and all(not stream.closed for stream in streams)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await request.close()
+        assert all(stream.closed for stream in streams)
+        if correlated:
+            assert store.current.state == "staging" and store.current.receipt_sha256 is None
+            assert Path(store.current.batch_root).is_dir()
+            lock = UploadBatchLock(tmp_path, store.current.batch_id)
+            try:
+                assert lock.acquire(), "request cancellation must release its drained batch lock"
+            finally:
+                lock.close()
+        else:
+            assert store.current is None
+    finally:
+        if not task.done():
+            task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        for stream in streams:
+            stream.close()
 
 
 def test_durable_seal_digest_rejects_rewritten_source_and_resealed_inventory(tmp_path):

@@ -3569,7 +3569,7 @@ async def _parse_portal_upload_multipart(request: Request) -> _ParsedPortalUploa
                 buffer.extend(chunk)
             _advance(eof=False)
         _advance(eof=True)
-    except Exception:
+    except BaseException:
         _cleanup()
         raise
 
@@ -10052,7 +10052,18 @@ async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -
             message=exc.message,
             details={"field": exc.field, "reason": exc.reason},
         )
-    except Exception:
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # ASGI receive task groups may wrap a single stream-limit rejection.
+        failure: BaseException = exc
+        while isinstance(failure, BaseExceptionGroup):
+            members = getattr(failure, "exceptions")
+            if len(members) != 1:
+                break
+            failure = members[0]
+        if isinstance(failure, HTTPException):
+            raise failure
         LOGGER.exception("correlated upload staging failed")
         return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
     finally:
