@@ -531,8 +531,8 @@ class TestSpatialAIPipelinePresetLoading:
         assert config.stages == ["ingest", "segmentation", "materials", "reconstruction"]
         assert config.ingest == {}
         assert config.segmentation == {"cache_policy": "read_write"}
-        assert isinstance(config.materials, dict)
-        assert isinstance(config.reconstruction, dict)
+        assert config.materials == {"allow_research_materials": False, "allow_unattested_materials": False}
+        assert config.reconstruction == {}
 
     def test_dict_to_config_accepts_empty_pipeline_section(self):
         """An empty 'pipeline:' section parses as None and means no stages (P-2)."""
@@ -546,6 +546,47 @@ class TestSpatialAIPipelinePresetLoading:
         """A stage section that is not a mapping fails with a clear configuration error (P-2)."""
         with pytest.raises(ValueError, match="must be a mapping"):
             SpatialAIPipeline._dict_to_config({"tier": "standard", "pipeline": {section: ["oops"]}})
+
+    @pytest.mark.parametrize("section", ["segmentation", "segment", "reconstruction", "reconstruct"])
+    @pytest.mark.parametrize("value", [False, 0, "", []])
+    def test_dict_to_config_rejects_falsy_non_mapping_aliased_sections(self, section, value):
+        """A falsy non-mapping value is rejected under either spelling of an aliased stage (P-2).
+
+        ``segmentation: false`` used to fall through the alias lookup and silently
+        enable the stage with defaults, while ``segment: false`` was rejected.
+        """
+        with pytest.raises(ValueError, match=f"'{section}' must be a mapping"):
+            SpatialAIPipeline._dict_to_config({"tier": "apex_research", "pipeline": {section: value}})
+
+    def test_dict_to_config_keeps_alias_precedence(self):
+        """A non-empty canonical section wins; an empty one falls back to its alias (P-2)."""
+        both = SpatialAIPipeline._dict_to_config(
+            {
+                "tier": "apex_research",
+                "pipeline": {
+                    "segmentation": {"backend": "sam2"},
+                    "segment": {"backend": "ignored"},
+                    "reconstruction": {"iterations": 10},
+                    "reconstruct": {"iterations": 99},
+                },
+            }
+        )
+        assert both.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
+        assert both.reconstruction == {"iterations": 10}
+
+        fallback = SpatialAIPipeline._dict_to_config(
+            {
+                "tier": "apex_research",
+                "pipeline": {
+                    "segmentation": None,
+                    "segment": {"backend": "sam2"},
+                    "reconstruction": {},
+                    "reconstruct": {"iterations": 99},
+                },
+            }
+        )
+        assert fallback.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
+        assert fallback.reconstruction == {"iterations": 99}
 
     def test_process_runs_ingest_with_empty_yaml_section(self, tmp_path):
         """A pipeline built from 'ingest:' (None) runs ingest instead of crashing (P-2)."""

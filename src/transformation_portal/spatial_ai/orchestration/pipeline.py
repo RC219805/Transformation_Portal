@@ -1391,11 +1391,18 @@ class SpatialAIPipeline:
             else:
                 logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
 
+        def _aliased_section(canonical: str, alias: str) -> Dict[str, Any]:
+            # Validate both spellings before choosing: `a or b` would skip a falsy
+            # non-mapping value (false, 0, "", []) under the canonical key and
+            # silently run the stage with defaults. A non-empty canonical section
+            # wins, otherwise the alias is used, as before.
+            canonical_data = _section(pipeline_data.get(canonical), canonical)
+            alias_data = _section(pipeline_data.get(alias), alias)
+            return canonical_data or alias_data
+
         # Normalize stage aliases while preserving backward compatibility.
-        segmentation_data = _section(pipeline_data.get("segmentation") or pipeline_data.get("segment"), "segmentation")
-        reconstruction_data = _section(
-            pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct"), "reconstruction"
-        )
+        segmentation_data = _aliased_section("segmentation", "segment")
+        reconstruction_data = _aliased_section("reconstruction", "reconstruct")
         materials_data = _section(pipeline_data.get("materials"), "materials")
         materials_data.update(_extract_materials_governance_overrides(data))
         stages = list(pipeline_data.keys())
