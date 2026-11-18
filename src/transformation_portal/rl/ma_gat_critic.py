@@ -59,7 +59,7 @@ class GATQMIXCritic:
         Agent Q-values + Context -> QMIX mixing -> Q_total
 
     Example:
-        >>> critic = GATQMIXCritic(state_dim=28, n_agents=3)
+        >>> critic = GATQMIXCritic(state_dim=28, n_agents=3, global_state_dim=20)
         >>> q_total = critic.forward(agent_qs, agent_states, global_state, edge_index)
     """
 
@@ -72,6 +72,7 @@ class GATQMIXCritic:
         num_gat_layers: int = 2,
         alpha: float = 0.8,
         gat_dropout: float = 0.0,
+        global_state_dim: int | None = None,
     ) -> None:
         """Initialize GAT-QMIX critic.
 
@@ -83,10 +84,15 @@ class GATQMIXCritic:
             num_gat_layers: Number of GAT layers
             alpha: QMIX weight (1.0 = pure QMIX, 0.0 = pure VDN)
             gat_dropout: Dropout in GAT layers
+            global_state_dim: Global state dimension fed to the QMIX
+                hypernetworks (defaults to ``state_dim``). The package's own
+                encoders produce different widths
+                (``ma_state.get_state_dim()`` vs ``ma_state.get_global_dim()``).
         """
         torch, nn, F = _get_torch()
 
         self.state_dim = state_dim
+        self.global_state_dim = state_dim if global_state_dim is None else global_state_dim
         self.n_agents = n_agents
         self.embed_dim = embed_dim
         self.alpha = alpha
@@ -111,18 +117,18 @@ class GATQMIXCritic:
 
         # QMIX hypernetworks
         self.hyper_w1 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, n_agents * embed_dim),
         )
-        self.hyper_b1 = nn.Linear(state_dim, embed_dim)
+        self.hyper_b1 = nn.Linear(self.global_state_dim, embed_dim)
 
         self.hyper_w2 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, embed_dim),
         )
-        self.hyper_b2 = nn.Linear(state_dim, 1)
+        self.hyper_b2 = nn.Linear(self.global_state_dim, 1)
 
     def _run_gat(self, x: Any, edge_index: Any) -> Any:
         """Run GAT layers.
@@ -153,7 +159,7 @@ class GATQMIXCritic:
         Args:
             agent_qs: Per-agent Q-values [batch, n_agents]
             agent_states: Per-agent states [batch, n_agents, state_dim]
-            global_state: Global state [batch, state_dim]
+            global_state: Global state [batch, global_state_dim]
             edge_index: DAG edges [2, num_edges]
 
         Returns:
@@ -220,7 +226,7 @@ class GATQMIXCritic:
         Args:
             agent_qs: Per-agent Q-values [batch, n_agents]
             agent_states: Per-agent states [batch, n_agents, state_dim]
-            global_state: Global state [batch, state_dim]
+            global_state: Global state [batch, global_state_dim]
             edge_index: DAG edges [2, num_edges]
 
         Returns:

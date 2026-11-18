@@ -64,7 +64,7 @@ class TemporalGATCritic:
     - "Early errors propagate through the DAG over time"
 
     Example:
-        >>> critic = TemporalGATCritic(state_dim=28, n_agents=3, seq_len=3)
+        >>> critic = TemporalGATCritic(state_dim=28, n_agents=3, seq_len=3, global_state_dim=20)
         >>> q_total = critic.forward(qs_seq, states_seq, global_seq, edges)
     """
 
@@ -77,6 +77,7 @@ class TemporalGATCritic:
         gat_heads: int = 4,
         temporal_heads: int = 4,
         alpha: float = 0.8,
+        global_state_dim: int | None = None,
     ) -> None:
         """Initialize temporal GAT critic.
 
@@ -88,10 +89,15 @@ class TemporalGATCritic:
             gat_heads: Number of GAT attention heads
             temporal_heads: Number of temporal attention heads
             alpha: QMIX weight (1.0 = pure QMIX, 0.0 = pure VDN)
+            global_state_dim: Global state dimension fed to the QMIX
+                hypernetworks (defaults to ``state_dim``). The package's own
+                encoders produce different widths
+                (``ma_state.get_state_dim()`` vs ``ma_state.get_global_dim()``).
         """
         torch, nn, F = _get_torch()
 
         self.state_dim = state_dim
+        self.global_state_dim = state_dim if global_state_dim is None else global_state_dim
         self.n_agents = n_agents
         self.embed_dim = embed_dim
         self.seq_len = seq_len
@@ -123,18 +129,18 @@ class TemporalGATCritic:
 
         # QMIX hypernetworks
         self.hyper_w1 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, n_agents * embed_dim),
         )
-        self.hyper_b1 = nn.Linear(state_dim, embed_dim)
+        self.hyper_b1 = nn.Linear(self.global_state_dim, embed_dim)
 
         self.hyper_w2 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, embed_dim),
         )
-        self.hyper_b2 = nn.Linear(state_dim, 1)
+        self.hyper_b2 = nn.Linear(self.global_state_dim, 1)
 
     def _run_gat(self, x: Any, edge_index: Any) -> Any:
         """Run GAT layers on single timestep.
@@ -164,7 +170,7 @@ class TemporalGATCritic:
         Args:
             agent_qs_seq: Per-agent Q-values [batch, seq_len, n_agents]
             agent_states_seq: Per-agent states [batch, seq_len, n_agents, state_dim]
-            global_state_seq: Global states [batch, seq_len, state_dim]
+            global_state_seq: Global states [batch, seq_len, global_state_dim]
             edge_index: DAG edges [2, num_edges] (assumed constant over sequence)
 
         Returns:
@@ -214,7 +220,7 @@ class TemporalGATCritic:
 
         # Get Q-values and global state for last timestep
         agent_qs = agent_qs_seq[:, -1, :]  # [B, N]
-        global_state = global_state_seq[:, -1, :]  # [B, state_dim]
+        global_state = global_state_seq[:, -1, :]  # [B, global_state_dim]
 
         # QMIX Layer 1
         w1 = torch.abs(self.hyper_w1(global_state))
