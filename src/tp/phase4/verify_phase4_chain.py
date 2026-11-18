@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -411,14 +412,33 @@ def verify_phase4_chain_payloads(
     }
 
 
+# Mirrors the ``inputs.*.*_contract_version`` pattern of
+# schemas/phase4/verification_report.schema.json. The inputs block echoes values
+# read from untrusted artifacts, so anything that does not conform is reported
+# as null instead of making the failure report itself schema-invalid.
+_REPORT_CONTRACT_VERSION_RE = re.compile(r"^tp\.meta\.[a-z0-9_]+\.v[0-9]+$")
+
+
+def _contract_version_or_none(value: Any) -> str | None:
+    version = string_or_none(value)
+    if version is None or _REPORT_CONTRACT_VERSION_RE.fullmatch(version) is None:
+        return None
+    return version
+
+
 def _derive_capture_contract_version(capture_payload: Any) -> str | None:
     if not isinstance(capture_payload, list) or not capture_payload:
         return None
-    versions = {record.get("metadata_contract_version") for record in capture_payload if isinstance(record, dict)}
+    versions: set[str | None] = set()
+    for record in capture_payload:
+        if not isinstance(record, dict):
+            continue
+        # Normalise before hashing: a non-string version (e.g. a list) is
+        # unhashable and must not crash failure-report generation.
+        versions.add(_contract_version_or_none(record.get("metadata_contract_version")))
     if len(versions) != 1:
         return None
-    only = versions.pop()
-    return string_or_none(only)
+    return versions.pop()
 
 
 def _build_inputs_block(
@@ -435,28 +455,30 @@ def _build_inputs_block(
     metadata_manifest_contract_version = None
     metadata_manifest_metadata_contract_version = None
     if isinstance(metadata_manifest_payload, dict):
-        metadata_manifest_contract_version = string_or_none(
+        metadata_manifest_contract_version = _contract_version_or_none(
             metadata_manifest_payload.get("metadata_manifest_contract_version")
         )
-        metadata_manifest_metadata_contract_version = string_or_none(
+        metadata_manifest_metadata_contract_version = _contract_version_or_none(
             metadata_manifest_payload.get("metadata_contract_version")
         )
 
     provenance_manifest_contract_version = None
     provenance_manifest_metadata_contract_version = None
     if isinstance(provenance_manifest_payload, dict):
-        provenance_manifest_contract_version = string_or_none(provenance_manifest_payload.get("provenance_contract_version"))
-        provenance_manifest_metadata_contract_version = string_or_none(
+        provenance_manifest_contract_version = _contract_version_or_none(
+            provenance_manifest_payload.get("provenance_contract_version")
+        )
+        provenance_manifest_metadata_contract_version = _contract_version_or_none(
             provenance_manifest_payload.get("metadata_contract_version")
         )
 
     provenance_merkle_contract_version = None
     provenance_merkle_provenance_contract_version = None
     if isinstance(provenance_merkle_payload, dict):
-        provenance_merkle_contract_version = string_or_none(
+        provenance_merkle_contract_version = _contract_version_or_none(
             provenance_merkle_payload.get("provenance_merkle_contract_version")
         )
-        provenance_merkle_provenance_contract_version = string_or_none(
+        provenance_merkle_provenance_contract_version = _contract_version_or_none(
             provenance_merkle_payload.get("provenance_contract_version")
         )
 

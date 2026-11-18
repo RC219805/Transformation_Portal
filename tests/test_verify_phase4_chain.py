@@ -862,3 +862,40 @@ def test_phase4f_progress_callback_can_be_omitted_for_direct_function_calls() ->
 
     assert verification["computed"]["metadata_entry_count"] == 2
     assert verification["computed"]["provenance_entry_count"] == 2
+
+
+@pytest.mark.parametrize(
+    "hostile_version",
+    ["capture-v1", ["tp.meta.capture.v1"], {"v": 1}, 7],
+    ids=["non-conforming-string", "list", "dict", "int"],
+)
+def test_phase4f_failure_report_nulls_non_conforming_input_contract_versions(tmp_path: Path, hostile_version: Any) -> None:
+    """T-21: untrusted contract versions must not suppress the failure report or mask the exit code."""
+    jsonschema = pytest.importorskip("jsonschema")
+    capture_path = tmp_path / "capture_bad_version.json"
+    _write_json(capture_path, [{"metadata_contract_version": hostile_version}])
+    unparsable_merkle = tmp_path / "provenance_merkle_unparsable.json"
+    unparsable_merkle.write_text("{not json", encoding="utf-8")
+
+    report_path = tmp_path / "failure_report.json"
+    result = _run_verify_cli(
+        "--capture-metadata",
+        str(capture_path),
+        "--metadata-manifest",
+        str(GOLDEN_METADATA_MANIFEST),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(unparsable_merkle),
+        "--out-report",
+        str(report_path),
+        "--write-report-on-failure",
+    )
+    assert result.returncode == 31, result.stderr
+    assert "Traceback" not in result.stderr
+    assert report_path.exists()
+
+    payload = _load_json(report_path)
+    jsonschema.Draft202012Validator(_load_json(REPORT_SCHEMA_PATH)).validate(payload)
+    assert payload["verification_status"]["failure_code_label"] == "MALFORMED_INPUT"
+    assert payload["inputs"]["capture_metadata"]["metadata_contract_version"] is None
