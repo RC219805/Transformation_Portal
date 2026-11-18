@@ -29,6 +29,9 @@ def _version_tuple(raw_version: Any) -> Tuple[int, ...]:
     suffix belong to the pre-release or local label, not to the release.
     """
     text = str(raw_version or "").strip()
+    if text[:1] in ("v", "V") and text[1:2].isdigit():
+        # PEP 440 allows a leading "v"; it is not a non-numeric first component.
+        text = text[1:]
     if not text:
         return ()
     parts = []
