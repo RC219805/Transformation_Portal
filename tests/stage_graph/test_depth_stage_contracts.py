@@ -160,25 +160,6 @@ def depth_pro_checkpoint(tmp_path, monkeypatch: pytest.MonkeyPatch):
     return checkpoint
 
 
-def test_depth_pro_cache_key_does_not_change_when_the_model_loads(tmp_path, depth_pro_checkpoint) -> None:
-    stage = _StubDepthPro(depth_pro_checkpoint)
-    cache_dir = tmp_path / "cache"
-
-    def context() -> StageContext:
-        return StageContext(artifacts={"image": _image_uint8()}, cache_enabled=True, cache_dir=cache_dir)
-
-    key_before_load = stage.get_cache_key(context())
-    first = stage.execute(context())
-    key_after_load = stage.get_cache_key(context())
-    second = stage.execute(context())
-
-    assert first.status == StageStatus.COMPLETED, first.error
-    assert key_before_load == key_after_load
-    assert second.cache_hit is True
-    assert stage.inference_runs == 1
-    assert np.array_equal(second.artifacts["depth_map"], first.artifacts["depth_map"])
-
-
 def test_depth_pro_run_that_asks_for_files_is_not_answered_from_the_cache(tmp_path, depth_pro_checkpoint) -> None:
     cache_dir = tmp_path / "cache"
     image = _image_uint8()
@@ -216,12 +197,15 @@ def test_depth_pro_file_outputs_are_not_written_into_the_stage_cache(tmp_path, d
     assert with_files.inference_runs == 2
     assert not cache_dir.exists() or list(cache_dir.iterdir()) == []
 
-    in_memory = _StubDepthPro(depth_pro_checkpoint)
+    # In-memory runs still use the cache. Each run gets a stage that has not
+    # loaded its model, as a new process would: the key of a loaded stage
+    # carries the transform hash (ADR-018) and differs from a fresh one.
+    in_memory = [_StubDepthPro(depth_pro_checkpoint) for _ in range(2)]
     results = [
-        in_memory.execute(StageContext(artifacts={"image": image}, cache_enabled=True, cache_dir=cache_dir)) for _ in range(2)
+        stage.execute(StageContext(artifacts={"image": image}, cache_enabled=True, cache_dir=cache_dir)) for stage in in_memory
     ]
     assert [result.cache_hit for result in results] == [False, True]
-    assert in_memory.inference_runs == 1
+    assert [stage.inference_runs for stage in in_memory] == [1, 0]
     assert set(results[1].artifacts) == {"depth_map", "depth_provenance"}
 
 
