@@ -677,7 +677,17 @@ def cleanup_expired_batches(
     except OSError:
         return []
 
-    retained = {str(Path(os.path.realpath(str(path)))) for path in retained_input_dirs if str(path).strip()}
+    # A job may read the whole staged input or any directory below it (the receipt
+    # advertises the top-level roots), so a batch is retained while a retained
+    # path equals or lies inside it. Collecting every retained path together with
+    # its ancestors turns that into one set lookup per batch.
+    retained: set[str] = set()
+    for path in retained_input_dirs:
+        if not str(path).strip():
+            continue
+        retained_real = Path(os.path.realpath(str(path)))
+        retained.add(str(retained_real))
+        retained.update(str(parent) for parent in retained_real.parents)
     removed: list[str] = []
     for batch_dir in upload_root.iterdir():
         try:
@@ -687,7 +697,8 @@ def cleanup_expired_batches(
                 continue
             input_dir = batch_dir / "input"
             input_dir_real = str(Path(os.path.realpath(input_dir)))
-            if input_dir_real in retained:
+            batch_dir_real = str(Path(os.path.realpath(batch_dir)))
+            if input_dir_real in retained or batch_dir_real in retained:
                 continue
             age_seconds = now - batch_dir.stat().st_mtime
             if age_seconds < ttl_seconds:

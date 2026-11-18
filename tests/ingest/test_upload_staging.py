@@ -242,3 +242,54 @@ def test_client_manifest_that_overwhelms_the_json_decoder_is_a_client_error(raw_
     assert exc_info.value.reason == "invalid_client_manifest"
     assert exc_info.value.field == "client_manifest"
     assert exc_info.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Expired batch cleanup
+# ---------------------------------------------------------------------------
+
+TTL_SECONDS = 86_400.0
+
+
+def _expired_batch(tmp_path: Path, names: list[str]) -> upload_staging.StagedUploadResult:
+    result = _stage(tmp_path, [_upload(name) for name in names])
+    os.utime(result.batch_root, (NOW, NOW))
+    return result
+
+
+def _cleanup(tmp_path: Path, retained_input_dirs: list[str], *, age_seconds: float = 2 * TTL_SECONDS) -> list[str]:
+    return upload_staging.cleanup_expired_batches(
+        tmp_path / "uploads",
+        now=NOW + age_seconds,
+        ttl_seconds=TTL_SECONDS,
+        retained_input_dirs=retained_input_dirs,
+    )
+
+
+@pytest.mark.parametrize(
+    "job_input_dir",
+    ["input", "input/shoot", "input/shoot/day", "."],
+    ids=["staged-input", "top-level-root", "nested-directory", "batch-root"],
+)
+def test_expired_batch_is_retained_while_a_job_reads_from_inside_it(tmp_path: Path, job_input_dir: str) -> None:
+    result = _expired_batch(tmp_path, ["shoot/day/frame.jpg"])
+    retained = str(result.batch_root / job_input_dir)
+
+    assert _cleanup(tmp_path, [retained]) == []
+    assert (result.input_dir / "shoot" / "day" / "frame.jpg").is_file()
+
+
+def test_expired_batch_is_removed_when_jobs_only_read_other_locations(tmp_path: Path) -> None:
+    in_use = _expired_batch(tmp_path, ["shoot/frame.jpg"])
+    unused = _expired_batch(tmp_path, ["shoot/frame.jpg"])
+    retained = [
+        str(in_use.input_dir / "shoot"),
+        # Neither an ancestor of the batch nor an unrelated directory keeps it.
+        str(tmp_path / "uploads"),
+        str(tmp_path / "elsewhere" / "input" / "shoot"),
+        "",
+    ]
+
+    assert _cleanup(tmp_path, retained) == [unused.batch_id]
+    assert in_use.batch_root.is_dir()
+    assert not unused.batch_root.exists()
