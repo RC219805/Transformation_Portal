@@ -41,7 +41,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -374,12 +374,16 @@ class UnifiedPipeline:
         self,
         input_path: Union[str, Path],
         output_dir: Optional[Union[str, Path]] = None,
+        output_name: Optional[str] = None,
     ) -> ProcessingResult:
         """Process a single image through the pipeline.
 
         Args:
             input_path: Path to the input image.
             output_dir: Optional output directory override.
+            output_name: Optional output filename override. Batch processing
+                passes the name it planned so that outputs stay unique within
+                the batch; the default is derived from the input stem.
 
         Returns:
             ProcessingResult with processing details.
@@ -437,7 +441,7 @@ class UnifiedPipeline:
                     log.warning(f"  ⚠ {stage.display_name} failed: {e}")
 
             # Generate output
-            output_path = self._generate_output(image, input_path, output_dir=output_dir)
+            output_path = self._generate_output(image, input_path, output_dir=output_dir, output_name=output_name)
             result.output_path = output_path
             result.success = True
 
@@ -500,8 +504,12 @@ class UnifiedPipeline:
         log.info(f"  Dry run: {dry_run}")
         log.info(f"  Parallel: {parallel}")
 
+        # Output names are planned for the whole batch before anything is written,
+        # so that two inputs can never be saved to the same file.
+        output_names = self._plan_batch_output_names(input_files)
+
         if dry_run:
-            return self._dry_run_batch(input_files, output_dir)
+            return self._dry_run_batch(input_files, output_dir, output_names)
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -511,12 +519,13 @@ class UnifiedPipeline:
             batch_result = self._process_batch_parallel(
                 input_files,
                 output_dir,
+                output_names,
                 max_workers=max_workers,
             )
         else:
-            for i, input_path in enumerate(input_files, 1):
+            for i, (input_path, output_name) in enumerate(zip(input_files, output_names), 1):
                 log.info(f"\n[{i}/{len(input_files)}] {input_path.name}")
-                result = self.process_single(input_path, output_dir=output_dir)
+                result = self.process_single(input_path, output_dir=output_dir, output_name=output_name)
                 batch_result.results.append(result)
 
                 if result.success:
@@ -533,6 +542,7 @@ class UnifiedPipeline:
         self,
         input_files: List[Path],
         output_dir: Path,
+        output_names: Sequence[str],
         max_workers: Optional[int] = None,
     ) -> BatchResult:
         """Process a batch in parallel with isolated worker pipeline instances."""
@@ -550,15 +560,17 @@ class UnifiedPipeline:
         batch_result = BatchResult(dry_run=False)
         worker_state = threading.local()
 
-        def _worker(input_path: Path) -> ProcessingResult:
+        def _worker(job: Tuple[Path, str]) -> ProcessingResult:
+            input_path, output_name = job
             worker_pipeline = getattr(worker_state, "pipeline", None)
             if worker_pipeline is None:
                 worker_pipeline = self._create_worker_pipeline(disable_rag_indexing=should_disable_rag_indexing)
                 worker_state.pipeline = worker_pipeline
-            return worker_pipeline.process_single(input_path, output_dir=output_dir)
+            return worker_pipeline.process_single(input_path, output_dir=output_dir, output_name=output_name)
 
+        jobs = list(zip(input_files, output_names))
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            for input_path, result in zip(input_files, executor.map(_worker, input_files)):
+            for input_path, result in zip(input_files, executor.map(_worker, jobs)):
                 log.info(f"\n[done] {input_path.name}")
                 batch_result.results.append(result)
 
@@ -605,12 +617,82 @@ class UnifiedPipeline:
             handle.write(json.dumps(document) + "\n")
         log.debug(f"Indexed quality document to RAG: {document.get('image_id', 'unknown')}")
 
-    def _dry_run_batch(self, input_files: List[Path], output_dir: Path) -> BatchResult:
+    def _plan_batch_output_names(self, input_files: Sequence[Path]) -> List[str]:
+        """Return one output filename per input, unique within the batch.
+
+        The default name is ``{stem}_{recipe}{ext}``, so inputs that share a stem
+        (``a.jpg`` + ``a.png``) or a file name (``x/final.jpg`` + ``y/final.jpg``)
+        would all be written to one file. Inputs whose default name is unique
+        keep it unchanged. Colliding inputs are renamed deterministically: by
+        their full source name, then by the directories that tell them apart,
+        then by a counter.
+
+        Args:
+            input_files: Input file paths in processing order.
+
+        Returns:
+            Output filenames aligned with ``input_files``.
+        """
+        default_names = [self._get_output_name(path) for path in input_files]
+        members_by_name: Dict[str, List[int]] = {}
+        for index, name in enumerate(default_names):
+            members_by_name.setdefault(name, []).append(index)
+
+        # Unique default names are reserved first, so a disambiguated name can
+        # never land on an output that another input already owns.
+        taken = {name for name, members in members_by_name.items() if len(members) == 1}
+        planned = list(default_names)
+        for default_name, members in members_by_name.items():
+            if len(members) == 1:
+                continue
+            log.warning(f"{len(members)} inputs share the output name {default_name}; writing distinct outputs instead")
+            group = [input_files[index] for index in members]
+            for index, stem in zip(members, self._distinct_output_stems(group)):
+                candidate = self._get_output_name(input_files[index], stem=stem)
+                counter = 1
+                while candidate in taken:
+                    counter += 1
+                    candidate = self._get_output_name(input_files[index], stem=f"{stem}_{counter}")
+                taken.add(candidate)
+                planned[index] = candidate
+        return planned
+
+    @staticmethod
+    def _distinct_output_stems(group: Sequence[Path]) -> List[str]:
+        """Return output stems that tell apart inputs sharing a default output name.
+
+        Args:
+            group: Inputs that would all receive the same default output name.
+
+        Returns:
+            One stem per input, aligned with ``group``.
+        """
+        names = [path.name for path in group]
+        if len(set(names)) == len(names):
+            # Same stem, different extension: the source extension is enough.
+            return names
+        # The same file name in several directories: qualify it with the
+        # directories below the group's common parent.
+        try:
+            common_parent = Path(os.path.commonpath([str(path.parent) for path in group]))
+            return ["_".join(path.relative_to(common_parent).parts) for path in group]
+        except ValueError:
+            # Mixed absolute/relative inputs have no common parent; the caller's
+            # counter keeps the names unique.
+            return names
+
+    def _dry_run_batch(
+        self,
+        input_files: List[Path],
+        output_dir: Path,
+        output_names: Optional[Sequence[str]] = None,
+    ) -> BatchResult:
         """Generate dry-run preview of batch processing.
 
         Args:
             input_files: List of input file paths.
             output_dir: Output directory path.
+            output_names: Planned output filenames aligned with ``input_files``.
 
         Returns:
             BatchResult with processing plan preview.
@@ -631,8 +713,9 @@ class UnifiedPipeline:
 
         log.info("")
         log.info("Files to process:")
-        for i, f in enumerate(input_files[:10], 1):
-            output_name = self._get_output_name(f)
+        if output_names is None:
+            output_names = self._plan_batch_output_names(input_files)
+        for i, (f, output_name) in enumerate(zip(input_files[:10], output_names), 1):
             log.info(f"  {i}. {f.name} → {output_name}")
         if len(input_files) > 10:
             log.info(f"  ... and {len(input_files) - 10} more files")
@@ -1026,6 +1109,7 @@ class UnifiedPipeline:
         image: Image.Image,
         input_path: Path,
         output_dir: Optional[Union[str, Path]] = None,
+        output_name: Optional[str] = None,
     ) -> Path:
         """Generate output file.
 
@@ -1033,6 +1117,7 @@ class UnifiedPipeline:
             image: Processed image.
             input_path: Original input path.
             output_dir: Optional output directory override.
+            output_name: Optional output filename override.
 
         Returns:
             Path to output file.
@@ -1053,7 +1138,8 @@ class UnifiedPipeline:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate output filename
-        output_name = self._get_output_name(input_path)
+        if output_name is None:
+            output_name = self._get_output_name(input_path)
         output_path = output_dir / output_name
 
         # Save based on format
@@ -1077,11 +1163,13 @@ class UnifiedPipeline:
         log.info(f"  Output: {output_path}")
         return output_path
 
-    def _get_output_name(self, input_path: Path) -> str:
+    def _get_output_name(self, input_path: Path, stem: Optional[str] = None) -> str:
         """Generate output filename.
 
         Args:
             input_path: Input file path.
+            stem: Optional replacement for the input stem (used to disambiguate
+                batch outputs that would otherwise share a name).
 
         Returns:
             Output filename.
@@ -1099,7 +1187,7 @@ class UnifiedPipeline:
 
         # Use recipe name in output filename
         recipe_slug = self.name.lower().replace(" ", "_").replace("-", "_")
-        return f"{input_path.stem}_{recipe_slug}{ext}"
+        return f"{input_path.stem if stem is None else stem}_{recipe_slug}{ext}"
 
 
 __all__ = [

@@ -938,6 +938,118 @@ class TestBatchProcessing:
         assert observed["max_workers"] == 5
         assert create_calls == 1
 
+    @staticmethod
+    def _write_solid(path: Path, color: tuple[int, int, int]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (16, 12), color=color).save(path)
+
+    @staticmethod
+    def _output_colors(batch_result) -> dict[str, tuple[int, int, int]]:
+        colors: dict[str, tuple[int, int, int]] = {}
+        for result in batch_result.results:
+            with Image.open(result.output_path) as output:
+                colors[result.input_path.name] = output.convert("RGB").getpixel((0, 0))
+        return colors
+
+    @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+    def test_batch_same_stem_different_extension_writes_distinct_outputs(
+        self, pipeline_module, minimal_recipe, tmp_path: Path, parallel: bool
+    ):
+        """Inputs that share a stem must not overwrite each other's output."""
+        input_dir = tmp_path / "inputs"
+        self._write_solid(input_dir / "a.bmp", (200, 10, 10))
+        self._write_solid(input_dir / "a.png", (10, 200, 10))
+        self._write_solid(input_dir / "b.png", (10, 10, 200))
+        output_dir = tmp_path / "outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        batch_result = pipeline.process_batch(str(input_dir / "*"), output_dir, parallel=parallel, max_workers=2)
+
+        assert batch_result.successful_count == 3
+        assert batch_result.failed_count == 0
+        output_names = {result.input_path.name: result.output_path.name for result in batch_result.results}
+        assert output_names == {
+            "a.bmp": "a.bmp_test_pipeline.png",
+            "a.png": "a.png_test_pipeline.png",
+            # The input that never collided keeps its historical name byte for byte.
+            "b.png": "b_test_pipeline.png",
+        }
+        assert sorted(path.name for path in output_dir.iterdir()) == sorted(output_names.values())
+        # Every output holds the pixels of its own input, not a sibling's.
+        assert self._output_colors(batch_result) == {
+            "a.bmp": (200, 10, 10),
+            "a.png": (10, 200, 10),
+            "b.png": (10, 10, 200),
+        }
+
+    def test_batch_same_name_in_different_directories_writes_distinct_outputs(
+        self, pipeline_module, minimal_recipe, tmp_path: Path
+    ):
+        """A glob that matches the same file name in several directories keeps every output."""
+        renders = tmp_path / "renders"
+        self._write_solid(renders / "kitchen" / "final.png", (200, 10, 10))
+        self._write_solid(renders / "lounge" / "final.png", (10, 200, 10))
+        output_dir = tmp_path / "outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        batch_result = pipeline.process_batch(str(renders / "*" / "final.png"), output_dir)
+
+        assert batch_result.successful_count == 2
+        assert [result.output_path.name for result in batch_result.results] == [
+            "kitchen_final.png_test_pipeline.png",
+            "lounge_final.png_test_pipeline.png",
+        ]
+        with Image.open(output_dir / "kitchen_final.png_test_pipeline.png") as kitchen:
+            assert kitchen.getpixel((0, 0)) == (200, 10, 10)
+        with Image.open(output_dir / "lounge_final.png_test_pipeline.png") as lounge:
+            assert lounge.getpixel((0, 0)) == (10, 200, 10)
+
+    def test_batch_output_plan_keeps_unique_names_and_never_reuses_a_taken_name(self, pipeline_module, minimal_recipe):
+        """Only colliding inputs are renamed, and never onto a name another input owns."""
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        inputs = [
+            Path("shoot/a.jpg"),
+            # Its default name equals the first disambiguation candidate of a.jpg.
+            Path("shoot/a.jpg.png"),
+            Path("shoot/a.png"),
+            Path("shoot/day/final.jpg"),
+            Path("shoot/night/final.jpg"),
+            Path("shoot/night/final.tif"),
+            Path("shoot/unique.tif"),
+        ]
+
+        planned = pipeline._plan_batch_output_names(inputs)
+
+        assert planned == [
+            "a.jpg_2_test_pipeline.png",
+            "a.jpg_test_pipeline.png",
+            "a.png_test_pipeline.png",
+            "day_final.jpg_test_pipeline.png",
+            "night_final.jpg_test_pipeline.png",
+            "night_final.tif_test_pipeline.png",
+            "unique_test_pipeline.png",
+        ]
+        assert len(set(planned)) == len(inputs)
+        # Non-colliding inputs keep exactly the name a single-image run gives them.
+        for index in (1, 6):
+            assert planned[index] == pipeline._get_output_name(inputs[index])
+
+    def test_batch_dry_run_previews_the_names_a_real_run_writes(self, pipeline_module, minimal_recipe, tmp_path: Path, caplog):
+        """The dry-run plan must show the disambiguated names, not the colliding default."""
+        input_dir = tmp_path / "inputs"
+        self._write_solid(input_dir / "a.bmp", (200, 10, 10))
+        self._write_solid(input_dir / "a.png", (10, 200, 10))
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        with caplog.at_level(logging.INFO, logger="unified_pipeline"):
+            pipeline.process_batch(str(input_dir / "*"), tmp_path / "outputs", dry_run=True)
+
+        preview = [record.getMessage() for record in caplog.records if "→" in record.getMessage()]
+        assert preview == [
+            "  1. a.bmp → a.bmp_test_pipeline.png",
+            "  2. a.png → a.png_test_pipeline.png",
+        ]
+
 
 # =============================================================================
 # Output Generation Tests
