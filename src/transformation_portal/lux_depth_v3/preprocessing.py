@@ -1029,8 +1029,8 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
 
         if corrected is None:
             # No rotation needed - for JPEG, copy byte-for-byte to avoid lossy re-encode
-            img.close()
             if input_path.suffix.lower() in {".jpg", ".jpeg"} and input_path != output_path:
+                img.close()
                 shutil.copy2(input_path, output_path)
                 logger.debug("No EXIF rotation needed, copied file: %s -> %s", input_path, output_path)
                 return
@@ -1039,10 +1039,9 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
                 logger.debug("No EXIF rotation needed, file unchanged: %s", input_path)
                 return
             else:
-                # Non-JPEG or same path - use PIL to copy (may re-encode)
+                # Non-JPEG to a new path - copy through PIL (may re-encode).
+                # Copy before closing: a closed image can no longer be loaded.
                 corrected = img.copy()
-                img.close()
-                img = Image.open(input_path)  # Re-open to get fresh copy
 
         # Extract and preserve EXIF data with normalized orientation
         exif_data = None

@@ -730,6 +730,21 @@ class TestNormalizeExifOrientation:
 
         assert hashlib.sha256(image_path.read_bytes()).hexdigest() == before
 
+    @pytest.mark.parametrize("suffix", [".png", ".tif"])
+    def test_upright_non_jpeg_to_new_path_is_written_losslessly(self, tmp_path, suffix):
+        """LC-18 follow-up: the upright non-JPEG branch must not copy from a closed image."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        pixels = (np.random.default_rng(1).random((24, 36, 3)) * 255).astype(np.uint8)
+        input_path = tmp_path / f"upright{suffix}"
+        output_path = tmp_path / "out" / f"upright{suffix}"
+        Image.fromarray(pixels).save(input_path)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        with Image.open(output_path) as out_img:
+            np.testing.assert_array_equal(np.asarray(out_img.convert("RGB")), pixels)
+
     def test_rotated_jpeg_is_transposed_and_orientation_reset(self, tmp_path):
         """An orientation-6 JPEG is physically rotated and its tag normalised to 1."""
         from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
