@@ -447,33 +447,34 @@ class DepthModelRegistry:
 
         # Role-based lookup
         if role is not None:
-            candidates = self.list_backends(
-                role=role,
-                commercial_only=commercial_only,
-            )
-            if not candidates:
+            # Filter registrations (not model ids) so a backend registered for a
+            # different role that shares a model_id can never be returned.
+            candidate_names = [
+                reg_name
+                for reg_name, registered_info in self._backend_info.items()
+                if registered_info.role == role and (not commercial_only or registered_info.is_commercial_safe())
+            ]
+            if not candidate_names:
                 raise KeyError(f"No backend found for " f"role={role.name}, " f"commercial_only={commercial_only}")
 
             # Return first matching (priority order determined by registration)
             failures = []
             last_error: Optional[Exception] = None
-            for info in candidates:
-                for reg_name, registered_info in self._backend_info.items():
-                    if registered_info.model_id == info.model_id:
-                        try:
-                            return self.get_backend(
-                                name=reg_name,
-                                commercial_only=commercial_only,
-                                use_cache=use_cache,
-                            )
-                        except Exception as exc:
-                            last_error = exc
-                            failures.append(f"{reg_name}: {exc}")
-                            logger.warning(
-                                "Skipping depth backend '%s' during role lookup: %s",
-                                reg_name,
-                                exc,
-                            )
+            for reg_name in candidate_names:
+                try:
+                    return self.get_backend(
+                        name=reg_name,
+                        commercial_only=commercial_only,
+                        use_cache=use_cache,
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    failures.append(f"{reg_name}: {exc}")
+                    logger.warning(
+                        "Skipping depth backend '%s' during role lookup: %s",
+                        reg_name,
+                        exc,
+                    )
 
             if failures:
                 raise RuntimeError(
