@@ -186,6 +186,31 @@ class TestEnhanceConfig:
         config = EnhanceConfig(quality_tier="apex", depth_fallback="APEX-STRICT")
         assert config.depth_fallback == "fail"  # auto-upgrade suppressed
 
+    def test_enhance_config_apex_strict_survives_dataclasses_replace(self):
+        """Regression (audit F16): ``__post_init__`` must be idempotent for the
+        ``apex-strict`` opt-out; rebuilding the config must not re-upgrade the
+        canonical ``fail`` to ``v2-auto``."""
+        import dataclasses
+
+        config = EnhanceConfig(quality_tier="apex", depth_fallback="apex-strict")
+        assert dataclasses.replace(config).depth_fallback == "fail"
+        assert dataclasses.replace(config, v2_timeout=600).depth_fallback == "fail"
+        # The private marker never changes equality or repr.
+        assert dataclasses.replace(config) == config
+        assert "_apex_strict_requested" not in repr(config)
+
+    def test_enhance_config_replace_keeps_default_apex_upgrade_semantics(self):
+        """Default APEX configs keep ``v2-auto`` through ``replace``; replacing the
+        policy of a strict config with another value drops the strict marker."""
+        import dataclasses
+
+        default_apex = EnhanceConfig(quality_tier="apex")
+        assert dataclasses.replace(default_apex).depth_fallback == "v2-auto"
+        strict = EnhanceConfig(quality_tier="apex", depth_fallback="apex-strict")
+        skip = dataclasses.replace(strict, depth_fallback="skip")
+        assert skip.depth_fallback == "skip"
+        assert dataclasses.replace(skip, depth_fallback="fail").depth_fallback == "v2-auto"
+
     def test_enhance_config_normalizes_legacy_depth_backend_alias(self):
         """Legacy backend aliases should normalize to canonical IDs."""
         with pytest.warns(FutureWarning, match="depth_anything_v3"):
