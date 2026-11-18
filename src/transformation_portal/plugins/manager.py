@@ -439,6 +439,10 @@ class PluginManager:
         reloaded = self._loader.reload_plugin(name)
         if not reloaded or not reloaded.plugin:
             return False
+        if not reloaded.is_valid:
+            # Same rule as discover_plugins(): a plugin with load errors never reaches the registry.
+            logger.warning("Refusing reloaded plugin %s with load errors: %s", name, "; ".join(reloaded.load_errors))
+            return False
 
         # Re-register
         try:

@@ -495,3 +495,19 @@ class TestInvalidPluginsAreRefused:
         with pytest.raises(PluginInitializationError):
             with manager.plugin_session("incompatible_lookup"):
                 pass
+
+    def test_reload_does_not_register_plugin_with_load_errors(self):
+        """T-11: reload must apply the discover_plugins() rule and keep invalid plugins out of the registry."""
+        manager = self._manager_with_invalid_plugin("incompatible_reload", [])
+        manager._loader.reload_plugin.return_value = manager._loader.load_plugin("incompatible_reload")  # noqa: SLF001
+
+        assert manager.reload_plugin("incompatible_reload") is False
+        assert manager._registry.list_plugins() == {}  # noqa: SLF001
+
+    def test_reload_registers_plugin_without_load_errors(self):
+        plugin = _make_plugin("valid_reload")
+        manager = _make_manager_with_plugin(plugin)
+        manager._loader.reload_plugin.return_value = manager._loader.load_plugin("valid_reload")  # noqa: SLF001
+
+        assert manager.reload_plugin("valid_reload") is True
+        assert manager._registry.list_plugins() == {"processor": ["valid_reload"]}  # noqa: SLF001

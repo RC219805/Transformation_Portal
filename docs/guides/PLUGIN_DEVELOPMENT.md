@@ -392,8 +392,11 @@ installed distribution is accepted only when it is an importable module. A
 manifest with an invalid `plugin_type`, unparsable portal-version bounds,
 malformed or unmet dependencies, or an incompatible portal version is still
 reported by `PluginLoader.discover_all()` (with `load_errors`), but
-`PluginManager` refuses to hand out, initialize or execute it. Each package's
-entry module must not share a name with an already-imported non-plugin module.
+`PluginManager` refuses to hand out, initialize, execute or re-register it on
+reload. An entry module shipped inside the package directory must not share a
+name with an already-imported non-plugin module; an entry module the directory
+does not ship is resolved as an installed module (for example a pip-installed
+plugin).
 
 ### Distribution
 

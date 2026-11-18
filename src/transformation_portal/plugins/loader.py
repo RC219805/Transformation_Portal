@@ -1,6 +1,7 @@
 """Plugin loader for dynamic discovery and loading of plugins."""
 
 import importlib
+import importlib.machinery
 import importlib.util
 import json
 import logging
@@ -500,12 +501,15 @@ class PluginLoader:
             sys_path_modified = True
 
         try:
-            # Import the module from this package directory, never a same-named module
-            # already imported from somewhere else.
-            collision_error = self._evict_foreign_plugin_module(package_dir, module_path)
+            # A package that ships its entry module must run that code, never a same-named
+            # module already imported from somewhere else. A manifest whose entry module is
+            # not shipped in the package directory names an installed module (pip-installed
+            # plugin) and is imported as before.
+            ships_entry_module = self._package_ships_module(package_dir, module_path)
+            collision_error = self._evict_foreign_plugin_module(package_dir, module_path, ships_entry_module)
             if collision_error is None:
                 module = importlib.import_module(module_path)
-                if not self._module_is_from(module, package_dir):
+                if ships_entry_module and not self._module_is_from(module, package_dir):
                     collision_error = (
                         f"Entry module {module_path} resolved outside plugin package {package_dir}: "
                         f"{getattr(module, '__file__', None)}"
@@ -519,7 +523,8 @@ class PluginLoader:
                     module_name=module_path,
                     load_errors=errors,
                 )
-            self._mark_plugin_module(module_path, package_dir)
+            if ships_entry_module:
+                self._mark_plugin_module(module_path, package_dir)
 
             # Get the plugin class
             if not hasattr(module, class_name):
@@ -591,19 +596,33 @@ class PluginLoader:
                 return False
         return found
 
-    def _evict_foreign_plugin_module(self, package_dir: Path, module_path: str) -> Optional[str]:
+    @staticmethod
+    def _package_ships_module(package_dir: Path, module_path: str) -> bool:
+        """Return True when ``package_dir`` itself provides the top-level entry module."""
+        top_level = module_path.split(".", 1)[0]
+        if (package_dir / top_level).is_dir():
+            return True
+        return any((package_dir / f"{top_level}{suffix}").is_file() for suffix in importlib.machinery.all_suffixes())
+
+    def _evict_foreign_plugin_module(
+        self, package_dir: Path, module_path: str, ships_entry_module: bool = True
+    ) -> Optional[str]:
         """Drop a same-named module that another plugin package imported earlier.
 
         Plugin entry modules are imported under their declared name. Without
         this, two packages that both ship ``plugin.py`` would silently share the
         first package's code. A non-plugin module (stdlib, third-party) with the
-        same name is never evicted: the plugin is rejected instead.
+        same name is never evicted: a package that ships its own module of that
+        name is rejected, while a manifest that only names an installed module
+        keeps using it.
         """
         top_level = module_path.split(".", 1)[0]
         existing = sys.modules.get(top_level)
         if existing is None or self._module_is_from(existing, package_dir):
             return None
         if getattr(existing, _PLUGIN_SOURCE_ATTR, None) is None:
+            if not ships_entry_module:
+                return None
             return f"Entry module {module_path} collides with already-imported module {top_level!r}"
         for name in [n for n in sys.modules if n == top_level or n.startswith(top_level + ".")]:
             del sys.modules[name]

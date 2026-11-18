@@ -596,3 +596,58 @@ def test_non_ascii_signature_is_a_load_error_not_a_crash(tmp_path: Path):
         "Plugin manifest signature verification failed: Plugin manifest signature does not match trusted key"
     ]
     assert not marker.exists()
+
+
+def test_entry_module_not_shipped_by_package_resolves_installed_module(tmp_path: Path, monkeypatch, _forget_modules):
+    """T-11 follow-up: a manifest may name an installed module that its directory does not ship."""
+    _forget_modules.append("t11_installed_entry")
+    site_dir = tmp_path / "site"
+    write_plugin_module(
+        site_dir, "t11_installed_entry", class_name="InstalledPlugin", plugin_name="installed", execute_result="site"
+    )
+    monkeypatch.syspath_prepend(str(site_dir))
+    plugins_dir = tmp_path / "plugins"
+    for package in ("first_package", "second_package"):
+        write_plugin_json(
+            plugins_dir / package,
+            name=f"{package}_plugin",
+            module_name="t11_installed_entry",
+            class_name="InstalledPlugin",
+        )
+
+    discovered = {p.manifest.name: p for p in isolated_loader(plugins_dir).discover_all() if p.manifest}
+
+    assert sorted(discovered) == ["first_package_plugin", "second_package_plugin"]
+    assert all(plugin.is_valid for plugin in discovered.values())
+    assert {plugin.plugin.execute() for plugin in discovered.values()} == {"site"}
+    # The installed module is not plugin-owned: a later package can never evict it from sys.modules.
+    assert not hasattr(sys.modules["t11_installed_entry"], "__tp_plugin_source__")
+
+
+def test_package_shipping_entry_module_rejects_same_named_installed_module(tmp_path: Path, monkeypatch, _forget_modules):
+    """T-11: a package that ships its entry module never runs an already-imported module of that name."""
+    import importlib
+
+    _forget_modules.append("t11_shadowed_entry")
+    site_dir = tmp_path / "site"
+    write_plugin_module(site_dir, "t11_shadowed_entry", class_name="ShadowPlugin", plugin_name="site", execute_result="site")
+    monkeypatch.syspath_prepend(str(site_dir))
+    installed = importlib.import_module("t11_shadowed_entry")
+    plugins_dir = tmp_path / "plugins"
+    write_plugin_module(
+        plugins_dir / "shipping_package",
+        "t11_shadowed_entry",
+        class_name="ShadowPlugin",
+        plugin_name="shipping",
+        execute_result="package",
+    )
+    write_plugin_json(
+        plugins_dir / "shipping_package", name="shipping", module_name="t11_shadowed_entry", class_name="ShadowPlugin"
+    )
+
+    discovered = isolated_loader(plugins_dir).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert "collides with already-imported module 't11_shadowed_entry'" in discovered[0].load_errors[-1]
+    assert sys.modules["t11_shadowed_entry"] is installed
