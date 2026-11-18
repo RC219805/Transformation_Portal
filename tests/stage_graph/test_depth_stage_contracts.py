@@ -160,6 +160,23 @@ def depth_pro_checkpoint(tmp_path, monkeypatch: pytest.MonkeyPatch):
     return checkpoint
 
 
+def test_depth_pro_cache_key_keeps_the_adr_018_layout(depth_pro_checkpoint) -> None:
+    """Cached depth maps stay addressable: the key layout must not drift."""
+    import hashlib
+
+    image = _image_uint8()
+    stage = _StubDepthPro(depth_pro_checkpoint)
+    context = StageContext(artifacts={"image": image})
+    prefix = f"depthpro_{stage._get_checkpoint_hash()[:16]}_{stage._get_package_version()}"
+    suffix = f"{hashlib.sha256(image.tobytes()).hexdigest()[:16]}_cpu_focal_estimated_v2"
+
+    assert stage.get_cache_key(context) == f"{prefix}_unloaded_{suffix}"
+
+    stage._load_model()
+    transform_hash = hashlib.sha256(repr(stage._transform)[:100].encode()).hexdigest()[:8]
+    assert stage.get_cache_key(context) == f"{prefix}_{transform_hash}_{suffix}"
+
+
 def test_depth_pro_run_that_asks_for_files_is_not_answered_from_the_cache(tmp_path, depth_pro_checkpoint) -> None:
     cache_dir = tmp_path / "cache"
     image = _image_uint8()
