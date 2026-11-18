@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Mapping
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from transformation_portal.core.depth_artifact import DepthArtifact
 from transformation_portal.core.image_artifact import ImageMaster, ImageProxy, ProxyTransform, metadata_payload
@@ -288,7 +288,15 @@ def validate_input_color_metadata(
             grayscale = page.photometric == tifffile.PHOTOMETRIC.MINISBLACK
             image_format = "TIFF"
     else:
-        with Image.open(source) as image:
+        # Only JPEG and PNG are admitted here. Restricting Pillow to those two plugins keeps the probe
+        # independent of which other plugins the process has registered: after Image.init() Pillow tries
+        # plugins alphabetically, and some read through file methods the bounded preflight reader does
+        # not offer, which used to escape as AttributeError.
+        try:
+            probe = Image.open(source, formats=("JPEG", "PNG"))
+        except UnidentifiedImageError as exc:
+            raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF") from exc
+        with probe as image:
             height, width = image.height, image.width
             image_format = str(image.format)
             if image_format not in {"JPEG", "PNG"}:

@@ -57,6 +57,25 @@ def test_tiff_declaration_and_ambiguous_metadata_match_ingest(tmp_path, color):
         assert error.value.code == "input_color_ambiguous"
 
 
+def test_preflight_does_not_depend_on_which_pillow_plugins_are_registered(tmp_path, monkeypatch):
+    """Image.init() registers every plugin alphabetically, so IM is tried before JPEG.
+
+    The IM plugin reads with ``readline``, which the bounded preflight reader does not offer; the
+    probe used to escape as AttributeError (a 500 for managed callers) in any process that had
+    called ``Image.init()`` or ``Image.registered_extensions()`` before its first ``Image.open``.
+    """
+    Image.init()
+    assert "IM" in Image.ID
+    monkeypatch.setattr(Image, "ID", ["IM", *[name for name in Image.ID if name != "IM"]])
+    Image.new("RGB", (14, 14)).save(tmp_path / "tagged.png", icc_profile=output_srgb_icc())
+    Image.new("RGB", (14, 14)).save(tmp_path / "untagged.jpg")
+    _inspect(tmp_path)
+    # A format this ingest does not admit is still refused with the documented message, not a plugin error.
+    Image.new("RGB", (14, 14)).save(tmp_path / "bitmap.jpg", format="BMP")
+    with pytest.raises(ValueError, match="supports RGB/gray JPEG, PNG and TIFF"):
+        _inspect(tmp_path)
+
+
 def test_canonical_srgb_and_untagged_jpeg_remain_accepted(tmp_path):
     Image.new("RGB", (14, 14)).save(tmp_path / "tagged.png", icc_profile=output_srgb_icc())
     Image.new("RGB", (14, 14)).save(tmp_path / "untagged.jpg")
