@@ -313,8 +313,14 @@ def segmentation_mask_artifact_path(
     segmentation_dir: Path,
     output_key: Path,
 ) -> Path:
-    """Return canonical segmentation mask artifact path."""
-    return segmentation_dir / output_key.parent / f"{output_key.stem}_materials_v3_masks.npz"
+    """Return canonical segmentation mask artifact path.
+
+    ``output_key`` is the extension-less ``<stem>_<ext>_<hash8>`` key from
+    :func:`make_output_key`. Its full name is used: ``Path.stem`` would cut a
+    key with an interior dot before the discriminating hash, so two inputs
+    such as ``kitchen.1.jpg`` and ``kitchen.2.jpg`` would share one artifact.
+    """
+    return segmentation_dir / output_key.parent / f"{output_key.name}_materials_v3_masks.npz"
 
 
 def build_artifact_index(

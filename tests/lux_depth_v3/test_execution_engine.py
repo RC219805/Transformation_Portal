@@ -430,6 +430,62 @@ class TestGeneratePBRStage:
         assert Path(result.roughness_path).exists()
         assert Path(result.ao_path).exists()
 
+    def test_keys_with_interior_dots_keep_separate_pbr_maps(self, tmp_path):
+        """Two keys sharing the text before their last interior dot must not share PBR maps.
+
+        The output key has no extension, so ``Path.stem`` truncated it at the
+        last interior dot and both inputs wrote ``2024.05_{normal,...}.png``.
+        """
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import generate_pbr_stage
+
+        config = EnhanceConfig(generate_pbr=True)
+        input_root = tmp_path / "inputs"
+        output_root = tmp_path / "output"
+        front_key = make_output_key(input_root / "2024.05.01_front.jpg", input_root)
+        back_key = make_output_key(input_root / "2024.05.01_back.jpg", input_root)
+        assert front_key.stem == back_key.stem, "fixture must exercise the truncating-stem collision"
+        ramp = np.linspace(0.0, 1.0, 32 * 24, dtype=np.float32)
+
+        front = generate_pbr_stage(depth=ramp.reshape(24, 32), output_key=front_key, output_root=output_root, config=config)
+        back = generate_pbr_stage(depth=ramp.reshape(32, 24), output_key=back_key, output_root=output_root, config=config)
+
+        assert front.success is True and back.success is True
+        for result, key in ((front, front_key), (back, back_key)):
+            assert Path(result.normal_path) == output_root / "pbr" / f"{key.name}_normal.png"
+            assert Path(result.roughness_path) == output_root / "pbr" / f"{key.name}_roughness.png"
+            assert Path(result.ao_path) == output_root / "pbr" / f"{key.name}_ao.png"
+        assert len(list((output_root / "pbr").iterdir())) == 6
+
+    @pytest.mark.parametrize("relative_input", ["image.jpg", "scene1/IMG_0042.png", "noext"])
+    def test_pbr_names_are_unchanged_without_interior_dots(self, tmp_path, relative_input):
+        """Keys without an interior dot keep exactly the PBR names they always had."""
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import generate_pbr_stage
+
+        input_root = tmp_path / "inputs"
+        output_root = tmp_path / "output"
+        key = make_output_key(input_root / relative_input, input_root)
+        assert key.stem == key.name
+
+        result = generate_pbr_stage(
+            depth=np.linspace(0.0, 1.0, 32 * 24, dtype=np.float32).reshape(24, 32),
+            output_key=key,
+            output_root=output_root,
+            config=EnhanceConfig(generate_pbr=True),
+        )
+
+        assert result.success is True
+        assert Path(result.normal_path) == output_root / "pbr" / f"{key.stem}_normal.png"
+        assert Path(result.roughness_path) == output_root / "pbr" / f"{key.stem}_roughness.png"
+        assert Path(result.ao_path) == output_root / "pbr" / f"{key.stem}_ao.png"
+
 
 class TestRunV2Stage:
     """Test run_v2_stage function."""

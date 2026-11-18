@@ -274,6 +274,52 @@ class TestArtifactReloadHelpers:
             tmp_path / "segmentation" / "scene" / "image_jpg_abcd1234_materials_v3_masks.npz"
         )
 
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            ("2024.05.01_front.jpg", "2024.05.01_back.jpg"),
+            ("kitchen.1.jpg", "kitchen.2.jpg"),
+            ("shot.v1.tif", "shot.v2.tif"),
+        ],
+    )
+    def test_segmentation_mask_artifact_path_keeps_keys_with_interior_dots_distinct(
+        self, tmp_path: Path, first: str, second: str
+    ):
+        """Inputs that share the text before their last interior dot keep separate mask artifacts.
+
+        The output key has no extension, so ``Path.stem`` cut it at the last
+        interior dot and dropped the discriminating hash: both inputs mapped
+        to one ``<prefix>_materials_v3_masks.npz``.
+        """
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key, segmentation_mask_artifact_path
+
+        input_root = tmp_path / "inputs"
+        segmentation_dir = tmp_path / "segmentation"
+        first_key = make_output_key(input_root / first, input_root)
+        second_key = make_output_key(input_root / second, input_root)
+        assert first_key.stem == second_key.stem, "fixture must exercise the truncating-stem collision"
+
+        first_path = segmentation_mask_artifact_path(segmentation_dir, first_key)
+        second_path = segmentation_mask_artifact_path(segmentation_dir, second_key)
+
+        assert first_path != second_path
+        assert first_path == segmentation_dir / f"{first_key.name}_materials_v3_masks.npz"
+        assert second_path == segmentation_dir / f"{second_key.name}_materials_v3_masks.npz"
+
+    @pytest.mark.parametrize("relative_input", ["image.jpg", "scene1/IMG_0042.png", "a/b/render final.tiff", "noext"])
+    def test_segmentation_mask_artifact_path_is_unchanged_without_interior_dots(self, tmp_path: Path, relative_input: str):
+        """Keys without an interior dot keep exactly the name they always had."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key, segmentation_mask_artifact_path
+
+        input_root = tmp_path / "inputs"
+        segmentation_dir = tmp_path / "segmentation"
+        key = make_output_key(input_root / relative_input, input_root)
+        assert key.stem == key.name
+
+        assert segmentation_mask_artifact_path(segmentation_dir, key) == (
+            segmentation_dir / key.parent / f"{key.stem}_materials_v3_masks.npz"
+        )
+
 
 class TestMakeOutputKey:
     """Test output key generation."""

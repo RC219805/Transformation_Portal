@@ -4906,15 +4906,16 @@ class EnhanceOrchestrator:
             pbr_dir = self.output_root / "pbr"
             pbr_dir.mkdir(parents=True, exist_ok=True)
 
-            # Derive base name from output_key for consistent artifact naming
-            sanitized_stem = output_key.stem if output_key.suffix else output_key.name
-
+            # An output key is ``<stem>_<ext>_<hash8>`` and carries no file
+            # extension, so its full name is the artifact base name.
+            # ``Path.stem`` would cut a key with an interior dot (input
+            # ``2024.05.01_front.jpg``) before its discriminating hash.
             pbr_paths = write_pbr_maps(
                 normal_map=normal_map,
                 roughness_map=roughness_map,
                 ao_map=ao_map,
                 output_dir=pbr_dir,
-                base_name=sanitized_stem,
+                base_name=output_key.name,
             )
             pbr_write_ms = round((time.perf_counter() - pbr_write_t0) * 1000.0, 3)
 
@@ -4963,7 +4964,8 @@ class EnhanceOrchestrator:
         """Return canonical Materials V3 enhanced path."""
         temp_dir = self.output_root / "temp"
         extension = ".tif" if self.config.output_bit_depth == 16 else ".png"
-        return temp_dir / f"{output_key.stem}" f"_materials_v3_enhanced" f"{extension}"
+        # The key has no extension; ``.stem`` would truncate at an interior dot.
+        return temp_dir / f"{output_key.name}" f"_materials_v3_enhanced" f"{extension}"
 
     def _segmentation_mask_artifact_path(
         self,
@@ -5678,7 +5680,7 @@ class EnhanceOrchestrator:
     ) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
-        File format: {output_key.stem}_materials_v3_masks.npz
+        File format: {output_key.name}_materials_v3_masks.npz
 
         Args:
             masks: Dictionary mapping material names to binary masks
@@ -5699,8 +5701,9 @@ class EnhanceOrchestrator:
             # Ensure output directory exists
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Build mask file path
-            mask_filename = f"{output_key.stem}_materials_v3_masks.npz"
+            # Build mask file path. The key has no extension; ``.stem`` would
+            # truncate at an interior dot and let two inputs share one file.
+            mask_filename = f"{output_key.name}_materials_v3_masks.npz"
             mask_path = output_dir / mask_filename
 
             # Validate mask data before serialization

@@ -510,3 +510,139 @@ class TestManifestEnvironment:
         manifest = _get_manifest_data(tmp_path, "time_order.png")
         # Lexicographic comparison works for ISO timestamps
         assert manifest["end_time"] >= manifest["start_time"]
+
+
+class TestDottedInputNamesKeepSeparateArtifacts:
+    """Inputs with interior dots must not share PBR, mask or Materials hand-off artifacts.
+
+    An output key is ``<stem>_<ext>_<hash8>`` with no extension. Naming an
+    artifact from ``Path(key).stem`` cut the key at its last interior dot and
+    dropped the discriminating hash, so ``2024.05.01_front.jpg`` and
+    ``2024.05.01_back.jpg`` both wrote ``2024.05_*``.
+    """
+
+    FRONT = "2024.05.01_front.jpg"
+    BACK = "2024.05.01_back.jpg"
+
+    def test_legacy_batch_writes_one_pbr_set_per_dotted_input(self, tmp_path: Path) -> None:
+        """Both images report ok, so each must own maps of its own dimensions."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        front = _make_test_image(inputs, self.FRONT, size=(64, 48))
+        back = _make_test_image(inputs, self.BACK, size=(80, 40))
+        orchestrator = _create_orchestrator(
+            output,
+            generate_pbr=True,
+            emit_run_card=False,
+            enable_parallel_processing=False,
+        )
+
+        results = orchestrator.enhance_batch(inputs, input_files=[back, front])
+
+        assert sorted((Path(r["image"]).name, r["status"]) for r in results) == [(self.BACK, "ok"), (self.FRONT, "ok")]
+        normal_paths = set()
+        for result in results:
+            key = make_output_key(Path(result["image"]), inputs)
+            pbr_assets = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))["pbr_assets"]
+            for map_name in ("normal", "roughness", "ao"):
+                assert Path(pbr_assets[f"{map_name}_path"]) == output / "pbr" / f"{key.name}_{map_name}.png"
+            with Image.open(result["image"]) as source, Image.open(pbr_assets["normal_path"]) as normal:
+                assert normal.size == source.size
+            normal_paths.add(pbr_assets["normal_path"])
+        assert len(normal_paths) == 2
+        assert len(list((output / "pbr").iterdir())) == 6
+
+    def test_prepared_batch_writes_one_pbr_set_per_dotted_input(self, tmp_path: Path) -> None:
+        """The production path delivered one input the other input's maps and still passed evidence."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        sizes = {"2024.05.01_front.png": (64, 48), "2024.05.01_back.png": (80, 40)}
+        images = []
+        for name, size in sizes.items():
+            pixels = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+            pixels[..., 0] = np.linspace(0, 255, size[0]).astype(np.uint8)[None, :]
+            Image.fromarray(pixels).save(inputs / name)
+            images.append(inputs / name)
+        prepared = prepare_lux_execution(
+            EnhanceConfig(depth_backend="synthetic", allow_synthetic_fallback=True, enable_v2=False, generate_pbr=True),
+            inputs,
+            sorted(images),
+        )
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output)
+
+        results = orchestrator.enhance_batch(inputs)
+
+        assert sorted((Path(r["image"]).name, r["status"]) for r in results) == sorted((name, "ok") for name in sizes)
+        normal_names = set()
+        for result in results:
+            key = make_output_key(Path(result["image"]), inputs)
+            pbr_assets = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))["pbr_assets"]
+            normal_path = Path(pbr_assets["normal_path"])
+            assert normal_path.name == f"{key.name}_normal.png"
+            with Image.open(normal_path) as normal:
+                assert normal.size == sizes[Path(result["image"]).name]
+            normal_names.add(normal_path.name)
+        assert len(normal_names) == 2
+
+    def test_materials_handoff_and_mask_artifacts_keep_dotted_keys_distinct(self, tmp_path: Path) -> None:
+        """The Materials V3 temp hand-off and both mask artifacts are named from the full key."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+
+        inputs = tmp_path / "inputs"
+        orchestrator = _create_orchestrator(tmp_path / "output")
+        front_key = make_output_key(inputs / self.FRONT, inputs)
+        back_key = make_output_key(inputs / self.BACK, inputs)
+        assert front_key.stem == back_key.stem, "fixture must exercise the truncating-stem collision"
+
+        front_handoff = orchestrator._expected_materials_v3_enhanced_path(front_key)
+        back_handoff = orchestrator._expected_materials_v3_enhanced_path(back_key)
+        assert front_handoff.name == f"{front_key.name}_materials_v3_enhanced.png"
+        assert back_handoff.name == f"{back_key.name}_materials_v3_enhanced.png"
+
+        front_artifact = orchestrator._segmentation_mask_artifact_path(front_key)
+        assert front_artifact.name == f"{front_key.name}_materials_v3_masks.npz"
+        assert front_artifact != orchestrator._segmentation_mask_artifact_path(back_key)
+
+        mask_dir = tmp_path / "masks"
+        front_masks = orchestrator._serialize_material_masks({"sky": np.ones((4, 4), dtype=np.float32)}, front_key, mask_dir)
+        back_masks = orchestrator._serialize_material_masks({"sky": np.zeros((4, 4), dtype=np.float32)}, back_key, mask_dir)
+        assert front_masks == mask_dir / f"{front_key.name}_materials_v3_masks.npz"
+        assert back_masks == mask_dir / f"{back_key.name}_materials_v3_masks.npz"
+        # The second image's masks must not have replaced the first image's.
+        with np.load(front_masks) as archive:
+            assert float(archive["sky"].min()) == 1.0
+
+    @pytest.mark.parametrize("relative_input", ["image.jpg", "scene1/IMG_0042.png", "a/b/render final.tiff", "noext"])
+    def test_artifact_names_are_unchanged_without_interior_dots(self, tmp_path: Path, relative_input: str) -> None:
+        """For a key without an interior dot ``stem == name``, so every name stays exactly as it was."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+
+        inputs = tmp_path / "inputs"
+        output = tmp_path / "output"
+        orchestrator = _create_orchestrator(output, generate_pbr=True)
+        key = make_output_key(inputs / relative_input, inputs)
+        assert key.stem == key.name
+
+        assert orchestrator._expected_materials_v3_enhanced_path(key) == (
+            output / "temp" / f"{key.stem}_materials_v3_enhanced.png"
+        )
+        assert orchestrator._segmentation_mask_artifact_path(key) == (
+            output / "segmentation" / key.parent / f"{key.stem}_materials_v3_masks.npz"
+        )
+        mask_dir = tmp_path / "masks"
+        assert orchestrator._serialize_material_masks({"sky": np.ones((4, 4), dtype=np.float32)}, key, mask_dir) == (
+            mask_dir / f"{key.stem}_materials_v3_masks.npz"
+        )
+        pbr_assets = orchestrator._generate_pbr_stage(np.linspace(0.0, 1.0, 32 * 24, dtype=np.float32).reshape(24, 32), key)
+        assert pbr_assets is not None
+        for map_name in ("normal", "roughness", "ao"):
+            assert Path(pbr_assets[f"{map_name}_path"]) == output / "pbr" / f"{key.stem}_{map_name}.png"
