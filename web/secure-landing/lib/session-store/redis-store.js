@@ -41,6 +41,23 @@ redis.call("SET", KEYS[1], cjson.encode(record), "XX", "KEEPTTL")
 return 1
 `;
 
+// KEYS = throttle buckets; ARGV = limit, sinceMs, attemptedAt, member, ttlMs.
+// Checks every bucket and records the failure in all of them in one atomic
+// script so concurrent credential POSTs cannot all pass the check.
+const RESERVE_LOGIN_ATTEMPT_SCRIPT = `
+local limit = tonumber(ARGV[1])
+for _, key in ipairs(KEYS) do
+  if redis.call("ZCOUNT", key, ARGV[2], "+inf") >= limit then
+    return 0
+  end
+end
+for _, key in ipairs(KEYS) do
+  redis.call("ZADD", key, ARGV[3], ARGV[4])
+  redis.call("PEXPIRE", key, ARGV[5])
+end
+return 1
+`;
+
 export function buildRedisClientOptions(connectTimeoutMs) {
   return {
     lazyConnect: false,
@@ -192,6 +209,26 @@ export class RedisSessionStore {
     // TTL the bucket so old failures auto-prune even without an explicit
     // pruneLoginAttempts call.
     await client.pexpire(this._loginKey(throttleKey), this._absoluteTimeoutMs);
+  }
+
+  async reserveLoginAttempt(throttleKeys, { attemptedAt, sinceMs, limit } = {}) {
+    const keys = Array.isArray(throttleKeys) ? throttleKeys.map((key) => String(key || "")) : [];
+    if (!keys.length || keys.some((key) => !key)) {
+      throw new Error("reserveLoginAttempt requires at least one non-empty throttle key");
+    }
+    const client = await this._client_();
+    const member = `${attemptedAt}:${Math.random().toString(36).slice(2, 10)}`;
+    const reserved = await client.eval(
+      RESERVE_LOGIN_ATTEMPT_SCRIPT,
+      keys.length,
+      ...keys.map((key) => this._loginKey(key)),
+      limit,
+      sinceMs,
+      attemptedAt,
+      member,
+      this._absoluteTimeoutMs
+    );
+    return Number(reserved) === 1;
   }
 
   async resetLoginAttempts(throttleKey) {

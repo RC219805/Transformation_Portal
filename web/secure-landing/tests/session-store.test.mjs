@@ -126,6 +126,28 @@ test("SqliteSessionStore login-attempt counters match the SQL surface", () => {
   });
 });
 
+test("SqliteSessionStore reserveLoginAttempt checks and records every bucket atomically", () => {
+  withTempSessionDb(() => {
+    const store = new SqliteSessionStore();
+    const now = Date.now();
+    const options = { attemptedAt: now, sinceMs: now - 60_000, limit: 2, remoteAddr: "127.0.0.1" };
+    assert.equal(store.reserveLoginAttempt(["addr-a", "account"], options), true);
+    assert.equal(store.reserveLoginAttempt(["addr-b", "account"], options), true);
+    // The shared account bucket is exhausted: refuse and record nothing.
+    assert.equal(store.reserveLoginAttempt(["addr-c", "account"], options), false);
+    assert.equal(store.countLoginFailures("account", options.sinceMs), 2);
+    assert.equal(store.countLoginFailures("addr-a", options.sinceMs), 1);
+    assert.equal(store.countLoginFailures("addr-c", options.sinceMs), 0);
+    // Failures outside the window do not count.
+    assert.equal(
+      store.reserveLoginAttempt(["account"], { ...options, sinceMs: now + 1 }),
+      true
+    );
+    assert.throws(() => store.reserveLoginAttempt([], options), /throttle key/);
+    assert.throws(() => store.reserveLoginAttempt(["ok", ""], options), /throttle key/);
+  });
+});
+
 test("getSessionStore returns the same singleton until reset", () => {
   withTempSessionDb(() => {
     const first = getSessionStore();
@@ -314,6 +336,43 @@ test("RedisSessionStore.countLoginFailures filters by score window", async () =>
   assert.equal(await store.countLoginFailures("user-a", 1_500), 2);
   assert.equal(await store.countLoginFailures("user-a", 0), 3);
   assert.equal(await store.countLoginFailures("user-b", 0), 0);
+});
+
+test("RedisSessionStore.reserveLoginAttempt checks and records in one atomic script", async () => {
+  const calls = [];
+  const client = {
+    async eval(script, ...args) {
+      assert.match(script, /ZCOUNT/);
+      assert.match(script, /ZADD/);
+      calls.push(args);
+      return calls.length === 1 ? 1 : 0;
+    },
+    async zcount() {
+      assert.fail("the throttle check must not run outside the atomic script");
+    },
+    async zadd() {
+      assert.fail("the failure must not be recorded outside the atomic script");
+    }
+  };
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client
+  });
+  const options = { attemptedAt: 5_000, sinceMs: 1_000, limit: 5, remoteAddr: "127.0.0.1" };
+
+  assert.equal(await store.reserveLoginAttempt(["addr", "account"], options), true);
+  assert.equal(await store.reserveLoginAttempt(["addr", "account"], options), false);
+  const [numKeys, keyA, keyB, limit, sinceMs, attemptedAt, member, ttlMs] = calls[0];
+  assert.deepEqual(
+    [numKeys, keyA, keyB, limit, sinceMs, attemptedAt, ttlMs],
+    [2, "tp:test:login:addr", "tp:test:login:account", 5, 1_000, 5_000, 3_600_000]
+  );
+  assert.match(member, /^5000:/);
+  await assert.rejects(store.reserveLoginAttempt([], options), /throttle key/);
+  assert.equal(calls.length, 2);
 });
 
 test("RedisSessionStore.recordLoginAttempt rejects missing throttle_key", async () => {

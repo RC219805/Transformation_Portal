@@ -237,6 +237,33 @@ export async function isLoginThrottled(throttleKey) {
   return failures >= getConfig().loginAttemptLimit;
 }
 
+/**
+ * Atomically check the throttle for every key and, when none is exhausted,
+ * record this attempt as a failure against all of them before the password
+ * is verified. Returns ``true`` when the attempt may proceed, ``false`` when
+ * it is throttled. Call ``clearLoginAttempts`` with the same keys once the
+ * credentials verify, so a successful login clears the reservation.
+ */
+export async function reserveLoginAttempt({ throttleKeys, remoteAddr }) {
+  const currentTime = nowMs();
+  await pruneLoginAttempts(currentTime);
+  return Boolean(
+    await getSessionStore().reserveLoginAttempt(throttleKeys, {
+      attemptedAt: currentTime,
+      sinceMs: currentTime - getConfig().loginWindowMs,
+      limit: getConfig().loginAttemptLimit,
+      remoteAddr: remoteAddr || null
+    })
+  );
+}
+
+export async function clearLoginAttempts(throttleKeys) {
+  const store = getSessionStore();
+  for (const throttleKey of throttleKeys) {
+    await store.resetLoginAttempts(throttleKey);
+  }
+}
+
 export async function recordLoginAttempt({ throttleKey, success, remoteAddr }) {
   const currentTime = nowMs();
   await pruneLoginAttempts(currentTime);
