@@ -22,6 +22,7 @@ from transformation_portal.core.execution_plan import (
     _validate_relative_input_path,
     decode_bounded_json_object,
 )
+from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v4.io import snapshot
 from transformation_portal.materials_v4 import artifacts as material_artifacts
@@ -241,7 +242,7 @@ async def bind_upload_references(
     paths.update(_resolved_source_paths(list(read_paths), upload_read_base=upload_read_base))
     for path in frozen_read_paths:
         try:
-            if not path.is_absolute() or path.resolve() != path:
+            if not path.is_absolute() or resolve_rejecting_symlink_loops(path) != path:
                 raise ValueError("frozen read changed through an alias")
         except (OSError, RuntimeError, ValueError) as error:
             raise UploadOwnershipLost("frozen read must retain its absolute identity") from error
@@ -369,7 +370,7 @@ def _resolved_source_paths(values: list[Any], *, upload_read_base: Path | None =
             base = Path(upload_read_base)
             if not base.is_absolute():
                 raise ValueError("upload read base must be absolute")
-            base = base.resolve()
+            base = resolve_rejecting_symlink_loops(base)
         except (OSError, RuntimeError, TypeError, ValueError) as error:
             raise UploadOwnershipLost("upload reads require an absolute server-owned base") from error
     paths = set()
@@ -380,7 +381,7 @@ def _resolved_source_paths(values: list[Any], *, upload_read_base: Path | None =
             resolved = path_security._resolve_untrusted_request_path(raw, repo_root=base)
             # Preserve loop/error detection after shared resolution has produced
             # an absolute path; this never consults a process or module CWD.
-            paths.add(resolved.resolve())
+            paths.add(resolve_rejecting_symlink_loops(resolved))
         except (OSError, RuntimeError, ValueError) as error:
             raise UploadOwnershipLost("upload read path resolution is unavailable") from error
     return tuple(sorted(paths))
@@ -419,7 +420,7 @@ def _frozen_source_paths(
                 or "\\" in relative
             ):
                 raise ValueError("noncontained frozen input")
-            resolved = (resolved_root / relative).resolve()
+            resolved = resolve_rejecting_symlink_loops(resolved_root / relative)
             if resolved.relative_to(resolved_root).as_posix() != relative:
                 raise ValueError("frozen input changed through an alias")
         except (OSError, RuntimeError, ValueError) as error:
