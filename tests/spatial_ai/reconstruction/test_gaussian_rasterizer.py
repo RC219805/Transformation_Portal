@@ -438,7 +438,7 @@ class TestLossComputation:
 class TestGradientFlow:
     """Test gradient backpropagation."""
 
-    def test_gradients_flow(self):
+    def test_gradients_flow(self, monkeypatch):
         """Test that gradients flow through rendering."""
         # Simple scene
         positions = torch.tensor([[0.0, 0.0, 5.0]], requires_grad=True)
@@ -476,6 +476,100 @@ class TestGradientFlow:
 
         # Colors should have gradient (most direct influence)
         assert torch.abs(colors.grad).sum() > 0
+
+        # R-8: both compositors (in place into full-image buffers, and layer by layer) must give
+        # bit-identical images and gradients, and small splats in a large image must not be
+        # written into full-image buffers in place, which makes autograd copy the whole image
+        # once per splat in the backward pass.
+        from transformation_portal.spatial_ai.reconstruction import gaussian_rasterizer
+
+        for threshold in (0, 10**12):  # force the layered, then the in-place compositor
+            monkeypatch.setattr(gaussian_rasterizer, "_IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA", threshold)
+            for n_splats in (3, 40):
+                scene = _overlapping_scene(n_splats, image_size)
+                leaves = [tensor.clone().requires_grad_(True) for tensor in (scene[0], scene[1], scene[2], scene[4])]
+                rendered = render_gaussians(leaves[0], leaves[1], leaves[2], scene[3], leaves[3], *scene[5:], image_size)
+                weights = torch.linspace(-1.0, 2.0, rendered.numel()).view(rendered.shape)
+                (rendered * weights).sum().backward()
+
+                reference_leaves = [tensor.clone().requires_grad_(True) for tensor in (scene[0], scene[1], scene[2], scene[4])]
+                reference = _render_gaussians_in_place_reference(*reference_leaves, *scene[5:], image_size)
+                (reference * weights).sum().backward()
+                assert torch.equal(rendered, reference)
+                for leaf, reference_leaf in zip(leaves, reference_leaves):
+                    assert torch.equal(leaf.grad, reference_leaf.grad)
+        monkeypatch.undo()
+
+        large_image = (96, 128)
+        copy_slices = []
+        for n_splats in (3, 40):
+            positions, colors, scales, rotations, opacities, intrinsics, extrinsics = _overlapping_scene(n_splats, large_image)
+            rendered = render_gaussians(
+                positions.requires_grad_(True), colors, scales * 0.1, rotations, opacities, intrinsics, extrinsics, large_image
+            )
+            copy_slices.append(_count_grad_nodes(rendered, "CopySlices"))
+        assert copy_slices[0] == copy_slices[1], f"in-place full-image writes grow with the splat count: {copy_slices}"
+
+
+def _overlapping_scene(n_splats, image_size):
+    """Deterministic splats in front of the camera with heavily overlapping footprints."""
+    generator = torch.Generator().manual_seed(n_splats)
+    positions = torch.cat(
+        [(torch.rand(n_splats, 2, generator=generator) - 0.5) * 0.8, torch.rand(n_splats, 1, generator=generator) * 3 + 2],
+        dim=1,
+    )
+    colors = torch.rand(n_splats, 3, generator=generator)
+    scales = torch.rand(n_splats, 3, generator=generator) * 0.2 + 0.02
+    opacities = torch.rand(n_splats, 1, generator=generator) * 0.9 + 0.05
+    rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n_splats, 1)
+    intrinsics = torch.tensor([[FX, 0.0, image_size[1] / 2.0], [0.0, FY, image_size[0] / 2.0], [0.0, 0.0, 1.0]])
+    return positions, colors, scales, rotations, opacities, intrinsics, torch.eye(4)
+
+
+def _count_grad_nodes(output, node_name):
+    """Count autograd nodes of one type reachable from ``output``."""
+    seen, stack, count = set(), [output.grad_fn], 0
+    while stack:
+        node = stack.pop()
+        if node is None or id(node) in seen:
+            continue
+        seen.add(id(node))
+        count += type(node).__name__ == node_name
+        stack.extend(next_node for next_node, _ in node.next_functions)
+    return count
+
+
+def _render_gaussians_in_place_reference(positions, colors, scales, opacities, intrinsics, extrinsics, image_size):
+    """Sequential front-to-back compositing written into full-image buffers (the original formulation)."""
+    from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import _compute_splat_bounds_batch
+
+    height, width = image_size
+    rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(positions.shape[0], 1)
+    mean_2d, cov_2d, depths, valid = project_gaussians_2d(positions, scales, rotations, intrinsics, extrinsics, image_size)
+    order = torch.argsort(depths[valid], stable=True)
+    mean_2d, cov_2d = mean_2d[valid][order], cov_2d[valid][order]
+    colors, opacities = colors[valid][order], opacities[valid][order]
+    cov_2d_inv = torch.inverse(cov_2d)
+    rendered = torch.zeros(height, width, 3)
+    accumulated_alpha = torch.zeros(height, width)
+    for i, bounds in enumerate(_compute_splat_bounds_batch(mean_2d, cov_2d, image_size)):
+        if bounds is None:
+            continue
+        u_min, u_max, v_min, v_max = bounds
+        u_coords = torch.arange(u_min, u_max, dtype=mean_2d.dtype)
+        v_coords = torch.arange(v_min, v_max, dtype=mean_2d.dtype)
+        v_grid, u_grid = torch.meshgrid(v_coords, u_coords, indexing="ij")
+        diff = torch.stack([u_grid, v_grid], dim=-1) - mean_2d[i].view(1, 1, 2)
+        tmp = torch.einsum("...c,cd->...d", diff, cov_2d_inv[i])
+        alpha_i = torch.exp(-0.5 * (tmp * diff).sum(dim=-1)) * opacities[i, 0]
+        rendered_patch = rendered[v_min:v_max, u_min:u_max, :]
+        alpha_patch = accumulated_alpha[v_min:v_max, u_min:u_max]
+        transmittance = 1.0 - alpha_patch
+        rendered[v_min:v_max, u_min:u_max, :] = (
+            rendered_patch + alpha_i.unsqueeze(-1) * transmittance.unsqueeze(-1) * colors[i]
+        )
+        accumulated_alpha[v_min:v_max, u_min:u_max] = alpha_patch + alpha_i * transmittance
+    return torch.clamp(rendered, 0.0, 1.0)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available() and not torch.backends.mps.is_available(), reason="No GPU available")

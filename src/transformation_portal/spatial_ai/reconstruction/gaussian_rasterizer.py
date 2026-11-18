@@ -37,6 +37,10 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
+# render_gaussians composites in place while (drawn splats x image area) is at most this many
+# times the summed window area, and layer by layer otherwise (measured CPU cost crossover).
+_IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA = 16
+
 
 def quaternion_to_rotation_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     """Convert quaternions to 3x3 rotation matrices.
@@ -341,9 +345,9 @@ def render_gaussians(
         cov_2d = cov_2d + torch.eye(2, device=device) * 1e-3
         cov_2d_inv = torch.inverse(cov_2d)
 
-    # Alpha composite (front to back)
-    rendered = torch.zeros(H, W, 3, device=device)
-    accumulated_alpha = torch.zeros(H, W, device=device)
+    splat_ids: List[int] = []
+    alpha_patches: List[torch.Tensor] = []
+    windows: List[Tuple[int, int, int, int]] = []
 
     bounds_by_splat = _compute_splat_bounds_batch(mean_2d, cov_2d, image_size)
     for i, bounds in enumerate(bounds_by_splat):
@@ -364,21 +368,140 @@ def render_gaussians(
         weight = torch.exp(-0.5 * mahal_sq)
 
         opacity = opacities[i, 0]
-        alpha_i = weight * opacity
+        splat_ids.append(i)
+        alpha_patches.append(weight * opacity)
+        windows.append(bounds)
 
-        rendered_patch = rendered[v_min:v_max, u_min:u_max, :]
-        alpha_patch = accumulated_alpha[v_min:v_max, u_min:u_max]
-        transmittance = 1.0 - alpha_patch
-
-        rendered[v_min:v_max, u_min:u_max, :] = (
-            rendered_patch + alpha_i.unsqueeze(-1) * transmittance.unsqueeze(-1) * colors[i]
-        )
-        accumulated_alpha[v_min:v_max, u_min:u_max] = alpha_patch + alpha_i * transmittance
+    # Both compositors give bit-identical images and gradients; pick the cheaper one. The
+    # in-place one costs about one full-image copy per splat in the backward pass, the layered
+    # one a constant number of gathers per covered (splat, pixel) pair.
+    drawn_area = sum((u_max - u_min) * (v_max - v_min) for u_min, u_max, v_min, v_max in windows)
+    if len(windows) * H * W <= _IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA * drawn_area:
+        rendered = _composite_windows_in_place(splat_ids, alpha_patches, windows, colors, image_size, device)
+    else:
+        rendered = _composite_windows_layered(splat_ids, alpha_patches, windows, colors, image_size, device)
 
     # Clamp to [0, 1]
     rendered = torch.clamp(rendered, 0.0, 1.0)
 
     return rendered
+
+
+def _composite_windows_in_place(
+    splat_ids: List[int],
+    alpha_patches: List[torch.Tensor],
+    windows: List[Tuple[int, int, int, int]],
+    colors: torch.Tensor,
+    image_size: Tuple[int, int],
+    device,
+) -> torch.Tensor:
+    """Alpha composite per-splat windows in list order (nearest first) by writing full-image buffers in place."""
+    H, W = image_size
+    rendered = torch.zeros(H, W, 3, device=device)
+    accumulated_alpha = torch.zeros(H, W, device=device)
+    for splat_id, alpha_i, (u_min, u_max, v_min, v_max) in zip(splat_ids, alpha_patches, windows):
+        rendered_patch = rendered[v_min:v_max, u_min:u_max, :]
+        alpha_patch = accumulated_alpha[v_min:v_max, u_min:u_max]
+        transmittance = 1.0 - alpha_patch
+
+        rendered[v_min:v_max, u_min:u_max, :] = (
+            rendered_patch + alpha_i.unsqueeze(-1) * transmittance.unsqueeze(-1) * colors[splat_id]
+        )
+        accumulated_alpha[v_min:v_max, u_min:u_max] = alpha_patch + alpha_i * transmittance
+    return rendered
+
+
+def _composite_windows_layered(
+    splat_ids: List[int],
+    alpha_patches: List[torch.Tensor],
+    windows: List[Tuple[int, int, int, int]],
+    colors: torch.Tensor,
+    image_size: Tuple[int, int],
+    device,
+) -> torch.Tensor:
+    """Alpha composite per-splat windows in list order (nearest first) into an (H, W, 3) image.
+
+    Per pixel this evaluates exactly the sequential recurrence of _composite_windows_in_place,
+
+        T = 1 - acc;  rendered += alpha * T * color;  acc += alpha * T
+
+    over the splats covering it, in compositing order, with the same operations and dtypes,
+    so the image and its gradients are bit-identical. Writing every window into full-image
+    buffers makes autograd copy the whole image once per splat in the backward pass; here all
+    pixels at the same position of their own splat chain ("layer") are updated together, so
+    the work is proportional to the summed window area.
+    """
+    H, W = image_size
+    state_dtype = torch.get_default_dtype()
+    if not windows:
+        return torch.zeros(H, W, 3, device=device)
+    pixel_ids = [
+        (
+            torch.arange(v_min, v_max, device=device, dtype=torch.int64).view(-1, 1) * W
+            + torch.arange(u_min, u_max, device=device, dtype=torch.int64).view(1, -1)
+        ).reshape(-1)
+        for u_min, u_max, v_min, v_max in windows
+    ]
+    pair_pixels = torch.cat(pixel_ids)
+    total_pairs = int(pair_pixels.numel())
+    if total_pairs == 0:
+        return torch.zeros(H, W, 3, device=device)
+
+    # Group the (splat, pixel) pairs into layers: layer k holds the k-th covering splat of every
+    # pixel that has more than k covering splats. Pixels are ordered by chain length (longest
+    # first), so layer k is exactly the first n_k pixels of that order and each layer's state is
+    # a prefix of the previous one.
+    index_device = pair_pixels.device
+    coverage = torch.zeros(H * W, dtype=torch.int64, device=index_device)
+    window_ranks: List[torch.Tensor] = []
+    for window_pixels in pixel_ids:  # pixels inside one window are distinct
+        window_ranks.append(coverage[window_pixels])
+        coverage[window_pixels] += 1
+    rank_in_chain = torch.cat(window_ranks)
+    num_pixels = int(torch.count_nonzero(coverage))
+    pixel_order = torch.argsort(-coverage, stable=True)[:num_pixels]
+    position = torch.empty_like(coverage)
+    position[pixel_order] = torch.arange(num_pixels, device=index_device)
+    layer_sizes_tensor = torch.bincount(rank_in_chain)
+    layer_offsets = torch.cumsum(layer_sizes_tensor, dim=0) - layer_sizes_tensor
+    pairs_to_layered = layer_offsets[rank_in_chain] + position[pair_pixels]
+    layered_pairs = torch.empty_like(pairs_to_layered)
+    layered_pairs[pairs_to_layered] = torch.arange(total_pairs, device=index_device)
+    layer_sizes = layer_sizes_tensor.tolist()
+    num_layers = len(layer_sizes)
+
+    # Pass 1: accumulated alpha, giving every pair's transmittance.
+    alpha_layers = torch.split(
+        torch.cat([patch.reshape(-1) for patch in alpha_patches]).index_select(0, layered_pairs), layer_sizes
+    )
+    accumulated = torch.zeros(layer_sizes[0], device=device)
+    transmittance_layers: List[torch.Tensor] = []
+    for k in range(num_layers):
+        accumulated_k = accumulated[: layer_sizes[k]]
+        transmittance = 1.0 - accumulated_k
+        transmittance_layers.append(transmittance)
+        if k + 1 < num_layers:
+            accumulated = (accumulated_k + alpha_layers[k] * transmittance).to(state_dtype)
+    pair_transmittance = torch.cat(transmittance_layers).index_select(0, pairs_to_layered)
+
+    # Pass 2: colour contributions, formed per window as in the in-place formulation.
+    contributions: List[torch.Tensor] = []
+    window_sizes = [int(patch.numel()) for patch in alpha_patches]
+    for splat_id, alpha_i, transmittance in zip(splat_ids, alpha_patches, torch.split(pair_transmittance, window_sizes)):
+        contribution = alpha_i.unsqueeze(-1) * transmittance.view(alpha_i.shape).unsqueeze(-1) * colors[splat_id]
+        contributions.append(contribution.reshape(-1, 3))
+    contribution_layers = torch.split(torch.cat(contributions).index_select(0, layered_pairs), layer_sizes)
+
+    rendered = torch.zeros(layer_sizes[0], 3, device=device)
+    finished: List[torch.Tensor] = []
+    for k in range(num_layers):
+        rendered = (rendered[: layer_sizes[k]] + contribution_layers[k]).to(state_dtype)
+        next_size = layer_sizes[k + 1] if k + 1 < num_layers else 0
+        finished.append(rendered[next_size:])
+    final_values = torch.cat(finished[::-1])  # pixel positions 0 .. num_pixels-1
+    image = torch.zeros(H * W, 3, device=device, dtype=final_values.dtype)
+    image = image.index_copy(0, pixel_order.to(image.device), final_values)
+    return image.view(H, W, 3)
 
 
 def render_gaussians_fast(
