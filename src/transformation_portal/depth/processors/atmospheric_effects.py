@@ -13,7 +13,7 @@ from typing import Optional, Tuple
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from .base import DepthProcessorMixin
+from .base import DepthProcessorMixin, merge_alpha, split_alpha
 
 try:
     from .numba_kernels import (
@@ -98,6 +98,11 @@ class AtmosphericEffects(DepthProcessorMixin):
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
             raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
+
+        # Alpha is coverage, not colour: process RGB only and pass alpha through.
+        rgb, alpha = split_alpha(image)
+        if alpha is not None:
+            return merge_alpha(self.process(rgb, depth, mask), alpha)
 
         # Scale depth to meters
         depth_meters = depth * self.depth_scale

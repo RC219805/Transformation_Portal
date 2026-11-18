@@ -14,6 +14,8 @@ from typing import Dict, List, Optional
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
+from .base import merge_alpha, split_alpha
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +129,11 @@ class ZoneToneMapping:
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
             raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
+
+        # Alpha is coverage, not colour: process RGB only and pass alpha through.
+        rgb, alpha = split_alpha(image)
+        if alpha is not None:
+            return merge_alpha(self.process(rgb, depth, mask), alpha)
 
         # Every zone needs its own parameters: zip() would silently drop the
         # zones without an entry and leave them black in the output.

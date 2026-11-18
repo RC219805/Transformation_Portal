@@ -210,3 +210,33 @@ def test_zone_tone_mapping_with_matching_zone_params_covers_every_zone() -> None
 
     # The far third of the frame is tone-mapped like the near third instead of being left black.
     np.testing.assert_allclose(result[:, -8:].mean(), result[:, :8].mean(), rtol=1e-3)
+
+
+_DENOISE_HAS_OPENCV = depth_aware_denoise.CV2_AVAILABLE
+
+
+@pytest.mark.parametrize("opencv", [False, True])
+@pytest.mark.parametrize(
+    "processor_type",
+    [atmospheric_effects.AtmosphericEffects, depth_aware_denoise.DepthAwareDenoise, zone_tone_mapping.ZoneToneMapping],
+)
+def test_rgba_input_processes_rgb_and_passes_alpha_through(
+    monkeypatch: pytest.MonkeyPatch, processor_type, opencv: bool
+) -> None:
+    """D-26: RGBA crashed AtmosphericEffects/DepthAwareDenoise and ZoneToneMapping tone-mapped alpha."""
+    if opencv:
+        if not _DENOISE_HAS_OPENCV:
+            pytest.skip("OpenCV not installed")
+        monkeypatch.setattr(depth_aware_denoise, "CV2_AVAILABLE", True)
+    depth = _depth_gradient()
+    rgb = np.random.default_rng(3).random((*depth.shape, 3)).astype(np.float32)
+    alpha = np.linspace(0.1, 0.9, rgb.shape[0] * rgb.shape[1], dtype=np.float32).reshape(*depth.shape, 1)
+    rgba = np.concatenate([rgb, alpha], axis=-1)
+    original = rgba.copy()
+
+    result = processor_type()(rgba, depth)
+
+    assert result.shape == rgba.shape
+    np.testing.assert_array_equal(result[..., 3:], alpha)
+    np.testing.assert_array_equal(result[..., :3], processor_type()(rgb, depth))
+    np.testing.assert_array_equal(rgba, original)

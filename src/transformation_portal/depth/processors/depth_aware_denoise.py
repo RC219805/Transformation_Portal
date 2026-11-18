@@ -21,7 +21,7 @@ except ImportError:
     CV2_AVAILABLE = False
     logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
-from .base import DepthProcessorMixin
+from .base import DepthProcessorMixin, merge_alpha, split_alpha
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,11 @@ class DepthAwareDenoise(DepthProcessorMixin):
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
             raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
+
+        # Alpha is coverage, not colour: process RGB only and pass alpha through.
+        rgb, alpha = split_alpha(image)
+        if alpha is not None:
+            return merge_alpha(self.process(rgb, depth, mask), alpha)
 
         # Detect depth edges
         edge_map = self._detect_depth_edges(depth)

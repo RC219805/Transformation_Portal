@@ -10,6 +10,25 @@ from typing import Optional
 import numpy as np
 
 
+def split_alpha(image: np.ndarray) -> "tuple[np.ndarray, Optional[np.ndarray]]":
+    """Split an HxWx4 image into its RGB channels and its HxWx1 alpha channel.
+
+    Depth processors operate on colour only; alpha is coverage, not light, and
+    must pass through untouched. Any other layout is returned unchanged with
+    ``None`` for alpha.
+    """
+    if image.ndim == 3 and image.shape[-1] == 4:
+        return image[..., :3], image[..., 3:]
+    return image, None
+
+
+def merge_alpha(rgb: np.ndarray, alpha: Optional[np.ndarray]) -> np.ndarray:
+    """Re-attach an alpha channel produced by :func:`split_alpha`, in ``rgb``'s dtype."""
+    if alpha is None:
+        return rgb
+    return np.concatenate([rgb, alpha.astype(rgb.dtype, copy=False)], axis=-1)
+
+
 class DepthProcessorMixin:
     """
     Mixin for depth processors with config override support.
