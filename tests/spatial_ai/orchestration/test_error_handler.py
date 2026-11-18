@@ -162,6 +162,12 @@ class TestErrorHandlerInitialization:
         assert handler.initial_delay == 0.5
         assert handler.max_delay == 30.0
 
+    @pytest.mark.parametrize("bad", [0, -1, 1.5, True, None])
+    def test_rejects_max_retries_below_one(self, bad):
+        """Regression (O-4): max_retries < 1 would raise without ever calling the stage."""
+        with pytest.raises(ValueError, match="max_retries"):
+            ErrorHandler(max_retries=bad)
+
 
 class TestErrorHandlerFailFast:
     """Test FAIL_FAST strategy."""
@@ -441,6 +447,67 @@ class TestErrorHandlerCPUFallback:
 
         assert result == "ok"
         assert device_changes == []
+
+    @pytest.mark.parametrize("max_retries", [1, 3])
+    def test_oom_on_last_attempt_runs_cpu_backend(self, max_retries):
+        """Regression (O-3): an OOM on the last attempt must still run the rebuilt CPU backend."""
+        handler = ErrorHandler(max_retries=max_retries, initial_delay=0.0)
+        backend = {"device": "cuda"}
+        calls = []
+        device_changes = []
+
+        def rebuild_backend(device, attempt, error):
+            backend["device"] = device
+            device_changes.append((device, attempt))
+
+        def oom_on_last_gpu_attempt():
+            calls.append(backend["device"])
+            if backend["device"] == "cpu":
+                return "cpu-ok"
+            if len(calls) < max_retries:
+                raise RuntimeError("transient I/O glitch")
+            raise RuntimeError("CUDA out of memory")
+
+        with patch("time.sleep"):
+            result = handler.execute_with_retry(
+                func=oom_on_last_gpu_attempt,
+                stage="segment",
+                strategy=ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+                device="cuda",
+                on_device_change=rebuild_backend,
+            )
+
+        assert result == "cpu-ok"
+        assert calls == ["cuda"] * max_retries + ["cpu"]
+        assert device_changes == [("cpu", max_retries)]
+
+    def test_oom_on_last_attempt_then_cpu_failure_reports_real_attempts(self):
+        """Regression (O-3): the extra CPU attempt is counted in the final error context."""
+        handler = ErrorHandler(max_retries=2, initial_delay=0.0)
+        backend = {"device": "cuda"}
+        calls = []
+
+        def always_fails():
+            calls.append(backend["device"])
+            if backend["device"] == "cpu":
+                raise RuntimeError("cpu kernel failed")
+            if len(calls) < 2:
+                raise RuntimeError("transient I/O glitch")
+            raise RuntimeError("CUDA out of memory")
+
+        with patch("time.sleep"):
+            with pytest.raises(PipelineError) as exc_info:
+                handler.execute_with_retry(
+                    func=always_fails,
+                    stage="segment",
+                    strategy=ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+                    device="cuda",
+                    on_device_change=lambda device, attempt, error: backend.update(device=device),
+                )
+
+        assert calls == ["cuda", "cuda", "cpu"]
+        assert exc_info.value.context == {"attempts": 3, "device": "cpu"}
+        assert str(exc_info.value.original_error) == "cpu kernel failed"
 
     def test_cpu_fallback_non_oom_error(self):
         """Test non-OOM errors don't trigger device switch."""
