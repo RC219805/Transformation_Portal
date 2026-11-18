@@ -294,6 +294,14 @@ logger = logging.getLogger(__name__)
 # directory, which may be an unrelated repository.
 _PIPELINE_REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# One wording for the hard failure of an audit-grade (RAW/TIFF) input on a host
+# without exiftool, whether it is found before Stage A or at manifest time.
+_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED = (
+    "Audit-grade provenance for RAW/TIFF requires exiftool."
+    " Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian)"
+    " or brew install exiftool (macOS)"
+)
+
 
 def _new_batch_id() -> str:
     """Return a filename-safe, collision-resistant UTC completion identity."""
@@ -6224,6 +6232,33 @@ class EnhanceOrchestrator:
                         cleanup_error,
                     )
 
+    @staticmethod
+    def _is_audit_grade_input(path: Path) -> bool:
+        """Return True for RAW/TIFF inputs, whose provenance requires exiftool."""
+        from .raw_loader import is_raw_file
+
+        return bool(is_raw_file(path)) or path.suffix.lower() in {".tif", ".tiff"}
+
+    def _require_audit_provenance_tooling(self, image_input: ImageInput) -> None:
+        """Fail before any stage runs when RAW/TIFF provenance cannot be captured.
+
+        ``_write_manifest`` is the last per-image step and hard-fails for an
+        audit-grade input on a host without exiftool. Discovering that only
+        there spent the whole depth/Materials/V2 run on every such image and
+        left Stage A outputs behind without a manifest to index them.
+        """
+        if not self._is_audit_grade_input(image_input.path):
+            return
+        from . import provenance as provenance_module
+
+        # Resolved on the module at call time: this is the probe the strict
+        # capture itself records as ``toolchain.exiftool_version``.
+        if provenance_module.get_exiftool_version() is None:
+            logger.error(
+                "Provenance capture failed:" " exiftool not available" " for RAW/TIFF input",
+            )
+            raise RuntimeError(_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED) from ExiftoolNotFoundError("exiftool not found in PATH")
+
     def _write_manifest(
         self,
         manifest_path: Path,
@@ -6275,9 +6310,7 @@ class EnhanceOrchestrator:
 
         # Determine if this is an audit-grade input (RAW or TIFF)
         # Only RAW/TIFF require exiftool for audit trail
-        from .raw_loader import is_raw_file
-
-        is_audit_input = is_raw_file(image_input.path) or image_input.path.suffix.lower() in {".tif", ".tiff"}
+        is_audit_input = self._is_audit_grade_input(image_input.path)
 
         try:
             # Get config fingerprint for provenance
@@ -6344,15 +6377,7 @@ class EnhanceOrchestrator:
             logger.error(
                 "Provenance capture failed:" " exiftool not available" " for RAW/TIFF input",
             )
-            raise RuntimeError(
-                "Audit-grade provenance for"
-                " RAW/TIFF requires exiftool."
-                " Install with: apt-get"
-                " install"
-                " libimage-exiftool-perl"
-                " (Ubuntu/Debian) or brew"
-                " install exiftool (macOS)"
-            ) from e
+            raise RuntimeError(_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED) from e
         except ProvenanceError as e:
             # Hard fail on provenance error
             logger.error(
@@ -6693,6 +6718,10 @@ class EnhanceOrchestrator:
         self._active_depth_attempts = []
         self._active_selected_attempt_index = None
         prepared_reuse: Optional[_PreparedReuseSnapshot] = None
+
+        # An audit-grade input cannot complete without exiftool: say so before
+        # any stage spends compute or writes outputs no manifest will index.
+        self._require_audit_provenance_tooling(image_input)
 
         # PERFORMANCE FIX (#4): Use pre-computed
         # paths from parallel batch if available

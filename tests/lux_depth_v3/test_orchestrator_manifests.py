@@ -646,3 +646,118 @@ class TestDottedInputNamesKeepSeparateArtifacts:
         assert pbr_assets is not None
         for map_name in ("normal", "roughness", "ao"):
             assert Path(pbr_assets[f"{map_name}_path"]) == output / "pbr" / f"{key.stem}_{map_name}.png"
+
+
+class TestAuditProvenancePreflight:
+    """A RAW/TIFF input needs exiftool; a host without it must fail before inference.
+
+    The requirement used to surface only in ``_write_manifest``, the last
+    per-image step, so every TIFF ran the full depth stage, failed with the
+    same environment error and left depth outputs behind without a manifest.
+    """
+
+    MESSAGE_PREFIX = "Audit-grade provenance for RAW/TIFF requires exiftool."
+
+    def test_tiff_without_exiftool_fails_before_any_stage_runs(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Each TIFF is an immediate error row; the PNG beside it is unaffected."""
+        from transformation_portal.lux_depth_v3 import provenance
+
+        monkeypatch.setattr(provenance, "get_exiftool_version", lambda: None)
+        monkeypatch.setattr(provenance, "_check_exiftool_available", lambda: False)
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        tiff_names = [f"render_{index}.tif" for index in range(3)]
+        for name in tiff_names:
+            _make_test_image(inputs, name)
+        _make_test_image(inputs, "preview.png")
+        orchestrator = _create_orchestrator(output, emit_run_card=False, enable_parallel_processing=False)
+
+        results = orchestrator.enhance_batch(inputs)
+
+        by_name = {Path(result["image"]).name: result for result in results}
+        assert sorted(by_name) == sorted([*tiff_names, "preview.png"])
+        assert by_name["preview.png"]["status"] == "ok"
+        for name in tiff_names:
+            assert by_name[name]["status"] == "error"
+            assert by_name[name]["error"].startswith(self.MESSAGE_PREFIX)
+            assert by_name[name]["attempts"] == []
+        # Only the PNG reached depth inference ...
+        assert orchestrator.depth_backend.compute.call_count == 1
+        # ... and no failed input left a Stage A output behind.
+        depth_outputs = sorted(path.name for path in (output / "depth").rglob("*") if path.is_file())
+        assert len(depth_outputs) == 2
+        assert all(name.startswith("preview_png_") for name in depth_outputs)
+
+    def test_prepared_tiff_batch_without_exiftool_spends_no_inference(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The production path still fails closed at evidence, but before any depth compute."""
+        from transformation_portal.lux_depth_v3 import provenance
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_evidence import ExecutionEvidenceError
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        monkeypatch.setattr(provenance, "get_exiftool_version", lambda: None)
+        monkeypatch.setattr(provenance, "_check_exiftool_available", lambda: False)
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        images = []
+        for index in range(2):
+            pixels = np.zeros((48, 64, 3), dtype=np.uint8)
+            pixels[..., 0] = np.linspace(0, 255, 64).astype(np.uint8)[None, :]
+            pixels[..., 2] = 40 * index
+            Image.fromarray(pixels).save(inputs / f"render_{index}.tif")
+            images.append(inputs / f"render_{index}.tif")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(depth_backend="synthetic", allow_synthetic_fallback=True, enable_v2=False),
+            inputs,
+            images,
+        )
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
+        real_compute = orchestrator.depth_backend.compute
+        compute_calls: list[Any] = []
+
+        def counting_compute(image: Any) -> Any:
+            compute_calls.append(image)
+            return real_compute(image)
+
+        monkeypatch.setattr(orchestrator.depth_backend, "compute", counting_compute)
+
+        with pytest.raises(ExecutionEvidenceError):
+            orchestrator.enhance_batch(inputs)
+
+        assert compute_calls == []
+
+    def test_tiff_with_exiftool_still_runs_and_records_the_tool_version(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The preflight asks the provenance toolchain probe, so an available tool passes through."""
+        from transformation_portal.lux_depth_v3 import provenance
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        monkeypatch.setattr(provenance, "get_exiftool_version", lambda: "12.76")
+        monkeypatch.setattr(provenance, "_check_exiftool_available", lambda: True)
+        monkeypatch.setattr(provenance, "extract_exif_metadata", lambda path: {"SourceFile": str(path)})
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        image = _make_test_image(inputs, "render.tif")
+        orchestrator = _create_orchestrator(tmp_path / "output")
+
+        result = orchestrator.enhance_image(ImageInput(path=image), input_root=inputs)
+
+        assert result["status"] == "ok"
+        assert orchestrator.depth_backend.compute.call_count == 1
+        manifest_path = Path(result["manifest"])
+        sidecar = json.loads(manifest_path.with_name(f"{manifest_path.stem}_provenance.json").read_text(encoding="utf-8"))
+        assert sidecar["toolchain"]["exiftool_version"] == "12.76"
+        assert sidecar["exif"] == {"SourceFile": str(image)}
