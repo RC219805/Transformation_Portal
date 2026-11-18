@@ -173,6 +173,16 @@ class TestValidateFilepath:
         result = validate_filepath(nonexistent, allowed_dirs, must_exist=False)
         assert result.parent == (temp_workspace / "data").resolve()
 
+    @pytest.mark.parametrize("relative", ["loop", "loop/missing/new_output.jpg"])
+    def test_symlink_loop_is_unresolvable_with_must_exist_false(
+        self, temp_workspace: Path, allowed_dirs: list[Path], relative: str
+    ) -> None:
+        """A symlink loop inside an allowed directory is never a valid output path."""
+        (temp_workspace / "data" / "loop").symlink_to("loop")
+
+        with pytest.raises(SecurityError, match="Cannot resolve path"):
+            validate_filepath(temp_workspace / "data" / relative, allowed_dirs, must_exist=False)
+
     def test_file_size_limit_enforcement(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that file size limits are enforced."""
         large_file = temp_workspace / "data" / "large_file.txt"
