@@ -724,6 +724,22 @@ def test_verify_governance_export_binds_explicit_governance_profile_id(tmp_path:
     assert "does not match --governance-profile-id" in mismatching.stdout
 
 
+@pytest.mark.security
+def test_verify_governance_export_rejects_untrimmed_governance_profile_id(tmp_path: Path) -> None:
+    bundle_manifest, governance_export, risk_assessment_path, cybersecurity_audit_path = _generate_governance_export_fixture(
+        tmp_path
+    )
+    payload = json.loads(governance_export.read_text(encoding="utf-8"))
+    payload["governance_profile_id"] = f" {payload['governance_profile_id']} "
+    governance_export.write_bytes(regulatory_export._canonical_json_bytes(payload))
+
+    verified = _run_verify_governance_export(
+        bundle_manifest, governance_export, risk_assessment_path, cybersecurity_audit_path
+    )
+    assert verified.returncode == 31, verified.stdout + verified.stderr
+    assert "governance_profile_id must be a non-empty, trimmed string" in verified.stdout
+
+
 def test_verify_governance_export_rejects_generation_args(tmp_path: Path) -> None:
     bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
     risk_path = tmp_path / "risk_metadata.json"

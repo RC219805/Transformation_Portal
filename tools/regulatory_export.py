@@ -1423,7 +1423,9 @@ def _run_governance_export_verification(args: argparse.Namespace) -> int:
         if governance_export_payload["governance_export_mode_version"] != GOVERNANCE_EXPORT_MODE_VERSION:
             raise ValueError("governance-export.governance_export_mode_version must be " f"{GOVERNANCE_EXPORT_MODE_VERSION!r}")
         exported_profile_id = _require_string(governance_export_payload, "governance_profile_id", "governance-export")
-        if not exported_profile_id.strip() or exported_profile_id != exported_profile_id.strip():
+        # _require_string returns the stripped value, so compare it with the raw field: generation only
+        # ever writes a trimmed id.
+        if governance_export_payload["governance_profile_id"] != exported_profile_id:
             raise ValueError("governance-export.governance_profile_id must be a non-empty, trimmed string")
         if args.governance_profile_id is not None and exported_profile_id != args.governance_profile_id.strip():
             raise ValueError("governance-export.governance_profile_id does not match --governance-profile-id")
