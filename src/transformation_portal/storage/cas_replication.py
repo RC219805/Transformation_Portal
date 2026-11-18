@@ -3,7 +3,8 @@
 This module provides CAS replication capabilities:
 - Push/pull artifacts by SHA256
 - Batch transfers to minimize round-trips
-- Resume-safe (idempotent: skip if exists)
+- Resume-safe (idempotent: skip an object only if an intact copy exists)
+- Pulled objects are stored through the CAS atomic writer, never in place
 - Optional compression
 
 Example:
@@ -131,6 +132,17 @@ class CASReplicator:
         self.buffer_size = buffer_size
         self.compress = compress
         self.stats = ReplicationStats()
+
+    def _has_intact_object(self, sha: str) -> bool:
+        """True only for a local object whose bytes still hash to ``sha``.
+
+        Existence alone is not possession: a truncated or corrupt object left
+        at its content address must be fetched again, not skipped forever.
+        """
+        try:
+            return self.cas.has_object(sha) and self.cas.verify_object(sha)
+        except (CASError, OSError):
+            return False
 
     def _send_request(self, peer: CASPeer, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Send request to peer and get response.
@@ -315,7 +327,7 @@ class CASReplicator:
         for sha in shas:
             try:
                 validate_sha256(sha)
-                if skip_existing and self.cas._object_path(sha).exists():
+                if skip_existing and self._has_intact_object(sha):
                     continue
                 need.append(sha)
             except PathSafetyError:
@@ -356,14 +368,15 @@ class CASReplicator:
                 logger.warning("SHA mismatch, skipping: expected %s, got %s", sha[:8], actual_sha[:8])
                 continue
 
-            # Store in CAS
-            path = self.cas._object_path(sha)
-            path.parent.mkdir(parents=True, exist_ok=True)
-
-            if not path.exists():
-                path.write_bytes(data)
-                pulled += 1
-                total_bytes += len(data)
+            # Store through the CAS writer (temp file, fsync, verify, atomic
+            # rename under the per-object lock): a crash or full disk cannot
+            # leave a truncated object at its content address, and a corrupt
+            # one already there is replaced.
+            if self._has_intact_object(sha):
+                continue
+            self.cas.add_bytes(data)
+            pulled += 1
+            total_bytes += len(data)
 
         self.stats.objects_pulled += pulled
         self.stats.bytes_transferred += total_bytes
