@@ -114,3 +114,47 @@ def test_ingest_files_rejects_escaping_logical_path_before_adding_objects(tmp_pa
 
     assert sorted(p.name for p in (tmp_path / "cas").rglob("*") if p.is_file()) == objects_before
     assert dataset.get_manifest("d", "1.0.0") is None
+
+
+# --------------------------------------------------------------------------- #
+# Manifest-path collisions (STOR-04)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [(("train/v1", "1"), ("train_v1", "1")), (("a_b", "1"), ("a", "b_1"))],
+)
+def test_colliding_dataset_names_do_not_replace_each_other(tmp_path: Path, first, second) -> None:
+    dataset, _sha = _dataset(tmp_path)
+    src = tmp_path / "payload.bin"
+    assert dataset._manifest_path(*first) == dataset._manifest_path(*second)
+
+    dataset.ingest_files(first[0], [("a.bin", src)], version=first[1])
+    with pytest.raises(DatasetCASError, match="collides"):
+        dataset.ingest_files(second[0], [("b.bin", src)], version=second[1])
+    with pytest.raises(DatasetCASError, match="collides"):
+        dataset.ingest_directory(second[0], tmp_path / "datasets", version=second[1])
+
+    loaded = dataset.get_manifest(*first)
+    assert loaded is not None
+    assert (loaded.name, loaded.version) == first
+    assert [f.logical_path for f in loaded.files] == ["a.bin"]
+    # The other pair is not found, and deleting it must not remove the first.
+    assert dataset.get_manifest(*second) is None
+    assert dataset.delete_dataset(*second) is False
+    assert dataset.get_manifest(*first) is not None
+
+
+def test_reingesting_the_same_dataset_still_replaces_its_manifest(tmp_path: Path) -> None:
+    dataset, _sha = _dataset(tmp_path)
+    src = tmp_path / "payload.bin"
+
+    dataset.ingest_files("train/v1", [("a.bin", src)], version="1")
+    dataset.ingest_files("train/v1", [("c.bin", src)], version="1")
+
+    loaded = dataset.get_manifest("train/v1", "1")
+    assert loaded is not None
+    assert [f.logical_path for f in loaded.files] == ["c.bin"]
+    assert dataset.delete_dataset("train/v1", "1") is True
+    assert dataset.get_manifest("train/v1", "1") is None
