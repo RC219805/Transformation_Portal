@@ -12,7 +12,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import yaml
@@ -268,6 +268,48 @@ class ArchitecturalDepthPipeline:
         """
         return self._apply_depth_postprocessing(depth)
 
+    def _estimate_depth(self, image: np.ndarray) -> Tuple[Dict, np.ndarray]:
+        """
+        Estimate depth for one image (with caching) and apply the configured depth postprocessing.
+
+        Every processing path uses this helper, so a configured ``depth_postprocessing`` step
+        applies to batch, pipelined and progressive runs exactly as it does to ``process_render``.
+
+        Args:
+            image: Normalised input image
+
+        Returns:
+            Tuple of (raw depth result from the model or cache, postprocessed depth map)
+        """
+        depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
+        return depth_result, self._apply_depth_postprocessing(depth_result["depth"])
+
+    def _apply_processors(self, image: np.ndarray, depth: np.ndarray) -> np.ndarray:
+        """Run the enabled depth-aware processors, in pipeline order, on a copy of ``image``."""
+        result_image = image.copy()
+
+        # 1. Depth-aware denoising
+        if "denoise" in self.processors:
+            logger.debug("Applying depth-aware denoising")
+            result_image = self.processors["denoise"](result_image, depth)
+
+        # 2. Zone-based tone mapping
+        if "tone_mapping" in self.processors:
+            logger.debug("Applying zone tone mapping")
+            result_image = self.processors["tone_mapping"](result_image, depth)
+
+        # 3. Atmospheric effects
+        if "atmospheric" in self.processors:
+            logger.debug("Applying atmospheric effects")
+            result_image = self.processors["atmospheric"](result_image, depth)
+
+        # 4. Depth-guided filters
+        if "filters" in self.processors:
+            logger.debug("Applying depth-guided filters")
+            result_image = self.processors["filters"](result_image, depth)
+
+        return result_image
+
     def process_render(
         self,
         image_path: Union[str, Path],
@@ -292,35 +334,11 @@ class ArchitecturalDepthPipeline:
         logger.info(f"Processing: {image_path}")
         image = load_image(image_path, normalize=True)
 
-        # Estimate depth (with caching)
-        depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
-        depth = depth_result["depth"]
-
-        # Apply depth postprocessing if configured
-        depth = self._apply_depth_postprocessing(depth)
+        # Estimate depth (with caching) and apply depth postprocessing if configured
+        depth_result, depth = self._estimate_depth(image)
 
         # Apply processing pipeline
-        result_image = image.copy()
-
-        # 1. Depth-aware denoising
-        if "denoise" in self.processors:
-            logger.debug("Applying depth-aware denoising")
-            result_image = self.processors["denoise"](result_image, depth)
-
-        # 2. Zone-based tone mapping
-        if "tone_mapping" in self.processors:
-            logger.debug("Applying zone tone mapping")
-            result_image = self.processors["tone_mapping"](result_image, depth)
-
-        # 3. Atmospheric effects
-        if "atmospheric" in self.processors:
-            logger.debug("Applying atmospheric effects")
-            result_image = self.processors["atmospheric"](result_image, depth)
-
-        # 4. Depth-guided filters
-        if "filters" in self.processors:
-            logger.debug("Applying depth-guided filters")
-            result_image = self.processors["filters"](result_image, depth)
+        result_image = self._apply_processors(image, depth)
 
         # Compute processing time
         processing_time = time.time() - start_time
@@ -403,24 +421,11 @@ class ArchitecturalDepthPipeline:
         else:
             image = load_image(image_path, normalize=True)
 
-        # Estimate depth (with caching)
-        depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
-        depth = depth_result["depth"]
+        # Estimate depth (with caching) and apply depth postprocessing if configured
+        depth_result, depth = self._estimate_depth(image)
 
         # Apply processing pipeline
-        result_image = image.copy()
-
-        if "denoise" in self.processors:
-            result_image = self.processors["denoise"](result_image, depth)
-
-        if "tone_mapping" in self.processors:
-            result_image = self.processors["tone_mapping"](result_image, depth)
-
-        if "atmospheric" in self.processors:
-            result_image = self.processors["atmospheric"](result_image, depth)
-
-        if "filters" in self.processors:
-            result_image = self.processors["filters"](result_image, depth)
+        result_image = self._apply_processors(image, depth)
 
         processing_time = time.time() - start_time
 
@@ -740,9 +745,9 @@ class ArchitecturalDepthPipeline:
 
                 path, image = item
                 try:
-                    # Use caching for depth estimation
-                    depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
-                    depth_queue.put((path, image, depth_result))
+                    # Cached depth estimation plus the configured depth postprocessing
+                    depth_result, depth = self._estimate_depth(image)
+                    depth_queue.put((path, image, depth_result, depth))
                 except Exception as e:
                     logger.error(f"Failed depth estimation for {path}: {e}")
 
@@ -755,23 +760,10 @@ class ArchitecturalDepthPipeline:
                     process_queue.put(None)
                     break
 
-                path, image, depth_result = item
+                path, image, depth_result, depth = item
                 try:
-                    depth = depth_result["depth"]
-                    result_image = image.copy()
-
                     # Apply all processors
-                    if "denoise" in self.processors:
-                        result_image = self.processors["denoise"](result_image, depth)
-
-                    if "tone_mapping" in self.processors:
-                        result_image = self.processors["tone_mapping"](result_image, depth)
-
-                    if "atmospheric" in self.processors:
-                        result_image = self.processors["atmospheric"](result_image, depth)
-
-                    if "filters" in self.processors:
-                        result_image = self.processors["filters"](result_image, depth)
+                    result_image = self._apply_processors(image, depth)
 
                     result = {
                         "image": result_image,
@@ -898,24 +890,11 @@ class ArchitecturalDepthPipeline:
                 image_scaled = image_full
                 logger.info(f"Processing at full resolution: {h_full}x{w_full}")
 
-            # Estimate depth at current scale
-            depth_result = self.cache.get_or_compute(image_scaled, lambda: self.depth_model.estimate_depth(image_scaled))
-            depth = depth_result["depth"]
+            # Estimate depth at current scale and apply depth postprocessing if configured
+            depth_result, depth = self._estimate_depth(image_scaled)
 
             # Apply processing pipeline
-            result_image = image_scaled.copy()
-
-            if "denoise" in self.processors:
-                result_image = self.processors["denoise"](result_image, depth)
-
-            if "tone_mapping" in self.processors:
-                result_image = self.processors["tone_mapping"](result_image, depth)
-
-            if "atmospheric" in self.processors:
-                result_image = self.processors["atmospheric"](result_image, depth)
-
-            if "filters" in self.processors:
-                result_image = self.processors["filters"](result_image, depth)
+            result_image = self._apply_processors(image_scaled, depth)
 
             # Upscale back to full resolution if needed
             if scale < 1.0:

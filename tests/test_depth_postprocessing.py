@@ -215,3 +215,65 @@ def test_depth_postprocessing_bilateral_keeps_depth_range(monkeypatch, preserve_
     assert float(out.max()) <= float(depth.max()) + 1e-6
     # Within the 8-bit quantisation step of the input span of the original values.
     np.testing.assert_allclose(out, depth, atol=0.05)
+
+
+def _marking_postprocess_config():
+    return {
+        "depth_model": {"variant": "small", "backend": "pytorch_cpu"},
+        "processing": {"depth_postprocessing": {"enabled": True, "method": "gaussian", "sigma": 1.0}},
+        "output": {},
+    }
+
+
+def _marking_smooth_depth(depth, method="bilateral", sigma=5.0, edge_preserve=0.1):
+    # A recognisable "smoothed" map: the raw depth shifted by +100.
+    return np.asarray(depth, dtype=np.float32) + 100.0
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        pytest.param(
+            lambda p, paths, out: p.batch_process(paths, out, False, False, parallel=True, max_workers=2),
+            id="parallel",
+        ),
+        pytest.param(
+            lambda p, paths, out: p.batch_process(paths, out, False, False, parallel=False, preload_images=True),
+            id="sequential",
+        ),
+        pytest.param(lambda p, paths, out: list(p.batch_process_pipelined(paths, out, False, False)), id="pipelined"),
+        pytest.param(lambda p, paths, out: list(p.batch_process_streaming(paths, out, False, False)), id="streaming"),
+        pytest.param(
+            lambda p, paths, out: p.process_render_progressive(paths[0], [1.0], return_all_levels=True),
+            id="progressive",
+        ),
+    ],
+)
+def test_every_processing_path_applies_depth_postprocessing(monkeypatch, tmp_path, run):
+    """Regression (D-02): batch/pipelined/progressive paths used raw depth while process_render smoothed it."""
+    depth = np.tile(np.linspace(0.0, 1.0, 4, dtype=np.float32), (4, 1))
+    monkeypatch.setattr(pipeline_mod, "smooth_depth", _marking_smooth_depth)
+
+    pipeline = _build_pipeline(monkeypatch, _marking_postprocess_config(), depth)
+    expected = pipeline.process_render("a.png")["depth"]
+    np.testing.assert_array_equal(expected, depth + 100.0)
+
+    results = run(pipeline, [str(tmp_path / "a.png"), str(tmp_path / "b.png")], tmp_path / "out")
+
+    assert results
+    for result in results:
+        np.testing.assert_array_equal(result["depth"], expected)
+        assert result["metadata"]["depth_stats"] == pipeline_mod.depth_statistics(expected)
+
+
+def test_depth_postprocessing_leaves_the_cached_depth_result_unchanged(monkeypatch):
+    """The postprocessed depth must not be written back into the model/cache result."""
+    depth = np.tile(np.linspace(0.0, 1.0, 4, dtype=np.float32), (4, 1))
+    raw = depth.copy()
+    monkeypatch.setattr(pipeline_mod, "smooth_depth", _marking_smooth_depth)
+
+    pipeline = _build_pipeline(monkeypatch, _marking_postprocess_config(), depth)
+    depth_result, smoothed = pipeline._estimate_depth(np.zeros((4, 4, 3), dtype=np.float32))
+
+    np.testing.assert_array_equal(depth_result["depth"], raw)
+    np.testing.assert_array_equal(smoothed, raw + 100.0)
