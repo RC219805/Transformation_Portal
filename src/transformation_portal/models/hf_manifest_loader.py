@@ -112,14 +112,24 @@ class HFResolvedLocalModel:
     resolved_files: dict[str, Path]
 
 
-def _common_local_root(paths: list[Path]) -> Path:
+_HF_REPO_CACHE_PREFIXES = ("models--", "datasets--", "spaces--")
+
+
+def _common_local_root(paths: list[Path], revision: Optional[str] = None) -> Path:
     """Given verified cached file paths from hf_hub_download, infer the local snapshot root.
 
     HuggingFace hub typically stores files under:
     .../models--org--repo/snapshots/<commit>/<file>
 
+    The snapshot root is the ``snapshots/<commit>`` pair whose parent is the
+    ``models--``/``datasets--``/``spaces--`` repo cache directory, so a
+    ``snapshots`` component elsewhere in the cache path (``/mnt/snapshots/...``)
+    or inside the repository is not mistaken for it.
+
     Args:
         paths: List of resolved local file paths
+        revision: Optional pinned commit SHA; when given, the snapshot root
+            directory name must equal it.
 
     Returns:
         Path to the snapshot root directory
@@ -134,10 +144,15 @@ def _common_local_root(paths: list[Path]) -> Path:
     # .../models--org--repo/snapshots/<commit>/<file>
     first = paths[0]
     parts = first.parts
-    if "snapshots" not in parts:
+    # A snapshot root needs at least one component (the file) below it.
+    candidates = [i for i, part in enumerate(parts[:-2]) if part == "snapshots"]
+    if not candidates:
         raise HFManifestLoaderError(f"Unable to infer Hugging Face snapshot root from path: {first}")
-    snapshot_index = parts.index("snapshots")
+    repo_cache_candidates = [i for i in candidates if i > 0 and parts[i - 1].startswith(_HF_REPO_CACHE_PREFIXES)]
+    snapshot_index = repo_cache_candidates[-1] if repo_cache_candidates else candidates[0]
     root = Path(*parts[: snapshot_index + 2])
+    if revision is not None and root.name.casefold() != revision.casefold():
+        raise HFManifestLoaderError(f"Hugging Face snapshot root {root} does not match the pinned revision {revision}")
     if any(not path.is_relative_to(root) for path in paths):
         raise HFManifestLoaderError("Verified model files do not share one snapshot root")
     return root
@@ -183,9 +198,9 @@ def _infer_local_root_from_hub(
                 repo_type=repo_type,
                 cache_dir=cache_dir,
             )
-            return _common_local_root([Path(local_path)])
         except Exception:
             continue
+        return _common_local_root([Path(local_path)], revision)
 
     raise HFManifestLoaderError(f"Cannot determine local root for '{repo_id}@{revision}': " "no common config files found")
 
@@ -227,7 +242,7 @@ def resolve_manifest_model(
         except HFModelLockError as exc:
             raise HFManifestLoaderError(f"Failed to resolve required files for '{model_key}': {exc}") from exc
 
-        local_root = _common_local_root(list(resolved_files.values()))
+        local_root = _common_local_root(list(resolved_files.values()), record.revision)
     else:
         # No explicit required_files - infer root from hub
         local_root = _infer_local_root_from_hub(
