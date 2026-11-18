@@ -342,6 +342,13 @@ class BinaryUnionTileMerger:
             iou_threshold = float(getattr(instance_merge, "iou_threshold", 0.35))
             border_only = bool(getattr(instance_merge, "border_only", True))
             continuity_threshold = 0.80
+            # Patch boxes that do not meet inside the band mean an empty
+            # intersection, which joins a pair only when a zero IoU satisfies
+            # the threshold and border_only is off. Skipping on the boxes is
+            # exact in every other configuration; in that one the pair must
+            # still be evaluated, or the result would depend on how tightly a
+            # backend crops its patches.
+            disjoint_pairs_can_merge = not border_only and iou_threshold <= 0.0
 
             def find(idx: int) -> int:
                 while parent[idx] != idx:
@@ -378,18 +385,18 @@ class BinaryUnionTileMerger:
                     if tile_overlap is None:
                         continue
                     candidate_overlap = self._bbox_overlap_window(left.bbox, right.bbox)
-                    if candidate_overlap is None:
-                        continue
-                    overlap_window = self._bbox_overlap_window(
-                        BBox(*tile_overlap),
-                        BBox(*candidate_overlap),
-                    )
-                    if overlap_window is None:
+                    overlap_window = None
+                    if candidate_overlap is not None:
+                        overlap_window = self._bbox_overlap_window(
+                            BBox(*tile_overlap),
+                            BBox(*candidate_overlap),
+                        )
+                    if overlap_window is None and not disjoint_pairs_can_merge:
                         continue
                     left_band_area = band_area(left_idx, tile_overlap)
                     right_band_area = band_area(right_idx, tile_overlap)
                     intersection = 0
-                    if left_band_area > 0 and right_band_area > 0:
+                    if overlap_window is not None and left_band_area > 0 and right_band_area > 0:
                         intersection = int(
                             np.count_nonzero(
                                 self._window_patch(left, overlap_window) & self._window_patch(right, overlap_window)

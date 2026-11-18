@@ -727,8 +727,12 @@ def test_tiling_reproduces_ground_truth_when_all_tiles_agree():
     assert np.array_equal(result.masks[2], lamp)
 
 
-def _merge_ground_truth_directly(masks_for_tile, *, width, height, tight, tile_size_px=200, overlap_px=50):
+def _merge_ground_truth_directly(
+    masks_for_tile, *, width, height, tight, tile_size_px=200, overlap_px=50, instance_merge=None
+):
     config = SegmentationTilingConfig(enabled=True, tile_size_px=tile_size_px, overlap_px=overlap_px)
+    if instance_merge is not None:
+        config.merge.instance_merge = instance_merge
     manifest = UniformTilingPlanner().plan(
         image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
     )
@@ -781,6 +785,32 @@ def test_tiling_merge_does_not_depend_on_patch_crop():
     assert np.array_equal(full[1], tight[1])
     assert full[3]["seam_metrics"] == tight[3]["seam_metrics"]
     assert full[3]["seam_metrics"]["merged_pair_count"] > 0
+
+
+def test_tiling_merge_does_not_depend_on_patch_crop_when_a_zero_iou_merges():
+    """``iou_threshold=0`` with ``border_only`` off joins pairs that share no pixel, however the patches are cropped.
+
+    The patch-box shortcut of the pair loop is exact only while an empty intersection cannot join a pair. Tight
+    patches of two objects that never touch have disjoint boxes; full-tile patches of the same masks do not.
+    """
+    height, width = 60, 300  # tiles [0, 200) and [150, 300)
+    left_object = _rect_mask(height, width, (10, 30), (20, 60))
+    right_object = _rect_mask(height, width, (35, 55), (240, 280))
+    instance_merge = InstanceMergeConfig(iou_threshold=0.0, border_only=False)
+
+    def masks_for_tile(tile):
+        return [left_object] if tile.bbox.x0 == 0 else [right_object]
+
+    full = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=False, instance_merge=instance_merge)
+    tight = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=True, instance_merge=instance_merge)
+
+    assert full[0].shape == (1, height, width)
+    assert np.array_equal(full[0][0], left_object | right_object)
+    assert np.array_equal(tight[0], full[0])
+    assert np.array_equal(tight[1], full[1])
+    assert tight[2] == full[2]
+    assert tight[3] == full[3]
+    assert full[3]["seam_metrics"]["max_merged_discontinuity"] == 1.0
 
 
 def test_sam2_segment_tile_emits_tight_bool_patches_that_merge_like_full_tile_patches(tmp_path):
