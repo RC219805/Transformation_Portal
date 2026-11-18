@@ -53,7 +53,9 @@ class ArtifactObjectMetadata:
     The dataclass is intentionally backend-neutral. ``LocalArtifactStore``
     populates it from ``path.stat()`` + ``path.open("rb")`` streaming
     hash; ``S3ArtifactStore`` populates it from a ``HEAD`` request
-    plus a streaming download that produces the same hash.
+    plus a streaming download that produces the same hash. That download
+    happens once per stored object version: an unchanged object is not
+    downloaded again by later lookups.
     """
 
     relative_path: str
