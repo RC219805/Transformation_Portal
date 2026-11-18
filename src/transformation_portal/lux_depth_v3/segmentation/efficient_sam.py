@@ -104,6 +104,9 @@ class EfficientSAMBackend:
         self._clip_text_prompt_signature: Optional[Tuple[str, ...]] = None
         self._clip_classification_timing_ms: Dict[str, float] = {}
         self._material_confidence_evidence: Dict[str, Dict[str, Any]] = {}
+        # True when the last segment() call could not obtain SAM proposals
+        # (generator missing or raising) and substituted heuristic regions.
+        self._sam_proposals_failed = False
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
         self._sky_brightness_threshold = float(sky_brightness_threshold)
@@ -206,10 +209,14 @@ class EfficientSAMBackend:
 
         The heuristic labelling path (efficientvit missing, a real-model or CLIP
         failure, ``SKIP_CLIP_INFERENCE``) is a degraded stand-in for the
-        requested backend. Such results must never be cached under the key a
+        requested backend, and so is a result whose regions are heuristic
+        because SAM proposal generation failed, even when CLIP then labelled
+        those regions. Such results must never be cached under the key a
         healthy run would read, otherwise later runs replay them without the
         backend executing.
         """
+        if getattr(self, "_sam_proposals_failed", False):
+            return True
         degraded_types = {HEURISTIC_MATERIAL_SCORE_TYPE, MISSING_CLIP_SCORE_FALLBACK_TYPE}
         return any(
             evidence.get("confidence_score_type") in degraded_types for evidence in self._material_confidence_evidence.values()
@@ -342,6 +349,8 @@ class EfficientSAMBackend:
 
         if image.dtype != np.uint8:
             raise ValueError(f"Expected uint8 image, got dtype {image.dtype}")
+
+        self._sam_proposals_failed = False
 
         # V2: Real EfficientSAM inference if available
         if self._use_real_model and EFFICIENTVIT_AVAILABLE:
@@ -544,6 +553,7 @@ class EfficientSAMBackend:
                 "This should not happen if model loaded correctly. "
                 "Falling back to empty segments."
             )
+            self._sam_proposals_failed = True
             return []
 
         try:
@@ -578,6 +588,7 @@ class EfficientSAMBackend:
         except Exception as e:
             logger.error(f"SAM inference failed: {e}", exc_info=True)
             logger.warning("Falling back to empty segments (CLIP will classify heuristic masks)")
+            self._sam_proposals_failed = True
             return []
 
     def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, Tuple[np.ndarray, float]]:

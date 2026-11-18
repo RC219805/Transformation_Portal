@@ -1168,6 +1168,68 @@ def test_efficientsam_segmentation_degraded_tracks_clip_evidence():
     assert backend.segmentation_degraded() is True
 
 
+def test_segment_materials_does_not_cache_when_sam_proposals_fail(tmp_path, monkeypatch):
+    """LC-02: CLIP labels on heuristic regions (SAM proposals failed) are still a degraded result."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    image = np.full((120, 160, 3), 90, dtype=np.uint8)
+    proposal = np.zeros(image.shape[:2], dtype=bool)
+    proposal[10:60, 10:60] = True
+
+    class FlakyMaskGenerator:
+        fail = True
+
+        def generate(self, _image):
+            if self.fail:
+                raise RuntimeError("transient SAM failure")
+            return [{"segmentation": proposal, "bbox": [10, 10, 50, 50], "area": int(proposal.sum())}]
+
+    generator = FlakyMaskGenerator()
+    backend = EfficientSAMBackend()
+    backend._model_loaded = True
+    backend._use_real_model = True
+    backend._device = "cpu"
+    backend._mask_generator = generator
+
+    def clip_labels_any_regions(_image, segments):
+        # Stand-in for a working CLIP stage: it labels whatever regions it is handed
+        # (SAM proposals, or heuristic regions when SAM returned nothing).
+        mask = segments[0]["segmentation"].astype(np.float32) if segments else np.ones(image.shape[:2], np.float32)
+        backend._material_confidence_evidence = {
+            "glass": {"material_confidence": 0.9, "confidence_score_type": "clip_softmax_margin_v1"}
+        }
+        return {"glass": (mask, 0.9)}
+
+    monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(backend, "_classify_segments_with_clip", clip_labels_any_regions)
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: backend)
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        depth_device="cpu",
+    )
+
+    served = segment_materials(image, config, cache_dir=tmp_path)
+    assert set(served) == {"glass"}, "the degraded result is still served for this run"
+    assert backend.segmentation_degraded() is True
+    assert list(tmp_path.rglob("*.json")) == []
+
+    # The generator recovers: the next run executes the backend and its result is cached.
+    generator.fail = False
+    recovered = segment_materials(image, config, cache_dir=tmp_path)
+    assert get_last_segmentation_runtime_metadata()["cache_hit"] is False
+    assert np.array_equal(recovered["glass"], proposal.astype(np.float32))
+    assert backend.segmentation_degraded() is False
+    assert len(list(tmp_path.rglob("*.json"))) == 1
+
+    # A missing generator is the same degraded condition.
+    backend._mask_generator = None
+    backend.segment(image)
+    assert backend.segmentation_degraded() is True
+
+
 def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
     """Strict mode should raise when SAM2 backend dependencies are unavailable."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
