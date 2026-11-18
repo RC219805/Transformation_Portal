@@ -776,6 +776,10 @@ class ArtifactStore:
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
 
+            # Bytes of existing files this write replaces, including a corrupted
+            # marker removed below (size accounting).
+            replaced_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
+
             # Idempotency check: if already committed, skip write (Issue #929 correctness)
             # This prevents overwrite hazards when multiple processes compute same key.
             # If crash happens during overwrite, old .committed marker could point to
@@ -788,9 +792,6 @@ class ArtifactStore:
                     # Marker exists but files missing → corruption, invalidate and rebuild
                     logger.warning(f"Corrupted entry detected (marker without files): {cache_key}")
                     committed_path.unlink(missing_ok=True)
-
-            # Bytes of uncommitted remnants this write replaces (size accounting).
-            replaced_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
 
             # Create directory
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1281,7 +1282,7 @@ class ArtifactStore:
             self._invalidate_size_estimate()
 
         logger.info(
-            f"Scavenger complete:{report['orphaned_artifacts_removed']} orphaned artifacts, "
+            f"Scavenger complete: {report['orphaned_artifacts_removed']} orphaned artifacts, "
             f"{report['orphaned_provenance_removed']} orphaned provenance, "
             f"{report['stale_temp_files_removed']} stale temp files removed"
         )
