@@ -46,6 +46,7 @@ import argparse
 import json
 import logging
 import sqlite3
+import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -379,12 +380,13 @@ class PerformanceLedger:
         total_times.sort()
 
         n = len(total_times)
+        median = statistics.median(total_times)
 
         return {
             "count": n,
             "mean_sec": sum(total_times) / n,
-            "median_sec": total_times[n // 2],
-            "p50_sec": total_times[n // 2],
+            "median_sec": median,
+            "p50_sec": median,
             "p95_sec": total_times[int(n * 0.95)] if n > 1 else total_times[0],
             "min_sec": total_times[0],
             "max_sec": total_times[-1],
@@ -455,7 +457,7 @@ def detect_regression(
     current_total = current_capsule.timings["total"]
 
     n = len(historical_totals)
-    historical_p50 = historical_totals[n // 2]
+    historical_p50 = statistics.median(historical_totals)
     historical_p95 = historical_totals[int(n * 0.95)] if n > 1 else historical_totals[0]
 
     result = {
@@ -516,17 +518,19 @@ def generate_performance_report(
     for scene_type, capsules in sorted(by_scene.items()):
         totals = sorted([c.timings["total"] for c in capsules])
         n = len(totals)
+        # PerformanceCapsule allows a 0.0 s total (cache hit / dry run): no ratio then.
+        ratio = f"{totals[-1] / totals[0]:.2f}×" if totals[0] > 0 else "n/a (zero-duration minimum)"
 
         lines.extend(
             [
                 f"### {scene_type.title()} Scenes (n={n})",
                 "",
                 f"- Mean: {sum(totals) / n:.2f}s",
-                f"- Median: {totals[n // 2]:.2f}s",
+                f"- Median: {statistics.median(totals):.2f}s",
                 f"- p95: {totals[int(n * 0.95)] if n > 1 else totals[0]:.2f}s",
                 f"- Min: {totals[0]:.2f}s",
                 f"- Max: {totals[-1]:.2f}s",
-                f"- Max/Min ratio: {totals[-1] / totals[0]:.2f}×",
+                f"- Max/Min ratio: {ratio}",
                 "",
             ]
         )
