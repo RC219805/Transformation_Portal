@@ -332,6 +332,75 @@ class TestSSIM:
         assert -1 <= result <= 1
 
 
+def _global_window_ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
+    """The single-global-window formula the fallback used to apply (not SSIM)."""
+    c1, c2 = (0.01 * data_range) ** 2, (0.03 * data_range) ** 2
+    mu_a, mu_b = a.mean(), b.mean()
+    cov = np.mean((a - mu_a) * (b - mu_b))
+    return float(((2 * mu_a * mu_b + c1) * (2 * cov + c2)) / ((mu_a**2 + mu_b**2 + c1) * (a.var() + b.var() + c2)))
+
+
+class TestSSIMWindowedFallback:
+    """M-30: without scikit-image, ``ssim`` must still be the windowed SSIM, not one global window."""
+
+    @pytest.fixture(autouse=True)
+    def _no_skimage(self, monkeypatch):
+        import sys
+
+        monkeypatch.setitem(sys.modules, "skimage", None)
+        monkeypatch.setitem(sys.modules, "skimage.metrics", None)
+
+    @pytest.fixture
+    def detail(self):
+        rng = np.random.default_rng(0)
+        base = np.tile(np.linspace(0, 1, 96, dtype=np.float32)[None, :], (96, 1))
+        return np.clip(base + (rng.random((96, 96)).astype(np.float32) - 0.5) * 0.3, 0, 1)
+
+    def test_identical_images_score_one(self, identical_images):
+        img1, img2 = identical_images
+        assert ssim(img1, img2) == pytest.approx(1.0, abs=1e-9)
+
+    def test_heavy_blur_scores_far_below_global_window(self, detail):
+        import cv2
+
+        blurred = cv2.GaussianBlur(detail, (0, 0), 6)
+        assert _global_window_ssim(detail, blurred) > 0.9
+        assert ssim(detail, blurred) < 0.3
+
+    def test_row_shuffle_scores_far_below_global_window(self, detail):
+        shuffled = detail.copy()
+        np.random.default_rng(1).shuffle(shuffled, axis=0)
+        assert _global_window_ssim(detail, shuffled) > 0.9
+        assert ssim(detail, shuffled) < 0.3
+
+    def test_matches_brute_force_window_definition(self):
+        rng = np.random.default_rng(2)
+        a = rng.random((9, 11))
+        b = np.clip(a + rng.normal(0, 0.1, a.shape), 0, 1)
+        win = 3
+        c1, c2 = 0.01**2, 0.03**2
+        values = []
+        for i in range(a.shape[0] - win + 1):
+            for j in range(a.shape[1] - win + 1):
+                wa, wb = a[i : i + win, j : j + win], b[i : i + win, j : j + win]
+                mu_a, mu_b = wa.mean(), wb.mean()
+                cov = np.cov(wa.ravel(), wb.ravel(), ddof=1)
+                values.append(
+                    ((2 * mu_a * mu_b + c1) * (2 * cov[0, 1] + c2)) / ((mu_a**2 + mu_b**2 + c1) * (cov[0, 0] + cov[1, 1] + c2))
+                )
+        assert ssim(a, b, win_size=win) == pytest.approx(float(np.mean(values)), abs=1e-9)
+
+    def test_rgb_is_mean_of_channel_scores(self, different_images):
+        img1, img2 = different_images
+        per_channel = [ssim(img1[..., c], img2[..., c]) for c in range(3)]
+        assert ssim(img1, img2) == pytest.approx(float(np.mean(per_channel)), abs=1e-9)
+
+    def test_window_larger_than_image_raises(self):
+        tiny = np.zeros((4, 4, 3), dtype=np.float32)
+        with pytest.raises(ValueError, match="win_size"):
+            ssim(tiny, tiny)
+
+
 class TestLPIPS:
     """Test LPIPS computation (mocked)."""
 

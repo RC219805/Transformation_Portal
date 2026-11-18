@@ -266,19 +266,53 @@ def ssim(
     except ImportError:
         pass
 
-    # Fallback: simplified SSIM
-    C1 = (0.01 * data_range) ** 2
-    C2 = (0.03 * data_range) ** 2
+    # Fallback without scikit-image: the same windowed SSIM (skimage's defaults).
+    return _windowed_ssim(arr1, arr2, win_size=win_size, data_range=data_range)
 
-    mu1 = np.mean(arr1)
-    mu2 = np.mean(arr2)
-    sigma1_sq = np.var(arr1)
-    sigma2_sq = np.var(arr2)
-    sigma12 = np.mean((arr1 - mu1) * (arr2 - mu2))
 
-    ssim_val = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / ((mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2))
+def _windowed_ssim(arr1: np.ndarray, arr2: np.ndarray, *, win_size: int, data_range: float) -> float:
+    """Mean windowed SSIM (Wang et al. 2004) with scikit-image's default parameters.
 
-    return float(ssim_val)
+    Local statistics come from a ``win_size`` uniform window with the sample-covariance
+    correction, the map is cropped by the window half-width and averaged; 3-D inputs are
+    channel-last and the per-channel means are averaged. This matches
+    ``skimage.metrics.structural_similarity(..., gaussian_weights=False)``, so the score does
+    not depend on whether scikit-image is installed. A single global window is *not* SSIM:
+    it scores a heavily blurred or row-shuffled image close to 1.0.
+    """
+    from scipy.ndimage import uniform_filter
+
+    if arr1.shape != arr2.shape:
+        raise ValueError(f"Image shapes don't match: {arr1.shape} vs {arr2.shape}")
+    if win_size < 3 or win_size % 2 == 0:
+        raise ValueError(f"win_size must be an odd integer >= 3, got {win_size}")
+
+    channels_last = arr1.ndim == 3
+    spatial_shape = arr1.shape[:-1] if channels_last else arr1.shape
+    if arr1.ndim < 2 or min(spatial_shape) < win_size:
+        raise ValueError(f"win_size {win_size} exceeds the image size {arr1.shape}; pass a smaller odd win_size")
+
+    x_all = arr1.astype(np.float64)
+    y_all = arr2.astype(np.float64)
+    pairs = [(x_all[..., c], y_all[..., c]) for c in range(arr1.shape[-1])] if channels_last else [(x_all, y_all)]
+
+    c1 = (0.01 * data_range) ** 2
+    c2 = (0.03 * data_range) ** 2
+    window_pixels = win_size ** len(spatial_shape)
+    cov_norm = window_pixels / (window_pixels - 1.0)
+    pad = (win_size - 1) // 2
+    crop = tuple(slice(pad, dim - pad) for dim in spatial_shape)
+
+    channel_means = []
+    for x, y in pairs:
+        mu_x = uniform_filter(x, size=win_size)
+        mu_y = uniform_filter(y, size=win_size)
+        var_x = cov_norm * (uniform_filter(x * x, size=win_size) - mu_x * mu_x)
+        var_y = cov_norm * (uniform_filter(y * y, size=win_size) - mu_y * mu_y)
+        cov_xy = cov_norm * (uniform_filter(x * y, size=win_size) - mu_x * mu_y)
+        ssim_map = ((2 * mu_x * mu_y + c1) * (2 * cov_xy + c2)) / ((mu_x**2 + mu_y**2 + c1) * (var_x + var_y + c2))
+        channel_means.append(float(ssim_map[crop].mean()))
+    return float(np.mean(channel_means))
 
 
 # ============================================================================
