@@ -178,21 +178,22 @@ class GeometricValidator:
 
             H, W = depth_map.shape
 
-            # Sample depth values at projected locations
-            for i, (u, v, depth_splat) in enumerate(projected_depths):
-                u_idx = int(round(u))
-                v_idx = int(round(v))
+            # Sample depth values at the nearest pixel (round half to even, as
+            # Python's round) of every splat in front of the camera; splats
+            # behind it (depth <= 0) or with non-finite projections are not
+            # observed by this view.
+            u_idx = np.rint(projected_depths[:, 0])
+            v_idx = np.rint(projected_depths[:, 1])
+            depth_splat = projected_depths[:, 2]
+            observed = (depth_splat > 0) & (u_idx >= 0) & (u_idx < W) & (v_idx >= 0) & (v_idx < H)
+            depth_ref = depth_map[v_idx[observed].astype(np.intp), u_idx[observed].astype(np.intp)]
+            depth_splat = depth_splat[observed]
 
-                # Check bounds
-                if 0 <= u_idx < W and 0 <= v_idx < H:
-                    depth_ref = depth_map[v_idx, u_idx]
-
-                    # Check consistency
-                    if depth_ref > 0:  # Valid depth
-                        relative_error = abs(depth_splat - depth_ref) / (depth_ref + 1e-8)
-                        if relative_error < threshold:
-                            total_consistent += 1
-                        total_points += 1
+            # Check consistency against valid reference depth only
+            valid = depth_ref > 0
+            relative_error = np.abs(depth_splat[valid] - depth_ref[valid]) / (depth_ref[valid] + 1e-8)
+            total_consistent += int(np.count_nonzero(relative_error < threshold))
+            total_points += int(np.count_nonzero(valid))
 
         # Compute consistency score
         if total_points == 0:
@@ -210,6 +211,7 @@ class GeometricValidator:
         Returns:
             Dict with coverage metrics:
             - "mean_points_per_view": Average visible points per camera
+              (in front of the camera and inside its image)
             - "min_points_per_view": Minimum visible points
             - "max_points_per_view": Maximum visible points
             - "coverage_std": Standard deviation of coverage
@@ -218,15 +220,15 @@ class GeometricValidator:
 
         for camera in scene.cameras:
             # Project all splats to camera
-            projected = self._project_points(scene.splats.positions, camera)
+            projected = self._project_depths(scene.splats.positions, camera)
+            u, v, depth = projected[:, 0], projected[:, 1], projected[:, 2]
 
-            # Count visible points
-            visible = 0
-            for u, v in projected:
-                if 0 <= u < camera.width and 0 <= v < camera.height:
-                    visible += 1
+            # Count visible points: in front of the camera and inside the image.
+            # A splat behind the camera (depth <= 0) also maps to a pixel
+            # through the pinhole division but is not seen by this view.
+            visible = (depth > 0) & (u >= 0) & (u < camera.width) & (v >= 0) & (v < camera.height)
 
-            points_per_view.append(visible)
+            points_per_view.append(int(np.count_nonzero(visible)))
 
         return {
             "mean_points_per_view": float(np.mean(points_per_view)),
