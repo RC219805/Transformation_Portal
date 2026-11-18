@@ -71,9 +71,12 @@ class DepthProStage(Stage):
     Cache Key Components:
         - checkpoint_sha256[:16]
         - depth_pro package version
-        - transform hash
         - input image hash
         - device class
+        - supplied focal length
+
+    The stage cache holds the in-memory result only. A run that asks for files
+    (``output_dir``) always computes, so the files are always written.
     """
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
@@ -110,6 +113,17 @@ class DepthProStage(Stage):
         self._model = None
         self._transform = None
         self._model_loaded = False
+
+    def execute(self, context: StageContext) -> StageResult:
+        """Execute with the stage cache, unless the run asks for files.
+
+        A cache hit returns the stored depth map without running ``compute``,
+        so it cannot write the files requested through ``output_dir``; and the
+        paths one run wrote are not a result to hand to the next run.
+        """
+        if context.get_artifact("output_dir"):
+            return self.execute_uncached(context)
+        return super().execute(context)
 
     def compute(self, context: StageContext) -> StageResult:
         """Run Depth Pro inference with full provenance tracking.
@@ -200,9 +214,14 @@ class DepthProStage(Stage):
         Includes:
             - Checkpoint SHA256
             - depth_pro package version
-            - Transform representation hash
             - Input image hash
             - Device class
+            - Supplied focal length
+
+        Every component is known before the model is loaded. The loaded
+        transform is deliberately not one of them: it only exists after the
+        first inference, which gave the same image two keys in one process,
+        and it is fixed by the package version in any case.
         """
         image = context.get_artifact("image")
         if image is None:
@@ -227,15 +246,9 @@ class DepthProStage(Stage):
         # Get package version
         pkg_ver = self._get_package_version()
 
-        # Transform hash (if model loaded)
-        transform_hash = "unloaded"
-        if self._transform is not None:
-            transform_repr = repr(self._transform)[:100]
-            transform_hash = hashlib.sha256(transform_repr.encode()).hexdigest()[:8]
-
         focal = self._validated_focal_length(context.get_artifact("focal_length_px"))
         focal_key = "estimated" if focal is None else hashlib.sha256(focal.hex().encode("ascii")).hexdigest()[:16]
-        return f"depthpro_{ckpt_hash}_{pkg_ver}_{transform_hash}_{image_hash}_{self.device}_focal_{focal_key}_v2"
+        return f"depthpro_{ckpt_hash}_{pkg_ver}_{image_hash}_{self.device}_focal_{focal_key}_v3"
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device (prefer MPS for Apple Silicon)."""
