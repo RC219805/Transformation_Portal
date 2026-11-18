@@ -3763,6 +3763,8 @@ test("@portal-browser native Materials editor previews and saves a separate unap
       regions: [{ id: "region-1", label: "glass", region: [0.25, 0.25, 0.75, 0.75], strength: 0.02 }] },
   } });
   await expectNoHorizontalOverflow(page, "Native Materials editor");
+  await expect(page.locator('[data-ui="photographic-primary-viewport"]')).toHaveAttribute("role", "group");
+  await expect(page.locator('[data-ui="photographic-comparison-viewport"]')).toHaveAttribute("role", "group");
   await expectNoWcagViolations(page, "Native Materials editor");
   await commit.click();
   const revisionPath = "revisions/native-input-0000/master.tif";
