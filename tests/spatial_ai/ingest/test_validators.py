@@ -117,6 +117,12 @@ class TestGammaValidation:
         with pytest.raises(LinearityViolationError):
             validate_gamma(1.001, expected=1.0, tolerance=1e-6)
 
+    @pytest.mark.parametrize("bad_gamma", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_gamma_rejected(self, bad_gamma):
+        """I-6: NaN must not slip through the tolerance comparison."""
+        with pytest.raises(LinearityViolationError, match="gamma"):
+            validate_gamma(bad_gamma, expected=1.0)
+
 
 class TestRangeValidation:
     """Test range validation."""

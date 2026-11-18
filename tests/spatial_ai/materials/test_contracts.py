@@ -39,6 +39,12 @@ class TestMaterialInput:
                 gamma=2.2,  # Invalid
             )
 
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must not pass the gamma=1.0 contract."""
+        image = np.zeros((8, 8, 3), dtype=np.float32)
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            MaterialInput(image=image, gamma=float("nan"))
+
     def test_dtype_enforcement(self):
         """Test float32 dtype enforcement."""
         image = np.random.rand(512, 512, 3).astype(np.float64)  # Wrong dtype

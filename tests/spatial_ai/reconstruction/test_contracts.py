@@ -230,6 +230,15 @@ class TestReconstructionInput:
         with pytest.raises(ValueError, match="Reconstruction requires gamma=1.0"):
             ReconstructionInput(images=images, gamma=2.2, cameras=cameras, tier="apex_research")
 
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must not pass the gamma=1.0 contract."""
+        # Two views so that, without the gamma check, construction would succeed.
+        images = [np.zeros((48, 64, 3), dtype=np.float32) for _ in range(2)]
+        cameras = [CameraParams(np.eye(3, dtype=np.float32), np.eye(4, dtype=np.float32), 64, 48) for _ in range(2)]
+        ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
+        with pytest.raises(ValueError, match="Reconstruction requires gamma=1.0"):
+            ReconstructionInput(images=images, gamma=float("nan"), cameras=cameras, tier="apex_research")
+
     def test_tier_restriction(self):
         """Test tier restriction enforcement (Inria license)."""
         images = [np.random.rand(480, 640, 3).astype(np.float32) for _ in range(2)]

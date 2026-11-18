@@ -47,6 +47,22 @@ class TestLinearDecoder:
         with pytest.raises(ValueError, match="gamma=1.0"):
             LinearDecoder(gamma=2.2)
 
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must be rejected like any other non-linear gamma."""
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            LinearDecoder(gamma=float("nan"))
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            LinearIngestResult(
+                linear_rgb=np.zeros((4, 4, 3), dtype=np.float32),
+                gamma=float("nan"),
+                bit_depth=32,
+                dtype="float32",
+                input_size=(4, 4),
+                input_path=Path("test.png"),
+                input_format="PNG",
+                color_space="linear_sRGB",
+            )
+
     def test_linear_decode_preserves_hdr(self, tmp_path: Path):
         """Test that linear ingest preserves HDR values >1.0."""
         # Create HDR test image (values >1.0)

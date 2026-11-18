@@ -188,7 +188,7 @@ class SceneBuilder:
             FileNotFoundError: If image file not found.
             ValueError: If gamma != 1.0 (must be pre-linearized).
         """
-        if abs(gamma - 1.0) > 1e-6:
+        if not abs(gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"SceneBuilder requires gamma=1.0 (pre-linearized images), got {gamma}. "
                 "Linearize images before passing to SceneBuilder."

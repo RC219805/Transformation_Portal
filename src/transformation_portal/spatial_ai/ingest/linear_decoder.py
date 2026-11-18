@@ -224,7 +224,7 @@ class LinearIngestResult:
     def __post_init__(self):
         """Validate result contract."""
         # Gamma enforcement (SpatialCaptureV1 contract)
-        if abs(self.gamma - 1.0) > 1e-6:
+        if not abs(self.gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"Linear ingest requires gamma=1.0, got {self.gamma}. " "This violates the SpatialCaptureV1 contract."
             )
@@ -284,7 +284,7 @@ class LinearDecoder:
         Raises:
             ValueError: If gamma != 1.0 (linear ingest contract).
         """
-        if abs(gamma - 1.0) > 1e-6:
+        if not abs(gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"Linear ingest requires gamma=1.0 (got {gamma}). "
                 "This is a non-negotiable contract for research/training data."
