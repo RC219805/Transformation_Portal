@@ -327,6 +327,38 @@ def test_archive_bagit_path_key_ignores_unicode_normalization_form(monkeypatch: 
     assert archive_bagit._bag_path_key(decomposed) == archive_bagit._bag_path_key(precomposed)
 
 
+def test_archive_bagit_validate_rejects_unlisted_twin_that_differs_only_in_normalization(tmp_path: Path) -> None:
+    """A second on-disk name that only differs in normalization form must not hide behind the listed one."""
+    precomposed_name = "café.bin"
+    decomposed_name = "café.bin"
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    payload = b"listed payload"
+    (archive_root / precomposed_name).write_bytes(payload)
+    manifest_path = tmp_path / "manifest.jsonl"
+    _write_manifest_jsonl(
+        manifest_path, [{"relpath": precomposed_name, "sha256": _sha256_bytes(payload), "hash_status": "ok"}]
+    )
+    bag_dir = tmp_path / "bag"
+    build = _run_bagit(
+        "build", "--manifest-jsonl", str(manifest_path), "--archive-root", str(archive_root), "--bag-dir", str(bag_dir)
+    )
+    assert build.returncode == 0, build.stderr
+
+    (bag_dir / "data" / decomposed_name).write_bytes(b"unlisted twin")
+    if len(os.listdir(bag_dir / "data")) != 2:
+        pytest.skip("filesystem does not keep names that differ only in normalization form apart")
+    # Re-declare the Oxum so that only the completeness check can catch the twin.
+    oxum = f"Payload-Oxum: {len(payload) + len(b'unlisted twin')}.2\n"
+    (bag_dir / "bag-info.txt").write_text(f"Source-Organization: TEST_ORG\n{oxum}", encoding="utf-8")
+    _rewrite_tag_manifest(bag_dir)
+
+    result, issues = _validate_bag(bag_dir, tmp_path / "validate_report.json")
+
+    assert result.returncode == 4
+    assert issues == {("payload", f"data/{decomposed_name}", "unlisted_payload")}
+
+
 def test_archive_bagit_build_fails_when_payload_missing(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive_root"
     bag_dir = tmp_path / "bag"

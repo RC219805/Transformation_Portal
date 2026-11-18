@@ -213,9 +213,12 @@ def _scan_payload_directory(bag_dir: Path) -> tuple[set[str], int, int]:
     """Return every entry under data/ plus the octet and file totals of its regular files.
 
     Symlinks are never followed: a symlinked file or directory is reported as one entry so it
-    cannot keep unlisted content out of the completeness check.
+    cannot keep unlisted content out of the completeness check. Two on-disk names that differ only
+    in Unicode normalization form share one comparison key, and a manifest row can only stand for
+    one of them, so the second one is reported under its raw (non-NFC) name and stays unlisted.
     """
     present: set[str] = set()
+    raw_by_key: dict[str, str] = {}
     octets = 0
     file_count = 0
     for dirpath, dirnames, filenames in os.walk(bag_dir / "data", followlinks=False):
@@ -223,7 +226,13 @@ def _scan_payload_directory(bag_dir: Path) -> tuple[set[str], int, int]:
         symlinked_dirs = [name for name in dirnames if (base / name).is_symlink()]
         for name in [*filenames, *symlinked_dirs]:
             entry = base / name
-            present.add(_bag_path_key(entry.relative_to(bag_dir)))
+            raw = entry.relative_to(bag_dir).as_posix()
+            key = _bag_path_key(entry.relative_to(bag_dir))
+            if key in raw_by_key:
+                present.add(raw if raw != key else raw_by_key[key])
+            else:
+                raw_by_key[key] = raw
+                present.add(key)
             try:
                 entry_stat = entry.lstat()
             except OSError:
