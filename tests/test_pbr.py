@@ -200,3 +200,65 @@ def test_write_pbr_maps_partial_failure_cleanup():
         # Verify no temp files remain even after partial failure
         temp_files = list(output_dir.glob(".tmp_*"))
         assert len(temp_files) == 0, f"Temp files leaked after partial failure: {temp_files}"
+
+
+def _pbr_parity_depths():
+    rng = np.random.default_rng(1)
+    h, w = 96, 128
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    scene = (0.5 + 0.2 * np.sin(xx / 20) * np.cos(yy / 15) + 0.01 * rng.standard_normal((h, w))).astype(np.float32)
+    scene[30:60, 40:90] -= 0.15
+    ramp = np.tile(np.linspace(0.0, 1.0, w, dtype=np.float32), (h, 1))
+    # One same-shape batch (mixed shapes make torch.cat fall back to numpy) and a
+    # 4x7 map smaller than the AO blur window, exercising repeated reflect padding.
+    return [[scene, ramp], [rng.random((4, 7)).astype(np.float32)]]
+
+
+@pytest.mark.ml
+@pytest.mark.parametrize(
+    "config",
+    [
+        PBRConfig(),
+        PBRConfig(normal_blur_radius=2, normal_strength=3.0, roughness_strength=2.0, ao_strength=1.5, ao_bias=0.3),
+    ],
+)
+def test_pbr_batched_torch_path_matches_numpy_reference(config):
+    """The batched torch path reproduces the numpy reference maps (LC-09).
+
+    Device "cpu:0" takes the torch branch ("cpu" short-circuits to numpy). Only
+    float32 rounding at the uint8 truncation boundary may differ, by one level
+    (on the ramp, the two border columns that tie for the roughness maximum).
+    """
+    pytest.importorskip("torch")
+    from transformation_portal.lux_depth_v3.pbr import generate_pbr_maps_batched
+
+    reference = []
+    batched = []
+    for depths in _pbr_parity_depths():
+        reference.extend(generate_pbr_maps(depth, config) for depth in depths)
+        batched.extend(generate_pbr_maps_batched(depths, config, device="cpu:0"))
+
+    assert len(batched) == len(reference) == 3
+    for ref_maps, torch_maps in zip(reference, batched):
+        for ref_map, torch_map in zip(ref_maps, torch_maps):
+            assert ref_map.shape == torch_map.shape
+            assert ref_map.dtype == torch_map.dtype == np.uint8
+            diff = np.abs(ref_map.astype(np.int16) - torch_map.astype(np.int16))
+            assert int(diff.max()) <= 1
+            assert float(np.mean(diff != 0)) < 0.05
+
+
+def test_pbr_batched_validates_inputs_like_numpy_reference():
+    """Invalid depth/config raises on every device, as the numpy path does."""
+    from transformation_portal.lux_depth_v3.pbr import generate_pbr_maps_batched
+
+    depth = np.random.default_rng(0).random((16, 16)).astype(np.float32)
+    bad = depth.copy()
+    bad[0, 0] = np.nan
+    for device in ("cpu", "cpu:0"):
+        with pytest.raises(ValueError, match="NaN or Inf"):
+            generate_pbr_maps_batched([depth, bad], PBRConfig(), device=device)
+        with pytest.raises(ValueError, match="2D"):
+            generate_pbr_maps_batched([depth[None]], PBRConfig(), device=device)
+        with pytest.raises(ValueError, match="ao_strength"):
+            generate_pbr_maps_batched([depth], PBRConfig(ao_strength=-1.0), device=device)

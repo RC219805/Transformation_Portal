@@ -276,6 +276,27 @@ def _ensure_torch_for_batching() -> bool:
     return TORCH_AVAILABLE
 
 
+def _scipy_reflect_indices(size: int, pad: int) -> np.ndarray:
+    """Source indices reproducing scipy.ndimage ``mode="reflect"`` padding.
+
+    scipy's ``reflect`` mode mirrors about the pixel edge (``d c b a | a b c d``),
+    repeating for pads wider than the axis; torch has no equivalent padding mode.
+    """
+    period = 2 * size
+    idx = np.mod(np.arange(-pad, size + pad), period)
+    return np.where(idx >= size, period - 1 - idx, idx)
+
+
+def _torch_reflect_pad(batch: Any, pad: int) -> Any:
+    """Pad a (B, C, H, W) tensor exactly like scipy.ndimage ``mode="reflect"``."""
+    if pad <= 0:
+        return batch
+    height, width = int(batch.shape[-2]), int(batch.shape[-1])
+    rows = torch.as_tensor(_scipy_reflect_indices(height, pad), dtype=torch.long, device=batch.device)
+    cols = torch.as_tensor(_scipy_reflect_indices(width, pad), dtype=torch.long, device=batch.device)
+    return batch.index_select(-2, rows).index_select(-1, cols)
+
+
 def generate_pbr_maps_batched(
     depth_maps: list,
     config: PBRConfig = PBRConfig(),
@@ -304,6 +325,17 @@ def generate_pbr_maps_batched(
     """
     if not depth_maps:
         return []
+
+    # Same input/config validation as the numpy reference path, whatever the device.
+    for depth in depth_maps:
+        if depth.ndim != 2:
+            raise ValueError(f"Depth must be 2D, got shape {depth.shape}")
+        if np.any(np.isnan(depth)) or np.any(np.isinf(depth)):
+            raise ValueError("Depth contains NaN or Inf values")
+    if config.roughness_strength < 0:
+        raise ValueError("roughness_strength must be" " non-negative, got" f" {config.roughness_strength}")
+    if config.ao_strength < 0:
+        raise ValueError("ao_strength must be non-negative," f" got {config.ao_strength}")
 
     # Fast CPU path: no torch import needed.
     if device == "cpu":
@@ -362,6 +394,20 @@ def generate_pbr_maps_batched(
     _avg_pool2d = getattr(F, "avg_pool2d")
     _conv2d = getattr(F, "conv2d")
     _normalize = getattr(F, "normalize")
+
+    # The numpy path (generate_pbr_maps) is the reference. It uses
+    # ndimage.convolve / uniform_filter with mode="reflect": a true convolution
+    # (kernel flipped, unlike F.conv2d's cross-correlation) over scipy-reflect
+    # padded borders. Reproduce both here so outputs do not depend on device.
+    def _box_blur(batch: Any, radius: int) -> Any:
+        if radius <= 0:
+            return batch
+        kernel_size = 2 * radius + 1
+        return _avg_pool2d(_torch_reflect_pad(batch, radius), kernel_size=kernel_size, stride=1, padding=0)
+
+    def _convolve3x3(batch: Any, kernel: Any) -> Any:
+        return _conv2d(_torch_reflect_pad(batch, 1), torch.flip(kernel, dims=(-2, -1)), padding=0)
+
     with torch.no_grad():
         # Sobel kernels for gradients
         sobel_x = torch.tensor(
@@ -376,28 +422,11 @@ def generate_pbr_maps_batched(
         sobel_y = sobel_y.view(1, 1, 3, 3).to(device)
 
         # Pre-blur for normals if requested
-        if config.normal_blur_radius > 0:
-            kernel_size = 2 * config.normal_blur_radius + 1
-            depth_for_normals = _avg_pool2d(
-                depth_batch,
-                kernel_size=kernel_size,
-                stride=1,
-                padding=kernel_size // 2,
-            )
-        else:
-            depth_for_normals = depth_batch
+        depth_for_normals = _box_blur(depth_batch, config.normal_blur_radius)
 
         # Compute gradients (batched)
-        grad_x = _conv2d(
-            depth_for_normals,
-            sobel_x,
-            padding=1,
-        )
-        grad_y = _conv2d(
-            depth_for_normals,
-            sobel_y,
-            padding=1,
-        )
+        grad_x = _convolve3x3(depth_for_normals, sobel_x)
+        grad_y = _convolve3x3(depth_for_normals, sobel_y)
 
         # 1. NORMAL MAP
         grad_x_scaled = grad_x * config.normal_strength
@@ -425,25 +454,10 @@ def generate_pbr_maps_batched(
             .to(device)
         )
 
-        detail = torch.abs(
-            _conv2d(
-                depth_batch,
-                laplacian_kernel,
-                padding=1,
-            )
-        )
+        detail = torch.abs(_convolve3x3(depth_batch, laplacian_kernel))
 
         # Blur
-        if config.roughness_blur_radius > 0:
-            kernel_size = 2 * config.roughness_blur_radius + 1
-            roughness = _avg_pool2d(
-                detail,
-                kernel_size=kernel_size,
-                stride=1,
-                padding=kernel_size // 2,
-            )
-        else:
-            roughness = detail
+        roughness = _box_blur(detail, config.roughness_blur_radius)
 
         # Normalize per-image in batch
         roughness_normalized = torch.zeros_like(roughness)
@@ -474,16 +488,7 @@ def generate_pbr_maps_batched(
         grad_mag = torch.sqrt(grad_x**2 + grad_y**2)
 
         # Blur
-        if config.ao_blur_radius > 0:
-            kernel_size = 2 * config.ao_blur_radius + 1
-            occlusion = _avg_pool2d(
-                grad_mag,
-                kernel_size=kernel_size,
-                stride=1,
-                padding=kernel_size // 2,
-            )
-        else:
-            occlusion = grad_mag
+        occlusion = _box_blur(grad_mag, config.ao_blur_radius)
 
         # Normalize per-image
         occlusion_normalized = torch.zeros_like(occlusion)
