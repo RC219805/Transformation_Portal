@@ -127,7 +127,9 @@ class GraphEncoder(nn.Module):
 
         Args:
             node_states: Node features [B, N, state_dim]
-            adjacency: Optional adjacency matrix [B, N, N]
+            adjacency: Optional adjacency matrix [B, N, N] (or [N, N] shared by
+                the batch); any non-zero entry ``[i, j]`` lets node ``i``
+                attend to node ``j``. Every node always attends to itself.
 
         Returns:
             Tuple of (node_embeddings [B, N, d_model], graph_embedding [B, d_model])
@@ -137,8 +139,7 @@ class GraphEncoder(nn.Module):
         # Create attention mask from adjacency if provided
         mask = None
         if adjacency is not None:
-            # Invert: 0 = attend, 1 = mask
-            mask = (1 - adjacency).bool()
+            mask = self._attention_mask(adjacency, batch_size=x.size(0), num_nodes=x.size(1))
 
         for layer in self.layers:
             x = layer(x, src_mask=mask)
@@ -148,6 +149,25 @@ class GraphEncoder(nn.Module):
         graph_emb = (weights.unsqueeze(-1) * x).sum(dim=1)
 
         return x, graph_emb
+
+    def _attention_mask(self, adjacency: torch.Tensor, batch_size: int, num_nodes: int) -> torch.Tensor:
+        """Turn an adjacency matrix into a boolean attention mask (True = blocked).
+
+        Self-loops are always allowed so no query row is fully masked (a fully
+        masked row makes the attention softmax NaN). A per-sample [B, N, N]
+        mask is repeated per head, as ``nn.MultiheadAttention`` expects
+        ``[B * n_heads, N, N]``.
+        """
+        if adjacency.dim() not in (2, 3) or tuple(adjacency.shape[-2:]) != (num_nodes, num_nodes):
+            raise ValueError(f"adjacency must have shape [N, N] or [B, N, N] with N={num_nodes}, got {tuple(adjacency.shape)}")
+        if adjacency.dim() == 3 and adjacency.size(0) != batch_size:
+            raise ValueError(f"adjacency batch size {adjacency.size(0)} does not match node_states batch size {batch_size}")
+
+        eye = torch.eye(num_nodes, dtype=torch.bool, device=adjacency.device)
+        mask = ~((adjacency != 0) | eye)
+        if mask.dim() == 3:
+            mask = mask.repeat_interleave(self.config.n_heads, dim=0)
+        return mask
 
 
 class TrajectoryEncoder(nn.Module):
@@ -406,9 +426,19 @@ class PipelineFoundationModel(nn.Module):
 
             # For InfoNCE, labels should be the indices of positive samples
             # If positive_idx[i] = j, then sample i's positive is sample j
-            # We need to ensure positive_idx correctly represents the positive pair indices
             labels = positive_idx.to(logits.device)
+            self_match = torch.eye(logits.size(0), dtype=torch.bool, device=logits.device)
+            if bool((labels == torch.arange(logits.size(0), device=logits.device)).any()):
+                raise ValueError("positive_idx must not pair a sample with itself")
+            # A sample's similarity to itself is always maximal; it is neither
+            # its positive nor a negative, so exclude it from the softmax.
+            logits = logits.masked_fill(self_match, float("-inf"))
             losses["contrastive"] = F.cross_entropy(logits, labels)
+
+        if not losses:
+            raise ValueError(
+                "pretrain batch has no training target: provide metrics, target_value, target_reward or positive_idx"
+            )
 
         # Total loss
         losses["total"] = sum(losses.values())
