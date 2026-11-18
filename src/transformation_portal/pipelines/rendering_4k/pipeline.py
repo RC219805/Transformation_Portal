@@ -830,9 +830,11 @@ class Rendering4KPipeline:
         digest.update(str(image.dtype).encode("ascii"))
         digest.update(b"|")
 
+        # Hash the whole pixel buffer: a prefix-only key made frames that share
+        # size and their first rows (blown sky, letterbox) return each other's
+        # depth map from the cache.
         contiguous_image = image if image.flags.c_contiguous else np.ascontiguousarray(image)
-        byte_view = contiguous_image.view(np.uint8).reshape(-1)
-        digest.update(memoryview(byte_view[:4096]))
+        digest.update(memoryview(contiguous_image.view(np.uint8).reshape(-1)))
         return digest.hexdigest()
 
     def _get_or_load_controlnet_pipe(self):

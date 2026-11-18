@@ -56,3 +56,36 @@ def test_rendering_4k_pipeline_preview_smoke_writes_delivery_artifact(tmp_path: 
             assert output_image.size == (8, 6)
     finally:
         sys.modules.pop(PIPELINE_MODULE, None)
+
+
+def test_rendering_4k_depth_cache_does_not_alias_images_sharing_a_prefix() -> None:
+    """M-01: two frames that differ only after the first rows must not share a depth cache entry."""
+    import numpy as np
+
+    from transformation_portal.pipelines.rendering_4k import stages
+    from transformation_portal.pipelines.rendering_4k.pipeline import Rendering4KPipeline
+
+    pipeline = Rendering4KPipeline.from_preset("default")
+    assert pipeline.config.depth.cache_enabled
+    # Force the deterministic fallback estimator; no model is loaded.
+    pipeline._depth_model_initialized = True
+    pipeline._depth_model = None
+
+    image_a = np.zeros((128, 512, 3), np.float32)
+    image_a[:1] = 1.0
+    image_a[1:, :256] = 0.9
+    image_b = np.zeros((128, 512, 3), np.float32)
+    image_b[:1] = 1.0
+    image_b[1:, 256:] = 0.9
+
+    assert pipeline._compute_cache_key(image_a) != pipeline._compute_cache_key(image_b)
+
+    depth_a = pipeline._estimate_depth(image_a, Path("a.png")).copy()
+    depth_b = pipeline._estimate_depth(image_b, Path("b.png"))
+
+    np.testing.assert_array_equal(depth_b, stages.estimate_depth_simple(image_b))
+    assert not np.array_equal(depth_a, depth_b)
+    # Identical content still hits the cache.
+    assert (
+        pipeline._estimate_depth(image_a.copy(), Path("a2.png")) is pipeline._depth_cache[pipeline._compute_cache_key(image_a)]
+    )
