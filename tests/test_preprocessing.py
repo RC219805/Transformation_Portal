@@ -22,6 +22,7 @@ from transformation_portal.lux_depth_v3.preprocessing import (
     DIMENSION_MULTIPLE,
     SUPPORTED_EXTENSIONS,
     preprocess_image,
+    preprocess_image_linear,
     preprocess_image_snapshot,
     validate_image_format,
 )
@@ -535,6 +536,31 @@ class TestHighBitDepthGrayscale:
         Image.fromarray(gray).save(path)
 
         result, _ = preprocess_image(path)
+        with Image.open(path) as opened:
+            historical = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
+        assert np.array_equal(result, historical)
+
+    def test_linear_pil_branch_keeps_uint16_grayscale_precision(self, tmp_path):
+        """LC-03: the APEX linear path's non-TIFF PIL branch divides 16-bit samples by 65535."""
+        samples = _uint16_gray_ramp()
+        path = tmp_path / "gray16.png"
+        Image.fromarray(samples).save(path)
+
+        result, shape = preprocess_image_linear(path, verify_linearity=False, apex_strict_formats=False)
+
+        assert shape == samples.shape
+        expected = samples.astype(np.float32) / 65535.0
+        for channel in range(3):
+            assert np.array_equal(result[..., channel], expected)
+
+    def test_linear_pil_branch_8bit_grayscale_is_unchanged(self, tmp_path):
+        """LC-03: ordinary 8-bit input on the linear PIL branch keeps the historical /255 decode."""
+        gray = np.tile(np.arange(56, dtype=np.uint8) * 4, (28, 1))
+        path = tmp_path / "gray8.png"
+        Image.fromarray(gray).save(path)
+
+        result, _ = preprocess_image_linear(path, verify_linearity=False, apex_strict_formats=False)
+
         with Image.open(path) as opened:
             historical = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
         assert np.array_equal(result, historical)
