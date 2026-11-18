@@ -179,6 +179,41 @@ def test_optimize_openapi_documents_mock_model_compatibility(client: TestClient)
     assert "model_path: Deprecated, unsupported field; accepted and ignored" in description
 
 
+def test_job_registry_evicts_finished_jobs_oldest_first(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Audit finding D12: the job registry used to grow without bound.
+    monkeypatch.setattr(rl_api, "MAX_RETAINED_JOBS", 2)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformation_portal.rl.optimize_rl",
+        SimpleNamespace(RLOptimizationConfig=Mock(), train_rl=Mock(side_effect=RuntimeError("stub"))),
+    )
+    job_ids = []
+    for _ in range(3):
+        resp = client.post("/rl/optimize", json={"max_iterations": 1})
+        assert resp.status_code == 200
+        job_ids.append(resp.json()["job_id"])
+        # TestClient runs the background task before returning: the job is finished.
+        assert client.get(f"/rl/status/{job_ids[-1]}").json()["status"] in {"completed", "error"}
+
+    assert client.get(f"/rl/status/{job_ids[0]}").json() == {"error": "Job not found"}
+    for job_id in job_ids[1:]:
+        assert "status" in client.get(f"/rl/status/{job_id}").json()
+
+
+def test_job_registry_full_of_active_jobs_refuses_new_ones(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(rl_api, "MAX_RETAINED_JOBS", 2)
+    # Never run the background task, so the registered jobs stay active.
+    monkeypatch.setattr(rl_api.BackgroundTasks, "add_task", lambda self, *args, **kwargs: None)
+    first = client.post("/rl/optimize", json={"max_iterations": 1})
+    second = client.post("/rl/optimize", json={"max_iterations": 1})
+    assert first.status_code == second.status_code == 200
+
+    refused = client.post("/rl/optimize", json={"max_iterations": 1})
+
+    assert refused.status_code == 503
+    assert client.get(f"/rl/status/{first.json()['job_id']}").json()["status"] == "starting"
+
+
 def test_create_router_returns_none_without_fastapi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rl_api, "FASTAPI_AVAILABLE", False)
     assert rl_api.create_rl_api_router() is None

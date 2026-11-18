@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 MIN_MAX_ITERATIONS = 1
 MAX_MAX_ITERATIONS = 10_000
 
+# Upper bound on jobs kept in the per-router registry. Finished jobs are
+# evicted oldest-first; when every retained job is still active a new job is
+# refused with 503 instead of growing the registry without bound.
+MAX_RETAINED_JOBS = 256
+_TERMINAL_STATUSES = frozenset({"completed", "error"})
+
 # Optional FastAPI import. These names must be resolvable at module scope:
 # `from __future__ import annotations` defers annotation evaluation, so
 # FastAPI resolves endpoint annotations (e.g. ``BackgroundTasks``) against
@@ -43,6 +49,15 @@ def _validate_max_iterations(value: Any) -> int:
     if not MIN_MAX_ITERATIONS <= value <= MAX_MAX_ITERATIONS:
         raise ValueError(f"max_iterations must be between {MIN_MAX_ITERATIONS} and {MAX_MAX_ITERATIONS}")
     return value
+
+
+def _make_room_for_job(jobs: dict[str, dict[str, Any]]) -> bool:
+    """Evict the oldest finished jobs; return False if the registry stays full."""
+    for job_id in [jid for jid, j in jobs.items() if j.get("status") in _TERMINAL_STATUSES]:
+        if len(jobs) < MAX_RETAINED_JOBS:
+            break
+        del jobs[job_id]
+    return len(jobs) < MAX_RETAINED_JOBS
 
 
 def create_rl_api_router():
@@ -81,6 +96,12 @@ def create_rl_api_router():
             max_iters = _validate_max_iterations(payload.get("max_iterations", 50))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        if not _make_room_for_job(_running_jobs):
+            raise HTTPException(
+                status_code=503,
+                detail=f"too many active RL optimization jobs (limit {MAX_RETAINED_JOBS})",
+            )
 
         _running_jobs[job_id] = {
             "status": "starting",
