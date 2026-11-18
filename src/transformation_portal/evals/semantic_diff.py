@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -182,15 +184,50 @@ def _parse_response(raw: str) -> dict[str, Any]:
         text = "\n".join(lines)
 
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError as e:
-        logger.warning("Failed to parse semantic diff response: %s", e)
-        return {
-            "summary": "Failed to parse semantic diff response",
-            "changes": [],
-            "parse_error": str(e),
-            "raw_text": raw[:500],  # Include truncated raw for debugging
-        }
+        # Models often wrap the object in prose ("Here is the JSON: {...}").
+        # Fall back to the outermost {...} span, as llava_schema does.
+        match = re.search(r"\{[\s\S]*\}", text)
+        parsed = None
+        error = str(e)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+            except json.JSONDecodeError as inner:
+                error = str(inner)
+        if parsed is None:
+            logger.warning("Failed to parse semantic diff response: %s", error)
+            return _parse_failure(raw, error)
+
+    if not isinstance(parsed, dict):
+        error = f"expected a JSON object, got {type(parsed).__name__}"
+        logger.warning("Failed to parse semantic diff response: %s", error)
+        return _parse_failure(raw, error)
+    return parsed
+
+
+def _parse_failure(raw: str, error: str) -> dict[str, Any]:
+    """Build the parse-failure payload (``semantic_diff`` raises on it)."""
+    return {
+        "summary": "Failed to parse semantic diff response",
+        "changes": [],
+        "parse_error": error,
+        "raw_text": raw[:500],  # Include truncated raw for debugging
+    }
+
+
+def _coerce_confidence(value: Any) -> float:
+    """Return a confidence in [0, 1]; reject non-numeric or non-finite values."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise SemanticDiffError(f"Invalid change confidence: {value!r}")
+    try:
+        confidence = float(value)
+    except ValueError as e:
+        raise SemanticDiffError(f"Invalid change confidence: {value!r}") from e
+    if not math.isfinite(confidence):
+        raise SemanticDiffError(f"Invalid change confidence: {value!r}")
+    return min(max(confidence, 0.0), 1.0)
 
 
 def _validate_change(change: dict[str, Any]) -> SemanticChange | None:
@@ -200,14 +237,24 @@ def _validate_change(change: dict[str, Any]) -> SemanticChange | None:
         change: Raw change dictionary from model
 
     Returns:
-        Validated SemanticChange or None if invalid
+        Validated SemanticChange or None if it has no description
+
+    Raises:
+        SemanticDiffError: If the change is not an object or its confidence
+            is not a finite number
     """
+    if not isinstance(change, dict):
+        raise SemanticDiffError(f"Invalid change entry (expected an object): {change!r}"[:200])
+
     valid_types = {"geometry", "texture", "missing", "artifact", "semantic"}
     valid_severities = {"low", "medium", "high"}
 
-    ctype = change.get("type", "").lower()
-    severity = change.get("severity", "").lower()
-    description = change.get("description", "")
+    ctype = str(change.get("type") or "").strip().lower()
+    severity = str(change.get("severity") or "").strip().lower()
+    description = change.get("description") or ""
+    if not isinstance(description, str):
+        description = str(description)
+    description = description.strip()
 
     # Validate required fields
     if ctype not in valid_types:
@@ -221,12 +268,13 @@ def _validate_change(change: dict[str, Any]) -> SemanticChange | None:
     if not description:
         return None
 
+    location = change.get("location")
     return SemanticChange(
         type=ctype,
         severity=severity,
         description=description,
-        location=change.get("location"),
-        confidence=float(change.get("confidence", 1.0)),
+        location=None if location is None else str(location),
+        confidence=_coerce_confidence(change.get("confidence", 1.0)),
     )
 
 
@@ -250,7 +298,9 @@ def semantic_diff(
         SemanticDiffResult with structured analysis
 
     Raises:
-        SemanticDiffError: If analysis fails critically
+        SemanticDiffError: If analysis fails critically, including when the
+            model answer is not parseable JSON of the documented shape (an
+            unparseable answer must not read as "no differences")
 
     Example:
         >>> result = semantic_diff(
@@ -280,9 +330,13 @@ def semantic_diff(
 
     # Parse response
     payload = _parse_response(raw)
+    if "parse_error" in payload:
+        raise SemanticDiffError(f"Unparseable semantic diff response: {payload['parse_error']}")
 
     # Extract and validate changes
-    raw_changes = payload.get("changes", [])
+    raw_changes = payload.get("changes")
+    if not isinstance(raw_changes, list):
+        raise SemanticDiffError(f"Semantic diff response has no 'changes' list: {type(raw_changes).__name__}")
     validated_changes: list[SemanticChange] = []
 
     for raw_change in raw_changes:
@@ -297,7 +351,7 @@ def semantic_diff(
         return hashlib.sha256(p.read_bytes()).hexdigest()[:16]
 
     return SemanticDiffResult(
-        summary=payload.get("summary", "Analysis complete."),
+        summary=str(payload.get("summary", "Analysis complete.")),
         changes=tuple(validated_changes),
         raw_text=raw,
         structured=payload,
