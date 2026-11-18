@@ -865,7 +865,7 @@ class TestRealTIFFProvenance:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         # Capture provenance
@@ -906,7 +906,7 @@ class TestRealTIFFProvenance:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         config_fingerprint = "sha256:determinism_test"

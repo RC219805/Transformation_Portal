@@ -17,6 +17,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.depth.backends.protocol import LicenseType
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
@@ -121,6 +122,11 @@ class TestEnhanceBatch:
                 mock_backend = Mock()
                 mock_backend.ensure_available.return_value = None  # Success
                 mock_backend.name = "da3"
+                # Depth metadata records backend.license_type.value. Left as an
+                # auto-attribute it is a Mock, which canonical JSON chases
+                # through to_dict() until RecursionError: every image fails and
+                # the run burns ~10 GB of mock call records.
+                mock_backend.license_type = LicenseType.COMMERCIAL
 
                 mock_registry = Mock()
                 mock_registry.get_backend.return_value = mock_backend
@@ -173,49 +179,30 @@ class TestEnhanceBatch:
                 mock_write.return_value = (Path("depth.png"), None, mock_stats)
 
                 # Run batch processing
-                try:
-                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+                results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
-                    # Verify results structure
-                    assert isinstance(results, list)
-                    assert len(results) == 3  # We created 3 test images
+            # Every image must actually succeed. A failed image contributes no
+            # runtime, so tolerating failures here would leave the stats path
+            # unexercised and let the original regression (results passed where
+            # List[float] was expected) return unnoticed.
+            assert isinstance(results, list)
+            assert len(results) == 3  # We created 3 test images
+            assert [result.get("status") for result in results] == ["ok", "ok", "ok"], results
+            runtimes = [result["runtime_s"] for result in results]
+            assert all(isinstance(runtime, float) and runtime >= 0.0 for runtime in runtimes)
 
-                    # Each result should have runtime_s
-                    for result in results:
-                        assert isinstance(result, dict)
-                        assert "runtime_s" in result or "error" in result
+            batch_manifests = list((tmpdir_path / "manifests").glob("batch_*.json"))
+            assert len(batch_manifests) == 1
+            with open(batch_manifests[0], encoding="utf-8") as f:
+                manifest = json.load(f)
 
-                    # Check that batch manifest was created
-                    manifests_dir = tmpdir_path / "manifests"
-                    if manifests_dir.exists():
-                        batch_manifests = list(manifests_dir.glob("batch_*.json"))
-                        if batch_manifests:
-                            # Verify batch manifest has runtime stats
-                            with open(batch_manifests[0]) as f:
-                                manifest = json.load(f)
-
-                            # Should have stats dict with runtime statistics
-                            assert "stats" in manifest
-                            stats = manifest["stats"]
-
-                            # Check for runtime statistics fields
-                            # These come from compute_batch_runtime_stats
-                            if any(r.get("status") == "ok" for r in results):
-                                # Only check if we had successful results
-                                assert "count" in stats or "total" in stats
-
-                except Exception as e:
-                    # The test might fail due to missing dependencies or other issues
-                    # but the important part is that if enhance_batch runs,
-                    # it must not fail with a type error when calling compute_batch_runtime_stats
-                    if "takes 1 positional argument but" in str(e) or ("expected" in str(e) and "List[float]" in str(e)):
-                        pytest.fail(
-                            f"enhance_batch failed with signature mismatch error: {e}\n"
-                            "This indicates compute_batch_runtime_stats is still being called "
-                            "with results instead of extracted runtime_s values."
-                        )
-                    # Other errors are acceptable for this focused test
-                    return
+            # compute_batch_runtime_stats must have received the extracted floats.
+            stats = manifest["stats"]
+            assert stats["count"] == 3
+            assert stats["total_images"] == 3
+            assert stats["total"] == pytest.approx(sum(runtimes))
+            assert stats["min"] == pytest.approx(min(runtimes))
+            assert stats["max"] == pytest.approx(max(runtimes))
 
     def test_enhance_batch_handles_partial_failure(self, batch_temp_workspace):
         """Test that batch processing handles partial failures gracefully."""

@@ -70,7 +70,7 @@ class TestProvenanceIntegration:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         # Use real TIFF fixture
@@ -218,7 +218,7 @@ class TestProvenanceIntegration:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         # Use real TIFF fixture

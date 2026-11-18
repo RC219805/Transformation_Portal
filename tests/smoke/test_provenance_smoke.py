@@ -30,7 +30,7 @@ def check_exiftool():
         else:
             print("✗ exiftool not available")
             return False
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         print("✗ exiftool not found in PATH")
         return False
 
