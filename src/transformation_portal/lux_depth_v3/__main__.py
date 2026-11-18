@@ -171,6 +171,10 @@ app = typer.Typer(
 _TRUE_FLAG_VALUES = frozenset({"on", "true", "yes", "1"})
 _FALSE_FLAG_VALUES = frozenset({"off", "false", "no", "0"})
 _VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+# Standard ``logging`` level names that resolved before the level was validated;
+# they keep working and select the same numeric level as before.
+_LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
+_ACCEPTED_LOG_LEVELS = frozenset(_VALID_LOG_LEVELS) | {"NOTSET"}
 
 
 def _parse_bool_flag(value: str, option_name: Optional[str] = None) -> bool:
@@ -194,11 +198,19 @@ def _parse_bool_flag(value: str, option_name: Optional[str] = None) -> bool:
 
 
 def _normalize_log_level(log_level: Optional[str]) -> Optional[str]:
-    """Return the upper-case logging level name, rejecting unknown names."""
+    """Return the upper-case logging level name, rejecting unknown names.
+
+    An empty value keeps meaning "not set" (``--verbose``/default apply), and
+    the standard ``logging`` aliases ``WARN``, ``FATAL`` and ``NOTSET`` keep
+    resolving to the level they always selected.
+    """
     if log_level is None:
         return None
     normalized = log_level.strip().upper()
-    if normalized not in _VALID_LOG_LEVELS:
+    if not normalized:
+        return None
+    normalized = _LOG_LEVEL_ALIASES.get(normalized, normalized)
+    if normalized not in _ACCEPTED_LOG_LEVELS:
         raise typer.BadParameter(
             f"{log_level!r} is not a log level. Use one of: {', '.join(_VALID_LOG_LEVELS)}.",
             param_hint="--log-level",

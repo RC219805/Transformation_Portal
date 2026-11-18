@@ -405,7 +405,9 @@ sidecar to verify.
 - `--verbose` / `-v`: Enable verbose logging
 - `--quiet` / `-q`: Suppress all output except errors
 - `--log-level TEXT`: Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL;
-  case-insensitive). Unknown names are a usage error (exit code `2`).
+  case-insensitive). The standard `logging` aliases `WARN`, `FATAL` and `NOTSET`
+  are also accepted, and an empty value means "not set". Unknown names are a
+  usage error (exit code `2`).
 
 ## Quality Tiers
 

@@ -468,6 +468,15 @@ class TestPlanModeOptionValidation:
         assert "Invalid value" in click.unstyle(result.output)
         assert not (tmp_path / "out").exists()
 
+    @pytest.mark.parametrize("level", ["WARN", "fatal", "NOTSET", ""])
+    def test_standard_log_level_aliases_still_plan(self, tmp_path: Path, level: str) -> None:
+        # These resolved to a real logging level (or to "not set") before the
+        # level was validated, so they must not become usage errors.
+        default = self._plan(tmp_path)
+        aliased = self._plan(tmp_path, "--log-level", level)
+        assert default.exit_code == 0 and aliased.exit_code == 0, (default.output, aliased.output)
+        assert _extract_plan_json(aliased.output) == _extract_plan_json(default.output)
+
     def test_recognised_boolean_spellings_still_parse(self, tmp_path: Path) -> None:
         on = self._plan(tmp_path, "--pbr", "On ")
         off = self._plan(tmp_path, "--pbr", "0")
