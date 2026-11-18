@@ -41,12 +41,17 @@ def _install_fake_depth_anything3(monkeypatch):
     import types
 
     class FakeDepthAnything3:
+        requested_revisions: list = []
+
         def __init__(self):
             self.loaded_device = None
 
         @classmethod
-        def from_pretrained(cls, model_id):
+        def from_pretrained(cls, model_id, revision=None):
+            # Mirrors the real hub-mixin signature: the engine pins the load to the
+            # resolved contract revision and no longer retries without it (LC-05).
             del model_id
+            cls.requested_revisions.append(revision)
             return cls()
 
         def to(self, device):
@@ -75,6 +80,7 @@ def _install_fake_depth_anything3(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
     monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
+    return FakeDepthAnything3
 
 
 def test_da3_backend_implements_protocol():
@@ -946,7 +952,7 @@ def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):
     pytest.importorskip("torch")
     import transformation_portal.lux_depth_v3.inference as inference_module
 
-    _install_fake_depth_anything3(monkeypatch)
+    fake_da3 = _install_fake_depth_anything3(monkeypatch)
     monkeypatch.setattr(DA3Backend, "ensure_available", lambda self: None)
     monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", True)
 
@@ -955,6 +961,9 @@ def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):
 
     assert result.device == "cpu"
     assert result.depth_map.shape == (64, 64)
+    # The weights are requested once, at the revision the resolved contract records.
+    assert fake_da3.requested_revisions == [backend._resolved_model_contract.revision]
+    assert fake_da3.requested_revisions[0]
 
 
 def test_da3_backend_smoke_mps_no_hidden_cuda(monkeypatch):
