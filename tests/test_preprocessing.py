@@ -489,6 +489,57 @@ class TestPreprocessImage:
         assert result.shape[1] >= DIMENSION_MULTIPLE
 
 
+def _uint16_gray_ramp() -> np.ndarray:
+    # 28x56 keeps dimensions multiples of 14 so no crop/pad alters the samples.
+    return np.tile(np.linspace(0, 65535, 56).round().astype(np.uint16), (28, 1))
+
+
+def _expected_rgb_from_uint16(samples: np.ndarray) -> np.ndarray:
+    gray = ((samples.astype(np.uint32) + 128) // 257).astype(np.uint8)
+    return np.repeat(gray[..., None], 3, axis=2).astype(np.float32) / 255.0
+
+
+class TestHighBitDepthGrayscale:
+    """Regression for LC-03: 16-bit grayscale must be scaled, not clipped to white."""
+
+    @pytest.mark.parametrize("suffix", [".png", ".tif"])
+    def test_uint16_grayscale_file_is_scaled(self, tmp_path, suffix):
+        samples = _uint16_gray_ramp()
+        path = tmp_path / f"gray16{suffix}"
+        Image.fromarray(samples).save(path)
+        with Image.open(path) as opened:
+            assert opened.mode.startswith("I;16")
+
+        legacy, legacy_shape = preprocess_image(path)
+        snapshot, snapshot_shape, _ = preprocess_image_snapshot(path)
+
+        expected = _expected_rgb_from_uint16(samples)
+        assert legacy_shape == snapshot_shape == samples.shape
+        assert np.array_equal(legacy, expected)
+        assert np.array_equal(snapshot, expected)
+        assert 0.45 < float(legacy.mean()) < 0.55
+
+    def test_float_grayscale_tiff_is_rejected_not_blackened(self, tmp_path):
+        path = tmp_path / "grayf32.tif"
+        Image.fromarray(np.tile(np.linspace(0, 1, 56, dtype=np.float32), (28, 1))).save(path)
+
+        with pytest.raises(ValueError, match="Floating-point grayscale"):
+            preprocess_image(path)
+        with pytest.raises(ValueError) as excinfo:
+            preprocess_image_snapshot(path)
+        assert "Floating-point grayscale" in str(excinfo.value.__cause__)
+
+    def test_8bit_grayscale_decode_is_unchanged(self, tmp_path):
+        gray = np.tile(np.arange(56, dtype=np.uint8) * 4, (28, 1))
+        path = tmp_path / "gray8.png"
+        Image.fromarray(gray).save(path)
+
+        result, _ = preprocess_image(path)
+        with Image.open(path) as opened:
+            historical = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
+        assert np.array_equal(result, historical)
+
+
 class TestDimensionEnforcement:
     """Test dimension enforcement edge cases."""
 
