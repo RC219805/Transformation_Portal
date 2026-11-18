@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from transformation_portal.core import execution_wrapper
 from transformation_portal.core.cas_dag_executor import (
     CASDAGConfig,
     CASDAGExecutor,
@@ -95,12 +99,154 @@ class TestFileLock:
         """Test lock timeout behavior."""
         lock_path = tmp_path / "test.lock"
 
-        # Create existing lock
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(str(time.time()))
+        # Lock held by another owner
+        holder = FileLock(lock_path, timeout=5.0)
+        assert holder.acquire() is True
+        try:
+            lock = FileLock(lock_path, timeout=0.1)
+            assert lock.acquire() is False
+        finally:
+            holder.release()
 
-        lock = FileLock(lock_path, timeout=0.1)
-        assert lock.acquire() is False
+    def test_waiter_cannot_take_a_lock_held_longer_than_twice_its_timeout(self, tmp_path):
+        """A long critical section is still exclusive: lock age is not staleness."""
+        lock_path = tmp_path / "test.lock"
+        holder = FileLock(lock_path, timeout=0.05)
+        assert holder.acquire() is True
+        try:
+            time.sleep(0.15)  # held for more than 2x the waiter's timeout
+
+            waiter = FileLock(lock_path, timeout=0.05)
+            assert waiter.acquire() is False
+            assert lock_path.exists()
+        finally:
+            holder.release()
+
+    def test_release_keeps_a_lock_file_now_held_by_someone_else(self, tmp_path):
+        """release() only removes the lock file it still owns."""
+        lock_path = tmp_path / "test.lock"
+        first = FileLock(lock_path, timeout=0.05)
+        assert first.acquire() is True
+        lock_path.unlink()  # e.g. an operator clearing the locks directory
+        second = FileLock(lock_path, timeout=0.05)
+        assert second.acquire() is True
+        try:
+            first.release()
+
+            assert lock_path.exists()
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+        finally:
+            second.release()
+        assert not lock_path.exists()
+
+    @pytest.mark.parametrize("leftover", ["", "not-a-timestamp", "fresh"], ids=["empty", "garbage", "fresh-timestamp"])
+    def test_lock_file_left_by_a_dead_holder_does_not_block(self, tmp_path, leftover):
+        """A lock file nobody holds is free, whatever it contains."""
+        lock_path = tmp_path / "test.lock"
+        lock_path.write_text(str(time.time()) if leftover == "fresh" else leftover)
+
+        lock = FileLock(lock_path, timeout=0.05)
+        try:
+            assert lock.acquire() is True
+        finally:
+            lock.release()
+        assert not lock_path.exists()
+
+    def test_second_acquire_on_a_held_instance_times_out_and_keeps_the_lock(self, tmp_path):
+        """The lock is not reentrant, and a failed re-acquire does not drop it."""
+        lock_path = tmp_path / "test.lock"
+        lock = FileLock(lock_path, timeout=0.05)
+        assert lock.acquire() is True
+        try:
+            time.sleep(0.15)
+            assert lock.acquire() is False
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+        finally:
+            lock.release()
+        assert not lock_path.exists()
+
+    def test_lock_dies_with_its_holder_process(self, tmp_path):
+        """Ownership is an OS lock: it ends when the holding process is killed."""
+        pytest.importorskip("fcntl")
+        lock_path = tmp_path / "test.lock"
+        source_root = Path(execution_wrapper.__file__).resolve().parents[2]
+        holder_script = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "from transformation_portal.core.execution_wrapper import FileLock\n"
+            "lock = FileLock(Path(sys.argv[1]), timeout=5.0)\n"
+            "assert lock.acquire()\n"
+            "print('held', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        holder = subprocess.Popen(
+            [sys.executable, "-c", holder_script, str(lock_path)],
+            stdout=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": str(source_root)},
+        )
+        try:
+            assert holder.stdout is not None
+            assert holder.stdout.readline().strip() == "held"
+            assert FileLock(lock_path, timeout=0.1).acquire() is False
+
+            holder.kill()
+            holder.wait(timeout=10)
+
+            survivor = FileLock(lock_path, timeout=5.0)
+            assert survivor.acquire() is True
+            survivor.release()
+        finally:
+            if holder.poll() is None:
+                holder.kill()
+                holder.wait(timeout=10)
+            if holder.stdout is not None:
+                holder.stdout.close()
+
+
+class TestFileLockWithoutFcntl:
+    """The exclusive-create fallback keeps mutual exclusion without stealing."""
+
+    @pytest.fixture(autouse=True)
+    def _without_fcntl(self, monkeypatch):
+        monkeypatch.setattr(execution_wrapper, "_FCNTL", None)
+
+    def test_acquire_release_roundtrip(self, tmp_path):
+        lock_path = tmp_path / "locks" / "test.lock"
+        lock = FileLock(lock_path, timeout=0.05)
+
+        assert lock.acquire() is True
+        assert lock_path.exists()
+        assert FileLock(lock_path, timeout=0.05).acquire() is False
+
+        lock.release()
+        assert not lock_path.exists()
+
+    def test_held_lock_is_never_reclaimed_by_age(self, tmp_path):
+        lock_path = tmp_path / "test.lock"
+        holder = FileLock(lock_path, timeout=0.05)
+        assert holder.acquire() is True
+        try:
+            time.sleep(0.15)
+
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+            assert lock_path.exists()
+        finally:
+            holder.release()
+
+    def test_release_keeps_a_lock_file_created_by_someone_else(self, tmp_path):
+        lock_path = tmp_path / "test.lock"
+        first = FileLock(lock_path, timeout=0.05)
+        assert first.acquire() is True
+        lock_path.unlink()
+        second = FileLock(lock_path, timeout=0.05)
+        assert second.acquire() is True
+
+        first.release()
+        assert lock_path.exists()
+
+        second.release()
+        assert not lock_path.exists()
 
 
 class SimpleStage:

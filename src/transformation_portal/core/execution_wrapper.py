@@ -29,12 +29,15 @@ Example:
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable, Optional, Protocol, TypeVar, Union
 
 from transformation_portal.core._cas_helpers import CASObjectMissingError
@@ -62,6 +65,13 @@ from transformation_portal.storage.cas_store import ArtifactStore
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+# POSIX advisory locking; absent on platforms without ``fcntl``.
+_FCNTL: Optional[ModuleType]
+try:
+    _FCNTL = importlib.import_module("fcntl")
+except ImportError:  # pragma: no cover - exercised only where fcntl is missing
+    _FCNTL = None
 
 
 def _sanitize_cas_id_for_filename(cas_id: str) -> str:
@@ -181,10 +191,20 @@ class ExecutorConfig:
 
 
 class FileLock:
-    """Simple file-based lock for parallel safety.
+    """File-based lock for parallel safety across threads and processes.
 
-    Uses atomic file creation for cross-process locking.
-    This is a minimal implementation suitable for local execution.
+    On POSIX the lock is an OS advisory lock (``fcntl.flock``) held on an open
+    descriptor of the lock file. Ownership ends when the holder releases the
+    lock or its process dies, and never because of the file's age or content:
+    a waiter cannot take a lock that is still held, however long the holder
+    works, and a file left behind by a dead holder blocks nobody.
+
+    Where ``fcntl`` is unavailable the lock falls back to exclusive creation
+    of the lock file. That keeps mutual exclusion but cannot detect a dead
+    holder, so a file left by a crashed process has to be removed by hand.
+
+    The lock is not reentrant and expects a local filesystem. A lock that is
+    never released stays held until its process exits.
 
     Example:
         >>> with FileLock(Path("/tmp/my_lock")):
@@ -202,6 +222,7 @@ class FileLock:
         self.lock_path = Path(lock_path)
         self.timeout = timeout
         self._acquired = False
+        self._descriptor: Optional[int] = None
 
     def acquire(self) -> bool:
         """Acquire the lock.
@@ -211,43 +232,99 @@ class FileLock:
 
         Note:
             Uses exponential backoff with jitter for contention handling.
+            The timeout only bounds how long this caller waits; it never
+            decides that a lock held by someone else has gone stale.
         """
         import random
 
-        start_time = time.time()
+        deadline = time.monotonic() + self.timeout
         wait_time = 0.01  # Start with 10ms
 
-        while time.time() - start_time < self.timeout:
-            try:
-                # Atomic creation - fails if file exists
-                self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-                with self.lock_path.open("x") as fd:
-                    fd.write(str(time.time()))
-                self._acquired = True
+        while True:
+            if self._try_acquire():
                 return True
-            except FileExistsError:
-                # Lock held by another process
-                # Check if lock is stale (older than 2x timeout)
-                try:
-                    lock_time = float(self.lock_path.read_text())
-                    if time.time() - lock_time > self.timeout * 2:
-                        # Stale lock, remove and retry
-                        self.lock_path.unlink(missing_ok=True)
-                        continue
-                except (ValueError, OSError):
-                    pass
 
-                # Wait with exponential backoff + jitter
-                time.sleep(wait_time + random.uniform(0, wait_time * 0.1))
-                wait_time = min(wait_time * 2, 1.0)  # Cap at 1 second
+            remaining = deadline - time.monotonic()
+            if not remaining > 0:
+                return False
 
-        return False
+            # Wait with exponential backoff + jitter
+            time.sleep(min(wait_time + random.uniform(0, wait_time * 0.1), remaining))
+            wait_time = min(wait_time * 2, 1.0)  # Cap at 1 second
+
+    def _try_acquire(self) -> bool:
+        """Make one non-blocking attempt to take the lock."""
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        if _FCNTL is None:
+            return self._try_create_exclusive_file()
+
+        descriptor = os.open(self.lock_path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            try:
+                _FCNTL.flock(descriptor, _FCNTL.LOCK_EX | _FCNTL.LOCK_NB)
+            except BlockingIOError:
+                return False
+            # A holder unlinks the file as it releases, so a descriptor opened
+            # before that now locks an orphaned inode that excludes nobody.
+            # Only a lock on the file currently at lock_path counts.
+            if not self._is_current_lock_file(descriptor):
+                return False
+            self._descriptor = descriptor
+            self._acquired = True
+            return True
+        finally:
+            if self._descriptor != descriptor:
+                os.close(descriptor)
+
+    def _try_create_exclusive_file(self) -> bool:
+        """Fallback without ``fcntl``: own the lock by creating its file."""
+        try:
+            descriptor = os.open(self.lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return False
+        self._descriptor = descriptor
+        self._acquired = True
+        return True
+
+    def _is_current_lock_file(self, descriptor: int) -> bool:
+        """Return whether ``descriptor`` is the file currently at ``lock_path``."""
+        try:
+            current = os.lstat(self.lock_path)
+        except FileNotFoundError:
+            return False
+        return os.path.samestat(os.fstat(descriptor), current)
 
     def release(self) -> None:
-        """Release the lock."""
-        if self._acquired:
-            self.lock_path.unlink(missing_ok=True)
-            self._acquired = False
+        """Release the lock if this instance holds it.
+
+        The lock file is removed only while it is provably this holder's own,
+        so releasing never deletes a lock that somebody else now holds.
+        """
+        if not self._acquired or self._descriptor is None:
+            return
+        descriptor, self._descriptor = self._descriptor, None
+        self._acquired = False
+
+        if _FCNTL is None:
+            try:
+                created_here = self._is_current_lock_file(descriptor)
+            finally:
+                # An open file cannot be unlinked on every platform.
+                os.close(descriptor)
+            if created_here:
+                self.lock_path.unlink(missing_ok=True)
+            return
+
+        try:
+            # Unlink before unlocking: while the lock is held nobody else can
+            # own this path, and waiters re-check the path after locking.
+            if self._is_current_lock_file(descriptor):
+                self.lock_path.unlink(missing_ok=True)
+        finally:
+            try:
+                _FCNTL.flock(descriptor, _FCNTL.LOCK_UN)
+            finally:
+                os.close(descriptor)
 
     def __enter__(self) -> "FileLock":
         if not self.acquire():

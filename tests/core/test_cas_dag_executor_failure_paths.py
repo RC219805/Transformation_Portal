@@ -23,6 +23,9 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 from unittest.mock import patch
 
@@ -452,3 +455,49 @@ def test_cache_path_is_partitioned_by_id_prefix(tmp_path):
     # non-empty and short.
     assert len(path.parent.name) == 2
     assert path.suffix == ".json"
+
+
+# ---------------------------------------------------------------------------
+# Lock exclusivity under a short lock_timeout
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_run_does_not_execute_a_stage_that_is_still_running(tmp_path):
+    """A second identical run must not start a stage while the first run still
+    holds its lock, even when the stage outlives 2x ``lock_timeout``."""
+    started = threading.Event()
+    finish = threading.Event()
+    compute_calls: List[str] = []
+
+    class _SlowStage(_RecordingStage):
+        def compute(self, context: StageContext) -> StageResult:
+            compute_calls.append(threading.current_thread().name)
+            if len(compute_calls) == 1:
+                started.set()
+                assert finish.wait(timeout=30)
+            return super().compute(context)
+
+    def run():
+        graph = StageGraph("slow-pipeline")
+        graph.add_stage(_SlowStage("depth"))
+        executor = CASDAGExecutor(
+            ArtifactStore(tmp_path / "cas"),
+            tmp_path / "cache",
+            CASDAGConfig(lock_timeout=0.05, enable_provenance=False),
+        )
+        return executor.execute(graph, StageContext(artifacts={"seed": 1}))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(run)
+        try:
+            assert started.wait(timeout=30)
+            time.sleep(0.15)  # the first run now holds its lock for more than 2x lock_timeout
+            duplicate = run()
+        finally:
+            finish.set()
+        first_result = first.result(timeout=30)
+
+    assert len(compute_calls) == 1
+    assert duplicate.success is False
+    assert duplicate.error is not None and "Could not acquire lock" in duplicate.error
+    assert first_result.success is True
