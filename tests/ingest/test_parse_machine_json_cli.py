@@ -282,3 +282,30 @@ def test_documented_shell_parsers_preserve_supported_success(
     assert result.returncode == 0
     assert expected_output in result.stdout
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "exit_code,success",
+    [
+        (None, False),
+        ("5", False),
+        (5.0, False),
+        (True, False),
+        (-1, False),
+        (256, False),
+        (5, True),
+        (0, False),
+    ],
+    ids=["null", "string", "float", "bool", "negative", "too-large", "success-true-nonzero", "success-false-zero"],
+)
+def test_invalid_or_inconsistent_envelope_exit_code_fails_closed(parse_output, exit_code, success) -> None:
+    payload = json.loads(envelope({}, exit_code=5, error={"type": "X", "message": "boom"}))
+    payload["exit_code"] = exit_code
+    payload["success"] = success
+
+    result = parse_output(json.dumps(payload))
+
+    assert result.returncode == 99
+    assert result.stdout == ""
+    assert "Invalid envelope exit_code" in result.stderr or "Inconsistent envelope" in result.stderr
+    assert "Traceback" not in result.stderr
