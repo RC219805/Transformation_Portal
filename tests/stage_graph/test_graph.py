@@ -53,6 +53,42 @@ def _pipeline(middle: _ScriptedStage) -> tuple[StageGraph, _ScriptedStage]:
     return graph, sink
 
 
+def test_stage_rejected_for_a_missing_dependency_is_not_left_in_the_graph():
+    graph = StageGraph("partial")
+    source = _ScriptedStage("source", artifacts={"image": "pixels"})
+    graph.add_stage(source)
+
+    with pytest.raises(ValueError, match="depends on 'not_installed', but 'not_installed' is not in graph"):
+        graph.add_stage(_ScriptedStage("optional_extra", deps=["not_installed"]))
+
+    assert list(graph.stages) == ["source"]
+    assert graph.get_execution_order() == ["source"]
+    execution = graph.execute(StageContext(cache_enabled=False), parallel=False)
+    assert execution.success is True and execution.error is None
+    assert source.calls == 1
+
+
+def test_rejected_stage_can_be_added_once_its_dependency_exists():
+    graph = StageGraph("retry")
+    extra = _ScriptedStage("optional_extra", deps=["backend"])
+    with pytest.raises(ValueError, match="is not in graph"):
+        graph.add_stage(extra)
+
+    graph.add_stage(_ScriptedStage("backend"))
+    graph.add_stage(extra)
+
+    assert graph.get_execution_order() == ["backend", "optional_extra"]
+
+
+def test_stage_that_depends_on_itself_is_rejected_when_added():
+    graph = StageGraph("self-cycle")
+
+    with pytest.raises(ValueError, match="depends on 'loop'"):
+        graph.add_stage(_ScriptedStage("loop", deps=["loop"]))
+
+    assert graph.stages == {}
+
+
 @pytest.mark.parametrize(
     ("status", "expected"),
     [

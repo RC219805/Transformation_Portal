@@ -104,13 +104,16 @@ class StageGraph:
         if stage.name in self.stages:
             raise ValueError(f"Stage '{stage.name}' already exists in graph")
 
-        self.stages[stage.name] = stage
-        self._dependency_graph[stage.name] = set(stage.get_dependencies())
+        dependencies = set(stage.get_dependencies())
 
-        # Validate dependencies exist
-        for dep in self._dependency_graph[stage.name]:
+        # Validate dependencies exist before registering anything, so a
+        # rejected stage does not stay behind as an unresolvable node
+        for dep in sorted(dependencies):
             if dep not in self.stages:
                 raise ValueError(f"Stage '{stage.name}' depends on '{dep}', " f"but '{dep}' is not in graph")
+
+        self.stages[stage.name] = stage
+        self._dependency_graph[stage.name] = dependencies
 
     def get_stage(self, name: str) -> Optional[Stage]:
         """Get stage by name."""
