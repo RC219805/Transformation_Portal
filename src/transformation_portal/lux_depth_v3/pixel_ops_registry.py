@@ -44,8 +44,18 @@ def _normalize_image(image: np.ndarray) -> tuple[np.ndarray, float]:
 
 
 def _apply_mask_blend(image: np.ndarray, mask: np.ndarray, modified: np.ndarray) -> np.ndarray:
-    mask_3 = np.clip(mask, 0.0, 1.0)[..., None]
-    return image * (1.0 - mask_3) + modified * mask_3
+    """Blend ``modified`` into ``image`` inside ``mask``.
+
+    Grayscale (H, W) images blend with the 2-D mask directly. Only the first
+    three (colour) channels are edited; any further channels such as alpha are
+    carried over from ``image`` unchanged.
+    """
+    mask_clipped = np.clip(mask, 0.0, 1.0)
+    mask_b = mask_clipped if image.ndim == 2 else mask_clipped[..., None]
+    blended = image * (1.0 - mask_b) + modified * mask_b
+    if image.ndim == 3 and image.shape[2] > 3:
+        blended[..., 3:] = image[..., 3:]
+    return blended
 
 
 def brightness_boost(image: np.ndarray, mask: np.ndarray, params: dict) -> np.ndarray:
@@ -237,7 +247,7 @@ def sky_dehaze(image: np.ndarray, mask: np.ndarray, params: dict) -> np.ndarray:
     # Subtle saturation boost (if RGB)
     if normalized.ndim == 3 and normalized.shape[2] >= 3:
         # Compute luminance (grayscale)
-        gray = np.mean(contrast, axis=2, keepdims=True)
+        gray = np.mean(contrast[..., :3] if contrast.shape[2] > 3 else contrast, axis=2, keepdims=True)
         # Increase color separation from gray (saturation)
         enhanced = contrast + (contrast - gray) * strength * 0.3
         enhanced = np.clip(enhanced, 0.0, 1.0)
