@@ -29,7 +29,7 @@ from PIL import Image
 
 from ...core.platform_matrix import CURRENT_PLATFORM
 from ...lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
-from ._array_contract import to_rgb_uint8
+from ._array_contract import parse_worker_input_size, to_rgb_uint8, validate_worker_depth_map
 from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
@@ -506,7 +506,7 @@ class DepthProBackend:
                 )
 
             try:
-                subprocess.run(
+                completed = subprocess.run(
                     command,
                     capture_output=True,
                     text=True,
@@ -528,10 +528,34 @@ class DepthProBackend:
             if not output_depth_path.exists() or not output_json_path.exists():
                 raise RuntimeError("Depth Pro subprocess completed without producing the expected output files.")
 
-            with output_json_path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-            self._verify_worker_authority_echo(payload)
-            depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
+            try:
+                with output_json_path.open("r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                self._verify_worker_authority_echo(payload)
+                if not isinstance(payload, dict):
+                    raise ValueError("Depth Pro worker result JSON is not an object")
+                depth_map = validate_worker_depth_map(
+                    np.load(output_depth_path, allow_pickle=False),
+                    label="Depth Pro worker",
+                )
+                normalized_input_size = parse_worker_input_size(
+                    payload.get("input_size"),
+                    fallback=(image_array.shape[0], image_array.shape[1]),
+                )
+            except LuxExecutionPlanAuthorityError:
+                raise
+            except (OSError, ValueError, EOFError) as exc:
+                output = self._format_subprocess_output(
+                    str(getattr(completed, "stdout", "") or ""),
+                    str(getattr(completed, "stderr", "") or ""),
+                )
+                raise RuntimeError(
+                    "Depth Pro subprocess produced malformed output.\n\n"
+                    f"Python: {self._python_executable}\n"
+                    f"Command: {' '.join(command)}\n"
+                    f"Protocol error: {exc}\n"
+                    f"Output:\n{output}"
+                ) from exc
 
         metric_metadata = self._build_metric_metadata(
             payload.get("provenance", {}),
@@ -541,11 +565,6 @@ class DepthProBackend:
         self._cache_checkpoint_hash_from_metadata(metric_metadata)
         if self._candidate_authority is not None:
             metric_metadata["execution_authority"] = payload["execution_authority"]
-
-        input_size = payload.get("input_size")
-        normalized_input_size = (image_array.shape[0], image_array.shape[1])
-        if isinstance(input_size, (list, tuple)) and len(input_size) == 2:
-            normalized_input_size = (int(input_size[0]), int(input_size[1]))
 
         warnings = payload.get("warnings")
         if not isinstance(warnings, list):

@@ -49,7 +49,7 @@ from ...lux_depth_v3.model_resolution import (
     restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
 )
-from ._array_contract import to_rgb_uint8
+from ._array_contract import parse_worker_input_size, to_rgb_uint8, validate_worker_depth_map
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -1327,13 +1327,20 @@ class DA3Backend:
                     with output_json_path.open("r", encoding="utf-8") as handle:
                         payload = json.load(handle)
                 verified_runtime_identity = self._verify_worker_authority_echo(payload)
+                if not isinstance(payload, dict):
+                    raise ValueError("DA3 worker result JSON is not an object")
                 if verified_runtime_identity is not None:
                     depth_map = _load_verified_worker_depth(output_depth_path, payload.get("depth_artifact"))
                 else:
-                    depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
+                    depth_map = np.load(output_depth_path, allow_pickle=False)
+                depth_map = validate_worker_depth_map(depth_map, label="DA3 worker")
+                normalized_input_size = parse_worker_input_size(
+                    payload.get("input_size"),
+                    fallback=(image_array.shape[0], image_array.shape[1]),
+                )
             except LuxExecutionPlanAuthorityError:
                 raise
-            except (json.JSONDecodeError, OSError, ValueError) as exc:
+            except (OSError, ValueError, EOFError) as exc:
                 category, summary = _classify_subprocess_failure(
                     phase="inference",
                     stdout=result.stdout,
@@ -1351,11 +1358,6 @@ class DA3Backend:
                         stderr=f"{result.stderr}\n{exc}".strip(),
                     )
                 ) from exc
-
-        input_size = payload.get("input_size")
-        normalized_input_size = (image_array.shape[0], image_array.shape[1])
-        if isinstance(input_size, (list, tuple)) and len(input_size) == 2:
-            normalized_input_size = (int(input_size[0]), int(input_size[1]))
 
         result_metadata = dict(payload.get("metadata", {})) if isinstance(payload.get("metadata"), dict) else {}
         if verified_runtime_identity is not None:

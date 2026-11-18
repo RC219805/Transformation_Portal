@@ -7,9 +7,11 @@ is converted identically, whichever backend receives it.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
-__all__ = ["to_rgb_uint8"]
+__all__ = ["parse_worker_input_size", "to_rgb_uint8", "validate_worker_depth_map"]
 
 
 def to_rgb_uint8(image: np.ndarray) -> np.ndarray:
@@ -47,3 +49,38 @@ def to_rgb_uint8(image: np.ndarray) -> np.ndarray:
             return (np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)
         return np.clip(image, 0.0, 255.0).astype(np.uint8)
     raise ValueError(f"Unsupported image array dtype {dtype}; expected uint8, uint16, another integer type or float")
+
+
+def validate_worker_depth_map(depth_map: Any, *, label: str) -> np.ndarray:
+    """Return a subprocess worker's depth map as float32, or raise ``ValueError``.
+
+    A worker that exits 0 is only trusted once its depth is a non-empty 2-D
+    real-valued array whose samples are all finite.
+    """
+    if not isinstance(depth_map, np.ndarray):
+        raise ValueError(f"{label} depth output is not an array")
+    if depth_map.dtype.kind not in "fiu":
+        raise ValueError(f"{label} depth output has non-real dtype {depth_map.dtype}")
+    if depth_map.ndim != 2 or depth_map.size == 0:
+        raise ValueError(f"{label} depth output must be a non-empty HxW map, got shape {depth_map.shape}")
+    depth = depth_map.astype(np.float32)
+    if not np.isfinite(depth).all():
+        raise ValueError(f"{label} depth output contains non-finite values")
+    return depth
+
+
+def parse_worker_input_size(value: Any, *, fallback: tuple[int, int]) -> tuple[int, int]:
+    """Parse the ``input_size`` a worker echoes; an absent echo keeps ``fallback``.
+
+    Raises:
+        ValueError: when a two-element echo does not hold two positive integers.
+    """
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return fallback
+    try:
+        height, width = int(value[0]), int(value[1])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"worker input_size echo {value!r} is not two integers") from exc
+    if height <= 0 or width <= 0:
+        raise ValueError(f"worker input_size echo {value!r} is not positive")
+    return height, width

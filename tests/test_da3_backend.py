@@ -448,6 +448,60 @@ def test_da3_backend_subprocess_protocol_error_reports_category(tmp_path):
             backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
 
 
+def _write_npy(path, array):
+    np.save(path, array, allow_pickle=False)
+
+
+@pytest.mark.parametrize(
+    ("write_depth", "payload"),
+    [
+        (lambda path: _write_npy(path, np.full((4, 5), np.nan, dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5, 3), dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((0, 5), dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.array([["a"] * 5] * 4)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), []),
+        (lambda path: path.write_bytes(b""), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), {"input_size": ["x", "y"]}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), {"input_size": [0, 5]}),
+    ],
+    ids=[
+        "non_finite",
+        "three_dimensional",
+        "empty",
+        "string_dtype",
+        "json_list",
+        "empty_npy",
+        "bad_input_size",
+        "zero_input_size",
+    ],
+)
+def test_da3_backend_subprocess_rejects_malformed_exit_zero_output(tmp_path, write_depth, payload):
+    """An exit-0 worker's depth and payload are validated inside the failure classification."""
+    from unittest.mock import MagicMock, patch
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        _licensed_da3_config(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        if "--check" not in command:
+            write_depth(Path(command[command.index("--output-depth") + 1]))
+            Path(command[command.index("--output-json") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("transformation_portal.depth.backends.da3.subprocess.run", side_effect=fake_run):
+        with pytest.raises(RuntimeError, match="Failure category: protocol_error"):
+            backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+
 def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
     """Subprocess worker output should map back to the DepthResult contract."""
     from unittest.mock import MagicMock, patch

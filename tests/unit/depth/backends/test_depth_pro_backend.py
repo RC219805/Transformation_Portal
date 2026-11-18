@@ -268,3 +268,67 @@ def test_worker_envelope_retains_stage_focal_metadata(tmp_path, monkeypatch):
     assert payload["focal_length_px"] == focal
     assert payload["field_of_view_deg"] == 61.0
     assert payload["provenance"]["camera"]["focal_length_source"] == "model_estimated"
+
+
+def _fake_depth_pro_worker(write_depth, payload):
+    def fake_run(command, **kwargs):
+        del kwargs
+        write_depth(Path(command[command.index("--output-depth") + 1]))
+        Path(command[command.index("--output-json") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="worker log")
+
+    return fake_run
+
+
+@pytest.mark.parametrize(
+    ("depth", "payload"),
+    [
+        (np.full((4, 5), np.nan, dtype=np.float32), {"provenance": {}}),
+        (np.full((4, 5), np.inf, dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 5, 3), dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 0), dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 5), dtype=np.float32), []),
+        (None, {"provenance": {}}),
+        (np.zeros((4, 5), dtype=np.float32), {"input_size": ["x", "y"]}),
+    ],
+    ids=["nan", "inf", "three_dimensional", "empty", "json_list", "empty_npy", "bad_input_size"],
+)
+def test_subprocess_rejects_malformed_exit_zero_output(tmp_path: Path, depth, payload) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+
+    def write_depth(path: Path) -> None:
+        if depth is None:
+            path.write_bytes(b"")
+        else:
+            np.save(path, depth, allow_pickle=False)
+
+    with patch(
+        "transformation_portal.depth.backends.depth_pro.subprocess.run",
+        side_effect=_fake_depth_pro_worker(write_depth, payload),
+    ):
+        with pytest.raises(RuntimeError, match="Depth Pro subprocess produced malformed output") as exc_info:
+            backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert "worker log" in str(exc_info.value)
+
+
+def test_subprocess_accepts_valid_exit_zero_output(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    depth = np.arange(20, dtype=np.float64).reshape(4, 5) + 1.0
+
+    with patch(
+        "transformation_portal.depth.backends.depth_pro.subprocess.run",
+        side_effect=_fake_depth_pro_worker(
+            lambda path: np.save(path, depth, allow_pickle=False),
+            {"provenance": {}, "input_size": [4, 5], "device": "cpu"},
+        ),
+    ):
+        result = backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert result.depth_map.dtype == np.float32
+    np.testing.assert_array_equal(result.depth_map, depth.astype(np.float32))
+    assert result.input_size == (4, 5)
