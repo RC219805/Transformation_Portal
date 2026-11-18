@@ -293,3 +293,92 @@ def test_expired_batch_is_removed_when_jobs_only_read_other_locations(tmp_path: 
     assert _cleanup(tmp_path, retained) == [unused.batch_id]
     assert in_use.batch_root.is_dir()
     assert not unused.batch_root.exists()
+
+
+def _interrupted_batch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Leave a batch behind the way a process killed mid-stage does.
+
+    ``KeyboardInterrupt`` is not an ``Exception``, so it skips the staging
+    cleanup handler just as SIGKILL would skip every handler.
+    """
+
+    def _killed(_source: object, _destination: Path) -> tuple[str, int]:
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(upload_staging, "_stream_upload_to_path", _killed)
+        with pytest.raises(KeyboardInterrupt):
+            _stage(tmp_path, [_upload("shoot/frame.jpg")])
+
+    (batch_root,) = (tmp_path / "uploads").iterdir()
+    assert not (batch_root / "_portal" / upload_staging.UPLOAD_RECEIPT_FILENAME).exists()
+    (batch_root / "input" / ".upload-0a1b2c3d.part").write_bytes(b"partial")
+    os.utime(batch_root, (NOW, NOW))
+    return batch_root
+
+
+def test_generated_batch_ids_match_the_interrupted_batch_pattern() -> None:
+    assert upload_staging._BATCH_ID_PATTERN.fullmatch(upload_staging.build_batch_id(NOW)) is not None
+
+
+def test_interrupted_batch_is_reaped_once_past_the_ttl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    batch_root = _interrupted_batch(tmp_path, monkeypatch)
+
+    assert _cleanup(tmp_path, [], age_seconds=TTL_SECONDS / 2) == []
+    assert batch_root.is_dir()
+
+    assert _cleanup(tmp_path, [], age_seconds=2 * TTL_SECONDS) == [batch_root.name]
+    assert not batch_root.exists()
+
+
+def test_interrupted_batch_outlives_a_short_ttl_until_it_cannot_be_in_flight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A receipt-less batch may still be staging, so a short TTL must not reap it."""
+    batch_root = _interrupted_batch(tmp_path, monkeypatch)
+    finished = _expired_batch(tmp_path, ["shoot/frame.jpg"])
+    grace = upload_staging.INTERRUPTED_BATCH_GRACE_SECONDS
+
+    def _cleanup_with_short_ttl(age_seconds: float) -> list[str]:
+        return upload_staging.cleanup_expired_batches(
+            tmp_path / "uploads", now=NOW + age_seconds, ttl_seconds=60.0, retained_input_dirs=[]
+        )
+
+    # The finished batch follows the TTL alone; the receipt-less one waits.
+    assert _cleanup_with_short_ttl(grace / 2) == [finished.batch_id]
+    assert batch_root.is_dir()
+    assert _cleanup_with_short_ttl(grace + 1) == [batch_root.name]
+
+
+def test_interrupted_batch_is_retained_while_a_job_reads_from_inside_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    batch_root = _interrupted_batch(tmp_path, monkeypatch)
+
+    assert _cleanup(tmp_path, [str(batch_root / "input" / "shoot")]) == []
+    assert batch_root.is_dir()
+
+
+def test_cleanup_never_touches_receiptless_directories_it_did_not_create(tmp_path: Path) -> None:
+    upload_root = tmp_path / "uploads"
+    kept = {
+        # Not a generated batch id.
+        "upload_123": ("input", "_portal"),
+        "upload_1700000000_0A1B2C3D": ("input", "_portal"),
+        "manual_batch": ("input", "_portal"),
+        # Generated-looking id without the managed layout.
+        "upload_1700000000_0a1b2c3d": ("input",),
+        "upload_1700000000_1a2b3c4d": ("_portal",),
+    }
+    for name, children in kept.items():
+        for child in children:
+            (upload_root / name / child).mkdir(parents=True)
+        (upload_root / name / "notes.txt").write_text("keep", encoding="utf-8")
+        os.utime(upload_root / name, (NOW, NOW))
+    orphan = upload_root / "upload_1700000000_9f8e7d6c"
+    for child in ("input", "_portal", "tmp"):
+        (orphan / child).mkdir(parents=True)
+    os.utime(orphan, (NOW, NOW))
+
+    assert _cleanup(tmp_path, []) == [orphan.name]
+    assert sorted(path.name for path in upload_root.iterdir()) == sorted(kept)

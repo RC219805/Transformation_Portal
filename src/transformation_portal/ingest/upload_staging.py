@@ -6,6 +6,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import uuid
@@ -39,6 +40,14 @@ _PARTIAL_UPLOAD_SUFFIX = ".part"
 # and is left to propagate unchanged.
 _PATH_CONFLICT_ERRNOS = frozenset({errno.EEXIST, errno.EISDIR, errno.ENOTDIR})
 _PATH_UNREPRESENTABLE_ERRNOS = frozenset({errno.EILSEQ, errno.EINVAL})
+# Shape of the ids produced by build_batch_id().
+_BATCH_ID_PATTERN = re.compile(r"upload_\d+_[0-9a-f]{8}")
+# A batch without a receipt is either still being staged or was interrupted (the
+# process died mid-request). Staging runs inside one HTTP request, so a
+# receipt-less batch this old can no longer be in flight. Cleanup waits for the
+# longer of this grace period and the configured TTL before reaping one, which
+# keeps a short TTL from deleting a batch that is still being written.
+INTERRUPTED_BATCH_GRACE_SECONDS = 60 * 60
 _COMPOUND_EXTENSIONS = (
     ".tar.gz",
     ".tar.bz2",
@@ -693,7 +702,11 @@ def cleanup_expired_batches(
         try:
             if not batch_dir.is_dir():
                 continue
-            if not _is_managed_staged_batch_dir(batch_dir):
+            if _is_managed_staged_batch_dir(batch_dir):
+                min_age_seconds = ttl_seconds
+            elif _is_interrupted_staged_batch_dir(batch_dir):
+                min_age_seconds = max(ttl_seconds, INTERRUPTED_BATCH_GRACE_SECONDS)
+            else:
                 continue
             input_dir = batch_dir / "input"
             input_dir_real = str(Path(os.path.realpath(input_dir)))
@@ -701,7 +714,7 @@ def cleanup_expired_batches(
             if input_dir_real in retained or batch_dir_real in retained:
                 continue
             age_seconds = now - batch_dir.stat().st_mtime
-            if age_seconds < ttl_seconds:
+            if age_seconds < min_age_seconds:
                 continue
             shutil.rmtree(batch_dir, ignore_errors=False)
             removed.append(batch_dir.name)
@@ -720,3 +733,19 @@ def _is_managed_staged_batch_dir(batch_dir: Path) -> bool:
         return False
     receipt_path = portal_dir / UPLOAD_RECEIPT_FILENAME
     return receipt_path.is_file()
+
+
+def _is_interrupted_staged_batch_dir(batch_dir: Path) -> bool:
+    """Return True for a batch that staging created but never finished.
+
+    The receipt is written last, and a failed stage removes its batch, so a
+    receipt-less batch is left behind only when the process is killed mid-stage.
+    Only directories that carry a generated batch id and the managed layout
+    qualify; anything else in the upload root is never touched.
+    """
+    if _BATCH_ID_PATTERN.fullmatch(str(batch_dir.name or "")) is None:
+        return False
+    portal_dir = batch_dir / "_portal"
+    if not (batch_dir / "input").is_dir() or not portal_dir.is_dir():
+        return False
+    return not os.path.lexists(portal_dir / UPLOAD_RECEIPT_FILENAME)
