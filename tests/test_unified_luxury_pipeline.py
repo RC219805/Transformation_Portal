@@ -996,6 +996,27 @@ class TestMaterialResponse:
         assert isinstance(result, Image.Image)
         assert result.size == sample_image.size
 
+    def test_material_response_never_blurs_across_colour_channels(self, sample_image, temp_dir, monkeypatch):
+        """Regression for H-04: every Gaussian on an HxWx3 array must leave the channel axis alone."""
+        import scipy.ndimage
+
+        real_gaussian = scipy.ndimage.gaussian_filter
+        rgb_sigmas = []
+
+        def spy(input, sigma, *args, **kwargs):  # pylint: disable=redefined-builtin
+            if np.ndim(input) == 3:
+                rgb_sigmas.append(sigma)
+            return real_gaussian(input, sigma, *args, **kwargs)
+
+        monkeypatch.setattr(scipy.ndimage, "gaussian_filter", spy)
+        pipeline = UnifiedLuxuryPipeline(UnifiedPipelineConfig(output_dir=temp_dir, enable_material_response=True))
+
+        pipeline._apply_material_response(sample_image, {"material_strength": 0.7}, SceneType.INTERIOR)
+
+        assert rgb_sigmas, "material response should blur the RGB array at least once"
+        for sigma in rgb_sigmas:
+            assert np.ndim(sigma) == 1 and len(sigma) == 3 and sigma[-1] == 0, sigma
+
 
 class TestEdgeCases:
     """Test edge cases and error conditions."""

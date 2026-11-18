@@ -774,7 +774,8 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
 
         # 8. Transition blending (smooth material boundaries)
         # Apply final gaussian smoothing to mask edges
-        final_blend = gaussian_filter(enhanced, sigma=0.3)
+        # Spatial axes only: never blur across the colour-channel axis
+        final_blend = gaussian_filter(enhanced, sigma=(0.3, 0.3, 0) if enhanced.ndim == 3 else 0.3)
         blend_factor = 0.15  # Subtle blending
         enhanced = enhanced * (1 - blend_factor) + final_blend * blend_factor
 

@@ -642,8 +642,9 @@ class ProPipeline:
             # (placeholder - would use actual depth estimation in production)
             clarity_boost = self.config.depth_stage.config.get("clarity", 0.15)
 
-            # Apply unsharp mask for clarity
-            blurred = gaussian_filter(img_array, sigma=2.0)
+            # Apply unsharp mask for clarity (spatial axes only: blurring across
+            # the colour-channel axis greys the base and saturates flat colour)
+            blurred = gaussian_filter(img_array, sigma=(2.0, 2.0, 0) if img_array.ndim == 3 else 2.0)
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * clarity_boost, 0, 1)
 
@@ -705,8 +706,8 @@ class ProPipeline:
 
             img_array = np.array(image).astype(np.float32) / 255.0
 
-            # Enhance micro-contrast
-            blurred = gaussian_filter(img_array, sigma=1.0)
+            # Enhance micro-contrast (spatial axes only, never across channels)
+            blurred = gaussian_filter(img_array, sigma=(1.0, 1.0, 0) if img_array.ndim == 3 else 1.0)
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * strength * 0.08, 0, 1)
 
@@ -772,7 +773,8 @@ class ProPipeline:
 
             # Sharpening
             sharpen_amount = self.config.finishing_stage.config.get("sharpen", 0.14)
-            blurred = gaussian_filter(img_array, sigma=1.0)
+            # Unsharp mask over the spatial axes only, never across channels
+            blurred = gaussian_filter(img_array, sigma=(1.0, 1.0, 0) if img_array.ndim == 3 else 1.0)
             sharpened = img_array + (img_array - blurred) * sharpen_amount
             sharpened = np.clip(sharpened, 0, 1)
 

@@ -345,3 +345,29 @@ def test_depth_adaptive_denoise_covers_far_field(strength: float) -> None:
     far_std = float(result.array[:, -width // 4 : -8].std())
     assert far_std < 0.5 * float(noisy.std())
     assert far_std <= near_std
+
+
+def test_material_response_stage_never_blurs_across_colour_channels(tmp_path: Path, monkeypatch) -> None:
+    """Regression for H-04: every Gaussian on an HxWx3 array must leave the channel axis alone."""
+    import scipy.ndimage
+
+    from transformation_portal.streaming.stages import MaterialResponseStage
+
+    real_gaussian = scipy.ndimage.gaussian_filter
+    rgb_sigmas = []
+
+    def spy(input, sigma, *args, **kwargs):  # pylint: disable=redefined-builtin
+        if np.ndim(input) == 3:
+            rgb_sigmas.append(sigma)
+        return real_gaussian(input, sigma, *args, **kwargs)
+
+    monkeypatch.setattr(scipy.ndimage, "gaussian_filter", spy)
+    rng = np.random.default_rng(0)
+    image_data = ImageData(array=rng.random((24, 24, 3), dtype=np.float32), path=tmp_path / "frame.png")
+
+    result = MaterialResponseStage(use_depth=False)._enhance_sync(image_data)
+
+    assert result.metadata["material_enhanced"] is True
+    assert rgb_sigmas, "material response should blur the RGB array at least once"
+    for sigma in rgb_sigmas:
+        assert np.ndim(sigma) == 1 and len(sigma) == 3 and sigma[-1] == 0, sigma

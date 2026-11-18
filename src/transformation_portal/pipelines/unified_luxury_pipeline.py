@@ -1302,7 +1302,7 @@ class UnifiedLuxuryPipeline:
 
         # 9. TRANSITION BLENDING: Smooth material boundaries
         # This respects the third Material Response tenet
-        final_blend = gaussian_filter(enhanced, sigma=0.4)
+        final_blend = gaussian_filter(enhanced, sigma=(0.4, 0.4, 0))  # spatial only, never across channels
         blend_factor = 0.12
         enhanced = enhanced * (1 - blend_factor) + final_blend * blend_factor
 

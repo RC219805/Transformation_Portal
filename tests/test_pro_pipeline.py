@@ -607,6 +607,41 @@ class TestProPipeline:
         assert stats["avg_time"] > 0
 
 
+class TestUnsharpStagesStaySpatial:
+    """The clarity / micro-contrast / sharpen stages are unsharp masks over the spatial axes only.
+
+    Regression for H-04: ``gaussian_filter(img, sigma=s)`` on an HxWx3 array also blurred the
+    colour-channel axis, so the "blurred" base was nearly grey and the stages pushed flat colour
+    patches towards saturation (RGB(204,102,51) became RGB(215,99,42) in the depth stage).
+    """
+
+    STAGES = ("_apply_depth_stage", "_apply_material_stage", "_apply_finishing_stage")
+
+    @pytest.mark.parametrize("stage_name", STAGES)
+    @pytest.mark.parametrize("preset", [PipelinePreset.CUSTOM, PipelinePreset.ARCHITECTURAL_HERO])
+    def test_flat_colour_patch_is_left_untouched(self, tmp_path, stage_name, preset):
+        config = ProPipelineConfig(input_path=tmp_path / "in.png", output_dir=tmp_path / "out", preset=preset, device="cpu")
+        pipeline = ProPipeline(config)
+        flat = Image.fromarray(np.tile(np.array([[[204, 102, 51]]], dtype=np.uint8), (32, 32, 1)))
+
+        out = np.asarray(getattr(pipeline, stage_name)(flat, tmp_path / "in.png")).astype(np.int16)
+
+        # One level of slack for the float -> uint8 conversion; channel mixing moved it by 2-11 levels.
+        assert np.abs(out - np.array([204, 102, 51], dtype=np.int16)).max() <= 1
+
+    @pytest.mark.parametrize("stage_name", STAGES)
+    def test_stage_still_sharpens_a_spatial_edge(self, pipeline_config, tmp_path, stage_name):
+        pipeline = ProPipeline(pipeline_config)
+        arr = np.full((32, 32, 3), 64, dtype=np.uint8)
+        arr[:, 16:] = 192
+        out = np.asarray(getattr(pipeline, stage_name)(Image.fromarray(arr), tmp_path / "in.png")).astype(np.int16)
+
+        # Unsharp masking overshoots on both sides of the edge and leaves channels equal on grey input.
+        assert out[:, 16:18].max() > 192
+        assert out[:, 14:16].min() < 64
+        assert np.array_equal(out[..., 0], out[..., 1]) and np.array_equal(out[..., 1], out[..., 2])
+
+
 class TestPresets:
     """Tests for pipeline presets."""
 
