@@ -421,6 +421,56 @@ def test_batch_extract_hash_suffix_uses_canonical_path_representation(monkeypatc
     assert absolute_names == relative_names
 
 
+@pytest.mark.parametrize("deterministic_order", [True, False], ids=["sorted", "caller-order"])
+def test_batch_extract_disambiguated_sidecar_never_lands_on_another_inputs_sidecar(
+    tmp_path: Path, deterministic_order: bool
+) -> None:
+    """IMG.CR2 is renamed to IMG.CR2.provenance.json, which IMG.CR2.jpg already owns."""
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    names = ["IMG_0001.CR2", "IMG_0001.JPG", "IMG_0001.CR2.jpg", "IMG_0002.CR2", "notes.CR2.tif"]
+    for name in names:
+        (input_root / name).write_bytes(name.encode("utf-8"))
+    output_dir = tmp_path / "out"
+
+    def capture(*, input_path: Path, **_kwargs: object) -> str:
+        return input_path.name
+
+    def write(sidecar: str, output_path: Path, fsync: bool = False) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(sidecar, encoding="utf-8")
+
+    service = MetadataExtractionService(capture_provenance_fn=capture, write_sidecar_fn=write, clock_fn=_clock)
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[input_root / name for name in names],
+            output_dir=output_dir,
+            input_root=input_root,
+            emit_raw_sidecar=False,
+            deterministic_order=deterministic_order,
+        )
+    )
+
+    assert result.success
+    written = {item.path.name: item.output_path for item in result.items}
+    assert len(set(written.values())) == len(names)
+    # Every sidecar on disk describes its own input: nothing was overwritten.
+    assert {path.read_text(encoding="utf-8") for path in output_dir.iterdir()} == set(names)
+    for name, output_path in written.items():
+        assert output_path.read_text(encoding="utf-8") == name
+
+    # Inputs that never collided keep their historical names byte for byte.
+    assert written["IMG_0001.CR2.jpg"] == output_dir / "IMG_0001.CR2.provenance.json"
+    assert written["IMG_0002.CR2"] == output_dir / "IMG_0002.provenance.json"
+    assert written["notes.CR2.tif"] == output_dir / "notes.CR2.provenance.json"
+    # A collision that is resolved by the source name alone is unchanged too.
+    assert written["IMG_0001.JPG"] == output_dir / "IMG_0001.JPG.provenance.json"
+    # Only the input whose first choice is owned by another input moves on.
+    assert written["IMG_0001.CR2"].name.startswith("IMG_0001.CR2.")
+    assert written["IMG_0001.CR2"].name.endswith(".provenance.json")
+    assert written["IMG_0001.CR2"] != output_dir / "IMG_0001.CR2.provenance.json"
+
+
 def test_batch_extract_fail_fast_stops_after_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     input_paths = [tmp_path / "one.cr2", tmp_path / "two.cr2", tmp_path / "three.cr2"]
     for path in input_paths:
