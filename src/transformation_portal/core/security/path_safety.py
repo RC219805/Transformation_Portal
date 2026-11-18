@@ -30,6 +30,7 @@ Usage:
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import re
@@ -238,3 +239,47 @@ def safe_cas_path(
 
     logger.debug("Path safety: constructed CAS path %s", filepath)
     return Path(filepath)
+
+
+# Windows reports an unresolvable reparse-point cycle with this code.
+_WINERROR_CANT_RESOLVE_FILENAME = 1921
+
+
+class SymlinkLoopError(OSError, RuntimeError):
+    """A path cannot be resolved because one of its components is a symlink loop.
+
+    It is both an ``OSError`` (errno ``ELOOP``, what strict resolution raises
+    on Python 3.13+) and a ``RuntimeError`` (what ``Path.resolve`` raised on
+    Python 3.11 and 3.12), so handlers written for either keep catching it.
+    """
+
+
+def resolve_rejecting_symlink_loops(path: str | os.PathLike[str]) -> Path:
+    """Resolve ``path`` non-strictly, failing on a symlink loop on every Python.
+
+    Up to Python 3.12, ``Path.resolve(strict=False)`` raised ``RuntimeError``
+    for a symlink loop; Python 3.13 returns a best-effort path instead. Call
+    sites that fail closed on that exception use this helper so the loop is
+    detected explicitly rather than by relying on interpreter behaviour.
+
+    The result is exactly ``Path(path).resolve()`` when no loop is present.
+    Missing components remain allowed: the existing prefix is resolved and
+    the missing tail is kept lexically.
+
+    Raises:
+        SymlinkLoopError: If following the resolved path's symlinks loops
+            (or exceeds the platform's symlink depth limit).
+    """
+    try:
+        resolved = Path(path).resolve()
+    except RuntimeError as exc:
+        # Python <= 3.12 reports the loop itself; normalize its type.
+        raise SymlinkLoopError(errno.ELOOP, "Symlink loop", os.fspath(path)) from exc
+    # Non-strict resolution keeps a looping component lexically on Python
+    # 3.13+, so probe the result: the kernel reports ELOOP for any loop on it.
+    try:
+        os.stat(resolved)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP or getattr(exc, "winerror", None) == _WINERROR_CANT_RESOLVE_FILENAME:
+            raise SymlinkLoopError(errno.ELOOP, "Symlink loop", os.fspath(path)) from exc
+    return resolved
