@@ -76,18 +76,38 @@ def unechoable_arg_fields(args: Any) -> List[Tuple[str, str]]:
 def json_safe_echo(value: Any) -> Any:
     """Copy ``value`` with unechoable floats and strings replaced by ``None``.
 
-    Dict entries whose key cannot be encoded are dropped. Values that are
-    already echoable are returned unchanged (same object).
+    Dict entries whose key cannot be encoded are dropped. A value that is
+    already echoable is returned unchanged (same object); otherwise every
+    container is copied. The copy is iterative and single pass, like the walk
+    in :func:`json_payload_rejection_reason`, so a value nested as deeply as
+    the JSON parser allows can neither exhaust the interpreter stack nor be
+    re-scanned once per nesting level.
     """
 
     if json_payload_rejection_reason(value) is None:
         return value
-    if isinstance(value, (float, str)):
-        return None
-    if isinstance(value, dict):
-        return {
-            key: json_safe_echo(item)
-            for key, item in value.items()
-            if not (isinstance(key, str) and _has_unpaired_surrogate(key))
-        }
-    return [json_safe_echo(item) for item in value]
+
+    # Each pending entry is (source value, container to fill, key or index).
+    root: List[Any] = [None]
+    stack: List[Tuple[Any, Any, Any]] = [(value, root, 0)]
+    while stack:
+        item, target, slot = stack.pop()
+        if isinstance(item, float):
+            target[slot] = item if math.isfinite(item) else None
+        elif isinstance(item, str):
+            target[slot] = None if _has_unpaired_surrogate(item) else item
+        elif isinstance(item, dict):
+            copied: dict[Any, Any] = {}
+            target[slot] = copied
+            for key, child in item.items():
+                if isinstance(key, str) and _has_unpaired_surrogate(key):
+                    continue
+                copied[key] = None  # reserve the slot so key order is kept
+                stack.append((child, copied, key))
+        elif isinstance(item, (list, tuple)):
+            sequence: List[Any] = [None] * len(item)
+            target[slot] = sequence
+            stack.extend((child, sequence, index) for index, child in enumerate(item))
+        else:
+            target[slot] = item
+    return root[0]

@@ -324,6 +324,33 @@ class TestNonJsonCompliantPayloadRejection:
         assert error.get("details") == {"field": "note", "reason": "non_finite_number"}
         assert orchestrator_app.JOBS == {}
 
+    @pytest.mark.parametrize("leaf", ["NaN", '"\\ud800"'])
+    def test_deeply_nested_unechoable_arg_is_a_field_error_not_500(self, auth_client, leaf):
+        # The JSON parser accepts nesting deeper than the interpreter recursion
+        # limit; the null-echo copy of the preview must not recurse per level.
+        depth = 2000
+        raw = '{"pipeline": "archive-gate-b", "args": {%s, "note": %s%s%s}}' % (
+            self._ARGS,
+            "[" * depth,
+            leaf,
+            "]" * depth,
+        )
+
+        preview_response = self._post(auth_client, "/v1/config-preview", raw)
+
+        assert preview_response.status_code == 200
+        preview = preview_response.json()["data"]
+        assert "note" in [issue.get("field") for issue in preview["field_errors"]]
+        node = preview["normalized_args"]["note"]
+        for _ in range(depth):
+            node = node[0]
+        assert node is None
+
+        job_response = self._post(auth_client, "/v1/jobs", raw)
+        assert job_response.status_code == 400
+        assert (job_response.json().get("error") or {}).get("code") == "INVALID_ARGUMENT"
+        assert orchestrator_app.JOBS == {}
+
     def test_unechoable_arg_is_the_reported_error_when_otherwise_valid(self):
         preview = orchestrator_app._reject_unechoable_preview_args(
             "archive-gate-b",
