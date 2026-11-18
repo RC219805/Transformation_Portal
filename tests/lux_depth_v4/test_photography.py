@@ -332,6 +332,19 @@ def test_jpeg_limit_is_checked_before_pixel_decode(monkeypatch):
         decode_master(stream.getvalue(), source_name="large.jpg", max_pixels=100)
 
 
+def test_pixel_limit_error_carries_geometry_and_survives_pickling():
+    import pickle
+
+    from transformation_portal.lux_depth_v4.photography import DecodedPixelLimitError
+
+    with pytest.raises(DecodedPixelLimitError) as excinfo:
+        decode_master(_tiff(np.ones((28, 42, 3), np.uint16)), source_name="large.tif", max_pixels=100)
+    assert (excinfo.value.height, excinfo.value.width) == (28, 42)
+    restored = pickle.loads(pickle.dumps(excinfo.value))
+    assert type(restored) is DecodedPixelLimitError
+    assert (restored.height, restored.width, str(restored)) == (28, 42, "Decoded image dimensions exceed max_pixels")
+
+
 def test_materials_default_and_uncertain_evidence_abstain():
     master = _master(np.full((28, 42, 3), 0.25, np.float32))
     unchanged, report = apply_materials(master)

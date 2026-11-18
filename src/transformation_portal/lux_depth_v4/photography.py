@@ -43,6 +43,10 @@ class DecodedPixelLimitError(ValueError):
         self.height = height
         self.width = width
 
+    def __reduce__(self) -> tuple[type["DecodedPixelLimitError"], tuple[int, int]]:
+        # args holds only the message, so default pickling would call __init__ with one argument.
+        return type(self), (self.height, self.width)
+
 
 def _orient(array: np.ndarray, orientation: int) -> np.ndarray:
     if orientation == 1:
