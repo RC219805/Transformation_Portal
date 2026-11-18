@@ -2913,6 +2913,42 @@ class TestV2SkipIndependentOfGeneratePBR:
 
                     assert skip_changed is False, "Changed V2 config should invalidate skip"
 
+    @pytest.mark.parametrize("deliverable_present", [True, False])
+    def test_v2_skip_requires_v2_deliverable_when_verifying_outputs(self, temp_workspace, deliverable_present):
+        """F13: with verify_outputs, a missing V2 output image must force V2 to rerun."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "villa.jpg"
+        test_image.write_bytes(b"fake image")
+        v2_report = tmpdir / "villa_report.json"
+        v2_report.write_text('{"status": "ok"}', encoding="utf-8")
+        v2_output = tmpdir / "villa_enhanced.png"
+        v2_output.write_bytes(b"enhanced")
+        manifest_path = tmpdir / "villa_manifest.json"
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(v2_preset="default"), tmpdir / "output", verify_outputs=True)
+            CombinedManifest(
+                config_fingerprint=orchestrator.compute_config_fingerprint(),
+                v2=V2Metadata(
+                    preset="default",
+                    status="ok",
+                    strict_depth=True,
+                    output_dir="v2/",
+                    report_path=str(v2_report),
+                    output_paths=[str(v2_output)],
+                ),
+            ).save(manifest_path)
+
+        if not deliverable_present:
+            v2_output.unlink()
+
+        skip = orchestrator.should_skip_v2(v2_report, manifest_path, ImageInput(test_image), depth_was_skipped=True)
+
+        assert skip is deliverable_present
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

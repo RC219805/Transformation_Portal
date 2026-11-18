@@ -3766,6 +3766,13 @@ class EnhanceOrchestrator:
                     logger.debug(f"V2 report missing: {v2_report_path}")
                     return False
 
+            # Defensive output check for the V2 deliverable itself
+            if self.verify_outputs:
+                for v2_output in manifest.v2.output_paths or []:
+                    if not isinstance(v2_output, str) or not v2_output or not os.path.exists(v2_output):
+                        logger.debug(f"V2 output missing: {v2_output}")
+                        return False
+
             # Defensive output check for PBR assets
             if self.verify_outputs and manifest.pbr_assets:
                 pbr_outputs = manifest.pbr_assets
