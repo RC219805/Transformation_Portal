@@ -18,6 +18,7 @@ Harmony principles:
 - Cool palettes suggest luxury (coastal, modern)
 """
 
+import colorsys
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -108,9 +109,21 @@ class ColorHarmonyAnalyzer:
     COMPLEMENTARY_THRESHOLD = 30  # ±30° from 180°
     TRIADIC_THRESHOLD = 30  # ±30° from 120°
 
-    # Temperature thresholds (hue degrees)
+    # Temperature thresholds (colour-wheel hue degrees: red 0, yellow 60, cyan 180, blue 240)
     WARM_HUE_RANGES = [(0, 60), (300, 360)]  # Reds, oranges, yellows
     COOL_HUE_RANGES = [(180, 270)]  # Blues, cyans
+
+    # CIELAB chroma below which a colour is achromatic: greys have no meaningful
+    # hue, so they count as neither warm nor cool.
+    NEUTRAL_CHROMA_THRESHOLD = 5.0
+
+    # Upper bound on pixels handed to K-means when subsampling. Palette estimates
+    # do not improve beyond this, while every Lloyd iteration is linear in the
+    # sample count (10% of a 100 MP render would otherwise be 10M points).
+    MAX_PALETTE_SAMPLES = 200_000
+
+    # Fixed seed for pixel subsampling so repeated analyses of one image agree.
+    SAMPLING_SEED = 42
 
     def __init__(self, num_colors: int = 5, min_proportion: float = 0.05):
         """Initialize color harmony analyzer.
@@ -180,26 +193,38 @@ class ColorHarmonyAnalyzer:
         """
         # Reshape image to pixel array
         pixels = image.reshape(-1, 3)
+        total_pixels = len(pixels)
+        if total_pixels == 0:
+            raise ValueError("Cannot extract a color palette from an empty image")
 
-        # Sample pixels for efficiency
+        # Sample pixels for efficiency. Keep at least one sample per requested
+        # cluster (tiny images) and bound the sample for very large ones.
         if sample_fraction < 1.0:
-            n_samples = int(len(pixels) * sample_fraction)
-            indices = np.random.choice(len(pixels), n_samples, replace=False)
-            pixels = pixels[indices]
+            n_samples = min(int(total_pixels * sample_fraction), self.MAX_PALETTE_SAMPLES)
+            n_samples = max(n_samples, min(total_pixels, self.num_colors))
+            if n_samples < total_pixels:
+                # A local seeded generator keeps the analysis reproducible for a
+                # given image and leaves the caller's global NumPy RNG untouched.
+                rng = np.random.default_rng(self.SAMPLING_SEED)
+                pixels = pixels[rng.choice(total_pixels, n_samples, replace=False)]
 
-        # K-means clustering in RGB
-        kmeans = KMeans(n_clusters=self.num_colors, random_state=42, n_init=10)
+        # K-means clustering in RGB. An image cannot have more clusters than
+        # distinct colours (flat fills, two-tone graphics, line art).
+        distinct_colors = len(np.unique(pixels, axis=0))
+        n_clusters = max(1, min(self.num_colors, distinct_colors))
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         kmeans.fit(pixels)
 
-        colors_rgb = kmeans.cluster_centers_.astype(np.uint8)
+        colors_rgb = np.clip(np.rint(kmeans.cluster_centers_), 0, 255).astype(np.uint8)
 
-        # Calculate proportions
-        labels = kmeans.labels_
-        unique, counts = np.unique(labels, return_counts=True)
+        # Calculate proportions. bincount keeps one entry per cluster centre, so
+        # colours and proportions stay aligned even if a cluster ends up empty.
+        counts = np.bincount(kmeans.labels_, minlength=n_clusters)
         proportions = counts / counts.sum()
 
-        # Filter by minimum proportion
+        # Filter by minimum proportion, always keeping the dominant colour
         mask = proportions >= self.min_proportion
+        mask[int(np.argmax(proportions))] = True
         colors_rgb = colors_rgb[mask]
         proportions = proportions[mask]
         proportions /= proportions.sum()  # Renormalize
@@ -271,6 +296,45 @@ class ColorHarmonyAnalyzer:
 
         return hues, saturations, lightnesses
 
+    @staticmethod
+    def _wheel_hues(colors_rgb: np.ndarray) -> np.ndarray:
+        """Return colour-wheel (HSV/HSL) hue angles in degrees for RGB colours.
+
+        ``ColorPalette.hues`` holds CIELAB hue angles, which suit perceptual hue
+        *distance* but not the warm/cool ranges: those are colour-wheel
+        conventions. On the CIELAB angle sRGB blue sits near 306 degrees and
+        yellow near 103, so applying the wheel ranges there classified blues as
+        warm and yellows and oranges as neutral.
+
+        Args:
+            colors_rgb: RGB colors (N, 3) in range [0, 255]
+
+        Returns:
+            Hue angles (N,) in [0, 360)
+        """
+        rgb = np.asarray(colors_rgb, dtype=np.float64).reshape(-1, 3) / 255.0
+        return np.array([colorsys.rgb_to_hsv(r, g, b)[0] * 360.0 for r, g, b in rgb], dtype=np.float64)
+
+    def _classify_temperature(self, palette: ColorPalette) -> Tuple[np.ndarray, np.ndarray]:
+        """Classify each palette colour as warm and/or cool.
+
+        Args:
+            palette: Color palette
+
+        Returns:
+            Tuple of boolean arrays (is_warm, is_cool), one entry per palette colour
+        """
+        wheel_hues = self._wheel_hues(palette.colors_rgb)
+        chromatic = np.asarray(palette.saturations) >= self.NEUTRAL_CHROMA_THRESHOLD
+
+        def in_ranges(ranges: List[Tuple[int, int]]) -> np.ndarray:
+            hits = np.zeros(len(wheel_hues), dtype=bool)
+            for start, end in ranges:
+                hits |= (wheel_hues >= start) & (wheel_hues <= end)
+            return hits
+
+        return chromatic & in_ranges(self.WARM_HUE_RANGES), chromatic & in_ranges(self.COOL_HUE_RANGES)
+
     def _detect_harmony_type(self, palette: ColorPalette) -> HarmonyType:
         """Detect color harmony type from palette.
 
@@ -280,7 +344,10 @@ class ColorHarmonyAnalyzer:
         Returns:
             Detected harmony type
         """
-        hues = palette.hues
+        # Hue is undefined for achromatic colours (atan2 of ~0, ~0 is noise), so
+        # only chromatic palette entries take part in hue-relationship checks.
+        chromatic = np.asarray(palette.saturations) >= self.NEUTRAL_CHROMA_THRESHOLD
+        hues = np.asarray(palette.hues)[chromatic]
 
         if len(hues) < 2:
             return HarmonyType.MONOCHROMATIC
@@ -311,8 +378,9 @@ class ColorHarmonyAnalyzer:
             return HarmonyType.TRIADIC
 
         # Check for warm/cool
-        warm_count = sum(any(start <= h <= end for start, end in self.WARM_HUE_RANGES) for h in hues)
-        cool_count = sum(any(start <= h <= end for start, end in self.COOL_HUE_RANGES) for h in hues)
+        is_warm, is_cool = self._classify_temperature(palette)
+        warm_count = int(is_warm.sum())
+        cool_count = int(is_cool.sum())
 
         if warm_count > cool_count * 2:
             return HarmonyType.WARM
@@ -369,25 +437,14 @@ class ColorHarmonyAnalyzer:
         Returns:
             Temperature score
         """
-        warm_weight = 0.0
-        cool_weight = 0.0
+        is_warm, is_cool = self._classify_temperature(palette)
+        proportions = np.asarray(palette.proportions, dtype=np.float64)
 
-        for hue, proportion in zip(palette.hues, palette.proportions):
-            # Check if warm
-            is_warm = any(start <= hue <= end for start, end in self.WARM_HUE_RANGES)
+        warm_weight = float(proportions[is_warm].sum())
+        cool_weight = float(proportions[is_cool & ~is_warm].sum())
 
-            # Check if cool
-            is_cool = any(start <= hue <= end for start, end in self.COOL_HUE_RANGES)
-
-            if is_warm:
-                warm_weight += proportion
-            elif is_cool:
-                cool_weight += proportion
-
-        # Normalize to [-1, 1]
-        temperature = warm_weight - cool_weight
-
-        return temperature
+        # Proportions sum to 1, so the difference is already in [-1, 1]
+        return warm_weight - cool_weight
 
     def _generate_emotional_profile(
         self, palette: ColorPalette, harmony_type: HarmonyType, temperature: float
@@ -473,15 +530,22 @@ class ColorHarmonyAnalyzer:
         high_sat_colors = palette.saturations > 50
         if np.sum(high_sat_colors) >= 2:
             high_sat_hues = palette.hues[high_sat_colors]
-            # Check for clashing hues (not harmonious)
+            # Check for clashing hues (not harmonious). Report the issue once,
+            # however many pairs clash: breaking only the inner loop used to
+            # append the same message for every clashing first colour.
+            clashing = False
             for i in range(len(high_sat_hues)):
                 for j in range(i + 1, len(high_sat_hues)):
                     diff = abs(high_sat_hues[i] - high_sat_hues[j])
                     diff = min(diff, 360 - diff)
                     # Clashing if not complementary or triadic
                     if 50 < diff < 150 or 210 < diff < 310:
-                        issues.append("Clashing saturated colors detected")
+                        clashing = True
                         break
+                if clashing:
+                    break
+            if clashing:
+                issues.append("Clashing saturated colors detected")
 
         return issues
 
