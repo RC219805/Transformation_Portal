@@ -524,7 +524,9 @@ def save_tiff_16bit(
 
         # Save with tifffile (map the documented 'zip' alias to Adobe Deflate,
         # TIFF compression code 8, which tifffile names 'zlib')
-        tiff_compression = _TIFF_COMPRESSION_ALIASES.get(compression.lower(), compression)
+        tiff_compression = (
+            _TIFF_COMPRESSION_ALIASES.get(compression.lower(), compression) if isinstance(compression, str) else compression
+        )
         tifffile.imwrite(
             output_path,
             image_array,

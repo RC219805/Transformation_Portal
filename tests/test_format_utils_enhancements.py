@@ -552,6 +552,17 @@ class TestTruncatedLiteralAndBitDepthRegressions:
             assert int(tif.pages[0].compression) == 8  # Adobe Deflate
             np.testing.assert_array_equal(tif.asarray(), arr)
 
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_save_tiff_16bit_still_accepts_none_compression(self, temp_dir):
+        import tifffile
+
+        arr = np.random.default_rng(2).integers(0, 65535, (8, 8, 3)).astype(np.uint16)
+        output = temp_dir / "none.tif"
+
+        assert save_tiff_16bit(arr, output, compression=None) is True
+        with tifffile.TiffFile(output) as tif:
+            assert int(tif.pages[0].compression) == 1  # uncompressed
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
