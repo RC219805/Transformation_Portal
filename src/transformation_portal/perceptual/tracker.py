@@ -127,7 +127,13 @@ class EnhancementTracker:
         self.baseline_established = True
         logger.info(f"Baseline established for {len(self.trajectories)} images")
 
-    def track_enhancement(self, result: AnalysisResult, step: int, description: str = ""):
+    def track_enhancement(
+        self,
+        result: AnalysisResult,
+        step: int,
+        description: str = "",
+        baseline_name: Optional[str] = None,
+    ):
         """
         Track enhancement step.
 
@@ -135,19 +141,24 @@ class EnhancementTracker:
             result: Analysis result after enhancement
             step: Enhancement step number
             description: Description of enhancement applied
+            baseline_name: Name (file stem) of the baseline image this result
+                enhances. Defaults to ``result.image_path.stem``, which only
+                works when the enhanced file keeps the baseline's stem.
+
+        Raises:
+            RuntimeError: If no baseline has been established.
+            ValueError: If no baseline trajectory exists for ``baseline_name``
+                (an enhanced image is never used as its own baseline).
         """
         if not self.baseline_established:
             raise RuntimeError("Baseline not established. Call establish_baseline() first.")
 
-        image_name = result.image_path.stem
+        image_name = baseline_name if baseline_name is not None else result.image_path.stem
 
         if image_name not in self.trajectories:
-            logger.warning(f"No baseline for {image_name}, creating new trajectory")
-            self.trajectories[image_name] = EnhancementTrajectory(
-                image_name=image_name,
-                baseline_quality=result.overall_quality,
-                target_quality=result.overall_quality * self.target_quality_multiplier,
-            )
+            known = ", ".join(sorted(self.trajectories)) or "<none>"
+            hint = "" if baseline_name is not None else " Pass baseline_name= to name the baseline image this result enhances."
+            raise ValueError(f"No baseline trajectory for '{image_name}' (known baselines: {known}).{hint}")
 
         # Create trajectory point
         point = TrajectoryPoint(
