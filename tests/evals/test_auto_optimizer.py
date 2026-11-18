@@ -208,12 +208,12 @@ class TestHelperFunctions:
 
     def test_compute_composite_score(self):
         """Test composite score computation."""
-        metrics = {"psnr": 0.8, "ssim": 0.9, "lpips": 0.2}
+        metrics = {"psnr": 36.0, "ssim": 0.9, "lpips": 0.2}  # PSNR in dB
         weights = {"psnr": 0.4, "ssim": 0.4, "lpips": -0.2}  # Negative = lower is better
 
         score = _compute_composite_score(metrics, weights)
 
-        # psnr: 0.8 * 0.4 = 0.32
+        # psnr: 36 dB -> psnr_to_score 0.8; 0.8 * 0.4 = 0.32
         # ssim: 0.9 * 0.4 = 0.36
         # lpips (inverted): (1 - 0.2) * 0.2 = 0.16
         # total weight: 0.4 + 0.4 + 0.2 = 1.0
@@ -222,7 +222,7 @@ class TestHelperFunctions:
 
     def test_compute_composite_score_missing_metric(self):
         """Test composite score with missing metric."""
-        metrics = {"psnr": 0.8}
+        metrics = {"psnr": 36.0}  # 36 dB -> 0.8
         weights = {"psnr": 0.5, "ssim": 0.5}  # ssim missing
 
         score = _compute_composite_score(metrics, weights)
@@ -234,6 +234,28 @@ class TestHelperFunctions:
         """Test composite score with empty inputs."""
         score = _compute_composite_score({}, {})
         assert score == 0.0
+
+    def test_compute_composite_score_psnr_db_does_not_swamp_other_metrics(self):
+        """M-10: a +2 dB PSNR gain must not outrank a collapse of every other metric."""
+        weights = OptimizationConfig().score_weights
+        good = {"psnr": 30.0, "ssim": 0.95, "lpips": 0.05, "llava": 0.95}
+        worse = {"psnr": 32.0, "ssim": 0.40, "lpips": 0.60, "llava": 0.10}
+
+        good_score = _compute_composite_score(good, weights)
+        worse_score = _compute_composite_score(worse, weights)
+
+        assert 0.0 <= worse_score < good_score <= 1.0
+
+    def test_compute_composite_score_identical_image_psnr_inf_is_bounded(self):
+        """M-10: PSNR=+inf (identical images) maps to the top of the 0..1 scale."""
+        score = _compute_composite_score({"psnr": float("inf"), "ssim": 1.0}, {"psnr": 0.5, "ssim": 0.5})
+        assert score == pytest.approx(1.0)
+
+    def test_compute_composite_score_nan_fails_closed(self):
+        """M-10: NaN metrics contribute the worst score for their term, never the best."""
+        weights = {"psnr": 0.5, "lpips": -0.5}
+        assert _compute_composite_score({"psnr": float("nan"), "lpips": float("nan")}, weights) == 0.0
+        assert _compute_composite_score({"psnr": 40.0, "lpips": float("nan")}, weights) == pytest.approx(0.5)
 
     def test_acceptance_gate_accept(self):
         """Test acceptance gate accepts improvement."""
@@ -372,7 +394,7 @@ class TestAutoOptimizer:
             config=OptimizationConfig(score_weights={"psnr": 1.0}),
         )
 
-        output = {"metrics": {"psnr": 0.9}}
+        output = {"metrics": {"psnr": 38.0}}  # 38 dB -> psnr_to_score 0.9
         score = optimizer._compute_score(output)
         assert score == pytest.approx(0.9)
 

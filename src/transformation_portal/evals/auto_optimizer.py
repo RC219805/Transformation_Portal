@@ -22,6 +22,7 @@ import copy
 import hashlib
 import json
 import logging
+import math
 from typing import TYPE_CHECKING, Any, Callable
 
 from transformation_portal.evals.auto_opt_types import (
@@ -33,6 +34,7 @@ from transformation_portal.evals.auto_opt_types import (
     OptimizationStatus,
     PipelineState,
 )
+from transformation_portal.evals.metrics import psnr_to_score
 from transformation_portal.evals.self_heal_policy import (
     SelfHealPolicy,
     can_auto_apply,
@@ -63,6 +65,12 @@ def _compute_composite_score(
 ) -> float:
     """Compute weighted composite score from metrics.
 
+    Every term is brought onto the 0..1 scale before weighting: ``psnr`` is
+    reported in dB and is mapped with :func:`psnr_to_score` (20 dB -> 0,
+    40 dB -> 1, ``+inf`` for identical images -> 1). Non-finite values (NaN, or
+    an infinite value for any other metric) fail closed and contribute the worst
+    score for their term instead of poisoning or inflating the composite.
+
     Args:
         metrics: Dictionary of metric values
         weights: Dictionary of metric weights (can be negative)
@@ -75,12 +83,18 @@ def _compute_composite_score(
 
     for metric, weight in weights.items():
         if metric in metrics:
-            # Normalize LPIPS (lower is better, so we invert)
-            value = metrics[metric]
-            if weight < 0:
-                # Negative weight means lower is better
+            value = float(metrics[metric])
+            lower_is_better = weight < 0
+            weight = abs(weight)
+            if metric == "psnr" and not math.isnan(value):
+                # PSNR is in dB; normalise it onto the 0..1 scale of the other terms.
+                value = psnr_to_score(value)
+            elif not math.isfinite(value):
+                # Unknown/invalid measurement: worst score for this term (fail closed).
+                value = 1.0 if lower_is_better else 0.0
+            if lower_is_better:
+                # Negative weight means lower is better (e.g. LPIPS), so invert.
                 value = 1.0 - min(value, 1.0)
-                weight = abs(weight)
 
             score += value * weight
             total_weight += weight
