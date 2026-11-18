@@ -146,6 +146,7 @@ from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_f
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal import job_artifacts as _portal_job_artifacts
+from transformation_portal.portal import json_payload as _portal_json_payload
 from transformation_portal.portal import path_security as _portal_path_security
 from transformation_portal.portal import sam2_checkpoint_security as _portal_sam2_checkpoint_security
 from transformation_portal.portal.asset_bundle import (
@@ -2021,6 +2022,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "invalid_raw_wb_mode": "The selected RAW white-balance mode is not supported.",
     "invalid_reconstruction_tier": "The selected reconstruction tier is not supported.",
     "invalid_request": "The request contains invalid values.",
+    "invalid_unicode_string": "The request contains a string that is not valid Unicode.",
     "invalid_sam2_model_size": "The selected SAM2 model size is not supported.",
     "invalid_segmentation_backend": "The selected segmentation backend is not supported.",
     "invalid_surface": "The telemetry surface is not supported.",
@@ -2032,6 +2034,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "captioning_feature_disabled": "FastVLM captioning is not enabled for this portal cohort.",
     "manifest_jsonl_required": "A manifest JSONL artifact is required before dispatch.",
     "missing_required_paths": "Input and output paths are required.",
+    "non_finite_number": "The request contains a number that is not finite (NaN, Infinity or out of range).",
     "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
     "path_shorthand_traversal_disallowed": "Repo-local shorthand paths cannot include traversal segments.",
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
@@ -4421,7 +4424,7 @@ def _normalize_optional_positive_int(
         return None
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -4453,7 +4456,7 @@ def _normalize_optional_non_negative_int(
         return None
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -4483,7 +4486,7 @@ def _normalize_optional_probability(
         return None
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -6435,7 +6438,7 @@ def _build_archive_config_preview(
             continue
         try:
             parsed = int(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append(
                 _portal_issue(
                     canonical_field,
@@ -6553,6 +6556,35 @@ def _build_archive_config_preview(
     }
 
 
+def _reject_unechoable_preview_args(pipeline: str, args: Dict[str, Any], preview: Dict[str, Any]) -> Dict[str, Any]:
+    """Flag args JSON cannot echo (NaN, Infinity, 1e400, unpaired surrogates).
+
+    Valid JSON can carry such values, but the strict response encoder cannot
+    serialise them back. Each offending arg becomes a field error (so dispatch
+    is refused) and the whole preview is echoed with those values as ``null``.
+    """
+    issues = _portal_json_payload.unechoable_arg_fields(args)
+    if issues:
+        errors = list(preview.get("field_errors") or [])
+        flagged = {issue.get("field") for issue in errors if isinstance(issue, dict)}
+        for field, reason in issues:
+            if field in flagged:
+                continue
+            flagged.add(field)
+            errors.append(_portal_issue(field, reason, _portal_safe_error_message(reason, field=field)))
+        preview["field_errors"] = errors
+        if "argv_preview" in preview:
+            preview["argv_preview"] = ""
+        preview["next_best_action"] = _preview_next_best_action(
+            pipeline=pipeline,
+            errors=errors,
+            warnings=list(preview.get("field_warnings") or []),
+            readiness_snapshot=preview.get("readiness") if isinstance(preview.get("readiness"), dict) else None,
+        )
+    safe_preview = _portal_json_payload.json_safe_echo(preview)
+    return safe_preview if isinstance(safe_preview, dict) else preview
+
+
 def _build_config_preview(
     payload: Dict[str, Any],
     *,
@@ -6581,20 +6613,22 @@ def _build_config_preview(
         preview["next_best_action"] = _preview_next_best_action(
             pipeline=pipeline, errors=preview["field_errors"], warnings=[], readiness_snapshot=preview["readiness"]
         )
-        return preview
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     if pipeline == "lux-depth-v3":
-        return _build_lux_config_preview(
+        preview = _build_lux_config_preview(
             args,
             readiness_snapshot=readiness_snapshot,
             portal_actor=portal_actor,
         )
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     if pipeline in ARCHIVE_GATE_PIPELINES:
-        return _build_archive_config_preview(
+        preview = _build_archive_config_preview(
             pipeline,
             args,
             readiness_snapshot=readiness_snapshot,
             archive_index_scan_mode=archive_index_scan_mode,
         )
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     raise ValueError("Unsupported pipeline")
 
 
@@ -6810,7 +6844,13 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
         return None, "invalid_unit"
 
     value = payload.get("value")
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or float(value) < 0:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None, "invalid_value"
+    try:
+        numeric_value = float(value)
+    except OverflowError:
+        return None, "invalid_value"
+    if not math.isfinite(numeric_value) or numeric_value < 0:
         return None, "invalid_value"
 
     metric = str(payload.get("metric") or "").strip().lower()
@@ -6837,7 +6877,7 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
         "route": route,
         "view": view,
         "metric": metric,
-        "value": round(float(value), 4),
+        "value": round(numeric_value, 4),
         "unit": unit,
         "metadata": _portal_sanitize_metadata(payload.get("metadata")),
         "trace_id": trace_context.trace_id,
@@ -7848,7 +7888,7 @@ def _int_arg(
         return default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("Invalid archive integer option") from None
     if parsed < minimum:
         raise ValueError("Invalid archive integer option")
@@ -8714,7 +8754,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = int(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 1:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
@@ -8728,7 +8768,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = int(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 0:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
@@ -8742,7 +8782,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = float(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
