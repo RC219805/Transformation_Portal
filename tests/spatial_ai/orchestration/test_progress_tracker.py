@@ -294,9 +294,35 @@ class TestProgressTrackerStageEvents:
             tracker.start_stage("ingest", "Linear Ingest")
 
             event = mock_emit.call_args[0][0]
-            # Note: current implementation doesn't calculate estimated_remaining correctly
-            # This tests current behavior
-            assert event.estimated_remaining is None or isinstance(event.estimated_remaining, (int, float))
+            # Both stages are still ahead (the starting one included)
+            assert event.estimated_remaining == 15.0
+
+    def test_estimated_remaining_excludes_completed_stages(self):
+        """Regression (O-5): the estimate sums the historical times of the stages not yet completed."""
+        historical = {"ingest": 5.0, "segment": 30.0, "materials": 60.0}
+        tracker = ProgressTracker(total_stages=3, historical_times=historical)
+        tracker.start_pipeline()
+
+        with patch.object(tracker, "_emit_event") as mock_emit:
+            tracker.start_stage("ingest", "Linear Ingest")
+            assert mock_emit.call_args[0][0].estimated_remaining == 95.0
+
+            tracker.complete_stage("ingest", success=True)
+            tracker.start_stage("segment", "Segmentation")
+            assert mock_emit.call_args[0][0].estimated_remaining == 90.0
+
+            tracker.complete_stage("segment", success=True)
+            tracker.start_stage("materials", "Materials")
+            assert mock_emit.call_args[0][0].estimated_remaining == 60.0
+
+    def test_estimated_remaining_disabled(self):
+        """The estimate stays None when time estimation is disabled."""
+        tracker = ProgressTracker(total_stages=1, enable_time_estimation=False, historical_times={"ingest": 5.0})
+        tracker.start_pipeline()
+
+        with patch.object(tracker, "_emit_event") as mock_emit:
+            tracker.start_stage("ingest", "Linear Ingest")
+            assert mock_emit.call_args[0][0].estimated_remaining is None
 
     def test_update_stage(self):
         """Test stage progress update."""

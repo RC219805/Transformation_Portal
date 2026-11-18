@@ -181,11 +181,14 @@ class ProgressTracker:
         # Estimate remaining time
         estimated_remaining = None
         if self.enable_time_estimation and name in self.historical_times:
-            # Sum of remaining stages' historical times
+            # Sum of the historical times of every known stage that has not
+            # completed yet in this run, the one starting now included.
             remaining_stages = self.total_stages - self._completed_stages
             if remaining_stages > 0:
                 estimated_remaining = sum(
-                    self.historical_times.get(s, 0) for s in self._stage_metrics if s not in self._stage_metrics
+                    duration
+                    for stage_name, duration in self.historical_times.items()
+                    if not (stage_name in self._stage_metrics and self._stage_metrics[stage_name].is_complete)
                 )
 
         event = ProgressEvent(
