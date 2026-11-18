@@ -1,6 +1,8 @@
 import argparse
 import importlib.util
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -232,18 +234,145 @@ def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
     else:
         post_grade_label = post_eq_label
 
-    lut_node = next(node for node in nodes if "lut3d=" in node)
-    lut_input_match = re.search(r"\[(v\d+)\]lut3d", lut_node)
-    assert lut_input_match, "Failed to parse LUT input label"
-    pre_lut_label = lut_input_match.group(1)
-    assert pre_lut_label == post_grade_label
+    # The post-grade frames feed both the LUT and the blend base, so they must be
+    # fanned out with split: an FFmpeg output pad can only be consumed once.
+    split_node = next(node for node in nodes if node.startswith(f"[{post_grade_label}]split=2"))
+    split_match = re.search(r"^\[(v\d+)\]split=2\[(v\d+)\]\[(v\d+)\]$", split_node)
+    assert split_match, "Failed to parse pre-LUT split node"
+    blend_base_label, lut_input_label = split_match.group(2), split_match.group(3)
 
-    blend_node = next(node for node in nodes if "blend=all_expr" in node)
+    lut_node = next(node for node in nodes if "lut3d=" in node)
+    lut_match = re.search(r"^\[(v\d+)\]lut3d=.*\[(v\d+)\]$", lut_node)
+    assert lut_match, "Failed to parse LUT node"
+    assert lut_match.group(1) == lut_input_label
+    graded_label = lut_match.group(2)
+
+    blend_node = next(node for node in nodes if "blend=all_expr='A*(1-" in node)
     blend_match = re.search(r"^\[(v\d+)\]\[(v\d+)\]blend=all_expr", blend_node)
     assert blend_match, "Failed to parse blend node"
 
-    assert blend_match.group(1) == pre_lut_label, "Blend should use the post-EQ label as the base input"
+    assert blend_match.group(1) == blend_base_label, "Blend should use the post-EQ frames as the base input"
     assert blend_match.group(1) != pre_eq_label, "Blend should not use the pre-EQ label as the base input"
+    assert blend_match.group(2) == graded_label, "Blend should mix in the LUT-graded frames"
+    _assert_pads_linked_once(graph)
+
+
+_NODE_RE = re.compile(r"^((?:\[[^\]]+\])+)(.+?)((?:\[[^\]]+\])+)$")
+_PAD_RE = re.compile(r"\[([^\]]+)\]")
+
+
+def _assert_pads_linked_once(graph: str) -> None:
+    """Every labelled pad must be produced once and consumed exactly once (FFmpeg rule)."""
+
+    produced: list[str] = []
+    consumed: list[str] = []
+    for node in graph.split(";"):
+        match = _NODE_RE.match(node)
+        assert match, f"Unparseable filter node: {node}"
+        consumed.extend(_PAD_RE.findall(match.group(1)))
+        produced.extend(_PAD_RE.findall(match.group(3)))
+
+    assert len(produced) == len(set(produced)), f"Labels produced more than once: {sorted(produced)}"
+    duplicates = sorted({label for label in consumed if consumed.count(label) > 1})
+    assert not duplicates, f"Labels consumed more than once: {duplicates}"
+    assert set(consumed) - set(produced) == {"0:v"}
+    assert set(produced) - set(consumed) == {"vout"}
+
+
+def _write_identity_lut(path: Path) -> Path:
+    lines = ["LUT_3D_SIZE 2"]
+    for b in (0.0, 1.0):
+        for g in (0.0, 1.0):
+            for r in (0.0, 1.0):
+                lines.append(f"{r:.6f} {g:.6f} {b:.6f}")
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+_FULL_RECIPE = "full_recipe"
+_GRAPH_CASES = sorted(MODULE.PRESETS) + [_FULL_RECIPE]
+
+
+def _graph_case_config(case: str, lut_path: Path) -> dict:
+    """Config as the CLI builds it for a preset, or a recipe enabling every SDR node."""
+
+    if case == _FULL_RECIPE:
+        return {
+            "lut": lut_path,
+            "lut_strength": 0.6,
+            "denoise": "medium",
+            "contrast": 1.05,
+            "saturation": 1.02,
+            "gamma": 0.98,
+            "brightness": 0.01,
+            "warmth": 0.2,
+            "cool": -0.1,
+            "sharpen": "soft",
+            "grain": 3.5,
+            "deband": "medium",
+            "halation_intensity": 0.4,
+            "halation_radius": 20.0,
+            "target_fps": "24000/1001",
+        }
+    args = parse_arguments(["in.mov", "out.mov", "--preset", case, "--custom-lut", str(lut_path)])
+    return MODULE.build_config(args)
+
+
+@documents("Every preset recipe compiles to a filter graph FFmpeg can link")
+@pytest.mark.parametrize("case", _GRAPH_CASES)
+def test_build_filter_graph_preset_links_every_pad_once(tmp_path, case):
+    config = _graph_case_config(case, _write_identity_lut(tmp_path / "identity.cube"))
+    assert config["lut_strength"] < 0.999, "the LUT is attenuated, exercising the blend path"
+
+    graph, output_label = build_filter_graph(config)
+
+    assert output_label == "vout"
+    _assert_pads_linked_once(graph)
+
+
+def test_build_filter_graph_full_strength_lut_skips_split(tmp_path):
+    config = {"lut": _write_identity_lut(tmp_path / "identity.cube"), "lut_strength": 1.0}
+
+    graph, _ = build_filter_graph(config)
+
+    assert "split=" not in graph
+    assert "blend=" not in graph
+    _assert_pads_linked_once(graph)
+
+
+@documents("Every preset recipe compiles to a filter graph FFmpeg can link")
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg binary required")
+@pytest.mark.parametrize("case", _GRAPH_CASES)
+def test_build_filter_graph_preset_is_accepted_by_ffmpeg(tmp_path, case):
+    config = _graph_case_config(case, _write_identity_lut(tmp_path / "identity.cube"))
+    graph, output_label = build_filter_graph(config)
+
+    completed = subprocess.run(
+        [
+            shutil.which("ffmpeg") or "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=64x36:rate=24:duration=0.125",
+            "-filter_complex",
+            graph,
+            "-map",
+            f"[{output_label}]",
+            "-f",
+            "null",
+            "-",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def make_tone_args(**overrides):

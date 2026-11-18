@@ -631,15 +631,24 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if not lut_path.exists():
         raise FileNotFoundError(f"LUT file not found: {lut_path}")
 
+    lut_strength = float(config.get("lut_strength", 1.0))
+    blend_lut = lut_strength < 0.999
+
+    if blend_lut:
+        # A filtergraph output pad can feed exactly one input pad: the blend
+        # needs the ungraded frames as well as the LUT input, so fan them out.
+        pre_lut_label = next_label()
+        lut_input_label = next_label()
+        nodes.append(f"[{current}]split=2[{pre_lut_label}][{lut_input_label}]")
+        current = lut_input_label
+
     new_label = next_label()
     lut_expr = f"lut3d=file={shlex.quote(str(lut_path))}:interp=tetrahedral"
     nodes.append(f"[{current}]{lut_expr}[{new_label}]")
     current = new_label
     graded_label = current
 
-    lut_strength = float(config.get("lut_strength", 1.0))
-
-    if lut_strength < 0.999:
+    if blend_lut:
         blend_label = next_label()
         nodes.append(
             f"[{pre_lut_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
