@@ -323,6 +323,54 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
   assert.equal(headers.get("traceparent"), traceparent);
 });
 
+test("buildUpstreamHeaders drops hop-by-hop and Connection-scoped request headers", async () => {
+  const { buildUpstreamHeaders } = await import(`../lib/proxy.js?case=hop-${Date.now()}`);
+  const headers = buildUpstreamHeaders(
+    new Headers({
+      Accept: "application/json",
+      Connection: "keep-alive, X-Client-Hop",
+      Expect: "100-continue",
+      "Keep-Alive": "timeout=5",
+      "Proxy-Authorization": "Basic Zm9vOmJhcg==",
+      "Proxy-Authenticate": "Basic",
+      "Proxy-Connection": "keep-alive",
+      TE: "trailers",
+      Trailer: "x-checksum",
+      "Transfer-Encoding": "chunked",
+      Upgrade: "h2c",
+      "X-Client-Hop": "per-connection",
+      "X-Request-Id": "end-to-end"
+    }),
+    { backendApiKey: "backend-secret", actor: null }
+  );
+
+  for (const name of [
+    "connection",
+    "expect",
+    "keep-alive",
+    "proxy-authorization",
+    "proxy-authenticate",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "x-client-hop"
+  ]) {
+    assert.equal(headers.has(name), false, `${name} must not be forwarded upstream`);
+  }
+  assert.equal(headers.get("accept"), "application/json");
+  assert.equal(headers.get("x-request-id"), "end-to-end");
+  assert.equal(headers.get("authorization"), "Bearer backend-secret");
+
+  // undici refuses some of these on the upstream fetch; the stripped set must be accepted.
+  assert.doesNotThrow(() => new Request("http://127.0.0.1:9/v1/config-preview", {
+    method: "POST",
+    headers,
+    body: "{}"
+  }));
+});
+
 test("trace helpers normalize valid traceparent values and mint stable children", async () => {
   const {
     generateTraceparent,
