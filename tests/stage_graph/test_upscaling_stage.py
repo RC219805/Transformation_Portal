@@ -104,6 +104,37 @@ class TestUpscalingStageUnit:
         assert "bicubic" in key1
         assert "realesrgan" in key2
 
+    def test_cache_key_distinguishes_scale_factors_that_round_to_the_same_decimal(self):
+        """1.25 and 1.2 produce different outputs, so they need different cache keys."""
+        img = np.random.randint(0, 255, (40, 40, 3), dtype=np.uint8)
+        context = StageContext(artifacts={"image": img})
+
+        key_125 = UpscalingStage(scale_factor=1.25).get_cache_key(context)
+        key_120 = UpscalingStage(scale_factor=1.2).get_cache_key(context)
+
+        assert key_125 != key_120
+        assert "bicubic_1.25_" in key_125 and "bicubic_1.2_" in key_120
+        # Equal factors still share one key, however they were spelled.
+        assert UpscalingStage(scale_factor=2).get_cache_key(context) == UpscalingStage(scale_factor=2.0).get_cache_key(context)
+
+    def test_cached_result_is_not_reused_for_a_nearby_scale_factor(self, tmp_path):
+        img = np.random.randint(0, 255, (40, 40, 3), dtype=np.uint8)
+
+        def run(scale_factor):
+            context = StageContext(artifacts={"image": img}, device="cpu", cache_enabled=True, cache_dir=tmp_path)
+            return UpscalingStage(scale_factor=scale_factor).execute(context)
+
+        first = run(1.25)
+        second = run(1.2)
+        repeat = run(1.2)
+
+        assert first.artifacts["upscaled_image"].shape == (50, 50, 3)
+        assert second.cache_hit is False
+        assert second.artifacts["upscaled_image"].shape == (48, 48, 3)
+        assert second.artifacts["upscale_metadata"]["scale_factor"] == 1.2
+        assert repeat.cache_hit is True
+        assert repeat.artifacts["upscaled_image"].shape == (48, 48, 3)
+
     def test_cache_key_no_image(self):
         """Cache key without image should return 'no_image'."""
         stage = UpscalingStage()
