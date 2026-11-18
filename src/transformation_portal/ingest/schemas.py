@@ -158,8 +158,8 @@ class ExifMetadata(BaseModel):
         height: Image height in pixels
         bit_depth: Bits per channel
         datetime_original: Original capture timestamp (EXIF DateTimeOriginal)
-        gps_latitude: GPS latitude in signed decimal degrees (south negative) if available
-        gps_longitude: GPS longitude in signed decimal degrees (west negative) if available
+        gps_latitude: GPS latitude if available
+        gps_longitude: GPS longitude if available
     """
 
     all_tags: Dict[str, Any]  # Full exiftool JSON

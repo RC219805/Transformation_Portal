@@ -356,27 +356,6 @@ def _parse_exif_fields(exif_all_tags: Dict[str, Any]) -> ExifMetadata:
                 return exif_all_tags[key]
         return None
 
-    def get_coordinate(axis: str, negative_ref: str) -> Any:
-        # ``-coordFormat %.8f`` prints the EXIF GPS magnitude, which is unsigned
-        # by the EXIF specification; the hemisphere lives in the sibling
-        # ``<axis>Ref`` tag ("South"/"S", "West"/"W"). Read the reference from
-        # the same group as the value so signed decimal degrees come out.
-        for key in (f"EXIF:{axis}", axis):
-            if key not in exif_all_tags:
-                continue
-            value = exif_all_tags[key]
-            ref = exif_all_tags.get(f"{key}Ref")
-            if isinstance(value, bool) or not isinstance(ref, str):
-                return value
-            if not ref.strip().upper().startswith(negative_ref):
-                return value
-            try:
-                magnitude = float(value)
-            except (TypeError, ValueError):
-                return value
-            return -abs(magnitude)
-        return None
-
     return ExifMetadata(
         all_tags=exif_all_tags,
         camera_make=get_field("EXIF:Make", "Make"),
@@ -392,8 +371,8 @@ def _parse_exif_fields(exif_all_tags: Dict[str, Any]) -> ExifMetadata:
         height=get_field("EXIF:ImageHeight", "ImageHeight"),
         bit_depth=get_field("EXIF:BitsPerSample", "BitsPerSample"),
         datetime_original=get_field("EXIF:DateTimeOriginal", "DateTimeOriginal"),
-        gps_latitude=get_coordinate("GPSLatitude", "S"),
-        gps_longitude=get_coordinate("GPSLongitude", "W"),
+        gps_latitude=get_field("EXIF:GPSLatitude", "GPSLatitude"),
+        gps_longitude=get_field("EXIF:GPSLongitude", "GPSLongitude"),
     )
 
 
