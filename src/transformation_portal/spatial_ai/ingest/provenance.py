@@ -29,6 +29,10 @@ from ...ingest.canonical_json import dump_json
 from .exceptions import ProvenanceError
 from .validators import CURRENT_SCHEMA_VERSION
 
+# IFD0 pointer tags to the Exif sub-IFD and the GPS IFD.
+_EXIF_IFD_POINTER = 0x8769
+_GPS_IFD_POINTER = 0x8825
+
 logger = logging.getLogger(__name__)
 
 
@@ -327,8 +331,13 @@ class ProvenanceCapture:
                     logger.debug(f"No EXIF data found in {image_path.name}")
                     return camera
 
+                # IFD0 only points to the Exif sub-IFD (exposure, lens, capture
+                # time) and the GPS IFD; their tags must be read from those IFDs.
+                exif_ifd = self._read_sub_ifd(exif_data, _EXIF_IFD_POINTER, image_path)
+                gps_ifd = self._read_sub_ifd(exif_data, _GPS_IFD_POINTER, image_path)
+
                 # Map EXIF tags to CameraMetadata fields
-                for tag_id, value in exif_data.items():
+                for tag_id, value in [*exif_data.items(), *exif_ifd.items()]:
                     tag_name = TAGS.get(tag_id, tag_id)
 
                     # Camera
@@ -377,19 +386,28 @@ class ProvenanceCapture:
                     elif tag_name == "DateTimeDigitized":
                         camera.datetime_digitized = str(value)
 
-                    # GPS (if present)
-                    elif tag_name == "GPSInfo":
-                        gps_data = self._parse_gps(value)
-                        if gps_data:
-                            camera.gps_latitude = gps_data.get("latitude")
-                            camera.gps_longitude = gps_data.get("longitude")
-                            camera.gps_altitude = gps_data.get("altitude")
+                # GPS (if present)
+                if gps_ifd:
+                    gps_data = self._parse_gps(gps_ifd)
+                    if gps_data:
+                        camera.gps_latitude = gps_data.get("latitude")
+                        camera.gps_longitude = gps_data.get("longitude")
+                        camera.gps_altitude = gps_data.get("altitude")
 
         except Exception as e:
             logger.warning(f"EXIF extraction failed for {image_path.name}: {e}")
             # Return empty CameraMetadata (not an error)
 
         return camera
+
+    @staticmethod
+    def _read_sub_ifd(exif_data: Image.Exif, pointer_tag: int, image_path: Path) -> Dict[int, Any]:
+        """Return the tags of the IFD ``pointer_tag`` points to (empty if absent or unreadable)."""
+        try:
+            return dict(exif_data.get_ifd(pointer_tag))
+        except Exception as e:
+            logger.warning(f"EXIF sub-IFD 0x{pointer_tag:04X} unreadable in {image_path.name}: {e}")
+            return {}
 
     def _compute_file_hash(self, file_path: Path) -> str:
         """Compute SHA-256 hash of file.

@@ -237,6 +237,59 @@ class TestRAWMetadata:
         assert prov.transform.color_matrix == "sRGB"
 
 
+class TestExifSubIfdExtraction:
+    """Exposure, lens, date and GPS tags are read from their sub-IFDs (finding I-4)."""
+
+    @staticmethod
+    def _write_jpeg_with_exif(path: Path) -> None:
+        from PIL.TiffImagePlugin import IFDRational
+
+        exif = Image.Exif()
+        exif[0x010F] = "ACME"  # Make (IFD0)
+        exif[0x0110] = "Cam-1"  # Model (IFD0)
+        exif_ifd = exif.get_ifd(0x8769)
+        exif_ifd[0x829A] = IFDRational(1, 250)  # ExposureTime
+        exif_ifd[0x829D] = IFDRational(28, 10)  # FNumber
+        exif_ifd[0x8827] = 400  # ISOSpeedRatings
+        exif_ifd[0x920A] = IFDRational(35, 1)  # FocalLength
+        exif_ifd[0x9003] = "2026:01:02 03:04:05"  # DateTimeOriginal
+        exif_ifd[0xA434] = "Lens 35mm"  # LensModel
+        gps_ifd = exif.get_ifd(0x8825)
+        gps_ifd[1] = "S"
+        gps_ifd[2] = (IFDRational(48), IFDRational(30), IFDRational(0))
+        gps_ifd[3] = "E"
+        gps_ifd[4] = (IFDRational(2), IFDRational(15), IFDRational(0))
+        Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(path, exif=exif)
+
+    def test_exif_and_gps_sub_ifd_tags_are_extracted(self, tmp_path: Path):
+        img_path = tmp_path / "exif.jpg"
+        self._write_jpeg_with_exif(img_path)
+
+        camera = ProvenanceCapture()._extract_exif(img_path)
+
+        assert camera.make == "ACME"
+        assert camera.model == "Cam-1"
+        assert camera.lens_model == "Lens 35mm"
+        assert camera.focal_length == pytest.approx(35.0)
+        assert camera.aperture == pytest.approx(2.8)
+        assert camera.iso == 400
+        assert camera.datetime_original == "2026:01:02 03:04:05"
+        assert camera.gps_latitude == pytest.approx(-48.5)
+        assert camera.gps_longitude == pytest.approx(2.25)
+
+    def test_ifd0_only_file_leaves_sub_ifd_fields_empty(self, tmp_path: Path):
+        exif = Image.Exif()
+        exif[0x010F] = "ACME"
+        img_path = tmp_path / "ifd0.jpg"
+        Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(img_path, exif=exif)
+
+        camera = ProvenanceCapture()._extract_exif(img_path)
+
+        assert camera.make == "ACME"
+        assert camera.iso is None
+        assert camera.gps_latitude is None
+
+
 class TestValueRangeCapture:
     """Test value range capture in output metadata."""
 
