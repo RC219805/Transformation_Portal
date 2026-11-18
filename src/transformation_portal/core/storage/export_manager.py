@@ -129,6 +129,12 @@ class ExportManager:
             raise
 
     @staticmethod
+    def _unit_float_to_uint(img: np.ndarray, dtype: type) -> np.ndarray:
+        """Quantize a 0-1 float image to the full range of an unsigned integer type."""
+        scale = float(np.iinfo(dtype).max)
+        return np.rint(np.clip(img.astype(np.float64), 0.0, 1.0) * scale).astype(dtype)
+
+    @staticmethod
     def _write_file(img: np.ndarray, path: Path, config: ExportConfig):
         """Internal dispatcher for writing formats."""
         ext = config.format.lower()
@@ -143,9 +149,16 @@ class ExportManager:
             img_bgr = img
 
         if ext in ["jpg", "jpeg"]:
+            # JPEG is 8-bit only. OpenCV would cast a 0-1 float image straight
+            # to integers, which writes it black.
+            if np.issubdtype(img_bgr.dtype, np.floating):
+                img_bgr = ExportManager._unit_float_to_uint(img_bgr, np.uint8)
             cv2.imwrite(str(path), img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), config.quality_jpg])
 
         elif ext == "png":
+            # PNG stores integers; keep a float image's precision in 16 bits.
+            if np.issubdtype(img_bgr.dtype, np.floating):
+                img_bgr = ExportManager._unit_float_to_uint(img_bgr, np.uint16)
             # 16-bit PNG check
             if img.dtype == np.uint16:
                 cv2.imwrite(str(path), img_bgr, [int(cv2.IMWRITE_PNG_COMPRESSION), config.compression_png])
