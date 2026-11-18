@@ -36,8 +36,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# GPU out-of-memory indicators, matched case-insensitively on word boundaries.
-_GPU_OOM_PATTERN = re.compile(r"\b(?:out of memory|oom|cudnn error|allocation failed)\b", re.IGNORECASE)
+# GPU out-of-memory indicators, matched case-insensitively. The phrases match
+# anywhere, as they always did. The acronym must not be part of a longer run of
+# letters ("room", "zoom", "bloom"); digits, punctuation and underscores still
+# delimit it ("CUDA_OOM", "oom-killer").
+_GPU_OOM_PATTERN = re.compile(r"out of memory|cudnn error|allocation failed|(?<![a-z])oom(?![a-z])", re.IGNORECASE)
 
 
 if "ErrorRecoveryStrategy" not in globals():
@@ -352,9 +355,9 @@ class ErrorHandler:
         Returns:
             True if OOM error.
         """
-        # "oom" must be a whole word: a bare substring test also matched
-        # "room", "zoom" or "bloom" in paths and messages, so any unrelated
-        # failure triggered the CPU fallback.
+        # "oom" must not sit inside a longer word: a bare substring test also
+        # matched "room", "zoom" or "bloom" in paths and messages, so any
+        # unrelated failure triggered the CPU fallback.
         return _GPU_OOM_PATTERN.search(str(error)) is not None
 
     def _record_error(self, stage: str, attempt: int, device: str, error: Exception) -> None:

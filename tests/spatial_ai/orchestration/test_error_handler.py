@@ -424,6 +424,30 @@ class TestErrorHandlerCPUFallback:
         """Regression (O-2): "oom" inside another word is not a GPU out-of-memory error."""
         assert ErrorHandler()._is_gpu_oom(ValueError(msg)) is False
 
+    @pytest.mark.parametrize(
+        "msg",
+        [
+            "CUDA_OOM",
+            "backend returned GPU_OOM_ERROR (code 2)",
+            "worker hit oom_kill after 3 tiles",
+            "OOM2: device 0",
+            "texture buffer reallocation failed",
+            "MPS backend out of memory.",
+        ],
+    )
+    def test_oom_detection_keeps_delimited_acronym_and_phrases(self, msg):
+        """O-2 only excludes "oom" inside a longer word; every other OOM message stays OOM.
+
+        Underscores and digits delimit the acronym, and the phrase indicators still
+        match as substrings ("reallocation failed"), as they did before the fix.
+        """
+        assert ErrorHandler()._is_gpu_oom(RuntimeError(msg)) is True
+
+    @pytest.mark.parametrize("msg", ["zoom_factor must be > 0", "cannot read showroom_2.tiff", "ROOM2 mask is empty"])
+    def test_oom_detection_ignores_words_next_to_digits_or_underscores(self, msg):
+        """A word that merely ends in "oom" is not an acronym, whatever follows it."""
+        assert ErrorHandler()._is_gpu_oom(ValueError(msg)) is False
+
     def test_cpu_fallback_not_triggered_by_path_containing_room(self):
         """Regression (O-2): a non-OOM error naming a "room" path must not switch to CPU."""
         handler = ErrorHandler(max_retries=3, initial_delay=0.0)
