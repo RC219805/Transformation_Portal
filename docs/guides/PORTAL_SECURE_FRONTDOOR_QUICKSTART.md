@@ -346,6 +346,27 @@ Build retains its workflow values and steps. Friendly workflow labels and saved
 browser-profile provenance clarify the existing controls; compact layouts keep
 editing text accessible and recovery dialogs scroll within short screens.
 
+## Upgrade activation and acceptance
+
+The [upgrade closeout (#2334)](https://github.com/RC219805/Transformation_Portal/pull/2334) records
+the activation contract. Keep the following capabilities default-off until their
+deployment and acceptance gates pass:
+
+- `TP_JOB_SUBMISSION_RECOVERY_ENABLED=0`,
+  `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
+  `TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=0` remain the rollout defaults.
+- Apply `0010_upload_receipts` before deploying the matching Postgres backend,
+  including deployments that keep receipt writes off or use keyless jobs.
+- The retained `88ed65aa` native campaign is source-invalid for this code. Review and
+  bind the current descriptor/read-set and role-authority source closure, then
+  run and retain fresh CPU and mixed-workload qualification before native enablement.
+  Keep native admission and Materials capability flags off until qualified.
+- Provide a real authorized staging environment, credentials and deployment
+  target/URL, then pass `make validate-frontdoor-deployment-gate` with those
+  settings. Record deployment evidence for that exact target and serving source.
+- Actual Safari/iOS/VoiceOver and operator/photographic acceptance remain
+  open release gates. Retain explicit operator sign-off before rollout.
+
 ## Local Development
 
 From the repository root, create the local shared environment once. The writer
