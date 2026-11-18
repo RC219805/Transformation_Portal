@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -167,6 +169,39 @@ class TestCommonLocalRoot:
             {"repo_id": "org/repo", "revision": sha, "required_files": [{"path": "config.json"}]},
         )
         assert resolved.local_root == base
+
+
+class TestInferLocalRootFromHub:
+    """The hub-inferred snapshot root follows the same repo-cache and revision rules."""
+
+    @staticmethod
+    def _fake_hub(monkeypatch: pytest.MonkeyPatch, downloaded: Path) -> list[str]:
+        requested: list[str] = []
+
+        def hf_hub_download(**kwargs: object) -> str:
+            requested.append(str(kwargs["filename"]))
+            return str(downloaded)
+
+        monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(hf_hub_download=hf_hub_download))
+        return requested
+
+    def test_cache_dir_containing_snapshots_component(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sha = "a" * 40
+        base = Path(f"/mnt/snapshots/hf-cache/models--org--repo/snapshots/{sha}")
+        self._fake_hub(monkeypatch, base / "config.json")
+
+        root = loader_module._infer_local_root_from_hub(repo_id="org/repo", revision=sha, cache_dir="/mnt/snapshots/hf-cache")
+
+        assert root == base
+
+    def test_revision_mismatch_is_reported_instead_of_trying_other_files(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The root error must surface; it used to be swallowed and retried with the next config file.
+        requested = self._fake_hub(monkeypatch, Path(f"/cache/hub/models--org--repo/snapshots/{'c' * 40}/config.json"))
+
+        with pytest.raises(HFManifestLoaderError, match="does not match the pinned revision"):
+            loader_module._infer_local_root_from_hub(repo_id="org/repo", revision="d" * 40)
+
+        assert requested == ["config.json"]
 
 
 class TestHFResolvedLocalModel:
