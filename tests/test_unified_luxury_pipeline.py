@@ -498,6 +498,21 @@ class TestMetadataPreservation:
         assert metadata["tiff_photometric"] == "SEPARATED"
         assert metadata["tifffile_skip_reason"] == "unsupported_photometric"
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize("name", ["render.exr", "RENDER.EXR"])
+    def test_exr_input_is_rejected_with_actionable_error(self, temp_dir, name):
+        """M-09: EXR cannot be decoded, so the loader must fail with a clear message."""
+
+        exr_path = temp_dir / name
+        # OpenEXR magic number followed by padding; Pillow has no decoder for it.
+        exr_path.write_bytes(b"\x76\x2f\x31\x01" + b"\0" * 100)
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with pytest.raises(ValueError, match="cannot read OpenEXR"):
+            pipeline._load_image(exr_path)
+
 
 class TestGracefulDegradation:
     """Test graceful failure handling for optional stages."""
@@ -840,6 +855,24 @@ class TestConvenienceFunctions:
         assert input_dir / "b.tif" in input_paths
         assert input_dir / "c.jpg" in input_paths
         assert input_dir / "skip.ti" not in input_paths
+
+    @pytest.mark.regression
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_default_skips_unreadable_exr(self, mock_pipeline_class, sample_image, temp_dir):
+        """M-09: the default pattern must not discover EXR files the loader cannot read."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+        sample_image.save(input_dir / "keep.png")
+        (input_dir / "render.exr").write_bytes(b"\x76\x2f\x31\x01" + b"\0" * 100)
+
+        mock_instance = MagicMock()
+        mock_instance.batch_process.return_value = {}
+        mock_pipeline_class.return_value = mock_instance
+
+        batch_process_luxury_renders(input_dir, output_dir=temp_dir / "output")
+
+        input_paths = mock_instance.batch_process.call_args.args[0]
+        assert input_paths == [input_dir / "keep.png"]
 
     @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
     def test_batch_process_luxury_renders_respects_custom_pattern(self, mock_pipeline_class, sample_image, temp_dir):

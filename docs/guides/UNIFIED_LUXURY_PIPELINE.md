@@ -115,6 +115,10 @@ results = batch_process_luxury_renders(
 print(f"Processed {len(results)} images")
 ```
 
+The default batch pattern is `*.{jpg,jpeg,png,tif,tiff}`. OpenEXR (`.exr`) and
+other scene-referred HDR inputs are not supported: the loader rejects them with a
+`ValueError`, so convert them to a display-referred 16-bit TIFF first.
+
 `parallel_io` is opt-in for compatibility. It overlaps input loading and output
 writing for batch runs while preserving result ordering and per-image failure
 isolation. Keep it disabled when comparing against older timing baselines or
@@ -212,7 +216,7 @@ config = UnifiedPipelineConfig(
 )
 
 pipeline = UnifiedLuxuryPipeline(config)
-outputs = pipeline.process("greatroom.exr")
+outputs = pipeline.process("greatroom.tif")
 
 print(f"Processing time: {pipeline.stats.total_time:.2f}s")
 pipeline.save_stats()
@@ -271,7 +275,7 @@ config = UnifiedPipelineConfig(
 )
 
 pipeline = UnifiedLuxuryPipeline(config)
-outputs = pipeline.process("architectural_hero.exr")
+outputs = pipeline.process("architectural_hero.tif")
 ```
 
 ### Example 5: Batch Processing with Auto Scene Detection

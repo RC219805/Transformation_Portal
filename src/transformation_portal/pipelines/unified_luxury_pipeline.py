@@ -42,7 +42,7 @@ Usage:
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
-    results = pipeline.process(Path("input.exr"))
+    results = pipeline.process(Path("input.tif"))
 
 Performance:
     - PREMIUM profile: 2-5 minutes per 4K image (M4 Max with CoreML + MPS)
@@ -112,7 +112,14 @@ class OutputFormat(Enum):
     MAGAZINE = "magazine"  # 2K magazine layout (2048px)
 
 
-DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tif,tiff,exr}"
+DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tif,tiff}"
+
+# Scene-referred HDR containers the loader cannot read: Pillow has no decoder
+# for them, and turning scene-linear float pixels into this display-referred
+# pipeline would need an exposure/tone-mapping decision nobody has made yet.
+# Reject them up front with an actionable error instead of an opaque decoder
+# failure.
+UNSUPPORTED_INPUT_SUFFIXES = frozenset({".exr"})
 
 
 @dataclass
@@ -314,7 +321,7 @@ class UnifiedLuxuryPipeline:
         )
 
         pipeline = UnifiedLuxuryPipeline(config)
-        results = pipeline.process("input.exr")
+        results = pipeline.process("input.tif")
     """
 
     def __init__(self, config: UnifiedPipelineConfig):
@@ -396,7 +403,7 @@ class UnifiedLuxuryPipeline:
 
         Example:
             results = pipeline.process(
-                "render.exr",
+                "render.tif",
                 exposure=0.2,
                 enable_vfx=True
             )
@@ -495,7 +502,7 @@ class UnifiedLuxuryPipeline:
             Dictionary mapping input paths to their output dictionaries
 
         Example:
-            input_files = list(Path("renders").glob("*.exr"))
+            input_files = list(Path("renders").glob("*.tif"))
             results = pipeline.batch_process(input_files)
 
             for input_path, outputs in results.items():
@@ -774,6 +781,11 @@ class UnifiedLuxuryPipeline:
         """
         if not input_path.exists():
             raise FileNotFoundError(f"Input image not found: {input_path}")
+        if input_path.suffix.lower() in UNSUPPORTED_INPUT_SUFFIXES:
+            raise ValueError(
+                f"Unsupported input format {input_path.suffix!r} for {input_path.name}: the unified luxury "
+                "pipeline cannot read OpenEXR/HDR inputs; convert to a display-referred 16-bit TIFF first"
+            )
 
         log.info(f"Loading: {input_path.name}")
 
@@ -1778,7 +1790,7 @@ def process_luxury_render(
 
     Example:
         outputs = process_luxury_render(
-            "kitchen.exr",
+            "kitchen.tif",
             profile=ProcessingProfile.PREMIUM
         )
     """
