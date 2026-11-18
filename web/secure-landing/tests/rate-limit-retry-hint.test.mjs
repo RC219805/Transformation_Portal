@@ -410,17 +410,21 @@ test("retry-countdown helper is exported from portalInternals", () => {
 });
 
 test("mutating POSTs (job dispatch / upload) are not silently auto-replayed", () => {
-  // Sanity guard: the parser is only consumed in the two retry sites
-  // wired above. Searching the source for parseRateLimitRetryHint should
-  // surface exactly those two call sites — bootstrap and config-preview.
+  // The parser serves bootstrap, config-preview and GET-only receipt recovery.
+  // Recovery consumes throttling hints without replaying a dispatch or upload.
   const callSites = portalTemplate.match(/portalInternals\.parseRateLimitRetryHint\(/g) || [];
   assert.equal(
     callSites.length,
-    2,
-    "parseRateLimitRetryHint should be consumed by exactly two retry sites today; "
+    3,
+    "parseRateLimitRetryHint should be consumed by exactly three bounded retry sites; "
       + "if you add a new consumer, update this guard and confirm the new call site does not "
       + "auto-replay a non-idempotent POST."
   );
+  const recovery = readFileSync(path.resolve(__dirname, "../portal-src/client-recovery-deferred.js"), "utf8");
+  const reads = recovery.slice(recovery.indexOf("async function readReceipt("), recovery.indexOf("async function submit("));
+  assert.match(reads, /method: "GET"/);
+  assert.doesNotMatch(reads, /method: "POST"/);
+  assert.doesNotMatch(reads, /(?:submit|upload)\(/);
   // Job dispatch is implemented in submitJob; it must not invoke the
   // parser (a rate-limited dispatch should surface the cooldown to the
   // user, not silently replay the POST).

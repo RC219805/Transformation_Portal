@@ -3035,7 +3035,8 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal-photographic.css",
     "portal-config-transfer.js",
     "portal-photographic-drafts.js",
-    "portal-photographic-loader.js"
+    "portal-photographic-loader.js",
+    "portal-client-recovery.js"
   ]);
 });
 

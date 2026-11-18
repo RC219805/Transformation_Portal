@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const FRONTDOOR_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_TEMPLATE_PATH = path.resolve(FRONTDOOR_ROOT, "portal-src", "portal.template.js");
-const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "internal", "index.js");
+const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "internal", "runtime-entry.js");
 const PORTAL_REVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "review-surface-deferred.js");
 const PORTAL_PHOTOGRAPHIC_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "photographic-review.js");
 const PORTAL_PHOTOGRAPHIC_SUPPORT_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "photographic-review-support.js");
@@ -339,6 +339,10 @@ const deferredBuildSurfaceBuild = await bundleText(PORTAL_BUILD_SURFACE_ENTRY, {
   minifySyntax: true,
   minifyWhitespace: true
 });
+const clientRecoveryBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/client-recovery-deferred.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-client-recovery.js"), `${clientRecoveryBuild.text.trim()}\n`);
 const configTransferBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/config-transfer-deferred.js"), {
   format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
 });

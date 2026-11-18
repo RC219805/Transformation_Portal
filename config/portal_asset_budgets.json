@@ -80,6 +80,10 @@
     "portal-photographic-loader.js": {
       "max_bytes": 3000,
       "max_gzip_bytes": 1400
+    },
+    "portal-client-recovery.js": {
+      "max_bytes": 17000,
+      "max_gzip_bytes": 6500
     }
   }
 }

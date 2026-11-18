@@ -1123,6 +1123,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
         "portal-config-transfer.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-config-transfer.js",
+        "portal-client-recovery.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-client-recovery.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -1145,6 +1146,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
         "portal-config-transfer.js": "text/javascript; charset=utf-8",
+        "portal-client-recovery.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -1329,8 +1331,10 @@ def test_portal_rum_tracks_queue_actions_and_sse_reconnects() -> None:
     fetch_sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
     native_sse_body = _extract_js_function_body(content, "startJobEventStream")
 
-    assert "eventType: 'queue_request'" in submit_body
-    assert "metric: 'submit'" in submit_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "eventType: 'queue_request'" in recovery_body
+    assert "metric: 'submit'" in recovery_body
     assert "eventType: 'queue_request'" in cancel_body
     assert "metric: 'cancel'" in cancel_body
     assert "eventType: 'sse_reconnect'" in fetch_sse_body
@@ -1561,7 +1565,11 @@ def test_portal_protected_suppression_reads_managed_error_envelope_details() -> 
     assert "if (_isProtectedFamilySuppressed('jobs_list')) return;" in recover_body
     assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
     assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
-    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert (
+        "_recordProtectedFamilySuppression(type === 'upload' ? 'uploads_staging' : 'jobs_list', nonRetryableDetails);"
+        in recovery_body
+    )
 
 
 def test_portal_lux_dispatch_payload_preserves_path_fields_after_canonical_args() -> None:
@@ -1600,11 +1608,13 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     )
     assert "function _stagedUploadsSupportedForState() {" in content
     assert "function _stagedUploadsEnabledForState() {" in content
-    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);" in content
     assert "Staged upload controls are visible for this pipeline but gated for this portal cohort." in content
-    assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
-    assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
-    assert "formData.append('files', file, relativePath);" in content
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    transport = PORTAL_TEMPLATE_SOURCE_PATH.with_name("client-recovery-deferred.js").read_text(encoding="utf-8")
+    assert "headers: (extra, method) => _buildAuthHeaders(extra, method)" in recovery_body
+    assert 'xhr.open("POST", `${host.apiBase || ""}/v1/uploads/staging`);' in transport
+    assert 'form.append("files", file, relativePath)' in transport
     assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
     assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
     assert "function _renderStagedUploadSummary(container, uploadState) {" in content
@@ -4548,8 +4558,10 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "Execution readiness is still loading." in submit_body
     assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
-    assert "Backend submission failed: ${truncateMiddle(errorMessage, 180)}" in submit_body
-    assert 'createToast(toastMessage, "error");' in submit_body
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "state.jobs.push" not in submit_body
+    assert "state: 'failed'" not in submit_body
+    assert "createToast(error instanceof Error ? error.message : String(error), 'error');" in submit_body
     assert "els.runJobBtn.focus({ preventScroll: true });" in submit_body
     assert "mock simulation" not in submit_body
 

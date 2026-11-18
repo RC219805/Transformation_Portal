@@ -299,6 +299,35 @@ The lane covers cancellation ownership, sealed-completion recovery, duplicate
 requests, retained-job pinning and bounded cleanup fairness. It uses no Redis
 queue or model runtime and is not host/power-loss qualification.
 
+### Browser transfer reconciliation
+
+The portal waits for a verified server response before adding a submitted run.
+When job-submission receipts are enabled by signed backend bootstrap, each POST
+uses an actor-scoped opaque request key. A lost or malformed response triggers
+bounded GET-only receipt checks, then an explicit **Check status** action. An
+unknown outcome never permits an automatic second POST. An intentionally changed
+draft requires a separate, explicit confirmation and retains the earlier attempt.
+
+Upload cancellation stops the browser transport and reconciles its outcome;
+server staging may continue. Recovered input paths require explicit acceptance
+and never replace the chosen output path. Without receipt capability, an
+uncertain upload remains unresolved and its existing paths remain unchanged.
+
+Only opaque attempt IDs, actor-scope digests and creation times enter bounded
+tab storage (at most 16 entries). Request bodies, private Review drafts, upload
+paths and credentials are not stored there. Access uncertainty masks recovered
+results; a fresh authorized GET is required before revealing them again. Session
+recovery never replays a POST.
+
+Implemented timeout candidates are 30 seconds for the complete job response,
+90 seconds without upload progress, 120 seconds after transfer, and 60 seconds
+of receipt polling before manual status checks. Controlled-clock and browser
+regressions cover stalled responses, cancellation, unknown outcomes and late
+receipts. These tests are not representative transfer-latency measurements;
+qualify these candidates on the intended staging environment before capability
+enablement. Keep new backend capabilities disabled until their release gates
+pass. Existing route paths, selectors and successful API envelopes are retained.
+
 ## Local Development
 
 From the repository root, create the local shared environment once. The writer
