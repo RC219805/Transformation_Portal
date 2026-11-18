@@ -12,7 +12,7 @@ Example:
     >>> signed = signer.sign({"node_cls": "ProcessNode", "inputs": {...}})
     >>>
     >>> # Worker side
-    >>> verifier = TaskVerifier(controller_public_key)
+    >>> verifier = TaskVerifier(authorized_keys={controller_public_key})
     >>> if verifier.verify(signed):
     ...     execute(signed.payload)
 """
@@ -276,7 +276,8 @@ class TaskVerifier:
         """Initialize task verifier.
 
         Args:
-            authorized_keys: Set of authorized public keys (base64)
+            authorized_keys: Set of authorized public keys (base64). With no
+                keys every task is rejected until one is added.
             max_age_seconds: Maximum task age for freshness check
             track_nonces: If True, track seen nonces for replay protection
             max_nonce_cache: Maximum nonces to cache
@@ -312,14 +313,16 @@ class TaskVerifier:
             task: SignedTask to verify
             check_freshness: Verify timestamp is recent
             check_nonce: Check for replay attacks
-            check_authorization: Check public key is authorized
+            check_authorization: Check public key is authorized. Passing False
+                accepts a valid signature from any key.
 
         Returns:
             True if task is valid
         """
         try:
-            # Check authorization
-            if check_authorization and self.authorized_keys:
+            # Check authorization. An empty key set authorizes nobody: the
+            # signature alone only proves the task matches the key it carries.
+            if check_authorization:
                 if task.public_key not in self.authorized_keys:
                     logger.warning("Unauthorized public key: %s...", task.public_key[:16])
                     self._reject_count += 1

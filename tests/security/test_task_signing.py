@@ -29,6 +29,29 @@ def test_task_signing_round_trip_verifies() -> None:
     assert verifier.get_stats()["verified"] == 1
 
 
+@pytest.mark.parametrize("authorized_keys", [None, set()], ids=["default", "empty-set"])
+def test_task_verifier_without_authorized_keys_rejects_any_signer(authorized_keys: set[str] | None) -> None:
+    """A valid signature only proves the task matches the key it carries."""
+    attacker_key, _ = generate_ed25519_keypair()
+    forged = TaskSigner(CertificateSigner(attacker_key)).sign({"node_cls": "ShellNode", "inputs": {"cmd": "id"}})
+    verifier = TaskVerifier(authorized_keys=authorized_keys)
+
+    assert verifier.verify(forged) is False
+    assert verifier.get_stats() == {"verified": 0, "rejected": 1, "authorized_keys": 0, "cached_nonces": 0}
+
+
+def test_task_verifier_accepts_a_signer_only_after_its_key_is_authorized() -> None:
+    private_key, _ = generate_ed25519_keypair()
+    signed = TaskSigner(CertificateSigner(private_key)).sign({"node_cls": "ProcessNode"})
+    verifier = TaskVerifier()
+
+    assert verifier.verify(signed) is False
+
+    verifier.add_authorized_key(signed.public_key)
+
+    assert verifier.verify(signed) is True
+
+
 def test_task_signer_requires_crypto_backed_signer() -> None:
     class BrokenSigner:
         pass
