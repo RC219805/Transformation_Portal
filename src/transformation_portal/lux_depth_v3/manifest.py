@@ -475,7 +475,7 @@ class BatchManifest:
     @classmethod
     def load(cls, path: Path) -> BatchManifest:
         """Load batch manifest from JSON file."""
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls(**data)
 
@@ -599,7 +599,7 @@ class CombinedManifest:
 
         Deserializes all fields including timestamps.
         """
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 

@@ -654,6 +654,34 @@ class TestSidecarFileOperations:
         temp_files = list(tmp_path.glob("*.tmp"))
         assert len(temp_files) == 0
 
+    def test_sidecar_round_trips_non_ascii_exif_under_ascii_locale(
+        self,
+        valid_provenance_metadata: ProvenanceMetadata,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Sidecars are UTF-8 even when the locale default encoding is ASCII (``LC_ALL=C``)."""
+        import builtins
+
+        real_open = builtins.open
+
+        def ascii_default_open(file, mode="r", *args, **kwargs):
+            if "b" not in mode and len(args) < 2 and "encoding" not in kwargs:
+                kwargs["encoding"] = "ascii"
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(provenance_module, "open", ascii_default_open, raising=False)
+        valid_provenance_metadata.exif = {"EXIF:Copyright": "© Studio Müller", "EXIF:Artist": "José"}
+        sidecar_path = tmp_path / "test_provenance.json"
+
+        valid_provenance_metadata.write_sidecar(sidecar_path)
+
+        assert sidecar_path.read_bytes() == valid_provenance_metadata.to_json().encode("utf-8")
+        assert "© Studio Müller".encode("utf-8") in sidecar_path.read_bytes()
+        loaded = ProvenanceMetadata.load_sidecar(sidecar_path)
+        assert loaded.exif == valid_provenance_metadata.exif
+        assert sorted(path.name for path in tmp_path.iterdir()) == ["test_provenance.json"]
+
     def test_write_sidecar_validates_before_write(
         self,
         valid_provenance_metadata: ProvenanceMetadata,

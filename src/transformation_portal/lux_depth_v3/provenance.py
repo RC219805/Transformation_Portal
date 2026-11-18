@@ -33,7 +33,6 @@ import functools
 import hashlib
 import json
 import logging
-import os
 import platform
 import re
 import subprocess
@@ -43,6 +42,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ..ingest.canonical_json import dumps_json
+from .io_atomic import atomic_write_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -520,23 +520,14 @@ class ProvenanceMetadata:
         # Create parent directory if needed
         sidecar_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Atomic write: write to temp file, then rename
-        temp_path = sidecar_path.with_suffix(".tmp")
+        # Durable atomic write through a unique temp file in the destination
+        # directory. The JSON is UTF-8 (``ensure_ascii=False``) regardless of
+        # the process locale.
         try:
-            with open(temp_path, "w") as f:
-                f.write(self.to_json())
-                f.flush()
-                os.fsync(f.fileno())
-
-            # Atomic rename
-            temp_path.replace(sidecar_path)
+            atomic_write_bytes(sidecar_path, self.to_json().encode("utf-8"))
             logger.info(f"Wrote provenance sidecar: {sidecar_path}")
-
         except Exception as e:
-            # Clean up temp file on error
-            if temp_path.exists():
-                temp_path.unlink()
-            raise ProvenanceError(f"Failed to write sidecar: {e}") from e
+            raise ProvenanceError(f"Failed to write sidecar: {e.__cause__ or e}") from e
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ProvenanceMetadata:
@@ -581,7 +572,7 @@ class ProvenanceMetadata:
             FileNotFoundError: If sidecar doesn't exist
             SchemaValidationError: If schema validation fails
         """
-        with open(sidecar_path, "r") as f:
+        with open(sidecar_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         return cls.from_dict(data)

@@ -900,3 +900,40 @@ class TestStageAReuseBindsDepthShapingSettings:
         del manifest["depth"]["stats"]["stage_a_inputs_sha256"]
         manifest_path.write_text(json.dumps(manifest))
         assert _create_orchestrator(output).should_skip_depth(depth_path, manifest_path, image_input) is False
+
+
+class TestManifestEncoding:
+    """Manifests are UTF-8 JSON whatever the process locale's default encoding is."""
+
+    @staticmethod
+    def _force_ascii_default_open(monkeypatch: pytest.MonkeyPatch, module: Any) -> None:
+        """Make text-mode ``open`` calls without an explicit encoding behave as under ``LC_ALL=C``."""
+        import builtins
+
+        real_open = builtins.open
+
+        def ascii_default_open(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+            if "b" not in mode and len(args) < 2 and "encoding" not in kwargs:
+                kwargs["encoding"] = "ascii"
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(module, "open", ascii_default_open, raising=False)
+
+    def test_combined_and_batch_manifests_reload_non_ascii_under_ascii_locale(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from transformation_portal.lux_depth_v3 import manifest as manifest_module
+        from transformation_portal.lux_depth_v3.manifest import BatchManifest, CombinedManifest, InputMetadata
+
+        self._force_ascii_default_open(monkeypatch, manifest_module)
+        image_path = "/shoot/Küche/Wohnzimmer_é.png"
+        combined_path = tmp_path / "combined.json"
+        CombinedManifest(input=InputMetadata(image_path=image_path)).save(combined_path)
+        batch_path = tmp_path / "batch.json"
+        BatchManifest("id", "start", "end", {"note": "Küche"}, [], {}).write(batch_path)
+
+        assert "Küche".encode("utf-8") in combined_path.read_bytes()
+        assert CombinedManifest.load(combined_path).input.image_path == image_path
+        assert BatchManifest.load(batch_path).config == {"note": "Küche"}
