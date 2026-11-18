@@ -91,3 +91,55 @@ def test_self_loops_can_be_disabled():
     assert attn.shape == (2, 2)
     # Root node 0 has no incoming edge, so without self-loops only the bias remains.
     assert torch.allclose(out[0], layer.bias[:4])
+
+
+def test_gat_layer_with_dropout_runs_and_eval_disables_dropout():
+    """R6: GATLayer(dropout>0) crashed reading self.training on a plain class."""
+    from transformation_portal.rl.gat import GATLayer
+
+    torch.manual_seed(0)
+    layer = GATLayer(8, 8, heads=2, dropout=0.5)
+    x = torch.randn(3, 8)
+    edges = torch.tensor([[0, 1], [1, 2]])
+
+    assert layer.training is True
+    _, attn_train = layer.forward(x, edges, return_attention=True)
+    assert attn_train.shape[1] == 2
+
+    assert layer.eval() is layer
+    assert layer.training is False
+    with torch.no_grad():
+        first = layer.forward(x, edges)
+        second = layer.forward(x, edges)
+    assert torch.equal(first, second)
+
+    layer.train()
+    assert layer.training is True
+
+
+def test_gat_qmix_critic_with_gat_dropout_forwards_and_eval_is_deterministic():
+    """R6: GATQMIXCritic(gat_dropout>0).forward crashed with AttributeError."""
+    from transformation_portal.rl.ma_gat_critic import GATQMIXCritic
+
+    torch.manual_seed(0)
+    critic = GATQMIXCritic(8, 3, embed_dim=8, gat_heads=2, gat_dropout=0.5)
+    args = (torch.zeros(1, 3), torch.randn(1, 3, 8), torch.randn(1, 8), torch.tensor([[0, 1], [1, 2]]))
+
+    q_total = critic.forward(*args)
+    assert q_total.shape == (1, 1)
+    assert torch.isfinite(q_total).all()
+
+    critic.eval()
+    assert all(not gat.training for gat in critic.gat_layers)
+    with torch.no_grad():
+        assert torch.equal(critic.forward(*args), critic.forward(*args))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_gat_layers_expose_train_eval_modes(version):
+    from transformation_portal.rl.gat import create_gat_layer
+
+    layer = create_gat_layer(4, 4, version=version, heads=2, dropout=0.1)
+    assert layer.training is True
+    assert layer.eval().training is False
+    assert layer.train(True).training is True

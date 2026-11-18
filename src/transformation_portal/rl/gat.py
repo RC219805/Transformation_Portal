@@ -111,6 +111,9 @@ class GATLayer:
         self.negative_slope = negative_slope
         self.residual = residual
         self.add_self_loops = add_self_loops
+        # Plain class, so mirror nn.Module's mode flag: attention dropout is
+        # active in training mode only (see train()/eval()).
+        self.training = True
 
         # Linear transformation for node features
         self.W = nn.Linear(in_dim, out_dim * heads, bias=False)
@@ -234,6 +237,18 @@ class GATLayer:
 
         return out
 
+    def train(self, mode: bool = True) -> "GATLayer":
+        """Set training mode (attention dropout is applied only while training)."""
+        self.training = bool(mode)
+        self.W.train(mode)
+        if self.res_proj is not None:
+            self.res_proj.train(mode)
+        return self
+
+    def eval(self) -> "GATLayer":
+        """Set evaluation mode (disables attention dropout)."""
+        return self.train(False)
+
     def parameters(self):
         """Get layer parameters."""
         params = list(self.W.parameters())
@@ -304,6 +319,7 @@ class GATv2Layer:
         self.dropout = dropout
         self.share_weights = share_weights
         self.add_self_loops = add_self_loops
+        self.training = True
 
         # Separate linear transformations for source and target
         self.W_src = nn.Linear(in_dim, out_dim * heads, bias=False)
@@ -364,6 +380,17 @@ class GATv2Layer:
             out[dst[i]] += attn[i].unsqueeze(-1) * h_src[src[i]]
 
         return out.mean(dim=1) + self.bias
+
+    def train(self, mode: bool = True) -> "GATv2Layer":
+        """Set training mode."""
+        self.training = bool(mode)
+        self.W_src.train(mode)
+        self.W_dst.train(mode)
+        return self
+
+    def eval(self) -> "GATv2Layer":
+        """Set evaluation mode."""
+        return self.train(False)
 
     def parameters(self):
         """Get parameters."""

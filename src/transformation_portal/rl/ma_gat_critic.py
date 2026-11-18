@@ -90,6 +90,7 @@ class GATQMIXCritic:
         self.n_agents = n_agents
         self.embed_dim = embed_dim
         self.alpha = alpha
+        self.training = True
 
         # Node embedding
         self.node_embed = nn.Linear(state_dim, embed_dim)
@@ -262,6 +263,17 @@ class GATQMIXCritic:
         q_total = self.alpha * qmix + (1.0 - self.alpha) * vdn
 
         return q_total, all_attentions
+
+    def train(self, mode: bool = True) -> "GATQMIXCritic":
+        """Set training mode on the GAT layers (``gat_dropout`` applies only while training)."""
+        self.training = bool(mode)
+        for gat in self.gat_layers:
+            gat.train(mode)
+        return self
+
+    def eval(self) -> "GATQMIXCritic":
+        """Set evaluation mode (disables GAT attention dropout)."""
+        return self.train(False)
 
     def parameters(self):
         """Get all parameters."""
