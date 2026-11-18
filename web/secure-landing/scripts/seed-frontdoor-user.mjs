@@ -37,7 +37,10 @@ function parseArgs(argv) {
       throw new Error(`Unexpected positional argument: ${token}`);
     }
 
-    const [flag, inlineValue] = token.split("=", 2);
+    // Split on the first "=" only: values such as passwords may contain "=".
+    const separatorIndex = token.indexOf("=");
+    const flag = separatorIndex === -1 ? token : token.slice(0, separatorIndex);
+    const inlineValue = separatorIndex === -1 ? undefined : token.slice(separatorIndex + 1);
     if (flag === "--help") {
       parsed.help = true;
       continue;
@@ -81,12 +84,13 @@ function parseArgs(argv) {
   return parsed;
 }
 
-function resolveValue(explicitValue, envName, defaultValue = "") {
+function resolveValue(explicitValue, envName, defaultValue = "", { trim = true } = {}) {
   const rawValue =
     typeof explicitValue === "string" && explicitValue.length > 0
       ? explicitValue
       : process.env[envName] || defaultValue;
-  return String(rawValue || "").trim();
+  const value = String(rawValue || "");
+  return trim ? value.trim() : value;
 }
 
 function defaultAccessEmail(username) {
@@ -157,7 +161,9 @@ async function main(argv = process.argv.slice(2)) {
 
   const outputPath = resolveValue(parsed.output, "TP_FRONTDOOR_USERS_FILE", DEFAULT_OUTPUT_PATH);
   const username = normalizeUsername(resolveValue(parsed.username, "TP_FRONTDOOR_USERNAME", DEFAULT_USERNAME));
-  const password = resolveValue(parsed.password, "TP_FRONTDOOR_PASSWORD", DEFAULT_PASSWORD);
+  // The password is hashed exactly as given: /login verifies the submitted
+  // password untrimmed, so trimming here would seed an unusable credential.
+  const password = resolveValue(parsed.password, "TP_FRONTDOOR_PASSWORD", DEFAULT_PASSWORD, { trim: false });
   const accessEmail = normalizeAccessEmail(
     resolveValue(parsed.accessEmail, "TP_FRONTDOOR_ACCESS_EMAIL", defaultAccessEmail(username)),
   );
@@ -169,7 +175,7 @@ async function main(argv = process.argv.slice(2)) {
   if (!username) {
     throw new Error("Front-door username cannot be empty.");
   }
-  if (!password) {
+  if (!password.trim()) {
     throw new Error("Front-door password cannot be empty.");
   }
   if (!accessEmail) {
