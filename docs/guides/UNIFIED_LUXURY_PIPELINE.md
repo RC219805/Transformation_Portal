@@ -116,7 +116,7 @@ print(f"Processed {len(results)} images")
 ```
 
 The default batch pattern is `*.{jpg,jpeg,png,tif,tiff}`. OpenEXR (`.exr`) and
-other scene-referred HDR inputs are not supported: the loader rejects them with a
+other scene-referred HDR inputs are not supported: the loader rejects `.exr` with a
 `ValueError`, so convert them to a display-referred 16-bit TIFF first.
 
 Output files are named after the input stem (`kitchen.tif` → `kitchen_WEB_4K.jpg`).

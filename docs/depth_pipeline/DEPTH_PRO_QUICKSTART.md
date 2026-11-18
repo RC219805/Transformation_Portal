@@ -307,7 +307,8 @@ export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 
 The worker subprocess runs with the parent's `PYTHON*` and `VIRTUAL_ENV`
 variables removed (in a source checkout `PYTHONPATH` points only at the
-checkout's `src/`), and each worker call (readiness check and inference) is
+checkout's `src/`; outside a checkout the caller's `PYTHONPATH` is still
+forwarded so the runtime can import the package), and each worker call (readiness check and inference) is
 bounded by a timeout of 900 seconds by default. Override it with a positive
 integer number of seconds:
 ```bash
