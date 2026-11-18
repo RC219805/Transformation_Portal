@@ -498,3 +498,244 @@ def test_verify_tool_skips_symlinked_directory_traversal() -> None:
         mismatch = report["mismatches"][0]
         assert mismatch["issue"] == "status_mismatch"
         assert mismatch["observed_status"] == "skipped"
+
+
+def _run_bound_verify_tool(
+    hash_manifest: Path,
+    archive_root: Path,
+    report_path: Path,
+    *,
+    merkle_roots: Path | None = None,
+    hash_summary: Path | None = None,
+    sample: int = 0,
+) -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(VERIFY_TOOL),
+        "--hash-manifest",
+        str(hash_manifest),
+        "--archive-root",
+        str(archive_root),
+        "--report-path",
+        str(report_path),
+    ]
+    command.extend(["--verify-sample", str(sample)] if sample > 0 else ["--verify-all"])
+    if merkle_roots is not None:
+        command.extend(["--merkle-roots", str(merkle_roots)])
+    if hash_summary is not None:
+        command.extend(["--hash-summary", str(hash_summary)])
+    return _run_cli(command)
+
+
+def _rewrite_hash_manifest(manifest_path: Path, rows: list[list[str]]) -> None:
+    with gzip.open(manifest_path, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("# hash_algorithm=sha256\n")
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["origin_drive", "partition", "relpath", "filesize_bytes", "sha256", "hash_status", "error"])
+        writer.writerows(rows)
+
+
+def _read_hash_manifest_rows(manifest_path: Path) -> list[list[str]]:
+    with gzip.open(manifest_path, "rt", encoding="utf-8", newline="") as handle:
+        lines = [line for line in handle if not line.startswith("#")]
+    return list(csv.reader(lines))[1:]
+
+
+def _tamper_archive_and_manifest(archive_root: Path, manifest_path: Path) -> None:
+    """Rewrite one payload file and its manifest row, and drop another file together with its row."""
+    tampered = archive_root / "DriveA" / "Part1" / "alpha.txt"
+    tampered.write_bytes(b"TAMPERED CONTENT")
+    (archive_root / "DriveB" / "Part2" / "sub" / "charlie.txt").unlink()
+
+    rewritten: list[list[str]] = []
+    for row in _read_hash_manifest_rows(manifest_path):
+        if row[2].endswith("charlie.txt"):
+            continue
+        if row[2].endswith("alpha.txt"):
+            row[3] = str(tampered.stat().st_size)
+            row[4] = hashlib.sha256(tampered.read_bytes()).hexdigest()
+        rewritten.append(row)
+    _rewrite_hash_manifest(manifest_path, rewritten)
+
+
+def test_recomputed_merkle_roots_match_generator_golden() -> None:
+    rows = VERIFY_HASH_MODULE._open_manifest_reader(FIXTURE_GOLDEN / "hash_manifest.csv.gz")
+    golden = json.loads((FIXTURE_GOLDEN / "merkle_roots.json").read_text(encoding="utf-8"))
+
+    recomputed = VERIFY_HASH_MODULE.recompute_merkle_roots(rows)
+
+    assert recomputed["global"] == golden["global"]
+    assert recomputed["partitions"] == {
+        (entry["origin_drive"], entry["partition"]): {"leaf_count": entry["leaf_count"], "root_sha256": entry["root_sha256"]}
+        for entry in golden["partitions"]
+    }
+    assert VERIFY_HASH_MODULE.check_merkle_binding(rows, golden) == []
+    assert {field: golden[field] for field in VERIFY_HASH_MODULE.SUPPORTED_MERKLE_METHOD} == (
+        VERIFY_HASH_MODULE.SUPPORTED_MERKLE_METHOD
+    )
+
+
+def test_verify_merkle_binding_passes_for_untampered_outputs(tmp_path: Path) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+    assert _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir).returncode == 0
+
+    report_path = tmp_path / "verification_report.json"
+    result = _run_bound_verify_tool(
+        out_dir / "hash_manifest.csv.gz",
+        archive_root,
+        report_path,
+        merkle_roots=out_dir / "merkle_roots.json",
+        hash_summary=out_dir / "hash_summary.json",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Verification passed" in result.stdout
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["merkle_binding"] == {
+        "issues": [],
+        "leaf_count": 3,
+        "merkle_roots_sha256": hashlib.sha256((out_dir / "merkle_roots.json").read_bytes()).hexdigest(),
+        "verified": True,
+    }
+    assert report["hash_summary_binding"]["verified"] is True
+    assert report["hash_summary_binding"]["issues"] == []
+
+
+def test_verify_merkle_binding_detects_rewritten_and_dropped_manifest_rows(tmp_path: Path) -> None:
+    """Rows edited to match tampered bytes still agree with the archive; only the signed roots catch it."""
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+    assert _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir).returncode == 0
+    signed_roots = (out_dir / "merkle_roots.json").read_bytes()
+
+    _tamper_archive_and_manifest(archive_root, out_dir / "hash_manifest.csv.gz")
+
+    report_path = tmp_path / "verification_report.json"
+    result = _run_bound_verify_tool(
+        out_dir / "hash_manifest.csv.gz",
+        archive_root,
+        report_path,
+        merkle_roots=out_dir / "merkle_roots.json",
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Merkle binding failed" in result.stdout
+    assert "Verification passed" not in result.stdout
+    assert (out_dir / "merkle_roots.json").read_bytes() == signed_roots
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["mismatches"] == []
+    assert report["merkle_binding"]["verified"] is False
+    issues = {(item.get("scope"), item["issue"]) for item in report["merkle_binding"]["issues"]}
+    assert ("global", "root_mismatch") in issues
+    assert ("global", "leaf_count_mismatch") in issues
+    missing_partitions = [
+        (item["origin_drive"], item["partition"])
+        for item in report["merkle_binding"]["issues"]
+        if item["issue"] == "partition_missing_from_manifest"
+    ]
+    assert missing_partitions == [("DriveB", "Part2")]
+
+
+def test_verify_hash_summary_binding_detects_dropped_manifest_rows(tmp_path: Path) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+    assert _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir).returncode == 0
+
+    _tamper_archive_and_manifest(archive_root, out_dir / "hash_manifest.csv.gz")
+
+    report_path = tmp_path / "verification_report.json"
+    result = _run_bound_verify_tool(
+        out_dir / "hash_manifest.csv.gz",
+        archive_root,
+        report_path,
+        hash_summary=out_dir / "hash_summary.json",
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Hash summary binding failed" in result.stdout
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    by_field = {item["field"]: item for item in report["hash_summary_binding"]["issues"]}
+    assert by_field["rows_total"]["expected"] == 3
+    assert by_field["rows_total"]["observed"] == 2
+    assert "total_bytes_hashed" in by_field
+
+
+def test_verify_merkle_binding_covers_rows_outside_the_sample(tmp_path: Path) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+    assert _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir).returncode == 0
+
+    manifest_path = out_dir / "hash_manifest.csv.gz"
+    rows = _read_hash_manifest_rows(manifest_path)
+    rows[-1][4] = "0" * 64
+    _rewrite_hash_manifest(manifest_path, rows)
+
+    report_path = tmp_path / "verification_report.json"
+    result = _run_bound_verify_tool(
+        manifest_path,
+        archive_root,
+        report_path,
+        merkle_roots=out_dir / "merkle_roots.json",
+        sample=1,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["verify_mode"] == "sample"
+    assert report["rows_mismatched"] == 0
+    assert report["merkle_binding"]["verified"] is False
+
+
+@pytest.mark.parametrize("content", [None, "not json", "[]"])
+def test_verify_merkle_binding_fails_closed_on_unusable_roots_file(tmp_path: Path, content: str | None) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+    assert _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir).returncode == 0
+
+    roots_path = tmp_path / "unusable_merkle_roots.json"
+    if content is not None:
+        roots_path.write_text(content, encoding="utf-8")
+
+    result = _run_bound_verify_tool(
+        out_dir / "hash_manifest.csv.gz",
+        archive_root,
+        tmp_path / "verification_report.json",
+        merkle_roots=roots_path,
+    )
+
+    assert result.returncode == 1
+    assert "Verification passed" not in result.stdout
+    assert "merkle roots" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+
+
+def test_check_merkle_binding_rejects_unsupported_method_and_malformed_blocks() -> None:
+    rows = VERIFY_HASH_MODULE._open_manifest_reader(FIXTURE_GOLDEN / "hash_manifest.csv.gz")
+    golden = json.loads((FIXTURE_GOLDEN / "merkle_roots.json").read_text(encoding="utf-8"))
+
+    other_method = {**golden, "tree_method_version": "2.0"}
+    assert VERIFY_HASH_MODULE.check_merkle_binding(rows, other_method) == [
+        {"issue": "merkle_method_unsupported", "field": "tree_method_version", "supported": "1.0", "declared": "2.0"}
+    ]
+
+    boolean_count = {**golden, "global": {"leaf_count": True, "root_sha256": golden["partitions"][1]["root_sha256"]}}
+    one_row_partition = [row for row in rows if row.origin_drive == "DriveB"]
+    assert len(one_row_partition) == 1
+    boolean_issues = VERIFY_HASH_MODULE.check_merkle_binding(one_row_partition, boolean_count)
+    assert {"scope": "global", "issue": "leaf_count_mismatch", "expected_leaf_count": True, "observed_leaf_count": 1} in (
+        boolean_issues
+    )
+
+    no_partitions = {key: value for key, value in golden.items() if key != "partitions"}
+    assert {"issue": "merkle_roots_malformed", "field": "partitions"} in VERIFY_HASH_MODULE.check_merkle_binding(
+        rows, no_partitions
+    )
+
+    ghost_partition = {**golden, "partitions": [*golden["partitions"], {**golden["partitions"][0], "partition": "Ghost"}]}
+    assert {
+        "scope": "partition",
+        "origin_drive": "DriveA",
+        "partition": "Ghost",
+        "issue": "partition_missing_from_manifest",
+    } in VERIFY_HASH_MODULE.check_merkle_binding(rows, ghost_partition)

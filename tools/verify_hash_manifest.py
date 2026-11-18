@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import json
 import stat
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,22 @@ STATUS_OK = "ok"
 STATUS_MISSING = "missing"
 STATUS_UNREADABLE = "unreadable"
 STATUS_SKIPPED = "skipped"
+
+# Merkle method emitted by tools/archive_hash_manifest.py::build_merkle_roots. A roots file that
+# declares anything else cannot be recomputed here, so the binding check rejects it.
+SUPPORTED_MERKLE_METHOD = {
+    "hash_algorithm": "sha256",
+    "leaf_hash_algorithm": "sha256",
+    "leaf_format_version": "1.0",
+    "tree_method": "binary_duplicate_last",
+    "tree_method_version": "1.0",
+}
+HASH_SUMMARY_STATUS_FIELDS = {
+    "hashed_ok": STATUS_OK,
+    "missing": STATUS_MISSING,
+    "unreadable": STATUS_UNREADABLE,
+    "skipped": STATUS_SKIPPED,
+}
 
 
 @dataclass(frozen=True)
@@ -300,6 +317,152 @@ def compare_rows(expected: ExpectedRow, observed: ObservedRow) -> List[Dict[str,
     return mismatches
 
 
+def _merkle_root_sha256(leaf_hashes: Sequence[bytes]) -> str:
+    """Phase 3 tree method, shared with the generator through ``tp.crypto.merkle``."""
+    try:
+        from tp.crypto.merkle import merkle_root_sha256
+    except ImportError:
+        src_root = Path(__file__).resolve().parents[1] / "src"
+        if str(src_root) not in sys.path:
+            sys.path.insert(0, str(src_root))
+        from tp.crypto.merkle import merkle_root_sha256
+
+    return merkle_root_sha256(leaf_hashes)
+
+
+def _leaf_hash(row: ExpectedRow) -> bytes:
+    # Must stay byte-identical to tools/archive_hash_manifest.py::_leaf_preimage.
+    preimage = "\0".join((row.origin_drive, row.partition, row.relpath, row.hash_status, row.sha256))
+    return hashlib.sha256(preimage.encode("utf-8")).digest()
+
+
+def recompute_merkle_roots(rows: Sequence[ExpectedRow]) -> Dict[str, Any]:
+    """Rebuild the global and per-partition Merkle roots from every manifest row."""
+    canonical_rows = sorted(rows, key=lambda r: (r.origin_drive, r.partition, r.relpath, r.row_number))
+
+    global_leaves: List[bytes] = []
+    partition_leaves: Dict[Tuple[str, str], List[bytes]] = {}
+    for row in canonical_rows:
+        leaf = _leaf_hash(row)
+        global_leaves.append(leaf)
+        partition_leaves.setdefault((row.origin_drive, row.partition), []).append(leaf)
+
+    return {
+        "global": {"leaf_count": len(global_leaves), "root_sha256": _merkle_root_sha256(global_leaves)},
+        "partitions": {
+            key: {"leaf_count": len(leaves), "root_sha256": _merkle_root_sha256(leaves)}
+            for key, leaves in partition_leaves.items()
+        },
+    }
+
+
+def _compare_merkle_scope(scope: Dict[str, Any], expected: Dict[str, Any], observed: Dict[str, Any]) -> List[Dict[str, Any]]:
+    issues: List[Dict[str, Any]] = []
+    expected_leaf_count = expected.get("leaf_count")
+    if type(expected_leaf_count) is not int or expected_leaf_count != observed["leaf_count"]:
+        issues.append(
+            {
+                **scope,
+                "issue": "leaf_count_mismatch",
+                "expected_leaf_count": expected_leaf_count,
+                "observed_leaf_count": observed["leaf_count"],
+            }
+        )
+    expected_root = expected.get("root_sha256")
+    if expected_root != observed["root_sha256"]:
+        issues.append(
+            {
+                **scope,
+                "issue": "root_mismatch",
+                "expected_root_sha256": expected_root,
+                "observed_root_sha256": observed["root_sha256"],
+            }
+        )
+    return issues
+
+
+def check_merkle_binding(rows: Sequence[ExpectedRow], roots_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compare ``merkle_roots.json`` (expected) with roots recomputed from manifest rows (observed).
+
+    The detached signature and timestamp cover ``merkle_roots.json`` only; this is the step that
+    ties the hash manifest rows to those signed roots.
+    """
+    issues: List[Dict[str, Any]] = []
+    for field, supported in SUPPORTED_MERKLE_METHOD.items():
+        declared = roots_payload.get(field)
+        if declared != supported:
+            issues.append({"issue": "merkle_method_unsupported", "field": field, "supported": supported, "declared": declared})
+
+    observed = recompute_merkle_roots(rows)
+
+    global_block = roots_payload.get("global")
+    if isinstance(global_block, dict):
+        issues.extend(_compare_merkle_scope({"scope": "global"}, global_block, observed["global"]))
+    else:
+        issues.append({"issue": "merkle_roots_malformed", "field": "global"})
+
+    partitions_block = roots_payload.get("partitions")
+    if not isinstance(partitions_block, list):
+        issues.append({"issue": "merkle_roots_malformed", "field": "partitions"})
+        return issues
+
+    expected_partitions: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for entry in partitions_block:
+        origin_drive = entry.get("origin_drive") if isinstance(entry, dict) else None
+        partition = entry.get("partition") if isinstance(entry, dict) else None
+        if not isinstance(origin_drive, str) or not isinstance(partition, str):
+            issues.append({"issue": "merkle_roots_malformed", "field": "partitions"})
+            continue
+        scope = {"scope": "partition", "origin_drive": origin_drive, "partition": partition}
+        if (origin_drive, partition) in expected_partitions:
+            issues.append({**scope, "issue": "partition_duplicated"})
+            continue
+        expected_partitions[(origin_drive, partition)] = entry
+
+    observed_partitions = observed["partitions"]
+    for key in sorted(set(expected_partitions) | set(observed_partitions)):
+        scope = {"scope": "partition", "origin_drive": key[0], "partition": key[1]}
+        if key not in observed_partitions:
+            issues.append({**scope, "issue": "partition_missing_from_manifest"})
+        elif key not in expected_partitions:
+            issues.append({**scope, "issue": "partition_missing_from_roots"})
+        else:
+            issues.extend(_compare_merkle_scope(scope, expected_partitions[key], observed_partitions[key]))
+    return issues
+
+
+def check_hash_summary_binding(rows: Sequence[ExpectedRow], summary_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compare ``hash_summary.json`` (expected) with counts recomputed from manifest rows (observed)."""
+    observed: Dict[str, Any] = {"hash_algorithm": "sha256", "rows_total": len(rows)}
+    for field, status in HASH_SUMMARY_STATUS_FIELDS.items():
+        observed[field] = sum(1 for row in rows if row.hash_status == status)
+    observed["total_bytes_hashed"] = sum(row.filesize_bytes for row in rows if row.hash_status == STATUS_OK)
+
+    issues: List[Dict[str, Any]] = []
+    for field, observed_value in observed.items():
+        expected_value = summary_payload.get(field)
+        if type(expected_value) is not type(observed_value) or expected_value != observed_value:
+            issues.append(
+                {"issue": "hash_summary_mismatch", "field": field, "expected": expected_value, "observed": observed_value}
+            )
+    return issues
+
+
+def _load_bound_json(path: Path, label: str) -> Tuple[Dict[str, Any], str]:
+    """Return the JSON object at ``path`` and the SHA-256 of the exact bytes that were parsed."""
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise SystemExit(f"Unable to read {label}: {path}: {exc}") from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"{label} is not valid JSON: {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{label} must be a JSON object: {path}")
+    return payload, hashlib.sha256(raw).hexdigest()
+
+
 def verify_rows(
     selected_rows: Sequence[ExpectedRow],
     archive_root: Path,
@@ -355,6 +518,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=1,
         help="Verification worker count (ordering remains deterministic)",
     )
+    parser.add_argument(
+        "--merkle-roots",
+        default="",
+        help=(
+            "Path to the signed merkle_roots.json. Recomputes the global and per-partition Merkle roots "
+            "from every manifest row and fails on any root, leaf-count or partition mismatch"
+        ),
+    )
+    parser.add_argument(
+        "--hash-summary",
+        default="",
+        help="Path to hash_summary.json. Fails when its row, status or byte counts disagree with the manifest rows",
+    )
     return parser.parse_args(argv)
 
 
@@ -396,14 +572,44 @@ def main(argv: Sequence[str] | None = None) -> int:
     if verify_mode == "sample":
         report["sample_size"] = args.verify_sample
 
+    # Binding checks always cover every manifest row, also in --verify-sample mode.
+    merkle_issues: List[Dict[str, Any]] = []
+    if args.merkle_roots:
+        roots_payload, roots_sha256 = _load_bound_json(Path(args.merkle_roots), "merkle roots")
+        merkle_issues = check_merkle_binding(all_rows, roots_payload)
+        report["merkle_binding"] = {
+            "issues": merkle_issues,
+            "leaf_count": len(all_rows),
+            "merkle_roots_sha256": roots_sha256,
+            "verified": not merkle_issues,
+        }
+    summary_issues: List[Dict[str, Any]] = []
+    if args.hash_summary:
+        summary_payload, summary_sha256 = _load_bound_json(Path(args.hash_summary), "hash summary")
+        summary_issues = check_hash_summary_binding(all_rows, summary_payload)
+        report["hash_summary_binding"] = {
+            "hash_summary_sha256": summary_sha256,
+            "issues": summary_issues,
+            "verified": not summary_issues,
+        }
+
     report_path = Path(args.report_path) if args.report_path else manifest_path.parent / "verification_report.json"
     write_json_atomic(report_path, report)
 
     print(f"Wrote verification report: {report_path}")
     if mismatches:
         print(f"Verification failed with {len(mismatches)} mismatches")
+    if merkle_issues:
+        print(f"Merkle binding failed with {len(merkle_issues)} issue(s): manifest rows do not reproduce {args.merkle_roots}")
+    if summary_issues:
+        print(
+            f"Hash summary binding failed with {len(summary_issues)} issue(s): manifest rows disagree with {args.hash_summary}"
+        )
+    if mismatches or merkle_issues or summary_issues:
         return 1
 
+    if args.merkle_roots:
+        print(f"Merkle binding verified: {len(all_rows)} manifest rows reproduce {args.merkle_roots}")
     print("Verification passed")
     return 0
 

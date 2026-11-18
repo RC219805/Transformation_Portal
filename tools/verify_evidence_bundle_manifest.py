@@ -6,7 +6,9 @@ Phase 3.3 Verify canonical evidence bundle manifest.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import zlib
 from pathlib import Path
 
 from bundle_root_common import (
@@ -21,6 +23,56 @@ EXIT_BUNDLE_VERIFY_FAILURE = 11
 EXIT_BUNDLE_MALFORMED = 12
 
 
+def _load_json_object(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path.name} must be a JSON object")
+    return payload
+
+
+def _describe_binding_issue(issue: dict[str, object]) -> str:
+    return ", ".join(f"{key}={issue[key]!r}" for key in sorted(issue))
+
+
+def find_merkle_binding_failure(bundle_dir: Path, manifest: dict[str, object]) -> str | None:
+    """Recompute the bundled Merkle roots and summary counts from the bundled hash manifest rows.
+
+    Digest checks only prove that the artifacts match the (unsigned) bundle manifest. The signature
+    and timestamp cover ``merkle_roots.json``, so the hash manifest is anchored only once its rows
+    are shown to reproduce those roots.
+    """
+    from verify_hash_manifest import (  # pylint: disable=import-outside-toplevel
+        _open_manifest_reader,
+        check_hash_summary_binding,
+        check_merkle_binding,
+    )
+
+    hash_manifest_name = str(manifest["hash_manifest_path"])
+    try:
+        rows = _open_manifest_reader(bundle_dir / hash_manifest_name)
+    except SystemExit as exc:  # the row reader reports malformed manifests through SystemExit(message)
+        raise ValueError(str(exc)) from exc
+    except (EOFError, zlib.error, csv.Error) as exc:
+        raise ValueError(f"unreadable {hash_manifest_name}: {exc}") from exc
+
+    roots_name = str(manifest["roots_path"])
+    merkle_issues = check_merkle_binding(rows, _load_json_object(bundle_dir / roots_name))
+    if merkle_issues:
+        return (
+            f"{hash_manifest_name} rows do not reproduce {roots_name} "
+            f"({len(merkle_issues)} issue(s); first: {_describe_binding_issue(merkle_issues[0])})"
+        )
+
+    summary_name = str(manifest["hash_summary_path"])
+    summary_issues = check_hash_summary_binding(rows, _load_json_object(bundle_dir / summary_name))
+    if summary_issues:
+        return (
+            f"{summary_name} disagrees with {hash_manifest_name} rows "
+            f"({len(summary_issues)} issue(s); first: {_describe_binding_issue(summary_issues[0])})"
+        )
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-manifest", required=True, help="Path to evidence_bundle_manifest.json")
@@ -28,6 +80,14 @@ def main() -> int:
         "--bundle-dir",
         default=None,
         help="Directory containing bundle artifacts (defaults to bundle-manifest parent directory)",
+    )
+    parser.add_argument(
+        "--verify-merkle-binding",
+        action="store_true",
+        help=(
+            "Also recompute the Merkle roots and summary counts from the bundled hash manifest rows and fail "
+            "when they do not reproduce the bundled merkle_roots.json / hash_summary.json"
+        ),
     )
     args = parser.parse_args()
 
@@ -92,6 +152,13 @@ def main() -> int:
                 if sha256_hexdigest(bundle_path) != str(sigstore["bundle_sha256"]):
                     print("Verification failed: digest mismatch for notarization.sigstore.bundle_path")
                     return EXIT_BUNDLE_VERIFY_FAILURE
+
+        if args.verify_merkle_binding:
+            binding_failure = find_merkle_binding_failure(bundle_dir, manifest)
+            if binding_failure is not None:
+                print(f"Verification failed: {binding_failure}")
+                return EXIT_BUNDLE_VERIFY_FAILURE
+            print(f"Merkle binding verified: {manifest['hash_manifest_path']} rows reproduce {manifest['roots_path']}")
 
         print("Evidence bundle manifest valid")
         return 0

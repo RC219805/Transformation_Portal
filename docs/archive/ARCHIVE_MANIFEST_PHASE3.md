@@ -144,6 +144,28 @@ Verification compares archive bytes against `hash_manifest.csv.gz`:
 Verification report (`verification_report.json`) contains deterministic mismatch details and exits non-zero
 on any mismatch.
 
+### Binding the manifest to the signed Merkle roots
+
+Row verification alone only shows that the archive bytes agree with `hash_manifest.csv.gz`. The detached
+signature and timestamp (Phase 3.1 / 3.2) cover `merkle_roots.json`, not the manifest, so a manifest whose
+rows were edited or removed together with the archive bytes still passes row verification. Two optional
+inputs close that gap; both always cover every manifest row, also in `--verify-sample` mode:
+
+- `--merkle-roots /path/to/merkle_roots.json`: recomputes the global and per-partition Merkle roots from the
+  manifest rows (same leaf preimage and tree method as the generator) and fails on any root, `leaf_count`
+  or partition-set mismatch, and on a roots file that declares an unsupported leaf format or tree method.
+- `--hash-summary /path/to/hash_summary.json`: fails when `rows_total`, the status counts or
+  `total_bytes_hashed` disagree with the manifest rows.
+
+When supplied, the report gains `merkle_binding` / `hash_summary_binding` objects (`verified`, `issues`,
+and the SHA-256 of the file that was compared, which is the digest the signature envelope names as
+`signed_artifact_sha256`). An unreadable or malformed roots/summary file is a failure, never a skip.
+Without these inputs the report bytes are unchanged and no binding is claimed.
+
+Custody verification SHOULD therefore run, in order: `verify_merkle_signature.py` (signature over
+`merkle_roots.json`), then `verify_hash_manifest.py --merkle-roots ... --hash-summary ...` (roots to rows,
+rows to archive bytes).
+
 ## CLI Usage
 
 Generate Phase 3 outputs from Phase 2 index:
@@ -178,6 +200,18 @@ python tools/verify_hash_manifest.py \
   --hash-manifest /path/to/out_phase3/hash_manifest.csv.gz \
   --archive-root /path/to/All\ Archive \
   --verify-sample 250
+```
+
+Verify archive state and bind the manifest to the signed roots and the summary:
+
+```bash
+python tools/verify_hash_manifest.py \
+  --hash-manifest /path/to/out_phase3/hash_manifest.csv.gz \
+  --archive-root /path/to/All\ Archive \
+  --verify-all \
+  --merkle-roots /path/to/out_phase3/merkle_roots.json \
+  --hash-summary /path/to/out_phase3/hash_summary.json \
+  --report-path /path/to/out_phase3/verification_report.json
 ```
 
 ## Schema References
