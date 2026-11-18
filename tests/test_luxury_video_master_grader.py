@@ -665,3 +665,39 @@ def test_parse_arguments_list_presets_exits_early(capsys):
     assert "Available presets:" in captured.out
     for preset_key in MODULE.PRESETS:
         assert f"- {preset_key}:" in captured.out
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("23.976", "24000/1001"),
+        ("23.98", "24000/1001"),
+        ("29.97", "30000/1001"),
+        ("59.94", "60000/1001"),
+        ("24000/1001", "24000/1001"),
+        ("2997/125", "2997/125"),
+        ("24", "24/1"),
+        ("24.0", "24/1"),
+        ("25", "25/1"),
+        ("23.9", "239/10"),
+    ],
+)
+def test_normalize_frame_rate_snaps_ntsc_decimals_only(value, expected):
+    # L-07: the help text's own example "23.976" must conform to 24000/1001, not 2997/125;
+    # explicit rationals and whole numbers stay as written.
+    normalized, fraction = MODULE.normalize_frame_rate(value)
+    assert normalized == expected
+    assert f"{fraction.numerator}/{fraction.denominator}" == expected
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan", "-24", "0", "0/0"])
+def test_normalize_frame_rate_rejects_non_finite_and_non_positive(value):
+    # L-07: "inf" used to escape as an uncaught OverflowError instead of the handled ValueError.
+    with pytest.raises(ValueError, match="Unable to parse frame rate value"):
+        MODULE.normalize_frame_rate(value)
+
+
+def test_assess_frame_rate_override_with_ntsc_decimal_targets_exact_rate():
+    probe = {"streams": [{"codec_type": "video", "avg_frame_rate": "24/1", "r_frame_rate": "24/1"}]}
+    plan = assess_frame_rate(probe, "23.976", 0.05)
+    assert plan.target == "24000/1001"

@@ -439,7 +439,7 @@ def parse_ffprobe_fraction(value: Optional[str]) -> Optional[Fraction]:
         if "/" in value:
             return Fraction(value)
         return Fraction(float(value)).limit_denominator(100_000)
-    except (ValueError, ZeroDivisionError):
+    except (ValueError, ZeroDivisionError, OverflowError):
         return None
 
 
@@ -451,10 +451,32 @@ def normalize_frame_rate(value: str) -> Tuple[str, Fraction]:
     """Normalise arbitrary frame-rate expressions to a rational string and Fraction."""
 
     parsed = parse_ffprobe_fraction(value)
-    if not parsed:
+    if not parsed or parsed <= 0:
         raise ValueError(f"Unable to parse frame rate value: {value}")
+    ntsc = _snap_ntsc_decimal(value, parsed)
+    if ntsc is not None:
+        return ntsc
     reduced = parsed.limit_denominator(100_000)
     return format_fraction(reduced), reduced
+
+
+def _snap_ntsc_decimal(value: str, parsed: Fraction) -> Optional[Tuple[str, Fraction]]:
+    """Map a rounded NTSC decimal (``23.976``, ``29.97``, ``59.94``) to its exact x000/1001 rate.
+
+    A non-integer decimal snaps only when the NTSC rate, rounded to the number of decimals
+    written, equals it; explicit rationals and whole numbers are never altered.
+    """
+
+    text = value.strip()
+    if "/" in text or "." not in text or parsed.denominator == 1:
+        return None
+    decimals = len(text.split(".", 1)[1].rstrip("0"))
+    if decimals == 0:
+        return None
+    for label, fraction in STANDARD_FRAME_RATES:
+        if fraction.denominator == 1_001 and round(float(fraction), decimals) == float(parsed):
+            return label, fraction
+    return None
 
 
 def choose_standard_rate(fps: Fraction) -> Tuple[str, Fraction]:

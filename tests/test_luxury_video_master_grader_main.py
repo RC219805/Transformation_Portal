@@ -395,6 +395,14 @@ def test_main_frame_rate_error_returns_6(stub_environment, video_paths, lut_file
     assert "Frame-rate configuration error" in capsys.readouterr().err
 
 
+def test_main_infinite_frame_rate_returns_6(stub_environment, video_paths, lut_file, capsys) -> None:
+    # L-07: "--target-fps inf" raised an uncaught OverflowError instead of the frame-rate exit code.
+    src, out = video_paths
+    rc = grader.main([str(src), str(out), "--dry-run", "--custom-lut", str(lut_file), "--target-fps", "inf"])
+    assert rc == 6
+    assert "Frame-rate configuration error" in capsys.readouterr().err
+
+
 def test_main_ffmpeg_failure_propagates_returncode(stub_environment, video_paths, lut_file, monkeypatch) -> None:
     src, out = video_paths
 
