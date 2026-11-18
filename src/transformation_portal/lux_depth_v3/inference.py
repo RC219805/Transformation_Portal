@@ -582,7 +582,12 @@ class DA3InferenceEngine:
                     revision=model_revision,
                 )
             except TypeError:
-                if model_revision and strict_enabled:
+                # Fail closed once a revision is pinned: retrying without it
+                # would load repository HEAD while manifests and run cards
+                # still record the pinned SHA (audit LC-05). The revisionless
+                # retry is kept only when no revision was resolved, so the
+                # recorded contract already says "unpinned".
+                if model_revision:
                     raise
                 self.model = DepthAnything3.from_pretrained(model_id)
             self.model.to(self.device)  # type: ignore[union-attr]
