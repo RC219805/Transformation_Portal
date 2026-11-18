@@ -125,3 +125,84 @@ def test_roundtrip_conversion():
     orig_px = original.getpixel((0, 0))
     recon_px = reconstructed.getpixel((0, 0))
     assert all(abs(o - r) <= 1 for o, r in zip(orig_px, recon_px))
+
+
+def _cube_text(size, transfer, header=""):
+    """Spec-conformant .cube text: red index fastest, then green, then blue."""
+    lines = [f"LUT_3D_SIZE {size}"] + ([header] if header else [])
+    for b in range(size):
+        for g in range(size):
+            for r in range(size):
+                lines.append(" ".join(f"{v:.6f}" for v in transfer(r / (size - 1), g / (size - 1), b / (size - 1))))
+    return "\n".join(lines) + "\n"
+
+
+def test_load_cube_lut_indexes_table_in_channel_order(tmp_path):
+    """lut[r, g, b] holds the entry for input (r, g, b) even though .cube lists red fastest."""
+    from transformation_portal.utils.image_utils import load_cube_lut
+
+    cube = tmp_path / "swap.cube"
+    cube.write_text(_cube_text(3, lambda r, g, b: (b, g, r)), encoding="utf-8")
+
+    lut = load_cube_lut(cube)
+
+    assert lut.shape == (3, 3, 3, 3)
+    assert lut.dtype == np.float32
+    np.testing.assert_allclose(lut[2, 0, 0], [0.0, 0.0, 1.0])
+    np.testing.assert_allclose(lut[0, 1, 2], [1.0, 0.5, 0.0])
+
+
+def test_load_cube_lut_caches_until_file_changes(tmp_path):
+    from transformation_portal.utils.image_utils import load_cube_lut
+
+    cube = tmp_path / "look.cube"
+    cube.write_text(_cube_text(2, lambda r, g, b: (r, g, b)), encoding="utf-8")
+
+    first = load_cube_lut(cube)
+    assert load_cube_lut(cube) is first
+    assert not first.flags.writeable
+
+    cube.write_text(_cube_text(3, lambda r, g, b: (b, g, r)), encoding="utf-8")
+    reloaded = load_cube_lut(cube)
+    assert reloaded.shape == (3, 3, 3, 3)
+    np.testing.assert_allclose(reloaded[2, 0, 0], [0.0, 0.0, 1.0])
+
+
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        ("LUT_3D_SIZE 1\n0.5 0.5 0.5\n", "LUT_3D_SIZE"),
+        ("0 0 0\n1 1 1\n", "LUT_3D_SIZE"),
+        ("LUT_3D_SIZE 2\n0 0 0\n1 1 1\n", "expected 8 entries"),
+        (_cube_text(2, lambda r, g, b: (r, g, b)).replace("1.000000 1.000000 1.000000", "nan 1 1"), "non-finite"),
+    ],
+)
+def test_load_cube_lut_rejects_malformed_tables(tmp_path, text, message):
+    from transformation_portal.utils.image_utils import load_cube_lut
+
+    cube = tmp_path / "bad.cube"
+    cube.write_text(text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_cube_lut(cube)
+
+
+def test_apply_cube_lut_maps_unit_range_endpoints_exactly(tmp_path):
+    from transformation_portal.utils.image_utils import apply_cube_lut, load_cube_lut
+
+    cube = tmp_path / "identity.cube"
+    cube.write_text(_cube_text(4, lambda r, g, b: (r, g, b), header="DOMAIN_MIN 0 0 0"), encoding="utf-8")
+    image = np.array([[[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.5, -0.5, 0.5]]], dtype=np.float32)
+
+    result = apply_cube_lut(image, load_cube_lut(cube))
+
+    assert result.dtype == np.float32
+    np.testing.assert_allclose(result, np.clip(image, 0.0, 1.0), atol=1e-6)
+
+
+def test_apply_cube_lut_rejects_non_rgb_images():
+    from transformation_portal.utils.image_utils import apply_cube_lut
+
+    lut = np.zeros((2, 2, 2, 3), dtype=np.float32)
+    with pytest.raises(ValueError, match="3 colour channels"):
+        apply_cube_lut(np.zeros((4, 4, 4), dtype=np.float32), lut)

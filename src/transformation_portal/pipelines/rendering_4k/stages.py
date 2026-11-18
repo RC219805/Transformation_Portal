@@ -11,6 +11,7 @@ from typing import Optional, Union
 import numpy as np
 from PIL import Image, ImageFilter
 
+from ...utils.image_utils import apply_cube_lut, load_cube_lut
 from .types import (
     ColorGradingConfig,
     MaterialResponseConfig,
@@ -255,7 +256,8 @@ def _load_cube_lut(lut_path: Union[str, Path]) -> Optional[np.ndarray]:
         lut_path: Path to .cube LUT file
 
     Returns:
-        3D LUT array (size, size, size, 3) or None if loading fails
+        Read-only 3D LUT array (size, size, size, 3) indexed ``lut[r, g, b]``,
+        or None if loading fails
     """
     lut_path = Path(lut_path)
     if not lut_path.exists():
@@ -263,33 +265,8 @@ def _load_cube_lut(lut_path: Union[str, Path]) -> Optional[np.ndarray]:
         return None
 
     try:
-        lut_size = 0
-        lut_data = []
-
-        with open(lut_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("LUT_3D_SIZE"):
-                    lut_size = int(line.split()[-1])
-                elif line and not line.startswith("#") and not line.startswith("TITLE"):
-                    # Skip comments, titles, and domain specifications
-                    if line.startswith(("DOMAIN_", "LUT_")):
-                        continue
-                    parts = line.split()
-                    if len(parts) == 3:
-                        try:
-                            r, g, b = map(float, parts)
-                            lut_data.append([r, g, b])
-                        except ValueError:
-                            continue
-
-        if lut_size > 0 and len(lut_data) == lut_size**3:
-            return np.array(lut_data, dtype=np.float32).reshape(lut_size, lut_size, lut_size, 3)
-        else:
-            logger.warning(f"Invalid LUT data: size={lut_size}, expected {lut_size**3} entries, got {len(lut_data)}")
-            return None
-
-    except Exception as e:
+        return load_cube_lut(lut_path)
+    except (OSError, ValueError) as e:
         logger.warning(f"Failed to load LUT {lut_path}: {e}")
         return None
 
@@ -314,48 +291,7 @@ def _apply_lut(
     if lut is None:
         return None
 
-    lut_size = lut.shape[0]
-
-    # Normalize image to LUT index space
-    array = np.clip(image, 0, 1).astype(np.float32)
-    indices = array * (lut_size - 1)
-    indices = np.clip(indices, 0, lut_size - 1.001)
-
-    # Get floor and ceiling indices for trilinear interpolation
-    idx0 = np.floor(indices).astype(np.int32)
-    idx1 = np.minimum(idx0 + 1, lut_size - 1)
-    frac = indices - idx0
-
-    # Extract RGB indices
-    r0, g0, b0 = idx0[..., 0], idx0[..., 1], idx0[..., 2]
-    r1, g1, b1 = idx1[..., 0], idx1[..., 1], idx1[..., 2]
-    fr, fg, fb = frac[..., 0:1], frac[..., 1:2], frac[..., 2:3]
-
-    # Trilinear interpolation (8 corner lookups)
-    c000 = lut[r0, g0, b0]
-    c001 = lut[r0, g0, b1]
-    c010 = lut[r0, g1, b0]
-    c011 = lut[r0, g1, b1]
-    c100 = lut[r1, g0, b0]
-    c101 = lut[r1, g0, b1]
-    c110 = lut[r1, g1, b0]
-    c111 = lut[r1, g1, b1]
-
-    # Interpolate along each axis
-    c00 = c000 * (1 - fr) + c100 * fr
-    c01 = c001 * (1 - fr) + c101 * fr
-    c10 = c010 * (1 - fr) + c110 * fr
-    c11 = c011 * (1 - fr) + c111 * fr
-
-    c0 = c00 * (1 - fg) + c10 * fg
-    c1 = c01 * (1 - fg) + c11 * fg
-
-    graded = c0 * (1 - fb) + c1 * fb
-
-    # Blend with original based on strength
-    result = array * (1 - strength) + graded * strength
-
-    return np.clip(result, 0, 1).astype(np.float32)
+    return apply_cube_lut(image, lut, strength)
 
 
 def _apply_vibrance(image: np.ndarray, vibrance: float) -> np.ndarray:

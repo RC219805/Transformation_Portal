@@ -6,11 +6,16 @@ previously duplicated across multiple files (lux_render_pipeline.py,
 depth_tools.py, depth_pipeline/utils/image_utils.py).
 """
 
+import functools
 from pathlib import Path
 from typing import Union
 
 import numpy as np
 from PIL import Image
+
+# Adobe Cube LUT Specification 1.0: LUT_3D_SIZE must lie in [2, 256].
+CUBE_LUT_3D_MIN_SIZE = 2
+CUBE_LUT_3D_MAX_SIZE = 256
 
 
 def load_image(path: Union[str, Path]) -> Image.Image:
@@ -84,3 +89,106 @@ def load_image_rgb(path: Union[str, Path]) -> np.ndarray:
 
     img = load_image(path)
     return pil_to_np(img, to_float=True)
+
+
+def _parse_cube_lut(path: Path) -> np.ndarray:
+    """Parse a 3D ``.cube`` file into an array indexed ``lut[r, g, b]``.
+
+    ``.cube`` data rows list the red index fastest, then green, then blue, so a
+    plain ``reshape(N, N, N, 3)`` is indexed ``[b, g, r]``; the transpose puts
+    the axes in channel order.
+
+    Raises:
+        OSError: The file cannot be read.
+        ValueError: The file is not a valid 3D ``.cube`` LUT.
+    """
+    lut_size = 0
+    rows: list[list[float]] = []
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("LUT_3D_SIZE"):
+                lut_size = int(line.split()[-1])
+                continue
+            if line.startswith(("TITLE", "DOMAIN_", "LUT_")):
+                continue
+            parts = line.split()
+            if len(parts) == 3:
+                try:
+                    rows.append([float(part) for part in parts])
+                except ValueError:
+                    continue
+
+    if not CUBE_LUT_3D_MIN_SIZE <= lut_size <= CUBE_LUT_3D_MAX_SIZE:
+        raise ValueError(f"LUT_3D_SIZE must be between {CUBE_LUT_3D_MIN_SIZE} and {CUBE_LUT_3D_MAX_SIZE}, got {lut_size}")
+    if len(rows) != lut_size**3:
+        raise ValueError(f"Invalid LUT data: size={lut_size}, expected {lut_size**3} entries, got {len(rows)}")
+
+    table = np.asarray(rows, dtype=np.float32)
+    if not np.isfinite(table).all():
+        raise ValueError("LUT contains non-finite entries")
+    return np.ascontiguousarray(table.reshape(lut_size, lut_size, lut_size, 3).transpose(2, 1, 0, 3))
+
+
+@functools.lru_cache(maxsize=4)
+def _load_cube_lut_cached(path_str: str, mtime_ns: int, size_bytes: int) -> np.ndarray:
+    del mtime_ns, size_bytes  # cache-key components only
+    lut = _parse_cube_lut(Path(path_str))
+    lut.setflags(write=False)
+    return lut
+
+
+def load_cube_lut(path: Union[str, Path]) -> np.ndarray:
+    """Load a 3D ``.cube`` LUT as a read-only float32 array indexed ``lut[r, g, b]``.
+
+    Parsed tables are cached per resolved path, modification time and size, so a
+    batch applying the same LUT to many images parses it once.
+
+    Raises:
+        OSError: The file is missing or unreadable.
+        ValueError: The file is not a valid 3D ``.cube`` LUT.
+    """
+    resolved = Path(path).resolve()
+    stat_result = resolved.stat()
+    return _load_cube_lut_cached(str(resolved), stat_result.st_mtime_ns, stat_result.st_size)
+
+
+def apply_cube_lut(image: np.ndarray, lut: np.ndarray, strength: float = 1.0) -> np.ndarray:
+    """Apply a 3D LUT indexed ``lut[r, g, b]`` with trilinear interpolation.
+
+    Args:
+        image: Float image in [0, 1] with shape (..., 3); values outside are clipped.
+        lut: Table of shape (N, N, N, 3) as returned by :func:`load_cube_lut`.
+        strength: Blend factor between the input (0.0) and the LUT output (1.0).
+
+    Returns:
+        Float32 image clipped to [0, 1] with the same shape as ``image``.
+    """
+    if lut.ndim != 4 or lut.shape[3] != 3 or not lut.shape[0] == lut.shape[1] == lut.shape[2]:
+        raise ValueError(f"LUT must have shape (N, N, N, 3), got {lut.shape}")
+    lut_size = lut.shape[0]
+    if lut_size < CUBE_LUT_3D_MIN_SIZE:
+        raise ValueError(f"LUT size must be at least {CUBE_LUT_3D_MIN_SIZE}, got {lut_size}")
+    if image.ndim < 1 or image.shape[-1] != 3:
+        raise ValueError(f"Image must have 3 colour channels in the last axis, got shape {image.shape}")
+
+    array = np.clip(image, 0, 1).astype(np.float32)
+    indices = array * np.float32(lut_size - 1)
+    # Clamp the lower cell corner to N - 2 so that 1.0 lands exactly on the last grid node (frac == 1).
+    lower_f = np.minimum(np.floor(indices), np.float32(lut_size - 2))
+    frac = indices - lower_f
+    lower = lower_f.astype(np.int32)
+    upper = lower + 1
+
+    corners = ((lower, 1.0 - frac), (upper, frac))
+    graded = np.zeros_like(array)
+    for r_idx, r_weight in corners:
+        for g_idx, g_weight in corners:
+            for b_idx, b_weight in corners:
+                weight = r_weight[..., 0:1] * g_weight[..., 1:2] * b_weight[..., 2:3]
+                graded += lut[r_idx[..., 0], g_idx[..., 1], b_idx[..., 2]] * weight
+
+    result = array * (1.0 - strength) + graded * strength
+    return np.clip(result, 0, 1).astype(np.float32)
