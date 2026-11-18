@@ -1424,3 +1424,38 @@ def test_captioning_schema_extensions_are_optional_for_a1_plan_compatibility(
     assert runtime.fastvlm_review_model_path is None
     assert runtime.fastvlm_max_tokens == 120
     assert runtime.fastvlm_temperature == 0.0
+
+
+@pytest.mark.parametrize("name", ["A:kitchen.png", "line\nbreak.png"])
+def test_plan_rejects_input_names_execution_evidence_cannot_record(tmp_path: Path, name: str) -> None:
+    root = tmp_path / "inputs"
+    root.mkdir()
+    image = root / name
+    image.write_bytes(b"not-decoded-by-plan-preparation")
+    ordinary = root / "scene.png"
+    ordinary.write_bytes(b"not-decoded-by-plan-preparation")
+    config = _synthetic_config()
+
+    with pytest.raises(ExecutionPlanError, match="cannot be recorded in execution evidence"):
+        prepare_lux_execution(config, root, [ordinary, image])
+
+    prepared = prepare_lux_execution(config, root, [ordinary])
+    payload = prepared.plan.to_payload()
+    payload["input_selection"]["files"].append({"id": "input-000002", "path": name})
+    with pytest.raises(LuxExecutionPlanAuthorityError, match="cannot be recorded in execution evidence"):
+        consume_lux_execution_plan(
+            canonicalize_json(with_execution_plan_fingerprint(payload)),
+            authorized_input_root=root,
+        )
+
+
+@pytest.mark.parametrize("name", ["Küche öst 01.png", "-rf.png", "100% #1 [final] (v2).png", "x..y.png"])
+def test_plan_accepts_portable_input_names(tmp_path: Path, name: str) -> None:
+    root = tmp_path / "inputs"
+    root.mkdir()
+    image = root / name
+    image.write_bytes(b"not-decoded-by-plan-preparation")
+
+    prepared = prepare_lux_execution(_synthetic_config(), root, [image])
+
+    assert [item.path for item in prepared.plan.inputs] == [name]

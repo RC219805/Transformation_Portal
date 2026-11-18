@@ -8,9 +8,11 @@ runtime configuration only from that carrier at every later boundary.
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import math
 import os
+import re
 import stat
 import unicodedata
 from dataclasses import dataclass
@@ -141,6 +143,27 @@ def _canonical_input_key(path: str) -> str:
     return unicodedata.normalize("NFC", unicodedata.normalize("NFC", path).casefold())
 
 
+@functools.lru_cache(maxsize=1)
+def _evidence_relative_path_rule() -> tuple[re.Pattern[str], int, int]:
+    """Return the evidence schema's ``relativePath`` predicate (pattern, min, max length)."""
+
+    from .execution_evidence import load_execution_evidence_schema
+
+    definition = load_execution_evidence_schema()["$defs"]["relativePath"]
+    return re.compile(str(definition["pattern"])), int(definition["minLength"]), int(definition["maxLength"])
+
+
+def _is_evidence_recordable_input_path(relative: str) -> bool:
+    """Return whether execution evidence can record ``relative`` as a requested input path.
+
+    Mirrors the JSON Schema check (``re.search`` plus character-length bounds)
+    so a name the evidence would reject fails at plan time, not after the run.
+    """
+
+    pattern, min_length, max_length = _evidence_relative_path_rule()
+    return min_length <= len(relative) <= max_length and pattern.search(relative) is not None
+
+
 def _resolve_input_selection(
     input_root: Path,
     input_files: Sequence[Path],
@@ -169,6 +192,11 @@ def _resolve_input_selection(
             relative = resolved.relative_to(root).as_posix()
         except ValueError as exc:
             raise ExecutionPlanError(f"Planned input escapes the authorized root: {raw_path}") from exc
+        if not _is_evidence_recordable_input_path(relative):
+            raise ExecutionPlanError(
+                f"Planned input path cannot be recorded in execution evidence (drive-letter prefix, backslash, NUL "
+                f"or line-break characters are not portable): {relative!r}"
+            )
         if relative in selected:
             raise ExecutionPlanError(f"Duplicate planned input path: {relative!r}")
         collision_key = _canonical_input_key(relative)
@@ -216,6 +244,8 @@ def _bind_plan_inputs(
 
     collision_keys: dict[str, str] = {}
     for item in plan.inputs:
+        if not _is_evidence_recordable_input_path(item.path):
+            raise LuxExecutionPlanAuthorityError(f"Carried input path cannot be recorded in execution evidence: {item.path!r}")
         collision_key = _canonical_input_key(item.path)
         prior = collision_keys.get(collision_key)
         if prior is not None:
