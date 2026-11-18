@@ -56,10 +56,10 @@ class ScalingMetrics:
 
     Attributes:
         gpu_utilization: Current GPU utilization (0-1)
-        pending_tasks: Number of pending tasks
+        pending_tasks: Number of tasks occupying GPUs (in flight)
         current_workers: Current worker count
         avg_task_latency: Average task latency (seconds)
-        queue_depth: Depth of task queue
+        queue_depth: Tasks waiting for a GPU (from the queue-depth callback)
     """
 
     gpu_utilization: float = 0.0
@@ -236,6 +236,7 @@ class GPUAutoscaler:
 
         self._last_scale_time: float = 0.0
         self._metrics_callback: Callable[[ScalingMetrics], None] | None = None
+        self._queue_depth_fn: Callable[[], int] | None = None
 
     def set_metrics_callback(
         self,
@@ -247,6 +248,18 @@ class GPUAutoscaler:
             callback: Function to call with metrics
         """
         self._metrics_callback = callback
+
+    def set_queue_depth_callback(self, fn: Callable[[], int]) -> None:
+        """Set the source of the queue-depth (waiting tasks) metric.
+
+        Ray resource counters only show how many GPUs are busy, which can
+        never exceed the GPU count, so backlog-driven scale-up needs the
+        caller's real queue depth.
+
+        Args:
+            fn: Function returning the number of tasks waiting for a GPU
+        """
+        self._queue_depth_fn = fn
 
     def _get_metrics(self) -> ScalingMetrics:
         """Collect current metrics."""
@@ -269,6 +282,12 @@ class GPUAutoscaler:
         except Exception as e:
             logger.debug("Failed to get Ray metrics: %s", e)
 
+        if self._queue_depth_fn is not None:
+            try:
+                metrics.queue_depth = max(0, int(self._queue_depth_fn()))
+            except Exception as e:
+                logger.debug("Failed to get queue depth: %s", e)
+
         return metrics
 
     def _decide(self, metrics: ScalingMetrics) -> ScalingDecision:
@@ -287,13 +306,25 @@ class GPUAutoscaler:
             should_scale_up = True
             scale_up_reason = f"High GPU util: {metrics.gpu_utilization:.2f}"
 
-        # High pending tasks
+        # High backlog: tasks in flight plus tasks waiting for a GPU. With no
+        # workers any backlog is too much, so this also scales up from zero.
+        backlog = metrics.pending_tasks + metrics.queue_depth
         max_pending = current * self.policy.max_pending_per_gpu
-        if metrics.pending_tasks > max_pending and current > 0:
+        if backlog > max_pending:
             should_scale_up = True
-            scale_up_reason = f"High pending: {metrics.pending_tasks} > {max_pending}"
+            scale_up_reason = f"High pending: {backlog} > {max_pending}"
 
-        if should_scale_up and current < self.policy.max_workers:
+        floor = min(self.policy.min_workers, self.policy.max_workers)
+        if current < floor:
+            # Below the floor: restore min_workers regardless of load (or go
+            # further if the load-driven rules ask for more).
+            target = floor
+            if should_scale_up:
+                target = max(floor, min(current + self.policy.scale_up_increment, self.policy.max_workers))
+            action = "scale_up"
+            reason = f"Below min_workers: {current} < {self.policy.min_workers}"
+
+        elif should_scale_up and current < self.policy.max_workers:
             target = min(
                 current + self.policy.scale_up_increment,
                 self.policy.max_workers,
@@ -302,11 +333,7 @@ class GPUAutoscaler:
             reason = scale_up_reason
 
         # Check scale-down conditions
-        elif (
-            metrics.gpu_utilization < self.policy.scale_down_threshold
-            and metrics.pending_tasks == 0
-            and current > self.policy.min_workers
-        ):
+        elif metrics.gpu_utilization < self.policy.scale_down_threshold and backlog == 0 and current > self.policy.min_workers:
             target = max(
                 current - self.policy.scale_down_increment,
                 self.policy.min_workers,
