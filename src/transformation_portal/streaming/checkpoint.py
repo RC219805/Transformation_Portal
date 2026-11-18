@@ -5,12 +5,29 @@ from __future__ import annotations
 import datetime
 import functools
 import json
+import os
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, Optional
+
+_CHECKPOINT_FIELDS = ("id", "progress", "state", "timestamp", "metadata")
+# Errors that mean "this file is not a usable checkpoint"; such files are skipped on resume.
+_CHECKPOINT_LOAD_ERRORS = (ValueError, TypeError, KeyError, OSError)
+
+
+def _json_default(value: Any) -> Any:
+    """Serialise path-like state values (e.g. the current file) as strings."""
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 @dataclass(frozen=True)
@@ -80,8 +97,21 @@ class Checkpoint:
             "metadata": self.metadata,
         }
 
-        with open(path, "w") as f:
-            json.dump(checkpoint_data, f, indent=2)
+        # Serialise before touching the disk so an unserialisable state leaves no
+        # file behind, then publish atomically (temp file + fsync + os.replace) so
+        # an interrupted save never leaves a truncated checkpoint.
+        payload = json.dumps(checkpoint_data, indent=2, default=_json_default)
+        fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, path: Path) -> "Checkpoint":
@@ -93,8 +123,19 @@ class Checkpoint:
         Returns:
             Checkpoint instance
         """
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
+
+        if not isinstance(data, dict) or set(data) != set(_CHECKPOINT_FIELDS):
+            raise ValueError(f"not a checkpoint file (expected keys {list(_CHECKPOINT_FIELDS)}): {path}")
+        if not (
+            isinstance(data["id"], str)
+            and _is_number(data["progress"])
+            and _is_number(data["timestamp"])
+            and isinstance(data["state"], dict)
+            and isinstance(data["metadata"], dict)
+        ):
+            raise ValueError(f"checkpoint file has invalid field types: {path}")
 
         return cls(**data)
 
@@ -210,7 +251,7 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 loaded_checkpoints.append(checkpoint)
-            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
+            except _CHECKPOINT_LOAD_ERRORS as e:
                 # Log corrupted or inaccessible checkpoint files for consistency
                 print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
@@ -231,7 +272,7 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 checkpoints.append(checkpoint)
-            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
+            except _CHECKPOINT_LOAD_ERRORS as e:
                 print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
         return sorted(checkpoints, key=lambda c: c.timestamp)
