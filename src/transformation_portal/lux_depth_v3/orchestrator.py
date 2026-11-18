@@ -134,6 +134,7 @@ from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
 from .io_atomic import (
+    _DEFAULT_NEW_FILE_MODE,
     atomic_temp_file,
     atomic_write_bytes,
     atomic_write_evidence_pair,
@@ -877,6 +878,9 @@ class EnhanceOrchestrator:
         self._active_depth_attempts: List[Dict[str, Any]] = []
         self._active_selected_attempt_index: Optional[int] = None
         self._active_run_card_segmentation_metadata: Dict[str, Dict[str, Any]] = {}
+        # File modes of legacy manifests retired by Stage A, restored when the
+        # manifest is rewritten (keyed by manifest path).
+        self._retired_manifest_modes: Dict[str, int] = {}
         self._active_manifest_plan_projector: Optional[_ManifestPlanProjector] = None
         self._active_execution_outcome_payload: Optional[Mapping[str, Any]] = None
         # Serialize prepared-reuse verification. A cache is enabled only after
@@ -4536,7 +4540,7 @@ class EnhanceOrchestrator:
                 # later legacy resume would trust. Prepared reuse is bound to
                 # artifact bytes through its evidence authority instead.
                 if self._prepared_execution is None:
-                    manifest_path.unlink(missing_ok=True)
+                    self._retire_legacy_manifest(manifest_path)
 
                 # 2c. Materials V3 Processing (if enabled)
                 if self.materials_v3_engine:
@@ -6754,8 +6758,50 @@ class EnhanceOrchestrator:
                 backend_selection=(manifest_backend_selection.to_dict() if manifest_backend_selection is not None else None),
             ),
         )
+        if self._prepared_execution is None:
+            self._restore_retired_manifest_mode(manifest_write_path)
         manifest.write(manifest_write_path)
         return input_sha
+
+    def _retire_legacy_manifest(self, manifest_path: Path) -> None:
+        """Durably remove the previous legacy manifest before Stage A rewrites its artifacts.
+
+        The Stage A writers publish durably, so the removal must be durable
+        too: otherwise a crash could bring the old manifest back beside new
+        artifacts. A non-default file mode is remembered so the rewritten
+        manifest keeps the operator's permissions, as an in-place atomic
+        replacement would.
+        """
+        try:
+            previous_mode = stat.S_IMODE(manifest_path.stat().st_mode)
+        except FileNotFoundError:
+            return
+        if previous_mode != _DEFAULT_NEW_FILE_MODE:
+            retired_modes = self.__dict__.setdefault("_retired_manifest_modes", {})
+            retired_modes[str(manifest_path)] = previous_mode
+        durable_unlink(manifest_path)
+
+    def _restore_retired_manifest_mode(self, manifest_path: Path) -> None:
+        """Give a retired manifest's file mode to the manifest about to be written.
+
+        The atomic writer preserves the mode of an existing destination, so an
+        empty placeholder carrying the remembered mode is created exclusively
+        just before the write; the published manifest is never visible with
+        wider permissions. An empty manifest is not reusable by any resume
+        check, should the process stop between the two steps.
+        """
+        retired_modes = getattr(self, "_retired_manifest_modes", None)
+        previous_mode = retired_modes.pop(str(manifest_path), None) if retired_modes else None
+        if previous_mode is None:
+            return
+        try:
+            descriptor = os.open(manifest_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, previous_mode)
+        except FileExistsError:
+            return
+        try:
+            os.chmod(manifest_path, previous_mode)
+        finally:
+            os.close(descriptor)
 
     def enhance_image(
         self,

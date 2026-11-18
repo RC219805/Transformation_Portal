@@ -863,6 +863,70 @@ class TestInterruptedStageARetiresManifest:
         manifest = json.loads(Path(second["manifest"]).read_text())
         assert manifest["config_fingerprint"]["quality_tier"] == "premium"
 
+    def test_rewrite_after_retirement_keeps_restricted_manifest_mode(self, tmp_path: Path) -> None:
+        """Retiring the manifest must not widen an operator-restricted mode on the rewritten manifest."""
+        import stat
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image_input = ImageInput(path=_make_test_image(inputs, "room.png"))
+
+        first = _create_orchestrator(output).enhance_image(image_input, input_root=inputs)
+        manifest_path = Path(first["manifest"])
+        manifest_path.chmod(0o600)
+
+        second = _create_orchestrator(output, quality_tier="premium").enhance_image(image_input, input_root=inputs)
+
+        assert Path(second["manifest"]) == manifest_path
+        assert json.loads(manifest_path.read_text())["config_fingerprint"]["quality_tier"] == "premium"
+        assert stat.S_IMODE(manifest_path.stat().st_mode) == 0o600
+
+    def test_manifest_retirement_is_durable_and_an_empty_manifest_is_never_resumed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The retirement must reach the directory like the durable Stage A writes that follow it."""
+        from transformation_portal.lux_depth_v3 import io_atomic
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image_input = ImageInput(path=_make_test_image(inputs, "room.png"))
+        first = _create_orchestrator(output).enhance_image(image_input, input_root=inputs)
+        depth_path = Path(first["depth_path"])
+        manifest_path = Path(first["manifest"])
+
+        events: list[tuple[str, str]] = []
+        real_fsync_directory = io_atomic._fsync_directory
+        real_unlink = Path.unlink
+
+        def _recording_fsync_directory(directory: Path) -> None:
+            events.append(("fsync", Path(directory).name))
+            real_fsync_directory(directory)
+
+        def _recording_unlink(self: Path, *args: Any, **kwargs: Any) -> None:
+            if self == manifest_path:
+                events.append(("unlink", self.parent.name))
+            real_unlink(self, *args, **kwargs)
+
+        with monkeypatch.context() as patched:
+            patched.setattr(io_atomic, "_fsync_directory", _recording_fsync_directory)
+            patched.setattr(Path, "unlink", _recording_unlink)
+            _create_orchestrator(output, quality_tier="premium").enhance_image(image_input, input_root=inputs)
+
+        retired_at = events.index(("unlink", "manifests"))
+        # The directory entry removal is synced before any later depth write.
+        assert events[retired_at + 1] == ("fsync", "manifests")
+        assert ("fsync", "depth") in events[retired_at + 2 :]
+
+        # State left if the process stops between mode restoration and publish.
+        manifest_path.write_bytes(b"")
+        resumed = _create_orchestrator(output, quality_tier="premium")
+        assert resumed.should_skip_depth(depth_path, manifest_path, image_input) is False
+
 
 class TestStageAReuseBindsDepthShapingSettings:
     """F11: legacy Stage A reuse must not survive a change of RAW decode or depth postprocessing."""
