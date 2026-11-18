@@ -45,6 +45,24 @@ def test_scene_groups_parent_dir_mode_groups_deterministically():
     assert groups[0].scene_id != groups[1].scene_id
 
 
+def test_scene_groups_parent_dir_keeps_directory_whole_when_subdir_sorts_between_files():
+    """LC-08: a sub-directory sorting between a parent's files must not split the parent."""
+    images = [
+        Path("house/d_side.jpg"),
+        Path("house/b_details/closeup.jpg"),
+        Path("house/a_front.jpg"),
+        Path("house/c_back.jpg"),
+    ]
+
+    groups = build_scene_groups(images, dataset_root=Path("."), grouping_mode="parent_dir")
+
+    assert [group.images for group in groups] == [
+        (Path("house/a_front.jpg"), Path("house/c_back.jpg"), Path("house/d_side.jpg")),
+        (Path("house/b_details/closeup.jpg"),),
+    ]
+    assert len({group.scene_id for group in groups}) == 2
+
+
 # ============================================================================
 # ADR-042 Phase B Tests: Camera Parameters and Reconstruction Eligibility
 # ============================================================================
