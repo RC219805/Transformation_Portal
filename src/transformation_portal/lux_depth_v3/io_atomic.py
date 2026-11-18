@@ -101,6 +101,35 @@ def _write_all(handle: BinaryIO, data: bytes) -> None:
         remaining = remaining[written:]
 
 
+def _fsync_file(path: Path) -> None:
+    """Persist a complete temp file's bytes and mode before it is published.
+
+    Path-based writers (cv2, PIL) close their own handles, so the file is
+    reopened read-only for the fsync; Windows requires a writable descriptor.
+    """
+    flags = (os.O_RDWR | getattr(os, "O_BINARY", 0)) if _IS_WINDOWS else os.O_RDONLY
+    descriptor = os.open(path, flags | getattr(os, "O_CLOEXEC", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _close_if_same_file(descriptor: int, identity: os.stat_result) -> None:
+    """Close ``descriptor`` only while it still refers to the file ``identity`` describes.
+
+    A writer that was handed a descriptor may already have closed it, after
+    which another thread can be given the same number for an unrelated file;
+    closing it again would close that file instead.
+    """
+    try:
+        current = os.fstat(descriptor)
+    except OSError:
+        return  # Already closed and not reused.
+    if os.path.samestat(current, identity):
+        os.close(descriptor)
+
+
 def _fsync_directory(directory: Path) -> None:
     """Persist a directory entry update where the platform supports it.
 
@@ -363,9 +392,12 @@ def atomic_temp_file(
 
             # Preserve an existing mode or use the fixed new-file policy.
             os.chmod(temp_path, destination_mode)
+            # Persist bytes and mode before the rename, and the rename after.
+            _fsync_file(temp_path)
 
             # Atomic rename on success
             os.replace(temp_path, output_path)
+            _fsync_directory(output_path.parent)
 
         except BaseException:
             # Cleanup temp file on any failure (including KeyboardInterrupt)
@@ -387,7 +419,10 @@ def atomic_temp_file(
             # Atomic rename on success (temp_path should exist by now)
             if temp_path.exists():
                 os.chmod(temp_path, destination_mode)
+                # Persist bytes and mode before the rename, and the rename after.
+                _fsync_file(temp_path)
                 os.replace(temp_path, output_path)
+                _fsync_directory(output_path.parent)
             else:
                 raise IOError(f"Writer did not create temp file: {temp_path}")
 
@@ -503,9 +538,14 @@ def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: 
 
 
 def atomic_write_with_fd(output_path: Path, writer_func: Callable[[int, Path], None], suffix: str = ".tmp") -> Path:
-    """Atomically write using a file descriptor-based writer function.
+    """Atomically and durably write using a file descriptor-based writer function.
 
     For writers that need an open file descriptor (e.g., cv2.imwrite with fdopen).
+
+    The writer may close the descriptor it is given (directly, or through a
+    file object it wraps it in) or leave it open. This helper closes it only
+    while the number still refers to the temp file, so a descriptor number
+    that another thread was handed after the writer closed it is never closed.
 
     Args:
         output_path: Destination file path
@@ -529,41 +569,48 @@ def atomic_write_with_fd(output_path: Path, writer_func: Callable[[int, Path], N
     output_path.parent.mkdir(parents=True, exist_ok=True)
     destination_mode = _destination_file_mode(output_path)
 
-    temp_fd = None
-    temp_path = None
+    temp_fd: int | None = None
+    temp_identity: os.stat_result | None = None
+    temp_path: Path | None = None
 
     try:
         # Create temp file with FD
         temp_fd, temp_path_str = tempfile.mkstemp(suffix=suffix, dir=output_path.parent, prefix=".tmp_")
         temp_path = Path(temp_path_str)
+        temp_identity = os.fstat(temp_fd)
 
-        # Call writer function - it's responsible for closing FD if needed
+        # Call writer function - it may close the FD itself
         writer_func(temp_fd, temp_path)
 
         # Close FD if writer didn't consume it
-        if temp_fd is not None:
-            try:
-                os.close(temp_fd)
-            except OSError:
-                pass  # Already closed by writer
+        descriptor, temp_fd = temp_fd, None
+        _close_if_same_file(descriptor, temp_identity)
 
         # Preserve an existing mode or use the fixed new-file policy.
         os.chmod(temp_path, destination_mode)
+        # Persist bytes and mode before the rename, and the rename after.
+        _fsync_file(temp_path)
 
         # Atomic rename
         os.replace(temp_path, output_path)
+        _fsync_directory(output_path.parent)
 
         return Path(output_path)
 
-    except Exception as e:
-        # Cleanup
+    except BaseException as e:
+        # Cleanup, including on KeyboardInterrupt/SystemExit
         if temp_fd is not None:
-            try:
-                os.close(temp_fd)
-            except OSError:
-                pass
+            if temp_identity is not None:
+                _close_if_same_file(temp_fd, temp_identity)
+            else:
+                try:
+                    os.close(temp_fd)
+                except OSError:
+                    pass
 
         if temp_path is not None:
             Path(temp_path).unlink(missing_ok=True)
 
-        raise IOError(f"Failed to write {output_path}") from e
+        if isinstance(e, Exception):
+            raise IOError(f"Failed to write {output_path}") from e
+        raise
