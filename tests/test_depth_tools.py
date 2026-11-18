@@ -417,6 +417,33 @@ class TestDepthMapPairing:
         assert rc == 0
         assert [p.name for p in Path(temp_dirs["output"]).iterdir()] == ["house_enh_depthhaze.tif"]
 
+    @pytest.mark.parametrize(
+        "argv_tail",
+        [["dof", "--falloff", "2.0"], ["do", "--fallof", "2.0"], ["dof", "--fallof", "2.0"], ["do", "--falloff", "2.0"]],
+    )
+    def test_documented_dof_and_falloff_names_are_accepted(self, temp_dirs, monkeypatch, argv_tail):
+        """Regression for L-05: the documented ``dof`` mode and ``--falloff`` flag were rejected by argparse."""
+        from src.transformation_portal.pipelines import depth_tools
+
+        seen = {}
+        monkeypatch.setattr(depth_tools, "process_batch", lambda opts, progress=None: seen.setdefault("opts", opts) and 0)
+        cmd, *flags = argv_tail
+
+        rc = depth_tools.main([cmd, temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], *flags])
+
+        assert rc == 0
+        assert seen["opts"].falloff == 2.0
+        assert seen["opts"].mode in ("dof", "do")
+
+    def test_dof_mode_writes_the_historical_output_name(self, temp_dirs):
+        _rgb(120).save(Path(temp_dirs["images"]) / "house_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.png")
+
+        rc = main(["dof", temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], "--falloff", "2.0"])
+
+        assert rc == 0
+        assert [p.name for p in Path(temp_dirs["output"]).iterdir()] == ["house_enh_depthdo.tif"]
+
     def test_base_does_not_match_longer_base_sharing_its_prefix(self, temp_dirs):
         from src.transformation_portal.pipelines.depth_tools import find_file_for_base
 

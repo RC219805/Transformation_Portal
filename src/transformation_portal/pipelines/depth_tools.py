@@ -830,7 +830,7 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
                 building_mask=building_mask,
             )
             suffix = "_depthclarity"
-        elif opts.mode == "do":
+        elif opts.mode in ("dof", "do"):  # "do" is the historical spelling of the documented "dof"
             out = apply_depth_dof(
                 img,
                 depth,
@@ -1012,12 +1012,13 @@ def build_cli() -> argparse.ArgumentParser:
     pc.add_argument("--near", type=float, default=20.0)
     pc.add_argument("--far", type=float, default=80.0)
 
-    pd = sub.add_parser("do", help="Cinematic depth-of-field")
+    # "do" and "--fallof" are the historical spellings, kept as aliases of the documented names.
+    pd = sub.add_parser("dof", aliases=["do"], help="Cinematic depth-of-field")
     common(pd)
     pd.add_argument("--focus", type=float, default=35.0)
     pd.add_argument("--aperture", type=float, default=0.22)
     pd.add_argument("--clarity", type=float, default=0.18)
-    pd.add_argument("--fallof", type=float, default=1.4)
+    pd.add_argument("--falloff", "--fallof", dest="falloff", type=float, default=1.4)
 
     return ap
 
@@ -1062,11 +1063,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         opts.radius = int(getattr(args, "radius", 3))
         opts.near = float(getattr(args, "near", 20.0))
         opts.far = float(getattr(args, "far", 80.0))
-    elif args.cmd == "do":
+    elif args.cmd in ("dof", "do"):
         opts.focus = float(getattr(args, "focus", 35.0))
         opts.aperture = float(getattr(args, "aperture", 0.22))
         opts.clarity = float(getattr(args, "clarity", 0.18))
-        opts.falloff = float(getattr(args, "fallof", 1.4))
+        opts.falloff = float(getattr(args, "falloff", 1.4))
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)
