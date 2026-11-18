@@ -596,6 +596,36 @@ def test_apply_rights_policy_streaming_does_not_publish_partial_output_on_invali
     assert not out_summary.exists()
 
 
+def test_apply_rights_policy_missing_manifest_is_input_error_without_output_side_effects(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    policy_yaml = tmp_path / "rights_flags.yml"
+    policy_yaml.write_text(
+        "version: 1\n" + "default_flags: [unspecified]\n" + "default_owner: UNSPECIFIED\n" + "rules: []\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "out"
+    out_jsonl = out_dir / "asset_rights.jsonl"
+    out_summary = out_dir / "asset_rights.summary.json"
+
+    exit_code = RIGHTS_TOOL.main(
+        [
+            "--manifest-jsonl",
+            str(tmp_path / "missing.jsonl"),
+            "--policy-yaml",
+            str(policy_yaml),
+            "--out-jsonl",
+            str(out_jsonl),
+            "--out-summary",
+            str(out_summary),
+        ]
+    )
+
+    assert exit_code == RIGHTS_TOOL.EXIT_INPUT_ERROR
+    assert "Input error" in capsys.readouterr().err
+    assert not out_dir.exists()
+
+
 def test_premis_validate_rejects_invalid_datetime_and_outcome() -> None:
     payload = PREMIS_TOOL.build_premis_event(
         event_type="validation",
