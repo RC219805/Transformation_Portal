@@ -120,6 +120,9 @@ class PipelineNode(BaseModel):
     label: str
     position: dict[str, float]
     config: dict[str, Any] = Field(default_factory=dict)
+    # Port names the editor UI renders; persisted so a saved pipeline loads back.
+    inputs: list[str] = Field(default_factory=list)
+    outputs: list[str] = Field(default_factory=list)
 
 
 class PipelineEdge(BaseModel):
@@ -605,10 +608,10 @@ def get_dag_editor_html() -> str:
                 <div class="node-header">${node.label}</div>
                 <div class="node-body">ID: ${node.id}</div>
                 <div class="node-ports">
-                    <div class="ports-in">${node.inputs.map(i =>
+                    <div class="ports-in">${(node.inputs || []).map(i =>
                         `<div class="port input" title="${i}" data-port="${i}" data-dir="in"></div>`
                     ).join('')}</div>
-                    <div class="ports-out">${node.outputs.map(o =>
+                    <div class="ports-out">${(node.outputs || []).map(o =>
                         `<div class="port output" title="${o}" data-port="${o}" data-dir="out"></div>`
                     ).join('')}</div>
                 </div>

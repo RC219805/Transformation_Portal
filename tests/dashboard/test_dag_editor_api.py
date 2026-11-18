@@ -96,3 +96,32 @@ def test_save_coerces_empty_node_and_edge_lists(client: TestClient) -> None:
     got = client.get("/api/editor/pipelines/empty").json()
     assert got["nodes"] == []
     assert got["edges"] == []
+
+
+def test_saved_node_ports_round_trip(client: TestClient) -> None:
+    # D8: the editor UI posts inputs/outputs and renderNode() maps over them on load.
+    ui_node = {
+        "id": "node_1",
+        "type": "segment",
+        "label": "Segmentation",
+        "position": {"x": 10, "y": 20},
+        "inputs": ["image"],
+        "outputs": ["masks", "scores"],
+    }
+    assert client.post("/api/editor/pipelines/ports", json={"nodes": [ui_node], "edges": []}).status_code == 200
+    loaded = client.get("/api/editor/pipelines/ports").json()["nodes"][0]
+    assert loaded["inputs"] == ["image"]
+    assert loaded["outputs"] == ["masks", "scores"]
+
+
+def test_node_without_ports_loads_with_empty_port_lists(client: TestClient) -> None:
+    assert client.post("/api/editor/pipelines/demo", json=_pipeline_payload()).status_code == 200
+    loaded = client.get("/api/editor/pipelines/demo").json()["nodes"][0]
+    assert loaded["inputs"] == []
+    assert loaded["outputs"] == []
+
+
+def test_editor_ui_tolerates_nodes_without_ports() -> None:
+    html = dag_editor_api.get_dag_editor_html()
+    assert "(node.inputs || []).map(" in html
+    assert "(node.outputs || []).map(" in html
