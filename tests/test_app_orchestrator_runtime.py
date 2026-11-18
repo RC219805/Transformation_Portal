@@ -1119,6 +1119,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         # Surface-split deferred bundles. Operate, Build, and Profile are real
         # carves; Overview is an intentional placeholder (see commit fe2ed28).
         "portal-operate.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate.js",
+        "portal-operate-tools.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate-tools.js",
         "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
         "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
@@ -1142,6 +1143,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
+        "portal-operate-tools.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
         "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
@@ -1214,6 +1216,7 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
         "/portal/assets/shared-ui-tokens.css",
         "/portal/assets/portal-photographic-support.js",
         "/portal/assets/portal-photographic-editor.js",
+        "/portal/assets/portal-operate-tools.js",
         "/portal/assets/portal-photographic-drafts.js",
         "/portal/assets/portal-photographic-loader.js",
     }
@@ -4418,9 +4421,9 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
 def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
     content = _portal_bundle_content()
 
-    assert "archive-gate-a (Fixity / Manifest Prep)" in content
-    assert "archive-gate-b (BagIt Build)" in content
-    assert "archive-gate-c (METS Export)" in content
+    assert 'value="archive-gate-a">Fixity and manifest · Gate A' in content
+    assert 'value="archive-gate-b">Build archival package · Gate B' in content
+    assert 'value="archive-gate-c">Export metadata · Gate C' in content
     assert "Rights Manifest JSONL" in content
     assert "Canonical Command" in content
 

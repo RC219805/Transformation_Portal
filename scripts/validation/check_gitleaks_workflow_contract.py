@@ -41,7 +41,10 @@ EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
     r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
     r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
 )
-EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^7194b5cc25808899836fcbd4651b2f93c79616458b3ccca69b49febded7bcde1$"
+EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = (
+    r"^(?:7194b5cc25808899836fcbd4651b2f93c79616458b3ccca69b49febded7bcde1|"
+    r"4c9265b65315d7b5e19704ec7bbff490d18ba9da06267f9094923e1c6f9f1e7a)$"
+)
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -109,6 +112,15 @@ def _validate_config(config: dict[str, object]) -> list[str]:
     matching_rules = [rule for rule in rules if isinstance(rule, dict) and rule.get("id") == EXPECTED_RULE_ID]
     if len(matching_rules) != 1:
         return errors + ["gitleaks config must define exactly one generic-api-key rule extension"]
+
+    for rule in rules:
+        if not isinstance(rule, dict) or rule.get("id") == EXPECTED_RULE_ID:
+            continue
+        other_allowlists = rule.get("allowlists", [])
+        for allowlist in other_allowlists if isinstance(other_allowlists, list) else []:
+            patterns = allowlist.get("regexes") if isinstance(allowlist, dict) else None
+            if isinstance(patterns, list) and EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX in patterns:
+                errors.append("public catalog chunk digest exceptions must belong only to generic-api-key")
 
     allowlists = matching_rules[0].get("allowlists", [])
     if not isinstance(allowlists, list) or len(allowlists) != 4:

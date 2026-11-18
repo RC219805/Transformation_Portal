@@ -48,12 +48,14 @@ const SCRIPT_STUB_ROUTES = new Map([
   "/__mock-portal/portal-config-transfer.js",
   "/__mock-portal/portal-profile.js",
   "/__mock-portal/portal-operate.js",
+  "/__mock-portal/portal-operate-tools.js",
   "/__mock-portal/portal-overview.js",
   "/__mock-portal/portal-review.js",
   "/__mock-portal/portal-photographic.js",
 ].map((pathname) => [pathname, { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }]));
 
 const FILE_ROUTES = new Map([
+  ["/portal/assets/portal-operate-tools.js", { type: "text/javascript; charset=utf-8", file: "portal-operate-tools.js" }],
   ["/portal/assets/portal-photographic.css", { type: "text/css; charset=utf-8", file: "portal-photographic.css" }],
   ["/portal/assets/portal-photographic.js", { type: "text/javascript; charset=utf-8", file: "portal-photographic.js" }],
   ["/__mock-portal/portal-review.css", { type: "text/css; charset=utf-8", file: "portal-review.css" }],

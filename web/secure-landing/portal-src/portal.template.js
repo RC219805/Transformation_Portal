@@ -3109,7 +3109,7 @@ const BUILD_STEP_CONTENT = Object.freeze({
         }
     ],
     photographyUnified: [
-        { label: 'Configure', meta: 'Unified photography workflow.', title: '1. Choose Lux Depth Unified', summary: 'Choose processing or inference with optional MaterialsV4 evidence. V3 remains the production baseline.' },
+        { label: 'Configure', meta: 'Unified photography workflow.', title: '1. Choose Lux Depth Unified', summary: 'Choose complete photographic processing or inference with optional MaterialsV4 evidence. V3 remains the production baseline.' },
         { label: 'Paths', meta: 'Upload photographs and choose a fresh output.', title: '2. Set photography paths', summary: 'Choose files or a folder, then select a new authorized destination.' },
         { label: 'Outputs', meta: 'Workflow and photographic outputs.', title: '3. Configure Unified outputs', summary: 'Process includes grading and depth products. Infer accepts optional verified materials and companion manifests.' },
         { label: 'Dispatch', meta: 'Current workflow preview and readiness.', title: '4. Review and dispatch Unified', summary: 'A successful preview of this exact workflow and configuration is required before dispatch.' }
@@ -6006,7 +6006,7 @@ function _applyStagedUploadResult(result) {
     const fileCount = Math.max(0, Number(summary.file_count) || 0);
     const totalBytes = Math.max(0, Number(summary.total_bytes) || 0);
     if (!inputDir) {
-        throw new Error('Upload input_dir missing');
+        throw new Error('staged upload response did not include input_dir');
     }
 
     _setStagedUploadState({
@@ -6564,7 +6564,7 @@ async function _loadDeferredReviewSurface() {
     deferredReviewSurfaceLoadPromise = import(moduleUrl)
         .then((module) => {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
-                throw new Error('Missing review');
+                throw new Error('Missing review factory');
             }
             _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
@@ -6632,7 +6632,7 @@ async function loadDeferredSurface(name, hostFactory) {
         .then((module) => {
             const factory = module?.[descriptor.factoryName];
             if (typeof factory !== 'function') {
-                throw new Error(`Missing ${name}`);
+                throw new Error(`Missing ${name}: ${descriptor.factoryName}`);
             }
             entry.lastFailureAt = 0;
             entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
@@ -6755,6 +6755,8 @@ function _loadClientRecoverySurface() {
 function _createDeferredOperateSurfaceHost() {
     return {
         state,
+        copyToClipboard,
+        maxLogLines: MAX_JOB_LOG_LINES,
         els,
         portalRenderScheduler,
         EVENT_SOURCE_READY_STATE_CONNECTING,
@@ -7028,8 +7030,7 @@ function selectJob(jobId, reviewConfirmed = false) {
         void refreshJobStatus(job);
     }
     if (job && els.logPane) {
-        els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-        els.logPane.scrollTop = els.logPane.scrollHeight;
+        _deferredOperateSurfaceApi()?.renderLogs?.();
     }
     renderReviewSurfaces();
     if (state.currentView === 'operate') {
@@ -7239,8 +7240,7 @@ async function _fetchJobStatus(job) {
         if (!_syncHydratedJob(job, hydrated, rawJob)) return;
         job.logsLoadStatus = 'ready';
         if (state.selectedJobId === job.id && els.logPane) {
-            els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-            els.logPane.scrollTop = els.logPane.scrollHeight;
+            _deferredOperateSurfaceApi()?.renderLogs?.();
             if (!_isJobStreamRecoverable(job) && els.logStatusIndicator) {
                 els.logStatusIndicator.classList.add('hidden');
             }
@@ -11036,8 +11036,7 @@ function handleArtifactRailKeydown(event) {
 function logToPane(jobId, line) {
     if (state.selectedJobId === jobId || !state.selectedJobId) {
         if (els.logPane) {
-            els.logPane.textContent += line + '\n';
-            els.logPane.scrollTop = els.logPane.scrollHeight;
+            _deferredOperateSurfaceApi()?.renderLogs?.();
         }
     }
 }
@@ -12166,7 +12165,7 @@ if (els.copyRunCardFingerprintBtn) {
 }
 
 if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
-    if (els.logPane) els.logPane.textContent = '';
+    _deferredOperateSurfaceApi()?.clearLogs?.();
 });
 if (els.runJobBtn) els.runJobBtn.addEventListener('click', _handleRunJobAction);
 if (els.refreshHealthBtn) {

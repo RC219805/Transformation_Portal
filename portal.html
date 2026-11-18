@@ -209,7 +209,7 @@ Contract notes:
                             New Run
                         </button>
                         <button id="resumeDraftBtn" type="button" class="hero-action hero-action-secondary" data-ui="overview-resume-draft">
-                            Resume Draft
+                            Resume Build draft
                         </button>
                         <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="overview-active-job" aria-busy="false">
                             View Active Job
@@ -399,9 +399,9 @@ Contract notes:
                 <div>
                     <p class="section-kicker">Current View</p>
                     <h2 id="consoleViewTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Overview</h2>
-                    <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[14px] leading-7 text-slate-600 dark:text-slate-300">Status, recent jobs, and the clearest next operator action.</p>
+                    <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[14px] leading-7 text-slate-600 dark:text-slate-300">Resume your draft, follow a run, or review its outputs.</p>
                 </div>
-                <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
+                <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">Choose a run to keep its status, logs, and outputs together.</p>
             </div>
             <div class="console-context-strip mt-4" data-ui="console-context-strip">
                 <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon hidden" data-ui="console-context-ribbon" aria-live="polite" role="status">
@@ -505,7 +505,7 @@ Contract notes:
                             <span class="build-step-index">1</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Configure</span>
-                                <span class="build-step-meta">Pipeline and preset posture.</span>
+                                <span class="build-step-meta">Choose a workflow and preset.</span>
                             </span>
                         </button>
                         <button id="buildStepTab2" type="button" class="build-step-tab" data-build-step-target="2" aria-pressed="false" aria-controls="buildPathsShell fieldsArchiveGate" tabindex="-1" data-ui="build-step-tab">
@@ -526,7 +526,7 @@ Contract notes:
                             <span class="build-step-index">4</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Dispatch</span>
-                                <span class="build-step-meta">Primary review, launch, and parity tools.</span>
+                                <span class="build-step-meta">Check readiness, then start the run.</span>
                             </span>
                         </button>
                     </div>
@@ -593,32 +593,37 @@ Contract notes:
                     <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div>
                             <p class="section-kicker">Run setup</p>
-                            <h2 class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Pipeline &amp; profile</h2>
+                            <h2 class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Workflow &amp; profile</h2>
                         </div>
                     </div>
                     <div class="build-profile-fields">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Workflow</label>
                             <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
-                                <option value="lux-depth-v3">lux-depth-v3</option>
-                                <option value="lux-depth-v5">lux-depth-v5 (Opt-in photography)</option>
-                                <option value="lux-depth">Lux Depth Unified (opt-in)</option>
-                                <option value="lux-depth-v6">lux-depth-v6 (Grading and depth outputs)</option>
-                                <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
-                                <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
-                                <option value="archive-gate-c">archive-gate-c (METS Export)</option>
+                                <optgroup label="Photographic workflows">
+                                    <option value="lux-depth-v3">Photo enhancement · Production V3</option>
+                                    <option value="lux-depth-v5">Photo processing · Opt-in V5</option>
+                                    <option value="lux-depth">Complete photography · Opt-in Unified</option>
+                                    <option value="lux-depth-v6">Color grading and depth · Opt-in V6</option>
+                                </optgroup>
+                                <optgroup label="Archive preparation">
+                                    <option value="archive-gate-a">Fixity and manifest · Gate A</option>
+                                    <option value="archive-gate-b">Build archival package · Gate B</option>
+                                    <option value="archive-gate-c">Export metadata · Gate C</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Local Profile</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Saved browser profile</label>
                             <div class="flex gap-2">
-                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] transition-colors cursor-pointer">
+                                <select id="profileSelect" aria-describedby="profileStorageHint" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] transition-colors cursor-pointer">
                                     <!-- Populated by JS -->
                                 </select>
                                 <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors btn-busy" aria-busy="false">
                                     Save
                                 </button>
                             </div>
+                            <p id="profileStorageHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Saved on this browser for this account. Import or export a configuration to move settings.</p>
                         </div>
                     </div>
                     <section id="buildGuide" class="workspace-guide console-action-rail review-status-banner mt-4" data-ui="build-guide" data-tone="info" aria-label="Build guidance">
@@ -1749,7 +1754,7 @@ Contract notes:
                     </div>
 
                     <div id="selectedJobLogsPanel" class="mt-4 hidden space-y-3" role="tabpanel" aria-labelledby="inspectorLogsTab" tabindex="0">
-                        <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Raw logs stay available for deep debugging, but this view keeps them secondary to the structured timeline.</p>
+                        <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Inspect recent log lines here. Open the full loaded log buffer below for search and export.</p>
                         <pre id="selectedJobLogPreview" class="command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                     </div>
                     </div>
@@ -1767,6 +1772,14 @@ Contract notes:
                         <span id="queueCount" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">0 jobs</span>
                     </div>
 
+                    <div class="mb-4 flex flex-wrap items-end gap-3" data-ui="loaded-run-filters">
+                        <label class="flex-1 text-sm" for="loadedRunSearch">Search loaded runs
+                            <input id="loadedRunSearch" type="search" maxlength="256" aria-describedby="queueStatusSummary" class="w-full text-base rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800" placeholder="Run ID or workflow" data-ui="loaded-run-search" />
+                        </label>
+                        <label class="text-sm" for="loadedRunState">State
+                            <select id="loadedRunState" class="w-full text-base rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800" data-ui="loaded-run-state"><option value="all">All states</option></select>
+                        </label>
+                    </div>
                     <div class="flex-1 overflow-y-auto custom-scrollbar min-h-[100px]">
                         <div id="queueSkeletonState" class="hidden space-y-3" aria-hidden="true" data-ui="queue-skeleton">
                             <div class="surface-skeleton-card">
@@ -1948,12 +1961,19 @@ Contract notes:
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                                Live Logs
+                                Loaded Logs
                                 <span id="logStatusIndicator" class="hidden h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                             </h2>
                             <p id="logMetaLabel" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Select a job to stream or inspect its log output.</p>
                         </div>
-                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors">Clear</button>
+                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors">Clear loaded</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 px-6 py-4" data-ui="loaded-log-tools">
+                        <label class="flex-1 text-sm" for="loadedLogSearch">Search loaded lines<input id="loadedLogSearch" type="search" maxlength="256" aria-describedby="loadedLogSummary" class="w-full text-base rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800" data-ui="loaded-log-search" /></label>
+                        <button id="toggleLogFollowBtn" type="button" class="operator-action-btn operator-action-btn-secondary" aria-pressed="true" data-ui="loaded-log-follow">Pause follow</button>
+                        <button id="copyLoadedLogsBtn" type="button" class="operator-action-btn operator-action-btn-secondary" disabled>Copy loaded logs</button>
+                        <button id="downloadLoadedLogsBtn" type="button" class="operator-action-btn operator-action-btn-secondary" disabled>Download loaded logs</button>
+                        <p id="loadedLogSummary" class="w-full text-sm" data-ui="loaded-log-summary">Only the loaded buffer is available here; at most 1,200 lines.</p>
                     </div>
                     <pre id="logPane" class="log-surface flex-1 p-6 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
@@ -1970,7 +1990,7 @@ Contract notes:
 
     <!-- Legacy Draft Recovery -->
     <div id="legacyDraftRecoveryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70" aria-hidden="true" data-ui="legacy-draft-recovery-dialog" data-modal-shell="legacy-draft-recovery">
-        <div id="legacyDraftRecoveryPanel" class="w-full max-w-sm rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl dark:border-amber-900/60 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="legacyDraftRecoveryTitle" aria-describedby="legacyDraftRecoveryDescription legacyDraftRecoveryStatus" data-modal-dialog>
+        <div id="legacyDraftRecoveryPanel" class="w-full max-w-sm max-h-[92vh] overflow-y-auto custom-scrollbar rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl dark:border-amber-900/60 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="legacyDraftRecoveryTitle" aria-describedby="legacyDraftRecoveryDescription legacyDraftRecoveryStatus" data-modal-dialog>
             <p class="section-kicker">Draft recovery</p>
             <h2 id="legacyDraftRecoveryTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Recover an earlier unsaved draft?</h2>
             <p id="legacyDraftRecoveryDescription" class="mt-3 text-[13px] leading-6 text-slate-600 dark:text-slate-300">This draft was saved before portal usernames were included in browser ownership. Because multiple usernames can share one Access email, recover it only if it belongs to the current portal account, or discard it permanently.</p>

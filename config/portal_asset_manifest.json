@@ -68,6 +68,10 @@
       "repo_path": "public/portal-assets/portal-photographic.css",
       "media_type": "text/css; charset=utf-8"
     },
+    "portal-operate-tools.js": {
+      "repo_path": "public/portal-assets/portal-operate-tools.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
     "portal-config-transfer.js": {
       "repo_path": "public/portal-assets/portal-config-transfer.js",
       "media_type": "text/javascript; charset=utf-8"

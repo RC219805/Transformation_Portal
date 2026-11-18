@@ -328,6 +328,24 @@ qualify these candidates on the intended staging environment before capability
 enablement. Keep new backend capabilities disabled until their release gates
 pass. Existing route paths, selectors and successful API envelopes are retained.
 
+### Loaded runs and logs
+
+Operate searches the currently loaded run IDs and workflow names. State filters
+compose with that search; runs sort newest first, with run ID breaking timestamp
+ties. Filtering never changes the selected inspector, even when its run is
+outside the visible results. This is loaded-run discovery, not a server history
+query.
+
+Log search, pause/resume following, copy, download and clear operate on the
+existing browser buffer of at most 1,200 lines. Pausing preserves scroll position
+while new lines continue to arrive. Copy and download include the entire loaded
+buffer, regardless of the search; clear affects only that local buffer. These
+actions do not fetch or modify durable backend logs.
+
+Build retains its workflow values and steps. Friendly workflow labels and saved
+browser-profile provenance clarify the existing controls; compact layouts keep
+editing text accessible and recovery dialogs scroll within short screens.
+
 ## Local Development
 
 From the repository root, create the local shared environment once. The writer

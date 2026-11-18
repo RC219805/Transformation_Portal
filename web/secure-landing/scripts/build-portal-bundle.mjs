@@ -325,13 +325,28 @@ const photographicReviewBuild = await bundleText(PORTAL_PHOTOGRAPHIC_ENTRY, {
     }
   }]
 });
+const operateToolsBuild = await bundleText(path.resolve(FRONTDOOR_ROOT, "portal-src/operate-tools.js"), {
+  format: "esm", keepNames: true, minifyIdentifiers: true, minifySyntax: true, minifyWhitespace: true
+});
+const operateToolsText = `${operateToolsBuild.text.trim()}\n`;
+const operateToolsHash = createHash("sha256").update(operateToolsText).digest("hex").slice(0, 12);
+writeIfChanged(path.resolve(REPO_ROOT, "public/portal-assets/portal-operate-tools.js"), operateToolsText);
+const operateToolsPlugin = {
+  name: "operate-tools-asset",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /^\.\/operate-tools\.js$/ }, () => ({
+      path: `./portal-operate-tools.js?v=${operateToolsHash}`, external: true
+    }));
+  }
+};
 const deferredOperateSurfaceBuild = await bundleText(PORTAL_OPERATE_SURFACE_ENTRY, {
   format: "esm",
   keepNames: true,
   metafile: emitMetafile,
   minifyIdentifiers: true,
   minifySyntax: true,
-  minifyWhitespace: true
+  minifyWhitespace: true,
+  plugins: [operateToolsPlugin]
 });
 const deferredBuildSurfaceBuild = await bundleText(PORTAL_BUILD_SURFACE_ENTRY, {
   format: "esm",
