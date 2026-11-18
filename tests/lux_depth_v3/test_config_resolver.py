@@ -1201,3 +1201,45 @@ class TestPresetInfo:
         assert info.description is None
         assert info.default_model is None
         assert info.tier == "standard"
+
+
+class TestStageAInputsDigest:
+    """F11: depth-shaping settings outside ConfigFingerprint must still invalidate Stage A reuse."""
+
+    @staticmethod
+    def _resolved(**overrides):
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        return ConfigResolver().resolve(EnhanceConfig(depth_backend="da3", enable_v2=False, **overrides))
+
+    @classmethod
+    def _digest(cls, **overrides):
+        from transformation_portal.lux_depth_v3.config_resolver import build_stage_a_inputs_sha256
+
+        return build_stage_a_inputs_sha256(cls._resolved(**overrides).enhance_config)
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"raw_demosaic": "VNG"},
+            {"raw_ingest_mode": "force_rawpy"},
+            {"ensemble_fusion_method": "median"},
+            {"ensemble_max_variance_threshold": 0.3},
+        ],
+    )
+    def test_depth_shaping_settings_change_digest(self, overrides):
+        assert self._digest(**overrides) != self._digest()
+
+    def test_depth_postprocessing_changes_digest(self):
+        from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+
+        filtered = PostprocessingConfig(apply_median_filter=True, median_kernel_size=7, apply_bilateral_filter=True)
+        assert self._digest(depth_postprocessing=filtered) != self._digest()
+
+    def test_digest_is_stable_and_leaves_config_fingerprint_untouched(self):
+        digest = self._digest()
+        assert digest == self._digest()
+        assert len(digest) == 64
+        # Plan-bound ConfigFingerprint bytes are unchanged by this separate digest.
+        assert self._resolved().fingerprint.to_sha256() == self._resolved(raw_demosaic="VNG").fingerprint.to_sha256()

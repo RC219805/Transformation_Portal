@@ -121,6 +121,7 @@ from .config_resolver import (
     build_orchestrator_run_card_config_fingerprint,
     build_pbr_fingerprint_payload,
     build_run_card_config_fingerprint,
+    build_stage_a_inputs_sha256,
     compute_config_fingerprint,
     discover_presets,
     finalize_run_card_config_fingerprint,
@@ -3632,6 +3633,10 @@ class EnhanceOrchestrator:
             # Depth Metadata Check
             if not manifest.depth:
                 return False
+            stored_stats = manifest.depth.stats if isinstance(manifest.depth.stats, dict) else {}
+            if stored_stats.get("stage_a_inputs_sha256") != build_stage_a_inputs_sha256(self.config):
+                logger.info("Stage A RAW/postprocessing settings changed or unrecorded - regenerating Stage A")
+                return False
 
             # Defensive output existence check
             if self.verify_outputs:
@@ -4658,6 +4663,10 @@ class EnhanceOrchestrator:
                         geometry_result.transform.support().tobytes()
                     ).hexdigest()
                     stats["depth_png_normalization_scope"] = "photographic_support"
+                elif self._prepared_execution is None:
+                    # Legacy reuse binds these depth-shaping settings, which
+                    # the config fingerprint does not carry (see should_skip_depth).
+                    stats["stage_a_inputs_sha256"] = build_stage_a_inputs_sha256(self.config)
                 if depth_validity_metrics:
                     stats["apex_depth_validity"] = depth_validity_metrics
                     shape_context = depth_validity_metrics.get("shape_context")

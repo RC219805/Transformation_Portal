@@ -862,3 +862,41 @@ class TestInterruptedStageARetiresManifest:
         assert second["status"] == "ok"
         manifest = json.loads(Path(second["manifest"]).read_text())
         assert manifest["config_fingerprint"]["quality_tier"] == "premium"
+
+
+class TestStageAReuseBindsDepthShapingSettings:
+    """F11: legacy Stage A reuse must not survive a change of RAW decode or depth postprocessing."""
+
+    @staticmethod
+    def _first_run(tmp_path: Path):
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image_input = ImageInput(path=_make_test_image(inputs, "room.png"))
+        first = _create_orchestrator(output).enhance_image(image_input, input_root=inputs)
+        return output, image_input, Path(first["depth_path"]), Path(first["manifest"])
+
+    def test_reuse_requires_matching_stage_a_inputs(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+
+        output, image_input, depth_path, manifest_path = self._first_run(tmp_path)
+
+        assert _create_orchestrator(output).should_skip_depth(depth_path, manifest_path, image_input) is True
+        for overrides in (
+            {"raw_demosaic": "VNG"},
+            {"raw_ingest_mode": "force_rawpy"},
+            {"depth_postprocessing": PostprocessingConfig(apply_median_filter=True, median_kernel_size=7)},
+        ):
+            orchestrator = _create_orchestrator(output, **overrides)
+            assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False, overrides
+
+    def test_manifest_without_recorded_stage_a_inputs_is_regenerated(self, tmp_path: Path) -> None:
+        output, image_input, depth_path, manifest_path = self._first_run(tmp_path)
+
+        manifest = json.loads(manifest_path.read_text())
+        assert "stage_a_inputs_sha256" in manifest["depth"]["stats"]
+        del manifest["depth"]["stats"]["stage_a_inputs_sha256"]
+        manifest_path.write_text(json.dumps(manifest))
+        assert _create_orchestrator(output).should_skip_depth(depth_path, manifest_path, image_input) is False

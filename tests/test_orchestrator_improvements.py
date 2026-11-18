@@ -628,9 +628,18 @@ class TestFingerprintDrivenSkipInvalidation:
 
         assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
 
+        from transformation_portal.lux_depth_v3.config_resolver import build_stage_a_inputs_sha256
+
+        # The rewrite carries the Stage A inputs digest the orchestrator records in depth stats.
         CombinedManifest(
             config_fingerprint=orchestrator.compute_config_fingerprint(),
-            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            depth=DepthMetadata(
+                model="da3",
+                depth_path=str(depth_path),
+                runtime_seconds=0.1,
+                scaling={},
+                stats={"stage_a_inputs_sha256": build_stage_a_inputs_sha256(orchestrator.config)},
+            ),
             backend_selection=orchestrator._capture_backend_metadata(),
         ).save(manifest_path)
 
