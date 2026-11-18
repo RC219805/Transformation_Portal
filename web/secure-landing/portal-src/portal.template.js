@@ -12223,24 +12223,16 @@ function _effectiveThemeFromPreference(preference, themeQuery = null) {
 
 function _migrateThemePreferenceStorage() {
     // Denied or full site storage must not abort start-up (see _syncApiKeyInputState).
+    // Returns the saved preference; when storage is unreadable it returns nothing, which
+    // applyThemePreference normalises to 'system'.
     try {
-        const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);
-        if (storageVersion === THEME_STORAGE_VERSION) return;
-
-        if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {
+        if (localStorage.getItem(THEME_STORAGE_VERSION_KEY) !== THEME_STORAGE_VERSION) {
+            // removeItem is a no-op for a missing key, so no existence check is needed.
             localStorage.removeItem(THEME_STORAGE_KEY);
+            localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
         }
-
-        localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
-    } catch { /* Theme storage is a convenience; the preference falls back to 'system'. */ }
-}
-
-function _savedThemePreference() {
-    try {
-        return _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
-    } catch {
-        return 'system';
-    }
+        return localStorage.getItem(THEME_STORAGE_KEY);
+    } catch { /* unreadable storage: see above */ }
 }
 
 function _nextThemePreference(preference) {
@@ -12857,8 +12849,8 @@ window.addEventListener('popstate', portalHistoryNavigation.pop);
 
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    _migrateThemePreferenceStorage();
-    applyThemePreference(_savedThemePreference(), { persist: false, themeQuery });
+    // applyThemePreference normalises a missing or unreadable saved value to 'system'.
+    applyThemePreference(_migrateThemePreferenceStorage(), { persist: false, themeQuery });
     setupAmbientMotion();
     _startPortalRumObservers();
 
