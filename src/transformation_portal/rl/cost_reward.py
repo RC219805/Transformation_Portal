@@ -242,6 +242,11 @@ class SystemStatsCollector:
     def stop(self) -> SystemStats:
         """Stop collecting and return stats.
 
+        ``scale_events`` and ``iteration_count`` cover the events recorded
+        since the previous ``stop()`` (or since construction); both counters
+        are reset here, so a long-lived collector charges each measured run
+        only for its own events instead of the lifetime total.
+
         Returns:
             SystemStats with collected data
         """
@@ -249,13 +254,16 @@ class SystemStatsCollector:
         vram = self._get_peak_memory()
         gpu_util = self._get_gpu_util()
 
-        return SystemStats(
+        stats = SystemStats(
             latency_sec=latency,
             vram_bytes=vram,
             scale_events=self._scale_events,
             gpu_util=gpu_util,
             iteration_count=self._iteration_count,
         )
+        self._scale_events = 0
+        self._iteration_count = 0
+        return stats
 
     def snapshot(self) -> SystemStats:
         """Get snapshot without stopping.

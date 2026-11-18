@@ -11,6 +11,7 @@ from transformation_portal.rl.cost_reward import (
     COST_SENSITIVE_WEIGHTS,
     EFFICIENCY_FIRST_WEIGHTS,
     QUALITY_FIRST_WEIGHTS,
+    CostAwareRewardShaper,
     CostWeights,
     RewardBreakdown,
     SystemStats,
@@ -226,3 +227,31 @@ class TestSystemStatsCollector:
         assert isinstance(snap, SystemStats)
         stats = collector.stop()
         assert isinstance(stats, SystemStats)
+
+    def test_stop_resets_event_counters_between_runs(self):
+        """Each stop() reports only the events recorded since the previous stop() (R15)."""
+        collector = SystemStatsCollector()
+        for _ in range(3):
+            collector.record_iteration()
+            collector.start()
+            collector.record_scale_event()
+            stats = collector.stop()
+            assert (stats.scale_events, stats.iteration_count) == (1, 1)
+        collector.start()
+        assert (collector.stop().scale_events, collector.snapshot().iteration_count) == (0, 0)
+
+
+class TestCostAwareRewardShaper:
+    def test_identical_runs_get_identical_rewards(self):
+        """Penalties do not accumulate over the shaper's lifetime (R15)."""
+        weights = CostWeights(latency=0.0, vram=0.0)
+        shaper = CostAwareRewardShaper(lambda p: p, lambda o: {"score": 0.5}, weights)
+        rewards = []
+        for _ in range(5):
+            shaper.record_iteration()
+            shaper.record_scale_event()
+            reward, _, stats = shaper.run_and_reward({})
+            assert (stats.scale_events, stats.iteration_count) == (1, 1)
+            rewards.append(reward)
+        expected = weights.quality * 0.5 - weights.scaling - weights.iteration
+        assert rewards == pytest.approx([expected] * 5)
