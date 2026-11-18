@@ -717,6 +717,21 @@ def adjust_contrast_saturation(
 # --------------------------
 
 
+def _load_caption_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return a caption font of ``size`` px, falling back to Pillow's sized default."""
+
+    try:
+        # Use a clean sans (replace with your corporate font)
+        return ImageFont.truetype("arial.ttf", size=size)
+    except OSError:
+        pass
+    try:
+        # Pillow's bundled scalable default keeps the intended caption size.
+        return ImageFont.load_default(size=size)
+    except (OSError, TypeError, ImportError):
+        return ImageFont.load_default()
+
+
 def overlay_logo_caption(  # pylint: disable=too-many-locals
     img: Image.Image,
     logo_path: Optional[str],
@@ -726,17 +741,15 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     """Overlay caption text and optional logo onto ``img``."""
 
     canvas = img.copy()
-    draw = ImageDraw.Draw(canvas)
     width_px, height_px = canvas.size
 
     # Caption
     if text:
-        try:
-            # Use a clean sans (replace with your corporate font)
-            font = ImageFont.truetype("arial.tt", size=max(22, height_px // 40))
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-
+        font = _load_caption_font(max(22, height_px // 40))
+        # Draw on a transparent overlay and composite it, so the box and text
+        # alpha values are honoured instead of being painted opaque on RGB.
+        overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = margin
@@ -746,6 +759,10 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
         box = [x - pad, y - pad, x + tw + pad, y + th + pad]
         draw.rectangle(box, fill=(0, 0, 0, 160))
         draw.text((x, y), text, fill=(255, 255, 255, 230), font=font)
+        original_mode = canvas.mode
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay)
+        if original_mode != "RGBA":
+            canvas = canvas.convert(original_mode)
 
     # Logo
     if logo_path and Path(logo_path).exists():

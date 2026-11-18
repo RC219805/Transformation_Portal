@@ -183,3 +183,40 @@ def test_lux_render_batch_same_stem_inputs_keep_separate_outputs(monkeypatch, tm
     with Image.open(out / "kitchen_lux.png") as bright, Image.open(out / "kitchen_png_lux.png") as dark:
         assert bright.getpixel((0, 0))[0] > 200
         assert dark.getpixel((0, 0))[0] < 50
+
+
+def test_overlay_caption_uses_intended_font_size_and_translucent_box(monkeypatch) -> None:
+    """L-02: the caption asks for arial.ttf, keeps its size on fallback and blends its box at 60% alpha."""
+
+    np = pytest.importorskip("numpy")
+    from PIL import Image, ImageFont
+
+    from transformation_portal.pipelines import lux_render_pipeline as lux
+
+    requested: list[str] = []
+    real_truetype = ImageFont.truetype
+
+    def _missing_truetype(font, *args, **kwargs):
+        if isinstance(font, str):
+            requested.append(font)
+            raise OSError("cannot open resource")
+        # Pillow's sized load_default() loads its bundled font from bytes.
+        return real_truetype(font, *args, **kwargs)
+
+    # Force the fallback path so the result does not depend on installed system fonts.
+    monkeypatch.setattr(ImageFont, "truetype", _missing_truetype)
+
+    grey = 128
+    img = Image.new("RGB", (3840, 2160), (grey, grey, grey))
+    out_img = lux.overlay_logo_caption(img, None, "The Veridian | Penthouse 21B")
+    out = np.array(out_img)
+
+    assert requested == ["arial.ttf"]
+    assert out_img.mode == "RGB"
+    ys, xs = np.nonzero((out != grey).any(axis=2))
+    intended_size = 2160 // 40
+    # Box height = text height + 2 * 14 px padding; the tiny bitmap default gave 40 px.
+    assert ys.max() - ys.min() + 1 >= intended_size
+    box_corner = out[ys.min() + 2, xs.min() + 2]
+    expected = round(grey * (255 - 160) / 255)
+    assert np.all(np.abs(box_corner.astype(int) - expected) <= 1)
