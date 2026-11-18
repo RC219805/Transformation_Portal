@@ -93,3 +93,22 @@ def test_load_image_scales_raw_16bit_frame_by_dtype(tmp_path: Path) -> None:
 
     assert loaded.dtype == np.float32
     np.testing.assert_allclose(float(loaded.max()), 40000 / 65535, rtol=1e-6)
+
+
+def test_load_image_scales_big_endian_16bit_frame_by_dtype(tmp_path: Path) -> None:
+    """A big-endian 16-bit TIFF decodes as '>u2'; it must be normalised by 65535 like native uint16."""
+    deep = np.zeros((8, 8), np.uint16)
+    deep[2:4, 2:4] = 40000
+    Image.frombytes("I;16B", (8, 8), deep.astype(">u2").tobytes()).save(tmp_path / "deep_be.tif")
+
+    loaded = load_image(tmp_path / "deep_be.tif", color_space="BGR", normalize=True)
+
+    np.testing.assert_allclose(float(loaded.max()), 40000 / 65535, rtol=1e-6)
+
+
+def test_save_image_scales_big_endian_uint16_instead_of_wrapping(tmp_path: Path, writer_backend: str) -> None:
+    image = np.full((4, 4, 3), 65000, dtype=">u2")
+
+    save_image(image, tmp_path / "deep_be.png")
+
+    assert int(np.asarray(Image.open(tmp_path / "deep_be.png")).min()) == round(65000 / 257)

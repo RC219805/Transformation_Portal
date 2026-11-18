@@ -74,7 +74,8 @@ def load_image(
 
     # Convert dtype
     if dtype in ["float32", "float64"]:
-        source_dtype = image.dtype
+        # Native byte order, so a big-endian 16-bit decode ('>u2') is still recognised as uint16.
+        source_dtype = image.dtype.newbyteorder("=")
         image = image.astype(dtype)
         if normalize:
             if source_dtype == np.uint8:
@@ -117,7 +118,7 @@ def save_image(
     # Convert to uint8 if needed; the scale comes from the dtype, not from the pixel values
     if np.issubdtype(image.dtype, np.floating):
         image = (np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)
-    elif image.dtype == np.uint16:
+    elif image.dtype.newbyteorder("=") == np.uint16:
         image = np.rint(image / 257.0).astype(np.uint8)
     elif image.dtype != np.uint8:
         if image.max() <= 1.0:
