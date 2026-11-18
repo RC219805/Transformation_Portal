@@ -189,14 +189,16 @@ def self_heal(
             patched, patch_set = apply_fixes(pipeline, [fix])
             result.patch_set = patch_set
 
-            if patch_set.failed or not patch_set.successful:
-                # The fix was not applied (e.g. "Node not found"): the patched
+            if patch_set.failed or not patch_set.successful or patched == pipeline:
+                # The fix was not applied (e.g. "Node not found"), or it was a
+                # no-op (the node already had those values): the patched
                 # pipeline is the original, so re-running it would only measure
                 # run-to-run noise. Record it as unvalidated and skip the run.
                 logger.warning(
                     "Fix %s could not be applied: %s",
                     fix.action,
-                    "; ".join(p.error or "unknown error" for p in patch_set.failed) or "no patch recorded",
+                    "; ".join(p.error or "unknown error" for p in patch_set.failed)
+                    or ("no patch recorded" if not patch_set.successful else "patch left the pipeline unchanged"),
                 )
                 result.candidates.append(
                     HealingCandidate(

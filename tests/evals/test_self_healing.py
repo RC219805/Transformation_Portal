@@ -11,6 +11,8 @@ All tests use mocks - no ML model downloads or GPU requirements.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from transformation_portal.evals.self_healing import (
@@ -567,6 +569,38 @@ class TestSelfHealRunnerUnappliedFixes:
         assert result.best_candidate is None
         assert result.improved is False
         assert len(runs) == 1  # only the baseline run; the unpatched pipeline is not re-run
+
+    def test_no_op_fix_is_not_validated_or_run(self, tmp_path):
+        """M-11 follow-up: a patch that leaves the pipeline unchanged measures only noise."""
+        from transformation_portal.evals.self_heal_runner import self_heal
+        from transformation_portal.evals.self_healing import suggest_fixes
+
+        image_a, image_b = self._images(tmp_path)
+        # Give the sam2 node exactly the values the suggested fix would set.
+        fixes = [s for s in suggest_fixes(json.loads(_MISSING_REGION_DIFF), {}).suggestions if s.target_node == "sam2"]
+        assert fixes and fixes[0].params, "the missing-region diff must suggest a parameterised sam2 fix"
+        fix = fixes[0]
+        pipeline = {"nodes": [{"id": "sam2", "config": dict(fix.params)}]}
+        scores = iter([0.70, 0.80])
+        runs = []
+
+        def run_fn(p):
+            runs.append(p)
+            return {"score": next(scores)}
+
+        result = self_heal(
+            pipeline=pipeline,
+            llava=_FakeDiffBackend(_MISSING_REGION_DIFF),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=run_fn,
+            max_candidates=1,
+        )
+
+        assert result.candidates and not result.candidates[0].validated
+        assert result.best_candidate is None
+        assert len(runs) == 1
 
     def test_applied_fix_is_still_validated_and_selected(self, tmp_path):
         from transformation_portal.evals.self_heal_runner import self_heal
