@@ -284,15 +284,28 @@ def test_expired_batch_is_removed_when_jobs_only_read_other_locations(tmp_path: 
     unused = _expired_batch(tmp_path, ["shoot/frame.jpg"])
     retained = [
         str(in_use.input_dir / "shoot"),
-        # Neither an ancestor of the batch nor an unrelated directory keeps it.
-        str(tmp_path / "uploads"),
+        # Neither an unrelated directory nor a sibling that merely shares the
+        # batch id as a string prefix keeps it.
         str(tmp_path / "elsewhere" / "input" / "shoot"),
+        str(unused.batch_root) + "_sibling",
         "",
     ]
 
     assert _cleanup(tmp_path, retained) == [unused.batch_id]
     assert in_use.batch_root.is_dir()
     assert not unused.batch_root.exists()
+
+
+def test_expired_batch_is_retained_while_a_job_reads_an_ancestor_of_it(tmp_path: Path) -> None:
+    # A job that reads the upload root (or any directory above it) reads every
+    # batch inside it, so no batch below it may be removed.
+    first = _expired_batch(tmp_path, ["shoot/frame.jpg"])
+    second = _expired_batch(tmp_path, ["shoot/frame.jpg"])
+
+    assert _cleanup(tmp_path, [str(tmp_path / "uploads")]) == []
+    assert _cleanup(tmp_path, [str(tmp_path)]) == []
+    assert first.batch_root.is_dir()
+    assert second.batch_root.is_dir()
 
 
 def _interrupted_batch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -356,6 +369,31 @@ def test_interrupted_batch_is_retained_while_a_job_reads_from_inside_it(
     batch_root = _interrupted_batch(tmp_path, monkeypatch)
 
     assert _cleanup(tmp_path, [str(batch_root / "input" / "shoot")]) == []
+    assert batch_root.is_dir()
+
+
+@pytest.mark.parametrize("identity", ["request_marker", "lock_entry", "dangling_lock_link", "linked_lock_directory"])
+def test_interrupted_batch_owned_by_the_upload_ledger_is_never_reaped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, identity: str
+) -> None:
+    # The receipt ledger fences and deletes its own batches; legacy TTL cleanup
+    # must not reap a receipt-less batch that carries its marker or lock identity.
+    batch_root = _interrupted_batch(tmp_path, monkeypatch)
+    lock_directory = batch_root.parent / ".upload-locks"
+    if identity == "request_marker":
+        (batch_root / ".upload-request.v1.json").write_text("{}", encoding="utf-8")
+    elif identity == "lock_entry":
+        lock_directory.mkdir()
+        (lock_directory / (batch_root.name + ".lock")).write_bytes(b"")
+    elif identity == "dangling_lock_link":
+        lock_directory.mkdir()
+        (lock_directory / (batch_root.name + ".lock")).symlink_to(tmp_path / "missing-lock-target")
+    else:
+        (tmp_path / "lock-target").mkdir()
+        lock_directory.symlink_to(tmp_path / "lock-target", target_is_directory=True)
+    os.utime(batch_root, (NOW, NOW))
+
+    assert _cleanup(tmp_path, [], age_seconds=2 * TTL_SECONDS + upload_staging.INTERRUPTED_BATCH_GRACE_SECONDS) == []
     assert batch_root.is_dir()
 
 

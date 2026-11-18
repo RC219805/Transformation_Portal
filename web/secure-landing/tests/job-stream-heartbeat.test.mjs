@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { createOperateTools } from "../portal-src/operate-tools.js";
 
 const source = readFileSync(new URL("../portal-src/portal.template.js", import.meta.url), "utf8");
 function section(start, end) {
@@ -102,24 +103,32 @@ test('malformed heartbeats and events from a replaced native stream cannot exten
 test('live log pane appends lines, stays bounded and coalesces autoscroll per frame', () => {
   const frames = [];
   let layoutReads = 0;
+  let hydrated = false;
   const pane = {
     childNodes: [],
     scrollTop: 0,
     get firstChild() { return this.childNodes[0]; },
     get scrollHeight() { layoutReads += 1; return this.childNodes.length * 10; },
     get textContent() { return this.childNodes.map((node) => node.data).join(''); },
-    set textContent(_value) { throw new Error('logToPane must not rewrite the whole pane per line'); },
+    set textContent(_value) {
+      if (hydrated) throw new Error('logToPane must not rewrite the whole pane per line');
+    },
     appendChild(node) { this.childNodes.push(node); return node; },
     removeChild(node) { assert.equal(node, this.childNodes[0]); this.childNodes.shift(); return node; },
   };
-  const context = vm.createContext({
-    MAX_JOB_LOG_LINES: 1200,
-    logPaneScrollFrameId: null,
-    state: { selectedJobId: 'job-live' },
-    els: { logPane: pane },
-    document: { createTextNode: (data) => ({ data }) },
-    window: { requestAnimationFrame: (callback) => { frames.push(callback); return frames.length; } },
+  const state = { selectedJobId: 'job-live', jobs: [{ id: 'job-live', logs: [] }] };
+  const els = { logPane: pane };
+  // The operate tools own the log pane (search and follow); logToPane hands each
+  // live line to them. Creating the tools hydrates the pane once.
+  const tools = createOperateTools({
+    state, els, maxLogLines: 1200,
+    document: { getElementById: () => null, createTextNode: (data) => ({ data }) },
+    requestAnimationFrame: (callback) => { frames.push(callback); return frames.length; },
+    _displayJobState: (job) => job.state, _portalPrivilegesReady: () => true,
   });
+  hydrated = true;
+  layoutReads = 0;
+  const context = vm.createContext({ state, els, _deferredOperateSurfaceApi: () => tools });
   vm.runInContext(section('function logToPane(', '// ===='), context);
 
   for (let index = 0; index < 3000; index += 1) context.logToPane('job-live', `[INFO] line ${index}`);

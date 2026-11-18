@@ -1,0 +1,33 @@
+.photo-workspace-canvas,
+.photo-workspace-rail { min-width: 0; }
+.photo-workspace { display: grid; gap: 1rem; min-width: 0; }
+.photo-workspace [hidden] { display: none; }
+.photo-workspace-rail .photo-review-contact { grid-auto-flow: column; grid-auto-columns: 140px; grid-template-columns: none; overflow: auto; padding: 0.25rem; }
+.photo-workspace-canvas .photo-review-stage { min-height: 18rem; }
+.photo-workspace-canvas .photo-review-figure:first-child:has(+ .photo-review-figure.hidden) { grid-column: 1 / -1; }
+.photo-workspace-inspector { min-width: 0; padding: 0.75rem; border: 1px solid var(--ux-border-subtle); border-radius: 0.75rem; }
+.photo-workspace-inspector .photo-review-input { width: 100%; }
+.photo-workspace-inspector .photo-review-field { flex: 1 1 100%; }
+.photo-workspace-inspector .photo-review-controls { gap: 0.5rem; }
+.photo-region-surface { position: relative; min-width: 0; }
+.photo-region-layer { position: absolute; inset: 0 auto auto 0; overflow: hidden; pointer-events: none; }
+.photo-region-layer[hidden] { display: none; }
+.photo-region-box { position: absolute; border: 2px solid white; box-shadow: 0 0 0 1px #0f172a; box-sizing: border-box; }
+.photo-region-handle { position: absolute; min-width: 24px; min-height: 24px; padding: 0; border: 1px solid white; color: white; background: #0f172a; pointer-events: auto; touch-action: none; }
+.photo-region-move { inset: 0; width: 100%; height: 100%; background: rgb(15 23 42 / 20%); cursor: move; }
+.photo-region-label { padding: 2px 4px; color: white; background: #0f172a; }
+.photo-region-handle:focus-visible { outline: 3px solid #fbbf24; outline-offset: -3px; }
+.photo-region-nw { top: 0; left: 0; cursor: nwse-resize; }
+.photo-region-ne { top: 0; right: 0; cursor: nesw-resize; }
+.photo-region-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.photo-region-se { bottom: 0; right: 0; cursor: nwse-resize; }
+@media (min-width: 768px) {
+    .photo-workspace { grid-template-columns: 12rem minmax(0, 1fr); }
+    .photo-workspace-inspector { grid-column: 1 / -1; }
+    .photo-workspace-rail .photo-review-contact { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); max-height: 65vh; }
+    .photo-workspace-rail .photo-review-controls { align-items: stretch; }
+}
+@media (min-width: 1200px) {
+    .photo-workspace { grid-template-columns: 12rem minmax(0, 1fr) minmax(16rem, 20rem); }
+    .photo-workspace-inspector { grid-column: auto; }
+}

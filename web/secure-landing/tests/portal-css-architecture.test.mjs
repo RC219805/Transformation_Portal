@@ -3313,10 +3313,10 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   );
   assert.equal(
     ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashAfter,
-    "7fcd967558daa3076ccc7037d3a50de3b304ad015295062ab13972da9c161a90"
+    "d099f1af3a1ea2e1c35da6f2420b122105513d2d8b81ae8ec0a2bb7c9d8b92e4"
   );
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintBefore, "08a5cefdcc6a");
-  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "16df0fbdc89d");
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "06d52bb59d21");
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.parityBaselineChanged, false);
   assert.match(

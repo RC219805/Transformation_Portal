@@ -56,11 +56,12 @@ export function photographicAssetUrl(raw, jobId, origin = globalThis.location?.o
 }
 
 export function photographicRecipe({ exposure = 0, warmth = 0, saturation = 1, materials = [] } = {}) {
-  const numeric = (value, min, max, label) => {
+  const bounded = (value, min, max, label) => {
     const number = Number(value);
     if (!Number.isFinite(number) || number < min || number > max) throw new Error(`${label} is outside the supported range.`);
-    return Math.round(number * 10000) / 10000;
+    return number;
   };
+  const numeric = (...args) => Math.round(bounded(...args) * 10000) / 10000;
   const balance = numeric(warmth, -0.15, 0.15, "Warmth");
   const materialNames = new Set();
   if (!Array.isArray(materials) || materials.length > 16) throw new Error("At most 16 material regions are supported.");
@@ -68,7 +69,7 @@ export function photographicRecipe({ exposure = 0, warmth = 0, saturation = 1, m
     const name = String(material.name || "").trim();
     if (!name || materialNames.has(name.toLowerCase())) throw new Error("Material regions require unique names.");
     materialNames.add(name.toLowerCase());
-    const region = (material.region || []).map((value) => numeric(value, 0, 1, `Region ${index + 1}`));
+    const region = (material.region || []).map((value) => bounded(value, 0, 1, `Region ${index + 1}`));
     if (region.length !== 4 || region[0] >= region[2] || region[1] >= region[3]) throw new Error("Material regions require a positive-area normalized rectangle.");
     const regionWarmth = numeric(material.warmth || 0, -0.1, 0.1, "Material warmth");
     return { name, region, exposure_stops: numeric(material.exposure_stops, -0.5, 0.5, "Material exposure"),
@@ -148,6 +149,7 @@ export function createPhotographicPagedCatalogue(host) {
   let discarding = false;
   let refreshPromise = null;
   const details = new Map();
+  const renderedGenerations = new WeakMap();
   const controls = el("div", "", "photo-review-controls", "photographic-paged-controls");
   const filterControl = select("photographic-scene-filter", [["all", "All photographs"], ["unreviewed", "Unreviewed"], ["needs_revision", "Needs revision"], ["approved", "Approved"]], () => {
     const next = filterControl.value; filterControl.value = filter;
@@ -343,10 +345,15 @@ export function createPhotographicPagedCatalogue(host) {
     });
   }
   function renderCards(container, selectedId, selectedCard) {
+    const scenes = page?.scenes || [];
+    const pageChanged = renderedGenerations.get(container) !== generation || scenes.length !== container.children.length
+      || scenes.some((scene, index) => scene.scene_id !== container.children[index].dataset.sceneId);
+    renderedGenerations.set(container, generation);
     const focused = container.ownerDocument?.activeElement;
     const restoreFocus = focused?.dataset?.ui === "photographic-contact-item" && container.contains(focused);
     container.replaceChildren();
-    for (const scene of page?.scenes || []) {
+    const cards = [];
+    for (const scene of scenes) {
       const card = el("article", "", "photo-review-contact-item"); card.dataset.sceneId = scene.scene_id;
       const control = button("", "photographic-contact-item", () => void navigate(() => choose(scene.scene_id)));
       control.className = "photo-review-contact-select"; control.setAttribute("aria-pressed", String(scene.scene_id === selectedId));
@@ -361,9 +368,11 @@ export function createPhotographicPagedCatalogue(host) {
       }
       disclosure.append(el("p", "Recorded metadata; sources are checked when opened or exported.", "photo-review-help"));
       card.append(disclosure); if (scene.scene_id === selectedId) selectedCard?.(card, scene);
-      container.append(card);
+      container.append(card); cards.push({ scene, control });
       if (restoreFocus && scene.scene_id === selectedId) control.focus();
     }
+    if (pageChanged) container.scrollTop = container.scrollLeft = 0;
+    host.onCards?.(page, cards);
     renderState();
   }
   renderState();

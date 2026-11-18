@@ -1,3 +1,5 @@
+import { createOperateTools } from "./operate-tools.js";
+
 // Operate surface deferred bundle.
 //
 // Carved out of portal-src/portal.template.js. This module owns the
@@ -50,46 +52,9 @@ export function createDeferredOperateSurfaceApi(host) {
 
     let queueRenderScheduled = false;
     let queuedReviewSurfaceRefresh = false;
-    let lastQueueDeltaSnapshot = null;
 
-    function _announceQueueDelta() {
-        if (!els.queueDeltaStatus) return;
-        const current = new Map(state.jobs.map((job) => [String(job.id || ''), _displayJobState(job)]));
-        let message = '';
-        if (lastQueueDeltaSnapshot === null) {
-            const activeCount = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
-            message = state.jobs.length === 0
-                ? 'Queue is empty.'
-                : `Queue has ${state.jobs.length} job${state.jobs.length === 1 ? '' : 's'}; ${activeCount} active.`;
-        } else {
-            const added = Array.from(current.keys()).filter((jobId) => !lastQueueDeltaSnapshot.has(jobId));
-            const removed = Array.from(lastQueueDeltaSnapshot.keys()).filter((jobId) => !current.has(jobId));
-            const changed = Array.from(current.entries()).filter(([jobId, displayState]) => (
-                lastQueueDeltaSnapshot.has(jobId) && lastQueueDeltaSnapshot.get(jobId) !== displayState
-            ));
-            const announceableChanged = changed.filter(([jobId, displayState]) => (
-                typeof _consumeQueueDeltaAnnouncementSuppression !== 'function'
-                || !_consumeQueueDeltaAnnouncementSuppression(jobId, displayState)
-            ));
-            if (added.length > 0) {
-                message = `${added.length} job${added.length === 1 ? '' : 's'} added to the queue.`;
-            } else if (removed.length > 0) {
-                message = `${removed.length} job${removed.length === 1 ? '' : 's'} removed from the queue.`;
-            } else if (announceableChanged.length > 0) {
-                const [jobId, displayState] = announceableChanged[0];
-                message = `Job ${jobId} is now ${displayState}.`;
-            }
-        }
-        lastQueueDeltaSnapshot = current;
-        if (!message || els.queueDeltaStatus.textContent === message) return;
-        els.queueDeltaStatus.dataset.pendingAnnouncement = message;
-        els.queueDeltaStatus.textContent = '';
-        window.setTimeout(() => {
-            if (els.queueDeltaStatus.dataset.pendingAnnouncement === message) {
-                els.queueDeltaStatus.textContent = message;
-            }
-        }, 0);
-    }
+    const tools = createOperateTools({ ...host, onFilterChange: () => scheduleRenderJobQueue(false) });
+    function _announceQueueDelta() { tools.announceQueueDelta(); }
 
     function _queueEmptyStateCopy() {
         if (state.jobsLoadStatus === 'offline' || (!state.backendOk && state.jobs.length === 0)) {
@@ -328,6 +293,7 @@ export function createDeferredOperateSurfaceApi(host) {
     }
 
     function renderSelectedJobInspector() {
+        tools.renderLogs();
         const jobsLoading = _isJobsHydrationPending();
         _toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);
         if (jobsLoading) {
@@ -469,6 +435,8 @@ export function createDeferredOperateSurfaceApi(host) {
 
     function renderJobQueue(includeReviewSurfaces = true) {
         if (!els.jobList) return;
+        tools.renderQueueControls();
+        const visibleJobs = tools.visibleJobs();
         els.jobList.setAttribute('role', 'list');
         els.jobList.setAttribute('aria-label', 'Job queue');
         els.jobList.removeAttribute('aria-live');
@@ -490,7 +458,7 @@ export function createDeferredOperateSurfaceApi(host) {
             els.queueSkeletonState.setAttribute('aria-hidden', 'true');
         }
         els.jobList.classList.toggle('hidden', queueLoading);
-        if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
+        if (els.queueCount) els.queueCount.textContent = visibleJobs.length === state.jobs.length ? `${state.jobs.length} jobs` : `${visibleJobs.length} of ${state.jobs.length} jobs`;
         if (queueLoading) {
             if (els.queueCount) els.queueCount.textContent = 'Syncing...';
             if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Recovering recent runs and live transport state.';
@@ -516,10 +484,23 @@ export function createDeferredOperateSurfaceApi(host) {
             if (includeReviewSurfaces) renderReviewSurfaces();
             return;
         }
+        if (visibleJobs.length === 0) {
+            _setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, {
+                title: 'No loaded runs match', tone: 'neutral',
+                detail: 'Change the search or state filter. The selected inspector stays open.',
+                action: 'Search covers loaded run IDs and workflows only.'
+            });
+            if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
+            if (els.emptyQueueAction) els.emptyQueueAction.textContent = 'Clear the search or choose All states.';
+            els.jobList.replaceChildren();
+            _announceQueueDelta();
+            if (includeReviewSurfaces) renderReviewSurfaces();
+            return;
+        }
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
 
         const fragment = document.createDocumentFragment();
-        [...state.jobs].reverse().forEach((job) => {
+        visibleJobs.forEach((job) => {
             const li = document.createElement('li');
             li.dataset.jobId = job.id;
             li.dataset.ui = 'queue-row';
@@ -734,6 +715,9 @@ export function createDeferredOperateSurfaceApi(host) {
     }
 
     return {
+        renderLogs: tools.renderLogs,
+        appendLog: tools.appendLog,
+        clearLogs: tools.clearLogs,
         renderJobQueue,
         scheduleRenderJobQueue,
         renderSelectedJobInspector,
