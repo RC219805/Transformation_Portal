@@ -20,6 +20,7 @@ pytestmark = pytest.mark.unit
 
 from transformation_portal.compliance import (
     LicenseRestrictionError,
+    licensing,
     load_and_validate_preset,
     require_non_commercial,
     validate_materials_preset,
@@ -196,6 +197,87 @@ class TestValidateNonCommercialPreset:
         """Verify empty presets pass validation."""
         preset = {}
         assert validate_non_commercial_preset(preset) is True
+
+    @pytest.mark.parametrize(
+        "preset, location",
+        [
+            ({"fallback": {"model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"}}}, "fallback.model.hf_id"),
+            (
+                {
+                    "depth": {
+                        "models": [
+                            {"checkpoint": "hf://depth-anything/DA3-Large-1.1"},
+                            {"checkpoint": "hf://depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
+                        ]
+                    }
+                },
+                r"depth\.models\[1\]\.checkpoint",
+            ),
+            ({"model": {"repo_id": "  Depth-Anything/DA3-GIANT-1.1  "}}, "model.repo_id"),
+            ({"model": "depth-anything/DA3-GIANT-1.1"}, "at model"),
+            ({"ensemble": {"depth-anything/DA3-GIANT-1.1": {"weight": 0.5}}}, "at ensemble.depth-anything/DA3-GIANT-1.1"),
+        ],
+    )
+    def test_non_commercial_model_anywhere_in_preset_requires_marker(self, preset, location):
+        """The gate must not depend on the model being named under top-level model.hf_id."""
+        with pytest.raises(LicenseRestrictionError, match=location):
+            validate_non_commercial_preset(preset)
+
+        assert validate_non_commercial_preset({**preset, "license_restriction": "research_only"}) is True
+
+    def test_nested_marker_does_not_acknowledge_a_non_commercial_model(self):
+        """Only the top-level marker is an acknowledgement, as for top-level model.hf_id."""
+        preset = {
+            "fallback": {
+                "license_restriction": "research_only",
+                "model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
+            }
+        }
+        with pytest.raises(LicenseRestrictionError, match="license_restriction='non_commercial'"):
+            validate_non_commercial_preset(preset)
+
+    @pytest.mark.parametrize(
+        "relative_path",
+        [
+            "apex_research_canary.yaml",
+            "apex_research.yaml",
+            "experimental/apex_research_ultra.yaml",
+        ],
+    )
+    def test_shipped_research_presets_fail_closed_without_their_marker(self, relative_path):
+        """Each shipped preset that names a CC BY-NC model is caught once its marker is removed."""
+        preset_path = Path(__file__).resolve().parents[2] / "config" / "presets" / relative_path
+        preset = licensing._load_with_extends(preset_path)  # noqa: SLF001 - the loader the gate itself uses
+
+        assert validate_non_commercial_preset(preset) is True
+
+        del preset["license_restriction"]
+        with pytest.raises(LicenseRestrictionError, match="non-commercial model"):
+            validate_non_commercial_preset(preset)
+
+    @pytest.mark.parametrize("model_section", [None, "da3", ["depth-anything/DA3-Large-1.1"], 7])
+    def test_non_mapping_model_section_does_not_crash(self, model_section):
+        """`model: null` and `model: da3` are reachable YAML shapes."""
+        assert validate_non_commercial_preset({"model": model_section}) is True
+
+    def test_only_exact_model_ids_are_matched(self):
+        """Apache variants and free-text mentions are not model references."""
+        preset = {
+            "fallback": {"model": {"hf_id": "depth-anything/DA3-Large-1.1"}},
+            "notes": "compare against depth-anything/DA3-GIANT-1.1 later",
+            "depth": {"models": [{"checkpoint": "hf://depth-anything/DA3-GIANT-1.10"}]},
+        }
+        assert validate_non_commercial_preset(preset) is True
+
+    def test_self_referential_yaml_alias_terminates(self):
+        """A YAML anchor can make a container contain itself."""
+        preset = yaml.safe_load("models: &loop\n  - *loop\n")
+
+        assert validate_non_commercial_preset(preset) is True
+
+        preset["models"].append({"hf_id": "depth-anything/DA3-GIANT-1.1"})
+        with pytest.raises(LicenseRestrictionError):
+            validate_non_commercial_preset(preset)
 
 
 class TestLoadAndValidatePreset:
