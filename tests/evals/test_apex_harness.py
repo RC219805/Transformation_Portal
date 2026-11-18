@@ -288,6 +288,35 @@ class TestApexEvaluationHarness:
 
         assert results[0].score == 1.0  # Clamped
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize("bad_score", [float("nan"), float("inf"), float("-inf")])
+    def test_run_metrics_non_finite_score_fails_closed(self, bad_score):
+        """A NaN/inf metric score must score 0.0 with an error, never clamp to 1.0 (M-01)."""
+
+        def broken_metric(paths):
+            return bad_score
+
+        harness = ApexEvaluationHarness(metric_fns=[broken_metric])
+
+        results = harness._run_metrics([Path("dummy.png")])
+
+        assert results[0].score == 0.0
+        assert "non-finite" in results[0].metadata["error"]
+
+    @pytest.mark.regression
+    def test_evaluate_nan_metric_does_not_pass_gate(self):
+        """A metric that divides 0/0 must not pass a 0.99 threshold (M-01)."""
+
+        def flat_image_ratio_metric(paths):
+            return float("nan")
+
+        harness = ApexEvaluationHarness(metric_fns=[flat_image_ratio_metric], threshold=0.99)
+
+        result = harness.evaluate(image_paths=[Path("does-not-matter.png")])
+
+        assert result.score == 0.0
+        assert result.passes is False
+
     def test_evaluate_passes_threshold(self, tmp_path):
         """Test pass/fail threshold logic."""
         # Create test image

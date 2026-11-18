@@ -12,6 +12,7 @@ All metrics support both numpy arrays and torch tensors.
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -392,8 +393,13 @@ def normalize_score(value: float, min_val: float, max_val: float) -> float:
         max_val: Maximum expected value
 
     Returns:
-        Normalized value in [0, 1]
+        Normalized value in [0, 1]; a NaN value scores 0.0 (fail closed),
+        while +/-inf keep their ordered meaning (e.g. PSNR of identical
+        images is +inf and maps to 1.0).
     """
+    if math.isnan(value):
+        # ``min(1.0, nan)`` is 1.0, so NaN would otherwise clamp to a perfect score.
+        return 0.0
     if max_val == min_val:
         return 0.5
 

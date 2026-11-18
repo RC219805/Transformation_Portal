@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -139,12 +140,22 @@ def parse_vqa_result(
     passes_basic_quality = bool(data.get("passes_basic_quality", False))
 
     summary_score_raw = data.get("summary_score", 0.0)
+    parse_error: Optional[str] = None
     try:
+        if isinstance(summary_score_raw, bool):
+            # ``float(True)`` is 1.0; a boolean is not a score.
+            raise TypeError("boolean is not a number")
         summary_score = float(summary_score_raw)
+        if not math.isfinite(summary_score):
+            # ``json`` accepts NaN/Infinity and ``float("nan")`` parses; ``min(1.0, nan)``
+            # is 1.0, so a non-finite score must fail closed before the clamp.
+            raise ValueError("summary_score is not finite")
         # Clamp to [0, 1]
         summary_score = max(0.0, min(1.0, summary_score))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        logger.warning("Invalid VQA summary_score: %r", summary_score_raw)
         summary_score = 0.0
+        parse_error = f"invalid summary_score: {summary_score_raw!r}"
 
     # Parse issues
     issues = []
@@ -163,5 +174,5 @@ def parse_vqa_result(
         issues=issues,
         raw_text=raw_text,
         model_key=model_key,
-        parse_error=None,
+        parse_error=parse_error,
     )

@@ -29,6 +29,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -201,9 +202,21 @@ class ApexEvaluationHarness:
 
         for fn in self.metric_fns:
             try:
-                score = fn(image_paths)
+                score = float(fn(image_paths))
+                if not math.isfinite(score):
+                    # Fail closed: ``min(1.0, nan)`` is 1.0, so a NaN/inf score
+                    # must never reach the clamp below and read as perfect.
+                    logger.warning("Metric %s returned a non-finite score: %r", fn.__name__, score)
+                    results.append(
+                        EvalMetricResult(
+                            name=fn.__name__,
+                            score=0.0,
+                            metadata={"error": f"non-finite metric score: {score!r}"},
+                        )
+                    )
+                    continue
                 # Clamp to valid range
-                score = max(0.0, min(1.0, float(score)))
+                score = max(0.0, min(1.0, score))
 
                 results.append(
                     EvalMetricResult(

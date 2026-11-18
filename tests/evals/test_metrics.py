@@ -438,6 +438,18 @@ class TestNormalizeScore:
         result = normalize_score(5.0, min_val=5.0, max_val=5.0)
         assert result == 0.5
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize(("min_val", "max_val"), [(20.0, 40.0), (5.0, 5.0)])
+    def test_nan_value_fails_closed(self, min_val, max_val):
+        """NaN must normalise to 0.0, not to the 1.0 that ``min(1.0, nan)`` yields (M-01)."""
+        assert normalize_score(float("nan"), min_val=min_val, max_val=max_val) == 0.0
+        assert normalize_score(np.float32("nan"), min_val=min_val, max_val=max_val) == 0.0
+
+    def test_infinite_values_keep_their_order(self):
+        """+inf saturates high and -inf saturates low."""
+        assert normalize_score(float("inf"), min_val=20.0, max_val=40.0) == 1.0
+        assert normalize_score(float("-inf"), min_val=20.0, max_val=40.0) == 0.0
+
 
 class TestPSNRToScore:
     """Test psnr_to_score conversion."""
@@ -456,6 +468,23 @@ class TestPSNRToScore:
         """Test poor PSNR gives low score."""
         result = psnr_to_score(15.0)
         assert result == 0.0
+
+    @pytest.mark.regression
+    def test_nan_psnr_scores_zero(self):
+        """One NaN sample makes PSNR NaN; that must score 0.0, not 1.0 (M-01)."""
+        a = np.random.default_rng(0).random((16, 16, 3)).astype(np.float32)
+        b = a.copy()
+        b[0, 0, 0] = np.nan
+
+        assert np.isnan(psnr(a, b))
+        assert psnr_to_score(psnr(a, b)) == 0.0
+
+    def test_identical_images_score_one(self):
+        """Identical images have infinite PSNR, which is a perfect score."""
+        a = np.random.default_rng(0).random((16, 16, 3)).astype(np.float32)
+
+        assert psnr(a, a.copy()) == float("inf")
+        assert psnr_to_score(psnr(a, a.copy())) == 1.0
 
 
 class TestLPIPSToScore:
