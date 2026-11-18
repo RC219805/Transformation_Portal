@@ -38,6 +38,27 @@ def _get_torch():
     return _torch, _nn, _F
 
 
+def _with_self_loops(edge_index: Any, num_nodes: int) -> Any:
+    """Return ``edge_index`` with a self-loop ``(i, i)`` for every node lacking one.
+
+    Standard GAT (Veličković et al., 2018) lets each node attend to itself, so its
+    own features enter its updated embedding. Without self-loops a node only sees
+    its in-neighbours and a root node of a DAG collapses to the bias.
+    Existing self-loops are kept as-is (not duplicated); the added loops are
+    appended after the original edges, so attention rows ``[:E]`` still line up
+    with the caller's edges.
+    """
+    torch, _, _ = _get_torch()
+
+    src, dst = edge_index
+    has_loop = torch.zeros(num_nodes, dtype=torch.bool, device=edge_index.device)
+    has_loop[src[src == dst]] = True
+    missing = torch.nonzero(~has_loop, as_tuple=False).flatten().to(edge_index.dtype)
+    if missing.numel() == 0:
+        return edge_index
+    return torch.cat([edge_index, torch.stack([missing, missing])], dim=1)
+
+
 class GATLayer:
     """Single Graph Attention Network layer.
 
@@ -48,6 +69,7 @@ class GATLayer:
     - Multi-head attention
     - LeakyReLU activation for attention scores
     - Edge-based message passing
+    - Self-loops, so each node attends to its own features (standard GAT; on by default)
     - Residual connections (optional)
 
     Example:
@@ -66,6 +88,7 @@ class GATLayer:
         dropout: float = 0.0,
         negative_slope: float = 0.2,
         residual: bool = False,
+        add_self_loops: bool = True,
     ) -> None:
         """Initialize GAT layer.
 
@@ -76,6 +99,8 @@ class GATLayer:
             dropout: Dropout probability
             negative_slope: LeakyReLU negative slope
             residual: Whether to use residual connection
+            add_self_loops: Add a self-loop to every node lacking one before
+                attention, so a node's own features enter its embedding
         """
         torch, nn, F = _get_torch()
 
@@ -85,6 +110,7 @@ class GATLayer:
         self.dropout = dropout
         self.negative_slope = negative_slope
         self.residual = residual
+        self.add_self_loops = add_self_loops
 
         # Linear transformation for node features
         self.W = nn.Linear(in_dim, out_dim * heads, bias=False)
@@ -132,7 +158,9 @@ class GATLayer:
 
         Returns:
             Updated node features [num_nodes, out_dim]
-            or tuple of (features, attention_weights) if return_attention
+            or tuple of (features, attention_weights) if return_attention.
+            With ``add_self_loops`` the attention has one row per input edge
+            followed by one row per added self-loop.
         """
         torch, _, F = _get_torch()
 
@@ -150,6 +178,9 @@ class GATLayer:
             if return_attention:
                 return out, None
             return out
+
+        if self.add_self_loops:
+            edge_index = _with_self_loops(edge_index, N)
 
         src, dst = edge_index  # [E], [E]
         E = src.size(0)
@@ -252,6 +283,7 @@ class GATv2Layer:
         heads: int = 4,
         dropout: float = 0.0,
         share_weights: bool = False,
+        add_self_loops: bool = True,
     ) -> None:
         """Initialize GATv2 layer.
 
@@ -261,6 +293,8 @@ class GATv2Layer:
             heads: Number of attention heads
             dropout: Dropout probability
             share_weights: Share weights between source and target
+            add_self_loops: Add a self-loop to every node lacking one before
+                attention, so a node's own features enter its embedding
         """
         torch, nn, F = _get_torch()
 
@@ -269,6 +303,7 @@ class GATv2Layer:
         self.heads = heads
         self.dropout = dropout
         self.share_weights = share_weights
+        self.add_self_loops = add_self_loops
 
         # Separate linear transformations for source and target
         self.W_src = nn.Linear(in_dim, out_dim * heads, bias=False)
@@ -304,6 +339,9 @@ class GATv2Layer:
 
         if edge_index.numel() == 0:
             return h_src.mean(dim=1)
+
+        if self.add_self_loops:
+            edge_index = _with_self_loops(edge_index, N)
 
         src, dst = edge_index
         E = src.size(0)
