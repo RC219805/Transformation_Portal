@@ -30,6 +30,8 @@ import pytest
 from transformation_portal.utils.security import (
     CONFIG_EXTENSIONS,
     DANGEROUS_SHELL_CHARS,
+    FFMPEG_UNCONFINABLE_FILTERS,
+    FILTER_GRAPH_REJECTED_CHARS,
     IMAGE_EXTENSIONS,
     MAX_CONFIG_SIZE,
     MAX_IMAGE_SIZE,
@@ -610,8 +612,9 @@ class TestValidateFilterGraph:
             validate_filter_graph("scale=1920; rm -rf /")
 
     def test_rejects_all_dangerous_chars(self) -> None:
-        """Test rejection of all dangerous characters in filter graph."""
-        for char in DANGEROUS_SHELL_CHARS:
+        """Test rejection of all filter-graph rejected characters (parentheses excluded, see below)."""
+        assert FILTER_GRAPH_REJECTED_CHARS == DANGEROUS_SHELL_CHARS - {"(", ")"}
+        for char in FILTER_GRAPH_REJECTED_CHARS:
             with pytest.raises(SecurityError):
                 validate_filter_graph(f"scale=1920{char}1080")
 
@@ -621,6 +624,105 @@ class TestValidateFilterGraph:
             validate_filter_graph("scale=1920;1080")
         except SecurityError as e:
             assert ";" in str(e)
+
+    @pytest.mark.parametrize(
+        "graph",
+        [
+            "scale='min(1920,iw)':-2",
+            "scale=w='if(gt(iw,ih),1920,-2)':h=-2,fps=30",
+            "select='eq(n\\,0)'",
+        ],
+    )
+    def test_accepts_expressions_with_parentheses(self, graph: str) -> None:
+        """M-19: FFmpeg expressions need parentheses; the argv command has no shell to inject into."""
+        assert validate_filter_graph(graph) == graph
+
+
+class TestFilterGraphFileConfinement:
+    """M-19: path-valued filter options must stay inside allowed_dirs (fail closed)."""
+
+    @pytest.fixture
+    def allowed(self, tmp_path: Path) -> Path:
+        work = tmp_path / "work"
+        work.mkdir()
+        (work / "caption.txt").write_text("hello")
+        (tmp_path / "secret.txt").write_text("TOP-SECRET")
+        return work
+
+    @pytest.mark.parametrize(
+        "template",
+        [
+            "drawtext=textfile={secret}:fontcolor=white",
+            "drawtext=textfile='{secret}'",
+            "drawtext=textfile=\\{secret}",
+            "drawtext@label=fontcolor=white:textfile={secret}",
+            " drawtext = text=x : textfile = {secret}",
+            "Drawtext=textfile={secret}",
+            "drawtext=fontfile={secret}",
+            "drawtext={secret}",  # first positional argument of drawtext is fontfile
+            "scale=1920:1080,subtitles={secret}",
+            "subtitles=filename={secret}",
+            "movie={secret}",
+            "lut3d=file={secret}",
+            "metadata=mode=print:file={secret}",
+            "drawtext=text=x:/text={secret}",  # FFmpeg >= 7 option-from-file syntax
+        ],
+    )
+    def test_rejects_paths_outside_allowed_dirs(self, allowed: Path, template: str) -> None:
+        graph = template.format(secret=allowed.parent / "secret.txt")
+        with pytest.raises(SecurityError):
+            validate_filter_graph(graph, allowed_dirs=[allowed])
+
+    def test_rejects_traversal_out_of_allowed_dir(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="not confined"):
+            validate_filter_graph(f"drawtext=textfile={allowed}/../secret.txt", allowed_dirs=[allowed])
+
+    def test_rejects_url_protocols(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="URL/protocol"):
+            # Graph-level quotes keep the backslash; option-level unescaping yields "file:/etc/passwd".
+            validate_filter_graph("drawtext=textfile='file\\:/etc/passwd'", allowed_dirs=[allowed])
+
+    def test_rejects_file_path_without_allowed_dirs(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="no allowed_dirs"):
+            validate_filter_graph(f"drawtext=textfile={allowed}/caption.txt")
+
+    @pytest.mark.parametrize("name", sorted(FFMPEG_UNCONFINABLE_FILTERS))
+    def test_rejects_unconfinable_filters(self, allowed: Path, name: str) -> None:
+        with pytest.raises(SecurityError, match="not allowed"):
+            validate_filter_graph(f"{name}=x", allowed_dirs=[allowed])
+
+    def test_accepts_confined_paths(self, allowed: Path) -> None:
+        graph = f"drawtext=textfile={allowed / 'caption.txt'}:fontcolor=white:x='(w-tw)/2'"
+        assert validate_filter_graph(graph, allowed_dirs=[allowed]) == graph
+
+    def test_build_ffmpeg_command_confines_filter_paths(self, allowed: Path) -> None:
+        (allowed / "in.mp4").write_bytes(b"x")
+        secret = allowed.parent / "secret.txt"
+        with pytest.raises(SecurityError, match="not confined"):
+            build_ffmpeg_command(
+                allowed / "in.mp4",
+                allowed / "out.mp4",
+                filters=[f"drawtext=textfile={secret}:fontcolor=white"],
+                allowed_dirs=[allowed],
+            )
+        cmd = build_ffmpeg_command(
+            allowed / "in.mp4",
+            allowed / "out.mp4",
+            filters=[f"drawtext=textfile={allowed / 'caption.txt'}", "scale='min(1920,iw)':-2"],
+            allowed_dirs=[allowed],
+        )
+        assert cmd[cmd.index("-vf") + 1] == f"drawtext=textfile={allowed / 'caption.txt'},scale='min(1920,iw)':-2"
+
+    @pytest.mark.parametrize("option", ["-vf", "-af", "-filter:v", "-filter_complex", "-lavfi", "-i", "-/vf"])
+    def test_build_ffmpeg_command_rejects_filters_in_additional_args(self, allowed: Path, option: str) -> None:
+        (allowed / "in.mp4").write_bytes(b"x")
+        with pytest.raises(SecurityError, match="additional_args"):
+            build_ffmpeg_command(
+                allowed / "in.mp4",
+                allowed / "out.mp4",
+                additional_args=[option, "drawtext=textfile=/etc/passwd"],
+                allowed_dirs=[allowed],
+            )
 
 
 # =============================================================================
