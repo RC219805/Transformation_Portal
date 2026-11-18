@@ -509,6 +509,13 @@ that are not GPG-resolvable now fail closed. Verification also compares the
 GPG-extracted cleartext with the exact canonical attestation preimage; a valid
 signature over unrelated content is rejected.
 
+`verify_run_card_attestation.py` prints one line per attestation it examined
+and says what was checked. Without `--gpg` it only checks that the sidecar is
+bound to the run card and reports `signature NOT verified (--gpg not set)`;
+that is not evidence of who signed. When neither a native nor a DSSE sidecar
+exists it exits `5`, because nothing was verified. Exit codes: `0` verified,
+`2` unreadable or invalid run card, `5` attestation verification failed.
+
 When you need policy-based release gating instead of low-level integrity checks, use:
 
 ```bash
