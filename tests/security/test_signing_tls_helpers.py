@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import builtins
+import contextlib
 import json
 import socket
+import socketserver
 import ssl
+import threading
+from pathlib import Path
 
 import pytest
 
@@ -15,7 +19,9 @@ from transformation_portal.core.security.signing import (
     generate_ed25519_keypair,
 )
 from transformation_portal.core.security.tls import (
+    ThreadedTLSServer,
     TLSError,
+    TLSTCPServer,
     create_client_ssl_context,
     create_server_ssl_context,
     create_tls_connection,
@@ -73,6 +79,70 @@ def test_generate_self_signed_cert_requires_cryptography(monkeypatch: pytest.Mon
 
     with pytest.raises(TLSError, match="cryptography library required"):
         tls.generate_self_signed_cert("localhost", tmp_path)
+
+
+class _GreetingHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        self.server.handled.append(self.client_address)  # type: ignore[attr-defined]
+        self.request.sendall(b"ok")
+
+
+@contextlib.contextmanager
+def _serving(server_class: type[TLSTCPServer], tmp_path: Path, *, handshake_timeout: float | None = None):
+    """Serve ``_GreetingHandler`` over mTLS; yield ``(server, port, client_context)``."""
+    cert_path, key_path = generate_self_signed_cert("localhost", tmp_path)
+    server = server_class(
+        ("127.0.0.1", 0),
+        _GreetingHandler,
+        create_server_ssl_context(cert_path, key_path, cert_path),
+    )
+    server.handled = []  # type: ignore[attr-defined]
+    if handshake_timeout is not None:
+        server.handshake_timeout = handshake_timeout
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+    thread.start()
+    try:
+        yield server, server.server_address[1], create_client_ssl_context(cert_path, key_path, cert_path)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_threaded_tls_server_serves_clients_while_a_peer_stalls_the_handshake(tmp_path: Path) -> None:
+    """One peer that connects and stays silent must not block the accept loop."""
+    with _serving(ThreadedTLSServer, tmp_path) as (_, port, client_context):
+        # Opened first, never sends a ClientHello; closed before the server shuts down.
+        with socket.create_connection(("127.0.0.1", port)):
+            with create_tls_connection("localhost", port, client_context, timeout=2.0) as connection:
+                assert connection.recv(2) == b"ok"
+
+
+@pytest.mark.parametrize("server_class", [TLSTCPServer, ThreadedTLSServer])
+def test_tls_server_drops_a_peer_that_never_completes_the_handshake(tmp_path: Path, server_class: type[TLSTCPServer]) -> None:
+    with _serving(server_class, tmp_path, handshake_timeout=0.2) as (server, port, client_context):
+        with socket.create_connection(("127.0.0.1", port), timeout=2.0) as stalled:
+            assert stalled.recv(1) == b""  # closed by the server once the handshake timed out
+
+            with create_tls_connection("localhost", port, client_context, timeout=2.0) as connection:
+                assert connection.recv(2) == b"ok"
+
+        assert len(server.handled) == 1  # the stalled peer never reached the handler
+
+
+def test_tls_server_does_not_run_the_handler_after_a_failed_handshake(tmp_path: Path) -> None:
+    with _serving(ThreadedTLSServer, tmp_path) as (server, port, client_context):
+        with socket.create_connection(("127.0.0.1", port), timeout=2.0) as plaintext:
+            plaintext.sendall(b"GET / HTTP/1.1\r\n\r\n")
+            # The server answers with a TLS alert at most, then closes or resets.
+            with contextlib.suppress(ConnectionResetError):
+                while plaintext.recv(4096):
+                    pass
+
+        with create_tls_connection("localhost", port, client_context, timeout=2.0) as connection:
+            assert connection.recv(2) == b"ok"
+
+        assert len(server.handled) == 1
 
 
 def test_create_tls_connection_wraps_socket_failures(monkeypatch: pytest.MonkeyPatch) -> None:
