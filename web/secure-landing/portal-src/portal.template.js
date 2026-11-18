@@ -99,6 +99,7 @@ let _operatePendingScheduleRender = false;
 let _operatePendingIncludeReview = false;
 let healthPollIntervalId = null;
 let sseWatchdogIntervalId = null;
+let logPaneScrollFrameId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
@@ -11020,11 +11021,19 @@ function handleArtifactRailKeydown(event) {
 }
 
 function logToPane(jobId, line) {
-    if (state.selectedJobId === jobId || !state.selectedJobId) {
-        if (els.logPane) {
-            els.logPane.textContent += line + '\n';
-            els.logPane.scrollTop = els.logPane.scrollHeight;
-        }
+    if (state.selectedJobId && state.selectedJobId !== jobId) return;
+    const pane = els.logPane;
+    if (!pane) return;
+    // Append one text node per line instead of rewriting textContent (O(n)
+    // per line), keep the pane bounded like job.logs, and coalesce the
+    // autoscroll, which forces a reflow, to one per animation frame.
+    pane.appendChild(document.createTextNode(line + '\n'));
+    while (pane.childNodes.length > MAX_JOB_LOG_LINES) pane.removeChild(pane.firstChild);
+    if (logPaneScrollFrameId === null) {
+        logPaneScrollFrameId = window.requestAnimationFrame(() => {
+            logPaneScrollFrameId = null;
+            pane.scrollTop = pane.scrollHeight;
+        });
     }
 }
 
