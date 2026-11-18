@@ -8,6 +8,7 @@ import gzip
 import os
 import re
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Tuple
 
@@ -19,6 +20,13 @@ ARCHIVE_INDEX_REQUIRED_COLUMNS = {"origin_drive", "partition", "relpath"}
 ARCHIVE_INDEX_PREFLIGHT_EXAMPLE_LIMIT = 5
 ARCHIVE_INDEX_PREFLIGHT_PREVIEW_ROW_LIMIT = 256
 ARCHIVE_INDEX_PREFLIGHT_CACHE_MAX = 64
+# A cached verdict is revalidated by directory timestamps. Timestamps as coarse as two
+# seconds are in use (FAT; one second on HFS+ and many network filesystems), so a
+# directory changed this recently cannot be told apart from one changed again later.
+ARCHIVE_INDEX_PREFLIGHT_RACY_WINDOW_NS = 2_000_000_000
+# Upper bound on the directories one cached verdict may pin (memory per cache entry
+# and lstat calls per cache hit); larger scans are simply not cached.
+ARCHIVE_INDEX_PREFLIGHT_FINGERPRINT_MAX_DIRECTORIES = 4096
 ARCHIVE_INDEX_PREFLIGHT_SCAN_MODES = {"preview", "full"}
 _ARCHIVE_INDEX_PREFLIGHT_CACHE_LOCK = threading.Lock()
 _ARCHIVE_INDEX_PREFLIGHT_CACHE: Dict[Tuple[str, int, int, str, str], Dict[str, Any]] = {}
@@ -185,12 +193,31 @@ class _ArchiveRootListing:
     ``(st_dev, st_ino, st_mtime_ns, st_ctime_ns)`` before it is listed: adding,
     removing or renaming an entry changes its parent directory's mtime/ctime, so a
     cached verdict can be revalidated cheaply against the archive root's contents.
+
+    A timestamp only proves "unchanged" once it is older than the filesystem's
+    timestamp granularity: a second change in the same tick as the one the scan saw
+    leaves mtime/ctime as they were. A scan that meets a directory changed within
+    ``ARCHIVE_INDEX_PREFLIGHT_RACY_WINDOW_NS`` of its start is therefore not cacheable,
+    and neither is one that consults more directories than
+    ``ARCHIVE_INDEX_PREFLIGHT_FINGERPRINT_MAX_DIRECTORIES`` (the fingerprint is kept
+    for as long as the cache entry lives, so its size has to be bounded).
     """
 
     def __init__(self) -> None:
         self._entries: Dict[str, Dict[str, Optional[bool]] | str] = {}
         self._fingerprint: Dict[str, Tuple[int, int, int, int]] = {}
         self.cacheable = True
+        self._settled_before_ns = _now_ns() - ARCHIVE_INDEX_PREFLIGHT_RACY_WINDOW_NS
+
+    def _remember(self, key: str, signature: Tuple[int, int, int, int]) -> None:
+        if not self.cacheable:
+            return
+        recently_changed = max(signature[2], signature[3]) >= self._settled_before_ns
+        if recently_changed or len(self._fingerprint) >= ARCHIVE_INDEX_PREFLIGHT_FINGERPRINT_MAX_DIRECTORIES:
+            self.cacheable = False
+            self._fingerprint.clear()
+            return
+        self._fingerprint[key] = signature
 
     def entries(self, directory: Path) -> Dict[str, Optional[bool]] | str:
         """Return ``{name: is_symlink}`` for ``directory`` or a blocking reason."""
@@ -201,7 +228,7 @@ class _ArchiveRootListing:
             return cached
         listed: Dict[str, Optional[bool]] | str
         try:
-            self._fingerprint[key] = _directory_fingerprint(directory)
+            signature = _directory_fingerprint(directory)
         except FileNotFoundError:
             self.cacheable = False
             listed = "missing"
@@ -209,6 +236,7 @@ class _ArchiveRootListing:
             self.cacheable = False
             listed = "unreadable"
         else:
+            self._remember(key, signature)
             try:
                 names: Dict[str, Optional[bool]] = {}
                 with os.scandir(directory) as iterator:
@@ -227,6 +255,10 @@ class _ArchiveRootListing:
 
     def fingerprint(self) -> Tuple[Tuple[str, int, int, int, int], ...]:
         return tuple(sorted((path, *signature) for path, signature in self._fingerprint.items()))
+
+
+def _now_ns() -> int:
+    return time.time_ns()
 
 
 def _directory_fingerprint(directory: Path | str) -> Tuple[int, int, int, int]:

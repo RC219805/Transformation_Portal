@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,20 @@ import pytest
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+_MODULE_NAME = "transformation_portal.portal.archive_index_preflight"
+
+
+@pytest.fixture(autouse=True)
+def _archive_roots_settled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every scan as if its archive root was last changed long ago.
+
+    A verdict is only cached once the directories it consulted are older than the
+    racy-timestamp window; fixtures here are created milliseconds before the scan.
+    Tests about that window put the real clock back.
+    """
+    module = importlib.import_module(_MODULE_NAME)
+    monkeypatch.setattr(module, "_now_ns", lambda: time.time_ns() + 3600 * 1_000_000_000)
 
 
 def _write_archive_index(path: Path, relpaths: list[str]) -> None:
@@ -459,3 +474,74 @@ def test_full_scan_lists_each_archive_directory_once(
     assert result["rows_total"] == len(relpaths)
     scan_listings = [path for path in listed if path == str(archive_root) or path.startswith(str(archive_root) + os.sep)]
     assert sorted(scan_listings) == sorted({str(archive_root), str(scans)})
+
+
+def test_verdict_for_recently_changed_archive_root_is_not_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Emulate a filesystem with coarse timestamps: every change this test makes lands
+    # in one tick, so the directory's mtime/ctime cannot show the second change. The
+    # verdict taken between the two changes must not be cached.
+    module = importlib.import_module(_MODULE_NAME)
+    tick_ns = time.time_ns() - 10 * 1_000_000_000
+    real_fingerprint = module._directory_fingerprint
+
+    def coarse_fingerprint(directory: Any) -> tuple[int, int, int, int]:
+        dev, ino, mtime_ns, ctime_ns = real_fingerprint(directory)
+        return (dev, ino, min(mtime_ns, tick_ns), min(ctime_ns, tick_ns))
+
+    monkeypatch.setattr(module, "_directory_fingerprint", coarse_fingerprint)
+    monkeypatch.setattr(module, "_now_ns", lambda: tick_ns + 1)
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    (archive_root / "a.tif").write_bytes(b"a")
+    archive_index = tmp_path / "archive_index.csv"
+    _write_archive_index(archive_index, ["a.tif", "b.tif"])
+    cache: dict[tuple[str, int, int, str, str], dict[str, Any]] = {}
+    cache_lock = threading.Lock()
+
+    blocked = _validate_direct(module, archive_index, archive_root, cache=cache, cache_lock=cache_lock)
+    assert blocked["ok"] is False
+    assert coarse_fingerprint(archive_root)[2:] == (tick_ns, tick_ns)
+    assert cache == {}
+
+    (archive_root / "b.tif").write_bytes(b"b")
+    assert coarse_fingerprint(archive_root)[2:] == (tick_ns, tick_ns)
+    fixed = _validate_direct(module, archive_index, archive_root, cache=cache, cache_lock=cache_lock)
+    assert fixed["ok"] is True
+    assert cache == {}
+
+    # Once the root has been quiet for longer than the window the verdict is cached.
+    monkeypatch.setattr(module, "_now_ns", lambda: tick_ns + 2 * module.ARCHIVE_INDEX_PREFLIGHT_RACY_WINDOW_NS)
+    assert _validate_direct(module, archive_index, archive_root, cache=cache, cache_lock=cache_lock)["ok"] is True
+    assert len(cache) == 1
+
+
+def test_scan_over_more_directories_than_the_fingerprint_bound_is_not_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module(_MODULE_NAME)
+    archive_root = tmp_path / "archive_root"
+    relpaths = [f"box_{idx}/frame.tif" for idx in range(4)]
+    for relpath in relpaths:
+        (archive_root / relpath).parent.mkdir(parents=True)
+        (archive_root / relpath).write_bytes(b"")
+    archive_index = tmp_path / "archive_index.csv"
+    _write_archive_index(archive_index, relpaths)
+    cache: dict[tuple[str, int, int, str, str], dict[str, Any]] = {}
+    cache_lock = threading.Lock()
+
+    # The scan consults the root and four sub-directories.
+    monkeypatch.setattr(module, "ARCHIVE_INDEX_PREFLIGHT_FINGERPRINT_MAX_DIRECTORIES", 4)
+    over_bound = _validate_direct(module, archive_index, archive_root, cache=cache, cache_lock=cache_lock)
+    assert over_bound["ok"] is True
+    assert over_bound["rows_total"] == 4
+    assert cache == {}
+
+    monkeypatch.setattr(module, "ARCHIVE_INDEX_PREFLIGHT_FINGERPRINT_MAX_DIRECTORIES", 5)
+    assert _validate_direct(module, archive_index, archive_root, cache=cache, cache_lock=cache_lock)["ok"] is True
+    assert len(cache) == 1
+    (entry,) = cache.values()
+    assert len(entry["root_fingerprint"]) == 5

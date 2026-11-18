@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -4988,6 +4989,13 @@ def test_archive_index_preflight_preview_is_bounded_and_cached(
 
     with orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE_LOCK:
         orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE.clear()
+    # A verdict is cached only once the archive root has been unchanged for longer
+    # than the racy-timestamp window; this root was written milliseconds ago.
+    monkeypatch.setattr(
+        orchestrator_app._portal_archive_index_preflight,
+        "_now_ns",
+        lambda: time.time_ns() + 3600 * 1_000_000_000,
+    )
 
     preview_result = orchestrator_app._validate_archive_index_against_root(
         archive_index,
