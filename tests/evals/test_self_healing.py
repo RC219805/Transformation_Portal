@@ -623,3 +623,51 @@ class TestSelfHealRunnerUnappliedFixes:
         assert result.best_candidate.validated is True
         assert result.best_candidate.patched_pipeline != pipeline
         assert result.best_candidate.improvement == pytest.approx(0.10)
+
+
+@pytest.mark.regression
+class TestSuggestFixesToleratesModelFieldTypes:
+    """M-12 follow-up: semantic_diff accepts null/non-string fields, so self_heal must not crash on them."""
+
+    def test_null_and_non_string_fields_do_not_crash(self):
+        diff = {
+            "summary": "x",
+            "changes": [
+                {"type": None, "severity": None, "description": None},
+                {"type": "missing", "severity": None, "description": None},
+                {"type": "artifact", "severity": "HIGH", "description": 42},
+                "texture is off",
+            ],
+        }
+        result = suggest_fixes(diff)
+
+        missing = [s for s in result.suggestions if s.action == "increase_mask_coverage"]
+        assert len(missing) == 1  # null severity falls back to "medium"
+        assert missing[0].rationale == "Missing region detected"
+        assert all(isinstance(s.rationale, str) for s in result.suggestions)
+
+    def test_self_heal_with_null_type_answer_completes(self, tmp_path):
+        from transformation_portal.evals.self_heal_runner import self_heal
+
+        image_a, image_b = tmp_path / "a.png", tmp_path / "b.png"
+        image_a.write_bytes(b"a")
+        image_b.write_bytes(b"b")
+        answer = '{"summary": "x", "changes": [{"type": null, "severity": "high", "description": "d"}]}'
+        runs = []
+
+        def run_fn(p):
+            runs.append(p)
+            return {"score": 0.5}
+
+        result = self_heal(
+            pipeline={"nodes": []},
+            llava=_FakeDiffBackend(answer),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=run_fn,
+            max_candidates=1,
+        )
+
+        assert result.best_candidate is None
+        assert len(runs) == 1  # only the baseline run; no fix was applicable
