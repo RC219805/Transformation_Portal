@@ -161,22 +161,26 @@ class SpatialFrequencyAnalyzer:
             Tuple of (LSF, MSF, HSF) energies
         """
         h, w = spectrum.shape
-        center_y, center_x = h // 2, w // 2
 
-        # Create frequency coordinate grids
-        y, x = np.ogrid[:h, :w]
-        radius = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+        # Radial frequency in cycles per pixel, built per axis so the bands are
+        # isotropic for non-square images (bin distances are not: one bin is
+        # 1/h cycles/px vertically but 1/w horizontally). The grids are
+        # fftshift-ed to match the shifted spectrum.
+        fy = fftpack.fftshift(np.fft.fftfreq(h))[:, None]
+        fx = fftpack.fftshift(np.fft.fftfreq(w))[None, :]
+        radius = np.sqrt(fx**2 + fy**2)
 
-        # Normalize radius to [0, 1]
-        max_radius = np.sqrt(center_x**2 + center_y**2)
-        norm_radius = radius / max_radius
+        # Normalize by the corner (Nyquist diagonal) frequency sqrt(0.5) so the
+        # thresholds keep their meaning on square images.
+        norm_radius = radius / np.sqrt(0.5)
 
         # Adjust thresholds by viewing distance
         lsf_thresh = self.LSF_THRESHOLD * viewing_distance_factor
         msf_thresh = self.MSF_THRESHOLD * viewing_distance_factor
 
-        # Create masks for each band
-        lsf_mask = norm_radius <= lsf_thresh
+        # Create masks for each band. The DC term (zero frequency) is the image
+        # mean, i.e. brightness rather than structure, so it belongs to no band.
+        lsf_mask = (norm_radius <= lsf_thresh) & (radius > 0)
         msf_mask = (norm_radius > lsf_thresh) & (norm_radius <= msf_thresh)
         hsf_mask = norm_radius > msf_thresh
 
