@@ -23,12 +23,15 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import secrets
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from .path_safety import (
     PathSafetyError,
@@ -309,10 +312,7 @@ class FSGuard:
         self._log("write", path, {"size": len(data)})
 
         if atomic:
-            # Atomic write: write to temp, then rename
-            tmp_path = path.with_suffix(path.suffix + ".tmp")
-            tmp_path.write_text(data, encoding=encoding)
-            tmp_path.rename(path)
+            self._write_atomic(path, data, encoding)
         else:
             path.write_text(data, encoding=encoding)
 
@@ -328,11 +328,39 @@ class FSGuard:
         self._log("write", path, {"size": len(data)})
 
         if atomic:
-            tmp_path = path.with_suffix(path.suffix + ".tmp")
-            tmp_path.write_bytes(data)
-            tmp_path.rename(path)
+            self._write_atomic(path, data, None)
         else:
             path.write_bytes(data)
+
+    @staticmethod
+    def _write_atomic(path: Path, data: Union[str, bytes], encoding: Optional[str]) -> None:
+        """Stage ``data`` next to ``path``, flush it to disk, then rename it into place.
+
+        Every call stages through its own exclusively created file. A staging
+        name shared per target would let concurrent writers rename or
+        overwrite each other's half-written file.
+
+        Args:
+            path: Destination path
+            data: Text (with ``encoding``) or bytes (``encoding`` is None)
+            encoding: Text encoding, or None for binary content
+        """
+        staging_path = path.with_name(f".fsguard-{secrets.token_hex(8)}.tmp")
+        descriptor = os.open(
+            staging_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o666,
+        )
+        try:
+            with os.fdopen(descriptor, "wb" if encoding is None else "w", encoding=encoding) as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(staging_path, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                staging_path.unlink()
+            raise
 
     def delete(self, path: Path, missing_ok: bool = True) -> bool:
         """Delete a file.
