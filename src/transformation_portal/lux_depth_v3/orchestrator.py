@@ -4532,6 +4532,11 @@ class EnhanceOrchestrator:
                         **({"geometry_result": geometry_result} if geometry_result is not None else {}),
                     )
 
+                # A float depth left by an earlier run belongs to the depth PNG
+                # about to be replaced; drop it so it is never indexed or
+                # preferred for PBR next to this run's depth.
+                float_depth_path.unlink(missing_ok=True)
+
                 # 3. Write quantized depth (PNG 16-bit)
                 png_depth = result.depth
                 if geometry_result is not None:
@@ -4564,7 +4569,8 @@ class EnhanceOrchestrator:
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled
                 if getattr(self.config, "save_float_depth", False):
-                    np.save(str(float_depth_path), result.depth)
+                    with atomic_temp_file(float_depth_path, suffix=".npy") as float_depth_tmp:
+                        np.save(str(float_depth_tmp), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
                 # Capture backend metadata dynamically (ADR-019) from the

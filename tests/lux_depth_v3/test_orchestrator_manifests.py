@@ -761,3 +761,52 @@ class TestAuditProvenancePreflight:
         sidecar = json.loads(manifest_path.with_name(f"{manifest_path.stem}_provenance.json").read_text(encoding="utf-8"))
         assert sidecar["toolchain"]["exiftool_version"] == "12.76"
         assert sidecar["exif"] == {"SourceFile": str(image)}
+
+
+class TestFloatDepthFreshness:
+    """F10: a float-depth ``.npy`` must always pair with the depth PNG written beside it."""
+
+    @staticmethod
+    def _run(output: Path, image: Path, **config_kwargs) -> Dict[str, Any]:
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        orchestrator = _create_orchestrator(output, **config_kwargs)
+        return orchestrator.enhance_image(ImageInput(path=image), input_root=image.parent)
+
+    def test_depth_rewrite_without_float_depth_removes_stale_npy(self, tmp_path: Path) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image = inputs / "room.png"
+        Image.new("RGB", (64, 64), color="white").save(image)
+        first = self._run(output, image, save_float_depth=True)
+        float_depth = Path(first["depth_float_path"])
+        assert float_depth == Path(first["depth_path"]).with_suffix(".npy")
+        assert float_depth.is_file()
+
+        # New content forces Stage A to rewrite the depth PNG without float depth.
+        Image.new("RGB", (64, 64), color="black").save(image)
+        second = self._run(output, image, save_float_depth=False)
+
+        assert second["status"] == "ok"
+        assert Path(second["depth_path"]).with_suffix(".npy") == float_depth
+        assert second["depth_float_path"] is None
+        assert not float_depth.exists()
+
+    def test_float_depth_write_failure_leaves_no_partial_npy(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image = _make_test_image(inputs, "room.png")
+
+        def _partial_save(file, arr, *args, **kwargs):
+            Path(file).write_bytes(b"\x93NUMPY partial")
+            raise OSError("disk full")
+
+        monkeypatch.setattr(np, "save", _partial_save)
+        with pytest.raises(Exception):
+            self._run(output, image, save_float_depth=True)
+
+        depth_dir = output / "depth"
+        assert not list(depth_dir.glob("*.npy"))
+        assert not [p.name for p in depth_dir.iterdir() if p.name.startswith(".tmp_")]
