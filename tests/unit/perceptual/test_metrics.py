@@ -270,8 +270,136 @@ class TestModuleConvenienceWrappers:
         assert math.isfinite(score)
 
     def test_compute_lpips_identical_is_zero(self):
+        # Needs the real LPIPS model: without the lpips package the metric is
+        # unavailable (M-14) instead of silently falling back to MSE.
+        pytest.importorskip("lpips")
         from transformation_portal.perceptual.metrics import compute_lpips
 
         img = _rand_tensor((1, 3, 32, 32))
         score = compute_lpips(img, img.clone(), torch.device("cpu"))
         assert score == pytest.approx(0.0, abs=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Fallback / unavailable metrics (regression: M-13, M-14)
+# ---------------------------------------------------------------------------
+
+
+def _sharp_and_blurry():
+    import torch.nn.functional as F
+
+    torch.manual_seed(0)
+    sharp = torch.rand(3, 64, 64)
+    blurry = F.avg_pool2d(sharp.unsqueeze(0), 9, stride=1, padding=4)[0]
+    return sharp, blurry
+
+
+@pytest.fixture
+def _no_brisque_models(monkeypatch):
+    for name in ("TP_BRISQUE_MODEL_PATH", "TP_BRISQUE_RANGE_PATH", "BRISQUE_MODEL_PATH", "BRISQUE_RANGE_PATH"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture
+def _no_lpips(monkeypatch):
+    import sys
+
+    # A None entry makes ``import lpips`` raise ImportError whether or not it is installed.
+    monkeypatch.setitem(sys.modules, "lpips", None)
+
+
+@pytest.mark.ml
+@pytest.mark.regression
+class TestBrisqueFallbackDirection:
+    """The sharpness proxy is higher-is-better and must be labelled so (M-13)."""
+
+    def test_fallback_prefers_sharp_image(self, _no_brisque_models):
+        from transformation_portal.perceptual.metrics import QualityMetrics
+
+        qm = QualityMetrics(_make_substrate())
+        sharp, blurry = _sharp_and_blurry()
+        s_sharp, s_blurry = qm.compute_brisque(sharp), qm.compute_brisque(blurry)
+
+        assert s_sharp.higher_is_better is True
+        assert s_sharp.is_better_than(s_blurry) is True
+        assert s_blurry.is_better_than(s_sharp) is False
+        # normalized_score agrees with the comparison direction.
+        assert s_sharp.normalized_score > s_blurry.normalized_score
+
+    def test_fallback_normalized_score_is_bounded_and_tagged(self, _no_brisque_models):
+        from transformation_portal.perceptual.metrics import QualityMetrics
+
+        qm = QualityMetrics(_make_substrate())
+        sharp, _ = _sharp_and_blurry()
+        result = qm.compute_brisque(sharp)
+
+        assert result.score > 1.0  # raw gradient magnitude exceeds 1 for this image
+        assert 0.0 <= result.normalized_score <= 1.0
+        assert result.metadata["fallback"] == "gradient_sharpness"
+
+    def test_scores_with_different_directions_are_not_comparable(self):
+        from transformation_portal.perceptual.metrics import MetricType, PerceptualScore
+
+        real = PerceptualScore(MetricType.BRISQUE, 20.0, False, 0.8, {})
+        proxy = PerceptualScore(MetricType.BRISQUE, 0.5, True, 0.5, {"fallback": "gradient_sharpness"})
+        with pytest.raises(ValueError, match="direction"):
+            real.is_better_than(proxy)
+
+    def test_analyzer_compare_picks_sharp_image_on_brisque(self, _no_brisque_models):
+        from pathlib import Path
+
+        from transformation_portal.perceptual.analyzer import PerceptualAnalyzer
+        from transformation_portal.perceptual.image_loader import ImageMetadata
+
+        def _meta(name):
+            return ImageMetadata(
+                path=Path(name),
+                image_type=None,
+                width=64,
+                height=64,
+                channels=3,
+                format="PNG",
+                size_bytes=0,
+                bit_depth=8,
+                color_space="sRGB",
+                mean_intensity=0.5,
+                std_intensity=0.2,
+                dynamic_range=1.0,
+                tags={},
+            )
+
+        sharp, blurry = _sharp_and_blurry()
+        result = PerceptualAnalyzer(_make_substrate()).compare(sharp, blurry, _meta("sharp.png"), _meta("blurry.png"))
+        assert result["metric_comparisons"]["brisque"]["winner"] == 1
+
+
+@pytest.mark.ml
+@pytest.mark.regression
+class TestLpipsUnavailable:
+    """Without the lpips package LPIPS is reported unavailable, not as MSE (M-14)."""
+
+    def test_compute_lpips_raises_unavailable(self, _no_lpips):
+        from transformation_portal.perceptual.metrics import MetricUnavailableError, QualityMetrics
+
+        qm = QualityMetrics(_make_substrate())
+        sharp, blurry = _sharp_and_blurry()
+        with pytest.raises(MetricUnavailableError, match="lpips"):
+            qm.compute_lpips(blurry, sharp)
+
+    def test_module_wrapper_raises_unavailable(self, _no_lpips):
+        from transformation_portal.perceptual.metrics import MetricUnavailableError, compute_lpips
+
+        img = _rand_tensor((1, 3, 32, 32))
+        with pytest.raises(MetricUnavailableError):
+            compute_lpips(img, img.clone(), torch.device("cpu"))
+
+    def test_compute_all_omits_lpips_key(self, _no_lpips):
+        from transformation_portal.perceptual.metrics import MetricType, QualityMetrics
+
+        qm = QualityMetrics(_make_substrate())
+        sharp, blurry = _sharp_and_blurry()
+        scores = qm.compute_all(blurry, sharp)
+
+        assert MetricType.LPIPS not in scores
+        assert scores[MetricType.MSE].metric_type is MetricType.MSE
+        assert all(score.metric_type is key for key, score in scores.items())

@@ -17,6 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from .image_loader import ImageLoader, ImageMetadata
     from .metrics import (
         MetricType,
+        MetricUnavailableError,
         PerceptualScore,
         QualityMetrics,
         compute_brisque,
@@ -36,6 +37,7 @@ _LAZY_EXPORTS = {
     "ImageLoader": ".image_loader",
     "ImageMetadata": ".image_loader",
     "MetricType": ".metrics",
+    "MetricUnavailableError": ".metrics",
     "PerceptualScore": ".metrics",
     "QualityMetrics": ".metrics",
     "compute_brisque": ".metrics",
@@ -70,6 +72,7 @@ __all__ = [
     "BaselineConfig",
     "QualityMetrics",
     "MetricType",
+    "MetricUnavailableError",
     "PerceptualScore",
     "ImageLoader",
     "ImageMetadata",
