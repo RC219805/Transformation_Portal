@@ -639,8 +639,11 @@ class UnifiedPipeline:
             members_by_name.setdefault(name, []).append(index)
 
         # Unique default names are reserved first, so a disambiguated name can
-        # never land on an output that another input already owns.
-        taken = {name for name, members in members_by_name.items() if len(members) == 1}
+        # never land on an output that another input already owns. Reservations
+        # are compared case-insensitively: on a case-insensitive volume (the
+        # macOS default) ``a.JPG_x.png`` and ``a.jpg_x.png`` are the same file.
+        # Only names that are being disambiguated are affected by this.
+        taken = {name.casefold() for name, members in members_by_name.items() if len(members) == 1}
         planned = list(default_names)
         for default_name, members in members_by_name.items():
             if len(members) == 1:
@@ -650,10 +653,10 @@ class UnifiedPipeline:
             for index, stem in zip(members, self._distinct_output_stems(group)):
                 candidate = self._get_output_name(input_files[index], stem=stem)
                 counter = 1
-                while candidate in taken:
+                while candidate.casefold() in taken:
                     counter += 1
                     candidate = self._get_output_name(input_files[index], stem=f"{stem}_{counter}")
-                taken.add(candidate)
+                taken.add(candidate.casefold())
                 planned[index] = candidate
         return planned
 

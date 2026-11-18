@@ -1034,6 +1034,30 @@ class TestBatchProcessing:
         for index in (1, 6):
             assert planned[index] == pipeline._get_output_name(inputs[index])
 
+    def test_batch_output_plan_never_reuses_a_taken_name_that_differs_only_in_case(self, pipeline_module, minimal_recipe):
+        """A disambiguated name must not land on a case variant of another input's output.
+
+        On a case-insensitive volume (the macOS default) ``a.JPG_x.png`` and
+        ``a.jpg_x.png`` are one file, so the renamed output would overwrite it.
+        """
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        inputs = [
+            Path("shoot/a.JPG"),
+            Path("shoot/a.png"),
+            # Unique default name ``a.jpg_test_pipeline.png``: a case variant of
+            # the first disambiguation candidate of a.JPG.
+            Path("shoot/a.jpg.png"),
+        ]
+
+        planned = pipeline._plan_batch_output_names(inputs)
+
+        assert planned == [
+            "a.JPG_2_test_pipeline.png",
+            "a.png_test_pipeline.png",
+            "a.jpg_test_pipeline.png",
+        ]
+        assert len({name.casefold() for name in planned}) == len(inputs)
+
     def test_batch_dry_run_previews_the_names_a_real_run_writes(self, pipeline_module, minimal_recipe, tmp_path: Path, caplog):
         """The dry-run plan must show the disambiguated names, not the colliding default."""
         input_dir = tmp_path / "inputs"
