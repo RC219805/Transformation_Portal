@@ -237,7 +237,7 @@ def validate_schema(
             data_dict = json.loads(data)
         else:
             # File path
-            with open(data, "r") as f:
+            with open(data, "r", encoding="utf-8") as f:
                 data_dict = json.load(f)
     elif isinstance(data, dict):
         data_dict = data
