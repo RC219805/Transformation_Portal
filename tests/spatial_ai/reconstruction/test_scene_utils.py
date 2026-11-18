@@ -186,10 +186,47 @@ class TestSceneBuilder:
         )
         np.testing.assert_allclose(mid_R, expected_mid_R, atol=1e-4)
 
-        # Verify translation is linearly interpolated
-        mid_t = path[5].extrinsics[:3, 3]
-        expected_mid_t = np.array([0.5, 0.5, 0.0], dtype=np.float32)
-        np.testing.assert_allclose(mid_t, expected_mid_t, atol=1e-5)
+        # R-5: the camera centre C = -R^T t (extrinsics are world-to-camera) is
+        # linearly interpolated, not the translation t itself. cam1's centre is
+        # -R1^T [1, 1, 0] = [-1, 1, 0], so frame i sits at i/10 of the way there
+        # and its translation is rebuilt as t = -R C.
+        centre1 = np.array([-1.0, 1.0, 0.0])
+        for i, cam in enumerate(path):
+            R = cam.extrinsics[:3, :3].astype(np.float64)
+            centre = -R.T @ cam.extrinsics[:3, 3].astype(np.float64)
+            np.testing.assert_allclose(centre, centre1 * (i / 10.0), atol=1e-5, err_msg=f"Frame {i} camera centre")
+        expected_mid_t = -expected_mid_R.astype(np.float64) @ (0.5 * centre1)
+        np.testing.assert_allclose(path[5].extrinsics[:3, 3], expected_mid_t, atol=1e-5)
+
+        # R-5: a camera that only rotates in place (pans through yaw 0, 45 and 90
+        # degrees about Y at world position (10, 0, 0)) must stay at that
+        # position, both on the two-keyframe linear path and the spline path.
+        centre_fixed = np.array([10.0, 0.0, 0.0])
+        pan_cameras = []
+        for yaw in (0.0, np.pi / 4, np.pi / 2):
+            R_yaw = np.array(
+                [[np.cos(yaw), 0.0, np.sin(yaw)], [0.0, 1.0, 0.0], [-np.sin(yaw), 0.0, np.cos(yaw)]],
+                dtype=np.float32,
+            )
+            pan_extrinsics = np.eye(4, dtype=np.float32)
+            pan_extrinsics[:3, :3] = R_yaw
+            pan_extrinsics[:3, 3] = (-R_yaw.astype(np.float64) @ centre_fixed).astype(np.float32)
+            pan_cameras.append(CameraParams(intrinsics.copy(), pan_extrinsics, W, H))
+        pan_scene = Scene3D(
+            splats=splats,
+            cameras=pan_cameras,
+            rmse=TEST_RMSE,
+            iteration=TEST_ITERATION,
+            convergence=TEST_CONVERGENCE,
+        )
+        for interpolation in ("linear", "spline"):
+            pan_path = builder.extract_camera_path(pan_scene, num_frames=5, interpolation=interpolation)
+            for i, cam in enumerate(pan_path):
+                R = cam.extrinsics[:3, :3].astype(np.float64)
+                centre = -R.T @ cam.extrinsics[:3, 3].astype(np.float64)
+                np.testing.assert_allclose(
+                    centre, centre_fixed, atol=1e-4, err_msg=f"{interpolation} frame {i}: panning camera moved"
+                )
 
     def test_extract_camera_path_spline_passes_through_keyframes(self, builder, intrinsics):
         """Spline interpolation must pass through every keyframe camera.

@@ -253,14 +253,20 @@ class SceneBuilder:
 
         Modes:
         - ``"linear"`` (default): Two-keyframe path between the first and last
-          camera. Translation uses linear interpolation (LERP); rotation uses
-          spherical linear interpolation (SLERP) via quaternions. Intermediate
-          cameras in the scene are ignored.
+          camera. The camera centre uses linear interpolation (LERP); rotation
+          uses spherical linear interpolation (SLERP) via quaternions.
+          Intermediate cameras in the scene are ignored.
         - ``"spline"``: Multi-keyframe path that passes through every camera
           in ``scene.cameras`` (uniformly spaced in path parameter ``t``).
-          Translation uses a natural cubic spline; rotation uses piecewise
+          The camera centre uses a natural cubic spline; rotation uses piecewise
           SLERP across all keyframes. With only two cameras this degenerates
           to the same result as ``"linear"``.
+
+        Extrinsics are world-to-camera ``[R|t]``, so the camera centre is
+        ``C = -R^T t``. Positions are interpolated as camera centres and each
+        frame's translation is rebuilt as ``t = -R C`` from its interpolated
+        rotation; interpolating ``t`` itself would move a camera that only
+        rotates in place.
 
         Args:
             scene: Reconstructed 3D scene.
@@ -294,10 +300,12 @@ class SceneBuilder:
         n_keys = len(keyframes)
         key_times = np.linspace(0.0, 1.0, n_keys)
 
-        # Stack rotations and translations from keyframe extrinsics.
-        # Extrinsics format: [[R|t], [0 0 0 1]] where R is 3x3 rotation, t is 3x1 translation
-        key_rotations = np.stack([cam.extrinsics[:3, :3] for cam in keyframes])
-        key_translations = np.stack([cam.extrinsics[:3, 3] for cam in keyframes])
+        # Stack rotations and camera centres from keyframe extrinsics.
+        # Extrinsics format: [[R|t], [0 0 0 1]] (world-to-camera), so the
+        # camera centre in world coordinates is C = -R^T t.
+        key_rotations = np.stack([cam.extrinsics[:3, :3] for cam in keyframes]).astype(np.float64)
+        key_translations = np.stack([cam.extrinsics[:3, 3] for cam in keyframes]).astype(np.float64)
+        key_centres = -np.einsum("kji,kj->ki", key_rotations, key_translations)
 
         # SLERP handles both two-key (linear) and multi-key (spline) cases.
         slerp = Slerp(key_times, Rotation.from_matrix(key_rotations))
@@ -309,13 +317,13 @@ class SceneBuilder:
             # the LERP path below to avoid the extra dependency call.
             from scipy.interpolate import CubicSpline
 
-            translation_fn = CubicSpline(key_times, key_translations, bc_type="natural")
+            centre_fn = CubicSpline(key_times, key_centres, bc_type="natural")
         else:
             # Piecewise linear interpolation across keyframes (covers both
             # 2-keyframe "linear" mode and 2-keyframe "spline" degeneracy).
-            def translation_fn(t: float) -> np.ndarray:
+            def centre_fn(t: float) -> np.ndarray:
                 return np.array(
-                    [np.interp(t, key_times, key_translations[:, axis]) for axis in range(3)],
+                    [np.interp(t, key_times, key_centres[:, axis]) for axis in range(3)],
                     dtype=np.float64,
                 )
 
@@ -324,8 +332,8 @@ class SceneBuilder:
         for i in range(num_frames):
             t = i / (num_frames - 1) if num_frames > 1 else 0.0
 
-            t_interp = np.asarray(translation_fn(t))
             R_interp = slerp(t).as_matrix()
+            t_interp = -R_interp @ np.asarray(centre_fn(t), dtype=np.float64)
 
             # Reconstruct 4x4 extrinsics matrix
             extrinsics = np.eye(4, dtype=np.float32)
