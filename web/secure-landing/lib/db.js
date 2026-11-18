@@ -25,6 +25,9 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_sessions_idle_expires_at
     ON sessions (idle_expires_at);
 
+    CREATE INDEX IF NOT EXISTS idx_sessions_absolute_expires_at
+    ON sessions (absolute_expires_at);
+
     CREATE TABLE IF NOT EXISTS login_attempts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       throttle_key TEXT NOT NULL,

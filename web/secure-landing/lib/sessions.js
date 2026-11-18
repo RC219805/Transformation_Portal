@@ -74,6 +74,9 @@ export async function createAnonymousSession() {
   const config = getConfig();
   const store = getSessionStore();
   const currentTime = nowMs();
+  // Sweep expired rows whenever a new one is minted: the browser drops the
+  // cookie at absolute expiry, so an expired row is otherwise never revisited.
+  await store.pruneExpiredSessions(currentTime);
   const record = {
     id: generateId(),
     created_at: currentTime,
@@ -132,6 +135,7 @@ export async function rotateAuthenticatedSession(existingSession, user) {
 
   const config = getConfig();
   const currentTime = nowMs();
+  await store.pruneExpiredSessions(currentTime);
   const record = {
     id: generateId(),
     created_at: currentTime,

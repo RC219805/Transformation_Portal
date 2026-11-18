@@ -46,6 +46,10 @@
  *     absolute expiration; preserve current identity and CSRF fields.
  * @property {(sessionId: string) => void} deleteSession
  *     Idempotent. ``sessionId`` falsy is a no-op.
+ * @property {(nowMs: number) => void} pruneExpiredSessions
+ *     Drop every session whose idle or absolute expiry is at or before
+ *     ``nowMs``. Stores whose records expire natively (Redis TTL) may treat
+ *     this as a no-op.
  * @property {(throttleKey: string, sinceMs: number) => number} countLoginFailures
  *     How many failed login attempts for this throttle key since ``sinceMs``.
  * @property {(attempt: LoginAttempt) => void} recordLoginAttempt

@@ -88,6 +88,12 @@ export class SqliteSessionStore {
     getSessionDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
   }
 
+  pruneExpiredSessions(nowMs) {
+    getSessionDb()
+      .prepare("DELETE FROM sessions WHERE idle_expires_at <= ? OR absolute_expires_at <= ?")
+      .run(nowMs, nowMs);
+  }
+
   countLoginFailures(throttleKey, sinceMs) {
     const row = getSessionDb()
       .prepare(

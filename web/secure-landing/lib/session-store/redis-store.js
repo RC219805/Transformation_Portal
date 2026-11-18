@@ -183,6 +183,12 @@ export class RedisSessionStore {
     await client.del(this._sessionKey(sessionId));
   }
 
+  async pruneExpiredSessions() {
+    // Session keys carry a TTL set to the absolute expiry in persistSession,
+    // and sessions.js deletes idle-expired rows on read, so there is nothing
+    // to sweep here.
+  }
+
   async countLoginFailures(throttleKey, sinceMs) {
     const client = await this._client_();
     const count = await client.zcount(this._loginKey(throttleKey), sinceMs, "+inf");
