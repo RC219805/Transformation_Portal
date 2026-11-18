@@ -25,7 +25,8 @@ def atomic_open(path: Path, mode: str, **open_kwargs: Any) -> Iterator[IO[Any]]:
     :func:`os.replace` only when the ``with`` block finishes without an
     exception; otherwise it is removed and ``path`` keeps its previous content.
     New files get the mode ``open(path, mode)`` would give under the process
-    umask; an existing destination keeps its mode.
+    umask. An existing destination keeps its mode. On POSIX, a replacement
+    temp file starts with permissions no broader than the existing destination.
     """
     if mode not in _ALLOWED_MODES:
         raise ValueError(f"atomic_open supports modes {sorted(_ALLOWED_MODES)}, got {mode!r}")
@@ -36,7 +37,10 @@ def atomic_open(path: Path, mode: str, **open_kwargs: Any) -> Iterator[IO[Any]]:
 
     temp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-    fd = os.open(temp_path, flags, 0o666)
+    creation_mode = 0o666
+    if os.name == "posix" and existing_mode is not None:
+        creation_mode &= existing_mode
+    fd = os.open(temp_path, flags, creation_mode)
     try:
         handle = os.fdopen(fd, mode, **open_kwargs)
     except BaseException:
