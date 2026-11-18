@@ -419,7 +419,13 @@ class TestDepthMapPairing:
 
     @pytest.mark.parametrize(
         "argv_tail",
-        [["dof", "--falloff", "2.0"], ["do", "--fallof", "2.0"], ["dof", "--fallof", "2.0"], ["do", "--falloff", "2.0"]],
+        [
+            ["dof", "--falloff", "2.0"],
+            ["do", "--fallof", "2.0"],
+            ["dof", "--fallof", "2.0"],
+            ["do", "--falloff", "2.0"],
+            ["do", "--fallo", "2.0"],
+        ],
     )
     def test_documented_dof_and_falloff_names_are_accepted(self, temp_dirs, monkeypatch, argv_tail):
         """Regression for L-05: the documented ``dof`` mode and ``--falloff`` flag were rejected by argparse."""

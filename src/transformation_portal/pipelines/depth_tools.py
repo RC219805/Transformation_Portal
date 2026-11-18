@@ -1012,13 +1012,15 @@ def build_cli() -> argparse.ArgumentParser:
     pc.add_argument("--near", type=float, default=20.0)
     pc.add_argument("--far", type=float, default=80.0)
 
-    # "do" and "--fallof" are the historical spellings, kept as aliases of the documented names.
+    # "do" is the historical sub-command spelling, kept as an alias of the documented "dof".
     pd = sub.add_parser("dof", aliases=["do"], help="Cinematic depth-of-field")
     common(pd)
     pd.add_argument("--focus", type=float, default=35.0)
     pd.add_argument("--aperture", type=float, default=0.22)
     pd.add_argument("--clarity", type=float, default=0.18)
-    pd.add_argument("--falloff", "--fallof", dest="falloff", type=float, default=1.4)
+    # The historical "--fallof" (and shorter prefixes such as "--fallo") still parse as unambiguous abbreviations
+    # of "--falloff". Registering "--fallof" as a second option string would make those prefixes ambiguous.
+    pd.add_argument("--falloff", type=float, default=1.4)
 
     return ap
 
