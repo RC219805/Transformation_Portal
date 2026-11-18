@@ -477,6 +477,11 @@ class TestSafeExecution:
             ("def tile(v):\n    return v\n\n\nif __name__ == '__main__':\n    tile(1)\n", "If statement"),
             ("try:\n    import json\nexcept ImportError:\n    json = None\n\n\ndef tile(v):\n    return v\n", "Try statement"),
             ("(LIMIT := 4)\n\n\ndef tile(v):\n    return v * LIMIT\n", "assignment expression"),
+            (
+                "LIMIT = 4\n\n\ndef set_limit(v):\n    global LIMIT\n    LIMIT = v\n\n\ndef tile(v):\n    return v * LIMIT\n",
+                "global statement",
+            ),
+            ("def tile(v):\n    globals()['LAST'] = v\n    return v\n", "globals()"),
         ],
     )
     def test_modules_that_cannot_be_relocated_are_skipped(self, tmp_path, body, reason_fragment):

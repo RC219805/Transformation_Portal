@@ -131,6 +131,12 @@ def _relocation_blocker(tree: ast.Module) -> Optional[str]:
             return "relative import (resolves differently once moved)"
         if isinstance(node, ast.Name) and node.id in _LOCATION_DUNDERS:
             return f"uses {node.id} (changes once moved)"
+        # A stub binds copies of the shared module's globals at import time, so
+        # later rebinding in the shared module is invisible through the stub.
+        if isinstance(node, ast.Global):
+            return "global statement (rebinding is invisible through the re-export stub)"
+        if isinstance(node, ast.Name) and node.id == "globals":
+            return "uses globals() (bindings are not static)"
 
     for stmt in tree.body:
         if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.Pass)):
