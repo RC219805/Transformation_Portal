@@ -13,11 +13,14 @@ def pre_auth_encode(payload_type: str, payload: bytes) -> bytes:
     """Produce the DSSE v1 pre-authentication encoding."""
     if not isinstance(payload_type, str) or not payload_type:
         raise ValueError("payload_type must be a non-empty string")
+    # DSSE v1 PAE: LEN(s) is the byte length of the UTF-8 encoding, not the
+    # character count (the two coincide for ASCII payload types).
+    payload_type_bytes = payload_type.encode("utf-8")
     return (
         b"DSSEv1 "
-        + str(len(payload_type)).encode("ascii")
+        + str(len(payload_type_bytes)).encode("ascii")
         + b" "
-        + payload_type.encode("utf-8")
+        + payload_type_bytes
         + b" "
         + str(len(payload)).encode("ascii")
         + b" "
