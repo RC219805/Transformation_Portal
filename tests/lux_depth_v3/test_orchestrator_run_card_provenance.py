@@ -700,3 +700,54 @@ class TestProvenanceSidecarGitRevision:
         assert manifest["repro"]["v3_git_revision"] == pipeline_sha
         assert ingest_context["git_commit_sha"] == pipeline_sha
         assert unrelated_repo.resolve() not in git_head_lookups
+
+
+class TestRunCardSurvivesUnreadableInput:
+    """F12: an input that already failed must not abort run-card assembly for the batch."""
+
+    @staticmethod
+    def _failing_hash_for(unreadable: Path):
+        from transformation_portal.lux_depth_v3 import orchestrator as orch_mod
+
+        real_hash = orch_mod.compute_file_sha256
+
+        def fake_hash(path: Any, *args: Any, **kwargs: Any) -> str:
+            if Path(path).resolve() == unreadable.resolve():
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_hash(path, *args, **kwargs)
+
+        return fake_hash
+
+    def test_batch_with_one_unreadable_input_still_writes_run_card(self, tmp_path: Path) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        images = [_make_test_image(inputs, f"img_{index}.png") for index in range(3)]
+        orchestrator = _create_orchestrator(tmp_path / "output", emit_run_card=True, enable_parallel_processing=False)
+
+        with patch(
+            "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+            side_effect=self._failing_hash_for(images[1]),
+        ):
+            results = orchestrator.enhance_batch(inputs)
+
+        statuses = {Path(result["image"]).name: result["status"] for result in results}
+        assert statuses == {"img_0.png": "ok", "img_1.png": "error", "img_2.png": "ok"}
+        run_cards = [path for path in (tmp_path / "output").glob("run_card_*.json") if not path.name.endswith(".self.json")]
+        assert len(run_cards) == 1
+        run_card = json.loads(run_cards[0].read_text(encoding="utf-8"))
+        assert [record["path"] for record in run_card["inputs"]] == ["img_0.png", "img_2.png"]
+        assert run_card["error_count"] == 1
+        assert run_card["success_count"] == 2
+
+    def test_successful_input_that_cannot_be_hashed_still_fails_closed(self, tmp_path: Path) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        image = _make_test_image(inputs, "img_0.png")
+        orchestrator = _create_orchestrator(tmp_path / "output")
+
+        with patch(
+            "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+            side_effect=self._failing_hash_for(image),
+        ):
+            with pytest.raises(OSError, match="Hash computation failed"):
+                orchestrator._build_run_card_inputs([{"image": str(image), "status": "ok"}])

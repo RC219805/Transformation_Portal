@@ -9968,11 +9968,24 @@ class EnhanceOrchestrator:
             seen_paths.add(relative_path)
             source_hash = self._normalize_sha256(result.get("input_sha256"))
             if source_hash is None:
-                source_hash = self._compute_or_skip_hash(
-                    input_path,
-                    manifest_exists=False,
-                    for_manifest_write=True,
-                )
+                try:
+                    source_hash = self._compute_or_skip_hash(
+                        input_path,
+                        manifest_exists=False,
+                        for_manifest_write=True,
+                    )
+                except OSError as exc:
+                    if result.get("status") == "ok":
+                        raise
+                    # An input that already failed (e.g. unreadable) is recorded as a
+                    # per-image error; it must not abort run-card assembly for the
+                    # rest of the batch. Like a vanished input, it has no hash record.
+                    logger.warning(
+                        "Run card omits input record for failed image %s: %s",
+                        input_path,
+                        exc,
+                    )
+                    continue
             if source_hash is None:
                 continue
             try:
