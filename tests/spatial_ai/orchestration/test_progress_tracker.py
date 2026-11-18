@@ -455,6 +455,34 @@ class TestProgressTrackerTimeTracking:
         assert elapsed1 == elapsed2
         assert elapsed1 >= 0.1
 
+    def test_reused_tracker_resets_state_of_previous_run(self):
+        """A second run on the same tracker must not inherit the first run's state.
+
+        Regression (O-1): start_pipeline kept the previous run's end time, completed-stage
+        count and stage metrics, so a reused pipeline reported a negative execution_time
+        and progress above 100 %.
+        """
+        tracker = ProgressTracker(total_stages=2)
+        tracker.start_pipeline()
+        for name in ("ingest", "segment"):
+            tracker.start_stage(name, name.title())
+            tracker.complete_stage(name, success=True)
+        tracker.complete_pipeline(success=True)
+
+        time.sleep(0.05)
+        tracker.start_pipeline()
+        assert tracker._get_elapsed_time() >= 0.0
+        assert tracker.get_progress_percent() == 0.0
+        assert tracker.get_summary()["stages"] == {}
+
+        tracker.start_stage("ingest", "Ingest")
+        tracker.complete_stage("ingest", success=True)
+        assert tracker.get_progress_percent() == 50.0
+        assert tracker.get_summary()["completed_stages"] == 1
+
+        tracker.complete_pipeline(success=True)
+        assert tracker._get_elapsed_time() >= 0.0
+
 
 class TestProgressTrackerSummary:
     """Test summary generation."""

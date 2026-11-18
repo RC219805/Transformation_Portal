@@ -139,8 +139,16 @@ class ProgressTracker:
         self._completed_stages: int = 0
 
     def start_pipeline(self) -> None:
-        """Mark pipeline start."""
+        """Mark pipeline start.
+
+        Clears the state of any earlier run so that a reused tracker reports
+        this run's elapsed time, completed stages and stage metrics only.
+        """
         self._pipeline_start_time = time.time()
+        self._pipeline_end_time = None
+        self._current_stage = None
+        self._stage_metrics = {}
+        self._completed_stages = 0
         event = ProgressEvent(
             event_type=ProgressEventType.PIPELINE_START,
             stage=None,
