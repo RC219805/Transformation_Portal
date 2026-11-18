@@ -111,6 +111,72 @@ def test_process_batch_tracks_errors_and_progress_with_single_worker(tmp_path, m
     assert (tmp_path / "out").is_dir()
 
 
+def _batch_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    images = tmp_path / "images"
+    depths = tmp_path / "depths"
+    output = tmp_path / "out"
+    images.mkdir()
+    depths.mkdir()
+    return images, depths, output
+
+
+def test_process_batch_pairs_prefix_sharing_bases_with_their_own_images(tmp_path) -> None:
+    # IMG_1 and IMG_10 share a prefix; each depth map must be applied to its own photograph and both outputs
+    # must be written (IMG_1's depth used to be applied to IMG_10_enh.png, overwriting IMG_10's output).
+    images, depths, output = _batch_dirs(tmp_path)
+    _write_rgb(images / "IMG_1_golden.png", value=10)
+    _write_rgb(images / "IMG_10_enh.png", value=200)
+    _write_depth(depths / "IMG_1_depth16.png")
+    _write_depth(depths / "IMG_10_depth16.png")
+    opts = tools.BatchOptions(images_root=str(images), depths_root=str(depths), out_root=str(output), fmt="png")
+
+    error_count = tools.process_batch(opts)
+
+    assert error_count == 0
+    assert sorted(p.name for p in output.iterdir()) == ["IMG_10_enh_depthhaze.png", "IMG_1_golden_depthhaze.png"]
+    dark = np.asarray(Image.open(output / "IMG_1_golden_depthhaze.png"))
+    bright = np.asarray(Image.open(output / "IMG_10_enh_depthhaze.png"))
+    assert dark.mean() < bright.mean()
+
+
+def test_process_batch_fails_closed_when_depth_maps_resolve_to_one_source(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    # Base IMG_1 also owns IMG_1_2_enh.png by name, and its tag outranks IMG_1_golden.png, so both depth maps
+    # claim the same photograph and the same output file. Neither may be processed; the unrelated pair still is.
+    images, depths, output = _batch_dirs(tmp_path)
+    _write_rgb(images / "IMG_1_golden.png")
+    _write_rgb(images / "IMG_1_2_enh.png")
+    _write_rgb(images / "villa_enh.png")
+    for base in ("IMG_1", "IMG_1_2", "villa"):
+        _write_depth(depths / f"{base}_depth16.png")
+    progress: list[tuple[int, int, str]] = []
+    caplog.set_level("ERROR", logger="depth_tools")
+    opts = tools.BatchOptions(images_root=str(images), depths_root=str(depths), out_root=str(output), fmt="png")
+
+    error_count = tools.process_batch(opts, progress=lambda done, total, base: progress.append((done, total, base)))
+
+    assert error_count == 2
+    assert [p.name for p in output.iterdir()] == ["villa_enh_depthhaze.png"]
+    assert sorted(base for _, _, base in progress) == ["IMG_1", "IMG_1_2", "villa"]
+    assert [done for done, _, _ in progress] == [1, 2, 3]
+    summary = "\n".join(r.getMessage() for r in caplog.records if "ERROR SUMMARY" in r.getMessage())
+    assert summary.count("Ambiguous pairing") == 2
+    assert "IMG_1_depth16.png" in summary and "IMG_1_2_depth16.png" in summary
+
+
+def test_process_batch_rejects_two_depth_maps_of_the_same_base(tmp_path) -> None:
+    # villa_depth16.png and villa_depth16.tif both target villa_enh.png and one output file.
+    images, depths, output = _batch_dirs(tmp_path)
+    _write_rgb(images / "villa_enh.png")
+    _write_depth(depths / "villa_depth16.png")
+    _write_depth(depths / "villa_depth16.tif")
+    opts = tools.BatchOptions(images_root=str(images), depths_root=str(depths), out_root=str(output), fmt="png")
+
+    error_count = tools.process_batch(opts)
+
+    assert error_count == 2
+    assert list(output.iterdir()) == []
+
+
 def test_process_batch_raises_when_no_depth_maps_exist(tmp_path) -> None:
     opts = tools.BatchOptions(
         images_root=str(tmp_path / "images"),
