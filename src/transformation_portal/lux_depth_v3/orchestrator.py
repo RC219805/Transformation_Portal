@@ -4517,6 +4517,15 @@ class EnhanceOrchestrator:
                     selected_attempt_index,
                 )
 
+                # Stage A replaces its artifacts in place from here on, but the
+                # manifest describing them is only rewritten at the end of the
+                # image. Retire the previous manifest first so an interrupted
+                # run cannot leave new artifacts beside an old manifest that a
+                # later legacy resume would trust. Prepared reuse is bound to
+                # artifact bytes through its evidence authority instead.
+                if self._prepared_execution is None:
+                    manifest_path.unlink(missing_ok=True)
+
                 # 2c. Materials V3 Processing (if enabled)
                 if self.materials_v3_engine:
                     (

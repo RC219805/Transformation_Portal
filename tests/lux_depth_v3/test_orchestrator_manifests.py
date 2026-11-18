@@ -810,3 +810,55 @@ class TestFloatDepthFreshness:
         depth_dir = output / "depth"
         assert not list(depth_dir.glob("*.npy"))
         assert not [p.name for p in depth_dir.iterdir() if p.name.startswith(".tmp_")]
+
+
+class TestInterruptedStageARetiresManifest:
+    """F14: an interrupted Stage A rewrite must not leave new artifacts beside the old manifest."""
+
+    def test_interrupted_depth_rewrite_is_not_resumed_under_old_manifest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from transformation_portal.lux_depth_v3 import orchestrator as orchestrator_module
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image = _make_test_image(inputs, "room.png")
+        image_input = ImageInput(path=image)
+
+        first = _create_orchestrator(output).enhance_image(image_input, input_root=inputs)
+        depth_path = Path(first["depth_path"])
+        manifest_path = Path(first["manifest"])
+        # Control: an untouched run 1 is resumable under the same config.
+        assert _create_orchestrator(output).should_skip_depth(depth_path, manifest_path, image_input) is True
+
+        real_writer = orchestrator_module.atomic_write_depth_u16_png_with_stats
+
+        def _write_then_interrupt(*args, **kwargs):
+            real_writer(*args, **kwargs)
+            raise KeyboardInterrupt("operator interrupted the run after the depth rewrite")
+
+        monkeypatch.setattr(orchestrator_module, "atomic_write_depth_u16_png_with_stats", _write_then_interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            _create_orchestrator(output, quality_tier="premium").enhance_image(image_input, input_root=inputs)
+        monkeypatch.setattr(orchestrator_module, "atomic_write_depth_u16_png_with_stats", real_writer)
+
+        assert depth_path.is_file()
+        assert not manifest_path.exists()
+        assert _create_orchestrator(output).should_skip_depth(depth_path, manifest_path, image_input) is False
+
+    def test_completed_rewrite_still_writes_manifest(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        output = tmp_path / "output"
+        image_input = ImageInput(path=_make_test_image(inputs, "room.png"))
+
+        _create_orchestrator(output).enhance_image(image_input, input_root=inputs)
+        second = _create_orchestrator(output, quality_tier="premium").enhance_image(image_input, input_root=inputs)
+
+        assert second["status"] == "ok"
+        manifest = json.loads(Path(second["manifest"]).read_text())
+        assert manifest["config_fingerprint"]["quality_tier"] == "premium"
