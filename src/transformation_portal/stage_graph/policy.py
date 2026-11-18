@@ -183,7 +183,8 @@ class CachingPolicy:
             return self.cache_depth_maps
         elif "material" in stage_lower or "segmentation" in stage_lower:
             return self.cache_material_masks
-        elif "enhance" in stage_lower or "upscale" in stage_lower:
+        elif "enhance" in stage_lower or "upscal" in stage_lower:
+            # "upscal" covers both "upscale" and the registered "upscaling" stage
             return self.cache_enhanced
 
         return True  # Default: cache everything
