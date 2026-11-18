@@ -287,3 +287,22 @@ def test_worker_environment_removes_ambient_python_import_paths(monkeypatch):
     assert env["PYTHONPATH"] != "/untrusted"
     assert "PYTHONHOME" not in env and "VIRTUAL_ENV" not in env
     assert env["HF_HUB_OFFLINE"] == env["TP_STRICT_MODEL_LOCK"] == "1"
+
+
+def test_worker_environment_withholds_service_credentials(monkeypatch):
+    """LN-11: DA3 and RAW workers must not receive the parent's service secrets."""
+    secrets = {
+        "TP_API_KEY": "tp-secret",
+        "TP_DATABASE_URL": "postgresql://user:pw@db/tp",
+        "TP_REDIS_URL": "redis://cache",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret",
+        "HF_TOKEN": "hf-secret",
+        "VENDOR_PRIVATE_KEY": "key",
+    }
+    for key, value in secrets.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HF_HOME", "/models/hf")
+    env = backend.worker_environment()
+    assert not set(secrets) & set(env)
+    # Model-cache locations recorded by the DA3 runtime identity still cross.
+    assert env["HF_HOME"] == "/models/hf"

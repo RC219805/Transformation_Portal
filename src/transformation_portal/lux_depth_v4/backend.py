@@ -47,9 +47,15 @@ def require_process_supervisor() -> ModuleType:
 
 
 def worker_environment() -> dict[str, str]:
+    # Parent-only lazy import: the worker interpreter imports this module too.
+    from transformation_portal.orchestrator.execution_process import _sanitized_child_env
+
+    # Service credentials (API keys, store/broker URLs, cloud and hub tokens)
+    # never cross into third-party model or decoder code; the governed native
+    # consumer boundary already applies this same redaction.
     env = {
         key: value
-        for key, value in os.environ.items()
+        for key, value in _sanitized_child_env().items()
         if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
     }
     env.update(
