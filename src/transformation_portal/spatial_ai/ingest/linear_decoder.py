@@ -69,6 +69,68 @@ def _png_stores_16bit_multichannel(path: Path) -> bool:
     return header[24] == 16 and header[25] in _PNG_MULTICHANNEL_COLOR_TYPES
 
 
+# TIFF PhotometricInterpretation (tag 262) and Compression (tag 259) codes.
+_TIFF_PHOTOMETRIC_MINISWHITE = 0
+_TIFF_PHOTOMETRIC_MINISBLACK = 1
+_TIFF_PHOTOMETRIC_RGB = 2
+_TIFF_PHOTOMETRIC_YCBCR = 6
+_TIFF_COMPRESSION_JPEG = 7
+
+
+def _read_tiff_image(tifffile_module: Any, path: Path) -> np.ndarray:
+    """Read the single image of a TIFF file as stored samples in RGB / grey order.
+
+    tifffile returns stored sample values without applying the photometric
+    interpretation and stacks same-shaped pages into one array. Only layouts
+    whose samples are the image's intensities (or can be turned into them
+    exactly) are accepted; everything else fails closed instead of being read
+    as wrong pixels.
+
+    Raises:
+        ValueError: For a multi-page image series or an unsupported photometric
+            interpretation (palette, CMYK, CIELab, uncompressed YCbCr, ...).
+    """
+    with tifffile_module.TiffFile(str(path)) as tif:
+        if not tif.series:
+            raise ValueError(f"TIFF {path.name} contains no image")
+        series = tif.series[0]
+        page_count = len(series.pages)
+        if page_count > 1:
+            raise ValueError(
+                f"TIFF {path.name} stores {page_count} pages in one image series (shape {series.shape}, "
+                f"axes {series.axes}); multi-page TIFF is not supported. Refusing to read the page stack as one image."
+            )
+        page = series.keyframe
+        photometric = int(page.photometric)
+        compression = int(page.compression)
+        samples_per_pixel = int(page.samplesperpixel)
+        bits_per_sample = int(page.bitspersample)
+        if photometric in (_TIFF_PHOTOMETRIC_MINISBLACK, _TIFF_PHOTOMETRIC_RGB) or (
+            # The JPEG codec returns YCbCr-encoded JPEG data as RGB samples.
+            photometric == _TIFF_PHOTOMETRIC_YCBCR
+            and compression == _TIFF_COMPRESSION_JPEG
+        ):
+            return tif.asarray()
+        if photometric == _TIFF_PHOTOMETRIC_MINISWHITE:
+            array = tif.asarray()
+            if samples_per_pixel == 1 and array.dtype.kind == "u" and bits_per_sample == array.dtype.itemsize * 8:
+                # MinIsWhite: the stored maximum is black. Invert exactly.
+                return np.iinfo(array.dtype).max - array
+            raise ValueError(
+                f"TIFF {path.name} is MinIsWhite with {samples_per_pixel} sample(s) of {bits_per_sample}-bit "
+                f"{array.dtype}; only single-channel unsigned-integer MinIsWhite at full sample width can be inverted exactly."
+            )
+    try:
+        photometric_name = tifffile_module.PHOTOMETRIC(photometric).name
+    except ValueError:
+        photometric_name = str(photometric)
+    raise ValueError(
+        f"TIFF {path.name} uses unsupported photometric interpretation {photometric_name} "
+        f"(compression {compression}); its stored samples are not RGB / grey intensities. "
+        "Convert it to RGB or grayscale TIFF before ingest."
+    )
+
+
 def _canonical_f64_list(arr: np.ndarray) -> list:
     """Canonicalize array to a stable float64 list for fingerprint payloads.
 
@@ -517,7 +579,7 @@ class LinearDecoder:
             try:
                 import tifffile
 
-                img_array = tifffile.imread(str(path))
+                img_array = _read_tiff_image(tifffile, path)
             except ImportError:
                 # Fallback to PIL
                 logger.warning("tifffile not available, using PIL (may lose bit depth)")
@@ -528,6 +590,10 @@ class LinearDecoder:
             with Image.open(path) as img:
                 if format_str == "PNG" and _png_stores_16bit_multichannel(path):
                     img_array = self._decode_png_16bit_multichannel(path, (img.height, img.width))
+                elif img.mode in ("P", "PA"):
+                    # Palette PNG stores indices: expand them to their 8-bit RGB
+                    # palette colours (alpha is dropped like on every other path).
+                    img_array = np.array(img.convert("RGB"))
                 else:
                     img_array = np.array(img)
 

@@ -527,6 +527,81 @@ class TestLinearOutputRangeValidation:
             decoder.decode(raw_path)
 
 
+class TestStoredSampleInterpretation:
+    """Palette, MinIsWhite, CMYK and multi-page inputs decode correctly or fail (finding I-3)."""
+
+    def test_palette_png_decodes_palette_colours_not_indices(self, tmp_path: Path) -> None:
+        palette_image = Image.new("P", (4, 2))
+        palette_image.putpalette([255, 0, 0, 0, 255, 0, 0, 0, 255, 51, 102, 204] + [0] * (252 * 3))
+        palette_image.putdata([0, 1, 2, 3] * 2)
+        png_path = tmp_path / "palette.png"
+        palette_image.save(png_path)
+
+        result = decode(png_path)
+
+        expected_row = np.array([[255, 0, 0], [0, 255, 0], [0, 0, 255], [51, 102, 204]], dtype=np.float32) / 255.0
+        assert np.array_equal(result.linear_rgb, np.stack([expected_row, expected_row]))
+
+    def test_palette_png_with_transparency_drops_alpha(self, tmp_path: Path) -> None:
+        palette_image = Image.new("P", (2, 1))
+        palette_image.putpalette([10, 20, 30, 40, 50, 60] + [0] * (254 * 3))
+        palette_image.putdata([0, 1])
+        palette_image.info["transparency"] = 0
+        png_path = tmp_path / "palette_trns.png"
+        palette_image.save(png_path, transparency=0)
+
+        result = decode(png_path)
+
+        expected = np.array([[[10, 20, 30], [40, 50, 60]]], dtype=np.float32) / 255.0
+        assert np.array_equal(result.linear_rgb, expected)
+
+    def test_miniswhite_uint16_tiff_is_inverted(self, tmp_path: Path) -> None:
+        stored = np.array([[65535, 0], [32768, 1000]], dtype=np.uint16)
+        tiff_path = tmp_path / "miniswhite.tif"
+        tifffile.imwrite(str(tiff_path), stored, photometric="miniswhite")
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        intensity = (65535 - stored).astype(np.float32) / 65535.0
+        assert np.array_equal(result.linear_rgb, np.stack([intensity] * 3, axis=-1))
+
+    def test_minisblack_tiff_is_unchanged(self, tmp_path: Path) -> None:
+        stored = np.array([[65535, 0], [32768, 1000]], dtype=np.uint16)
+        tiff_path = tmp_path / "minisblack.tif"
+        tifffile.imwrite(str(tiff_path), stored, photometric="minisblack")
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        assert np.array_equal(result.linear_rgb, np.stack([stored.astype(np.float32) / 65535.0] * 3, axis=-1))
+
+    def test_multi_page_tiff_fails_closed(self, tmp_path: Path) -> None:
+        pages = np.arange(5 * 8 * 3, dtype=np.uint16).reshape(5, 8, 3)
+        tiff_path = tmp_path / "pages.tif"
+        tifffile.imwrite(str(tiff_path), pages, photometric="minisblack")
+
+        with pytest.raises(RuntimeError, match="stores 5 pages in one image series"):
+            decode(tiff_path)
+
+    def test_cmyk_tiff_fails_closed(self, tmp_path: Path) -> None:
+        cmyk = np.zeros((4, 4, 4), dtype=np.uint8)
+        cmyk[..., 0] = 255  # pure cyan, which an RGBA reading would turn into red
+        tiff_path = tmp_path / "cmyk.tif"
+        tifffile.imwrite(str(tiff_path), cmyk, photometric="separated")
+
+        with pytest.raises(RuntimeError, match="unsupported photometric interpretation SEPARATED"):
+            decode(tiff_path)
+
+    def test_palette_tiff_fails_closed(self, tmp_path: Path) -> None:
+        indices = np.array([[0, 1], [1, 0]], dtype=np.uint8)
+        colormap = np.zeros((3, 256), dtype=np.uint16)
+        colormap[0, 1] = 65535
+        tiff_path = tmp_path / "palette.tif"
+        tifffile.imwrite(str(tiff_path), indices, photometric="palette", colormap=colormap)
+
+        with pytest.raises(RuntimeError, match="unsupported photometric interpretation PALETTE"):
+            decode(tiff_path)
+
+
 class TestLinearIngestIntegration:
     """Integration tests for linear ingest with EnhanceConfig."""
 
