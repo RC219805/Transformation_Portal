@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -148,6 +149,87 @@ def test_load_hash_rows_rejects_missing_required_columns_without_data_rows(tmp_p
 
     with pytest.raises(ValueError, match="missing required columns"):
         MANIFEST_TOOL._load_hash_rows(hash_manifest)
+
+
+def test_load_hash_rows_keeps_hash_prefixed_values_after_header(tmp_path: Path) -> None:
+    """Only the preamble is metadata; an origin drive such as "#1 Backup" is a data row."""
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "# hash_algorithm=sha256\n"
+        "\n"
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n"
+        "#1 Backup,P1,#1 Backup/P1/a.jpg,4,abc,ok,\n"
+        "DriveB,P2,DriveB/P2/b.jpg,4,def,ok,\n",
+        encoding="utf-8",
+    )
+
+    rows = MANIFEST_TOOL._load_hash_rows(hash_manifest)
+
+    assert [(row["origin_drive"], row["relpath"]) for row in rows] == [
+        ("#1 Backup", "#1 Backup/P1/a.jpg"),
+        ("DriveB", "DriveB/P2/b.jpg"),
+    ]
+
+
+def test_manifest_build_does_not_drop_hash_prefixed_rows(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    (archive_root / "#1 Backup" / "P1").mkdir(parents=True)
+    (archive_root / "#1 Backup" / "P1" / "a.jpg").write_bytes(b"AAAA")
+    (archive_root / "DriveB" / "P2").mkdir(parents=True)
+    (archive_root / "DriveB" / "P2" / "b.jpg").write_bytes(b"BBBB")
+
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\n#1 Backup,P1,#1 Backup/P1/a.jpg\nDriveB,P2,DriveB/P2/b.jpg\n",
+        encoding="utf-8",
+    )
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "# hash_algorithm=sha256\n"
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n"
+        f"#1 Backup,P1,#1 Backup/P1/a.jpg,4,{hashlib.sha256(b'AAAA').hexdigest()},ok,\n"
+        f"DriveB,P2,DriveB/P2/b.jpg,4,{hashlib.sha256(b'BBBB').hexdigest()},ok,\n",
+        encoding="utf-8",
+    )
+    out_jsonl = tmp_path / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "archive_manifest_v2.summary.json"
+
+    exit_code = MANIFEST_TOOL.main(
+        [
+            "--archive-index",
+            str(archive_index),
+            "--hash-manifest",
+            str(hash_manifest),
+            "--archive-root",
+            str(archive_root),
+            "--out-jsonl",
+            str(out_jsonl),
+            "--out-summary",
+            str(out_summary),
+        ]
+    )
+
+    assert exit_code == MANIFEST_TOOL.EXIT_SUCCESS
+    entries = [json.loads(line) for line in out_jsonl.read_text(encoding="utf-8").splitlines()]
+    assert [entry["relpath"] for entry in entries] == ["#1 Backup/P1/a.jpg", "DriveB/P2/b.jpg"]
+    assert json.loads(out_summary.read_text(encoding="utf-8"))["entry_count"] == 2
+    assert MANIFEST_TOOL._consume_csv_rows(archive_index) == 2
+
+
+def test_open_csv_reader_keeps_quoted_blank_lines_and_skips_blank_separator_lines(tmp_path: Path) -> None:
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "origin_drive,partition,relpath\n"
+        'DriveA,P1,"DriveA/P1/two\n\nlines.txt"\n'
+        "   \n"
+        "\n"
+        "DriveA,P1,DriveA/P1/plain.txt\n",
+        encoding="utf-8",
+    )
+
+    rows = list(MANIFEST_TOOL._open_csv_reader(hash_manifest))
+
+    assert [row["relpath"] for row in rows] == ["DriveA/P1/two\n\nlines.txt", "DriveA/P1/plain.txt"]
 
 
 def test_manifest_build_streaming_does_not_publish_partial_output_on_build_error(tmp_path: Path) -> None:

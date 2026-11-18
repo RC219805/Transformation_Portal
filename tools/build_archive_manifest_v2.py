@@ -99,12 +99,9 @@ def _open_csv_reader(path: Path, *, required_columns: set[str] | None = None) ->
 
         def _iter_lines() -> Iterable[str]:
             yield header_line
-            for line in handle:
-                if not line.strip():
-                    continue
-                if line.lstrip().startswith("#"):
-                    continue
-                yield line
+            # Only lines before the header are metadata. After it a leading "#" belongs to a value
+            # (origin drive "#1 Backup"), and csv has to see every physical line of a quoted field.
+            yield from handle
 
         reader = csv.DictReader(_iter_lines())
         if reader.fieldnames is None:
@@ -114,7 +111,17 @@ def _open_csv_reader(path: Path, *, required_columns: set[str] | None = None) ->
             missing = sorted(required_columns.difference(available_columns))
             if missing:
                 raise ValueError(f"CSV missing required columns ({', '.join(missing)}): {path}")
-        yield from reader
+        for row in reader:
+            if _is_blank_record(row):
+                continue
+            yield row
+
+
+def _is_blank_record(row: dict[str | None, Any]) -> bool:
+    """True for a whitespace-only line between records: one blank cell and no other column."""
+    values = list(row.values())
+    first = values[0] if values else None
+    return isinstance(first, str) and not first.strip() and all(value is None for value in values[1:])
 
 
 def _consume_csv_rows(path: Path, *, required_columns: set[str] | None = None) -> int:
