@@ -347,7 +347,28 @@ def test_build_filter_graph_preset_is_accepted_by_ffmpeg(tmp_path, case):
     config = _graph_case_config(case, _write_identity_lut(tmp_path / "identity.cube"))
     graph, output_label = build_filter_graph(config)
 
-    completed = subprocess.run(
+    completed = _run_graph_through_ffmpeg(graph, output_label)
+
+    assert completed.returncode == 0, completed.stderr
+
+
+@documents("Every preset recipe compiles to a filter graph FFmpeg can link")
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg binary required")
+@pytest.mark.parametrize("preset_key", sorted(MODULE.PRESETS))
+def test_preset_with_its_repo_lut_is_accepted_by_ffmpeg(preset_key):
+    # No --custom-lut: the preset's own git-tracked LUT under <repo>/assets/luts/ is used.
+    config = MODULE.build_config(parse_arguments(["in.mov", "out.mov", "--preset", preset_key]))
+    graph, output_label = build_filter_graph(config)
+
+    completed = _run_graph_through_ffmpeg(graph, output_label)
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def _run_graph_through_ffmpeg(graph: str, output_label: str) -> subprocess.CompletedProcess:
+    """Run a filter graph on a tiny lavfi source into the null muxer."""
+
+    return subprocess.run(
         [
             shutil.which("ffmpeg") or "ffmpeg",
             "-hide_banner",
@@ -371,8 +392,6 @@ def test_build_filter_graph_preset_is_accepted_by_ffmpeg(tmp_path, case):
         text=True,
         timeout=120,
     )
-
-    assert completed.returncode == 0, completed.stderr
 
 
 def make_tone_args(**overrides):

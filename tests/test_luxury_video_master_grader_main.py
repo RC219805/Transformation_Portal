@@ -13,7 +13,11 @@ dry-run success path, the print-filter-graph branch, the real-run success and
 
 from __future__ import annotations
 
+import importlib.util
+import shutil
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -57,8 +61,8 @@ def video_paths(tmp_path):
 def lut_file(tmp_path):
     """A real (empty) .cube file so build_filter_graph's existence check passes.
 
-    The preset LUTs live under an external assets/ tree that is not committed,
-    so reaching the filter-graph stage requires overriding with --custom-lut.
+    The preset LUTs are git-tracked under <repo>/assets/luts/; these tests pin a
+    tmp LUT with --custom-lut so the filter graph does not depend on them.
     """
     lut = tmp_path / "look.cube"
     lut.write_text("# minimal cube placeholder\n")
@@ -231,13 +235,66 @@ def test_main_parameter_validation_matrix(stub_environment, video_paths, lut_fil
     assert needle in capsys.readouterr().err
 
 
-def test_main_filter_graph_failure_returns_5(stub_environment, video_paths, capsys) -> None:
-    # No --custom-lut: the default preset points at an uncommitted asset LUT, so
-    # build_filter_graph raises FileNotFoundError -> main returns 5.
+def test_main_filter_graph_failure_returns_5(stub_environment, video_paths, tmp_path, capsys) -> None:
+    # A LUT that does not exist makes build_filter_graph raise FileNotFoundError -> main returns 5.
     src, out = video_paths
-    rc = grader.main([str(src), str(out), "--dry-run"])
+    rc = grader.main([str(src), str(out), "--dry-run", "--custom-lut", str(tmp_path / "missing.cube")])
     assert rc == 5
-    assert "Failed to build filter graph" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "Failed to build filter graph" in err
+    assert "LUT file not found" in err
+
+
+# --------------------------------------------------------------------------- #
+# Preset LUT resolution (H-06)
+# --------------------------------------------------------------------------- #
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_preset_luts_resolve_to_git_tracked_repo_assets(preset_key) -> None:
+    # The preset LUTs are git-tracked at <repo>/assets/luts/, not next to the module.
+    lut = grader.PRESETS[preset_key].lut
+    assert lut.is_relative_to(_REPO_ROOT / "assets" / "luts")
+    assert lut.is_file()
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_main_preset_without_custom_lut_builds_graph(stub_environment, video_paths, capsys, preset_key) -> None:
+    # Earlier the default preset LUT path pointed at processors/assets/ (absent), so every
+    # preset run without --custom-lut exited 5; a source checkout must grade with the presets.
+    src, out = video_paths
+    rc = grader.main([str(src), str(out), "--dry-run", "--preset", preset_key])
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    assert "lut3d=file=" in captured.out
+    assert str(grader.PRESETS[preset_key].lut) in captured.out
+
+
+def test_preset_lut_missing_from_installed_package_names_custom_lut(tmp_path) -> None:
+    # An installed wheel has no assets/luts/ tree: the preset run must fail with an actionable error.
+    installed = tmp_path / "lib" / "python3" / "site-packages" / "transformation_portal" / "processors"
+    installed.mkdir(parents=True)
+    module_path = installed / "luxury_video_master_grader.py"
+    shutil.copyfile(grader.__file__, module_path)
+    spec = importlib.util.spec_from_file_location("_installed_luxury_video_master_grader", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        config = module.build_config(module.parse_arguments(["in.mov", "out.mov"]))
+        with pytest.raises(FileNotFoundError) as excinfo:
+            module.build_filter_graph(config)
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    message = str(excinfo.value)
+    assert message.startswith("LUT file not found: ")
+    # site-packages/transformation_portal/processors/ -> parents[3] is lib/python3/, which has no assets tree.
+    assert str((tmp_path / "lib" / "python3" / "assets" / "luts").resolve()) in message
+    assert "--custom-lut" in message
 
 
 def test_main_frame_rate_error_returns_6(stub_environment, video_paths, lut_file, capsys) -> None:

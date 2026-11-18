@@ -27,7 +27,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 # Repository-rooted LUT presets curated for short-form luxury real-estate video.
-REPO_ROOT = Path(__file__).resolve().parent
+# The LUTs are git-tracked under <repo>/assets/luts/ and are not shipped as
+# package data; this module lives at <repo>/src/transformation_portal/processors/,
+# so they only resolve from a source checkout (an installed wheel needs --custom-lut).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PRESET_LUT_ROOT = REPO_ROOT / "assets" / "luts"
 
 
 @dataclass
@@ -629,7 +633,13 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
-        raise FileNotFoundError(f"LUT file not found: {lut_path}")
+        message = f"LUT file not found: {lut_path}"
+        if lut_path.is_relative_to(PRESET_LUT_ROOT):
+            message += (
+                f". Preset LUTs are read from the repository assets tree ({PRESET_LUT_ROOT}), which ships with a"
+                " source checkout but not with an installed package; pass --custom-lut <file.cube> instead."
+            )
+        raise FileNotFoundError(message)
 
     lut_strength = float(config.get("lut_strength", 1.0))
     blend_lut = lut_strength < 0.999
@@ -853,7 +863,10 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--custom-lut",
         type=Path,
-        help="Override the preset LUT with a custom .cube file.",
+        help=(
+            "Override the preset LUT with a custom .cube file (required when the repository assets/luts/ tree is"
+            " unavailable, e.g. an installed package)."
+        ),
     )
     parser.add_argument(
         "--lut-strength",
