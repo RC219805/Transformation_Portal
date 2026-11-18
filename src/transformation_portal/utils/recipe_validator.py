@@ -287,8 +287,16 @@ class RecipeValidator:
 
         Args:
             schema_path: Optional path to a custom schema file.
+
+        Raises:
+            FileNotFoundError: If ``schema_path`` is given but is not a file.
+                A requested custom schema is never silently replaced by the
+                built-in one (fail closed).
         """
-        if schema_path and schema_path.exists():
+        if schema_path is not None:
+            schema_path = Path(schema_path)
+            if not schema_path.is_file():
+                raise FileNotFoundError(f"Recipe schema not found: {schema_path}")
             with open(schema_path, "r", encoding="utf-8") as f:
                 self.schema = json.load(f)
         else:

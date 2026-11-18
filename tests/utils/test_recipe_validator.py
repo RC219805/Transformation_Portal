@@ -129,15 +129,20 @@ class TestRecipeValidatorInit:
 
         assert "custom_field" in validator.schema["required"]
 
-    def test_nonexistent_schema_path_uses_default(self, temp_workspace):
-        """Test that nonexistent schema path falls back to default."""
+    @pytest.mark.regression
+    def test_nonexistent_schema_path_raises(self, temp_workspace):
+        """L-12: a missing custom schema must not silently fall back to the built-in one."""
         from transformation_portal.utils.recipe_validator import RecipeValidator
 
         nonexistent = temp_workspace["root"] / "nonexistent.json"
-        validator = RecipeValidator(schema_path=nonexistent)
+        with pytest.raises(FileNotFoundError, match="nonexistent.json"):
+            RecipeValidator(schema_path=nonexistent)
 
-        # Should fall back to embedded schema
-        assert "name" in validator.schema["required"]
+    def test_no_schema_path_uses_default(self):
+        """Without schema_path the embedded schema is used."""
+        from transformation_portal.utils.recipe_validator import RecipeValidator
+
+        assert "name" in RecipeValidator().schema["required"]
 
 
 class TestRecipeValidatorValidate:
