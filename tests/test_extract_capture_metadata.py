@@ -464,3 +464,47 @@ def test_phase4c_progress_callback_reports_direct_function_sequence(tmp_path: Pa
         (2, 2, "Validating records against schema..."),
         (2, 2, "Extraction complete: 2 records"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("hostile_tags", "expected_warning"),
+    [
+        ({"DateTimeOriginal": "2026:01:02 03:04:05", "OffsetTimeOriginal": "+99:00"}, "WARN_DATETIME_NO_TZ"),
+        ({"DateTimeOriginal": "2026:01:02 03:04:05", "OffsetTimeOriginal": "-24:00"}, "WARN_DATETIME_NO_TZ"),
+        ({"Orientation": "inf"}, "WARN_INVALID_ORIENTATION"),
+        ({"Orientation": "1/0"}, "WARN_INVALID_ORIENTATION"),
+        ({"Orientation": "1e999999999"}, "WARN_INVALID_ORIENTATION"),
+        ({"FocalLength": "NaN"}, None),
+        ({"GPSLatitude": "nan"}, "WARN_GPS_PARSE_FAIL"),
+    ],
+)
+def test_phase4c_hostile_exif_values_degrade_to_warning_codes(
+    tmp_path: Path, hostile_tags: dict[str, str], expected_warning: str | None
+) -> None:
+    """T-20: hostile EXIF values must map to governed WARN_* codes, never raw exceptions."""
+    config = load_capture_metadata_config(CAPTURE_CONFIG_PATH)
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "sample_01.dng").write_bytes(b"phase4-hostile")
+
+    def _fake_runner(file_paths: list[Path], tag_whitelist: list[str]) -> dict[str, dict[str, object]]:
+        del tag_whitelist
+        return {str(path.resolve()): dict(hostile_tags) for path in file_paths}
+
+    records = extract_capture_metadata_records(
+        input_root=input_root,
+        config=config,
+        strict=False,
+        schema_path=SCHEMA_PATH,
+        exif_runner=_fake_runner,
+    )
+    out_path = tmp_path / "capture_metadata.tp.meta.capture.v1.json"
+    write_capture_metadata_artifact(records, out_path)
+
+    record = json.loads(out_path.read_text(encoding="utf-8"))[0]
+    if expected_warning is not None:
+        assert expected_warning in record["extraction_warnings"]
+    if "FocalLength" in hostile_tags:
+        assert record["focal_length_mm"] is None
+    if "OffsetTimeOriginal" in hostile_tags:
+        assert record["capture_datetime_utc"] is None
