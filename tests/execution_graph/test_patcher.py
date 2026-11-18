@@ -110,6 +110,41 @@ class TestApplyFix:
         assert node["config"]["needs_review"] is True
 
 
+class TestPatchRecordsPreviousValues:
+    """The recorded change is the only trace of what a fix replaced."""
+
+    @pytest.mark.parametrize(
+        ("action", "key"),
+        [("enable_seam_blending", "seam_blending"), ("apply_denoising", "denoising")],
+    )
+    @pytest.mark.parametrize("previous", [False, True, None], ids=["was-off", "was-on", "was-unset"])
+    def test_enabling_a_flag_records_what_it_was_before(self, action, key, previous):
+        config = {} if previous is None else {key: previous}
+        pipeline = _pipeline(nodes=[{"id": "sam2", "config": config}])
+
+        patched, patch_set = apply_fixes(pipeline, [_fix(action)])
+
+        (patch,) = patch_set.successful
+        assert patch.changes[key] == {"old": previous, "new": True}
+        assert patched["nodes"][0]["config"][key] is True
+
+    def test_flagging_an_already_flagged_node_records_its_previous_reason(self):
+        pipeline = _pipeline(nodes=[{"id": "sam2", "config": {"needs_review": True, "review_reason": "seams visible"}}])
+
+        _, patch_set = apply_fixes(pipeline, [_fix("flag_for_review", params={"reason": "noise"})])
+
+        (patch,) = patch_set.successful
+        assert patch.changes["needs_review"] == {"old": True, "new": True}
+        assert patch.changes["review_reason"] == {"old": "seams visible", "new": "noise"}
+
+    def test_flagging_a_fresh_node_records_no_previous_review(self):
+        _, patch_set = apply_fixes(_pipeline(), [_fix("flag_for_review")])
+
+        (patch,) = patch_set.successful
+        assert patch.changes["needs_review"] == {"old": False, "new": True}
+        assert patch.changes["review_reason"] == {"old": None, "new": "Flagged by self-healing"}
+
+
 class TestApplyFixes:
     def test_multiple_fixes_applied_in_order(self):
         """Second fix sees the result of the first fix."""
