@@ -988,6 +988,29 @@ def test_portal_html_signature_tracks_preloaded_font_fingerprint() -> None:
     assert ("fonts/portal-sans.woff2", font_fingerprint) in signature
 
 
+def test_portal_direct_asset_fingerprint_cache_holds_every_manifest_asset() -> None:
+    """A warm page load must not re-read and re-hash portal assets (LRU thrash)."""
+    asset_names = [name for name in portal_asset_bundle.PORTAL_ASSET_MANIFEST if name != "portal.css"]
+    fingerprint_cache = portal_asset_bundle._build_portal_direct_asset_fingerprint
+
+    def _page_load() -> None:
+        orchestrator_app._get_portal_asset_bundle()
+        for asset_name in asset_names:
+            orchestrator_app._get_portal_direct_asset_fingerprint(asset_name)
+
+    fingerprint_cache.cache_clear()
+    try:
+        _page_load()
+        warm = fingerprint_cache.cache_info()
+        _page_load()
+        after = fingerprint_cache.cache_info()
+    finally:
+        fingerprint_cache.cache_clear()
+
+    assert after.misses == warm.misses
+    assert after.hits > warm.hits
+
+
 def test_portal_css_signature_tracks_active_template_token_assets_only() -> None:
     signature = orchestrator_app._portal_css_signature()
     sans_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")

@@ -282,7 +282,10 @@ def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
     return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
 
 
-@lru_cache(maxsize=16)
+# Keyed by (asset name, file signature): the bound must comfortably exceed the
+# number of manifest assets, otherwise one page load cycles through more names
+# than the cache holds and every lookup re-reads and re-hashes its file.
+@lru_cache(maxsize=256)
 def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
     return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
 
