@@ -263,6 +263,7 @@ class TestNonJsonCompliantPayloadRejection:
     """
 
     _ARGS = '"input_dir": "/nonexistent/in", "output_dir": "/nonexistent/out"'
+    _NESTED_CASES = [("NaN", "non_finite_number"), ('"\\ud800"', "invalid_unicode_string")]
     _CASES = [
         ("lux-depth-v3", '"max_workers": 1e400', "max_workers"),
         ("lux-depth-v3", '"reconstruction_iterations": Infinity', "reconstruction_iterations"),
@@ -277,6 +278,16 @@ class TestNonJsonCompliantPayloadRejection:
     @staticmethod
     def _post(client, path, raw):
         return client.post(path, headers={"content-type": "application/json"}, content=raw.encode("utf-8"))
+
+    @staticmethod
+    def _valid_archive_args(tmp_path):
+        input_dir = tmp_path / "in"
+        output_dir = tmp_path / "out"
+        input_dir.mkdir()
+        output_dir.mkdir()
+        manifest = output_dir / "m.jsonl"
+        manifest.write_text("{}\n", encoding="utf-8")
+        return json.dumps({"input_dir": str(input_dir), "output_dir": str(output_dir), "manifest_jsonl": str(manifest)})
 
     @pytest.mark.parametrize(("pipeline", "extra", "field"), _CASES)
     def test_preview_flags_unechoable_args_and_echoes_null(self, auth_client, pipeline, extra, field):
@@ -304,13 +315,7 @@ class TestNonJsonCompliantPayloadRejection:
 
     @pytest.mark.parametrize("path", ["/v1/jobs", "/v2/jobs"])
     def test_otherwise_valid_archive_job_with_nan_arg_is_not_accepted(self, auth_client, tmp_path, path):
-        input_dir = tmp_path / "in"
-        output_dir = tmp_path / "out"
-        input_dir.mkdir()
-        output_dir.mkdir()
-        manifest = output_dir / "m.jsonl"
-        manifest.write_text("{}\n", encoding="utf-8")
-        args = json.dumps({"input_dir": str(input_dir), "output_dir": str(output_dir), "manifest_jsonl": str(manifest)})
+        args = self._valid_archive_args(tmp_path)
         valid = self._post(auth_client, "/v1/config-preview", '{"pipeline": "archive-gate-b", "args": %s}' % args)
         assert valid.status_code == 200
         assert valid.json()["data"]["field_errors"] == []
@@ -324,13 +329,13 @@ class TestNonJsonCompliantPayloadRejection:
         assert error.get("details") == {"field": "note", "reason": "non_finite_number"}
         assert orchestrator_app.JOBS == {}
 
-    @pytest.mark.parametrize("leaf", ["NaN", '"\\ud800"'])
-    def test_deeply_nested_unechoable_arg_is_a_field_error_not_500(self, auth_client, leaf):
-        # The JSON parser accepts nesting deeper than the interpreter recursion
-        # limit; the null-echo copy of the preview must not recurse per level.
-        depth = 2000
-        raw = '{"pipeline": "archive-gate-b", "args": {%s, "note": %s%s%s}}' % (
-            self._ARGS,
+    @pytest.mark.parametrize(("leaf", "reason"), _NESTED_CASES)
+    def test_nested_unechoable_arg_is_a_field_error_not_500(self, auth_client, tmp_path, leaf, reason):
+        # Keep the HTTP fixture inside CPython 3.11's JSON decoder stack limit.
+        depth = 256
+        args = self._valid_archive_args(tmp_path)
+        raw = '{"pipeline": "archive-gate-b", "args": %s, "note": %s%s%s}}' % (
+            args[:-1],
             "[" * depth,
             leaf,
             "]" * depth,
@@ -340,7 +345,7 @@ class TestNonJsonCompliantPayloadRejection:
 
         assert preview_response.status_code == 200
         preview = preview_response.json()["data"]
-        assert "note" in [issue.get("field") for issue in preview["field_errors"]]
+        assert ("note", reason) in [(issue["field"], issue["code"]) for issue in preview["field_errors"]]
         node = preview["normalized_args"]["note"]
         for _ in range(depth):
             node = node[0]
@@ -348,8 +353,30 @@ class TestNonJsonCompliantPayloadRejection:
 
         job_response = self._post(auth_client, "/v1/jobs", raw)
         assert job_response.status_code == 400
-        assert (job_response.json().get("error") or {}).get("code") == "INVALID_ARGUMENT"
+        error = job_response.json()["error"]
+        assert error["code"] == "INVALID_ARGUMENT"
+        assert error["details"] == {"field": "note", "reason": reason}
         assert orchestrator_app.JOBS == {}
+
+    @pytest.mark.parametrize(("leaf", "reason"), _NESTED_CASES)
+    def test_preview_sanitizes_unechoable_values_beyond_the_decoder_stack_limit(self, leaf, reason):
+        depth = 2000
+        args = json.loads("{" + self._ARGS + "}")
+        nested_value = json.loads(leaf)
+        for _ in range(depth):
+            nested_value = [nested_value]
+        args["note"] = nested_value
+
+        preview = orchestrator_app._build_config_preview({"pipeline": "archive-gate-b", "args": args})
+
+        assert ("note", reason) in [(issue["field"], issue["code"]) for issue in preview["field_errors"]]
+        assert preview["argv_preview"] == ""
+        for field in ("normalized_args", "execution_args"):
+            node = preview[field]["note"]
+            for _ in range(depth):
+                assert isinstance(node, list) and len(node) == 1
+                node = node[0]
+            assert node is None
 
     def test_unechoable_arg_is_the_reported_error_when_otherwise_valid(self):
         preview = orchestrator_app._reject_unechoable_preview_args(
