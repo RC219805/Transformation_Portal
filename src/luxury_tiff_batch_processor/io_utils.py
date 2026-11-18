@@ -25,6 +25,9 @@ Functions
 image_to_float
     Convert PIL Image to normalized float32 RGB array.
 
+read_full_precision_pixels
+    Read the samples of 16-bit RGB(A) TIFFs that Pillow decodes at 8 bits.
+
 float_to_dtype_array
     Convert float array back to target dtype with proper scaling.
 
@@ -44,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageMode
 
 try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
@@ -303,7 +306,7 @@ class ImageToFloatResult:
         yield self.base_channels
 
 
-def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def image_to_float(
     image: Image.Image,
     return_format: Literal["tuple3", "tuple4", "object"] = "object",
 ) -> Union[
@@ -328,7 +331,23 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     if image.mode not in supported_modes:
         image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
 
-    arr = np.array(image)
+    return pixels_to_float(np.array(image), return_format=return_format)
+
+
+def pixels_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    arr: np.ndarray,
+    return_format: Literal["tuple3", "tuple4", "object"] = "object",
+) -> Union[
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray]],
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int],
+    ImageToFloatResult,
+]:
+    """Convert a decoded ``(H, W)`` or ``(H, W, C)`` sample array to an RGB float32 array in the 0-1 range.
+
+    This is the array half of :func:`image_to_float`; it also takes samples
+    decoded without Pillow (see :func:`read_full_precision_pixels`).
+    """
+
     alpha_channel: Optional[np.ndarray] = None
 
     if arr.ndim == 2:
@@ -398,6 +417,87 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     if return_format not in allowed_formats:
         raise ValueError(f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}")
     return result
+
+
+# Pillow decodes these modes at 8 bits per band and image_to_float consumes them unconverted.
+_PILLOW_8BIT_PASSTHROUGH_MODES = frozenset({"L", "LA", "RGB", "RGBA"})
+# Photometric interpretations whose stored samples tifffile returns in the layout those modes describe.
+_TIFFFILE_PIXEL_PHOTOMETRICS = frozenset({1, 2})  # MINISBLACK, RGB
+
+
+def _tag_ints(tags: Any, tag: int) -> Tuple[int, ...]:
+    try:
+        value = tags.get(tag)
+    except (AttributeError, TypeError, ValueError, KeyError):  # pragma: no cover - metadata best effort
+        return ()
+    if value is None:
+        return ()
+    values = value if isinstance(value, (tuple, list)) else (value,)
+    try:
+        return tuple(int(item) for item in values)
+    except (TypeError, ValueError):
+        return ()
+
+
+def read_full_precision_pixels(source: Path, image: Image.Image) -> Optional[np.ndarray]:
+    """Return the stored samples of a TIFF whose Pillow decode holds fewer bits than the file.
+
+    Pillow opens 16-bit RGB and RGBA TIFFs as 8-bit ``RGB``/``RGBA`` images, so
+    reading pixels through Pillow alone drops the low byte of every sample. For
+    such sources the samples are read with tifffile instead; Pillow stays the
+    source of the tags and the ICC profile.
+
+    Returns ``None`` when Pillow's decode already holds every stored bit (all
+    8-bit sources, and the ``I;16``/``I``/``F`` modes), so those keep the Pillow
+    path unchanged. It also returns ``None`` when tifffile cannot supply an
+    equivalent array; that case is logged as a warning because the image is
+    then processed at Pillow's reduced precision.
+    """
+
+    tags = getattr(image, "tag_v2", None)
+    if tags is None:
+        return None
+    try:
+        decoded_bits = np.dtype(ImageMode.getmode(image.mode).typestr).itemsize * 8
+    except (KeyError, TypeError, ValueError):  # pragma: no cover - unknown Pillow mode
+        return None
+    bits = _tag_ints(tags, 258)
+    if not bits or max(bits) <= decoded_bits:
+        return None
+
+    reduced = f"{source} stores {max(bits)} bits per sample but is decoded at {decoded_bits} bits"
+    if image.mode not in _PILLOW_8BIT_PASSTHROUGH_MODES:
+        LOGGER.warning("%s: Pillow mode %s is not read at full precision.", reduced, image.mode)
+        return None
+    if tifffile is None:
+        LOGGER.warning("%s: install 'tifffile' to process it at full precision.", reduced)
+        return None
+    photometric = _tag_ints(tags, 262)
+    if len(photometric) != 1 or photometric[0] not in _TIFFFILE_PIXEL_PHOTOMETRICS:
+        LOGGER.warning("%s: photometric interpretation %s is not read at full precision.", reduced, photometric)
+        return None
+    try:
+        with tifffile.TiffFile(os.fspath(source)) as tif:
+            page = tif.pages[0]
+            samples = page.asarray()
+            axes = page.axes
+    except Exception as exc:  # pylint: disable=broad-exception-caught  # tifffile/codec errors are not a closed set
+        LOGGER.warning("%s: tifffile could not decode it (%s: %s).", reduced, type(exc).__name__, exc)
+        return None
+
+    if axes == "SYX":  # PlanarConfiguration=2 (separate planes)
+        samples = np.moveaxis(samples, 0, -1)
+    elif axes not in ("YX", "YXS"):
+        LOGGER.warning("%s: tifffile sample layout %r is not supported.", reduced, axes)
+        return None
+    bands = len(image.getbands())
+    expected = (image.height, image.width) if bands == 1 else (image.height, image.width, bands)
+    if samples.shape != expected or samples.dtype.itemsize * 8 != max(bits):
+        LOGGER.warning(
+            "%s: tifffile returned %s %s samples, Pillow describes %s.", reduced, samples.dtype, samples.shape, expected
+        )
+        return None
+    return np.ascontiguousarray(samples, dtype=samples.dtype.newbyteorder("="))
 
 
 def float_to_dtype_array(  # pylint: disable=too-many-branches
@@ -590,7 +690,7 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
             "metadata": None,
         }
         if extrasample_needed or (array_to_write.ndim == 3 and array_to_write.shape[2] > 3):
-            tiff_kwargs["extrasamples"] = "unassoc"
+            tiff_kwargs["extrasamples"] = "unassalpha"
         extratags = []
         if icc_profile:
             extratags.append((34675, "B", len(icc_profile), icc_profile, False))
@@ -672,5 +772,7 @@ __all__ = [
     "ProcessingContext",
     "float_to_dtype_array",
     "image_to_float",
+    "pixels_to_float",
+    "read_full_precision_pixels",
     "save_image",
 ]

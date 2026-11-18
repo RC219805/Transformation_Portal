@@ -256,6 +256,97 @@ def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytes
     assert np.array_equal(restored, arr)
 
 
+def _fine_grained_uint16(shape: tuple[int, ...]) -> np.ndarray:
+    """16-bit samples whose low bytes vary, so any 8-bit round trip is detectable."""
+
+    rng = np.random.default_rng(1608)
+    return rng.integers(0, 65536, size=shape, dtype=np.uint16)
+
+
+@pytest.mark.parametrize("profile_name", ["quality", "balanced"])
+@pytest.mark.parametrize("layout", ["contig", "planar", "rgba"])
+def test_process_single_image_keeps_16bit_tiff_precision(tmp_path: Path, layout: str, profile_name: str):
+    """H-08: Pillow decodes 16-bit RGB(A) TIFFs at 8 bits; the pipeline must not inherit that loss."""
+
+    tifffile = pytest.importorskip("tifffile")
+    channels = 4 if layout == "rgba" else 3
+    samples = _fine_grained_uint16((10, 14, channels))
+    source = tmp_path / f"{layout}16.tif"
+    if layout == "planar":
+        tifffile.imwrite(source, np.moveaxis(samples, -1, 0), photometric="rgb", planarconfig="separate")
+    elif layout == "rgba":
+        tifffile.imwrite(source, samples, photometric="rgb", extrasamples="unassalpha")
+    else:
+        tifffile.imwrite(source, samples, photometric="rgb")
+    with Image.open(source) as image:  # the precondition the pipeline has to work around
+        assert np.array(image).dtype == np.uint8
+
+    destination = tmp_path / "out" / f"{layout}_{profile_name}.tif"
+    ltiff.process_single_image(
+        source,
+        destination,
+        ltiff.AdjustmentSettings(),
+        compression="tiff_lzw",
+        profile=ltiff.PROCESSING_PROFILES[profile_name],
+    )
+
+    with tifffile.TiffFile(destination) as written:
+        page = written.pages[0]
+        output = page.asarray()
+        extrasamples = tuple(int(value) for value in page.extrasamples)
+    assert output.dtype == np.uint16
+    np.testing.assert_array_equal(output, samples)
+    assert extrasamples == ((2,) if layout == "rgba" else ())
+
+
+@pytest.mark.parametrize("profile_name", ["quality", "balanced", "performance"])
+def test_process_single_image_8bit_output_is_unchanged_pillow_route(tmp_path: Path, profile_name: str):
+    """8-bit sources keep the Pillow decode, so their deliverables stay byte-identical."""
+
+    ImageCms = pytest.importorskip("PIL.ImageCms")  # pylint: disable=invalid-name
+
+    arr = np.random.default_rng(8).integers(0, 256, size=(12, 18, 3), dtype=np.uint8)
+    info = TiffImagePlugin.ImageFileDirectory_v2()
+    info[270] = "Luxury scene"
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    source = tmp_path / "frame8.tif"
+    Image.fromarray(arr).save(source, compression="tiff_lzw", dpi=(300, 300), icc_profile=icc, tiffinfo=info)
+    profile = ltiff.PROCESSING_PROFILES[profile_name]
+    adjustments = ltiff.AdjustmentSettings(exposure=0.2, vibrance=0.3, clarity=0.2, glow=0.1)
+    compression = profile.resolve_compression("tiff_lzw")
+
+    destination = tmp_path / "out" / "frame8.tif"
+    ltiff.process_single_image(source, destination, adjustments, compression=compression, profile=profile)
+
+    # Reference: the Pillow-only decode route every 8-bit source took before H-08.
+    reference = tmp_path / "reference.tif"
+    with Image.open(source) as image:
+        assert io_utils.read_full_precision_pixels(source, image) is None
+        decoded = io_utils.image_to_float(image, return_format="object")
+        adjusted = ltiff.apply_adjustments(decoded.array, adjustments, profile=profile)
+        target_dtype = profile.target_dtype(decoded.dtype)
+        arr_int = io_utils.float_to_dtype_array(adjusted, target_dtype, decoded.alpha, decoded.base_channels)
+        io_utils.save_image(reference, arr_int, target_dtype, image.tag_v2, image.info.get("icc_profile"), compression)
+
+    assert destination.read_bytes() == reference.read_bytes()
+
+
+def test_read_full_precision_pixels_warns_without_tifffile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """Without tifffile a 16-bit RGB source is still processed at 8 bits, but never silently."""
+
+    tifffile = pytest.importorskip("tifffile")
+    source = tmp_path / "rgb16.tif"
+    tifffile.imwrite(source, _fine_grained_uint16((6, 8, 3)), photometric="rgb")
+    monkeypatch.setattr(io_utils, "tifffile", None)
+
+    with Image.open(source) as image, caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
+        assert io_utils.read_full_precision_pixels(source, image) is None
+
+    assert "stores 16 bits per sample but is decoded at 8 bits" in caplog.text
+
+
 @documents("Dry runs provide planning insight without side effects")
 def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     input_dir = tmp_path / "in"
