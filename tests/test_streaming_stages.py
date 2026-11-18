@@ -17,6 +17,7 @@ pytestmark = [
 import transformation_portal.depth.models as depth_models
 from transformation_portal.streaming.stages import (
     ColorGradingStage,
+    DenoiseStage,
     DepthEstimationStage,
     ImageData,
     ImageLoadStage,
@@ -324,3 +325,23 @@ def test_resize_stage_resizes_depth_map_with_image() -> None:
     assert result.depth_map.dtype == np.float32
     assert result.depth_map.min() >= 0.0 and result.depth_map.max() <= 1.0
     assert np.all(np.diff(result.depth_map[0]) > 0)
+
+
+@pytest.mark.parametrize("strength", [0.5, 1.0])
+def test_depth_adaptive_denoise_covers_far_field(strength: float) -> None:
+    """M-15: every pixel is denoised and the far field is blurred at least as much as the near field."""
+    rng = np.random.default_rng(3)
+    height, width = 32, 256
+    noisy = np.clip(0.5 + rng.normal(0.0, 0.1, (height, width, 3)), 0.0, 1.0).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, width, dtype=np.float32), (height, 1))
+
+    result = DenoiseStage(strength=strength, use_depth=True)._denoise_sync(
+        ImageData(array=noisy.copy(), path=Path("x.png"), depth_map=depth)
+    )
+
+    untouched = np.all(result.array == noisy, axis=2)
+    assert not untouched.any()
+    near_std = float(result.array[:, 8 : width // 4].std())
+    far_std = float(result.array[:, -width // 4 : -8].std())
+    assert far_std < 0.5 * float(noisy.std())
+    assert far_std <= near_std

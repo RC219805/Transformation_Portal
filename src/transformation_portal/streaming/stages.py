@@ -1133,17 +1133,28 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
         # Create per-pixel sigma map (more blur for distant pixels)
         sigma_map = base_sigma * (1 + depth * 2)
 
-        # Apply spatially varying blur (simplified - use uniform regions)
+        # Apply spatially varying blur (simplified - use uniform regions).
+        # Bands are 0.5 wide and centred on multiples of 0.5 (the historical
+        # [0.5, 1.0, 1.5, 2.0] grid), extended to cover the whole sigma_map
+        # range so the far field is never left un-denoised.
         denoised = np.zeros_like(array)
-        for sigma_level in [0.5, 1.0, 1.5, 2.0]:
-            mask = (sigma_map >= sigma_level - 0.25) & (sigma_map < sigma_level + 0.25)
-            if not mask.any():
+        covered = np.zeros(sigma_map.shape, dtype=bool)
+        finite = np.isfinite(sigma_map)
+        level_index = np.zeros(sigma_map.shape, dtype=np.int64)
+        level_index[finite] = np.floor((sigma_map[finite] + 0.25) / 0.5).astype(np.int64)
+        for index in np.unique(level_index[finite]):
+            if index <= 0:
                 continue
+            sigma_level = 0.5 * float(index)
+            mask = finite & (level_index == index)
             sigma = base_sigma * sigma_level
             self._apply_blur_to_masked_region(array, denoised, mask, sigma)
+            covered |= mask
 
-        # Fill any remaining pixels
-        remaining = denoised.sum(axis=-1 if len(denoised.shape) == 3 else None) == 0
+        # Fill any remaining pixels (sigma below the first band or non-finite depth)
+        remaining = ~covered
+        if remaining.ndim == 3:
+            remaining = remaining[..., 0]
         if remaining.any():
             self._fill_remaining_pixels(array, denoised, remaining)
 
