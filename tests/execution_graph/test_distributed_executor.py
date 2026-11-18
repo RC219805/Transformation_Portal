@@ -96,6 +96,125 @@ class TestDistributedDAGExecutorRay:
         mock_ray.remote.assert_called()
 
 
+class _StubTask:
+    """Outcome of a task that ran in-process when it was submitted."""
+
+    def __init__(self, fn, args):
+        self.error = None
+        self.value = None
+        try:
+            self.value = fn(*args)
+        except Exception as exc:  # noqa: BLE001 - re-raised by _StubRay.get, like a Ray task error
+            self.error = exc
+
+
+class _StubRay:
+    """In-process stand-in for the parts of the Ray API the executor uses."""
+
+    def __init__(self) -> None:
+        self.get_timeouts: list[float | None] = []
+
+    @staticmethod
+    def is_initialized() -> bool:
+        return True
+
+    @staticmethod
+    def remote(*args, **_kwargs):
+        def wrap(fn):
+            submit = MagicMock()
+            submit.remote.side_effect = lambda *call_args: _StubTask(fn, call_args)
+            return submit
+
+        return wrap(args[0]) if args and callable(args[0]) else wrap
+
+    def get(self, task: _StubTask, timeout: float | None = None):
+        self.get_timeouts.append(timeout)
+        if task.error is not None:
+            raise task.error
+        return task.value
+
+
+def _recording_node(calls: list[str], name: str, *, fail: bool = False) -> MagicMock:
+    node = MagicMock()
+
+    def run(**inputs):
+        calls.append(name)
+        if fail:
+            raise RuntimeError(f"{name} lost its worker")
+        return {name: sorted(inputs)}
+
+    node.run.side_effect = run
+    return node
+
+
+@pytest.fixture
+def stub_ray():
+    ray = _StubRay()
+    with (
+        patch("transformation_portal.execution_graph.distributed_executor.RAY_AVAILABLE", True),
+        patch("transformation_portal.execution_graph.distributed_executor.ray", ray),
+    ):
+        yield ray
+
+
+class TestRayBackendFailsLikeTheLocalBackend:
+    def test_valid_dag_gives_the_same_results_as_the_local_backend(self, stub_ray):
+        def scheduler() -> PriorityDAGScheduler:
+            s = PriorityDAGScheduler()
+            s.add_node("ingest", _recording_node([], "ingest"))
+            s.add_node("segment", _recording_node([], "segment"), deps=["ingest"])
+            s.add_node("report", _recording_node([], "report"), deps=["ingest", "segment"])
+            return s
+
+        local = DistributedDAGExecutor(scheduler(), config=ExecutionConfig(backend="local")).run()
+        distributed = DistributedDAGExecutor(scheduler(), config=ExecutionConfig(backend="ray")).run()
+
+        assert distributed == local
+        assert distributed["report"] == {"report": ["ingest", "segment"]}
+
+    def test_missing_dependency_is_an_error_instead_of_a_skipped_node(self, stub_ray):
+        calls: list[str] = []
+        s = PriorityDAGScheduler()
+        s.add_node("ingest", _recording_node(calls, "ingest"))
+        s.add_node("quality_gate", _recording_node(calls, "quality_gate"), deps=["ingets"])  # misspelled dependency
+
+        with pytest.raises(DistributedExecutorError, match="DAG validation failed.*'quality_gate'.*'ingets'"):
+            DistributedDAGExecutor(s, config=ExecutionConfig(backend="ray")).run()
+
+        assert calls == []
+
+    def test_cycle_is_an_error_instead_of_an_empty_result(self, stub_ray):
+        calls: list[str] = []
+        s = PriorityDAGScheduler()
+        s.add_node("a", _recording_node(calls, "a"), deps=["b"])
+        s.add_node("b", _recording_node(calls, "b"), deps=["a"])
+
+        with pytest.raises(DistributedExecutorError, match="Cycle detected"):
+            DistributedDAGExecutor(s, config=ExecutionConfig(backend="ray")).run()
+
+        assert calls == []
+
+    def test_failed_dependency_is_reported_with_its_node_name(self, stub_ray):
+        calls: list[str] = []
+        s = PriorityDAGScheduler()
+        s.add_node("ingest", _recording_node(calls, "ingest", fail=True))
+        s.add_node("segment", _recording_node(calls, "segment"), deps=["ingest"])
+
+        with pytest.raises(DistributedExecutorError, match="Node 'ingest' execution failed: ingest lost its worker"):
+            DistributedDAGExecutor(s, config=ExecutionConfig(backend="ray")).run()
+
+        assert calls == ["ingest"]
+
+    def test_node_timeout_also_bounds_the_wait_for_a_dependency(self, stub_ray):
+        s = PriorityDAGScheduler()
+        s.add_node("ingest", _recording_node([], "ingest"))
+        s.add_node("segment", _recording_node([], "segment"), deps=["ingest"])
+
+        DistributedDAGExecutor(s, config=ExecutionConfig(backend="ray", timeout_per_node=7.5)).run()
+
+        assert stub_ray.get_timeouts == [7.5, 7.5, 7.5]
+
+
 class TestExecutionConfig:
     def test_default_config(self):
         """Default ExecutionConfig has backend='local' and no GPU tasks."""
