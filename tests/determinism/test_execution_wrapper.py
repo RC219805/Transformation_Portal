@@ -815,8 +815,33 @@ class TestCASExecutionResult:
         assert stats["speedup_estimate"] == float("inf")
 
 
+class FixedOutputStage(DAGStageForTesting):
+    """DAG stage that returns the same artifacts on every run."""
+
+    def __init__(self, name: str, artifacts: Dict[str, Any], deps: List[str] = None):
+        super().__init__(name, deps)
+        self._artifacts = artifacts
+
+    def compute(self, context: StageContext) -> StageResult:
+        self.call_count += 1
+        return StageResult(
+            stage_name=self.name,
+            stage_version=self.version,
+            status=StageStatus.COMPLETED,
+            artifacts=dict(self._artifacts),
+        )
+
+
 class TestVerifyDAGDeterminism:
     """Tests for verify_dag_determinism function."""
+
+    @pytest.fixture
+    def executor(self, tmp_path):
+        with patch(
+            "transformation_portal.core.execution_identity.get_env_fingerprint",
+            return_value="sha256:fixed_env",
+        ):
+            yield CASDAGExecutor(ArtifactStore(tmp_path / "cas"), tmp_path / "cache", CASDAGConfig(enable_caching=True))
 
     def test_deterministic_dag(self, tmp_path):
         """Test verification passes for deterministic DAG."""
@@ -828,7 +853,7 @@ class TestVerifyDAGDeterminism:
         executor = CASDAGExecutor(store, cache_dir, config)
 
         graph = StageGraph("test")
-        stage = DAGStageForTesting("deterministic")
+        stage = FixedOutputStage("deterministic", {"deterministic_output": 1})
         graph.add_stage(stage)
 
         context = StageContext()
@@ -848,6 +873,37 @@ class TestVerifyDAGDeterminism:
                 assert is_det is True
                 assert len(hashes["deterministic"]) == 2
                 assert hashes["deterministic"][0] == hashes["deterministic"][1]
+
+    def test_stage_with_different_output_on_each_run_is_not_deterministic(self, executor):
+        """Outputs are compared, including those of the last stage in the DAG."""
+        graph = StageGraph("test")
+        # DAGStageForTesting returns its call counter, so every run differs.
+        graph.add_stage(DAGStageForTesting("counter"))
+
+        is_det, hashes = verify_dag_determinism(executor, graph, StageContext(), runs=3)
+
+        assert is_det is False
+        assert len(set(hashes["counter"])) == 3
+
+    def test_only_the_nondeterministic_stage_is_reported(self, executor):
+        graph = StageGraph("test")
+        graph.add_stage(FixedOutputStage("stable", {"stable_output": np.arange(6, dtype=np.float32).reshape(2, 3)}))
+        graph.add_stage(DAGStageForTesting("counter"))
+
+        is_det, hashes = verify_dag_determinism(executor, graph, StageContext(), runs=2)
+
+        assert is_det is False
+        assert len(set(hashes["stable"])) == 1
+        assert len(set(hashes["counter"])) == 2
+
+    def test_outputs_that_cannot_be_hashed_are_not_reported_as_deterministic(self, executor):
+        graph = StageGraph("test")
+        graph.add_stage(FixedOutputStage("opaque", {"opaque_output": object()}))
+
+        is_det, _ = verify_dag_determinism(executor, graph, StageContext(), runs=2)
+
+        assert is_det is False
+        assert executor.config.enable_caching is True  # restored after verification
 
 
 class TestCacheHitCompatibilityRegression:

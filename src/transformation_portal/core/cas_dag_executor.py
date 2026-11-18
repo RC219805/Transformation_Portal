@@ -732,8 +732,16 @@ def verify_dag_determinism(
                 logger.warning("Run %d failed: %s", i + 1, result.error)
                 return False, all_hashes
 
-            for stage_name, identity in result.identities.items():
-                all_hashes[stage_name].append(identity.cas_id)
+            # Compare what each stage produced. Its execution identity only
+            # describes the inputs, which are the same on every run.
+            for stage_name, stage_result in result.stage_results.items():
+                try:
+                    output_payload = canonical_input_value(stage_result.artifacts)
+                    output_hash = hashlib.sha256(jcs_dumpb(output_payload)).hexdigest()
+                except (TypeError, ValueError) as exc:
+                    logger.warning("Outputs of stage %s cannot be hashed: %s", stage_name, exc)
+                    return False, all_hashes
+                all_hashes[stage_name].append(f"sha256:{output_hash}")
 
             logger.debug("Run %d completed", i + 1)
 
