@@ -76,8 +76,15 @@ class AgentTrainer:
     def step(self, batch: list[tuple]) -> float:
         """Training step on batch.
 
+        The log-probability and value are recomputed from the current model for
+        every transition, so a transition can be trained on in more than one
+        update (the replay window overlaps between updates). Extra trailing
+        tuple items (the legacy ``log_prob, value`` pair recorded at action
+        time) are accepted and ignored: their autograd graphs are freed by the
+        first backward pass and reusing them crashes the second update.
+
         Args:
-            batch: List of (state, action, reward, next_state, done, log_prob, value)
+            batch: List of (state, action, reward, next_state, done[, ...])
 
         Returns:
             Loss value
@@ -87,13 +94,17 @@ class AgentTrainer:
 
         loss = torch.tensor(0.0)
 
-        for s, a, r, s2, done, logp, v in batch:
+        for item in batch:
+            s, a, r, s2, done = item[:5]
+            logits, v = self.model.forward(torch.as_tensor(s, dtype=torch.float32).unsqueeze(0))
+            logp = F.log_softmax(logits, dim=-1)[0, int(a)]
+
             # Compute target
-            target = r
+            target = float(r)
             if not done:
                 with torch.no_grad():
-                    _, v2 = self.model.forward(torch.tensor(s2).unsqueeze(0))
-                    target = r + self.config.gamma * v2.item()
+                    _, v2 = self.model.forward(torch.as_tensor(s2, dtype=torch.float32).unsqueeze(0))
+                    target = float(r) + self.config.gamma * v2.item()
 
             advantage = target - v.item()
 
@@ -101,7 +112,7 @@ class AgentTrainer:
             loss = loss + (-logp * advantage)
 
             # Value loss
-            loss = loss + self.config.value_coef * F.mse_loss(v, torch.tensor([[target]]))
+            loss = loss + self.config.value_coef * F.mse_loss(v, torch.tensor([[target]], dtype=v.dtype))
 
         self.optimizer.zero_grad()
         loss.backward()

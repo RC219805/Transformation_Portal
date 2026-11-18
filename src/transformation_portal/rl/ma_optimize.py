@@ -152,7 +152,9 @@ def optimize_multi_agent(
                 continue
 
             s = states[node_id]
-            a_idx, logp, v = agent.model.act(torch.tensor(s).unsqueeze(0))
+            # Acting needs no graph: the trainer recomputes log-prob and value.
+            with torch.no_grad():
+                a_idx, _, _ = agent.model.act(torch.tensor(s).unsqueeze(0))
             action = agent.actions[a_idx]
 
             joint_actions.append(action)
@@ -162,7 +164,7 @@ def optimize_multi_agent(
                 bus.publish(node_id, {"intent": action.action_type})
 
             # Store for training
-            agent.last_transition = (s, a_idx, logp, v)
+            agent.last_transition = (s, a_idx)
 
         # Environment step
         result = env.step(joint_actions)
@@ -176,10 +178,13 @@ def optimize_multi_agent(
             if node_id not in result.states:
                 continue
 
-            s, a_idx, logp, v = agent.last_transition
+            s, a_idx = agent.last_transition
             s2 = result.states[node_id]
 
-            agent.replay.append((s, a_idx, reward, s2, result.done, logp, v))
+            # Only detached data is stored: the replay window below overlaps
+            # between updates, so graph-attached tensors would be backpropagated
+            # through twice.
+            agent.replay.append((s, a_idx, reward, s2, result.done))
 
         # Training updates
         for node_id, agent in agents.items():
