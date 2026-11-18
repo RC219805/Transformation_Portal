@@ -817,6 +817,35 @@ class TestBatchProcessing:
         assert np.asarray(Image.open(results[dark]["web"])).mean() < 20
         assert pipeline.stats.images_processed == 3
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize("parallel_io", [False, True])
+    def test_batch_accepts_string_input_paths(self, temp_dir, parallel_io):
+        """M-02 follow-up: str inputs must find their output stem on the parallel I/O path too."""
+        src = temp_dir / "in"
+        src.mkdir()
+        first = src / "kitchen.png"
+        second = src / "kitchen.tif"
+        Image.fromarray(np.full((32, 32, 3), 250, np.uint8)).save(first)
+        Image.fromarray(np.full((32, 32, 3), 10, np.uint8)).save(second)
+
+        out = temp_dir / "out"
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=out,
+            output_formats=[OutputFormat.WEB_4K],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=parallel_io,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        pipeline.batch_process([str(first), str(second)], show_progress=False)
+
+        assert pipeline.stats.images_processed == 2
+        assert pipeline.stats.images_failed == 0
+        assert sorted(p.name for p in out.iterdir()) == ["kitchen_WEB_4K.jpg", "kitchen_tif_WEB_4K.jpg"]
+
     def test_failed_output_write_leaves_previous_deliverable_intact(self, temp_dir, sample_image):
         """Outputs are written to a temp file and replaced, so a failed save keeps the old file."""
         out = temp_dir / "out"

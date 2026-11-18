@@ -524,7 +524,7 @@ class UnifiedLuxuryPipeline:
 
         for input_path in iterator:
             try:
-                outputs = self.process(input_path, output_stem=output_stems[input_path])
+                outputs = self.process(input_path, output_stem=output_stems[Path(input_path)])
                 results[input_path] = outputs
             except Exception as e:
                 log.error(f"Failed to process {input_path.name}: {e}")
@@ -540,9 +540,11 @@ class UnifiedLuxuryPipeline:
 
         Same-stem inputs (``kitchen.png`` and ``kitchen.tif``) would otherwise write the
         same files and overwrite each other; only the later colliding names change.
+        Keys are ``Path`` objects, so ``str`` inputs and the ``Path`` that the parallel
+        I/O loader hands back resolve to the same entry.
         """
         allocator = OutputStemAllocator()
-        return {input_path: allocator.claim(input_path) for input_path in input_paths}
+        return {Path(input_path): allocator.claim(input_path) for input_path in input_paths}
 
     def _batch_process_parallel_io(
         self,
@@ -573,7 +575,7 @@ class UnifiedLuxuryPipeline:
         io_results = io_pipeline.process_batch(
             input_paths,
             lambda input_path, loaded: self._prepare_batch_output_work(
-                input_path, loaded, output_stem=output_stems[input_path]
+                input_path, loaded, output_stem=output_stems[Path(input_path)]
             ),
         )
 
