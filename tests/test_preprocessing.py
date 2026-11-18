@@ -694,6 +694,56 @@ class TestNormalizeExifOrientation:
         with pytest.raises(ValueError, match="Invalid image file"):
             normalize_exif_orientation(corrupt_path, output_path)
 
+    @staticmethod
+    def _noisy_jpeg(path: Path, orientation: int | None = None) -> None:
+        pixels = (np.random.default_rng(0).random((48, 72, 3)) * 255).astype(np.uint8)
+        img = Image.fromarray(pixels)
+        if orientation is None:
+            img.save(path, quality=98, subsampling=0)
+        else:
+            exif = Image.Exif()
+            exif[0x0112] = orientation
+            img.save(path, quality=98, subsampling=0, exif=exif.tobytes())
+
+    @pytest.mark.parametrize("orientation", [None, 1])
+    def test_upright_jpeg_is_copied_byte_for_byte(self, tmp_path, orientation):
+        """LC-18: an upright JPEG must be copied, not lossily re-encoded."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        input_path = tmp_path / "upright.jpg"
+        output_path = tmp_path / "out" / "upright.jpg"
+        self._noisy_jpeg(input_path, orientation)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        assert output_path.read_bytes() == input_path.read_bytes()
+
+    def test_upright_jpeg_in_place_is_left_unchanged(self, tmp_path):
+        """LC-18: in-place normalisation of an upright JPEG must not rewrite the file."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        image_path = tmp_path / "upright.jpg"
+        self._noisy_jpeg(image_path)
+        before = hashlib.sha256(image_path.read_bytes()).hexdigest()
+
+        normalize_exif_orientation(image_path, image_path)
+
+        assert hashlib.sha256(image_path.read_bytes()).hexdigest() == before
+
+    def test_rotated_jpeg_is_transposed_and_orientation_reset(self, tmp_path):
+        """An orientation-6 JPEG is physically rotated and its tag normalised to 1."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        input_path = tmp_path / "rotated.jpg"
+        output_path = tmp_path / "normalized.jpg"
+        self._noisy_jpeg(input_path, orientation=6)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        with Image.open(output_path) as out_img:
+            assert out_img.size == (48, 72)
+            assert out_img.getexif().get(0x0112) == 1
+
 
 class TestValidateDepthImageAlignment:
     """Tests for validate_depth_image_alignment function."""

@@ -1018,8 +1018,14 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
         raise ValueError(f"Invalid image file: {input_path}") from exc
 
     try:
-        # exif_transpose returns None if no transpose needed, else new image
-        corrected = exif_transpose(img)
+        # exif_transpose(img) always returns an image (never None), so decide
+        # from the orientation tag itself: only values 2-8 require a transpose.
+        try:
+            orientation = img.getexif().get(0x0112, 1)
+        except Exception:
+            orientation = 1
+        needs_transpose = orientation in (2, 3, 4, 5, 6, 7, 8)
+        corrected = exif_transpose(img) if needs_transpose else None
 
         if corrected is None:
             # No rotation needed - for JPEG, copy byte-for-byte to avoid lossy re-encode
