@@ -206,3 +206,37 @@ def test_apply_cube_lut_rejects_non_rgb_images():
     lut = np.zeros((2, 2, 2, 3), dtype=np.float32)
     with pytest.raises(ValueError, match="3 colour channels"):
         apply_cube_lut(np.zeros((4, 4, 4), dtype=np.float32), lut)
+
+
+def _icc_profile(colour_space: bytes) -> bytes:
+    """Minimal ICC header bytes whose data colour space signature is ``colour_space``."""
+    header = bytearray(128)
+    header[16:20] = colour_space
+    return bytes(header)
+
+
+def test_extract_output_metadata_keeps_rgb_icc_dpi_and_exif():
+    """M-07: the source ICC profile, DPI and EXIF are collected for re-attachment on save."""
+    from transformation_portal.utils.image_utils import extract_output_metadata
+
+    img = Image.new("RGB", (4, 4))
+    exif = img.getexif()
+    exif[0x0110] = "Camera"
+    img.info.update({"icc_profile": _icc_profile(b"RGB "), "dpi": (300, 240), "exif": exif.tobytes()})
+
+    metadata = extract_output_metadata(img)
+
+    assert metadata["icc_profile"] == _icc_profile(b"RGB ")
+    assert metadata["dpi"] == (300, 240)
+    assert metadata["exif"][0x0110] == "Camera"
+
+
+def test_extract_output_metadata_drops_non_rgb_icc_and_malformed_values():
+    """M-07: a CMYK profile would mis-describe RGB output; junk DPI/EXIF are dropped."""
+    from transformation_portal.utils.image_utils import extract_output_metadata
+
+    img = Image.new("RGB", (4, 4))
+    img.info.update({"icc_profile": _icc_profile(b"CMYK"), "dpi": (0, 0), "exif": b"not exif"})
+
+    assert extract_output_metadata(img) == {}
+    assert extract_output_metadata(Image.new("RGB", (4, 4))) == {}

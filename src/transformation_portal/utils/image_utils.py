@@ -8,7 +8,7 @@ depth_tools.py, depth_pipeline/utils/image_utils.py).
 
 import functools
 from pathlib import Path
-from typing import Union
+from typing import Any, Dict, Union
 
 import numpy as np
 from PIL import Image
@@ -29,6 +29,43 @@ def load_image(path: Union[str, Path]) -> Image.Image:
     """
     img = Image.open(path).convert("RGB")
     return img
+
+
+def extract_output_metadata(img: Image.Image) -> Dict[str, Any]:
+    """Collect the ICC profile, DPI and EXIF of a loaded image for re-attachment on save.
+
+    The returned mapping holds only keys that are present and usable, named after the
+    Pillow save keywords (``icc_profile``, ``dpi``, ``exif``). The ICC profile is kept
+    only when it describes an RGB colour space: pipeline outputs are RGB, so a CMYK or
+    greyscale profile carried over from a ``convert("RGB")`` source would mis-describe them.
+
+    Args:
+        img: Image as loaded (``convert`` keeps ``info``, so a converted image works too)
+
+    Returns:
+        Dict suitable for ``Image.save(path, **metadata)``
+    """
+    metadata: Dict[str, Any] = {}
+    icc = img.info.get("icc_profile")
+    if isinstance(icc, bytes) and len(icc) >= 20 and icc[16:20] == b"RGB ":
+        metadata["icc_profile"] = icc
+    dpi = img.info.get("dpi")
+    if (
+        isinstance(dpi, tuple)
+        and len(dpi) == 2
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in dpi)
+    ):
+        metadata["dpi"] = (dpi[0], dpi[1])
+    exif_bytes = img.info.get("exif")
+    if isinstance(exif_bytes, bytes) and exif_bytes:
+        try:
+            exif = Image.Exif()
+            exif.load(exif_bytes)
+        except Exception:  # noqa: BLE001 - malformed EXIF is dropped, not fatal
+            exif = None
+        if exif is not None and len(exif) > 0:
+            metadata["exif"] = exif
+    return metadata
 
 
 def save_image(img: Image.Image, path: Union[str, Path]) -> None:

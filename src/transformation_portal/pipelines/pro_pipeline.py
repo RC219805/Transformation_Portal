@@ -44,6 +44,8 @@ import typer
 from PIL import Image
 from tqdm import tqdm
 
+from transformation_portal.utils.image_utils import extract_output_metadata
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("pro_pipeline")
@@ -582,6 +584,8 @@ class ProPipeline:
         try:
             # Load image
             image = Image.open(image_path).convert("RGB")
+            # ICC profile / DPI / EXIF of the source, re-attached to the output
+            source_metadata = extract_output_metadata(image) if self.config.preserve_metadata else {}
             log.info(f"  Image size: {image.size[0]}x{image.size[1]}")
 
             # Stage 1: Depth-aware processing
@@ -605,7 +609,7 @@ class ProPipeline:
                 image = self._apply_finishing_stage(image, image_path)
 
             # Save output
-            output_path = self._save_output(image, image_path)
+            output_path = self._save_output(image, image_path, source_metadata=source_metadata)
 
             # Update statistics
             elapsed = time.time() - start_time
@@ -784,9 +788,21 @@ class ProPipeline:
             log.warning(f"    ⚠ Finishing stage failed: {e}, using original")
             return image
 
-    def _save_output(self, image: Image.Image, input_path: Path) -> Path:
-        """Save the processed image with appropriate format and metadata."""
+    def _save_output(
+        self,
+        image: Image.Image,
+        input_path: Path,
+        source_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Path:
+        """Save the processed image with appropriate format and metadata.
+
+        ``source_metadata`` (from :func:`extract_output_metadata`) is re-attached to the
+        output. The linear TIFF keeps only the DPI: its pixels are no longer encoded in
+        the source colour space, so the source ICC profile would mis-describe them.
+        """
         import numpy as np
+
+        metadata = source_metadata or {}
 
         # Determine output filename
         stem = input_path.stem
@@ -825,23 +841,38 @@ class ProPipeline:
                     output_array = (linear_array * 255).astype(np.uint8)
 
                 # Save with tifffile
+                tiff_kwargs: Dict[str, Any] = {}
+                if "dpi" in metadata:
+                    tiff_kwargs["resolution"] = (float(metadata["dpi"][0]), float(metadata["dpi"][1]))
+                    tiff_kwargs["resolutionunit"] = "INCH"
                 tifffile.imwrite(
-                    output_path, output_array, compression="deflate", photometric="rgb", metadata={"colorspace": "linear"}
+                    output_path,
+                    output_array,
+                    compression="deflate",
+                    photometric="rgb",
+                    metadata={"colorspace": "linear"},
+                    **tiff_kwargs,
                 )
 
                 log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
 
             except ImportError:
                 log.warning("  ⚠ tifffile not available, saving as standard TIFF")
-                self._save_standard(image, output_path, ext)
+                self._save_standard(image, output_path, ext, metadata)
         else:
-            self._save_standard(image, output_path, ext)
+            self._save_standard(image, output_path, ext, metadata)
 
         return output_path
 
-    def _save_standard(self, image: Image.Image, output_path: Path, ext: str):
-        """Save image in standard gamma-encoded format."""
-        save_kwargs = {}
+    def _save_standard(
+        self,
+        image: Image.Image,
+        output_path: Path,
+        ext: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Save image in standard gamma-encoded format, re-attaching source metadata."""
+        save_kwargs: Dict[str, Any] = dict(metadata or {})
         if ext.lower() in ["jpg", "jpeg"]:
             save_kwargs["quality"] = 95
             save_kwargs["optimize"] = True

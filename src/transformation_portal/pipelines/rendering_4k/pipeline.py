@@ -43,7 +43,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -104,7 +104,7 @@ except ImportError:
 
 # Import internal utilities
 from ...core.security.model_lock import resolve_model_lock_revision
-from ...utils.image_utils import load_image, np_to_pil, pil_to_np
+from ...utils.image_utils import extract_output_metadata, load_image, np_to_pil, pil_to_np
 from .quality import GPUMemoryManager, QualityAssessor
 
 # isort: off
@@ -480,6 +480,8 @@ class Rendering4KPipeline:
         logger.info("[1/9] Input Validation")
         try:
             image_pil = load_image(input_path)
+            # ICC profile / DPI / EXIF of the source, re-attached to the outputs
+            source_metadata = extract_output_metadata(image_pil) if self.config.output.preserve_metadata else {}
             image_np = pil_to_np(image_pil, to_float=True)
             # Store original for quality comparison
             self._current_original = image_np.copy()
@@ -690,6 +692,7 @@ class Rendering4KPipeline:
                 input_path,
                 Path(output_dir),
                 unified_metrics=unified_metrics,
+                source_metadata=source_metadata,
             )
             logger.info(f"  Saved {len(output_paths)} files")
         stage_metrics.append(
@@ -993,18 +996,30 @@ class Rendering4KPipeline:
         input_path: Path,
         output_dir: Path,
         unified_metrics: Optional[UnifiedQualityMetrics] = None,
+        source_metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Path]:
-        """Save all output files."""
+        """Save all output files.
+
+        ``source_metadata`` (from :func:`extract_output_metadata`) carries the source
+        ICC profile, DPI and EXIF onto the master TIFF (ICC + DPI) and delivery JPEG.
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
         stem = input_path.stem
         outputs = {}
+        metadata = source_metadata or {}
 
         # Master TIFF (16-bit)
         if self.config.output.master_tiff_16bit and HAS_TIFFFILE:
             tiff_path = output_dir / f"{stem}_MASTER.tiff"
             img_np = pil_to_np(image, to_float=True)
             img_16bit = (np.clip(img_np, 0, 1) * 65535).astype(np.uint16)
-            tifffile.imwrite(str(tiff_path), img_16bit, photometric="rgb")
+            tiff_kwargs: Dict[str, Any] = {}
+            if "icc_profile" in metadata:
+                tiff_kwargs["iccprofile"] = metadata["icc_profile"]
+            if "dpi" in metadata:
+                tiff_kwargs["resolution"] = (float(metadata["dpi"][0]), float(metadata["dpi"][1]))
+                tiff_kwargs["resolutionunit"] = "INCH"
+            tifffile.imwrite(str(tiff_path), img_16bit, photometric="rgb", **tiff_kwargs)
             outputs["master_tiff"] = tiff_path
             logger.info(f"  Master TIFF: {tiff_path.name}")
 
@@ -1016,6 +1031,7 @@ class Rendering4KPipeline:
                 quality=self.config.output.jpeg_quality,
                 progressive=self.config.output.jpeg_progressive,
                 optimize=True,
+                **metadata,
             )
             outputs["delivery_jpeg"] = jpeg_path
             logger.info(f"  Delivery JPEG: {jpeg_path.name}")

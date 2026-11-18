@@ -693,6 +693,64 @@ class TestErrorHandling:
         assert pipeline.stats["images_failed"] == 1
 
 
+class TestSourceMetadataPreservation:
+    """M-07: ``preserve_metadata=True`` must carry the source ICC profile, DPI and EXIF."""
+
+    @staticmethod
+    def _tagged_jpeg(path):
+        from PIL import ImageCms
+
+        icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+        img = Image.new("RGB", (32, 32), color=(120, 90, 60))
+        exif = img.getexif()
+        exif[0x0110] = "Camera"
+        img.save(path, icc_profile=icc, dpi=(300, 300), exif=exif, quality=95)
+        return icc
+
+    @pytest.mark.parametrize("fmt", ["jpg", "png"])
+    def test_gamma_encoded_output_keeps_icc_dpi_and_exif(self, tmp_path, fmt):
+        source = tmp_path / "tagged.jpg"
+        icc = self._tagged_jpeg(source)
+        config = ProPipelineConfig(input_path=source, output_dir=tmp_path / "out", output_format=fmt, device="cpu")
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert output.info.get("icc_profile") == icc
+            assert tuple(round(v) for v in output.info["dpi"]) == (300, 300)
+            assert output.getexif().get(0x0110) == "Camera"
+
+    def test_linear_tiff_keeps_dpi_but_not_the_gamma_icc_profile(self, tmp_path):
+        pytest.importorskip("tifffile")
+        source = tmp_path / "tagged.jpg"
+        self._tagged_jpeg(source)
+        config = ProPipelineConfig(
+            input_path=source, output_dir=tmp_path / "out", output_format="tif", linear_output=True, device="cpu"
+        )
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert tuple(round(v) for v in output.info["dpi"]) == (300, 300)
+            assert not output.info.get("icc_profile")
+
+    def test_preserve_metadata_false_drops_source_metadata(self, tmp_path):
+        source = tmp_path / "tagged.jpg"
+        self._tagged_jpeg(source)
+        config = ProPipelineConfig(
+            input_path=source, output_dir=tmp_path / "out", output_format="jpg", preserve_metadata=False, device="cpu"
+        )
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert not output.info.get("icc_profile")
+            assert output.getexif().get(0x0110) is None
+
+
 class TestCLI:
     """Tests for CLI interface (typer commands)."""
 

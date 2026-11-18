@@ -89,3 +89,43 @@ def test_rendering_4k_depth_cache_does_not_alias_images_sharing_a_prefix() -> No
     assert (
         pipeline._estimate_depth(image_a.copy(), Path("a2.png")) is pipeline._depth_cache[pipeline._compute_cache_key(image_a)]
     )
+
+
+def _write_tagged_jpeg(path: Path) -> bytes:
+    from PIL import ImageCms
+
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    img = Image.new("RGB", (8, 6), color=(64, 96, 128))
+    exif = img.getexif()
+    exif[0x0110] = "Camera"
+    img.save(path, icc_profile=icc, dpi=(300, 300), exif=exif, quality=95)
+    return icc
+
+
+@pytest.mark.parametrize("preserve", [True, False])
+def test_rendering_4k_outputs_carry_source_icc_and_dpi(tmp_path: Path, monkeypatch, preserve: bool) -> None:
+    """M-07: preserve_metadata=True re-attaches the source ICC profile and DPI to the outputs."""
+    pytest.importorskip("tifffile")
+    pipeline_module = _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch)
+
+    try:
+        input_path = tmp_path / "tagged.jpg"
+        icc = _write_tagged_jpeg(input_path)
+
+        pipeline = pipeline_module.Rendering4KPipeline.from_preset("preview")
+        pipeline.config.output.master_tiff_16bit = True
+        pipeline.config.output.preserve_metadata = preserve
+        result = pipeline.process(input_path, tmp_path / "output")
+
+        assert {"master_tiff", "delivery_jpeg"} <= result.output_paths.keys()
+        for key in ("master_tiff", "delivery_jpeg"):
+            with Image.open(result.output_paths[key]) as output_image:
+                if preserve:
+                    assert output_image.info.get("icc_profile") == icc
+                    assert tuple(round(v) for v in output_image.info["dpi"]) == (300, 300)
+                else:
+                    assert not output_image.info.get("icc_profile")
+        with Image.open(result.output_paths["delivery_jpeg"]) as jpeg:
+            assert (jpeg.getexif().get(0x0110) == "Camera") is preserve
+    finally:
+        sys.modules.pop(PIPELINE_MODULE, None)
