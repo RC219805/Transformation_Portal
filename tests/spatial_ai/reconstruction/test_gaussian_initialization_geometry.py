@@ -13,7 +13,7 @@ pytestmark = [pytest.mark.ml, pytest.mark.unit]
 
 
 @pytest.mark.parametrize("use_depth_prior", [True, False], ids=["depth", "fixed-5m"])
-def test_initialize_gaussians_camera_roundtrip(use_depth_prior: bool) -> None:
+def test_initialize_gaussians_camera_roundtrip(use_depth_prior: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     for pose_name, extrinsics in [
         ("identity", np.eye(4, dtype=np.float32)),
         (
@@ -93,3 +93,28 @@ def test_initialize_gaussians_camera_roundtrip(use_depth_prior: bool) -> None:
                 depth[0, 0] = np.inf
             with pytest.raises(ValueError, match="no pixel with a finite positive depth"):
                 backend._initialize_gaussians(unmasked, use_depth_prior=True, use_segmentation=True)
+
+            # R-4: without depth maps the fixed-depth fallback runs although the depth
+            # prior was requested, and the metadata must name the initializer that ran.
+            no_depth = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, masks=masks, tier="experimental")
+            fallback = backend._initialize_gaussians(no_depth, use_depth_prior=True, use_segmentation=True)
+            assert fallback.metadata["initialization"] == "sfm", pose_name
+
+            # R-4: the subsample above MAX_GAUSSIANS runs before the optimizer seeds the
+            # global RNGs, so a seeded backend must draw it from its own seeded generator.
+            dense = ReconstructionInput(
+                images=[np.full((4, 4, 3), 0.5, dtype=np.float32) for _ in range(2)],
+                gamma=1.0,
+                cameras=[CameraParams(intrinsics.copy(), extrinsics.copy(), width=4, height=4) for _ in range(2)],
+                depth_maps=[np.arange(16, dtype=np.float32).reshape(4, 4) + 1.0 for _ in range(2)],
+                tier="experimental",
+            )
+            monkeypatch.setattr(GaussianBackend, "MAX_GAUSSIANS", 5)
+            subsamples = []
+            for global_seed in (1, 2):
+                np.random.seed(global_seed)
+                seeded = GaussianBackend(tier="experimental", device="cpu", optimization_seed=7)
+                subsamples.append(seeded._initialize_gaussians(dense, use_depth_prior=True, use_segmentation=False))
+            assert subsamples[0].num_gaussians == 5, pose_name
+            np.testing.assert_array_equal(subsamples[0].positions, subsamples[1].positions, err_msg=pose_name)
+            monkeypatch.undo()

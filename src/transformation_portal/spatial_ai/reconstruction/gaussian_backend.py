@@ -453,7 +453,8 @@ class GaussianBackend:
         Returns:
             Initial GaussianSplat.
         """
-        if use_depth_prior and reconstruction_input.depth_maps is not None:
+        depth_guided = use_depth_prior and reconstruction_input.depth_maps is not None
+        if depth_guided:
             # Depth-guided initialization (best quality)
             positions, colors = self._initialize_from_depth(
                 reconstruction_input.images,
@@ -487,7 +488,9 @@ class GaussianBackend:
             scales=scales,
             rotations=rotations,
             opacities=opacities,
-            metadata={"initialization": "depth" if use_depth_prior else "sfm"},
+            # Record the initializer that actually ran: without depth maps the
+            # fixed-depth fallback runs even when the depth prior was requested.
+            metadata={"initialization": "depth" if depth_guided else "sfm"},
         )
 
     def _initialize_from_depth(
@@ -561,7 +564,13 @@ class GaussianBackend:
 
         # Subsample if too many points
         if len(positions) > self.MAX_GAUSSIANS:
-            indices = np.random.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
+            # The optimizer seeds the global RNGs only after initialization, so a
+            # seeded backend draws this subsample from its own seeded generator.
+            if self.optimization_seed is None:
+                indices = np.random.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
+            else:
+                subsample_rng = np.random.default_rng(self.optimization_seed)
+                indices = subsample_rng.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
             positions = positions[indices]
             colors = colors[indices]
 
