@@ -764,6 +764,22 @@ class TestCLI:
         assert list_presets is not None
         assert version is not None
 
+    def test_batch_exits_nonzero_when_every_image_fails(self, tmp_path):
+        """M-08: a batch in which every image failed must not exit 0."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines.pro_pipeline import app
+
+        bad_dir = tmp_path / "bad"
+        bad_dir.mkdir()
+        (bad_dir / "a.jpg").write_bytes(b"not an image")
+        (bad_dir / "b.png").write_bytes(b"also not an image")
+
+        result = CliRunner().invoke(app, ["batch", str(bad_dir), "--out", str(tmp_path / "out"), "--format", "png"])
+
+        assert result.exit_code == 1, result.output
+        assert "all 2 images failed" in (result.stdout or "") + (result.stderr or "")
+
     def test_preset_enum_values(self):
         """Test that preset enum has expected values."""
         assert PipelinePreset.ARCHITECTURAL_HERO.value == "architectural-hero"

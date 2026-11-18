@@ -129,3 +129,23 @@ def test_rendering_4k_outputs_carry_source_icc_and_dpi(tmp_path: Path, monkeypat
             assert (jpeg.getexif().get(0x0110) == "Camera") is preserve
     finally:
         sys.modules.pop(PIPELINE_MODULE, None)
+
+
+def test_rendering_4k_cli_batch_exits_nonzero_when_every_image_fails(tmp_path: Path, monkeypatch) -> None:
+    """M-08: a batch in which every image failed must not exit 0."""
+    pipeline_module = _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch)
+
+    try:
+        bad_dir = tmp_path / "bad"
+        bad_dir.mkdir()
+        (bad_dir / "a.jpg").write_bytes(b"not an image")
+        (bad_dir / "b.png").write_bytes(b"also not an image")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["rendering_4k_pipeline", "-d", str(bad_dir), "-o", str(tmp_path / "out"), "--preset", "preview"],
+        )
+
+        assert pipeline_module.main() == 1
+    finally:
+        sys.modules.pop(PIPELINE_MODULE, None)

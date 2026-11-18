@@ -124,3 +124,29 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, c
         else:
             pipelines_package.__dict__.pop("lux_render_pipeline", None)
         portal_module._lux_render = original_cached_pipeline
+
+
+def test_lux_render_batch_exits_nonzero_when_every_file_fails(monkeypatch, tmp_path) -> None:
+    """M-08: a batch in which every input fails must not exit 0."""
+    pipeline_module = importlib.import_module(PIPELINE_MODULE)
+
+    class _StubPipeline:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def enhance(self, **kwargs):  # pragma: no cover - unreadable inputs fail before enhance
+            raise AssertionError("enhance must not run for unreadable inputs")
+
+    monkeypatch.setattr(pipeline_module, "_require_lux_render_runtime_dependencies", lambda: None)
+    monkeypatch.setattr(pipeline_module, "LuxuryRenderPipeline", _StubPipeline)
+    (tmp_path / "a.png").write_bytes(b"not an image")
+    (tmp_path / "b.png").write_bytes(b"also not an image")
+
+    result = CliRunner().invoke(
+        pipeline_module.app,
+        ["--input-glob", str(tmp_path / "*.png"), "--out", str(tmp_path / "out"), "--prompt", "luxury interior"],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "all 2 file(s) failed" in (result.stdout or "") + (result.stderr or "")
+    assert not list((tmp_path / "out").glob("*"))

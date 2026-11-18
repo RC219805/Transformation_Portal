@@ -1287,7 +1287,13 @@ Examples:
                 return 1
 
             logger.info(f"Found {len(input_paths)} images to process")
-            pipeline.batch_process(input_paths, args.output)
+            results = pipeline.batch_process(input_paths, args.output)
+            failed = len(input_paths) - len(results)
+            if not results:
+                logger.error(f"❌ Processing failed: all {len(input_paths)} images failed")
+                return 1
+            if failed:
+                logger.warning(f"⚠ Completed with {failed} failures out of {len(input_paths)} images")
         else:
             # Single image
             pipeline.process(args.input, args.output)

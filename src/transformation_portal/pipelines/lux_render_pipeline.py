@@ -1499,6 +1499,7 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     print(f"[Finishing] {asdict(finish)}")
     print(f"[Batch] {len(files)} file(s)")
 
+    failures = 0
     for i, f in enumerate(files, 1):
         try:
             print(f"\n[{i}/{len(files)}] {f}")
@@ -1517,7 +1518,14 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
             save_image(out_img, out_dir / fname)
             print(f"[Saved] {out_dir / fname}")
         except Exception as e:
+            failures += 1
             print(f"[Error] {f}: {e}")
+
+    if failures == len(files):
+        typer.echo(f"Error: all {failures} file(s) failed", err=True)
+        raise typer.Exit(code=1)
+    if failures:
+        print(f"[Batch] Completed with {failures} failure(s) out of {len(files)} file(s)")
 
 
 if __name__ == "__main__":

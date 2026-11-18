@@ -1116,6 +1116,9 @@ def batch(
 
     if stats["failed"] == 0:
         typer.echo(f"\n✓ All {stats['processed']} images processed successfully!")
+    elif stats["processed"] == 0:
+        typer.echo(f"\n✗ Processing failed: all {stats['failed']} images failed", err=True)
+        raise typer.Exit(code=1)
     else:
         typer.echo(f"\n⚠ Completed with {stats['failed']} failures out of {stats['processed'] + stats['failed']} images")
 
