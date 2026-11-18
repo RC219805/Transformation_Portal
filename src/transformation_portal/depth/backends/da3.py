@@ -49,6 +49,7 @@ from ...lux_depth_v3.model_resolution import (
     restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
 )
+from ._array_contract import to_rgb_uint8
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -1109,20 +1110,7 @@ class DA3Backend:
     ) -> tuple[Image.Image, np.ndarray]:
         """Normalize input image for both local and subprocess execution."""
         if isinstance(image, np.ndarray):
-            if image.dtype == np.uint8:
-                arr = image
-            elif np.issubdtype(image.dtype, np.floating):
-                image_max = image.max()
-                if image_max <= 1.0:
-                    image_min = image.min()
-                    if image_min >= 0.0:
-                        arr = (image * 255).astype(np.uint8)
-                    else:
-                        arr = image.astype(np.uint8, copy=False)
-                else:
-                    arr = image.astype(np.uint8, copy=False)
-            else:
-                arr = image.astype(np.uint8, copy=False)
+            arr = to_rgb_uint8(image)
             image_pil = Image.fromarray(arr)
             image_array = arr
         else:

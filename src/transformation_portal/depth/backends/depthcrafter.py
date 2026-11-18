@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Deque, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ._array_contract import to_rgb_uint8
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -141,16 +142,7 @@ class DepthCrafterBackend:
     @staticmethod
     def _normalize_numpy_input(image: np.ndarray) -> np.ndarray:
         """Normalize numpy input to uint8 image space."""
-        if image.dtype in (np.float16, np.float32, np.float64):
-            image = np.nan_to_num(image, nan=0.0, posinf=255.0, neginf=0.0)
-            if image.size and float(np.max(image)) <= 1.0:
-                return (np.clip(image, 0.0, 1.0) * 255.0).astype(np.uint8)
-            return np.clip(image, 0.0, 255.0).astype(np.uint8)
-
-        if image.dtype != np.uint8:
-            return np.clip(image, 0, 255).astype(np.uint8)
-
-        return image
+        return to_rgb_uint8(image)
 
     @classmethod
     def _to_rgb_uint8_array(

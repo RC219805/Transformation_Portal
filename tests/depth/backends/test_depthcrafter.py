@@ -72,6 +72,16 @@ class TestDepthCrafterCompute:
         assert result.original_image.dtype == np.uint8
         assert result.original_image.mean() > 100
 
+    def test_compute_scales_uint16_numpy_input_instead_of_saturating(self):
+        """A 16-bit frame maps its full range to uint8 rather than clipping to 255."""
+        backend = DepthCrafterBackend()
+        img_array = np.full((32, 32, 3), 32768, dtype=np.uint16)
+
+        result = backend.compute(img_array)
+
+        assert result.original_image.dtype == np.uint8
+        assert np.unique(result.original_image).tolist() == [128]
+
     def test_checkpoint_present_without_model_inference_skips_model_path(self, monkeypatch):
         """Checkpoint presence should not repeatedly call placeholder model inference."""
         backend = DepthCrafterBackend()

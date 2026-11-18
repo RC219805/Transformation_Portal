@@ -634,6 +634,65 @@ def test_da3_backend_prepare_image_scales_normalized_float_arrays():
     assert np.array_equal(image_array, expected)
 
 
+def test_da3_backend_prepare_image_scales_uint16_instead_of_wrapping():
+    """A 16-bit image maps its full range to uint8; a direct cast wraps modulo 256."""
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.repeat(np.array([[0, 255, 256, 32768, 65535]], dtype=np.uint16)[:, :, None], 3, axis=2)
+
+    image_pil, image_array = backend._prepare_image(image)
+
+    assert image_array[0, :, 0].tolist() == [0, 1, 1, 128, 255]
+    assert np.array_equal(np.asarray(image_pil), image_array)
+
+
+def test_da3_backend_prepare_image_clips_normalized_float_undershoot():
+    """A tiny negative undershoot must not turn a normalized float image into a black frame."""
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.repeat(np.array([[-0.02, 0.5, 1.0]], dtype=np.float32)[:, :, None], 3, axis=2)
+
+    _, image_array = backend._prepare_image(image)
+
+    assert image_array[0, :, 0].tolist() == [0, 127, 255]
+
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        np.tile(np.linspace(0, 65535, 64).astype(np.uint16), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.linspace(-0.05, 1.0, 64, dtype=np.float32), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.linspace(0.0, 300.0, 64), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.arange(-10, 290, 5, dtype=np.int32), (2, 1))[:, :, None].repeat(3, axis=2),
+    ],
+    ids=["uint16", "float_undershoot", "float_0_255_overshoot", "int32_out_of_range"],
+)
+def test_ndarray_inputs_are_interpreted_identically_by_every_backend(image):
+    """Every depth backend must hand the model the same uint8 pixels for one ndarray."""
+    from transformation_portal.depth.backends.depth_pro import DepthProBackend
+    from transformation_portal.depth.backends.depthcrafter import DepthCrafterBackend
+    from transformation_portal.depth.backends.synthetic import SyntheticDepthBackend
+
+    da3_pixels = DA3Backend(_licensed_da3_config())._prepare_image(image)[1]
+    depth_pro_pixels = DepthProBackend.__new__(DepthProBackend)._prepare_image(image)[1]
+    synthetic_pixels = SyntheticDepthBackend().compute(image).original_image
+    depthcrafter_pixels = DepthCrafterBackend._to_rgb_uint8_array(image)
+
+    assert da3_pixels.dtype == np.uint8
+    for pixels in (depth_pro_pixels, synthetic_pixels, depthcrafter_pixels):
+        assert np.array_equal(pixels, da3_pixels)
+    # The conversion is monotone, so a monotone ramp never wraps around.
+    assert (np.diff(da3_pixels[0, :, 0].astype(np.int32)) >= 0).all()
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_da3_backend_prepare_image_rejects_non_finite_float_pixels(bad):
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.full((2, 2, 3), 0.5, dtype=np.float32)
+    image[0, 0, 0] = bad
+
+    with pytest.raises(ValueError, match="non-finite"):
+        backend._prepare_image(image)
+
+
 @pytest.mark.skipif(
     not can_run_da3_compute(),
     reason="DA3 compute requires depth_anything_3 + transformers + online mode",
