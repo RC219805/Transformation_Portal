@@ -12,6 +12,7 @@ import logging
 import warnings
 from pathlib import Path
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -424,3 +425,64 @@ class TestPlanMode:
         second = runner.invoke(app, args)
         assert first.exit_code == 0 and second.exit_code == 0
         assert _extract_plan_json(first.output) == _extract_plan_json(second.output)
+
+
+class TestPlanModeOptionValidation:
+    """Invalid option values are usage errors, never silently coerced (F-09)."""
+
+    @staticmethod
+    def _plan(tmp_path: Path, *extra: str):
+        input_dir = tmp_path / "inputs"
+        if not input_dir.exists():
+            input_dir = _make_input_dir(tmp_path)
+        args = [
+            "--input-dir",
+            str(input_dir),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--model-key",
+            "da3-metric",
+            "--plan",
+            *extra,
+        ]
+        return runner.invoke(app, args)
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            ("--pbr", "enabled"),
+            ("--pbr", "y"),
+            ("--enable-v2", "enabled"),
+            ("--emit-run-card", "onn"),
+            ("--materials-v3", "ture"),
+            ("--log-level", "nonsense"),
+            ("--depth-device", "gpu9"),
+            ("--geometry-recipe", "bogus"),
+            ("--v2-input-color", "bogus"),
+        ],
+    )
+    def test_invalid_option_value_is_a_usage_error(self, tmp_path: Path, extra: tuple[str, str]) -> None:
+        result = self._plan(tmp_path, *extra)
+        assert result.exit_code == 2, result.output
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "Invalid value" in click.unstyle(result.output)
+        assert not (tmp_path / "out").exists()
+
+    def test_recognised_boolean_spellings_still_parse(self, tmp_path: Path) -> None:
+        on = self._plan(tmp_path, "--pbr", "On ")
+        off = self._plan(tmp_path, "--pbr", "0")
+        assert on.exit_code == 0 and off.exit_code == 0, (on.output, off.output)
+        on_stages = [node["id"].split(".")[-1] for node in _extract_plan_json(on.output)["nodes"]]
+        off_stages = [node["id"].split(".")[-1] for node in _extract_plan_json(off.output)["nodes"]]
+        assert "pbr" in on_stages
+        assert "pbr" not in off_stages
+
+    def test_quality_tier_and_device_spelling_do_not_change_the_plan(self, tmp_path: Path) -> None:
+        lower = self._plan(tmp_path, "--quality-tier", "apex", "--depth-device", "cpu")
+        upper = self._plan(tmp_path, "--quality-tier", "APEX", "--depth-device", "CPU")
+        assert lower.exit_code == 0 and upper.exit_code == 0, (lower.output, upper.output)
+        lower_plan = _extract_plan_json(lower.output)
+        upper_plan = _extract_plan_json(upper.output)
+        assert upper_plan["quality_tier"] == "apex"
+        assert upper_plan["config_fingerprint_sha256"] == lower_plan["config_fingerprint_sha256"]
+        assert upper_plan["plan_fingerprint_sha256"] == lower_plan["plan_fingerprint_sha256"]

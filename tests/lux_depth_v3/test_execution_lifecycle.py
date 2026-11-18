@@ -1459,3 +1459,18 @@ def test_plan_accepts_portable_input_names(tmp_path: Path, name: str) -> None:
     prepared = prepare_lux_execution(_synthetic_config(), root, [image])
 
     assert [item.path for item in prepared.plan.inputs] == [name]
+
+
+@pytest.mark.parametrize("device", ["mps", "cuda"])
+def test_gpu_worker_default_respects_its_bound_when_max_workers_exceeds_it(tmp_path: Path, device: str) -> None:
+    root, image = _input_tree(tmp_path)
+
+    prepared = prepare_lux_execution(_synthetic_config(depth_device=device, max_workers=16), root, [image])
+    assert (prepared.runtime_config.max_workers, prepared.runtime_config.max_gpu_workers) == (16, 8)
+
+    # Within the bound the derived default is unchanged (it follows max_workers),
+    # and an explicit out-of-range value still fails closed.
+    prepared = prepare_lux_execution(_synthetic_config(depth_device=device, max_workers=4), root, [image])
+    assert prepared.runtime_config.max_gpu_workers == 4
+    with pytest.raises(ExecutionPlanError, match="max_gpu_workers must be between 0 and 8"):
+        prepare_lux_execution(_synthetic_config(depth_device=device, max_workers=16, max_gpu_workers=9), root, [image])

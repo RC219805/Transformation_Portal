@@ -364,7 +364,9 @@ def _effective_worker_counts(config: EnhanceConfig) -> tuple[int, int]:
     if config.max_gpu_workers is not None:
         max_gpu_workers = int(config.max_gpu_workers)
     elif config.depth_device in {"mps", "cuda"}:
-        max_gpu_workers = max_workers
+        # The derived default must respect the GPU bound itself; otherwise a
+        # valid ``max_workers`` above it fails on a knob the caller never set.
+        max_gpu_workers = min(max_workers, 8)
     else:
         max_gpu_workers = 0
     if max_gpu_workers < 0 or max_gpu_workers > 8:

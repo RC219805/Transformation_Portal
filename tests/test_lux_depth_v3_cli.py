@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import _parse_bool_flag, app
@@ -64,6 +65,12 @@ class TestBoolFlagParsing:
     def test_parse_bool_flag(self, value, expected):
         """Test that _parse_bool_flag correctly parses various boolean string formats."""
         assert _parse_bool_flag(value) == expected
+
+    @pytest.mark.parametrize("value", ["enabled", "y", "onn", "ture", "", "2"])
+    def test_parse_bool_flag_rejects_unrecognised_values(self, value):
+        """An unknown spelling is a usage error, never a silent ``off``."""
+        with pytest.raises(typer.BadParameter, match="not a recognised boolean"):
+            _parse_bool_flag(value, "--pbr")
 
 
 class TestCLIValidation:
