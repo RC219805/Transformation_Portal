@@ -5538,6 +5538,58 @@ def test_run_job_does_not_spawn_or_rewrite_startup_terminal_authority(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("in_memory", [True, False])
+def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: bool) -> None:
+    class _ExpiredLeaseBroker:
+        def __init__(self, job_ids: list[str]) -> None:
+            self._job_ids = job_ids
+
+        async def server_time(self) -> float:
+            return orchestrator_app._now()
+
+        async def reclaim_expired_leases(self, *, now: float) -> list[str]:
+            del now
+            return list(self._job_ids)
+
+    async def scenario() -> None:
+        finished = orchestrator_app._now() - 5.0
+        done = orchestrator_app.Job(
+            id=f"job_reclaim_done_{in_memory}",
+            created_at=finished - 10.0,
+            started_at=finished - 9.0,
+            finished_at=finished,
+            done_published_at=finished,
+            state="succeeded",
+            exit_code=0,
+        )
+        stranded = orchestrator_app.Job(
+            id=f"job_reclaim_stranded_{in_memory}",
+            created_at=finished - 10.0,
+            started_at=finished - 9.0,
+            state="running",
+        )
+        await _seed_job_async(done)
+        await _seed_job_async(stranded)
+        if not in_memory:
+            orchestrator_app.JOBS.pop(done.id, None)
+            orchestrator_app.JOBS.pop(stranded.id, None)
+        repository = orchestrator_app._job_repository()
+
+        reclaimed = await orchestrator_app._reclaim_sweep_once(_ExpiredLeaseBroker([done.id, stranded.id]), repository)
+
+        assert reclaimed == [done.id, stranded.id]
+        done_record = await repository.get(done.id)
+        assert done_record is not None
+        assert done_record.state == "succeeded"
+        assert done_record.error is None
+        assert done_record.finished_at == finished
+        stranded_record = await repository.get(stranded.id)
+        assert stranded_record is not None and stranded_record.state == "worker_lost"
+        assert stranded_record.error["code"] == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+
+    asyncio.run(scenario())
+
+
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())

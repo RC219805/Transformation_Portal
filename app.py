@@ -11692,6 +11692,25 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     await _persist_job_state(job)
 
 
+async def _reclaimed_job_already_terminal(jid: str, job: Optional["Job"], repository: Any) -> bool:
+    """Whether a job reported by a lease reclaim has already finished.
+
+    Checks the in-process job first, then the durable row. A repository
+    read failure counts as "not terminal" so a genuinely stranded job is
+    still marked ``worker_lost``.
+    """
+    if job is not None and job.finished_at is not None:
+        return True
+    if repository is None:
+        return False
+    try:
+        record = await repository.get(jid)
+    except Exception:  # noqa: BLE001 - fall back to the reclaim outcome
+        LOGGER.exception("repository read for reclaimed job %s failed", jid)
+        return False
+    return record is not None and (record.finished_at is not None or record.state in _TERMINAL_JOB_STATES)
+
+
 async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
     """One pass of the Phase 2.D broker-reclaim reconciler.
 
@@ -11738,6 +11757,11 @@ async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[st
         return []
     for jid in reclaimed:
         job = JOBS.get(jid)
+        if await _reclaimed_job_already_terminal(jid, job, repository):
+            # The job finished before its lease lapsed (e.g. completion raced
+            # the release); never rewrite a terminal outcome as worker_lost.
+            LOGGER.info("reclaim sweep skipped job %s: already terminal", jid)
+            continue
         if job is not None:
             try:
                 await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
