@@ -47,6 +47,7 @@ import glob
 import logging
 import math
 import os
+import re
 import time
 from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -795,9 +796,13 @@ class BatchOptions:
     falloff: float = 1.4
 
 
+# The batch globs "*_depth16.*": strip that suffix whatever the extension (.png, .tif, .tiff, ...).
+_DEPTH16_SUFFIX_RE = re.compile(r"_depth16\.[^.]+$")
+
+
 def _depth_map_base(dp: str) -> str:
     """Base name shared by a depth map and its source image (depth map file name without the _depth16 suffix)."""
-    return os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tif", "").replace("_depth16.ti", "")
+    return _DEPTH16_SUFFIX_RE.sub("", os.path.basename(dp))
 
 
 def _find_pairing_collisions(depth_maps: List[str], opts: BatchOptions) -> Dict[str, str]:

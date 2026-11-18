@@ -177,6 +177,19 @@ def test_process_batch_rejects_two_depth_maps_of_the_same_base(tmp_path) -> None
     assert list(output.iterdir()) == []
 
 
+@pytest.mark.parametrize("ext", ["png", "tif", "tiff"])
+def test_process_batch_pairs_depth16_maps_of_every_extension(tmp_path, ext: str) -> None:
+    # The batch globs "*_depth16.*"; a .tiff depth map used to resolve to base "villaf" and find no image.
+    images, depths, output = _batch_dirs(tmp_path)
+    _write_rgb(images / "villa_enh.png")
+    _write_depth(depths / f"villa_depth16.{ext}")
+    opts = tools.BatchOptions(images_root=str(images), depths_root=str(depths), out_root=str(output), fmt="png")
+
+    assert tools._depth_map_base(str(depths / f"villa_depth16.{ext}")) == "villa"
+    assert tools.process_batch(opts) == 0
+    assert [p.name for p in output.iterdir()] == ["villa_enh_depthhaze.png"]
+
+
 def test_process_batch_raises_when_no_depth_maps_exist(tmp_path) -> None:
     opts = tools.BatchOptions(
         images_root=str(tmp_path / "images"),
