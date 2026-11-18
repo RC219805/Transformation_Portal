@@ -261,6 +261,21 @@ test("session rotation creates a new authenticated session id", async () => {
   }
 });
 
+test("validateCsrfToken rejects multi-byte candidates of equal string length instead of throwing", async () => {
+  const sessions = await import(`../lib/sessions.js?case=${Date.now()}`);
+  const session = { csrfToken: "a".repeat(48) };
+  // Same string length (48) but a longer UTF-8 byte length; this used to
+  // reach timingSafeEqual() with unequal buffers and throw RangeError.
+  const multiByte = `${"a".repeat(47)}é`;
+  assert.equal(multiByte.length, session.csrfToken.length);
+
+  assert.equal(sessions.validateCsrfToken(session, multiByte), false);
+  assert.equal(sessions.validateCsrfToken(session, "b".repeat(48)), false);
+  assert.equal(sessions.validateCsrfToken(session, "a".repeat(47)), false);
+  assert.equal(sessions.validateCsrfToken(session, ""), false);
+  assert.equal(sessions.validateCsrfToken(session, session.csrfToken), true);
+});
+
 test("login throttling trips after repeated failures in the same window", async () => {
   const temp = withTempDb();
   try {

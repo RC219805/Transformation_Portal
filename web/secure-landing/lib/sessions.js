@@ -204,10 +204,15 @@ export function clearSessionCookie(response) {
 export function validateCsrfToken(session, token) {
   const sessionToken = String(session?.csrfToken || "");
   const candidate = String(token || "");
-  if (!sessionToken || !candidate || sessionToken.length !== candidate.length) {
+  if (!sessionToken || !candidate) {
     return false;
   }
-  return timingSafeEqual(Buffer.from(sessionToken), Buffer.from(candidate));
+  // Compare UTF-8 byte lengths, not string lengths: a candidate with
+  // multi-byte characters can match the token's string length while
+  // differing in byte length, which makes timingSafeEqual() throw.
+  const expected = Buffer.from(sessionToken);
+  const actual = Buffer.from(candidate);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 async function pruneLoginAttempts(currentTime) {
