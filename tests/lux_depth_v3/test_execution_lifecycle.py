@@ -1029,6 +1029,117 @@ def test_from_prepared_constructor_never_applies_ambient_runtime_defaults(
     assert orchestrator.config.execution_plan_canonical_bytes == prepared.canonical_plan_bytes
 
 
+@pytest.mark.parametrize(
+    ("failing_da3_calls", "expected_backends"),
+    [
+        pytest.param({1}, ["da2", "da3", "da3", "da3"], id="transient-first-image"),
+        pytest.param({1, 2, 3, 4}, ["da2", "da2", "da2", "da2"], id="persistent"),
+    ],
+)
+def test_prepared_runtime_fallback_restarts_the_carried_chain_for_every_image(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_da3_calls: set[int],
+    expected_backends: list[str],
+) -> None:
+    """A runtime DA3 -> DA2 fallback must stay local to the image that needed it.
+
+    The attempt loop used to rebind the orchestrator's start-up backend to the
+    fallback, so every later image began its carried chain at DA2. Those images
+    carried no DA3 attempt, final evidence rejected them and the whole batch
+    raised after all inference had been spent.
+    """
+    import numpy as np
+    from PIL import Image
+
+    import transformation_portal.lux_depth_v3.orchestrator as orchestrator_module
+    from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
+
+    monkeypatch.delenv("TP_ALLOW_SYNTHETIC_FALLBACK", raising=False)
+    root = tmp_path / "inputs"
+    root.mkdir()
+    images: list[Path] = []
+    for index in range(4):
+        pixels = np.zeros((48, 64, 3), dtype=np.uint8)
+        pixels[..., 0] = np.linspace(0, 255, 64).astype(np.uint8)[None, :]
+        pixels[..., 1] = 40 * index + 10
+        image = root / f"frame_{index}.png"
+        Image.fromarray(pixels).save(image)
+        images.append(image)
+
+    prepared = prepare_lux_execution(EnhanceConfig(enable_v2=False), root, images)
+    assert list(prepared.plan.candidate_fallback_chain) == ["da3", "da2"]
+
+    class Backend:
+        license_type = LicenseType.COMMERCIAL
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.calls = 0
+            self._candidate_authority: object = None
+            self._canonical_plan_bytes: bytes = b""
+
+        def ensure_available(self) -> None:
+            return None
+
+        def compute(self, pil_image: Image.Image) -> DepthResult:
+            self.calls += 1
+            if self.name == "da3" and self.calls in failing_da3_calls:
+                raise RuntimeError("simulated DA3 worker failure")
+            width, height = pil_image.size
+            luminance = np.asarray(pil_image.convert("L"), dtype=np.float32) / 255.0
+            ramp = np.linspace(0.0, 1.0, width * height, dtype=np.float32).reshape(height, width)
+            return DepthResult(
+                depth_map=(0.5 * ramp + 0.5 * luminance).astype(np.float32),
+                original_image=np.asarray(pil_image.convert("RGB")),
+                metadata={},
+                depth_units="relative",
+                backend_id=self.name,
+                device="cpu",
+            )
+
+    backends = {"da3": Backend("da3"), "da2": Backend("da2")}
+
+    class Registry:
+        @staticmethod
+        def get_backend(
+            backend_id: str,
+            config: EnhanceConfig,
+            *,
+            candidate_authority: object,
+            canonical_plan_bytes: bytes,
+        ) -> Backend:
+            backend = backends[backend_id]
+            backend._candidate_authority = candidate_authority
+            backend._canonical_plan_bytes = canonical_plan_bytes
+            return backend
+
+    class PassThroughPostprocessor:
+        @staticmethod
+        def process(result: DepthResult) -> DepthResult:
+            return result
+
+    monkeypatch.setattr(orchestrator_module, "DepthBackendRegistry", Registry)
+    orchestrator = orchestrator_module.EnhanceOrchestrator.from_prepared(prepared, tmp_path / "output")
+    orchestrator.postprocessor = PassThroughPostprocessor()  # type: ignore[assignment]
+
+    results = orchestrator.enhance_batch(root)
+
+    assert [result["status"] for result in results] == ["ok"] * 4
+    assert [result["backend"] for result in results] == expected_backends
+    assert [[(attempt["backend"], attempt["status"]) for attempt in result["attempts"]] for result in results] == [
+        [("da3", "failed"), ("da2", "success")] if backend == "da2" else [("da3", "success")] for backend in expected_backends
+    ]
+    assert backends["da3"].calls == 4
+    assert backends["da2"].calls == expected_backends.count("da2")
+    assert orchestrator.depth_backend is backends["da3"]
+    for result, backend in zip(results, expected_backends):
+        manifest = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))
+        assert manifest["backend_selection"]["requested_backend"] == "da3"
+        assert manifest["backend_selection"]["resolved_backend"] == backend
+        assert manifest["depth"]["stats"]["backend"] == backend
+
+
 def test_depthcrafter_execution_complete_fails_closed(tmp_path: Path) -> None:
     root, image = _input_tree(tmp_path)
 

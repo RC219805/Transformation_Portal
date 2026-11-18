@@ -4044,6 +4044,7 @@ class EnhanceOrchestrator:
                 depth_map = None
                 depth_validity_metrics = None
                 selected_backend_id = _primary_backend_name
+                selected_backend_instance: Optional[Any] = None
                 selected_attempt_index: Optional[int] = None
                 native_depth_shape: Optional[tuple[int, int]] = None
                 last_error: Optional[Exception] = None
@@ -4081,11 +4082,15 @@ class EnhanceOrchestrator:
                     try:
                         cached_depth = None
                         cache_authority: Optional[_DepthCacheAuthority] = None
+                        # The attempt backend stays local to this image.
+                        # ``self.depth_backend`` is the start-up selection that
+                        # every image's chain begins from; rebinding it here
+                        # made one runtime fallback re-home the rest of the
+                        # batch on the fallback backend.
                         backend = self._get_or_create_depth_backend(
                             backend_id,
                         )
                         backend_instance = backend
-                        self.depth_backend = backend
                         attempt_record.update(
                             self._resolve_backend_model_artifact(
                                 backend_id,
@@ -4384,6 +4389,7 @@ class EnhanceOrchestrator:
                         depth_map = native_depth_map
                         depth_validity_metrics = gate_result
                         selected_backend_id = backend_id
+                        selected_backend_instance = backend_instance
                         selected_attempt_index = attempt_slot
                         native_depth_shape = current_shape
                         break
@@ -4547,8 +4553,9 @@ class EnhanceOrchestrator:
                     np.save(str(float_depth_path), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
-                # Capture backend metadata dynamically (ADR-019)
-                _backend = self.depth_backend
+                # Capture backend metadata dynamically (ADR-019) from the
+                # backend that actually produced this image's depth.
+                _backend = selected_backend_instance
                 license_str = (
                     _backend.license_type.value if _backend is not None and hasattr(_backend, "license_type") else "unknown"
                 )
