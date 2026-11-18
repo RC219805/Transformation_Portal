@@ -199,6 +199,7 @@ Notes:
 - `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`. In pilot tenant mode, place staging under the intended tenant's workspace or CAS root so the returned input directory passes tenant admission.
 - A successful file or folder upload replaces Input Directory only. Output Directory must separately name an authorized destination; staging does not dispatch a job.
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
+- Each multipart part's header block is capped at 16 KiB (not configurable). Larger or unparseable part headers return typed `400` with reason `invalid_multipart_payload`.
 - `TP_PORTAL_UPLOAD_TTL_SECONDS` is the age at which the cleanup loop removes a staged batch that no job reads from. A batch is kept while any job's Input Directory is the staged input directory or a directory inside the batch. A batch whose staging was interrupted before its receipt was written is removed once it is older than both the TTL and one hour.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
 

@@ -724,6 +724,10 @@ MAX_UPLOAD_REQUEST_BYTES = _env_int("TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES", MAX_RE
 PORTAL_UPLOAD_MAX_FILES = _env_int("TP_PORTAL_UPLOAD_MAX_FILES", 256, minimum=1)
 PORTAL_UPLOAD_MAX_FIELDS = _env_int("TP_PORTAL_UPLOAD_MAX_FIELDS", 32, minimum=1)
 PORTAL_UPLOAD_MAX_PART_BYTES = _env_int("TP_PORTAL_UPLOAD_MAX_PART_BYTES", MAX_UPLOAD_REQUEST_BYTES, minimum=1024)
+# Upper bound on one multipart part's header block. The email parser used for part
+# headers is super-linear (and can recurse without bound) on adversarial input, so
+# oversized header blocks are rejected before they reach it.
+PORTAL_UPLOAD_MAX_PART_HEADER_BYTES = 16 * 1024
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 PILOT_CONTROL_PLANE_ENABLED = _env_bool("TP_PILOT_CONTROL_PLANE_ENABLED", False)
@@ -3328,26 +3332,44 @@ def _portal_upload_boundary_bytes(content_type: str) -> bytes:
     return boundary.encode("utf-8")
 
 
+def _portal_upload_part_headers_too_large() -> UploadStagingError:
+    return UploadStagingError(
+        "invalid_multipart_payload",
+        f"multipart part headers exceed {PORTAL_UPLOAD_MAX_PART_HEADER_BYTES} bytes",
+    )
+
+
 def _parse_portal_upload_part_headers(header_bytes: bytes) -> _PortalMultipartPart:
-    header_message = BytesParser(policy=email_policy).parsebytes(header_bytes + b"\r\n\r\n")
-    if header_message.get_content_disposition() != "form-data":
+    if len(header_bytes) > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES:
+        raise _portal_upload_part_headers_too_large()
+    try:
+        header_message = BytesParser(policy=email_policy).parsebytes(header_bytes + b"\r\n\r\n")
+        content_disposition = header_message.get_content_disposition()
+        field_name = str(header_message.get_param("name", header="content-disposition") or "").strip()
+        filename = header_message.get_filename()
+        content_type = str(header_message.get_content_type() or "")
+        charset = str(header_message.get_content_charset("utf-8") or "utf-8")
+    except Exception as exc:  # noqa: BLE001 - the email parser raises arbitrary errors (incl. RecursionError)
+        raise UploadStagingError(
+            "invalid_multipart_payload",
+            "multipart part headers could not be parsed",
+        ) from exc
+    if content_disposition != "form-data":
         raise UploadStagingError(
             "invalid_multipart_payload",
             "multipart parts must use form-data content disposition",
         )
-    field_name = str(header_message.get_param("name", header="content-disposition") or "").strip()
     if not field_name:
         raise UploadStagingError(
             "invalid_multipart_payload",
             "multipart field name is required",
         )
-    filename = header_message.get_filename()
     if filename is not None:
         return _PortalMultipartPart(
             field_name=field_name,
             filename=str(filename or ""),
-            content_type=str(header_message.get_content_type() or ""),
-            charset=str(header_message.get_content_charset("utf-8") or "utf-8"),
+            content_type=content_type,
+            charset=charset,
             file_stream=tempfile.SpooledTemporaryFile(
                 max_size=min(PORTAL_UPLOAD_MAX_PART_BYTES, 1024 * 1024),
                 mode="w+b",
@@ -3356,8 +3378,8 @@ def _parse_portal_upload_part_headers(header_bytes: bytes) -> _PortalMultipartPa
     return _PortalMultipartPart(
         field_name=field_name,
         filename=None,
-        content_type=str(header_message.get_content_type() or ""),
-        charset=str(header_message.get_content_charset("utf-8") or "utf-8"),
+        content_type=content_type,
+        charset=charset,
     )
 
 
@@ -3523,6 +3545,10 @@ async def _parse_portal_upload_multipart(request: Request) -> _ParsedPortalUploa
 
             if state == "headers":
                 header_index = buffer.find(b"\r\n\r\n")
+                if header_index > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES or (
+                    header_index < 0 and len(buffer) > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES + 3
+                ):
+                    raise _portal_upload_part_headers_too_large()
                 if header_index < 0:
                     if eof:
                         raise UploadStagingError(

@@ -448,6 +448,80 @@ def test_staged_upload_route_rejects_invalid_client_manifest(
     assert body["error"]["details"]["field"] == "client_manifest"
 
 
+def _raw_multipart_body(part_headers: bytes, boundary: bytes = b"tp-boundary") -> bytes:
+    return b"--" + boundary + b"\r\n" + part_headers + b"\r\n\r\nhello\r\n--" + boundary + b"--\r\n"
+
+
+@pytest.mark.parametrize(
+    ("part_headers", "terminated", "message_fragment"),
+    [
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"; filename=' + b"(a<b>@,;:" * 1000,
+            True,
+            "could not be parsed",
+            id="parser-recursion-error",
+        ),
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"' + b"".join(b"; filename*%d*=a" % index for index in range(8000)),
+            True,
+            "exceed",
+            id="oversized-header-block",
+        ),
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"; filename="a.png"' + b"\r\nX-Pad: " + b"a" * 400_000,
+            False,
+            "exceed",
+            id="unterminated-oversized-header-block",
+        ),
+    ],
+)
+def test_staged_upload_route_rejects_hostile_part_headers_with_typed_400(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    part_headers: bytes,
+    terminated: bool,
+    message_fragment: str,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+    body_bytes = _raw_multipart_body(part_headers) if terminated else b"--tp-boundary\r\n" + part_headers
+
+    response = client.post(
+        "/v1/uploads/staging",
+        content=body_bytes,
+        headers={"content-type": "multipart/form-data; boundary=tp-boundary"},
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_multipart_payload"
+    assert message_fragment in body["error"]["message"]
+
+
+def test_staged_upload_route_accepts_part_headers_within_the_header_limit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+    part_headers = b'Content-Disposition: form-data; name="files"; filename="sample.txt"\r\nContent-Type: text/plain'
+
+    response = client.post(
+        "/v1/uploads/staging",
+        content=_raw_multipart_body(part_headers),
+        headers={"content-type": "multipart/form-data; boundary=tp-boundary"},
+    )
+
+    assert response.status_code == 200
+    input_dir = Path(response.json()["data"]["input_dir"])
+    assert (input_dir / "sample.txt").read_bytes() == b"hello"
+
+
 def test_staged_upload_route_returns_typed_413_for_oversized_parts(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
