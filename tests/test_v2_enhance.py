@@ -149,6 +149,22 @@ class TestFindDepthMap:
         assert "scene_a/test_image_depth.png" in message
         assert "scene_b/test_image_depth.png" in message
 
+    @pytest.mark.regression
+    def test_find_depth_map_treats_glob_metacharacters_in_stem_literally(self, tmp_path):
+        """LC-14: '[', ']' in an image stem must not act as glob syntax in the nested search."""
+        depth_dir = tmp_path / "depth"
+        nested = depth_dir / "batch"
+        nested.mkdir(parents=True)
+        own_depth = nested / "IMG[1]_depth.png"
+        own_depth.touch()
+        (nested / "IMG1_depth.png").touch()
+
+        assert find_depth_map(depth_dir, "IMG[1]") == own_depth
+
+        (nested / "IMG1_depth.png").unlink()
+        assert find_depth_map(depth_dir, "IMG[1]") == own_depth
+        assert find_depth_map(depth_dir, "IMG?") is None
+
     def test_find_depth_map_no_directory(self):
         """Test behavior when depth_dir is None or doesn't exist."""
         assert find_depth_map(None, "test") is None

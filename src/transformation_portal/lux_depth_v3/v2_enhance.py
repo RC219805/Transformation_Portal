@@ -24,6 +24,7 @@ Reference: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import io
 import json
@@ -540,7 +541,9 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
         # Fallback: recursive search for nested output_key
         # directories. Sort for deterministic selection.
         for pattern in patterns:
-            recursive_matches = sorted(depth_dir.glob(f"**/{pattern}"))
+            # Escape the stem: '[', ']', '*' and '?' in a filename are literal
+            # characters, not glob syntax (IMG[1] must not match IMG1).
+            recursive_matches = sorted(depth_dir.glob(f"**/{glob.escape(pattern)}"))
             for depth_path in recursive_matches:
                 if depth_path.exists():
                     add_candidate(depth_path)
