@@ -3,9 +3,11 @@ from __future__ import annotations
 import builtins
 import contextlib
 import json
+import os
 import socket
 import socketserver
 import ssl
+import stat
 import threading
 from pathlib import Path
 
@@ -17,6 +19,8 @@ from transformation_portal.core.security.signing import (
     CertificateVerifier,
     SigningError,
     generate_ed25519_keypair,
+    load_private_key,
+    save_keypair,
 )
 from transformation_portal.core.security.tls import (
     ThreadedTLSServer,
@@ -46,6 +50,29 @@ def test_certificate_signer_round_trip() -> None:
 
     assert CertificateVerifier.verify(manifest_json, cert) is True
     assert CertificateVerifier.verify_with_public_key(manifest_json, cert, signer.public_key_bytes) is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+@pytest.mark.parametrize("existing_mode", [None, 0o644], ids=["new-file", "existing-world-readable-file"])
+def test_save_keypair_private_key_is_readable_by_its_owner_only(tmp_path: Path, existing_mode: int | None) -> None:
+    """The umask must not decide who can read the signing key."""
+    private_key, public_key = generate_ed25519_keypair()
+    private_path = tmp_path / "signing.key"
+    public_path = tmp_path / "signing.pub"
+    if existing_mode is not None:
+        private_path.write_bytes(b"a previous, longer key file that has to be replaced completely")
+        private_path.chmod(existing_mode)
+
+    previous_umask = os.umask(0o022)
+    try:
+        save_keypair(private_key, public_key, private_path, public_path)
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(private_path.stat().st_mode) == 0o600
+    assert private_path.read_bytes() == private_key
+    assert load_private_key(private_path) == private_key
+    assert public_path.read_bytes() == public_key
 
 
 def test_generate_ed25519_keypair_requires_crypto(monkeypatch: pytest.MonkeyPatch) -> None:
