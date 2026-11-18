@@ -15,7 +15,13 @@ pytestmark = [
 ]
 
 import transformation_portal.depth.models as depth_models
-from transformation_portal.streaming.stages import DepthEstimationStage, ImageData, ImageLoadStage, ImageSaveStage
+from transformation_portal.streaming.stages import (
+    ColorGradingStage,
+    DepthEstimationStage,
+    ImageData,
+    ImageLoadStage,
+    ImageSaveStage,
+)
 
 
 def test_image_load_stage_loads_rgb_image_and_metadata(tmp_path: Path) -> None:
@@ -180,3 +186,78 @@ def test_depth_stage_uses_estimate_depth_contract_when_real_model_present(
         assert result.data.metadata["depth_capability"]["model_repo_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
 
     asyncio.run(runner())
+
+
+# ---------------------------------------------------------------------------
+# ColorGradingStage .cube LUT application (H-03: channel order + trilinear lookup)
+# ---------------------------------------------------------------------------
+
+
+def _write_cube(path: Path, size: int, transfer) -> None:
+    """Write a spec-conformant .cube file: red index fastest, then green, then blue."""
+    lines = ['TITLE "test"', f"LUT_3D_SIZE {size}"]
+    for b in range(size):
+        for g in range(size):
+            for r in range(size):
+                out = transfer(r / (size - 1), g / (size - 1), b / (size - 1))
+                lines.append(" ".join(f"{v:.6f}" for v in out))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _grade(stage: ColorGradingStage, array: np.ndarray, tmp_path: Path) -> np.ndarray:
+    return stage._apply_lut_sync(ImageData(array=array.copy(), path=tmp_path / "frame.png")).array
+
+
+_LUT_PIXELS = np.array([[[1.0, 0.25, 0.0], [0.0, 0.5, 1.0], [0.2, 0.4, 0.6]]], dtype=np.float32)
+
+
+def test_color_grading_identity_lut_returns_input_without_posterising(tmp_path: Path) -> None:
+    cube = tmp_path / "identity.cube"
+    _write_cube(cube, 17, lambda r, g, b: (r, g, b))
+    stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+    stage._load_lut()
+
+    np.testing.assert_allclose(_grade(stage, _LUT_PIXELS, tmp_path), _LUT_PIXELS, atol=1e-5)
+
+    ramp = np.repeat(np.linspace(0.0, 1.0, 1000, dtype=np.float32)[None, :, None], 3, axis=2)
+    graded_ramp = _grade(stage, ramp, tmp_path)
+    np.testing.assert_allclose(graded_ramp, ramp, atol=1e-5)
+    assert len(np.unique(graded_ramp[..., 1])) == 1000
+
+
+def test_color_grading_red_blue_swap_lut_swaps_red_and_blue(tmp_path: Path) -> None:
+    cube = tmp_path / "swap_rb.cube"
+    _write_cube(cube, 5, lambda r, g, b: (b, g, r))
+    stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+    stage._load_lut()
+
+    image = np.random.default_rng(3).random((8, 8, 3), dtype=np.float32)
+    np.testing.assert_allclose(_grade(stage, image, tmp_path), image[..., ::-1], atol=1e-5)
+
+    half = ColorGradingStage(lut_path=cube, intensity=0.25)
+    half._load_lut()
+    np.testing.assert_allclose(
+        _grade(half, _LUT_PIXELS, tmp_path), 0.75 * _LUT_PIXELS + 0.25 * _LUT_PIXELS[..., ::-1], atol=1e-5
+    )
+
+
+def test_color_grading_stage_matches_4k_pipeline_lut_lookup(tmp_path: Path) -> None:
+    from transformation_portal.pipelines.rendering_4k.stages import _apply_lut
+
+    cube = tmp_path / "multilinear.cube"
+    _write_cube(cube, 3, lambda r, g, b: (r * g, g * (1.0 - b), 0.25 + 0.5 * b * r))
+
+    async def runner() -> np.ndarray:
+        stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+        await stage.startup()
+        try:
+            result = await stage(ImageData(array=(_LUT_PIXELS * 255).astype(np.uint8), path=tmp_path / "frame.png"))
+        finally:
+            await stage.shutdown()
+        assert result.success
+        assert result.data.metadata["color_graded"] is True
+        return result.data.array
+
+    graded = asyncio.run(runner())
+    expected = _apply_lut((_LUT_PIXELS * 255).astype(np.uint8).astype(np.float32) / 255.0, cube, strength=1.0)
+    np.testing.assert_allclose(graded, expected, atol=1e-5)

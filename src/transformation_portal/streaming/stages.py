@@ -850,33 +850,14 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             self._load_lut()
 
     def _load_lut(self) -> None:
-        """Load LUT from .cube file."""
+        """Load LUT from .cube file (shared parser, table indexed ``lut[r, g, b]``)."""
         if self._lut_path is None or not self._lut_path.exists():
             return
 
         try:
-            import numpy as np
+            from transformation_portal.utils.image_utils import load_cube_lut
 
-            lut_size = 0
-            lut_data = []
-
-            with open(self._lut_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LUT_3D_SIZE"):
-                        lut_size = int(line.split()[-1])
-                    elif line and not line.startswith("#") and not line.startswith("TITLE"):
-                        parts = line.split()
-                        if len(parts) == 3:
-                            try:
-                                r, g, b = map(float, parts)
-                                lut_data.append([r, g, b])
-                            except ValueError:
-                                continue
-
-            if lut_size > 0 and len(lut_data) == lut_size**3:
-                # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
-                self._lut_data = np.array(lut_data).reshape(lut_size, lut_size, lut_size, 3)
+            self._lut_data = load_cube_lut(self._lut_path)
         except (OSError, ValueError, IndexError):
             # LUT file unreadable or malformed - disable LUT processing
             self._lut_data = None
@@ -890,21 +871,10 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             array = array / 255.0
 
         if self._lut_data is not None:
-            # Trilinear interpolation for LUT application
-            lut_size = self._lut_data.shape[0]
-            indices = array * (lut_size - 1)
-            indices = np.clip(indices, 0, lut_size - 1.001)
+            from transformation_portal.utils.image_utils import apply_cube_lut
 
-            # Floor indices for nearest-neighbor lookup
-            # (trilinear interpolation would use idx1 and frac)
-            idx0 = np.floor(indices).astype(np.int32)
-
-            # Simple nearest-neighbor for now (full trilinear is more complex)
-            r, g, b = idx0[..., 0], idx0[..., 1], idx0[..., 2]
-            graded = self._lut_data[r, g, b]
-
-            # Blend with original based on intensity
-            array = array * (1 - self._intensity) + graded * self._intensity
+            # Shared trilinear lookup (same as the 4K pipeline), blended by intensity.
+            array = apply_cube_lut(array, self._lut_data, strength=self._intensity)
         else:
             # Fallback: simple contrast/saturation adjustment
             # Increase saturation slightly
