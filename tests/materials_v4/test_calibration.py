@@ -1,7 +1,9 @@
 """Draft calibration validates observations and never manufactures edit authority."""
 
+import gc
 import hashlib
 import sys
+import weakref
 from copy import deepcopy
 from dataclasses import replace
 from types import ModuleType
@@ -775,3 +777,33 @@ def test_fitting_detects_a_shared_input_changed_after_its_first_use(tmp_path, mo
     monkeypatch.setattr(calibration_module, "load_evidence", mutating_load)
     with pytest.raises(MaterialsError, match="changed during fitting"):
         fit_calibration(payload, source_root=source_root, data_root=data_root)
+
+
+def test_fitting_retains_one_bundle_and_rereads_nothing_for_distinct_inputs(tmp_path, monkeypatch):
+    """LN-7 follow-up: memoising must not keep every distinct bundle and mask alive for the whole fit."""
+    payload, source_root, data_root = _shared_bundle_payload(tmp_path, shared=False)
+    real_load, real_snapshot = calibration_module.load_evidence, calibration_module.snapshot
+    alive, live_at_load, reads = weakref.WeakSet(), [], []
+
+    def tracked_load(*args, **kwargs):
+        gc.collect()
+        live_at_load.append(len(alive))
+        result = real_load(*args, **kwargs)
+        alive.add(result)
+        return result
+
+    def counted_snapshot(root, path, **kwargs):
+        reads.append(path.name)
+        return real_snapshot(root, path, **kwargs)
+
+    monkeypatch.setattr(calibration_module, "load_evidence", tracked_load)
+    monkeypatch.setattr(calibration_module, "snapshot", counted_snapshot)
+    fitted = fit_calibration(payload, source_root=source_root, data_root=data_root)
+    assert fitted.receipt.classes == ("water",)
+    # Six distinct bundles: at most the previous record's bundle is still referenced.
+    assert len(live_at_load) == 6
+    assert max(live_at_load) <= 1
+    # Inputs used once are read once; only the reused photograph is re-checked.
+    assert reads.count("evidence.json") == 6
+    assert reads.count("target.npy") == 6
+    assert reads.count("photo.png") == 3

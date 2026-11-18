@@ -374,12 +374,15 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
         raise MaterialsError("Fitting binding IDs differ from calibration record IDs")
     recipe, provenance, pairs, properties, observed_regions = None, [], defaultdict(list), defaultdict(set), set()
     # Records commonly share one photograph, one evidence bundle and one
-    # annotation mask. Each is read and verified once per fit, keyed on its
-    # path and declared digest; a final hash-only re-snapshot of every distinct
-    # input still fails closed if one changed while fitting.
+    # annotation mask. Consecutive records reuse the verified input, keyed on
+    # its path and declared digest. Only the most recent bundle and annotation
+    # mask are retained, so peak memory stays that of one record however many
+    # distinct inputs a fit binds. An input that was reused instead of re-read
+    # gets one final hash-only re-snapshot, which still fails closed if it
+    # changed while fitting; an input used once costs no extra read.
     source_shapes: dict[str, tuple[int, int]] = {}
-    bundles: dict[tuple[str, str, str, tuple[int, int]], tuple[dict, MaterialEvidence]] = {}
-    annotation_masks: dict[tuple[str, str, tuple[int, int]], tuple[dict, np.ndarray]] = {}
+    bundle_slot: tuple[tuple[str, str, str, tuple[int, int]], tuple[dict, MaterialEvidence]] | None = None
+    mask_slot: tuple[tuple[str, str, tuple[int, int]], tuple[dict, np.ndarray]] | None = None
     reread: dict[tuple[str, str, str], tuple[Path, Path, int, str, str]] = {}
     for record in records:
         membership_item = sources.get(record["source_sha256"])
@@ -421,9 +424,9 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
             raise MaterialsError(
                 "Annotation requires matching source/label/group and distinct declared human review identities"
             )
+        source_relative = _relative_path(membership_item["source_path"])
         cached_shape = source_shapes.get(record["source_sha256"])
         if cached_shape is None:
-            source_relative = _relative_path(membership_item["source_path"])
             source_data, _ = _read(source_root, source_relative, 1024**3)
             if hashlib.sha256(source_data).hexdigest() != record["source_sha256"]:
                 raise MaterialsError("Calibration source changed during fitting")
@@ -433,6 +436,7 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
                     height, width = width, height
             del source_data
             cached_shape = source_shapes[record["source_sha256"]] = (height, width)
+        else:
             reread[("source", str(source_root / source_relative), record["source_sha256"])] = (
                 source_root,
                 source_root / source_relative,
@@ -446,15 +450,16 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
         evidence_path = data_root / _relative_path(binding["evidence_path"])
         declared_evidence = validate_digest(binding["evidence_sha256"], "evidence_sha256")
         bundle_key = (str(evidence_path), declared_evidence, record["source_sha256"], shape)
-        cached_bundle = bundles.get(bundle_key)
-        if cached_bundle is None:
+        if bundle_slot is None or bundle_slot[0] != bundle_key:
+            bundle_slot = None  # release the previous bundle before loading the next one
             evidence_data, evidence_file = snapshot(data_root, evidence_path, maximum_bytes=1024 * 1024)
             if evidence_file["sha256"] != declared_evidence:
                 raise MaterialsError("Inference evidence bytes differ from fitting binding")
             evidence_content = decode_bounded_json_object(evidence_data).get("content_sha256")
             validate_digest(evidence_content, "evidence content_sha256")
             loaded = load_evidence(evidence_path, record["source_sha256"], shape, expected_content_hash=evidence_content)
-            cached_bundle = bundles[bundle_key] = (evidence_file, loaded)
+            bundle_slot = (bundle_key, (evidence_file, loaded))
+        else:
             reread[("evidence", str(evidence_path), declared_evidence)] = (
                 data_root,
                 evidence_path,
@@ -462,7 +467,7 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
                 declared_evidence,
                 "Inference evidence bytes differ from fitting binding",
             )
-        evidence_file, evidence = cached_bundle
+        evidence_file, evidence = bundle_slot[1]
         region = next((item for item in evidence.regions if item.region_id == binding["region_id"]), None)
         if (
             region is None
@@ -487,15 +492,16 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
         mask_relative = _relative_path(annotation["mask_path"])
         declared_mask = validate_digest(annotation["mask_sha256"], "mask_sha256")
         mask_key = (str(annotation_root / mask_relative), declared_mask, shape)
-        cached_mask = annotation_masks.get(mask_key)
-        if cached_mask is None:
+        if mask_slot is None or mask_slot[0] != mask_key:
+            mask_slot = None  # release the previous mask before reading the next one
             mask_data, mask_file = _read(annotation_root, mask_relative, MaterialLimits().max_mask_bytes)
             if mask_file["sha256"] != declared_mask:
                 raise MaterialsError("Annotation mask bytes differ from their declaration")
             parsed = _mask_array(mask_data, shape, MaterialLimits())
             if not np.any(parsed) or np.any((parsed != 0) & (parsed != 1)):
                 raise MaterialsError("Reviewed annotation requires a nonempty binary source-frame mask")
-            cached_mask = annotation_masks[mask_key] = (mask_file, parsed)
+            mask_slot = (mask_key, (mask_file, parsed))
+        else:
             reread[("mask", str(annotation_root / mask_relative), declared_mask)] = (
                 annotation_root,
                 annotation_root / mask_relative,
@@ -503,7 +509,7 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
                 declared_mask,
                 "Annotation mask bytes differ from their declaration",
             )
-        mask_file, mask = cached_mask
+        mask_file, mask = mask_slot[1]
         predicted = region.mask > 0
         intersection, union = int(np.count_nonzero(predicted & (mask > 0))), int(np.count_nonzero(predicted | (mask > 0)))
         predicted_pixels = int(np.count_nonzero(predicted))
