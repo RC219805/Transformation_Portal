@@ -204,3 +204,29 @@ def test_reconstruction_manifest_canonical_paths_require_captured_digests(tmp_pa
             tier="apex_research",
             paths_are_canonical=True,
         )
+
+
+def test_reconstruction_artifact_paths_keep_short_scene_ids_unchanged(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path
+
+    assert reconstruction_manifest_path(scene_id="kitchen/a", output_dir=tmp_path).name == "kitchen__a_manifest.json"
+    assert (
+        diagnostics_artifact_path(scene_id="kitchen/a", output_dir=tmp_path).name
+        == "kitchen__a_reconstruction_diagnostics.json"
+    )
+
+
+def test_reconstruction_artifact_paths_fit_name_max_and_stay_distinct_for_long_scene_ids(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.io_atomic import atomic_write_bytes
+    from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path
+
+    nested = "/".join(f"floor_plan_variant_{index:02d}" for index in range(11))
+    scene_ids = [nested + "/a", nested + "/b", "x" * 254 + "/a", "x" * 254 + "/b", "é" * 200]
+    for path_for in (reconstruction_manifest_path, diagnostics_artifact_path):
+        paths = [path_for(scene_id=scene_id, output_dir=tmp_path) for scene_id in scene_ids]
+        assert len({path.name for path in paths}) == len(scene_ids)
+        for path in paths:
+            assert len(path.name.encode("utf-8")) <= 255
+            assert path.name.endswith(("_manifest.json", "_reconstruction_diagnostics.json"))
+            atomic_write_bytes(path, b"{}\n")
+            assert path.read_bytes() == b"{}\n"

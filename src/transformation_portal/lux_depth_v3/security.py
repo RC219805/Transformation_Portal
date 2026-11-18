@@ -6,6 +6,7 @@ building on the core security module for path validation and sanitization.
 Functions:
 - sanitize_file_stem: Sanitize file stems for safe filesystem use
 - sanitize_path_component_nonlossy: Sanitize path components without losing info
+- bounded_file_name: Sanitized component plus suffix, kept within NAME_MAX
 - validate_device_spec: Validate device specifications (cpu/cuda/mps)
 - validate_quantization_method: Validate quantization methods
 - validate_depth_fallback: Validate depth fallback strategies
@@ -13,8 +14,10 @@ Functions:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
+import sys
 from enum import Enum
 from typing import Optional
 
@@ -149,6 +152,52 @@ def sanitize_path_component_nonlossy(component: str, max_length: int = 255) -> s
             result = result.rstrip("_")
 
     return result
+
+
+# POSIX NAME_MAX on the filesystems the pipeline writes to (bytes, not characters).
+_NAME_MAX_BYTES = 255
+# ``io_atomic.atomic_write_bytes`` stages ``.<name>.XXXXXXXX.tmp`` next to the
+# destination, so a published name must leave room for those 14 bytes.
+_ATOMIC_TEMP_NAME_OVERHEAD_BYTES = len("." + "." + "X" * 8 + ".tmp")
+_BOUNDED_NAME_MAX_BYTES = _NAME_MAX_BYTES - _ATOMIC_TEMP_NAME_OVERHEAD_BYTES
+# Hex characters of the SHA-256 of the original component kept in shortened names.
+_SHORTENED_NAME_DIGEST_CHARS = 16
+
+
+def _utf8_len(value: str) -> int:
+    return len(value.encode("utf-8", "surrogatepass"))
+
+
+def bounded_file_name(component: str, suffix: str) -> str:
+    """Return ``sanitize_path_component_nonlossy(component) + suffix`` within NAME_MAX.
+
+    The result, and the temporary sibling ``io_atomic.atomic_write_bytes`` stages
+    for it, fit in NAME_MAX (255 bytes): names of at most 241 UTF-8 bytes are
+    returned unchanged. Longer names (which the filesystem would reject) are
+    shortened on a character boundary and disambiguated with a short SHA-256 digest
+    of the original ``component``, so distinct long identifiers keep distinct
+    file names and ``suffix`` is always preserved.
+    """
+
+    budget = _BOUNDED_NAME_MAX_BYTES - _utf8_len(suffix)
+    marker_bytes = 1 + _SHORTENED_NAME_DIGEST_CHARS
+    if budget <= marker_bytes:
+        raise ValueError(f"file name suffix is too long: {suffix!r}")
+    sanitized = sanitize_path_component_nonlossy(component, max_length=sys.maxsize)
+    if _utf8_len(sanitized) <= budget:
+        return sanitized + suffix
+    digest = hashlib.sha256(component.encode("utf-8", "surrogatepass")).hexdigest()[:_SHORTENED_NAME_DIGEST_CHARS]
+    head_budget = budget - marker_bytes
+    head_chars: list[str] = []
+    used = 0
+    for char in sanitized:
+        char_bytes = _utf8_len(char)
+        if used + char_bytes > head_budget:
+            break
+        head_chars.append(char)
+        used += char_bytes
+    head = "".join(head_chars).rstrip("_. ")
+    return f"{head}-{digest}{suffix}" if head else f"{digest}{suffix}"
 
 
 def validate_device_spec(device: str) -> str:
@@ -319,6 +368,7 @@ __all__ = [
     "HashMode",
     "sanitize_file_stem",
     "sanitize_path_component_nonlossy",
+    "bounded_file_name",
     "validate_device_spec",
     "validate_quantization_method",
     "validate_depth_fallback",

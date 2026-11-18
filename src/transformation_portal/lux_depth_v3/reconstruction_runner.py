@@ -27,7 +27,7 @@ from .reconstruction_manifest import (
 )
 from .scene_context import CameraWithProvenance, SceneContext
 from .scene_groups import lexical_relative_path
-from .security import sanitize_path_component_nonlossy
+from .security import bounded_file_name
 
 logger = logging.getLogger(__name__)
 RECONSTRUCTION_DIAGNOSTICS_SCHEMA = "tp.reconstruction_diagnostics.v1"
@@ -80,8 +80,7 @@ def _normalize_scene_scale(scene: Scene3D) -> Dict[str, float | str]:
 
 def diagnostics_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
     """Compute deterministic diagnostics artifact path for a scene."""
-    safe_scene_id = sanitize_path_component_nonlossy(scene_id)
-    return output_dir / f"{safe_scene_id}_reconstruction_diagnostics.json"
+    return output_dir / bounded_file_name(scene_id, "_reconstruction_diagnostics.json")
 
 
 def manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
@@ -445,8 +444,7 @@ def run_scene_reconstruction(
     if camera_provenance_files:
         payload["camera_provenance_files"] = camera_provenance_files
 
-    safe_scene_id = sanitize_path_component_nonlossy(execution_manifest.scene_id)
-    report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"
+    report_path = output_dir / bounded_file_name(execution_manifest.scene_id, "_reconstruction_report.json")
     report_bytes = (
         dumps_json(
             payload,
