@@ -508,3 +508,60 @@ class TestSmallTrainerDefects:
                 return iter(())
 
         assert train_muzero(MuZeroModel(4, 3, 8), _EmptyDataset()) == []
+
+
+@pytest.mark.ml
+class TestMuZeroTransformerPaddingMask:
+    """MuZeroTransformer.forward(mask=[B, T]) applies a causal + key-padding mask."""
+
+    @staticmethod
+    def _model():
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_transformer import MuZeroTransformer
+
+        torch.manual_seed(0)
+        model = MuZeroTransformer(obs_dim=4, action_dim=3, d_model=8, n_heads=2, n_layers=2, dropout=0.0).eval()
+        obs = torch.randn(2, 5, 4)
+        act = torch.randint(0, 3, (2, 5))
+        return torch, model, obs, act
+
+    def test_all_valid_mask_matches_default_causal(self):
+        torch, model, obs, act = self._model()
+        with torch.no_grad():
+            ref = model(obs, act)
+            out = model(obs, act, mask=torch.zeros(2, 5, dtype=torch.bool))
+        for key in ("policy", "value", "reward", "next_state"):
+            assert torch.allclose(out[key], ref[key], atol=1e-6)
+
+    def test_right_padding_predicts_from_last_real_step(self):
+        torch, model, obs, act = self._model()
+        mask = torch.tensor([[False] * 5, [False, False, False, True, True]])
+        with torch.no_grad():
+            out = model(obs, act, mask=mask)
+            truncated = model(obs[1:, :3], act[1:, :3])
+            full = model(obs[:1], act[:1])
+        assert torch.allclose(out["value"][1], truncated["value"][0], atol=1e-5)
+        assert torch.allclose(out["policy"][1], truncated["policy"][0], atol=1e-5)
+        assert torch.allclose(out["value"][0], full["value"][0], atol=1e-5)
+
+    def test_left_padding_is_finite_and_ignores_padded_inputs(self):
+        torch, model, obs, act = self._model()
+        mask = torch.tensor([[True, True, False, False, False], [False] * 5])
+        changed = obs.clone()
+        changed[0, :2] = 100.0
+        with torch.no_grad():
+            out = model(obs, act, mask=mask)
+            out_changed = model(changed, act, mask=mask)
+        assert torch.isfinite(out["hidden"]).all()
+        assert torch.isfinite(out["value"]).all()
+        assert torch.allclose(out["value"], out_changed["value"], atol=1e-5)
+        assert torch.allclose(out["policy"], out_changed["policy"], atol=1e-5)
+
+    def test_rejects_wrong_shape_dtype_or_fully_padded_row(self):
+        torch, model, obs, act = self._model()
+        with pytest.raises(ValueError, match="padding mask"):
+            model(obs, act, mask=torch.zeros(5, 5, dtype=torch.bool))
+        with pytest.raises(ValueError, match="padding mask"):
+            model(obs, act, mask=torch.zeros(2, 5))
+        with pytest.raises(ValueError, match="every position"):
+            model(obs, act, mask=torch.tensor([[True] * 5, [False] * 5]))
