@@ -28,6 +28,7 @@ import numpy as np
 
 from transformation_portal.ingest.canonical_json import dump_json
 
+from ._atomic_io import atomic_open
 from .protocol import resolve_saved_native_recipe
 
 logger = logging.getLogger(__name__)
@@ -182,7 +183,7 @@ class PLYExporter:
         # Use configurable color scale; clamp to 255 for uint8 output
         scale = self._get_effective_color_scale()
 
-        with open(output_path, "wb") as f:
+        with atomic_open(output_path, "wb") as f:
             # Write header as ASCII
             f.write(header.encode("ascii"))
 
@@ -291,7 +292,7 @@ class PLYExporter:
         # Use configurable color scale; clamp to 255 for uint8 output
         scale = self._get_effective_color_scale()
 
-        with open(output_path, "w", encoding="ascii") as f:
+        with atomic_open(output_path, "w", encoding="ascii") as f:
             f.write(header)
 
             for i in range(num_points):
@@ -382,7 +383,7 @@ class PLYExporter:
         if additional_metadata:
             provenance["request_metadata"] = additional_metadata
 
-        with open(sidecar_path, "w", encoding="utf-8") as f:
+        with atomic_open(sidecar_path, "w", encoding="utf-8") as f:
             dump_json(provenance, f, indent=2, ensure_ascii=False)
 
         logger.debug(f"Provenance sidecar written: {sidecar_path}")

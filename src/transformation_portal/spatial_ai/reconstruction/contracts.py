@@ -129,13 +129,16 @@ class GaussianSplat:
             raise ValueError(f"Positions must be (N, 3), got shape {self.positions.shape}")
         if self.positions.dtype != np.float32:
             raise ValueError(f"Positions must be float32, got {self.positions.dtype}")
+        if not np.all(np.isfinite(self.positions)):
+            raise ValueError("Positions must be finite")
 
         # Colors validation
         if self.colors.shape != (N, 3):
             raise ValueError(f"Colors must be ({N}, 3), got shape {self.colors.shape}")
         if self.colors.dtype != np.float32:
             raise ValueError(f"Colors must be float32, got {self.colors.dtype}")
-        if np.any(self.colors < 0) or np.any(self.colors > 1):
+        # Written so that NaN, which fails every comparison, is rejected too.
+        if not np.all((self.colors >= 0) & (self.colors <= 1)):
             raise ValueError("Colors must be in [0, 1] (linear RGB)")
 
         # Scales validation
@@ -143,8 +146,8 @@ class GaussianSplat:
             raise ValueError(f"Scales must be ({N}, 3), got shape {self.scales.shape}")
         if self.scales.dtype != np.float32:
             raise ValueError(f"Scales must be float32, got {self.scales.dtype}")
-        if np.any(self.scales <= 0):
-            raise ValueError("Scales must be positive")
+        if not np.all(np.isfinite(self.scales) & (self.scales > 0)):
+            raise ValueError("Scales must be positive and finite")
 
         # Rotations validation
         if self.rotations.shape != (N, 4):
@@ -161,7 +164,7 @@ class GaussianSplat:
             raise ValueError(f"Opacities must be ({N}, 1), got shape {self.opacities.shape}")
         if self.opacities.dtype != np.float32:
             raise ValueError(f"Opacities must be float32, got {self.opacities.dtype}")
-        if np.any(self.opacities < 0) or np.any(self.opacities > 1):
+        if not np.all((self.opacities >= 0) & (self.opacities <= 1)):
             raise ValueError("Opacities must be in [0, 1]")
 
         # Spherical harmonics validation
@@ -172,6 +175,8 @@ class GaussianSplat:
                 raise ValueError(f"SH coefficients must have {N} entries, got {self.sh_coefficients.shape[0]}")
             if self.sh_coefficients.shape[2] != 3:
                 raise ValueError(f"SH coefficients must have 3 color channels, got {self.sh_coefficients.shape[2]}")
+            if not np.all(np.isfinite(self.sh_coefficients)):
+                raise ValueError("SH coefficients must be finite")
 
     @property
     def num_gaussians(self) -> int:
