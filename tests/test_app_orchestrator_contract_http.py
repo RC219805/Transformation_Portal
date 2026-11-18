@@ -3543,6 +3543,101 @@ def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) ->
     assert detail_body["data"]["run_summary"]["error_count"] == 1
 
 
+def _seed_succeeded_job_with_persisted_summary(output_dir: Path, job_id: str) -> Any:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=now - 50,
+        started_at=now - 49,
+        finished_at=now - 40,
+        done_published_at=now - 40,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        run_summary={
+            "source": "run_card",
+            "batch_id": "2026-01-01_000000",
+            "total_images": 2,
+            "success_count": 2,
+            "error_count": 0,
+            "reviewable_outputs": True,
+            "partial": False,
+        },
+    )
+    return _seed_job(job)
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_finished_job_keeps_its_outcome_when_a_later_run_reuses_the_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    jobs_base: str,
+) -> None:
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    job = _seed_succeeded_job_with_persisted_summary(output_dir, "job_outcome_survives_reuse")
+    # A later run into the same directory leaves a partial run card behind.
+    (output_dir / "run_card_2026-02-02_000000.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-02-02_000000",
+                "run_card_version": "v1",
+                "total_images": 4,
+                "success_count": 3,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    detail = client.get(f"{jobs_base}/{job.id}").json()["data"]
+    listed = client.get(jobs_base).json()["data"]["jobs"][0]
+    with client.stream("GET", f"{jobs_base}/{job.id}/events") as stream_response:
+        assert stream_response.status_code == 200
+        done = next(payload for name, payload in _collect_sse_events(stream_response) if name == "done")
+
+    for payload in (detail, listed, done):
+        assert payload["state"] == "succeeded"
+        assert payload["error"] is None
+        assert payload["run_summary"]["batch_id"] == "2026-01-01_000000"
+        assert payload["run_summary"]["partial"] is False
+    assert job.state == "succeeded" and job.error is None
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None and record.state == "succeeded"
+
+
+def test_job_reads_serve_the_persisted_summary_without_reading_the_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "run_card_2026-01-01_000000.json").write_text(
+        json.dumps({"batch_id": "2026-01-01_000000", "total_images": 2, "success_count": 2, "error_count": 0}),
+        encoding="utf-8",
+    )
+    job = _seed_succeeded_job_with_persisted_summary(output_dir, "job_reads_do_not_touch_disk")
+
+    def _fail_directory_read(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("job reads must not re-derive the run summary from the output directory")
+
+    monkeypatch.setattr(orchestrator_app._portal_job_artifacts, "_resolve_job_run_metadata", _fail_directory_read)
+
+    detail_response = client.get(f"/v1/jobs/{job.id}")
+    list_response = client.get("/v2/jobs")
+    with client.stream("GET", f"/v1/jobs/{job.id}/events") as stream_response:
+        assert stream_response.status_code == 200
+        done = next(payload for name, payload in _collect_sse_events(stream_response) if name == "done")
+
+    assert detail_response.status_code == 200
+    assert list_response.status_code == 200
+    assert detail_response.json()["data"]["run_summary"]["batch_id"] == "2026-01-01_000000"
+    assert list_response.json()["data"]["jobs"][0]["run_summary"]["success_count"] == 2
+    assert done["run_summary"]["batch_id"] == "2026-01-01_000000"
+
+
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
     client: TestClient,

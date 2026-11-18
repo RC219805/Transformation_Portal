@@ -7608,6 +7608,106 @@ def test_job_run_window_is_unbounded_only_for_fenced_or_startless_runner_outcome
         dispatch_fence_var.reset(token)
 
 
+def _run_card_text(batch_id: str, *, success: int, error: int, files: list[str]) -> str:
+    return json.dumps(
+        {
+            "batch_id": batch_id,
+            "run_card_version": "v1",
+            "total_images": success + error,
+            "success_count": success,
+            "error_count": error,
+            "artifact_index": [{"relative_path": name} for name in files],
+        }
+    )
+
+
+def test_run_job_without_its_own_run_card_is_not_summarized_from_an_earlier_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    # An earlier run into the same directory finished 3 of 4 images.
+    (output_dir / "c_master16.png").write_bytes(b"\x89PNG earlier run")
+    (output_dir / "run_card_2026-02-02_000000.json").write_text(
+        _run_card_text("2026-02-02_000000", success=3, error=1, files=["c_master16.png"]),
+        encoding="utf-8",
+    )
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_fails_before_any_output",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(job, _file_writing_runner_argv(output_dir, {}, exit_code=1))
+
+        assert job.exit_code == 1
+        assert job.state == "failed"
+        assert job.error is not None and job.error["code"] == "RUNNER_EXIT_NONZERO"
+        assert job.run_summary == {}
+        assert job.artifacts["items"] == []
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None
+        assert stored.state == "failed"
+        assert stored.run_summary == {}
+        assert stored.error is not None and stored.error["code"] == "RUNNER_EXIT_NONZERO"
+
+    asyncio.run(scenario())
+    assert (output_dir / "c_master16.png").exists()
+
+
+def test_run_job_summary_comes_from_its_own_run_card_not_the_newest_in_the_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    # Another run's partial card sorts as the newest by batch id.
+    (output_dir / "z_master16.png").write_bytes(b"\x89PNG other run")
+    (output_dir / "run_card_2099-01-01_000000.json").write_text(
+        _run_card_text("2099-01-01_000000", success=3, error=1, files=["z_master16.png"]),
+        encoding="utf-8",
+    )
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_with_its_own_run_card",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(
+            job,
+            _file_writing_runner_argv(
+                output_dir,
+                {
+                    "a_master16.png": "own render",
+                    "run_card_2026-03-03_000000.json": _run_card_text(
+                        "2026-03-03_000000", success=2, error=0, files=["a_master16.png"]
+                    ),
+                },
+            ),
+        )
+
+        assert job.state == "succeeded" and job.error is None
+        assert job.run_summary["batch_id"] == "2026-03-03_000000"
+        assert job.run_summary["success_count"] == 2
+        assert job.run_summary["partial"] is False
+        assert {item["relative_path"] for item in job.artifacts["items"]} == {
+            "a_master16.png",
+            "run_card_2026-03-03_000000.json",
+        }
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None and stored.state == "succeeded"
+        assert stored.run_summary["batch_id"] == "2026-03-03_000000"
+
+    asyncio.run(scenario())
+
+
 def test_create_job_validation_uses_typed_error_envelope() -> None:
     response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
     body = json.loads(response.body.decode("utf-8"))

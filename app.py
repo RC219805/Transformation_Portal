@@ -122,6 +122,7 @@ from transformation_portal.orchestrator.artifact_store import (
 )
 from transformation_portal.orchestrator.artifact_store.generation_cleanup import cleanup_terminal_generation
 from transformation_portal.orchestrator.dispatch import DispatchLocator, current_dispatch_fence
+from transformation_portal.orchestrator.execution_diagnostics import annotate_job_failure
 from transformation_portal.orchestrator.queue import (
     JobEnqueueRequest,
     QueueBroker,
@@ -7455,12 +7456,23 @@ def _job_run_window(job: Job) -> Tuple[Optional[float], Optional[float]]:
 
 
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
-    return _execution_summary.refresh_job_run_summary(job, _job_output_dir(job))
+    not_before, not_after = _job_run_window(job)
+    return _execution_summary.refresh_job_run_summary(
+        job,
+        _job_output_dir(job),
+        not_before=not_before,
+        not_after=not_after,
+    )
 
 
 def _serialized_job_run_summary(job: Job) -> Optional[Dict[str, Any]]:
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    # The runner derives ``run_summary`` (and any ``partial`` promotion) once,
+    # when it finalizes the job, and persists both. Read paths only project that
+    # record: re-deriving it here re-read the output directory on every list,
+    # detail and SSE request and let a later run into the same directory rewrite
+    # the status of a job that had already finished. Recovery guidance for known
+    # historical failures is still projected, from the job's own log tail alone.
+    annotate_job_failure(job)
     summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
     if job.state in ACTIVE_JOB_STATES:
         requested_status = _requested_fastvlm_captioning_status(job)
@@ -11231,8 +11243,8 @@ async def _job_events(
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_events", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    # A synthesized ``done`` carries the persisted outcome; see _serialized_job_run_summary.
+    annotate_job_failure(job)
 
     try:
         replay_after_seq = _last_event_id_from_request(request)

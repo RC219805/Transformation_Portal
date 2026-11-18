@@ -208,13 +208,30 @@ def _summarize_batch_manifest_payload(payload: Mapping[str, Any]) -> Dict[str, A
     return summary
 
 
-def refresh_job_run_summary(job: ExecutionJob, output_dir: Path | None) -> Dict[str, Any]:
+def refresh_job_run_summary(
+    job: ExecutionJob,
+    output_dir: Path | None,
+    *,
+    not_before: float | None = None,
+    not_after: float | None = None,
+) -> Dict[str, Any]:
+    """Derive ``job.run_summary`` from the run card or batch manifest of its run.
+
+    ``not_before``/``not_after`` bind the lookup to the job's own run window so a
+    run card another run left in a shared ``output_dir`` cannot set this job's
+    summary or state. Without them the newest metadata in the directory is used.
+    """
     if not job:
         return {}
 
     annotate_job_failure(job)
     existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
-    metadata = _artifacts._resolve_job_run_metadata(output_dir, max_bytes=1024 * 1024)
+    metadata = _artifacts._resolve_job_run_metadata(
+        output_dir,
+        max_bytes=1024 * 1024,
+        not_before=not_before,
+        not_after=not_after,
+    )
     summary: Dict[str, Any] = {}
     if metadata is not None and metadata.run_card_payload is not None:
         summary = _summarize_run_card_payload(metadata.run_card_payload)
