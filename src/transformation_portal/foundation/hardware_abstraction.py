@@ -63,7 +63,11 @@ def _coreml_runtime_available() -> bool:
 # Errors that indicate a device/backend problem (unsupported op, OOM, device
 # unavailable) and therefore justify retrying on the next backend. Torch raises
 # these as RuntimeError (NotImplementedError and OutOfMemoryError subclass it).
-# Any other exception type is a caller error and propagates unchanged.
+# Any other exception type raised by the operation is a caller error and
+# propagates unchanged. Failures while moving the inputs onto a device are
+# always device problems, whatever their type: torch raises AssertionError
+# ("Torch not compiled with CUDA enabled") and TypeError ("Cannot convert a MPS
+# Tensor to float64 dtype") there, so those still fall back.
 _FALLBACK_ERRORS = (RuntimeError,)
 
 
@@ -289,10 +293,21 @@ class HardwareAbstraction:
                 continue
             attempted_devices.add(device)
             try:
-                # Move tensors to target device
+                # Move tensors to target device. Any failure here is a device
+                # problem (unavailable device, unsupported dtype), never a
+                # caller error, so it always qualifies for fallback.
                 args_on_device = self._move_to_device(args, device)
                 kwargs_on_device = self._move_to_device(kwargs, device)
+            except Exception as e:
+                errors.append((backend, str(e)))
+                last_error = e
+                logger.debug(f"{operation_name} could not move inputs to {backend.value}: {e}")
 
+                if not self.enable_auto_fallback:
+                    raise
+                continue
+
+            try:
                 # Execute operation
                 result = operation(*args_on_device, **kwargs_on_device)
 

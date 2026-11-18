@@ -125,6 +125,51 @@ class TestExecuteWithFallback:
         assert torch.equal(result, torch.full((2,), 2.0))
         assert moved_to[0] == "cuda" and "cpu" in moved_to
 
+    @pytest.mark.parametrize(
+        "move_error",
+        [
+            AssertionError("Torch not compiled with CUDA enabled"),
+            TypeError("Cannot convert a MPS Tensor to float64 dtype"),
+        ],
+    )
+    def test_non_runtime_move_failure_still_falls_back(self, move_error):
+        from transformation_portal.foundation.hardware_abstraction import BackendType
+
+        hal = _cpu_only_hal()
+        hal.primary_backend = BackendType.MPS
+        hal.fallback_chain = [BackendType.MPS, BackendType.CPU]
+        real_move = hal._move_to_device
+        calls = []
+
+        def fake_move(obj, device):
+            if device.type == "mps":
+                raise move_error
+            return real_move(obj, device)
+
+        def op(x):
+            calls.append(x.device.type)
+            return x * 2
+
+        with patch.object(hal, "_move_to_device", side_effect=fake_move):
+            result = hal.execute_with_fallback(op, torch.ones(2), operation_name="op")
+
+        assert torch.equal(result, torch.full((2,), 2.0))
+        assert calls == ["cpu"]
+
+    def test_move_failure_without_auto_fallback_raises_original(self):
+        from transformation_portal.foundation.hardware_abstraction import BackendType
+
+        hal = _cpu_only_hal()
+        hal.enable_auto_fallback = False
+        hal.fallback_chain = [BackendType.MPS, BackendType.CPU]
+
+        def fake_move(obj, device):
+            raise TypeError("Cannot convert a MPS Tensor to float64 dtype")
+
+        with patch.object(hal, "_move_to_device", side_effect=fake_move):
+            with pytest.raises(TypeError, match="float64"):
+                hal.execute_with_fallback(lambda x: x, torch.ones(2), operation_name="op")
+
     def test_namedtuple_argument_is_rebuilt(self):
         hal = _cpu_only_hal()
         Pair = collections.namedtuple("Pair", "image mask")
