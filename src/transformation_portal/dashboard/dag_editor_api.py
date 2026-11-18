@@ -98,8 +98,8 @@ def set_pipelines_dir(path: Path) -> None:
     """Set the pipelines storage directory.
 
     Creates the directory if it doesn't exist and initializes the FSContext.
-    This is the single point where the pipelines directory is created;
-    endpoint handlers rely on this initialization and do not repeat mkdir.
+    Without an explicit call the default directory is created lazily by the
+    first save, never at import or router creation time.
 
     Args:
         path: Directory path for pipeline JSON files
@@ -194,17 +194,17 @@ def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
 
     Note: The FSGuard instance (`fs`) is created once at router initialization.
-    The pipelines directory is created here at router creation time to ensure
-    the API is robust on fresh installs without requiring an external call to
-    set_pipelines_dir().
+    Creating the router has no filesystem side effect: the pipelines directory
+    is created lazily on the first save (or eagerly by an explicit
+    set_pipelines_dir() call), and listing a directory that does not exist yet
+    returns an empty list. This keeps a fresh install working without leaving
+    a stray ``pipelines/`` in whatever directory the process was started from.
 
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
     router = APIRouter(prefix="/api/editor", tags=["editor"])
     fs = get_fs_guard()
-    # Ensure pipelines directory exists at router creation time
-    fs.mkdir(_pipelines_dir)
 
     @router.get("/pipelines")
     async def list_pipelines() -> JSONResponse:
@@ -212,9 +212,11 @@ def create_dag_editor_router() -> APIRouter:
 
         Note: Uses FSGuard.list_dir for audit logging consistency.
         Pipeline names are derived from validated filenames only.
-        Directory is created at router initialization in create_dag_editor_router().
+        A pipelines directory that does not exist yet holds no pipelines.
         """
-        pipelines = []
+        pipelines: list[dict[str, Any]] = []
+        if not fs.exists(_pipelines_dir):
+            return JSONResponse({"pipelines": pipelines})
         # Use FSGuard for directory listing to maintain audit trail
         for p in fs.list_dir(_pipelines_dir):
             # Skip directories and non-JSON files
@@ -263,6 +265,7 @@ def create_dag_editor_router() -> APIRouter:
         save_data["name"] = name
 
         try:
+            fs.mkdir(_pipelines_dir)
             fs.write_text(filepath, json.dumps(save_data, indent=2))
             logger.info("Saved pipeline: %s", name)
             return JSONResponse({"status": "ok", "name": name})

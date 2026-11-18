@@ -328,6 +328,21 @@ def test_set_db_path_mutates_global(tmp_path) -> None:
         experiment_api.set_db_path(original)
 
 
+def test_read_helpers_do_not_create_database(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # D13: reads against a not-yet-created DB must not leave ./experiments.db behind.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(experiment_api, "_db_path", experiment_api.Path("experiments.db"))
+    assert experiment_api.list_experiments() == []
+    assert experiment_api.get_experiment(1) is None
+    assert experiment_api.get_run(1) is None
+    assert experiment_api.list_runs(1) == []
+    assert list(tmp_path.iterdir()) == []
+    # Writes still create the database on demand.
+    exp_id = experiment_api.create_experiment("alpha")
+    assert (tmp_path / "experiments.db").is_file()
+    assert [e.id for e in experiment_api.list_experiments()] == [exp_id]
+
+
 def test_create_router_requires_fastapi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(experiment_api, "FASTAPI_AVAILABLE", False)
     with pytest.raises(ImportError, match="FastAPI is required"):

@@ -58,6 +58,16 @@ def _loads_json(text: Optional[str], default: str) -> Any:
     return json.loads(text or default, parse_constant=_non_finite_to_none)
 
 
+def _db_missing() -> bool:
+    """Return True when the database file has not been created yet.
+
+    Read-only helpers answer "nothing stored" for a missing database instead of
+    letting ``sqlite3.connect`` create an empty ``experiments.db`` in the
+    process working directory as a side effect of a read.
+    """
+    return not _db_path.exists()
+
+
 @contextmanager
 def get_db() -> Generator[sqlite3.Connection, None, None]:
     """Get database connection context manager."""
@@ -167,6 +177,8 @@ def create_experiment(
 
 def get_experiment(experiment_id: int) -> Optional[Experiment]:
     """Get experiment by ID."""
+    if _db_missing():
+        return None
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM experiments WHERE id = ?",
@@ -188,6 +200,8 @@ def get_experiment(experiment_id: int) -> Optional[Experiment]:
 
 def list_experiments() -> list[Experiment]:
     """List all experiments."""
+    if _db_missing():
+        return []
     init_db()
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM experiments ORDER BY created_at DESC").fetchall()
@@ -302,6 +316,8 @@ def complete_run(run_id: int, status: str = "completed") -> None:
 
 def get_run(run_id: int) -> Optional[Run]:
     """Get run by ID."""
+    if _db_missing():
+        return None
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM runs WHERE id = ?",
@@ -328,6 +344,8 @@ def get_run(run_id: int) -> Optional[Run]:
 
 def list_runs(experiment_id: int) -> list[Run]:
     """List runs for an experiment."""
+    if _db_missing():
+        return []
     with get_db() as conn:
         rows = conn.execute(
             "SELECT * FROM runs WHERE experiment_id = ? ORDER BY created_at DESC",

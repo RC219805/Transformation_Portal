@@ -20,14 +20,18 @@ from transformation_portal.dashboard import dag_editor_api
 
 @pytest.fixture
 def client(tmp_path):
-    original = dag_editor_api._pipelines_dir
+    original_dir = dag_editor_api._pipelines_dir
+    original_ctx = dag_editor_api._fs_context
     dag_editor_api.set_pipelines_dir(tmp_path / "pipelines")
     app = FastAPI()
     app.include_router(dag_editor_api.create_dag_editor_router())
     try:
         yield TestClient(app)
     finally:
-        dag_editor_api.set_pipelines_dir(original)
+        # Restore the globals directly: set_pipelines_dir() would mkdir the
+        # default (CWD-relative) directory and leak ``pipelines/`` (D13).
+        dag_editor_api._pipelines_dir = original_dir
+        dag_editor_api._fs_context = original_ctx
 
 
 def _pipeline_payload() -> dict:
@@ -125,3 +129,20 @@ def test_editor_ui_tolerates_nodes_without_ports() -> None:
     html = dag_editor_api.get_dag_editor_html()
     assert "(node.inputs || []).map(" in html
     assert "(node.outputs || []).map(" in html
+
+
+def test_router_has_no_cwd_side_effect_until_first_save(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # D13: creating the router (and listing) must not create ./pipelines in the CWD.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(dag_editor_api, "_pipelines_dir", dag_editor_api.Path("pipelines"))
+    monkeypatch.setattr(dag_editor_api, "_fs_context", None)
+    app = FastAPI()
+    app.include_router(dag_editor_api.create_dag_editor_router())
+    client = TestClient(app)
+    assert client.get("/api/editor/pipelines").json() == {"pipelines": []}
+    assert client.get("/api/editor/pipelines/demo").status_code == 404
+    assert list(tmp_path.iterdir()) == []
+    # The first save creates the directory lazily and the pipeline is listed.
+    assert client.post("/api/editor/pipelines/demo", json=_pipeline_payload()).status_code == 200
+    assert (tmp_path / "pipelines" / "demo.json").is_file()
+    assert [p["name"] for p in client.get("/api/editor/pipelines").json()["pipelines"]] == ["demo"]
