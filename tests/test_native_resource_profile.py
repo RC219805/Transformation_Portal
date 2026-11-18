@@ -278,10 +278,14 @@ def test_native_source_closure_excludes_only_pure_data_authority_and_includes_lo
     assert "pyproject.toml" in paths and "requirements/base.in" in paths
     assert {
         "src/transformation_portal/core/archive_execution_plan.py",
+        "src/transformation_portal/materials_v4/artifacts.py",
+        "src/transformation_portal/materials_v4/contracts.py",
+        "src/transformation_portal/materials_v4/taxonomy.py",
         "src/transformation_portal/orchestrator/submissions.py",
         "src/transformation_portal/orchestrator/upload_receipts.py",
         "src/transformation_portal/ingest/upload_recovery.py",
         "src/transformation_portal/ingest/upload_staging.py",
+        "src/transformation_portal/vlm_captioning/fastvlm_runtime.py",
         "src/transformation_portal/api/routes/jobs.py",
         "src/transformation_portal/api/v1/jobs.py",
         "src/transformation_portal/api/v1/uploads.py",
@@ -311,7 +315,14 @@ def test_native_profile_rejects_schema_resources_from_another_source_closure(mon
 
 @pytest.mark.parametrize(
     "name",
-    ["app", "transformation_portal.photographic_delivery.models", "transformation_portal.photographic_delivery"],
+    [
+        "app",
+        "transformation_portal.photographic_delivery.models",
+        "transformation_portal.photographic_delivery",
+        "transformation_portal.materials_v4.artifacts",
+        "transformation_portal.materials_v4.taxonomy",
+        "transformation_portal.vlm_captioning.fastvlm_runtime",
+    ],
 )
 @pytest.mark.usefixtures("synthetic_cache_authority")
 def test_native_profile_rejects_loaded_sources_from_a_different_checkout(monkeypatch, tmp_path, name):
