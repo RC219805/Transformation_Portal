@@ -29,6 +29,12 @@ from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata
 
 logger = logging.getLogger(__name__)
 
+# Pixel-chunk bounds for the exact float32 IoU matrix products: a chunk
+# shorter than 2**24 keeps every partial count exactly representable, and
+# the byte budget caps the float32 copies of both mask stacks.
+_IOU_EXACT_CHUNK_PIXELS = (1 << 24) - 1
+_IOU_CHUNK_BYTES = 64 * 1024 * 1024
+
 
 class MaskProcessor:
     """Mask post-processing for temporal tracking and refinement.
@@ -62,6 +68,11 @@ class MaskProcessor:
         self.min_area = min_area
         self.min_stability = min_stability
         self.iou_threshold = iou_threshold
+        # Highest tracking ID this processor has issued or been handed.
+        # ``track_temporal`` only sees the previous frame, so without this
+        # memory the ID of an object that left the scene two frames ago
+        # would be handed to the next new object.
+        self._max_track_id = -1
 
         logger.info(
             f"MaskProcessor initialized: min_area={min_area}, " f"min_stability={min_stability}, iou_threshold={iou_threshold}"
@@ -150,7 +161,10 @@ class MaskProcessor:
         """Assign temporal tracking IDs to current masks.
 
         Matches current masks to previous frame masks using IoU.
-        New masks get new IDs, matched masks inherit IDs.
+        New masks get new IDs, matched masks inherit IDs. A new ID is
+        never one this processor has issued or been handed before, so an
+        object that left the scene does not lend its ID to a later one;
+        use one ``MaskProcessor`` per video sequence.
 
         Args:
             current_masks: Current frame masks (N_cur, H, W) bool.
@@ -174,16 +188,21 @@ class MaskProcessor:
         if prev_ids.shape != (N_prev,):
             raise ValueError(f"prev_ids shape must be ({N_prev},), got {prev_ids.shape}")
 
+        if N_prev > 0:
+            self._max_track_id = max(self._max_track_id, int(prev_ids.max()))
+        next_new_id = self._max_track_id + 1
+
+        if N_prev == 0:
+            current_ids = np.arange(next_new_id, next_new_id + N_cur, dtype=np.int32)
+            self._max_track_id += N_cur
+            return current_ids
+
         # Compute IoU matrix (N_cur x N_prev)
         iou_matrix = self._compute_iou_matrix(current_masks, prev_masks)
 
         # Assign IDs
         current_ids = np.zeros(N_cur, dtype=np.int32)
-        if N_prev == 0:
-            return np.arange(N_cur, dtype=np.int32)
-
         used_prev_ids = set()
-        next_new_id = prev_ids.max() + 1 if len(prev_ids) > 0 else 0
 
         for i in range(N_cur):
             # Find best match in previous frame
@@ -198,6 +217,8 @@ class MaskProcessor:
                 # No match: assign new ID
                 current_ids[i] = next_new_id
                 next_new_id += 1
+
+        self._max_track_id = max(self._max_track_id, next_new_id - 1)
 
         logger.debug(
             f"Temporal tracking: {N_cur} current masks, " f"{len(used_prev_ids)} matched, {N_cur - len(used_prev_ids)} new"
@@ -253,15 +274,29 @@ class MaskProcessor:
         N_b = masks_b.shape[0]
 
         iou_matrix = np.zeros((N_a, N_b), dtype=np.float32)
+        if N_a == 0 or N_b == 0:
+            return iou_matrix
 
-        for i in range(N_a):
-            for j in range(N_b):
-                intersection = (masks_a[i] & masks_b[j]).sum()
-                union = (masks_a[i] | masks_b[j]).sum()
+        flat_a = masks_a.reshape(N_a, -1)
+        flat_b = masks_b.reshape(N_b, -1)
+        n_pixels = flat_a.shape[1]
 
-                if union > 0:
-                    iou_matrix[i, j] = intersection / union
-                else:
-                    iou_matrix[i, j] = 0.0
+        # Intersection counts by float32 matrix products over pixel chunks.
+        # Every partial sum is an integer no larger than the chunk length,
+        # which stays below 2**24, so the float32 products are exact and the
+        # int64 totals equal the per-pair ``(a & b).sum()``.
+        chunk = min(_IOU_EXACT_CHUNK_PIXELS, max(1, _IOU_CHUNK_BYTES // (4 * (N_a + N_b))))
+        intersection = np.zeros((N_a, N_b), dtype=np.int64)
+        for start in range(0, n_pixels, chunk):
+            block_a = flat_a[:, start : start + chunk].astype(np.float32)
+            block_b = flat_b[:, start : start + chunk].astype(np.float32)
+            intersection += (block_a @ block_b.T).astype(np.int64)
+
+        area_a = flat_a.sum(axis=1, dtype=np.int64)
+        area_b = flat_b.sum(axis=1, dtype=np.int64)
+        union = area_a[:, None] + area_b[None, :] - intersection
+
+        nonzero = union > 0
+        iou_matrix[nonzero] = intersection[nonzero] / union[nonzero]
 
         return iou_matrix
