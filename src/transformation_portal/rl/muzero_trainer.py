@@ -17,6 +17,16 @@ if TYPE_CHECKING:
     from transformation_portal.rl.muzero_model import MuZeroModel
 
 
+def _safe_log(p: torch.Tensor) -> torch.Tensor:
+    """Log of softmax probabilities that stays finite when one underflows to 0.
+
+    ``cross_entropy`` re-normalises its input with ``log_softmax``, so for a
+    normalised ``p`` this equals ``p.log()`` wherever that is finite; an exact 0
+    would give ``-inf`` and ``0 * -inf = NaN`` in the loss and the weights.
+    """
+    return torch.log(p.clamp_min(torch.finfo(p.dtype).tiny))
+
+
 @dataclass
 class MuZeroTrainConfig:
     """Configuration for MuZero training."""
@@ -86,7 +96,7 @@ class MuZeroTrainer:
 
         # Initial losses
         value_loss = F.mse_loss(v.squeeze(-1), target_values[:, 0])
-        policy_loss = F.cross_entropy(p.log(), target_policies[:, 0], reduction="mean")
+        policy_loss = F.cross_entropy(_safe_log(p), target_policies[:, 0], reduction="mean")
         reward_loss = torch.tensor(0.0, device=obs.device)
 
         # Unroll dynamics
@@ -96,7 +106,7 @@ class MuZeroTrainer:
             # Accumulate losses
             value_loss = value_loss + F.mse_loss(v.squeeze(-1), target_values[:, t + 1])
             reward_loss = reward_loss + F.mse_loss(r.squeeze(-1), target_rewards[:, t])
-            policy_loss = policy_loss + F.cross_entropy(p.log(), target_policies[:, t + 1], reduction="mean")
+            policy_loss = policy_loss + F.cross_entropy(_safe_log(p), target_policies[:, t + 1], reduction="mean")
 
         # Average over unroll steps
         n_steps = unroll_steps + 1
@@ -175,6 +185,10 @@ def train_muzero(
         for batch in dataset.batches(config.batch_size):
             losses = trainer.train_step(batch)
             epoch_losses.append(losses)
+
+        if not epoch_losses:
+            # Nothing to train on: report the epochs completed so far.
+            break
 
         # Average epoch losses
         avg_losses = {k: sum(l[k] for l in epoch_losses) / len(epoch_losses) for k in epoch_losses[0]}

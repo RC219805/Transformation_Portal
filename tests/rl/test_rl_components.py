@@ -285,6 +285,35 @@ class TestMessageBus:
         messages = bus.read_all()
         assert len(messages) == 0
 
+    def test_encoded_intents_use_real_action_types(self):
+        """R16: every encoded intent slot is an action type agents actually publish."""
+        from transformation_portal.rl.ma_action_space import NODE_ACTIONS
+        from transformation_portal.rl.ma_comm import CoordinationProtocol, MessageBus
+
+        action_types = sorted({name for templates in NODE_ACTIONS.values() for name, _ in templates})
+        hits = []
+        for action_type in action_types:
+            bus = MessageBus()
+            bus.publish("node", {"intent": action_type})
+            encoded = bus.encode_messages()
+            assert len(encoded) == 6
+            if sum(encoded):
+                hits.append(action_type)
+
+        assert hits == sorted(
+            [
+                "adjust_metalness_prior",
+                "adjust_roughness_prior",
+                "apply_denoising",
+                "enable_seam_blending",
+                "increase_iterations",
+                "increase_mask_coverage",
+            ]
+        )
+        for pair in CoordinationProtocol.COMPATIBILITY:
+            assert set(pair) <= set(action_types)
+        assert CoordinationProtocol.get_compatibility("increase_iterations", "increase_mask_coverage") == 1.0
+
 
 @pytest.mark.ml
 class TestWorldModelInferenceAndCheckpoints:
@@ -418,3 +447,64 @@ class TestZeroIterationRuns:
         assert result.best_pipeline == pipeline
         assert result.score_history == [result.best_score]
         assert result.loss_history == []
+
+
+@pytest.mark.ml
+class TestSmallTrainerDefects:
+    """R16: replay entries without graphs, finite MuZero loss, empty datasets."""
+
+    def test_rl_trainer_stores_detached_log_prob_and_value(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.action_space import enumerate_actions
+        from transformation_portal.rl.model import create_model
+        from transformation_portal.rl.state_encoder import get_state_dim
+        from transformation_portal.rl.trainer import RLTrainer
+
+        actions = enumerate_actions()
+        trainer = RLTrainer(create_model(get_state_dim(), len(actions)), actions)
+        state = [0.0] * get_state_dim()
+        action_idx, log_prob, value = trainer.select_action(state)
+        assert log_prob.requires_grad
+
+        trainer.store_transition(state, action_idx, 0.5, state, False, log_prob, value)
+
+        stored = trainer.buffer.buffer[0]
+        assert stored.log_prob.grad_fn is None and not stored.log_prob.requires_grad
+        assert stored.value.grad_fn is None and not stored.value.requires_grad
+        assert float(stored.log_prob) == pytest.approx(float(log_prob))
+
+    def test_muzero_policy_loss_stays_finite_when_a_probability_underflows(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_model import MuZeroModel
+        from transformation_portal.rl.muzero_trainer import MuZeroTrainer
+
+        torch.manual_seed(0)
+        model = MuZeroModel(obs_dim=4, action_dim=3, latent_dim=8)
+        with torch.no_grad():
+            model.pred.policy_head.weight.zero_()
+            model.pred.policy_head.bias.copy_(torch.tensor([200.0, 0.0, 0.0]))
+        batch = {
+            "obs": torch.randn(2, 4),
+            "actions": torch.zeros(2, 1, dtype=torch.long),
+            "values": torch.zeros(2, 2),
+            "rewards": torch.zeros(2, 1),
+            "policies": torch.tensor([1.0, 0.0, 0.0]).expand(2, 2, 3).contiguous(),
+        }
+        assert model.initial_inference(batch["obs"])[1][0, 1].item() == 0.0
+
+        losses = MuZeroTrainer(model).train_step(batch)
+
+        assert all(math.isfinite(v) for v in losses.values())
+        assert losses["policy"] == pytest.approx(0.0, abs=1e-6)
+        assert not any(torch.isnan(p).any().item() for p in model.parameters())
+
+    def test_train_muzero_on_an_empty_dataset_returns_empty_history(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_model import MuZeroModel
+        from transformation_portal.rl.muzero_trainer import train_muzero
+
+        class _EmptyDataset:
+            def batches(self, batch_size):
+                return iter(())
+
+        assert train_muzero(MuZeroModel(4, 3, 8), _EmptyDataset()) == []

@@ -12,6 +12,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
+# Added to |TD error| so a zero error never makes a transition unsampleable.
+PRIORITY_EPS = 1e-6
+
 
 class Transition(NamedTuple):
     """A single transition tuple."""
@@ -169,7 +172,9 @@ class PrioritizedReplayBuffer:
             transition: Transition to add
             priority: Priority value (defaults to max)
         """
-        priority = priority or self.max_priority
+        # None (or 0) keeps the documented default of the current max priority;
+        # a signed TD error is used by magnitude (a negative base ** alpha is complex).
+        priority = abs(float(priority)) if priority else self.max_priority
 
         if len(self.buffer) < self.capacity:
             self.buffer.append(transition)
@@ -229,11 +234,14 @@ class PrioritizedReplayBuffer:
 
         Args:
             indices: Transition indices
-            priorities: New priorities (e.g., TD errors)
+            priorities: New priorities (e.g., TD errors). Signed values are used
+                by magnitude and a small epsilon keeps every transition
+                sampleable, as in prioritized replay (|delta| + eps).
         """
         for idx, priority in zip(indices, priorities):
-            self.priorities[idx] = priority**self.alpha
-            self.max_priority = max(self.max_priority, priority)
+            magnitude = abs(float(priority)) + PRIORITY_EPS
+            self.priorities[idx] = magnitude**self.alpha
+            self.max_priority = max(self.max_priority, magnitude)
 
     def __len__(self) -> int:
         """Get buffer size."""

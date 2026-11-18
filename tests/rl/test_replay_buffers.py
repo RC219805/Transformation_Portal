@@ -411,3 +411,50 @@ class TestTemporalReplayBuffer:
         for _ in range(5):
             buf.add_episode(self._make_episode(3))
         assert len(buf) == 3
+
+    def test_sample_formatted_pads_missing_agents_to_observed_state_width(self):
+        """R16: a missing agent is zero-padded to the real state width, not 28."""
+        np = pytest.importorskip("numpy")
+        buf = TemporalReplayBuffer(seq_len=1)
+        buf.add_transitions([_temporal_transition()])
+
+        batch = buf.sample_formatted(2, ["sam2", "nvdiffrec"])
+
+        assert batch is not None
+        assert batch["states_seq"].shape == (2, 1, 2, 8)
+        assert np.all(batch["states_seq"][:, :, 1, :] == 0.0)
+
+
+class TestPrioritizedReplayTdErrors:
+    """R16: update_priorities accepts signed and all-zero TD errors."""
+
+    def test_signed_td_errors_are_used_by_magnitude(self):
+        buf = PrioritizedReplayBuffer(capacity=10, alpha=0.6)
+        for i in range(4):
+            buf.add(_transition(state=i))
+
+        buf.update_priorities([0, 1, 2, 3], [-2.0, 2.0, -0.5, 0.5])
+        _, _, weights = buf.sample(4)
+
+        assert all(isinstance(p, float) for p in buf.priorities)
+        assert buf.priorities[0] == pytest.approx(buf.priorities[1])
+        assert buf.priorities[2] == pytest.approx(buf.priorities[3])
+        assert buf.priorities[0] > buf.priorities[2]
+        assert all(0.0 < w <= 1.0 for w in weights)
+
+    def test_all_zero_td_errors_keep_the_buffer_sampleable(self):
+        buf = PrioritizedReplayBuffer(capacity=10)
+        for i in range(3):
+            buf.add(_transition(state=i))
+
+        buf.update_priorities([0, 1, 2], [0.0, 0.0, 0.0])
+        transitions, indices, weights = buf.sample(3)
+
+        assert len(transitions) == len(indices) == 3
+        assert weights == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_negative_priority_on_add_is_used_by_magnitude(self):
+        buf = PrioritizedReplayBuffer(capacity=10, alpha=1.0)
+        buf.add(_transition(), priority=-3.0)
+
+        assert buf.priorities == [pytest.approx(3.0)]
