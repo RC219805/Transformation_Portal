@@ -81,3 +81,15 @@ def test_save_image_scales_uint16_instead_of_wrapping(tmp_path: Path, writer_bac
 
     assert back[0, 0, 0] == round(30000 / 257)
     assert int(back[1:, 1:].min()) == round(65000 / 257)
+
+
+def test_load_image_scales_raw_16bit_frame_by_dtype(tmp_path: Path) -> None:
+    """A raw 16-bit decode is normalised by 65535; dividing by 255 left values far above 1.0."""
+    deep = np.zeros((8, 8), np.uint16)
+    deep[2:4, 2:4] = 40000
+    Image.fromarray(deep).save(tmp_path / "deep.png")
+
+    loaded = load_image(tmp_path / "deep.png", color_space="BGR", normalize=True)
+
+    assert loaded.dtype == np.float32
+    np.testing.assert_allclose(float(loaded.max()), 40000 / 65535, rtol=1e-6)

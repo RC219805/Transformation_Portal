@@ -186,3 +186,42 @@ def test_smooth_depth_bilateral_constant_depth_stays_constant():
     depth = np.full((8, 8), 7.5, dtype=np.float32)
 
     np.testing.assert_array_equal(smooth_depth(depth, method="bilateral", sigma=2.0), depth)
+
+
+@pytest.mark.parametrize("explicit_mask", [False, True])
+def test_inpaint_depth_holes_without_opencv_treats_non_finite_pixels_as_holes(explicit_mask, monkeypatch):
+    """D-04: without OpenCV, NaN/inf pixels are holes too and must not poison the fill value."""
+    monkeypatch.setattr("transformation_portal.depth.utils.depth_utils.CV2_AVAILABLE", False)
+    depth = _ramp(lo=1.0, hi=10.0)
+    holed = depth.copy()
+    holed[4, 4] = np.nan
+    holed[5, 5] = np.inf
+    mask = None
+    hole = ~np.isfinite(holed)
+    if explicit_mask:
+        mask = np.zeros(depth.shape, dtype=np.uint8)
+        mask[0:3, 0:3] = 1
+        hole |= mask.astype(bool)
+
+    out = inpaint_depth_holes(holed, mask=mask)
+
+    assert np.isfinite(out).all()
+    np.testing.assert_array_equal(out[~hole], depth[~hole])
+    np.testing.assert_allclose(out[hole], holed[~hole].mean(), rtol=1e-6)
+
+
+@requires_cv2
+def test_inpaint_depth_holes_constant_depth_keeps_its_value():
+    """D-04: constant valid depth has no span to normalise over; holes take that constant, not 0 or 1."""
+    depth = np.full((16, 16), 5.0, dtype=np.float32)
+    depth[4:6, 4:6] = 0.0
+
+    np.testing.assert_array_equal(inpaint_depth_holes(depth), np.full((16, 16), 5.0, dtype=np.float32))
+
+
+@requires_cv2
+def test_inpaint_depth_holes_without_valid_pixels_returns_zeros():
+    out = inpaint_depth_holes(np.full((8, 8), np.nan, dtype=np.float32))
+
+    assert out.dtype == np.float32
+    np.testing.assert_array_equal(out, np.zeros((8, 8), dtype=np.float32))
