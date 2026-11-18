@@ -58,6 +58,27 @@ def test_jcs_rejects_non_finite_numbers():
         dumps({"x": float("inf")})
 
 
+@pytest.mark.parametrize("number", [0.5, 1e-5, 1e-7, 123456.789, 1e21, 1e22, -2.5e-9, 0.1 + 0.2])
+def test_jcs_serializes_float_subclasses_like_plain_floats(number: float):
+    """np.float64 is a float; its NumPy 2 repr must not leak into the canonical text."""
+    canonical = dumps({"m": np.float64(number)})
+
+    assert canonical == dumps({"m": number})
+    assert json.loads(canonical) == {"m": number}
+    assert sha256_hex_of_canonical_json({"m": np.float64(number)}) == sha256_hex_of_canonical_json({"m": number})
+
+
+def test_jcs_rejects_non_finite_float_subclass():
+    with pytest.raises(ValueError, match="Non-finite"):
+        dumps({"x": np.float64("nan")})
+
+
+@pytest.mark.parametrize("payload", [{1: "a"}, {"a": 1, 2: "b"}, {None: 1}, {("a",): 1}])
+def test_jcs_rejects_non_string_keys_with_type_error(payload: dict):
+    with pytest.raises(TypeError, match="string object keys"):
+        dumps(payload)
+
+
 def test_compute_artifact_id_is_stable_across_dtype_and_layout():
     base = np.arange(24, dtype=np.float32).reshape(2, 4, 3)
     be_fortran = np.asarray(base, dtype=">f4", order="F")
