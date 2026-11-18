@@ -21,6 +21,7 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
     SoftMaskPatch,
     TileInstance,
     TileManifest,
+    TileSegmentationResult,
     TileSpec,
 )
 from transformation_portal.spatial_ai.segmentation.tiling.validator import SeamMergeValidator
@@ -629,8 +630,9 @@ class _GroundTruthCropBackend:
     name = "stub"
     device = "cpu"
 
-    def __init__(self, masks_for_tile):
+    def __init__(self, masks_for_tile, *, tight=False):
         self._masks_for_tile = masks_for_tile
+        self._tight = tight
 
     def global_seed_pass(self, **kwargs):
         del kwargs
@@ -644,12 +646,17 @@ class _GroundTruthCropBackend:
             crop = full_mask[box.y0 : box.y1, box.x0 : box.x1]
             if not crop.any():
                 continue
+            patch_bbox = BBox(0, 0, box.w, box.h)
+            if self._tight:
+                rows, cols = np.nonzero(crop)
+                patch_bbox = BBox(int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1)
+                crop = crop[patch_bbox.y0 : patch_bbox.y1, patch_bbox.x0 : patch_bbox.x1]
             instances.append(
                 TileInstance(
                     local_id=f"{tile_spec.tile_id}:{idx}",
                     score=0.9,
                     stability_score=0.9,
-                    soft_mask=SoftMaskPatch(bbox=BBox(0, 0, box.w, box.h), values=crop.astype(np.float32), space="prob"),
+                    soft_mask=SoftMaskPatch(bbox=patch_bbox, values=crop.astype(np.float32), space="prob"),
                 )
             )
         return tuple(instances)
@@ -717,6 +724,62 @@ def test_tiling_reproduces_ground_truth_when_all_tiles_agree():
     assert np.array_equal(result.masks[0], floor)
     assert np.array_equal(result.masks[1], rug)
     assert np.array_equal(result.masks[2], lamp)
+
+
+def _merge_ground_truth_directly(masks_for_tile, *, width, height, tight, tile_size_px=200, overlap_px=50):
+    config = SegmentationTilingConfig(enabled=True, tile_size_px=tile_size_px, overlap_px=overlap_px)
+    manifest = UniformTilingPlanner().plan(
+        image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
+    )
+    backend = _GroundTruthCropBackend(masks_for_tile, tight=tight)
+    tile_results = [
+        TileSegmentationResult(
+            image_hash="abc",
+            tile_id=tile.tile_id,
+            tile_spec=tile,
+            instances=backend.segment_tile(tile_spec=tile),
+            runtime_s=0.0,
+        )
+        for tile in manifest.tiles
+    ]
+    return BinaryUnionTileMerger().merge(
+        image_hash="abc",
+        W=width,
+        H=height,
+        manifest=manifest,
+        tile_results=tile_results,
+        global_hints=None,
+        merge_config=config.merge,
+    )
+
+
+def test_tiling_merge_does_not_depend_on_patch_crop():
+    """Full-tile patches (what SAM2 emits) and tight-bbox patches of the same masks merge identically.
+
+    Covers the band metrics (two tiles that see the same object shifted by five rows, plus a whole with a nested
+    part) and the per-tile vote (a tile that splits an object in two).
+    """
+    height, width = 60, 300
+    shifted_left = _rect_mask(height, width, (0, 15), (150, 200))
+    shifted_right = _rect_mask(height, width, (5, 20), (150, 200))
+    sofa = _rect_mask(height, width, (25, 58), (20, 280))
+    cushion = _rect_mask(height, width, (30, 50), (160, 190))
+    left_part = _rect_mask(height, width, (25, 58), (20, 170))
+    right_part = _rect_mask(height, width, (25, 58), (170, 200))
+
+    def masks_for_tile(tile):
+        if tile.bbox.x0 == 0:
+            return [shifted_left, sofa, cushion, left_part, right_part]
+        return [shifted_right, sofa, cushion, left_part | right_part]
+
+    full = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=False)
+    tight = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=True)
+
+    assert full[0].shape == tight[0].shape
+    assert np.array_equal(full[0], tight[0])
+    assert np.array_equal(full[1], tight[1])
+    assert full[3]["seam_metrics"] == tight[3]["seam_metrics"]
+    assert full[3]["seam_metrics"]["merged_pair_count"] > 0
 
 
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):
