@@ -331,6 +331,90 @@ def test_process_single_image_8bit_output_is_unchanged_pillow_route(tmp_path: Pa
     assert destination.read_bytes() == reference.read_bytes()
 
 
+@pytest.mark.parametrize(
+    ("dpi", "unit", "expected_unit"),
+    [((300, 300), None, 2), ((72.5, 144.25), None, 2), ((118, 59), "cm", 3)],
+)
+def test_process_single_image_16bit_output_keeps_dpi_and_single_icc(
+    tmp_path: Path, dpi: tuple[float, float], unit: str | None, expected_unit: int
+):
+    """M-10: the tifffile (16-bit) writer kept neither DPI nor a single ICC tag."""
+
+    tifffile = pytest.importorskip("tifffile")
+    ImageCms = pytest.importorskip("PIL.ImageCms")  # pylint: disable=invalid-name
+
+    arr = np.random.default_rng(10).integers(0, 256, size=(8, 12, 3), dtype=np.uint8)
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    source = tmp_path / "frame8.tif"
+    save_kwargs: Dict[str, Any] = {"compression": "tiff_lzw", "icc_profile": icc, "description": "Luxury"}
+    if unit is None:
+        save_kwargs["dpi"] = dpi
+    else:
+        save_kwargs.update(x_resolution=dpi[0], y_resolution=dpi[1], resolution_unit=unit)
+    Image.fromarray(arr).save(source, **save_kwargs)
+    with Image.open(source) as image:
+        source_resolution = (image.tag_v2[282], image.tag_v2[283])
+        assert int(image.tag_v2[296]) == expected_unit
+        source_dpi = image.info["dpi"]
+
+    destination = tmp_path / "out" / "frame16.tif"
+    profile = ltiff.PROCESSING_PROFILES["balanced"]  # 8-bit sources become 16-bit masters
+    ltiff.process_single_image(source, destination, ltiff.AdjustmentSettings(), compression="none", profile=profile)
+
+    with tifffile.TiffFile(destination) as written:
+        page = written.pages[0]
+        assert page.dtype == np.uint16
+        codes = [tag.code for tag in page.tags]
+        resolution = (page.tags[282].value, page.tags[283].value)
+        written_unit = int(page.tags[296].value)
+        icc_values = [tag.value for tag in page.tags if tag.code == 34675]
+        description = page.tags[270].value
+    assert len(codes) == len(set(codes))
+    assert icc_values == [icc]
+    assert description == "Luxury"
+    assert written_unit == expected_unit
+    for written_value, source_value in zip(resolution, source_resolution):
+        assert written_value[0] / written_value[1] == pytest.approx(float(source_value))
+    with Image.open(destination) as reread:
+        assert reread.info["dpi"] == pytest.approx(source_dpi)
+        assert reread.info["icc_profile"] == icc
+
+
+def test_save_image_16bit_writes_icc_from_metadata_when_no_profile_given(tmp_path: Path):
+    """The tifffile writer keeps a metadata-only ICC tag once, as the Pillow writer does."""
+
+    tifffile = pytest.importorskip("tifffile")
+    icc = b"\x00\x01icc-profile-bytes"
+    destination = tmp_path / "meta_icc.tif"
+    io_utils.save_image(destination, _fine_grained_uint16((4, 6, 3)), np.uint16, {34675: icc, 270: "x"}, None, "none")
+    with tifffile.TiffFile(destination) as written:
+        page = written.pages[0]
+        icc_values = [tag.value for tag in page.tags if tag.code == 34675]
+        resolution_unit = int(page.tags[296].value)
+    assert icc_values == [icc]
+    assert resolution_unit == 1  # no source resolution: tifffile's own default stays
+
+
+def test_save_image_8bit_output_matches_direct_pillow_save(tmp_path: Path):
+    """M-10 fix is confined to the tifffile writer: 8-bit deliverables are byte-identical to Pillow's."""
+
+    ImageCms = pytest.importorskip("PIL.ImageCms")  # pylint: disable=invalid-name
+    arr = np.random.default_rng(11).integers(0, 256, size=(9, 13, 3), dtype=np.uint8)
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    source = tmp_path / "src8.tif"
+    Image.fromarray(arr).save(source, compression="tiff_lzw", dpi=(300, 300), icc_profile=icc, description="Luxury")
+    with Image.open(source) as image:
+        metadata = image.tag_v2
+        destination = tmp_path / "via_save_image.tif"
+        io_utils.save_image(destination, arr, np.uint8, metadata, icc, "tiff_lzw")
+        reference = tmp_path / "direct_pillow.tif"
+        safe = io_utils.sanitize_tiff_metadata(metadata)
+        Image.fromarray(arr, mode="RGB").save(reference, format="TIFF", compression="tiff_lzw", tiffinfo=safe, icc_profile=icc)
+    assert destination.read_bytes() == reference.read_bytes()
+    with Image.open(destination) as reread:
+        assert reread.info["dpi"] == pytest.approx((300.0, 300.0))
+
+
 def test_read_full_precision_pixels_warns_without_tifffile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ):

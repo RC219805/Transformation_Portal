@@ -643,6 +643,59 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
     return None
 
 
+# Tags the tifffile branch of ``save_image`` writes itself (from the array, the
+# keyword arguments or the ICC profile); tifffile refuses them as extratags.
+_TIFFFILE_WRITER_OWNED_TAGS = frozenset({258, 259, 262, 277, 278, 282, 283, 284, 296, 317, 338, 339, 34675})
+_TIFF_ICC_PROFILE_TAG = 34675
+_TIFF_RESOLUTION_UNITS = frozenset({1, 2, 3})  # NONE, INCH, CENTIMETER
+_TIFF_DEFAULT_RESOLUTION_UNIT = 2  # TIFF 6.0 default when ResolutionUnit is absent
+
+
+def _resolution_component(value: Any) -> Optional[Union[Tuple[int, int], float]]:
+    """Return one X/YResolution value as a tifffile rational, or None when unusable."""
+
+    if isinstance(value, (tuple, list)) and len(value) == 1:
+        value = value[0]
+    numerator = getattr(value, "numerator", None)
+    denominator = getattr(value, "denominator", None)
+    if isinstance(numerator, int) and isinstance(denominator, int) and not isinstance(value, bool):
+        if numerator > 0 and denominator > 0 and numerator <= 0xFFFFFFFF and denominator <= 0xFFFFFFFF:
+            return (numerator, denominator)
+    if isinstance(value, (tuple, list)) and len(value) == 2 and all(isinstance(item, int) for item in value):
+        if value[0] > 0 and value[1] > 0:
+            return (int(value[0]), int(value[1]))
+        return None
+    try:
+        as_float = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isfinite(as_float) and as_float > 0:
+        return as_float
+    return None
+
+
+def _tifffile_resolution_kwargs(metadata: Optional[Dict[int, Any]]) -> Dict[str, Any]:
+    """Map source X/YResolution/ResolutionUnit tags to tifffile's keyword arguments."""
+
+    if not metadata or 282 not in metadata or 283 not in metadata:
+        return {}
+    x_res = _resolution_component(metadata[282])
+    y_res = _resolution_component(metadata[283])
+    if x_res is None or y_res is None:
+        LOGGER.debug("Skipping unusable TIFF resolution %r x %r", metadata[282], metadata[283])
+        return {}
+    unit = metadata.get(296, _TIFF_DEFAULT_RESOLUTION_UNIT)
+    if isinstance(unit, (tuple, list)) and len(unit) == 1:
+        unit = unit[0]
+    try:
+        unit = int(unit)
+    except (TypeError, ValueError):
+        unit = _TIFF_DEFAULT_RESOLUTION_UNIT
+    if unit not in _TIFF_RESOLUTION_UNITS:
+        unit = _TIFF_DEFAULT_RESOLUTION_UNIT
+    return {"resolution": (x_res, y_res), "resolutionunit": unit}
+
+
 def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     # pylint: disable=too-many-branches,too-many-statements
     destination: Path,
@@ -691,11 +744,17 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
         }
         if extrasample_needed or (array_to_write.ndim == 3 and array_to_write.shape[2] > 3):
             tiff_kwargs["extrasamples"] = "unassalpha"
+        tiff_kwargs.update(_tifffile_resolution_kwargs(metadata))
         extratags = []
+        if not icc_profile and metadata and isinstance(metadata.get(_TIFF_ICC_PROFILE_TAG), (bytes, bytearray)):
+            icc_profile = bytes(metadata[_TIFF_ICC_PROFILE_TAG])
         if icc_profile:
-            extratags.append((34675, "B", len(icc_profile), icc_profile, False))
+            extratags.append((_TIFF_ICC_PROFILE_TAG, "B", len(icc_profile), icc_profile, False))
         if metadata:
             for tag, value in metadata.items():
+                with contextlib.suppress(TypeError, ValueError):
+                    if int(tag) in _TIFFFILE_WRITER_OWNED_TAGS:
+                        continue
                 extratag = _metadata_to_extratag(tag, value)
                 if extratag is not None:
                     extratags.append(extratag)
