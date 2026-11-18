@@ -241,3 +241,27 @@ def test_get_processing_recommendations_matrix(
 
     for key, expected_value in expected.items():
         assert recommendations[key] == expected_value
+
+
+def test_structured_space_type_answer_beats_keywords_elsewhere() -> None:
+    analyzer = _analyzer(
+        "1. SPACE TYPE: Interior view of a kitchen.\n"
+        "2. ROOM TYPE: kitchen with overhead pendant lights\n"
+        "4. MATERIALS: an open SPACE plan\n"
+        "6. LIGHTING:\nnatural light"
+    )
+
+    analysis = analyzer.analyze("image-token")
+
+    assert analysis.space_type is SpaceType.INTERIOR
+    assert analysis.room_type is RoomType.KITCHEN
+    assert analysis.luxury_features == []
+    assert analysis.lighting_conditions == "natural light"
+    assert analyzer.get_processing_recommendations(analysis)["suggested_preset"] == "kitchen-bright"
+
+
+def test_luxury_feature_spa_matches_whole_word_only() -> None:
+    analyzer = _analyzer()
+
+    assert analyzer._extract_luxury_features("A spacious room with a home spa.") == ["spa"]
+    assert analyzer._extract_luxury_features("A spacious open space.") == []

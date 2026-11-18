@@ -196,3 +196,52 @@ def test_validate_enhancement_detects_regression_and_new_artifacts() -> None:
     assert result["enhancement_validation"]["new_artifacts_introduced"] is True
     assert result["enhancement_validation"]["score_delta"] == pytest.approx(-0.8)
     assert result["enhancement_validation"]["enhancement_valid"] is False
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "Overall this image would not pass as professional photography; the walls are visibly warped.",
+            ValidationStatus.FAIL,
+        ),
+        ("Rate overall: FAIL. The image otherwise looks like it could pass at a glance.", ValidationStatus.FAIL),
+        ("Rating: PASS. No warnings and nothing failed.", ValidationStatus.PASS),
+        ("PASS - photorealistic, geometry and materials are consistent.", ValidationStatus.PASS),
+        ("Rate overall: PASS / WARNING / FAIL", ValidationStatus.WARNING),
+        ("A bypass road is visible behind the house.", ValidationStatus.UNKNOWN),
+    ],
+)
+def test_quick_verdict_uses_whole_word_tokens_and_negation(text: str, expected: ValidationStatus) -> None:
+    validator = _validator(text)
+
+    assert validator._quick_verdict(text) is expected
+    report = validator.validate("image-token", detailed=False)
+    assert report.passed_validation is (expected is ValidationStatus.PASS)
+
+
+def test_aspect_issues_are_not_taken_from_the_next_aspect() -> None:
+    text = """1. PHOTOGRAPHIC REALISM: Score: 9/10
+Issues: none
+2. STRUCTURAL ACCURACY: Score: 3/10
+Issues: warped door frame and bent ceiling line
+3. MATERIAL CONSISTENCY: Score: 9/10
+Issues: none
+"""
+    validator = _validator(_detailed_response())
+
+    assert validator._extract_issues_for_aspect(text, "structural accuracy") == ["warped door frame and bent ceiling line"]
+    assert validator._extract_issues_for_aspect(text, "photographic realism") == []
+
+
+def test_aspect_without_issues_line_does_not_borrow_the_next_one() -> None:
+    text = "1. PHOTOGRAPHIC REALISM: Score: 9/10\n2. STRUCTURAL ACCURACY: Score: 3/10\nIssues: warped door frame\n"
+
+    assert _validator(_detailed_response())._extract_issues_for_aspect(text, "photographic realism") == []
+
+
+def test_extract_artifacts_ignores_negated_clauses_and_partial_words() -> None:
+    validator = _validator(_detailed_response())
+
+    assert validator._extract_artifacts("ARTIFACTS: None. No halos or noise are visible.") == []
+    assert validator._extract_artifacts("ARTIFACTS: no noise, but visible halos around windows.") == ["halo"]
