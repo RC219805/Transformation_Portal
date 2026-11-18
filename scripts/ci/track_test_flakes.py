@@ -27,9 +27,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER_PATH = REPO_ROOT / "tests" / "flake_ledger.json"
 
 
-def load_ledger() -> dict[str, Any]:
-    """Load the flake tracking ledger."""
-    if not LEDGER_PATH.exists():
+def load_ledger(ledger_path: Path | None = None) -> dict[str, Any]:
+    """Load the flake tracking ledger (``ledger_path`` defaults to ``LEDGER_PATH``)."""
+    path = LEDGER_PATH if ledger_path is None else Path(ledger_path)
+    if not path.exists():
         return {
             "version": "1.0.0",
             "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -42,24 +43,25 @@ def load_ledger() -> dict[str, Any]:
             "tests": {},
         }
 
-    with open(LEDGER_PATH) as f:
+    with open(path) as f:
         return json.load(f)
 
 
-def save_ledger(ledger: dict[str, Any]) -> None:
-    """Save the flake tracking ledger with atomic writes."""
+def save_ledger(ledger: dict[str, Any], ledger_path: Path | None = None) -> None:
+    """Save the flake tracking ledger with atomic writes (``ledger_path`` defaults to ``LEDGER_PATH``)."""
+    path = LEDGER_PATH if ledger_path is None else Path(ledger_path)
     ledger["last_updated"] = datetime.now(timezone.utc).isoformat()
-    LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     # Atomic write: write to temp file, then replace
-    temp_path = LEDGER_PATH.with_suffix(".tmp")
+    temp_path = path.with_suffix(".tmp")
     try:
         with open(temp_path, "w") as f:
             json.dump(ledger, f, indent=2, sort_keys=False)
             f.write("\n")  # Trailing newline
             f.flush()  # Ensure data written to disk
         # Atomic rename (POSIX guarantees atomicity)
-        temp_path.replace(LEDGER_PATH)
+        temp_path.replace(path)
     except Exception as e:
         # Clean up temp file on error
         if temp_path.exists():
@@ -189,8 +191,7 @@ def print_summary(ledger: dict[str, Any]) -> None:
                 status_icon = "🔴" if record["status"] == "quarantined" else "🟡"
                 print(f"{status_icon} {test_id}")
                 print(
-                    f"   Flake rate: {record['flake_rate']*100:.2f}% "
-                    f"({record['flake_count']}/{record['total_runs']} runs)"
+                    f"   Flake rate: {record['flake_rate']*100:.2f}% " f"({record['flake_count']}/{record['total_runs']} runs)"
                 )
                 print(f"   Last outcome: {record['last_outcome']}")
                 print()
@@ -228,13 +229,13 @@ def main() -> int:
         return 1
 
     # Load ledger
-    ledger = load_ledger()
+    ledger = load_ledger(args.ledger)
 
     # Process report
     ledger = process_report(args.report, ledger)
 
     # Save ledger
-    save_ledger(ledger)
+    save_ledger(ledger, args.ledger)
 
     # Print summary
     if not args.quiet:
