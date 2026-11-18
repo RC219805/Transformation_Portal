@@ -306,6 +306,44 @@ def test_invalidate_with_before_filter_only_removes_old_entries(make_executor, t
     assert all(not p.exists() for p in cache_files)
 
 
+def test_invalidate_accepts_a_naive_local_before_time(make_executor):
+    """``invalidate(before=datetime.now())`` is the obvious call and must work."""
+    executor = make_executor()
+    graph = StageGraph("naive-before")
+    graph.add_stage(_RecordingStage("only"))
+    executor.execute(graph, StageContext())
+    cache_files = list((executor.cache_dir / "dag_cache").rglob("*.json"))
+    assert cache_files
+
+    an_hour_ago = _dt.datetime.now() - _dt.timedelta(hours=1)
+    assert executor.invalidate(before=an_hour_ago) == 0
+    assert all(p.exists() for p in cache_files)
+
+    in_an_hour = _dt.datetime.now() + _dt.timedelta(hours=1)
+    assert executor.invalidate(before=in_an_hour) == len(cache_files)
+    assert all(not p.exists() for p in cache_files)
+
+
+@pytest.mark.parametrize("cached_at", ["not-a-timestamp", "2020-01-01T00:00:00", 12345, None])
+def test_invalidate_skips_entries_with_an_unusable_timestamp(make_executor, cached_at):
+    """One malformed entry must not abort the sweep over the others."""
+    executor = make_executor()
+    graph = StageGraph("bad-timestamp")
+    graph.add_stage(_RecordingStage("good"))
+    graph.add_stage(_RecordingStage("odd"))
+    executor.execute(graph, StageContext())
+    by_stage = {json.loads(p.read_text())["stage_name"]: p for p in (executor.cache_dir / "dag_cache").rglob("*.json")}
+    manifest = json.loads(by_stage["odd"].read_text())
+    manifest["cached_at"] = cached_at
+    by_stage["odd"].write_text(json.dumps(manifest))
+
+    removed = executor.invalidate(before=_dt.datetime(9999, 1, 1, tzinfo=_dt.timezone.utc))
+
+    assert not by_stage["good"].exists()
+    assert removed == (2 if cached_at is None else 1)
+    assert by_stage["odd"].exists() is (cached_at is not None)
+
+
 def test_invalidate_with_unknown_stage_name_is_no_op(make_executor):
     executor = make_executor()
     graph = StageGraph("unknown-pipeline")

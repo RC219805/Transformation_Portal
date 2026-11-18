@@ -647,7 +647,8 @@ class CASDAGExecutor:
 
         Args:
             stage_names: Specific stages to invalidate (None = all)
-            before: Invalidate entries older than this time
+            before: Invalidate entries older than this time. A naive value is
+                taken as local time, as ``datetime.now()`` returns it.
 
         Returns:
             Number of cache entries invalidated
@@ -659,6 +660,10 @@ class CASDAGExecutor:
 
         if not dag_cache.exists():
             return 0
+
+        if before is not None and before.tzinfo is None:
+            # Entries record an aware UTC time; a naive bound cannot be compared with it.
+            before = before.astimezone(timezone.utc)
 
         for prefix_dir in dag_cache.iterdir():
             if not prefix_dir.is_dir():
@@ -685,7 +690,8 @@ class CASDAGExecutor:
                     cache_file.unlink()
                     count += 1
 
-                except (json.JSONDecodeError, OSError):
+                except (OSError, ValueError, TypeError, AttributeError):
+                    # Unreadable or malformed entry (bad JSON, bad timestamp): skip it
                     continue
 
         logger.info("Invalidated %d cache entries", count)
