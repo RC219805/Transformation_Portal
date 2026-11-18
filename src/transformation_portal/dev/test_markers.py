@@ -176,8 +176,11 @@ def _test_directory_parts(file_path: Path, tests_root: Path | None = None) -> tu
 
     Components above the tests root (e.g. a CI workspace ``/ci/stress/repo``)
     must not decide markers or skips. The tests root is ``tests_root`` when
-    given and ``file_path`` is under it, otherwise the innermost ``tests``
-    directory component. Paths with neither keep all directory components.
+    given and ``file_path`` is under it, otherwise the outermost ``tests``
+    directory component, so a ``tests`` directory nested inside the tests
+    tree (``tests/fixtures/<project>/tests``, ``tests/integration/tests``)
+    keeps its enclosing skip / marker directories. Paths with neither keep
+    all directory components.
     """
     directory = file_path.parent
     if tests_root is not None:
@@ -187,9 +190,22 @@ def _test_directory_parts(file_path: Path, tests_root: Path | None = None) -> tu
             pass
     parts = directory.parts
     if "tests" in parts:
-        anchor = len(parts) - 1 - parts[::-1].index("tests")
-        return parts[anchor + 1 :]
+        return parts[parts.index("tests") + 1 :]
     return parts
+
+
+def _tests_root_for_directory(directory: Path) -> Path | None:
+    """Return the tests root for a directory named on the command line.
+
+    That is the directory itself or its innermost ``tests`` ancestor, so
+    directories above it (a CI workspace, even one named ``tests``) never
+    decide markers or skips. Returns None when no component is ``tests``.
+    """
+    parts = directory.parts
+    if "tests" not in parts:
+        return None
+    anchor = len(parts) - 1 - parts[::-1].index("tests")
+    return Path(*parts[: anchor + 1])
 
 
 def get_directory_marker(file_path: Path, tests_root: Path | None = None) -> list[str]:
@@ -525,21 +541,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     dry_run = args.dry_run
 
-    # Collect test files
-    test_files: list[Path] = []
+    # Collect test files (with the tests root of the directory they were found in)
+    test_roots: dict[Path, Path | None] = {}
     for path_str in args.paths:
         path = Path(path_str)
         if path.is_file():
-            test_files.append(path)
+            test_roots.setdefault(path, None)
         elif path.is_dir():
-            test_files.extend(path.rglob("test_*.py"))
+            root = _tests_root_for_directory(path)
+            for found in path.rglob("test_*.py"):
+                test_roots.setdefault(found, root)
+    test_files = list(test_roots)
 
     # Process files
     modified_count = 0
     skipped_reasons: dict[str, int] = {}
 
     for file_path in sorted(test_files):
-        modified, reason = process_file(file_path, dry_run=dry_run)
+        modified, reason = process_file(file_path, dry_run=dry_run, tests_root=test_roots[file_path])
         if modified:
             modified_count += 1
             print(f"{'[DRY-RUN] ' if dry_run else ''}Modified: {file_path}")

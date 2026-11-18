@@ -1400,3 +1400,24 @@ class TestRetrofitRegressions:
         modified, reason = process_file(file_path, dry_run=True)
 
         assert modified is True, reason
+
+    def test_nested_tests_directory_keeps_enclosing_skip_and_marker_dirs(self) -> None:
+        """A ``tests`` directory inside the tests tree must not hide ``fixtures`` / ``integration``."""
+        fixture = Path("tests/fixtures/sample_project/tests/test_sample.py")
+        modified, reason = process_file(fixture, dry_run=True)
+        assert (modified, reason) == (False, "in skip directory: fixtures")
+        assert get_directory_marker(Path("tests/integration/tests/test_i.py")) == ["integration"]
+
+    def test_cli_anchors_markers_and_skips_at_the_named_tests_directory(self, tmp_path: Path) -> None:
+        """Directories above the tests root named on the CLI never decide markers, even below a ``tests`` parent."""
+        root = tmp_path / "tests" / "stress" / "repo" / "tests"
+        (root / "fixtures" / "proj" / "tests").mkdir(parents=True)
+        plain = root / "test_a.py"
+        fixture = root / "fixtures" / "proj" / "tests" / "test_fixture.py"
+        for path in (plain, fixture):
+            path.write_text("def test_a():\n    assert 1 + 1 == 2\n", encoding="utf-8")
+
+        assert main(["--apply", str(root)]) == 0
+
+        assert "pytestmark = pytest.mark.unit" in plain.read_text(encoding="utf-8")
+        assert "pytestmark" not in fixture.read_text(encoding="utf-8")
