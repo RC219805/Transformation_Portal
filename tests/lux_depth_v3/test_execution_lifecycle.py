@@ -323,19 +323,25 @@ def test_prepared_orchestrator_uses_authorized_path_after_alias_retarget(
     monkeypatch.setattr(orchestrator, "_require_prepared_input", authorize_then_retarget)
 
     if boundary == "preprocess":
+        skip_check_paths: list[Path] = []
 
         def should_skip_depth(
             _depth_path: Path,
             _manifest_path: Path,
             authorized_input: ImageInput,
         ) -> bool:
-            observed["path"] = authorized_input.path
-            observed["payload"] = authorized_input.path.read_bytes()
+            skip_check_paths.append(authorized_input.path)
             return False
 
         monkeypatch.setattr(orchestrator, "should_skip_depth", should_skip_depth)
         result = orchestrator._preprocess_single(ImageInput(alias), root)
         assert result["image_input"].path == image.resolve()
+        # A prepared run decides depth reuse once, at the execution boundary, so
+        # preprocessing only hands the pinned input on. Whatever consults the
+        # input at this boundary must see the authorized path, never the alias.
+        assert set(skip_check_paths) <= {image.resolve()}
+        observed["path"] = result["image_input"].path
+        observed["payload"] = result["image_input"].path.read_bytes()
     else:
 
         authorized_input = orchestrator._authorize_prepared_image_input(ImageInput(alias))
@@ -1138,6 +1144,74 @@ def test_prepared_runtime_fallback_restarts_the_carried_chain_for_every_image(
         assert manifest["backend_selection"]["requested_backend"] == "da3"
         assert manifest["backend_selection"]["resolved_backend"] == backend
         assert manifest["depth"]["stats"]["backend"] == backend
+
+
+def test_prepared_parallel_batch_builds_one_reuse_snapshot_per_image(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parallel preprocessing must not build a second, discarded reuse snapshot per image.
+
+    A prepared run decides depth reuse at the execution boundary. The parallel
+    preprocess step used to build the same full snapshot first (re-reading and
+    re-hashing the manifest, the depth artifacts and the source image) only to
+    keep a boolean that the execution boundary then overwrote.
+    """
+    from collections import Counter
+
+    import numpy as np
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    root = tmp_path / "inputs"
+    root.mkdir()
+    images: list[Path] = []
+    for index in range(5):
+        pixels = np.zeros((48, 64, 3), dtype=np.uint8)
+        pixels[..., 0] = np.linspace(0, 255, 64).astype(np.uint8)[None, :]
+        pixels[..., 1] = 40 * index + 10
+        image = root / f"frame_{index}.png"
+        Image.fromarray(pixels).save(image)
+        images.append(image)
+    output = tmp_path / "output"
+
+    def run_batch() -> tuple[list[dict[str, object]], Counter[str]]:
+        prepared = prepare_lux_execution(_synthetic_config(save_float_depth=True), root, images)
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output)
+        calls: Counter[str] = Counter()
+
+        def count(target: object, name: str) -> None:
+            original = getattr(target, name)
+
+            def counted(*args: object, **kwargs: object) -> object:
+                calls[name] += 1
+                return original(*args, **kwargs)
+
+            monkeypatch.setattr(target, name, counted)
+
+        count(orchestrator, "_parallel_preprocess_batch")
+        count(orchestrator, "_prepared_depth_reuse_snapshot")
+        count(orchestrator, "_compute_prepared_input_sha256")
+        count(orchestrator.depth_backend, "compute")
+        return orchestrator.enhance_batch(root), calls
+
+    fresh_results, fresh_calls = run_batch()
+    resumed_results, resumed_calls = run_batch()
+
+    assert [result["status"] for result in fresh_results] == ["ok"] * 5
+    assert [result["status"] for result in resumed_results] == ["ok"] * 5
+    # Five images take the parallel preprocessing path in both runs.
+    assert fresh_calls["_parallel_preprocess_batch"] == 1
+    assert resumed_calls["_parallel_preprocess_batch"] == 1
+    # The resume still reuses every depth artifact without inference ...
+    assert fresh_calls["compute"] == 5
+    assert resumed_calls["compute"] == 0
+    # ... from exactly one authoritative snapshot per image, bound to the
+    # batch input snapshot rather than a second hash of the original source.
+    assert fresh_calls["_prepared_depth_reuse_snapshot"] == 5
+    assert resumed_calls["_prepared_depth_reuse_snapshot"] == 5
+    assert resumed_calls["_compute_prepared_input_sha256"] == 0
 
 
 def test_depthcrafter_execution_complete_fails_closed(tmp_path: Path) -> None:

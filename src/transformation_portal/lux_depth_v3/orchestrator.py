@@ -8098,11 +8098,20 @@ class EnhanceOrchestrator:
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
         manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
 
-        # Check skip logic (uses cached manifest loading from Phase 1)
-        should_skip = not self.config.force_depth and self.should_skip_depth(
-            depth_path,
-            manifest_path,
-            image_input,
+        # Check skip logic (uses cached manifest loading from Phase 1). A
+        # prepared run decides reuse once, at the execution boundary, from the
+        # exact snapshot it then consumes (``_enhance_image_authorized``
+        # overwrites this hint). Building that full snapshot here as well only
+        # re-read and re-hashed the manifest, depth and float artifacts and the
+        # source image, and then threw the result away.
+        should_skip = (
+            not self.config.force_depth
+            and self._prepared_execution is None
+            and self.should_skip_depth(
+                depth_path,
+                manifest_path,
+                image_input,
+            )
         )
         should_skip = self._authorize_legacy_depth_resume(should_skip)
 
