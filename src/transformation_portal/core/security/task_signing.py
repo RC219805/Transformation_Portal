@@ -301,13 +301,17 @@ class TaskVerifier:
                 keys every task is rejected until one is added.
             max_age_seconds: Maximum task age for freshness check
             track_nonces: If True, track seen nonces for replay protection
-            max_nonce_cache: Maximum nonces to cache
+            max_nonce_cache: Maximum nonces to cache. A nonce is kept until
+                its task is older than ``max_age_seconds``; when the cache is
+                full of such nonces, further tasks are rejected rather than
+                an earlier one being forgotten.
         """
         self.authorized_keys = authorized_keys or set()
         self.max_age = max_age_seconds
         self.track_nonces = track_nonces
         self.max_nonce_cache = max_nonce_cache
-        self._seen_nonces: set[str] = set()
+        # nonce -> time until which its task still passes the freshness check
+        self._seen_nonces: dict[str, float] = {}
         self._verify_count = 0
         self._reject_count = 0
 
@@ -375,13 +379,12 @@ class TaskVerifier:
                 self._reject_count += 1
                 return False
 
-            # Record nonce
-            if self.track_nonces:
-                self._seen_nonces.add(task.nonce)
-                # Trim cache if needed
-                if len(self._seen_nonces) > self.max_nonce_cache:
-                    # Remove oldest (arbitrary since set is unordered)
-                    self._seen_nonces.pop()
+            # Record nonce. A task whose nonce cannot be remembered could be
+            # replayed, so it is refused unless the caller waived the check.
+            if self.track_nonces and not self._remember_nonce(task) and check_nonce:
+                logger.warning("Nonce cache full: nonce=%s cannot be protected from replay", task.nonce[:8])
+                self._reject_count += 1
+                return False
 
             self._verify_count += 1
             logger.debug("Task verified: nonce=%s", task.nonce[:8])
@@ -391,6 +394,26 @@ class TaskVerifier:
             logger.error("Verification error: %s", e)
             self._reject_count += 1
             return False
+
+    def _remember_nonce(self, task: SignedTask) -> bool:
+        """Remember a verified task's nonce for as long as the task stays fresh.
+
+        Only nonces of tasks that are already too old to pass the freshness
+        check are forgotten to make room. Dropping any other entry would let
+        that task be replayed.
+
+        Returns:
+            False if the cache is full of nonces that are still needed
+        """
+        if task.nonce not in self._seen_nonces and len(self._seen_nonces) >= self.max_nonce_cache:
+            now = time.time()
+            for nonce in [nonce for nonce, fresh_until in self._seen_nonces.items() if fresh_until < now]:
+                del self._seen_nonces[nonce]
+            if len(self._seen_nonces) >= self.max_nonce_cache:
+                return False
+
+        self._seen_nonces[task.nonce] = task.timestamp + self.max_age
+        return True
 
     def _verify_signature(self, task: SignedTask) -> bool:
         """Verify task signature using Ed25519.

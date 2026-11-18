@@ -83,6 +83,62 @@ def test_task_verifier_rejects_metadata_moved_into_the_payload() -> None:
     assert verifier.verify(signed) is True
 
 
+class _Clock:
+    """Stand-in for the ``time`` module as task_signing uses it."""
+
+    def __init__(self) -> None:
+        self.now = 1_700_000_000.0
+
+    def time(self) -> float:
+        return self.now
+
+
+def test_replay_is_rejected_after_more_tasks_than_the_nonce_cache_holds() -> None:
+    """A full nonce cache refuses new tasks; it never forgets a nonce that can still be replayed."""
+    private_key, _ = generate_ed25519_keypair()
+    signer = TaskSigner(CertificateSigner(private_key))
+    tasks = [signer.sign({"n": index}) for index in range(8)]
+    verifier = TaskVerifier(authorized_keys={tasks[0].public_key}, max_nonce_cache=3)
+
+    first_pass = [verifier.verify(task) for task in tasks]
+    replay_pass = [verifier.verify(task) for task in tasks]
+
+    assert first_pass == [True, True, True, False, False, False, False, False]
+    assert replay_pass == [False] * 8
+    assert verifier.get_stats()["cached_nonces"] == 3
+
+
+def test_nonces_of_expired_tasks_make_room_for_new_ones(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = _Clock()
+    monkeypatch.setattr(task_signing, "time", clock)
+    private_key, _ = generate_ed25519_keypair()
+    signer = TaskSigner(CertificateSigner(private_key))
+    old_tasks = [signer.sign({"n": index}) for index in range(3)]
+    verifier = TaskVerifier(authorized_keys={old_tasks[0].public_key}, max_age_seconds=300.0, max_nonce_cache=2)
+
+    assert [verifier.verify(task) for task in old_tasks] == [True, True, False]
+
+    clock.now += 301.0
+    fresh = signer.sign({"n": "fresh"})
+
+    assert verifier.verify(fresh) is True
+    assert verifier.verify(fresh) is False  # replay of the fresh task
+    assert verifier.verify(old_tasks[0]) is False  # too old now, so its nonce is no longer needed
+    assert verifier.get_stats()["cached_nonces"] == 1
+
+
+def test_waived_nonce_check_is_not_blocked_by_a_full_nonce_cache() -> None:
+    private_key, _ = generate_ed25519_keypair()
+    signer = TaskSigner(CertificateSigner(private_key))
+    tasks = [signer.sign({"n": index}) for index in range(3)]
+    verifier = TaskVerifier(authorized_keys={tasks[0].public_key}, max_nonce_cache=2)
+    assert [verifier.verify(task) for task in tasks[:2]] == [True, True]
+
+    assert verifier.verify(tasks[2], check_nonce=False) is True
+    assert verifier.verify(tasks[0], check_nonce=False) is True
+    assert verifier.verify(tasks[0]) is False
+
+
 def test_task_signer_requires_crypto_backed_signer() -> None:
     class BrokenSigner:
         pass
