@@ -96,6 +96,9 @@ auto-discovered `./.venv-depth-pro/bin/python` contract and by explicit
 
 **What it does:**
 - Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
+- Refuses to clear an existing `--venv-dir` unless it is empty or an existing virtualenv
+  (regular `pyvenv.cfg`); a symlinked path or the filesystem root is always refused, and any
+  other non-empty directory needs an explicit `--force-clear` (checks also run under `--dry-run`)
 - Creates the isolated Depth Pro venv at `./.venv-depth-pro`
 - Installs the repo-owned pinned Depth Pro surface (`torch==2.13.0`, `torchvision==0.28.0`, `numpy==1.26.4`) plus the Apple `ml-depth-pro` package from a pinned git ref
 - Captures a runtime package snapshot at `.runtime/depth-pro-pip-freeze.txt`

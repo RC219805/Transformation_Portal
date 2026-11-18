@@ -19,6 +19,7 @@ REF="${DEPTH_PRO_RUNTIME_REF:-${DEFAULT_REF}}"
 VERIFY_DEVICE="auto"
 DRY_RUN=false
 SKIP_VERIFY=false
+FORCE_CLEAR=false
 
 usage() {
     cat <<EOF
@@ -38,6 +39,8 @@ OPTIONS:
   --verify-device DEVICE  Device to validate after install: auto|cpu|mps|cuda
   --dry-run               Print commands without executing them
   --skip-verify           Skip the Depth Pro worker readiness check
+  --force-clear           Clear an existing --venv-dir even when it holds no pyvenv.cfg
+                          (it is never a virtualenv this installer created; use with care)
   --help                  Show this help text
 EOF
 }
@@ -100,6 +103,10 @@ while [[ $# -gt 0 ]]; do
             SKIP_VERIFY=true
             shift
             ;;
+        --force-clear)
+            FORCE_CLEAR=true
+            shift
+            ;;
         --help)
             usage
             exit 0
@@ -132,6 +139,51 @@ case "${VERIFY_DEVICE}" in
 esac
 
 BOOTSTRAP_PYTHON="$("${PYTHON_RESOLVER}")"
+
+# ``python -m venv --clear`` deletes every entry of VENV_DIR (and follows a
+# symlinked VENV_DIR into its target). Only clear a directory that is absent,
+# empty, or an existing virtualenv (regular pyvenv.cfg); anything else needs
+# an explicit --force-clear. Symlinked paths and the filesystem root are never
+# cleared. These checks are read-only, so they also run under --dry-run.
+validate_existing_venv_for_clear() {
+    local lexical_venv canonical_venv
+
+    if [[ ! -e "${VENV_DIR}" && ! -L "${VENV_DIR}" ]]; then
+        return 0
+    fi
+    if [[ -L "${VENV_DIR}" || ! -d "${VENV_DIR}" ]]; then
+        printf '[ERROR] Refusing to clear --venv-dir that is a symlink or not a directory: %s\n' "${VENV_DIR}" >&2
+        return 1
+    fi
+    lexical_venv="$("${BOOTSTRAP_PYTHON}" -I -S -c \
+        'import os, sys; print(os.path.abspath(sys.argv[1]))' "${VENV_DIR}")"
+    canonical_venv="$(cd "${VENV_DIR}" && pwd -P)"
+    if [[ "${canonical_venv}" == "/" ]]; then
+        printf '[ERROR] Refusing to clear the filesystem root as --venv-dir: %s\n' "${VENV_DIR}" >&2
+        return 1
+    fi
+    if [[ "${lexical_venv}" != "${canonical_venv}" ]]; then
+        printf '[ERROR] Refusing to clear --venv-dir reached through a symlinked ancestor: %s\n' "${VENV_DIR}" >&2
+        return 1
+    fi
+    if [[ -z "$(ls -A "${VENV_DIR}")" ]]; then
+        return 0
+    fi
+    if [[ -f "${VENV_DIR}/pyvenv.cfg" && ! -L "${VENV_DIR}/pyvenv.cfg" ]]; then
+        return 0
+    fi
+    if [[ "${FORCE_CLEAR}" == "true" ]]; then
+        log "--force-clear: clearing non-virtualenv directory ${VENV_DIR}"
+        return 0
+    fi
+    printf '[ERROR] Refusing to clear --venv-dir that is not an existing virtualenv (no pyvenv.cfg): %s\n' "${VENV_DIR}" >&2
+    printf '[ERROR] Choose an absent or empty directory, or rerun with --force-clear to delete its contents.\n' >&2
+    return 1
+}
+
+if ! validate_existing_venv_for_clear; then
+    exit 1
+fi
 
 if [[ -d "${VENV_DIR}" ]]; then
     log "Refreshing isolated Depth Pro venv at ${VENV_DIR}"
