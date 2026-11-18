@@ -570,11 +570,21 @@ class CASExecutor:
 
         Args:
             stage: Stage to execute
-            inputs: Input artifacts/data
+            inputs: Input artifacts/data, keyed by name. The names and the
+                content of the values identify the cached execution, so every
+                value needs a canonical byte identity: None, bool, int, finite
+                float, str, bytes, NumPy arrays (no object arrays), and lists,
+                tuples and string-keyed dicts of these.
             config: Stage configuration
 
         Returns:
             CacheResult with outputs and cache status
+
+        Raises:
+            TypeError: If an input name is not a string, or a value has no
+                canonical form (a ``Path``, a NumPy scalar, an arbitrary
+                object). Load or hash such an input before passing it.
+            ValueError: If a float input is not finite
         """
         start_time = time.time()
 
@@ -704,7 +714,7 @@ def execute_with_caching(
         stage_fn: Function to execute (inputs, config) -> outputs
         stage_name: Name of the stage
         stage_version: Version of the stage
-        inputs: Input artifacts/data
+        inputs: Input artifacts/data (value types as for ``CASExecutor.execute``)
         config: Configuration
         artifact_store: CAS store
         cache_dir: Cache directory
