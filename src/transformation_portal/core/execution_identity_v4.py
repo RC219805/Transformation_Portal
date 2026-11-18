@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -11,6 +12,21 @@ from transformation_portal.core.execution_plan_v3 import ExecutionPlanV3, Photog
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
 IDENTITY_SCHEMA = "tp.execution.identity.v4"
+
+
+@functools.lru_cache(maxsize=8)
+def _validated_plan(canonical_bytes: bytes) -> tuple[str, dict[str, Any]]:
+    """Validate plan bytes and decode them, once per distinct carrier.
+
+    Identities are materialized once per stage for every input, and a full
+    validation is linear in the input inventory. Its outcome is a pure
+    function of the bytes, so only bytes that already passed are served from
+    the cache; any other carrier is validated in full.
+
+    The payload is shared between calls: read it, never mutate or return it.
+    """
+    plan = parse_photography_plan(canonical_bytes)
+    return plan.schema, plan.to_payload()
 
 
 @dataclass(frozen=True, init=False)
@@ -37,10 +53,11 @@ class MaterializedExecutionIdentityV4:
     ) -> MaterializedExecutionIdentityV4:
         if type(plan) not in (ExecutionPlanV2, ExecutionPlanV3):
             raise ExecutionPlanError("Execution identity requires the exact core-owned plan carrier")
+        if type(plan.canonical_bytes) is not bytes:
+            raise ExecutionPlanError("Plan carrier must be bytes")
         # Reconstruct from immutable bytes rather than trusting a forged object
         # or any caller-supplied projection of the plan.
-        plan = parse_photography_plan(plan.canonical_bytes)
-        payload = plan.to_payload()
+        plan_schema, payload = _validated_plan(plan.canonical_bytes)
         selected_inputs = [item for item in payload["inputs"] if item["id"] == input_id]
         if len(selected_inputs) != 1:
             raise ExecutionPlanError("Execution identity input must belong to the prepared inventory")
@@ -54,8 +71,8 @@ class MaterializedExecutionIdentityV4:
             raise ExecutionPlanError("Model-free stage identity cannot invent a model constituent")
         body = {
             "schema": IDENTITY_SCHEMA,
-            "plan_schema": plan.schema,
-            "plan_fingerprint_sha256": plan.plan_fingerprint_sha256,
+            "plan_schema": plan_schema,
+            "plan_fingerprint_sha256": payload["plan_fingerprint_sha256"],
             "stage_node_id": node_id,
             "stage_registry_id": node["stage"],
             "stage_configuration_sha256": digest_payload(node["configuration"]),

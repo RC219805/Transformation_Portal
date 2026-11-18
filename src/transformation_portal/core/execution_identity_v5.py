@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+import functools
+from typing import Any, Mapping
 
 from transformation_portal.core.cas_dag_executor import AuthoritativeStageIdentity
 from transformation_portal.core.execution_plan import ExecutionPlanError
@@ -10,6 +11,20 @@ from transformation_portal.core.execution_plan_v2 import digest_payload, require
 from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4, parse_plan_v4
 from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.stage_graph.stage import Stage
+
+
+@functools.lru_cache(maxsize=8)
+def _validated_plan_payload(canonical_bytes: bytes) -> dict[str, Any]:
+    """Validate plan bytes and decode them, once per distinct carrier.
+
+    Identities are materialized once per stage for every input, and a full
+    validation is linear in the input inventory. Its outcome is a pure
+    function of the bytes, so only bytes that already passed are served from
+    the cache; any other carrier is validated in full.
+
+    The payload is shared between calls: read it, never mutate or return it.
+    """
+    return parse_plan_v4(canonical_bytes).to_payload()
 
 
 def materialize_stage_identity(
@@ -23,7 +38,9 @@ def materialize_stage_identity(
 ) -> AuthoritativeStageIdentity:
     if type(plan) is not ExecutionPlanV4:
         raise ExecutionPlanError("V5 identity requires the exact core plan")
-    payload = parse_plan_v4(plan.canonical_bytes).to_payload()
+    if type(plan.canonical_bytes) is not bytes:
+        raise ExecutionPlanError("Plan carrier must be bytes")
+    payload = _validated_plan_payload(plan.canonical_bytes)
     selected = [item for item in payload["inputs"] if item["id"] == input_id]
     nodes = [item for item in payload["nodes"] if item["id"] == stage.name]
     if len(selected) != 1 or len(nodes) != 1 or nodes[0]["stage"] != stage.version or set(inputs) != set(nodes[0]["inputs"]):
@@ -45,6 +62,6 @@ def materialize_stage_identity(
         body["model"] = payload["model"]
         body["seed_policy"] = "proxy_content_v1"
     else:
-        body["plan_fingerprint_sha256"] = plan.plan_fingerprint_sha256
+        body["plan_fingerprint_sha256"] = payload["plan_fingerprint_sha256"]
         body["input_id"] = input_id
     return AuthoritativeStageIdentity(stage.name, stage.version, digest_payload(body), canonicalize_json(body))
