@@ -115,6 +115,41 @@ def _fsync_parent_directory(path: Path) -> None:
         pass
 
 
+def _publish_exclusive(staged: Path, dest: Path) -> None:
+    """Publish the regular file ``staged`` at ``dest`` without replacing ``dest``.
+
+    A hard link publishes the complete file in one step and fails if ``dest``
+    exists. Filesystems without hard links (FAT/exFAT volumes, some network
+    mounts) refuse ``os.link``; there ``dest`` is created exclusively and then
+    filled. That keeps the no-replace guarantee, at the price of a destination
+    that is visible while it is being written, and a destination left
+    incomplete by a failed copy is removed again.
+
+    Raises:
+        FileExistsError: If ``dest`` exists or appears before it is published.
+    """
+    try:
+        os.link(staged, dest)
+        return
+    except FileExistsError:
+        raise
+    except OSError:
+        # No hard-link support here; fall back to an exclusive create.
+        pass
+
+    out = open(dest, "xb")  # FileExistsError: someone else owns dest, leave it alone
+    try:
+        with out, staged.open("rb") as source:
+            shutil.copyfileobj(source, out)
+        shutil.copystat(staged, dest)
+    except BaseException:
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass
+        raise
+
+
 class CASError(RuntimeError):
     """Raised for CAS operation failures."""
 
@@ -755,8 +790,8 @@ class ArtifactStore:
             raise CASError(f"Destination exists and overwrite=False: {dest}")
 
         # Build the link or copy in a private staging directory next to
-        # ``dest`` and publish it with a single rename (or an exclusive link
-        # when overwrite=False). Unlinking ``dest`` and then recreating it
+        # ``dest`` and publish it with a single rename (or exclusively, see
+        # _publish_exclusive, when overwrite=False). Unlinking ``dest`` and then recreating it
         # raced with concurrent materializations of the same destination
         # (FileExistsError / FileNotFoundError) and could expose a partially
         # copied file.
@@ -779,7 +814,7 @@ class ArtifactStore:
                         dest.symlink_to(target)
                     else:
                         shutil.copy2(src, staged)
-                        os.link(staged, dest)
+                        _publish_exclusive(staged, dest)
                 except FileExistsError as exc:
                     raise CASError(f"Destination exists and overwrite=False: {dest}") from exc
         finally:

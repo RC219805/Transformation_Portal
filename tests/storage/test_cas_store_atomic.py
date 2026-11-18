@@ -12,6 +12,7 @@ Test Coverage:
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import tempfile
@@ -363,6 +364,80 @@ class TestMaterializeConcurrency:
             store.materialize(obj.sha256, dest, use_symlink=False, overwrite=False)
         assert dest.read_bytes() == b"written by another writer"
         assert [p.name for p in dest.parent.iterdir()] == ["file.bin"]
+
+
+class TestMaterializeWithoutHardLinks:
+    """STOR-06 follow-up: overwrite=False copies must still work where os.link is refused.
+
+    FAT/exFAT volumes and some network mounts have no hard links. The exclusive
+    publish then falls back to an exclusive create instead of failing a
+    materialization that worked before the staging directory existed.
+    """
+
+    @staticmethod
+    def _refuse_hard_links(monkeypatch) -> None:
+        from transformation_portal.storage import cas_store
+
+        def no_hard_links(src, dst, *args, **kwargs):
+            raise PermissionError(errno.EPERM, "Operation not permitted", str(dst))
+
+        monkeypatch.setattr(cas_store.os, "link", no_hard_links)
+
+    def test_overwrite_false_copy_succeeds(self, tmp_path, monkeypatch):
+        store = ArtifactStore(tmp_path / "cas")
+        obj = store.add_bytes(b"fresh" * 1024)
+        dest = tmp_path / "out" / "file.bin"
+        self._refuse_hard_links(monkeypatch)
+
+        assert store.materialize(obj.sha256, dest, use_symlink=False, overwrite=False) == dest
+
+        assert dest.read_bytes() == b"fresh" * 1024
+        assert not dest.is_symlink()
+        # Same metadata a direct shutil.copy2 would have produced.
+        assert dest.stat().st_mode == obj.path.stat().st_mode
+        assert dest.stat().st_mtime_ns == obj.path.stat().st_mtime_ns
+        assert [p.name for p in dest.parent.iterdir()] == ["file.bin"]
+
+    def test_overwrite_false_still_refuses_late_destination(self, tmp_path, monkeypatch):
+        from transformation_portal.storage import cas_store
+
+        store = ArtifactStore(tmp_path / "cas")
+        obj = store.add_bytes(b"fresh")
+        dest = tmp_path / "out" / "file.bin"
+        self._refuse_hard_links(monkeypatch)
+        real_copy2 = cas_store.shutil.copy2
+
+        def racing_copy2(src, dst, *args, **kwargs):
+            # Another writer creates the destination after the existence check.
+            if not dest.exists():
+                dest.write_bytes(b"written by another writer")
+            return real_copy2(src, dst, *args, **kwargs)
+
+        monkeypatch.setattr(cas_store.shutil, "copy2", racing_copy2)
+        with pytest.raises(CASError, match="overwrite=False"):
+            store.materialize(obj.sha256, dest, use_symlink=False, overwrite=False)
+        assert dest.read_bytes() == b"written by another writer"
+        assert [p.name for p in dest.parent.iterdir()] == ["file.bin"]
+
+    def test_failed_fallback_copy_leaves_no_partial_destination(self, tmp_path, monkeypatch):
+        from transformation_portal.storage import cas_store
+
+        store = ArtifactStore(tmp_path / "cas")
+        obj = store.add_bytes(b"fresh" * 1024)
+        dest = tmp_path / "out" / "file.bin"
+        self._refuse_hard_links(monkeypatch)
+        real_copyfileobj = cas_store.shutil.copyfileobj
+
+        def disk_full(fsrc, fdst, *args, **kwargs):
+            if getattr(fdst, "name", None) != str(dest):
+                return real_copyfileobj(fsrc, fdst, *args, **kwargs)
+            fdst.write(fsrc.read(16))
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+        monkeypatch.setattr(cas_store.shutil, "copyfileobj", disk_full)
+        with pytest.raises(OSError, match="No space left on device"):
+            store.materialize(obj.sha256, dest, use_symlink=False, overwrite=False)
+        assert list(dest.parent.iterdir()) == []
 
 
 class TestQuarantineGC:
