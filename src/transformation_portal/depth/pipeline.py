@@ -106,19 +106,30 @@ class ArchitecturalDepthPipeline:
             "base": ModelVariant.BASE,
             "large": ModelVariant.LARGE,
         }
-        variant = variant_map.get(model_config["variant"], ModelVariant.SMALL)
+        variant_name = model_config["variant"]
+        if variant_name not in variant_map:
+            # Fail closed: an unknown variant used to load the SMALL model silently.
+            raise ValueError(f"Unknown depth_model.variant {variant_name!r}; expected one of {sorted(variant_map)}")
+        variant = variant_map[variant_name]
 
-        # Map backend string to enum
+        # Map backend string to enum (absent: auto-detect)
         backend_map = {
             "pytorch_cpu": ModelBackend.PYTORCH_CPU,
             "pytorch_mps": ModelBackend.PYTORCH_MPS,
             "coreml": ModelBackend.COREML,
         }
-        backend = backend_map.get(model_config.get("backend"), None)
+        backend_name = model_config.get("backend")
+        if backend_name is not None and backend_name not in backend_map:
+            # Fail closed: an unknown backend used to fall back to auto-detection silently.
+            raise ValueError(
+                f"Unknown depth_model.backend {backend_name!r}; expected one of {sorted(backend_map)} or no value (auto)"
+            )
+        backend = backend_map.get(backend_name)
 
         model = DepthAnythingV2Model(
             variant=variant,
             backend=backend,
+            device=model_config.get("device"),
             precision=model_config.get("precision", "fp16"),
             model_revision=model_config.get("model_revision"),
             onnx_revision=model_config.get("onnx_revision"),
