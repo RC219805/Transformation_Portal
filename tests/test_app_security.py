@@ -368,3 +368,47 @@ def test_error_response_propagates_headers():
 
 def test_auth_mode_is_direct_debug():
     assert orchestrator_app._auth_mode() == "direct_debug"
+
+
+# ---------------------------------------------------------------------------
+# _has_valid_api_key: non-ASCII credentials must be a 401, never a 500
+# ---------------------------------------------------------------------------
+
+
+def _api_key_request(headers: list[tuple[bytes, bytes]]):
+    from starlette.requests import Request
+
+    return Request({"type": "http", "method": "GET", "path": "/v1/jobs", "query_string": b"", "headers": headers})
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [(b"x-api-key", b"caf\xe9")],
+        [(b"authorization", b"Bearer caf\xe9")],
+        [(b"x-api-key", b"\xff")],
+    ],
+)
+def test_has_valid_api_key_rejects_non_ascii_credentials_without_raising(monkeypatch, headers):
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
+    monkeypatch.setattr(orchestrator_app, "API_KEY_HEADER", "x-api-key")
+
+    assert orchestrator_app._has_valid_api_key(_api_key_request(headers)) is False
+
+
+def test_has_valid_api_key_handles_non_ascii_configured_secret(monkeypatch):
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "caf\u00e9-secret")
+    monkeypatch.setattr(orchestrator_app, "API_KEY_HEADER", "x-api-key")
+
+    assert orchestrator_app._has_valid_api_key(_api_key_request([(b"x-api-key", b"wrong")])) is False
+
+
+def test_non_ascii_api_key_header_returns_unauthorized_envelope(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
+    with TestClient(orchestrator_app.app, raise_server_exceptions=False) as client:
+        response = client.get("/v1/jobs", headers=[(b"x-api-key", b"caf\xe9")])
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"

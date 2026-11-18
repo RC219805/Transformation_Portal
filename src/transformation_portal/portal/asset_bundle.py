@@ -393,8 +393,18 @@ def _requested_portal_asset_fingerprint(request: Request) -> str:
     return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
 
 
+def _constant_time_text_equal(left: str, right: str) -> bool:
+    """Compare client-supplied text in constant time without raising.
+
+    ``hmac.compare_digest`` raises ``TypeError`` for ``str`` operands holding
+    non-ASCII characters, which a percent-decoded query value or a latin-1
+    decoded header can carry; compare the UTF-8 bytes instead.
+    """
+    return hmac.compare_digest(left.encode("utf-8", "surrogatepass"), right.encode("utf-8", "surrogatepass"))
+
+
 def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
-    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
+    if requested_fingerprint and _constant_time_text_equal(requested_fingerprint, current_fingerprint):
         return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     return PORTAL_ASSET_CACHE_CONTROL
 
@@ -411,7 +421,7 @@ def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> b
         normalized = candidate.strip()
         if normalized == "*":
             return True
-        if normalized and hmac.compare_digest(normalized, current_etag):
+        if normalized and _constant_time_text_equal(normalized, current_etag):
             return True
     return False
 

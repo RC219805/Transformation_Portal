@@ -6987,7 +6987,12 @@ def _has_valid_api_key(request: Request) -> bool:
 
     if not provided:
         return False
-    return hmac.compare_digest(provided, API_KEY_SECRET)
+    # Compare bytes: hmac.compare_digest raises TypeError for str operands that
+    # contain non-ASCII characters, which any client can send in a header.
+    return hmac.compare_digest(
+        provided.encode("utf-8", "surrogatepass"),
+        API_KEY_SECRET.encode("utf-8", "surrogatepass"),
+    )
 
 
 def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
