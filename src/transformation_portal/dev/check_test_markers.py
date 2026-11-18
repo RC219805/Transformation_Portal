@@ -98,6 +98,8 @@ class AuditReport:
     unmarked_functions: int = 0
     violations: list[MarkerViolation] = field(default_factory=list)
     marker_counts: dict[str, int] = field(default_factory=dict)
+    files_scanned: int = 0
+    tests_root_missing: bool = False
 
     @property
     def coverage_percent(self) -> float:
@@ -281,8 +283,9 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
     """Perform full audit of test marker coverage."""
     report = AuditReport()
 
-    if not tests_root.exists():
+    if not tests_root.is_dir():
         print(f"ERROR: Tests directory not found: {tests_root}", file=sys.stderr)
+        report.tests_root_missing = True
         return report
 
     # Collect test files matching pytest's python_files config (test_*.py only)
@@ -294,6 +297,7 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
         if "__pycache__" in test_file.parts:
             continue
 
+        report.files_scanned += 1
         test_functions = scan_file(test_file)
 
         for func in test_functions:
@@ -393,6 +397,14 @@ def main() -> int:
         # Full audit mode
         print(f"Auditing test markers in {args.tests_root}/...")
         report = audit_test_directory(args.tests_root, verbose=args.verbose)
+
+        # Fail closed: an audit that scanned nothing (wrong working directory,
+        # mistyped --tests-root) must not report a vacuous 100% coverage pass.
+        if report.tests_root_missing:
+            return 2
+        if report.files_scanned == 0:
+            print(f"ERROR: No test files (test_*.py) found under {args.tests_root}", file=sys.stderr)
+            return 2
 
         print("\n" + "=" * 60)
         print("TEST MARKER AUDIT REPORT (ADR-044)")

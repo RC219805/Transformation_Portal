@@ -966,3 +966,56 @@ class TestStressDirectoryRequirements:
 
         violation = check_marker_requirements(functions[0])
         assert violation is None
+
+
+# =============================================================================
+# Fail-closed CLI Contract Tests (M-25)
+# =============================================================================
+
+
+def _run_main(monkeypatch: pytest.MonkeyPatch, *argv: str) -> int:
+    """Invoke the checker CLI entry point with an explicit argv."""
+    from transformation_portal.dev.check_test_markers import main
+
+    monkeypatch.setattr("sys.argv", ["check_test_markers.py", *argv])
+    return main()
+
+
+class TestAuditFailsClosed:
+    """An audit that scanned nothing must not report a vacuous pass."""
+
+    def test_missing_tests_root_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        missing = tmp_path / "no_such_dir"
+        report = audit_test_directory(missing)
+        assert report.tests_root_missing is True
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(missing)) == 2
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(missing)) == 2
+
+    def test_tests_root_that_is_a_file_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        not_a_dir = tmp_path / "tests"
+        not_a_dir.write_text("", encoding="utf-8")
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(not_a_dir)) == 2
+
+    def test_root_without_test_files_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "conftest.py").write_text("", encoding="utf-8")
+        assert audit_test_directory(tests_dir).files_scanned == 0
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 2
+
+    def test_marked_tree_still_passes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_ok.py").write_text(
+            _src("""
+            import pytest
+
+            pytestmark = pytest.mark.unit
+
+            def test_one():
+                pass
+            """),
+            encoding="utf-8",
+        )
+        assert audit_test_directory(tests_dir).files_scanned == 1
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 0
