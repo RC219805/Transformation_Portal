@@ -1019,3 +1019,56 @@ class TestAuditFailsClosed:
         )
         assert audit_test_directory(tests_dir).files_scanned == 1
         assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 0
+
+
+class TestUnparseableFilesAreViolations:
+    """A test file whose markers cannot be validated must not pass the gate."""
+
+    def test_check_files_flags_syntax_error(self, tmp_path: Path) -> None:
+        broken = tmp_path / "test_broken.py"
+        broken.write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+
+        violations = check_files([broken])
+
+        assert len(violations) == 1
+        assert violations[0].name == "<module>"
+        assert violations[0].lineno == 1
+        assert "syntax error" in violations[0].issue
+
+    def test_check_files_flags_undecodable_source(self, tmp_path: Path) -> None:
+        binary = tmp_path / "test_binary.py"
+        binary.write_bytes(b"\xff\xfe\x00def test_x():\n    pass\n")
+
+        violations = check_files([binary])
+
+        assert len(violations) == 1
+        assert "cannot validate markers" in violations[0].issue
+
+    def test_precommit_mode_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        broken = tmp_path / "test_broken.py"
+        broken.write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+        assert _run_main(monkeypatch, str(broken)) == 1
+
+    def test_audit_counts_unparseable_and_strict_fails(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_ok.py").write_text(
+            _src("""
+            import pytest
+
+            pytestmark = pytest.mark.unit
+
+            def test_one():
+                pass
+            """),
+            encoding="utf-8",
+        )
+        (tests_dir / "test_broken.py").write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+
+        report = audit_test_directory(tests_dir)
+
+        assert report.unparseable_files == 1
+        assert [v.file_path.name for v in report.violations] == ["test_broken.py"]
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 1
+        # Without --strict the audit stays advisory.
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(tests_dir)) == 0

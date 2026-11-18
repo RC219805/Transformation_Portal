@@ -100,6 +100,7 @@ class AuditReport:
     marker_counts: dict[str, int] = field(default_factory=dict)
     files_scanned: int = 0
     tests_root_missing: bool = False
+    unparseable_files: int = 0
 
     @property
     def coverage_percent(self) -> float:
@@ -215,24 +216,45 @@ class TestMarkerVisitor(ast.NodeVisitor):
         return None
 
 
-def scan_file(file_path: Path) -> list[TestFunction]:
-    """Scan a single file for test functions and their markers."""
+def _scan_file_checked(file_path: Path) -> tuple[list[TestFunction], MarkerViolation | None]:
+    """Scan a file; an unreadable or unparseable file yields a violation instead of functions.
+
+    A file whose markers cannot be validated must not pass the gate silently.
+    """
     try:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError as e:
         lineno_info = f" at line {e.lineno}" if e.lineno else ""
         msg_info = f": {e.msg}" if e.msg else ""
-        print(
-            f"WARNING: Cannot validate markers in {file_path} due to syntax error{lineno_info}{msg_info}. "
-            "Fix syntax errors before running marker validation.",
-            file=sys.stderr,
+        return [], MarkerViolation(
+            file_path=file_path,
+            name="<module>",
+            lineno=e.lineno or 0,
+            issue=f"cannot validate markers: syntax error{lineno_info}{msg_info}",
         )
-        return []
+    except (UnicodeDecodeError, ValueError) as e:
+        return [], MarkerViolation(
+            file_path=file_path,
+            name="<module>",
+            lineno=0,
+            issue=f"cannot validate markers: unreadable source ({type(e).__name__})",
+        )
 
     visitor = TestMarkerVisitor(file_path)
     visitor.visit(tree)
-    return visitor.test_functions
+    return visitor.test_functions, None
+
+
+def scan_file(file_path: Path) -> list[TestFunction]:
+    """Scan a single file for test functions and their markers."""
+    test_functions, parse_violation = _scan_file_checked(file_path)
+    if parse_violation is not None:
+        print(
+            f"WARNING: {file_path}: {parse_violation.issue}. Fix the file before running marker validation.",
+            file=sys.stderr,
+        )
+    return test_functions
 
 
 def get_directory_type(file_path: Path) -> str | None:
@@ -298,7 +320,12 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
             continue
 
         report.files_scanned += 1
-        test_functions = scan_file(test_file)
+        test_functions, parse_violation = _scan_file_checked(test_file)
+        if parse_violation is not None:
+            report.unparseable_files += 1
+            report.violations.append(parse_violation)
+            if verbose:
+                print(f"  UNPARSEABLE: {test_file}: {parse_violation.issue}")
 
         for func in test_functions:
             report.total_test_functions += 1
@@ -332,7 +359,9 @@ def check_files(files: Sequence[Path]) -> list[MarkerViolation]:
         if not file_path.name.startswith("test_"):
             continue
 
-        test_functions = scan_file(file_path)
+        test_functions, parse_violation = _scan_file_checked(file_path)
+        if parse_violation is not None:
+            violations.append(parse_violation)
 
         for func in test_functions:
             violation = check_marker_requirements(func)
@@ -428,6 +457,11 @@ def main() -> int:
                 print(f"    {v.issue}")
             if len(report.violations) > MAX_VIOLATIONS_DISPLAY:
                 print(f"  ... and {len(report.violations) - MAX_VIOLATIONS_DISPLAY} more")
+
+        if report.unparseable_files:
+            print(f"\n⚠ {report.unparseable_files} test file(s) could not be parsed; their markers were not validated")
+            if args.strict:
+                return 1
 
         # ADR-044 target: <5% unmarked
         target_coverage = 95.0
