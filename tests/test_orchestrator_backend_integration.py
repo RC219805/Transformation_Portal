@@ -861,6 +861,71 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     assert backend_selection["attempts"][0]["failure_kind"] == "operational"
 
 
+def _enhance_with_every_backend_failing(tmp_path, depth_fallback: str):
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / f"all_fail_{depth_fallback}.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+    config = EnhanceConfig(depth_backend="da3", depth_device="cpu", enable_v2=False, depth_fallback=depth_fallback)
+
+    def failing_backend(backend_id, _config):
+        backend = Mock()
+        backend.name = backend_id
+        backend.license_type = Mock(value="commercial")
+        backend.ensure_available.return_value = None
+        backend.compute.side_effect = RuntimeError(f"{backend_id} cannot run")
+        return backend
+
+    registry = Mock()
+    registry.get_backend.side_effect = failing_backend
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path / "out")
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+    return orchestrator, result
+
+
+def test_v2_auto_after_total_depth_failure_manifest_records_failed_selection(tmp_path):
+    """F9: a manifest must not claim start-up backend success when every depth attempt failed."""
+    import json
+
+    orchestrator, result = _enhance_with_every_backend_failing(tmp_path, "v2-auto")
+
+    assert orchestrator._backend_metadata.resolution_status == "success"
+    assert result["status"] == "ok"
+    assert result["depth_path"] is None
+    attempts = [(a["backend"], a["status"]) for a in result["attempts"]]
+    assert attempts[:2] == [("da3", "failed"), ("da2", "failed")]
+    assert {status for _, status in attempts} == {"failed"}
+
+    backend_selection = json.loads(Path(result["manifest"]).read_text())["backend_selection"]
+    assert backend_selection["requested_backend"] == "da3"
+    assert backend_selection["resolution_status"] == "error"
+    assert backend_selection["resolved_backend"] == "none"
+    assert backend_selection["model_id"] == "none"
+    assert [(a["backend"], a["status"]) for a in backend_selection["attempts"]] == attempts
+    assert "da3 (operational: " in backend_selection["resolution_reason"]
+    assert "depth_fallback=v2-auto" in backend_selection["resolution_reason"]
+    assert orchestrator._active_backend_metadata.resolution_status == "error"
+
+
+def test_skip_after_total_depth_failure_records_failed_active_selection(tmp_path):
+    """F9: the skip recovery also reports an error selection instead of the start-up success."""
+    orchestrator, result = _enhance_with_every_backend_failing(tmp_path, "skip")
+
+    assert result["status"] == "skipped"
+    assert result["selected_attempt_index"] is None
+    active = orchestrator._active_backend_metadata
+    assert active.resolution_status == "error"
+    assert active.resolved_backend == "none"
+    assert [(a["backend"], a["status"]) for a in active.attempts] == [(a["backend"], a["status"]) for a in result["attempts"]]
+    assert {a["status"] for a in active.attempts} == {"failed"}
+    assert [a["backend"] for a in active.attempts][:2] == ["da3", "da2"]
+
+
 def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     """Semantic-gate failures should retry fallback backend when enabled."""
     import json

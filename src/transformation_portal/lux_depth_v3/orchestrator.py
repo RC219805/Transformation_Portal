@@ -208,6 +208,7 @@ from .pipeline_coordinator import (
     PipelineCoordinator,
     build_active_depth_state,
     build_backend_metadata_for_attempts,
+    build_failed_backend_metadata,
     default_model_id_for_backend,
     derive_model_id_from_backend_instance,
     expected_output_depth_units_for_backend,
@@ -4012,6 +4013,7 @@ class EnhanceOrchestrator:
                 output_key,
             )
             t0 = time.time()
+            selected_attempt_index: Optional[int] = None
             try:
                 # Phase 2: Check content-addressable depth cache
                 if self.depth_cache:
@@ -4057,7 +4059,7 @@ class EnhanceOrchestrator:
                 depth_validity_metrics = None
                 selected_backend_id = _primary_backend_name
                 selected_backend_instance: Optional[Any] = None
-                selected_attempt_index: Optional[int] = None
+                selected_attempt_index = None
                 native_depth_shape: Optional[tuple[int, int]] = None
                 last_error: Optional[Exception] = None
                 attempt_offset = len(depth_attempts)
@@ -4722,7 +4724,16 @@ class EnhanceOrchestrator:
                     raise
                 if self.config.depth_fallback == "fail":
                     raise
-                elif self.config.depth_fallback == "skip":
+                if selected_attempt_index is None:
+                    # No backend produced depth: do not carry the start-up
+                    # "success" selection into this image's manifest/result.
+                    active_backend_metadata = build_failed_backend_metadata(
+                        depth_attempts,
+                        self._backend_metadata,
+                        str(self.config.depth_fallback),
+                    )
+                    self._set_active_depth_state(active_backend_metadata, depth_attempts, None)
+                if self.config.depth_fallback == "skip":
                     return (
                         None,
                         0.0,
@@ -6912,6 +6923,15 @@ class EnhanceOrchestrator:
                 ),
             )
 
+        # The per-image manifest records an "error" selection when no backend
+        # produced depth (skip / v2-auto recovery). The result dict keeps the
+        # start-up selection because the run-card backend summary is derived
+        # from it and its semantics validator requires a backend for every
+        # successful image.
+        result_backend_metadata = backend_selection_metadata
+        if backend_selection_metadata is not None and backend_selection_metadata.resolution_status == "error":
+            result_backend_metadata = self._backend_metadata
+
         # Handle depth stage failures that return early
         if depth_metadata is None and depth_runtime_s == 0.0 and pbr_assets is None:
             if self.config.depth_fallback == "skip":
@@ -6919,9 +6939,9 @@ class EnhanceOrchestrator:
                     "status": "skipped",
                     "reason": "Depth computation failed",
                     "image": str(image_input.path),
-                    "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
+                    "backend": (result_backend_metadata.resolved_backend if result_backend_metadata else None),
                     "fallback_used": bool(
-                        backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")
+                        result_backend_metadata and (result_backend_metadata.resolution_status != "success")
                     ),
                     "attempts": depth_attempts,
                     "selected_attempt_index": None,
@@ -7118,10 +7138,10 @@ class EnhanceOrchestrator:
             "status": "ok",
             "image": str(image_input.path),
             "input_sha256": input_sha,
-            "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
-            "fallback_used": bool(backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")),
-            "model_id": (backend_selection_metadata.model_id if backend_selection_metadata else None),
-            "device": (backend_selection_metadata.device if backend_selection_metadata else None),
+            "backend": (result_backend_metadata.resolved_backend if result_backend_metadata else None),
+            "fallback_used": bool(result_backend_metadata and (result_backend_metadata.resolution_status != "success")),
+            "model_id": (result_backend_metadata.model_id if result_backend_metadata else None),
+            "device": (result_backend_metadata.device if result_backend_metadata else None),
             "attempts": depth_attempts,
             "selected_attempt_index": selected_attempt_index,
             "depth_path": (str(depth_path) if depth_metadata else None),
