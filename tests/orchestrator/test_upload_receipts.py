@@ -647,7 +647,7 @@ def test_upload_owner_is_composite_and_role_independent():
 
 
 @pytest.mark.parametrize(
-    "bad", ["", "../upload", "A" * 100, str(uuid.uuid4()).upper(), "00000000-0000-0000-0000-000000000000/"]
+    "bad", ["", "../upload", "A" * 100, "12345678-1234-4ABC-8DEF-123456789ABC", "00000000-0000-0000-0000-000000000000/"]
 )
 def test_request_id_is_bounded_canonical_uuid(bad):
     with pytest.raises(ValueError):
