@@ -416,7 +416,10 @@ def _load_bounded_json_object(
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except (OSError, ValueError, RecursionError):
+        # ValueError covers JSONDecodeError, UnicodeDecodeError and the int-digit
+        # limit; RecursionError is raised for deeply nested documents. A malformed
+        # run card must never fail the job list/detail routes.
         return None
     return payload if isinstance(payload, dict) else None
 

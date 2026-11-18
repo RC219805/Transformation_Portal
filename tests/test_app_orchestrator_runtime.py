@@ -7708,6 +7708,46 @@ def test_run_job_summary_comes_from_its_own_run_card_not_the_newest_in_the_direc
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    "poisoned_run_card",
+    [
+        pytest.param("[" * 50000 + "]" * 50000, id="deep-nesting-recursion-error"),
+        pytest.param('{"batch_id": "b", "total_images": ' + "9" * 5000 + "}", id="int-digit-limit-value-error"),
+    ],
+)
+def test_malformed_run_card_in_one_job_dir_does_not_fail_job_routes(tmp_path: Path, poisoned_run_card: str) -> None:
+    good_dir = tmp_path / "good"
+    bad_dir = tmp_path / "bad"
+    good_dir.mkdir()
+    bad_dir.mkdir()
+    (bad_dir / "run_card_x.json").write_text(poisoned_run_card, encoding="utf-8")
+    now = orchestrator_app._now()
+    for job_id, output_dir in (("job_good_run_card", good_dir), ("job_poisoned_run_card", bad_dir)):
+        request = {"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}}
+        _seed_job(
+            orchestrator_app.Job(
+                id=job_id,
+                created_at=now - 30,
+                started_at=now - 29,
+                finished_at=now - 20,
+                state="succeeded",
+                exit_code=0,
+                request=request,
+                effective_request=request,
+            )
+        )
+
+    listed = asyncio.run(orchestrator_app.list_jobs())
+    detail = asyncio.run(orchestrator_app.get_job("job_poisoned_run_card"))
+
+    assert listed.status_code == 200
+    listed_ids = {entry["id"] for entry in json.loads(listed.body.decode("utf-8"))["data"]["jobs"]}
+    assert {"job_good_run_card", "job_poisoned_run_card"} <= listed_ids
+    assert detail.status_code == 200
+    assert json.loads(detail.body.decode("utf-8"))["data"]["id"] == "job_poisoned_run_card"
+    assert orchestrator_app._load_bounded_json_object(bad_dir / "run_card_x.json") is None
+
+
 def test_create_job_validation_uses_typed_error_envelope() -> None:
     response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
     body = json.loads(response.body.decode("utf-8"))
