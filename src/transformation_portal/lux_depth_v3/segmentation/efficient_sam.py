@@ -620,22 +620,32 @@ class EfficientSAMBackend:
                 from scipy import ndimage
 
                 labeled, num_features = ndimage.label(mask > 0.5)
+                if num_features == 0:
+                    continue
+
+                # One pass for all component areas and bounding boxes instead of
+                # a full-image comparison per component (audit LC-12: speckled
+                # heuristic masks yield tens of thousands of components).
+                areas = np.bincount(labeled.ravel(), minlength=num_features + 1)
+                region_slices = ndimage.find_objects(labeled)
 
                 for region_id in range(1, num_features + 1):
-                    region_mask = labeled == region_id
-                    area = region_mask.sum()
+                    area = areas[region_id]
 
                     if area < 500:  # Skip small regions
                         continue
 
-                    # Compute bounding box
-                    rows, cols = np.where(region_mask)
-                    if len(rows) == 0:
+                    region_slice = region_slices[region_id - 1]
+                    if region_slice is None:
                         continue
+                    row_slice, col_slice = region_slice
 
-                    x1, x2 = cols.min(), cols.max()
-                    y1, y2 = rows.min(), rows.max()
-                    bbox = [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)]
+                    region_mask = np.zeros(labeled.shape, dtype=bool)
+                    region_mask[region_slice] = labeled[region_slice] == region_id
+
+                    # Bounding box [x, y, w, h] from the component's slices
+                    x1, y1 = col_slice.start, row_slice.start
+                    bbox = [int(x1), int(y1), int(col_slice.stop - x1), int(row_slice.stop - y1)]
 
                     segments.append(
                         {

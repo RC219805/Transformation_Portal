@@ -1674,3 +1674,113 @@ def test_confidence_filtering_example(efficientsam_heuristic_backend):
     # All remaining materials should meet threshold
     for material, (mask, conf) in high_confidence_only.items():
         assert conf >= min_confidence, f"{material} confidence {conf} below threshold {min_confidence}"
+
+
+def _legacy_heuristic_component_segments(heuristic_results):
+    """Reference: the original per-component full-image loop (pre audit LC-12)."""
+    from scipy import ndimage
+
+    reference = []
+    for material_name, (mask, _) in heuristic_results.items():
+        labeled, num_features = ndimage.label(mask > 0.5)
+        for region_id in range(1, num_features + 1):
+            region_mask = labeled == region_id
+            area = region_mask.sum()
+            if area < 500:
+                continue
+            rows, cols = np.where(region_mask)
+            x1, x2 = cols.min(), cols.max()
+            y1, y2 = rows.min(), rows.max()
+            reference.append(
+                {
+                    "segmentation": region_mask,
+                    "bbox": [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)],
+                    "area": int(area),
+                    "heuristic_label": material_name,
+                }
+            )
+    return reference
+
+
+def test_heuristic_component_segments_match_legacy_loop(monkeypatch):
+    """Regression (audit LC-12): vectorised component extraction stays bit-identical.
+
+    The heuristic fallback used a full-image pass per connected component, which is
+    quadratic on speckled masks; the bincount/find_objects path must produce the same
+    segments (order, masks, bboxes, areas, labels).
+    """
+    pytest.importorskip("scipy")
+    rng = np.random.default_rng(1234)
+    h, w = 96, 128
+
+    stone = rng.random((h, w)) < 0.35  # speckle: many tiny components
+    stone[0:30, 0:40] = True  # touches the top-left border
+    stone[60:96, 90:128] = True  # touches the bottom-right border
+    ring = np.zeros((h, w), dtype=bool)
+    ring[20:80, 50:85] = True
+    ring[30:70, 60:75] = False  # non-convex component with a hole
+    heuristic_results = {
+        "stone": (stone.astype(np.float32), 0.5),
+        "glass": (ring.astype(np.float32), 0.5),
+        "water": (np.zeros((h, w), dtype=np.float32), 0.5),
+    }
+
+    actual = _capture_heuristic_component_segments(monkeypatch, heuristic_results, (h, w))
+
+    expected = _legacy_heuristic_component_segments(heuristic_results)
+    assert len(expected) >= 3
+    assert len(actual) == len(expected)
+    for got, want in zip(actual, expected):
+        assert got["heuristic_label"] == want["heuristic_label"]
+        assert got["bbox"] == want["bbox"]
+        assert got["area"] == want["area"]
+        assert type(got["area"]) is int
+        assert got["segmentation"].dtype == want["segmentation"].dtype
+        assert np.array_equal(got["segmentation"], want["segmentation"])
+
+
+def test_heuristic_component_segments_scale_linearly_on_speckled_masks(monkeypatch):
+    """Regression (audit LC-12): tens of thousands of speckle components stay cheap.
+
+    The legacy loop compared the whole label image once per component (~15 s for a
+    500x750 speckled mask); the vectorised path needs well under a second.
+    """
+    pytest.importorskip("scipy")
+    import time
+
+    rng = np.random.default_rng(7)
+    h, w = 500, 750
+    speckle = rng.random((h, w)) < 0.4
+    speckle[100:200, 100:300] = True  # one component above the 500-px area floor
+    heuristic_results = {"stone": (speckle.astype(np.float32), 0.5)}
+
+    t0 = time.perf_counter()
+    segments = _capture_heuristic_component_segments(monkeypatch, heuristic_results, (h, w))
+    elapsed = time.perf_counter() - t0
+
+    assert segments, "the large block must survive the area filter"
+    assert elapsed < 3.0, f"component extraction took {elapsed:.2f}s on a speckled 500x750 mask"
+
+
+def _capture_heuristic_component_segments(monkeypatch, heuristic_results, shape):
+    """Run the no-SAM-segments branch and return the segments handed to CLIP."""
+    h, w = shape
+    backend = EfficientSAMBackend()
+    backend._device = "cpu"
+    monkeypatch.setattr(backend, "_heuristic_segmentation", lambda _image: heuristic_results)
+    monkeypatch.delenv("SKIP_CLIP_INFERENCE", raising=False)
+    if not TORCH_AVAILABLE:
+        # The CLIP branch imports torch before loading the runtime; a bare stand-in
+        # lets the capture hook below run in the core (torch-free) lane.
+        monkeypatch.setitem(sys.modules, "torch", types.ModuleType("torch"))
+
+    captured = {}
+
+    def _capture_segments_then_fail():
+        captured["segments"] = list(sys._getframe(1).f_locals["segments"])
+        raise RuntimeError("offline: CLIP not loaded in this test")
+
+    monkeypatch.setattr(backend, "_load_clip_runtime", _capture_segments_then_fail)
+
+    backend._classify_segments_with_clip(np.zeros((h, w, 3), dtype=np.uint8), [])
+    return captured["segments"]
