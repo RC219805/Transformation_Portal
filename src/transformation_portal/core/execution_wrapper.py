@@ -39,6 +39,7 @@ from typing import Any, Callable, Optional, Protocol, TypeVar, Union
 
 from transformation_portal.core._cas_helpers import CASObjectMissingError
 from transformation_portal.core._cas_helpers import atomic_write_json as _shared_atomic_write_json
+from transformation_portal.core._cas_helpers import canonical_input_value as _shared_canonical_input_value
 from transformation_portal.core._cas_helpers import compute_numpy_array_id as _shared_compute_numpy_array_id
 from transformation_portal.core._cas_helpers import load_list_recursive as _shared_load_list_recursive
 from transformation_portal.core._cas_helpers import load_serializable as _shared_load_serializable
@@ -438,34 +439,49 @@ class CASExecutor:
             return None
 
     def _compute_input_ids(self, inputs: dict[str, Any]) -> list[str]:
-        """Compute SHA-256 IDs for input artifacts.
+        """Compute one SHA-256 content ID per input, in sorted key order.
+
+        Every value is encoded with the typed canonical form the DAG executor
+        uses, so an ID never depends on ``str(value)``: sequences and nested
+        mappings are hashed element by element, equal text and bytes stay
+        distinct, and a value without a byte identity (a ``Path``, an arbitrary
+        object, an object array, a non-finite float) raises instead of sharing
+        a cache entry with a different value.
 
         For NumPy arrays, includes dtype, shape, and data bytes to prevent
         false cache hits between arrays with same bytes but different semantics.
+
+        The IDs do not carry the input names; ``_compute_input_identity`` binds
+        them to their keys for the execution identity.
+
+        Raises:
+            TypeError: If a key is not a string or a value has no canonical form
+            ValueError: If a float value is not finite
         """
-        import numpy as np
+        if any(type(key) is not str for key in inputs):
+            raise TypeError("Stage input mappings require string keys")
 
         ids = []
         for key in sorted(inputs.keys()):
-            value = inputs[key]
-
-            if isinstance(value, np.ndarray):
-                # Use shared helper for consistent NumPy identity across executors
-                ids.append(_compute_numpy_array_id(value))
-            elif isinstance(value, (bytes, bytearray)):
-                ids.append(hashlib.sha256(value).hexdigest())
-            elif isinstance(value, str):
-                ids.append(hashlib.sha256(value.encode()).hexdigest())
-            elif isinstance(value, dict):
-                ids.append(hashlib.sha256(jcs_dumpb(value)).hexdigest())
-            elif hasattr(value, "sha256"):
-                # CAS object
-                ids.append(value.sha256)
+            canonical = _shared_canonical_input_value(inputs[key])
+            if canonical[0] == "ndarray":
+                # Shared NumPy identity, consistent across executors
+                ids.append(canonical[1])
             else:
-                # Generic fallback
-                ids.append(hashlib.sha256(str(value).encode()).hexdigest())
+                ids.append(hashlib.sha256(jcs_dumpb(canonical)).hexdigest())
 
         return ids
+
+    def _compute_input_identity(self, inputs: dict[str, Any]) -> str:
+        """Compute one SHA-256 ID that binds every input name to its content ID.
+
+        ``compute_cas_id`` sorts the IDs it is given, so bare content IDs
+        describe an unordered bag of values: swapping two inputs, or renaming
+        a key, would resolve to the same cached execution.
+        """
+        input_ids = self._compute_input_ids(inputs)
+        bound = dict(zip(sorted(inputs.keys()), input_ids))
+        return hashlib.sha256(jcs_dumpb({"inputs": bound})).hexdigest()
 
     def execute(
         self,
@@ -485,8 +501,8 @@ class CASExecutor:
         """
         start_time = time.time()
 
-        # Compute input IDs
-        input_ids = self._compute_input_ids(inputs)
+        # Compute input identity (name-bound, see _compute_input_identity)
+        input_ids = [self._compute_input_identity(inputs)]
 
         # Compute execution identity (with lockfile for CI determinism)
         identity = compute_cas_id(

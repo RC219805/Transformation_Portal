@@ -993,6 +993,120 @@ class TestNumpyInputIdentityRegression:
         assert ids1[0] == ids2[0], "Identical arrays should have same input ID"
 
 
+class _RecordingStage:
+    """Stage that counts executions and derives its outputs from the inputs."""
+
+    name = "recording_stage"
+    version = "1.0.0"
+
+    def __init__(self, fn):
+        self._fn = fn
+        self.call_count = 0
+
+    def execute(self, inputs: Dict[str, Any], config: Any) -> Dict[str, Any]:
+        self.call_count += 1
+        return self._fn(inputs)
+
+
+class TestInputIdentityBindsNamesAndContent:
+    """Regression tests for cache identity collisions between different inputs.
+
+    The execution identity used to be an unordered bag of per-value hashes with
+    a ``str(value)`` fallback, so different inputs resolved to one cache entry
+    and the second call was served the first call's output.
+    """
+
+    @pytest.fixture
+    def executor(self, tmp_path):
+        with patch(
+            "transformation_portal.core.execution_identity.get_env_fingerprint",
+            return_value="sha256:fixed_env",
+        ):
+            yield CASExecutor(ArtifactStore(tmp_path / "cas"), tmp_path / "cache")
+
+    def test_swapped_inputs_are_not_served_from_cache(self, executor):
+        stage = _RecordingStage(lambda inputs: {"diff": inputs["a"] - inputs["b"]})
+        x = np.full((4, 4), 10.0, dtype=np.float32)
+        y = np.full((4, 4), 3.0, dtype=np.float32)
+
+        first = executor.execute(stage, {"a": x, "b": y}, {})
+        second = executor.execute(stage, {"a": y, "b": x}, {})
+
+        assert first.execution_identity.cas_id != second.execution_identity.cas_id
+        assert second.cache_hit is False
+        assert stage.call_count == 2
+        assert float(first.outputs["diff"][0, 0]) == 7.0
+        assert float(second.outputs["diff"][0, 0]) == -7.0
+
+    def test_renamed_input_key_is_a_cache_miss(self, executor):
+        stage = _RecordingStage(lambda inputs: {"keys": sorted(inputs)})
+        x = np.zeros((2, 2), dtype=np.float32)
+
+        executor.execute(stage, {"image": x}, {})
+        second = executor.execute(stage, {"mask": x}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["keys"] == ["mask"]
+
+    def test_sequence_of_arrays_is_identified_by_content(self, executor):
+        stage = _RecordingStage(lambda inputs: {"total": float(sum(float(frame.sum()) for frame in inputs["frames"]))})
+        blank = np.zeros((64, 64), dtype=np.float32)
+        marked = np.zeros((64, 64), dtype=np.float32)
+        marked[20:40, 20:40] = 1.0
+        # NumPy summarises large arrays, so the two reprs are indistinguishable.
+        assert str([blank]) == str([marked])
+
+        executor.execute(stage, {"frames": [blank]}, {})
+        second = executor.execute(stage, {"frames": [marked]}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["total"] == 400.0
+
+    @pytest.mark.parametrize(
+        ("first_value", "second_value"),
+        [("abc", b"abc"), (21, "21"), (None, "None")],
+        ids=["text-vs-bytes", "int-vs-text", "none-vs-text"],
+    )
+    def test_equal_looking_values_of_different_types_are_distinct(self, executor, first_value, second_value):
+        stage = _RecordingStage(lambda inputs: {"kind": type(inputs["value"]).__name__})
+
+        executor.execute(stage, {"value": first_value}, {})
+        second = executor.execute(stage, {"value": second_value}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["kind"] == type(second_value).__name__
+
+    def test_path_input_is_rejected_instead_of_identified_by_its_name(self, executor, tmp_path):
+        source = tmp_path / "input.bin"
+        source.write_bytes(b"version-1")
+        stage = _RecordingStage(lambda inputs: {"content": Path(inputs["path"]).read_bytes().decode()})
+
+        with pytest.raises(TypeError, match="materialize it explicitly"):
+            executor.execute(stage, {"path": source}, {})
+
+        assert stage.call_count == 0
+
+    def test_non_string_input_key_is_rejected(self, executor):
+        stage = _RecordingStage(lambda inputs: {"count": len(inputs)})
+
+        with pytest.raises(TypeError, match="string keys"):
+            executor.execute(stage, {1: "value"}, {})
+
+        assert stage.call_count == 0
+
+    def test_nested_mapping_with_arrays_is_cached_by_content(self, executor):
+        stage = _RecordingStage(lambda inputs: {"total": float(inputs["bundle"]["depth"].sum())})
+        ones = np.ones((3, 3), dtype=np.float32)
+
+        first = executor.execute(stage, {"bundle": {"depth": ones, "scale": 2.0}}, {})
+        repeat = executor.execute(stage, {"bundle": {"depth": ones.copy(), "scale": 2.0}}, {})
+        changed = executor.execute(stage, {"bundle": {"depth": ones * 2, "scale": 2.0}}, {})
+
+        assert (first.cache_hit, repeat.cache_hit, changed.cache_hit) == (False, True, False)
+        assert changed.outputs["total"] == 18.0
+        assert stage.call_count == 2
+
+
 class TestDAGExecutorNumpyIdentityRegression:
     """Regression tests for DAG executor NumPy artifact identity.
 
