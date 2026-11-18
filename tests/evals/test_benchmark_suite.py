@@ -253,10 +253,38 @@ class TestBenchmarkSuite:
         pred, gt = sample_images
         suite = BenchmarkSuite()
 
-        with patch("transformation_portal.evals.benchmark_suite.lpips_score", side_effect=ValueError("Test error")):
-            result = suite._compute_lpips(pred, gt)
+        with patch("transformation_portal.evals.benchmark_suite.lpips_available", return_value=True):
+            with patch("transformation_portal.evals.benchmark_suite.lpips_score", side_effect=ValueError("Test error")):
+                result = suite._compute_lpips(pred, gt)
 
-        assert result == 0.0
+        # 0.0 is the "identical" LPIPS distance, so a failure must be reported as unmeasured.
+        assert result is None
+
+    def test_compute_lpips_unavailable_is_none(self, sample_images):
+        """M-05: without lpips/torch, LPIPS is unmeasured, never the perfect 0.0 distance."""
+        pred, gt = sample_images
+        suite = BenchmarkSuite()
+
+        with patch("transformation_portal.evals.benchmark_suite.lpips_available", return_value=False):
+            with patch("transformation_portal.evals.benchmark_suite.lpips_score", return_value=0.0) as score:
+                result = suite._compute_lpips(pred, gt)
+
+        assert result is None
+        score.assert_not_called()
+
+    def test_unavailable_lpips_earns_no_credit_in_combined_score(self):
+        """M-05: black vs white must score ~0, not 0.3 from a perfect LPIPS sub-score."""
+        white = np.ones((32, 32, 3), np.float32)
+        black = np.zeros_like(white)
+        suite = BenchmarkSuite()
+
+        with patch("transformation_portal.evals.benchmark_suite.lpips_available", return_value=False):
+            result = suite.run(prediction=black, ground_truth=white)
+
+        assert result.lpips is None
+        assert result.metadata["lpips_available"] is False
+        assert result.to_dict()["lpips"] is None
+        assert result.combined_score < 0.01
 
     def test_compute_iou_error_handling(self, sample_masks):
         """Test IoU computation error handling."""
@@ -411,3 +439,21 @@ class TestRunBenchmarkBatch:
         assert result["mean_psnr"] == pytest.approx(30.0)  # (30+35+25)/3
         assert result["mean_ssim"] == pytest.approx(0.8167, rel=0.01)  # (0.80+0.90+0.75)/3
         assert result["mean_combined"] == pytest.approx(0.7167, rel=0.01)  # (0.70+0.80+0.65)/3
+
+    def test_unmeasured_lpips_excluded_from_mean(self):
+        """M-05: unmeasured LPIPS (None) neither counts as 0.0 nor breaks the mean."""
+        suite = BenchmarkSuite()
+        results = iter([BenchmarkResult(lpips=0.2), BenchmarkResult(lpips=None), BenchmarkResult(lpips=0.4)])
+
+        with patch.object(suite, "run", side_effect=lambda **_: next(results)):
+            agg = run_benchmark_batch(suite, [{"prediction": np.zeros((4, 4, 3))}] * 3)
+
+        assert agg["mean_lpips"] == pytest.approx(0.3)
+
+    def test_mean_lpips_none_when_never_measured(self):
+        suite = BenchmarkSuite()
+
+        with patch.object(suite, "run", return_value=BenchmarkResult(lpips=None)):
+            agg = run_benchmark_batch(suite, [{"prediction": np.zeros((4, 4, 3))}] * 2)
+
+        assert agg["mean_lpips"] is None

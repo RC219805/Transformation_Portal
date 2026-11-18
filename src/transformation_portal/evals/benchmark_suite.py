@@ -30,6 +30,7 @@ import numpy as np
 from transformation_portal.evals.metrics import (
     ImageLike,
     dice_coefficient,
+    lpips_available,
     lpips_score,
     lpips_to_score,
     psnr,
@@ -48,7 +49,8 @@ class BenchmarkResult:
     Attributes:
         psnr: Peak Signal-to-Noise Ratio (dB)
         ssim: Structural Similarity Index
-        lpips: LPIPS perceptual distance
+        lpips: LPIPS perceptual distance; ``None`` when ground truth was given but LPIPS
+            could not be measured (lpips/torch missing or the computation failed)
         iou: Segmentation IoU (if masks provided)
         dice: Dice coefficient (if masks provided)
         llava_score: LLaVA quality score (if backend provided)
@@ -59,7 +61,7 @@ class BenchmarkResult:
 
     psnr: float = 0.0
     ssim: float = 0.0
-    lpips: float = 0.0
+    lpips: Optional[float] = 0.0
     iou: float = 0.0
     dice: float = 0.0
     llava_score: float = 0.0
@@ -168,6 +170,7 @@ class BenchmarkSuite:
             result.psnr = self._compute_psnr(prediction, ground_truth)
             result.ssim = self._compute_ssim(prediction, ground_truth)
             result.lpips = self._compute_lpips(prediction, ground_truth)
+            result.metadata["lpips_available"] = result.lpips is not None
 
         # Segmentation metrics (require masks)
         if pred_mask is not None and gt_mask is not None:
@@ -213,13 +216,20 @@ class BenchmarkSuite:
         self,
         pred: ImageLike,
         gt: ImageLike,
-    ) -> float:
-        """Compute LPIPS metric."""
+    ) -> Optional[float]:
+        """Compute LPIPS metric, or ``None`` when it cannot be measured.
+
+        A missing or failed LPIPS must not read as 0.0: that is the "identical" distance
+        and would earn the full LPIPS weight in the combined score.
+        """
+        if not lpips_available():
+            logger.warning("LPIPS not available (install lpips and torch); LPIPS left out of the benchmark")
+            return None
         try:
             return lpips_score(pred, gt)
         except Exception as exc:
             logger.warning("LPIPS computation failed: %s", exc)
-            return 0.0
+            return None
 
     def _compute_iou(
         self,
@@ -292,10 +302,11 @@ class BenchmarkSuite:
             scores.append(max(0.0, result.ssim) * self.weights.ssim)
             total_weight += self.weights.ssim
 
-            # LPIPS (lower = better, convert to [0, 1] score)
-            lpips_norm = lpips_to_score(result.lpips)
-            scores.append(lpips_norm * self.weights.lpips)
-            total_weight += self.weights.lpips
+            # LPIPS (lower = better, convert to [0, 1] score); left out when unavailable
+            if result.lpips is not None:
+                lpips_norm = lpips_to_score(result.lpips)
+                scores.append(lpips_norm * self.weights.lpips)
+                total_weight += self.weights.lpips
 
         # IoU (already [0, 1])
         if result.metadata.get("has_masks"):
@@ -338,11 +349,14 @@ def run_benchmark_batch(
     if n == 0:
         return {"count": 0}
 
+    lpips_values = [r.lpips for r in results if r.lpips is not None]
+
     return {
         "count": n,
         "mean_psnr": sum(r.psnr for r in results) / n,
         "mean_ssim": sum(r.ssim for r in results) / n,
-        "mean_lpips": sum(r.lpips for r in results) / n,
+        # Unmeasured LPIPS (None) is excluded; None when no sample measured it.
+        "mean_lpips": sum(lpips_values) / len(lpips_values) if lpips_values else None,
         "mean_iou": sum(r.iou for r in results) / n,
         "mean_llava": sum(r.llava_score for r in results) / n,
         "mean_combined": sum(r.combined_score for r in results) / n,

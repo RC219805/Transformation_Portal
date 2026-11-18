@@ -323,6 +323,20 @@ def _windowed_ssim(arr1: np.ndarray, arr2: np.ndarray, *, win_size: int, data_ra
 _lpips_model: Optional["lpips.LPIPS"] = None
 
 
+def lpips_available() -> bool:
+    """Return whether ``lpips_score`` can compute a real LPIPS distance (lpips and torch import).
+
+    ``lpips_score`` returns 0.0 -- the "identical" distance -- when they are missing, so callers
+    that aggregate LPIPS must check this first and report the metric as unavailable instead.
+    """
+    try:
+        import lpips  # noqa: F401
+        import torch  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def lpips_score(
     img1: ImageLike,
     img2: ImageLike,
@@ -340,7 +354,9 @@ def lpips_score(
         net: Network backbone ("alex", "vgg", "squeeze")
 
     Returns:
-        LPIPS distance (lower = more similar)
+        LPIPS distance (lower = more similar). When lpips/torch are not installed this
+        returns 0.0, which is indistinguishable from "identical": check ``lpips_available()``
+        before treating the value as a measurement.
     """
     global _lpips_model
 

@@ -404,6 +404,15 @@ class TestSSIMWindowedFallback:
 class TestLPIPS:
     """Test LPIPS computation (mocked)."""
 
+    def test_lpips_available_false_without_packages(self, monkeypatch):
+        """M-05: callers can tell an unmeasured LPIPS from a real 0.0 distance."""
+        import sys
+
+        from transformation_portal.evals.metrics import lpips_available
+
+        monkeypatch.setitem(sys.modules, "lpips", None)
+        assert lpips_available() is False
+
     def test_lpips_score_mocked(self, different_images):
         """Test LPIPS with mocked backend."""
         pytest.importorskip("lpips", reason="LPIPS package required")
