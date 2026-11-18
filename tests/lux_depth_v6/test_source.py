@@ -162,6 +162,18 @@ def test_revalidates_frozen_geometry_and_admission_limits(completed):
         validate_source(replace(source, inventory=source.inventory[:-1]))
 
 
+def test_grade_pixel_ceiling_is_applied_before_the_v5_parent_replay(completed, monkeypatch):
+    # LN-8: SourceLimits admits max_pixels up to 200 M (standalone Depth Pro), but GradePlan's fixed
+    # ceiling must reject an oversized retained frame before the expensive V5 semantic replay runs.
+    def _replay_must_not_run(*_args, **_kwargs):
+        raise AssertionError("V5 parent replay ran for a frame GradePlan cannot admit")
+
+    monkeypatch.setattr(source_module, "MAX_GRADE_IMAGE_PIXELS", 29 * 43 - 1, raising=False)
+    monkeypatch.setattr(source_module, "verify_execution_evidence_v3", _replay_must_not_run)
+    with pytest.raises(ValueError, match="pixel ceiling"):
+        prepare_source(completed.result.output_root, limits=SourceLimits(max_pixels=200_000_000))
+
+
 def test_rejects_added_undeclared_source_artifact(completed):
     source = prepare_source(completed.result.output_root)
     (source.root / "unadmitted.txt").write_text("new artifact")

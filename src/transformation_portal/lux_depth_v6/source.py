@@ -29,6 +29,10 @@ from transformation_portal.lux_depth_v4.photography import create_proxy
 from transformation_portal.lux_depth_v5.evidence import MAX_ICC_BYTES, _array, _image, verify_execution_evidence_v3
 
 _MAX_FILES = 32769
+# GradePlan's fixed per-image geometry ceiling. SourceLimits.max_pixels may be
+# raised further for standalone Depth Pro originals, but retained-V5 grading
+# rejects larger frames, so source admission applies it before any V5 replay.
+MAX_GRADE_IMAGE_PIXELS = 100_000_000
 
 
 def _check(cancellation: Callable[[], bool] | None) -> None:
@@ -206,6 +210,8 @@ def _inspect_image(root: Path, input_id: str, declared: dict[str, dict], target:
     if not isinstance(original, dict) or original.get("shape") != shape:
         raise ValueError("V6 source and retained master geometry must agree before allocation")
     pixels = math.prod(shape)
+    if pixels > MAX_GRADE_IMAGE_PIXELS:
+        raise ValueError("V6 image exceeds the pixel ceiling")
     if pixels > limits.max_pixels:
         raise ValueError("V6 source exceeds its per-image pixel budget")
     # Include the independent V5 semantic replay's retained arrays and working

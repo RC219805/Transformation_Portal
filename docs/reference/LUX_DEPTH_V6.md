@@ -485,6 +485,10 @@ or `pixels * 320 + native_pixels * 128 + 256 MiB` with depth products; the
 upstream verification also accounts for its proxy and ICC storage. Output
 admission reserves every float product, TIFF, bounded PNG, metadata, plan, and completion before writing.
 These ceilings are frozen and rechecked by plan parsing and source admission.
+The 100-million-pixel per-image ceiling is fixed for retained-V5 grading:
+`--max-pixels` (bounded at 200 million for standalone Depth Pro originals) can
+only lower it, and source admission rejects a larger retained frame with
+"V6 image exceeds the pixel ceiling" before the V5 parent replay runs.
 They are conservative numerical admission bounds, not hard operating-system
 memory isolation. Cancellation and deadlines are observed at processing and
 verification checkpoints, including retained-source validation before output creation.

@@ -25,7 +25,7 @@ from transformation_portal.lux_depth_v5.preview import MAX_PREVIEW_BYTES
 
 from .color import GradeRecipe, RenderRecipe
 from .depth_maps import DepthMapRecipe
-from .source import SourceLimits, VerifiedV5Source, prepare_source
+from .source import MAX_GRADE_IMAGE_PIXELS, SourceLimits, VerifiedV5Source, prepare_source
 
 PLAN_SCHEMA = "tp.lux.grade.plan.v1"
 DEPTH_PLAN_SCHEMA = "tp.lux.grade.plan.v2"
@@ -150,18 +150,18 @@ class GradePlan:
             if (
                 not isinstance(shape, list)
                 or len(shape) != 2
-                or any(type(n) is not int or not 1 <= n <= 100_000_000 for n in shape)
+                or any(type(n) is not int or not 1 <= n <= MAX_GRADE_IMAGE_PIXELS for n in shape)
             ):
                 raise ValueError("Invalid V6 image dimensions")
-            if shape[0] * shape[1] > 100_000_000:
+            if shape[0] * shape[1] > MAX_GRADE_IMAGE_PIXELS:
                 raise ValueError("V6 image exceeds the pixel ceiling")
             if has_depth:
                 native = item["native_shape"]
                 if (
                     not isinstance(native, list)
                     or len(native) != 2
-                    or any(type(n) is not int or not 1 <= n <= 100_000_000 for n in native)
-                    or native[0] * native[1] > 100_000_000
+                    or any(type(n) is not int or not 1 <= n <= MAX_GRADE_IMAGE_PIXELS for n in native)
+                    or native[0] * native[1] > MAX_GRADE_IMAGE_PIXELS
                 ):
                     raise ValueError("Invalid V6 native depth dimensions")
             _require_digest(item["master_sha256"])
