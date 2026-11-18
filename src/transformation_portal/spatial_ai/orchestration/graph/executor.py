@@ -49,7 +49,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from .artifact_store import ArtifactStore, ProvenanceMetadata
+from .artifact_store import ArtifactStore, CacheLockTimeout, ProvenanceMetadata
 from .execution_graph import ExecutionGraph, ExecutionPlan
 from .stage import CheckpointPolicy, Stage
 
@@ -287,6 +287,16 @@ class Executor:
                 except Exception as e:
                     logger.warning(f"Cache load failed for {node.stage_id}: {e}, executing stage")
                     cache_hit = False
+                    outputs = None
+                    provenance = None
+                    # A committed entry that cannot be loaded must be evicted, otherwise
+                    # store() treats the key as already committed and the corrupt payload
+                    # is never repaired. A lock timeout says nothing about the payload.
+                    if not isinstance(e, CacheLockTimeout):
+                        try:
+                            self.artifact_store.evict(cache_key)
+                        except Exception as evict_error:
+                            logger.warning(f"Could not evict unreadable cache entry {cache_key}: {evict_error}")
 
             if not cache_hit:
                 # Cache miss - execute stage

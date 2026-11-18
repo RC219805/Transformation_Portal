@@ -500,6 +500,53 @@ class TestExecutor:
         out2 = result2.outputs["numpy.processed"]
         np.testing.assert_array_equal(out1, out2)
 
+    def test_corrupt_committed_artifact_is_repaired(self, executor: Executor, store: ArtifactStore, output_dir: Path):
+        """A committed entry whose payload cannot be loaded is evicted and rewritten (G-1)."""
+        calls = {"n": 0}
+
+        def transform(x):
+            calls["n"] += 1
+            return np.arange(1000) + x
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=transform), inputs={})
+
+        result1 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        cache_key = result1.stage_results[0].cache_key
+        payload = store._artifact_path(cache_key)
+        payload.write_bytes(payload.read_bytes()[:40])  # truncate the committed payload
+
+        result2 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        assert result2.stage_results[0].cache_hit is False
+        np.testing.assert_array_equal(result2.outputs["stage1.output"], np.arange(1000) + 1)
+
+        # The re-execution must have rewritten the entry, so the next run is a valid hit.
+        result3 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        assert result3.stage_results[0].cache_hit is True
+        np.testing.assert_array_equal(result3.outputs["stage1.output"], np.arange(1000) + 1)
+        assert calls["n"] == 2
+
+    def test_cache_lock_timeout_does_not_evict(self, executor: Executor, store: ArtifactStore, output_dir: Path, monkeypatch):
+        """A lock timeout on load says nothing about the payload, so the entry is kept."""
+        from transformation_portal.spatial_ai.orchestration.graph.artifact_store import CacheLockTimeout
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1"), inputs={})
+        result1 = executor.execute(graph=graph, inputs={"value": 2}, output_dir=output_dir)
+        cache_key = result1.stage_results[0].cache_key
+
+        def timeout(_key):
+            raise CacheLockTimeout("busy")
+
+        evicted = []
+        monkeypatch.setattr(store, "load", timeout)
+        monkeypatch.setattr(store, "evict", evicted.append)
+        result2 = executor.execute(graph=graph, inputs={"value": 2}, output_dir=output_dir)
+
+        assert result2.stage_results[0].cache_hit is False
+        assert evicted == []
+        assert store.exists(cache_key)
+
 
 class TestExecutionContext:
     """Tests for ExecutionContext."""
