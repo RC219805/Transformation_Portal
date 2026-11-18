@@ -263,6 +263,34 @@ class PluginLoader:
 
         return discovered
 
+    def discover_path(self, search_path: Path) -> List[LoadedPlugin]:
+        """Discover and load plugins from one directory under this loader's trust policy.
+
+        Args:
+            search_path: Directory to search
+
+        Returns:
+            List of loaded plugins
+
+        Raises:
+            ValueError: If the directory is outside the built-in plugin root
+                while external plugin loading is disabled.
+        """
+        search_path = Path(search_path).expanduser().resolve()
+        if not self._allow_external_plugins and not self._is_builtin_path(search_path):
+            raise ValueError(
+                "External plugin paths are disabled. "
+                "Set TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1 "
+                "or pass allow_external_plugins=True to PluginLoader."
+            )
+        if not search_path.exists():
+            logger.debug(f"Search path does not exist: {search_path}")
+            return []
+
+        discovered = self._discover_package_plugins(search_path)
+        discovered.extend(self._discover_file_plugins(search_path))
+        return discovered
+
     def _discover_package_plugins(self, search_path: Path) -> List[LoadedPlugin]:
         """Discover plugin packages with manifests.
 

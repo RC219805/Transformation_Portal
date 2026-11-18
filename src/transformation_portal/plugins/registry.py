@@ -10,6 +10,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .interface import PluginInterface, PluginMetadata, PluginType
+from .loader import _PLUGIN_TRUST_STORE_ENV, PluginLoader
 
 _ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
@@ -35,12 +36,19 @@ class PluginRegistry:
         >>> result = depth_model.execute(image)
     """
 
-    def __init__(self, allow_external_plugins: Optional[bool] = None):
+    def __init__(
+        self,
+        allow_external_plugins: Optional[bool] = None,
+        plugin_trust_store_path: Optional[Path] = None,
+    ):
         """Initialize plugin registry.
 
         Args:
-            allow_external_plugins: Enable user/env plugin discovery paths.
-                If None, reads TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS.
+            allow_external_plugins: Enable plugin discovery outside the built-in
+                plugin root. If None, reads TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS.
+            plugin_trust_store_path: Optional JSON trust store. When set (or when
+                TRANSFORMATION_PORTAL_PLUGIN_TRUST_STORE is), external plugins are
+                discovered only through the signed-manifest gate of PluginLoader.
         """
         self._plugins: Dict[str, Dict[str, PluginInterface]] = {}
         self._metadata_cache: Dict[str, PluginMetadata] = {}
@@ -48,6 +56,9 @@ class PluginRegistry:
         self._plugin_paths: List[Path] = []
         self._allow_external_plugins = (
             allow_external_plugins if allow_external_plugins is not None else _external_plugins_enabled_from_env()
+        )
+        self._plugin_trust_store_path = (
+            Path(plugin_trust_store_path).expanduser().resolve() if plugin_trust_store_path is not None else None
         )
 
         # Initialize plugin type categories
@@ -171,14 +182,32 @@ class PluginRegistry:
 
         Returns:
             Number of plugins discovered and registered
+
+        Raises:
+            ValueError: If a path lies outside the built-in plugin root while
+                external plugin loading is disabled. Nothing is loaded then.
         """
         if search_paths is None:
             search_paths = self._get_default_plugin_paths()
 
+        resolved_paths = [Path(path).expanduser().resolve() for path in search_paths]
+        external_paths = {path for path in resolved_paths if not self._is_builtin_path(path)}
+        if external_paths and not self._allow_external_plugins:
+            raise ValueError(
+                "External plugin paths are disabled. "
+                "Set TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1 "
+                "or pass allow_external_plugins=True to PluginRegistry."
+            )
+        trust_store_path = self._resolve_trust_store_path()
+
         discovered = 0
 
-        for path in search_paths:
-            path = Path(path).expanduser().resolve()
+        for path in resolved_paths:
+            if trust_store_path is not None and path in external_paths:
+                # ADR-049: with a trust store, external code runs only behind the signed-manifest gate.
+                discovered += self._discover_signed_external_plugins(path, trust_store_path)
+                continue
+
             if not path.exists():
                 continue
 
@@ -206,6 +235,47 @@ class PluginRegistry:
                 except Exception as e:
                     warnings.warn(f"Failed to load plugin from {plugin_file}: {e}", RuntimeWarning)
 
+        return discovered
+
+    def _is_builtin_path(self, path: Path) -> bool:
+        """Return True when a resolved path is the built-in plugin root or inside it."""
+        builtin_root = (Path(__file__).resolve().parent / "builtin").resolve()
+        try:
+            path.relative_to(builtin_root)
+        except ValueError:
+            return False
+        return True
+
+    def _resolve_trust_store_path(self) -> Optional[Path]:
+        """Return the trust store that gates external plugins, if one is configured.
+
+        The environment is read at discovery time: the global registry is often
+        created at import time, before an operator configures the trust store.
+        """
+        if self._plugin_trust_store_path is not None:
+            return self._plugin_trust_store_path
+        env_trust_store = os.environ.get(_PLUGIN_TRUST_STORE_ENV)
+        return Path(env_trust_store).expanduser().resolve() if env_trust_store else None
+
+    def _discover_signed_external_plugins(self, path: Path, trust_store_path: Path) -> int:
+        """Register external plugins that pass the PluginLoader signed-manifest gate.
+
+        With a trust store configured, external code runs only after its
+        plugin.json signature verifies; loose files and unsigned packages are
+        never executed.
+        """
+        loader = PluginLoader(allow_external_plugins=True, plugin_trust_store_path=trust_store_path)
+
+        discovered = 0
+        for loaded in loader.discover_path(path):
+            if loaded.is_valid and loaded.plugin is not None:
+                self.register(loaded.plugin, replace_existing=True)
+                discovered += 1
+            else:
+                warnings.warn(
+                    f"Rejected plugin from {loaded.source_path}: {'; '.join(loaded.load_errors)}",
+                    RuntimeWarning,
+                )
         return discovered
 
     def get_metadata(self, plugin_type: str, plugin_name: str) -> Optional[PluginMetadata]:

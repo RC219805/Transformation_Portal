@@ -210,6 +210,20 @@ discovered = registry.discover_plugins()
 print(f"Discovered {discovered} plugins")
 ```
 
+Discovery outside the built-in plugin root is opt-in. Export
+`TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1` before the process starts, or
+construct `PluginRegistry(allow_external_plugins=True)` /
+`PluginLoader(allow_external_plugins=True)`. Without the opt-in the user and
+environment plugin directories are not searched, and
+`registry.discover_plugins([...])` raises `ValueError` for any path outside the
+built-in root without loading anything.
+
+When `TRANSFORMATION_PORTAL_PLUGIN_TRUST_STORE` (or `plugin_trust_store_path=`)
+is configured, `PluginLoader` and `PluginRegistry.discover_plugins` run external
+code only from package directories whose `plugin.json` signature verifies
+([ADR-049](../architecture/ADR-049-plugin-manifest-trust.md)). Loose
+single-file plugins and unsigned packages are skipped.
+
 ### Manual Registration
 
 Register plugins programmatically:
