@@ -128,6 +128,10 @@ def test_load_recipe_invalid_type(temp_workspace):
         ({"name": "x", "stages": ["color_grading"], "output": "png"}, "Section 'output' must be a mapping"),
         ({"name": "x", "stages": ["color_grading"], "color_grading": True}, "Section 'color_grading' must be a mapping"),
         ({"name": 2024, "stages": ["color_grading"]}, "Field 'name' must be a string"),
+        (
+            {"name": "x", "stages": ["quality_assessment"], "quality_assessment": 5},
+            "Section 'quality_assessment' must be a mapping",
+        ),
     ],
 )
 def test_validate_recipe_reports_malformed_shapes_instead_of_raising(recipe, expected_error):
@@ -147,6 +151,18 @@ def test_validate_recipe_accepts_null_sections_and_unused_non_mapping_sections()
     recipe = {"name": "x", "stages": ["color_grading"], "color_grading": None, "branding": "unused"}
 
     assert validate_recipe(recipe) == (True, [])
+
+
+def test_validate_recipe_reports_each_malformed_section_once():
+    """A listed stage that is also always read (output) is reported a single time."""
+    from transformation_portal.config_loader import validate_recipe
+
+    recipe = {"name": "x", "stages": ["output", "color_grading", "color_grading"], "output": "png", "color_grading": 1}
+
+    assert validate_recipe(recipe) == (
+        False,
+        ["Section 'output' must be a mapping, got str", "Section 'color_grading' must be a mapping, got int"],
+    )
 
 
 def test_resolve_relative_paths_matches_path_words_not_substrings(tmp_path: Path):

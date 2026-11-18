@@ -300,13 +300,20 @@ def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[
         ],
     }
 
+    # A section whose options are all commented out loads as YAML null and is
+    # treated as empty; anything else that is not a mapping cannot configure a
+    # section the pipeline reads: every listed stage (also one without option
+    # checks below, such as quality_assessment), output and quality_feedback.
+    sections_read = ["output", "quality_feedback"]
+    for stage in stages if isinstance(stages, list) else []:
+        if isinstance(stage, str) and stage in valid_stages and stage not in sections_read:
+            sections_read.append(stage)
+    for section_name in sections_read:
+        section = recipe_dict.get(section_name)
+        if section is not None and not isinstance(section, dict):
+            errors.append(f"Section '{section_name}' must be a mapping, got {type(section).__name__}")
+
     for stage_name, valid_keys in stage_configs.items():
-        # A section whose options are all commented out loads as YAML null and is
-        # treated as empty; anything else that is not a mapping cannot configure a
-        # section the pipeline reads (listed stages, output, quality_feedback).
-        section_is_read = stage_name in ("output", "quality_feedback") or (isinstance(stages, list) and stage_name in stages)
-        if section_is_read and recipe_dict.get(stage_name) is not None and not isinstance(recipe_dict[stage_name], dict):
-            errors.append(f"Section '{stage_name}' must be a mapping, got {type(recipe_dict[stage_name]).__name__}")
         if stage_name in recipe_dict and isinstance(recipe_dict[stage_name], dict):
             stage_config = recipe_dict[stage_name]
 
