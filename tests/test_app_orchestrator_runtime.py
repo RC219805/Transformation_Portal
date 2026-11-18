@@ -967,6 +967,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
     assert f'data-photographic-review-js-url="{bundle.urls["portal-photographic.js"]}"' in html_content
     assert f'data-photographic-review-css-url="{bundle.urls["portal-photographic.css"]}"' in html_content
+    assert f'data-photographic-workspace-css-url="{bundle.urls["portal-photographic-workspace.css"]}"' in html_content
     assert f'data-profile-surface-js-url="{bundle.urls["portal-profile.js"]}"' in html_content
     assert "@import" not in css_content
     assert "--ux-target-min-size:" in css_content
@@ -1114,6 +1115,9 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic-editor.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-editor.js",
         "portal-photographic-drafts.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-drafts.js",
         "portal-photographic-loader.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-loader.js",
+        "portal-photographic-workspace.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-workspace.js",
+        "portal-photographic-thumbnails.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-thumbnails.js",
+        "portal-photographic-workspace.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-workspace.css",
         "portal-photographic.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.css",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         # Surface-split deferred bundles. Operate, Build, and Profile are real
@@ -1140,6 +1144,9 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic-editor.js": "text/javascript; charset=utf-8",
         "portal-photographic-drafts.js": "text/javascript; charset=utf-8",
         "portal-photographic-loader.js": "text/javascript; charset=utf-8",
+        "portal-photographic-workspace.js": "text/javascript; charset=utf-8",
+        "portal-photographic-thumbnails.js": "text/javascript; charset=utf-8",
+        "portal-photographic-workspace.css": "text/css; charset=utf-8",
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
@@ -1175,6 +1182,21 @@ def test_photographic_editor_import_binds_deferred_manifest_bytes() -> None:
     assert f"./portal-photographic-editor.js?v={fingerprint}" in viewer
     for entry in ("portal.js", "portal-review.js"):
         assert "portal-photographic-editor.js" not in orchestrator_app.PORTAL_ASSET_PATHS[entry].read_text()
+
+
+@pytest.mark.parametrize(
+    ("asset", "consumers"),
+    [
+        ("portal-photographic-workspace.js", ("portal-photographic.js", "portal-photographic-editor.js")),
+        ("portal-photographic-thumbnails.js", ("portal-photographic.js",)),
+    ],
+)
+def test_photographic_workspace_imports_bind_deferred_manifest_bytes(asset: str, consumers: tuple[str, ...]) -> None:
+    fingerprint = hashlib.sha256(orchestrator_app.PORTAL_ASSET_PATHS[asset].read_bytes()).hexdigest()[:12]
+    for consumer in consumers:
+        assert f"./{asset}?v={fingerprint}" in orchestrator_app.PORTAL_ASSET_PATHS[consumer].read_text()
+    for entry in ("portal.js", "portal-review.js"):
+        assert asset not in orchestrator_app.PORTAL_ASSET_PATHS[entry].read_text()
 
 
 def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
@@ -1219,6 +1241,8 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
         "/portal/assets/portal-operate-tools.js",
         "/portal/assets/portal-photographic-drafts.js",
         "/portal/assets/portal-photographic-loader.js",
+        "/portal/assets/portal-photographic-workspace.js",
+        "/portal/assets/portal-photographic-thumbnails.js",
     }
     for asset_url in bundled_asset_urls:
         asset_name = _portal_asset_name(asset_url)

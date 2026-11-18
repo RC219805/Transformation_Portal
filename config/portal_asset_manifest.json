@@ -84,6 +84,18 @@
       "repo_path": "public/portal-assets/portal-photographic-loader.js",
       "media_type": "text/javascript; charset=utf-8"
     },
+    "portal-photographic-workspace.js": {
+      "repo_path": "public/portal-assets/portal-photographic-workspace.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-photographic-workspace.css": {
+      "repo_path": "public/portal-assets/portal-photographic-workspace.css",
+      "media_type": "text/css; charset=utf-8"
+    },
+    "portal-photographic-thumbnails.js": {
+      "repo_path": "public/portal-assets/portal-photographic-thumbnails.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
     "portal-client-recovery.js": {
       "repo_path": "public/portal-assets/portal-client-recovery.js",
       "media_type": "text/javascript; charset=utf-8"

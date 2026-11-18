@@ -47,11 +47,12 @@ export function createPhotographicDraftLifecycle(host) {
     if (!nodes.draftStatus) return;
     const dirty = host.hasEdits();
     nodes.draftStatus.dataset.state = frozen ? "frozen" : ["saving", "failed", "unknown"].includes(saveState) ? saveState : dirty ? "unsaved" : "saved";
-    nodes.draftStatus.textContent = frozen ? "Review paused. Unsaved changes remain in this tab while access is checked."
+    const text = frozen ? "Review paused. Unsaved changes remain in this tab while access is checked."
       : saveState === "saving" ? "Saving the submitted changes. Newer edits are retained."
       : saveState === "failed" ? "Save failed. Your unsaved changes are retained."
       : saveState === "unknown" ? "Save outcome unknown. Refresh to reconcile before trying again."
       : dirty ? "Unsaved changes" : "Saved";
+    if (nodes.draftStatus.textContent !== text) nodes.draftStatus.textContent = text;
     host.onChange?.({ dirty, frozen });
   }
   function retain(action, options = {}) {

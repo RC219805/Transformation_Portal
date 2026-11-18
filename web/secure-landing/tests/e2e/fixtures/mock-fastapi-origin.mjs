@@ -55,6 +55,7 @@ const SCRIPT_STUB_ROUTES = new Map([
 ].map((pathname) => [pathname, { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }]));
 
 const FILE_ROUTES = new Map([
+  ["/portal/assets/portal-photographic-workspace.css", { type: "text/css; charset=utf-8", file: "portal-photographic-workspace.css" }],
   ["/portal/assets/portal-operate-tools.js", { type: "text/javascript; charset=utf-8", file: "portal-operate-tools.js" }],
   ["/portal/assets/portal-photographic.css", { type: "text/css; charset=utf-8", file: "portal-photographic.css" }],
   ["/portal/assets/portal-photographic.js", { type: "text/javascript; charset=utf-8", file: "portal-photographic.js" }],
@@ -86,6 +87,7 @@ const PLACEHOLDER_SUBSTITUTIONS = Object.freeze({
   __PORTAL_PROFILE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-profile.js`,
   __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-operate.js`,
   __PORTAL_OVERVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-overview.js`,
+  __PORTAL_PHOTOGRAPHIC_WORKSPACE_CSS_URL__: "/portal/assets/portal-photographic-workspace.css",
   __PORTAL_PHOTOGRAPHIC_CSS_URL__: "/portal/assets/portal-photographic.css",
   __PORTAL_PHOTOGRAPHIC_JS_URL__: "/portal/assets/portal-photographic.js",
   __PORTAL_REVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-review.js`,
