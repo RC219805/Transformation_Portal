@@ -524,3 +524,85 @@ class TestAutoOptimizer:
         assert len(results) == 1
         assert results[0].success is False
         assert "Run failed" in results[0].error
+
+
+class TestAcceptedStateCarriesCandidateOutput:
+    """M-09: after an accepted fix, later iterations must see the candidate's real output."""
+
+    @staticmethod
+    def _fix(action: str, priority: int):
+        from transformation_portal.evals.self_healing import FixSuggestion
+
+        return FixSuggestion(
+            type="quality",
+            target_node="nvdiffrec",
+            action=action,
+            params={"steps": 1000},
+            confidence=0.9,
+            rationale="test",
+            priority=priority,
+        )
+
+    def _run(self):
+        executions: list[int] = []
+        seen_metrics: list[dict] = []
+
+        def run_fn(pipeline):
+            steps = pipeline["steps"]
+            executions.append(steps)
+            psnr = 20.0 if steps < 1000 else 40.0  # the fix really repairs PSNR
+            return {"score": psnr / 100.0, "metrics": {"psnr": psnr}}
+
+        low, high = self._fix("low_priority", 1), self._fix("increase_iterations", 9)
+
+        def fake_suggest(diff, metrics=None):
+            seen_metrics.append(dict(metrics or {}))
+            # Only propose fixes while PSNR is still bad; list order is not priority order.
+            return MagicMock(suggestions=[low, high] if (metrics or {}).get("psnr", 0.0) < 30.0 else [])
+
+        def fake_apply(pipeline, fix):
+            return {**pipeline, "steps": 1000 if fix.action == "increase_iterations" else pipeline["steps"]}
+
+        with (
+            patch("transformation_portal.evals.auto_optimizer.suggest_fixes", side_effect=fake_suggest),
+            patch("transformation_portal.evals.auto_optimizer.apply_fix", side_effect=fake_apply),
+            patch("transformation_portal.evals.auto_optimizer.can_auto_apply", return_value=True),
+        ):
+            optimizer = AutoOptimizer(
+                run_fn=run_fn,
+                eval_fn=lambda o: o["score"],
+                diff_fn=lambda p, o: {"changes": []},
+                config=OptimizationConfig(max_iterations=4, parallel_evaluation=False, min_gain=0.01, beam_width=1),
+            )
+            result = optimizer.optimize({"steps": 100})
+        return optimizer, result, executions, seen_metrics
+
+    def test_next_iteration_sees_accepted_candidate_metrics(self):
+        _optimizer, result, executions, seen_metrics = self._run()
+
+        assert seen_metrics == [{"psnr": 20.0}, {"psnr": 40.0}]
+        assert [(h.score, h.metrics) for h in result.history] == [(0.2, {"psnr": 20.0}), (0.4, {"psnr": 40.0})]
+        # Initial run + one candidate run: the accepted candidate is not re-executed.
+        assert executions == [100, 1000]
+        assert result.status == OptimizationStatus.CONVERGED
+        assert result.best_score == pytest.approx(0.4)
+
+    def test_iterations_and_fixes_tried_reflect_what_ran(self):
+        optimizer, result, _executions, _seen = self._run()
+
+        # Iteration 1 accepted the fix; iteration 2 found nothing to do and converged.
+        assert result.iterations == 2
+        assert result.accepted_improvements == 1
+        # fixes_tried lists the candidates actually evaluated (highest priority first).
+        assert [s.fixes_tried for s in optimizer.iteration_summaries] == [["increase_iterations"]]
+
+    def test_candidate_result_keeps_output(self):
+        optimizer = AutoOptimizer(
+            run_fn=MagicMock(return_value={"score": 0.8, "metrics": {"psnr": 33.0}}),
+            eval_fn=MagicMock(),
+            diff_fn=MagicMock(),
+            config=OptimizationConfig(parallel_evaluation=False),
+        )
+        candidate = Candidate(pipeline={}, parent_score=0.7, expected_gain=0.1, fix={"action": "a"})
+        (res,) = optimizer._evaluate_sequential([candidate])
+        assert res.output == {"score": 0.8, "metrics": {"psnr": 33.0}}
