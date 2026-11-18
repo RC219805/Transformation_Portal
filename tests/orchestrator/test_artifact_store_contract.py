@@ -581,6 +581,29 @@ async def test_s3_bulk_delete_wraps_listing_failure_in_artifact_store_error() ->
         await store.list_for_job("job-bulk")
 
 
+async def test_s3_bulk_delete_wraps_request_level_delete_failure_in_artifact_store_error() -> None:
+    """ORCH-06: a ``delete_objects`` call that raises is wrapped like its per-key ``Errors`` are."""
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class DeleteRequestFailure(Exception):
+        pass
+
+    class FailingDeleteClient:
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "Contents": [{"Key": "tp/test/jobs/job-bulk/a.txt"}, {"Key": "tp/test/jobs/job-bulk/b.txt"}],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, **_kwargs):
+            raise DeleteRequestFailure("AccessDenied")
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=FailingDeleteClient())
+    with pytest.raises(ArtifactStoreError, match="S3 delete_objects failed for 2 keys under tp/test") as caught:
+        await store.delete("job-bulk")
+    assert isinstance(caught.value.__cause__, DeleteRequestFailure)
+
+
 async def test_s3_bulk_delete_counts_confirmed_deletions() -> None:
     from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
 

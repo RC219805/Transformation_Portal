@@ -1007,11 +1007,17 @@ class S3ArtifactStore(ArtifactStore):
                 break
 
     async def _delete_object_batch(self, client: Any, batch: List[dict[str, str]]) -> int:
-        response = await asyncio.to_thread(
-            client.delete_objects,
-            Bucket=self._bucket,
-            Delete={"Objects": batch, "Quiet": False},
-        )
+        try:
+            response = await asyncio.to_thread(
+                client.delete_objects,
+                Bucket=self._bucket,
+                Delete={"Objects": batch, "Quiet": False},
+            )
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            # A request-level failure (bucket gone since the listing, access
+            # denied on the call, endpoint error) is the store's own error,
+            # like the per-key failures reported in ``Errors`` below.
+            raise ArtifactStoreError(f"S3 delete_objects failed for {len(batch)} keys under {self._prefix}") from exc
         errors = response.get("Errors", []) or []
         if errors:
             sample = ", ".join(f"{error.get('Key', '<unknown>')}:{error.get('Code', '<unknown>')}" for error in errors[:3])
