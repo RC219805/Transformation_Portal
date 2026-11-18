@@ -775,7 +775,7 @@ class TestEdgeCases:
         assert "unit" in functions[0].markers
 
     def test_nested_class(self, tmp_path: Path) -> None:
-        """Only top-level Test classes are scanned (pytest behavior)."""
+        """Nested Test classes are scanned, as pytest collects them (M-25)."""
         content = _src("""
             import pytest
 
@@ -792,9 +792,10 @@ class TestEdgeCases:
         test_file.write_text(content, encoding="utf-8")
 
         functions = scan_file(test_file)
-        # Only outer test method is detected (nested classes not visited)
-        assert len(functions) == 1
-        assert functions[0].name == "TestOuter.test_outer"
+        # pytest collects TestOuter::TestNested::test_nested; the enclosing
+        # class marker applies to the nested class.
+        assert [f.name for f in functions] == ["TestOuter.test_outer", "TestOuter.TestNested.test_nested"]
+        assert all("unit" in f.markers for f in functions)
 
     def test_marker_with_call_syntax(self, tmp_path: Path) -> None:
         """Markers with call syntax are detected: @pytest.mark.unit()."""
@@ -1072,3 +1073,49 @@ class TestUnparseableFilesAreViolations:
         assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 1
         # Without --strict the audit stays advisory.
         assert _run_main(monkeypatch, "--audit", "--tests-root", str(tests_dir)) == 0
+
+
+class TestNestedTestClasses:
+    """Methods of nested Test classes are checked like any other test (M-25)."""
+
+    def test_unmarked_nested_method_is_a_violation(self, tmp_path: Path) -> None:
+        nested = tmp_path / "test_nested.py"
+        nested.write_text(
+            _src("""
+            class TestOuter:
+                class TestInner:
+                    def test_unmarked(self):
+                        pass
+            """),
+            encoding="utf-8",
+        )
+
+        violations = check_files([nested])
+
+        assert [v.name for v in violations] == ["TestOuter.TestInner.test_unmarked"]
+
+    def test_nested_markers_accumulate_and_helpers_are_ignored(self, tmp_path: Path) -> None:
+        nested = tmp_path / "test_nested_markers.py"
+        nested.write_text(
+            _src("""
+            import pytest
+
+            @pytest.mark.unit
+            class TestOuter:
+                @pytest.mark.slow
+                class TestInner:
+                    @pytest.mark.regression
+                    def test_deep(self):
+                        pass
+
+                class Helper:
+                    def test_not_collected(self):
+                        pass
+            """),
+            encoding="utf-8",
+        )
+
+        functions = scan_file(nested)
+
+        assert [f.name for f in functions] == ["TestOuter.TestInner.test_deep"]
+        assert functions[0].markers == frozenset({"unit", "slow", "regression"})

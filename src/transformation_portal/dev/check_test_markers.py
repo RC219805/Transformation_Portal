@@ -160,23 +160,32 @@ class TestMarkerVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Handle test classes with class-level markers."""
         if node.name.startswith("Test"):
-            class_markers = self._extract_markers_from_decorators(node.decorator_list)
-            # Visit methods within the class
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if item.name.startswith("test_"):
-                        method_markers = self._extract_markers_from_decorators(item.decorator_list)
-                        all_markers = method_markers | class_markers | self._module_markers
-                        self.test_functions.append(
-                            TestFunction(
-                                file_path=self.file_path,
-                                name=f"{node.name}.{item.name}",
-                                lineno=item.lineno,
-                                markers=all_markers,
-                            )
-                        )
+            self._visit_test_class(node, prefix=node.name, inherited_markers=frozenset())
         else:
             self.generic_visit(node)
+
+    def _visit_test_class(self, node: ast.ClassDef, prefix: str, inherited_markers: frozenset[str]) -> None:
+        """Collect test methods of a Test class, recursing into nested Test classes.
+
+        pytest collects ``Test*`` classes nested inside ``Test*`` classes, and
+        markers applied to an enclosing class apply to the nested class too.
+        """
+        class_markers = self._extract_markers_from_decorators(node.decorator_list) | inherited_markers
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if item.name.startswith("test_"):
+                    method_markers = self._extract_markers_from_decorators(item.decorator_list)
+                    all_markers = method_markers | class_markers | self._module_markers
+                    self.test_functions.append(
+                        TestFunction(
+                            file_path=self.file_path,
+                            name=f"{prefix}.{item.name}",
+                            lineno=item.lineno,
+                            markers=all_markers,
+                        )
+                    )
+            elif isinstance(item, ast.ClassDef) and item.name.startswith("Test"):
+                self._visit_test_class(item, prefix=f"{prefix}.{item.name}", inherited_markers=class_markers)
 
     def _extract_markers_from_decorators(self, decorators: list[ast.expr]) -> frozenset[str]:
         """Extract pytest.mark.X markers from decorator list."""
