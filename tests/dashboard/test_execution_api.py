@@ -236,6 +236,25 @@ def test_execution_ui_serves_html(client: TestClient) -> None:
     assert "<html" in resp.text.lower()
 
 
+@pytest.mark.parametrize(
+    "raw_sink",
+    [
+        "<h4>${nodeId}</h4>",
+        "${node.error}</div>",
+        "${JSON.stringify(node.outputs, null, 2)}\n",
+        "onclick=\"selectRun('${r.run_id}')\"",
+        "<h3>Run ${r.run_id}</h3>",
+        "[${log.node}]",
+        "${log.type}${log.message",
+    ],
+)
+def test_execution_ui_escapes_client_supplied_strings(raw_sink: str) -> None:
+    # Node ids, errors, outputs and run ids come from the /api/exec/run payload (D5).
+    html = execution_api.get_execution_ui_html()
+    assert "function escapeHtml(value)" in html
+    assert raw_sink not in html
+
+
 def test_websocket_ping_pong(client: TestClient) -> None:
     with client.websocket_connect("/api/exec/ws") as ws:
         ws.send_text("ping")

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, HTTPException, Query
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
     FASTAPI_AVAILABLE = True
@@ -136,13 +136,13 @@ def create_node_inspection_router() -> "APIRouter":
         )
 
     @router.get("/runs/{run_id}/nodes/{node_id}/logs")
-    async def get_node_logs(run_id: str, node_id: str, tail: int = 100):
+    async def get_node_logs(run_id: str, node_id: str, tail: int = Query(100, ge=1, le=1000)):
         """Get node execution logs.
 
         Args:
             run_id: Run identifier
             node_id: Node identifier
-            tail: Number of recent log entries to return
+            tail: Number of recent log entries to return (1-1000; out of range is 422)
         """
         store = get_store()
         node = store.get_node(run_id, node_id)

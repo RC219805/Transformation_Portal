@@ -656,6 +656,18 @@ def get_experiments_html() -> str:
     <script>
         let selectedExperiment = null;
 
+        // Escape a value for HTML text and quoted-attribute contexts. Experiment names,
+        // descriptions, run names and metric keys are client-supplied.
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+
         async function loadExperiments() {
             const res = await fetch('/api/experiments/');
             const data = await res.json();
@@ -668,9 +680,9 @@ def get_experiments_html() -> str:
 
             container.innerHTML = data.experiments.map(e => `
                 <div class="experiment-item ${selectedExperiment?.id === e.id ? 'selected' : ''}"
-                     onclick="selectExperiment(${e.id})">
-                    <h3>${e.name}</h3>
-                    <p>${e.description || 'No description'}</p>
+                     onclick="selectExperiment(${Number(e.id)})">
+                    <h3>${escapeHtml(e.name)}</h3>
+                    <p>${escapeHtml(e.description || 'No description')}</p>
                 </div>
             `).join('');
         }
@@ -704,11 +716,11 @@ def get_experiments_html() -> str:
                     <tbody>
                         ${runs.map(r => `
                             <tr>
-                                <td>${r.id}</td>
-                                <td>${r.name || '-'}</td>
-                                <td><span class="status ${r.status}">${r.status}</span></td>
-                                <td class="metrics">${formatMetrics(r.metrics)}</td>
-                                <td>${new Date(r.created_at).toLocaleString()}</td>
+                                <td>${escapeHtml(r.id)}</td>
+                                <td>${escapeHtml(r.name || '-')}</td>
+                                <td><span class="status ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span></td>
+                                <td class="metrics">${escapeHtml(formatMetrics(r.metrics))}</td>
+                                <td>${escapeHtml(new Date(r.created_at).toLocaleString())}</td>
                             </tr>
                         `).join('')}
                     </tbody>

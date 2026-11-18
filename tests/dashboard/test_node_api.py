@@ -121,6 +121,13 @@ def test_node_logs_respects_tail(client: TestClient) -> None:
     assert body["logs"][-1].endswith("line-4")
 
 
+@pytest.mark.parametrize("tail", [0, -1, 1001])
+def test_node_logs_rejects_out_of_range_tail(client: TestClient, tail: int) -> None:
+    # tail=0 used to slice logs[-0:] and return every entry (D5).
+    resp = client.get("/api/inspect/runs/run_1/nodes/ingest/logs", params={"tail": tail})
+    assert resp.status_code == 422
+
+
 # --------------------------------------------------------------------------- #
 # artifacts (with / without CAS)
 # --------------------------------------------------------------------------- #

@@ -307,6 +307,17 @@ def test_experiments_ui_serves_html(client: TestClient) -> None:
     assert "<html" in resp.text.lower()
 
 
+@pytest.mark.parametrize(
+    "raw_sink",
+    ["<h3>${e.name}</h3>", "<p>${e.description", "<td>${r.name", "${formatMetrics(r.metrics)}</td>"],
+)
+def test_experiments_ui_escapes_client_supplied_strings(raw_sink: str) -> None:
+    # Experiment names/descriptions, run names and metric keys are client-supplied (D5).
+    html = experiment_api.get_experiments_html()
+    assert "function escapeHtml(value)" in html
+    assert raw_sink not in html
+
+
 def test_set_db_path_mutates_global(tmp_path) -> None:
     original = experiment_api._db_path
     target = tmp_path / "custom.db"

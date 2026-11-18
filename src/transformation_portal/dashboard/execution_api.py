@@ -443,6 +443,17 @@ def get_execution_ui_html() -> str:
         let runs = {};
         let logs = [];
 
+        // Escape a value for HTML text and quoted-attribute contexts. Run ids, node ids,
+        // errors and outputs come from client-supplied payloads.
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/api/exec/ws`);
@@ -573,9 +584,9 @@ def get_execution_ui_html() -> str:
             const container = document.getElementById('logs');
             container.innerHTML = logs.map(log => `
                 <div class="log-entry ${log.type === 'node_error' || log.type === 'run_error' ? 'error' : ''}">
-                    <span class="time">[${log.time}]</span>
-                    ${log.node ? `<span class="node">[${log.node}]</span>` : ''}
-                    <span class="message">${log.type}${log.message ? ': ' + log.message : ''}${log.error ? ': ' + log.error : ''}</span>
+                    <span class="time">[${escapeHtml(log.time)}]</span>
+                    ${log.node ? `<span class="node">[${escapeHtml(log.node)}]</span>` : ''}
+                    <span class="message">${escapeHtml(log.type)}${log.message ? ': ' + escapeHtml(log.message) : ''}${log.error ? ': ' + escapeHtml(log.error) : ''}</span>
                 </div>
             `).join('');
         }
@@ -612,10 +623,10 @@ def get_execution_ui_html() -> str:
 
             container.innerHTML = runList.map(r => `
                 <div class="run-item ${selectedRunId === r.run_id ? 'selected' : ''}"
-                     onclick="selectRun('${r.run_id}')">
-                    <h3>Run ${r.run_id}</h3>
+                     onclick="selectRun(${escapeHtml(JSON.stringify(String(r.run_id)))})">
+                    <h3>Run ${escapeHtml(r.run_id)}</h3>
                     <p>
-                        <span class="status ${r.status}">${r.status}</span>
+                        <span class="status ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span>
                         ${r.start_time ? new Date(r.start_time).toLocaleString() : ''}
                     </p>
                 </div>
@@ -629,7 +640,7 @@ def get_execution_ui_html() -> str:
 
             // Fetch full run details
             try {
-                const res = await fetch(`/api/exec/runs/${runId}`);
+                const res = await fetch(`/api/exec/runs/${encodeURIComponent(runId)}`);
                 const data = await res.json();
                 runs[runId] = { ...runs[runId], ...data };
                 renderNodes();
@@ -668,7 +679,7 @@ def get_execution_ui_html() -> str:
             btn.textContent = 'Cancelling...';
 
             try {
-                const res = await fetch(`/api/exec/runs/${selectedRunId}/cancel`, { method: 'POST' });
+                const res = await fetch(`/api/exec/runs/${encodeURIComponent(selectedRunId)}/cancel`, { method: 'POST' });
                 const data = await res.json();
                 if (runs[selectedRunId]) {
                     runs[selectedRunId].status = data.status;
@@ -692,18 +703,18 @@ def get_execution_ui_html() -> str:
             }
 
             container.innerHTML = Object.entries(run.nodes).map(([nodeId, node]) => `
-                <div class="node-card ${node.status || 'pending'}">
-                    <h4>${nodeId}</h4>
+                <div class="node-card ${escapeHtml(node.status || 'pending')}">
+                    <h4>${escapeHtml(nodeId)}</h4>
                     <div class="meta">
-                        <span class="status ${node.status || 'pending'}">${node.status || 'pending'}</span>
-                        ${node.merkle_hash ? `<br>Hash: ${node.merkle_hash.slice(0, 8)}...` : ''}
+                        <span class="status ${escapeHtml(node.status || 'pending')}">${escapeHtml(node.status || 'pending')}</span>
+                        ${node.merkle_hash ? `<br>Hash: ${escapeHtml(String(node.merkle_hash).slice(0, 8))}...` : ''}
                     </div>
                     ${node.outputs ? `
                         <div class="outputs">
-                            ${JSON.stringify(node.outputs, null, 2)}
+                            ${escapeHtml(JSON.stringify(node.outputs, null, 2))}
                         </div>
                     ` : ''}
-                    ${node.error ? `<div class="outputs" style="color:#ff5252">${node.error}</div>` : ''}
+                    ${node.error ? `<div class="outputs" style="color:#ff5252">${escapeHtml(node.error)}</div>` : ''}
                 </div>
             `).join('');
         }
