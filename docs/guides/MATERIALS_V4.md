@@ -411,6 +411,10 @@ unknown predictions, and insufficient support do not become perfect metrics.
 Calibration output contains equal-width-bin ECE and **top-label binary Brier**;
 it is not multiclass Brier or proof that the model is calibrated.
 
+Evaluation input is limited to 16 MiB. Its evaluation-specific parser rejects
+duplicate keys and nonfinite numbers; it does not relax the execution-plan JSON
+limit, which is not applied to evaluation input.
+
 The CLI exits 0 for measured output, 2 for unavailable evaluation evidence, and 1
 for command/file failures. None of these establishes production acceptance.
 Freeze group-disjoint development/calibration/test data before selection; retain

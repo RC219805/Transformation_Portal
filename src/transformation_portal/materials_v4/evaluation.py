@@ -7,6 +7,7 @@ calibration adequacy, or that a producer actually honored its declared splits.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections import Counter, defaultdict
 from typing import Any, Mapping
@@ -20,6 +21,9 @@ from .taxonomy import MATERIAL_LABELS
 
 EVALUATION_INPUT_SCHEMA = "tp.materials.evaluation_input.v1"
 EVALUATION_REPORT_SCHEMA = "tp.materials.evaluation.v1"
+# Evaluation input carries JSON masks, so it is bounded here rather than by the
+# 1 MiB execution-plan decoder; the CLI reads and decodes under this one bound.
+MAX_EVALUATION_INPUT_BYTES = 16 * 1024 * 1024
 _MAX_RECORDS = 10_000
 _MAX_MASK_PIXELS = 16_777_216
 _MAX_TOTAL_MASK_PIXELS = 67_108_864
@@ -32,6 +36,39 @@ def _digest(payload: Any) -> str:
 
 def _unavailable(reason: str, **extra: Any) -> dict[str, Any]:
     return {"status": "unavailable", "reason": reason, **extra}
+
+
+def decode_evaluation_json_object(data: bytes) -> dict[str, Any]:
+    """Decode strict evaluation-input JSON without changing execution-plan limits."""
+    if not isinstance(data, bytes) or not 0 < len(data) <= MAX_EVALUATION_INPUT_BYTES:
+        raise MaterialsError(f"Evaluation input JSON is empty or exceeds {MAX_EVALUATION_INPUT_BYTES} bytes")
+
+    def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise MaterialsError("Evaluation input JSON contains duplicate object keys")
+            result[key] = value
+        return result
+
+    def finite(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise MaterialsError("Evaluation input JSON must contain finite numbers")
+        return parsed
+
+    def constant(_: str) -> Any:
+        raise MaterialsError("Evaluation input JSON must contain finite numbers")
+
+    try:
+        payload = json.loads(data.decode("utf-8"), object_pairs_hook=object_pairs, parse_constant=constant, parse_float=finite)
+    except MaterialsError:
+        raise
+    except (UnicodeError, ValueError, RecursionError) as exc:
+        raise MaterialsError("Evaluation input JSON must be a bounded finite UTF-8 object") from exc
+    if not isinstance(payload, dict):
+        raise MaterialsError("Evaluation input JSON must contain one object")
+    return payload
 
 
 def _integer(value: Any, name: str, low: int, high: int) -> int:

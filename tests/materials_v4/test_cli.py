@@ -121,6 +121,54 @@ def test_missing_evaluation_evidence_is_nonzero_and_explicit(tmp_path, capsys):
     assert json.loads(output.read_bytes()) == result
 
 
+def test_evaluation_input_above_the_plan_decoder_bound_is_measured(tmp_path, capsys):
+    """LN-3: the evaluate read budget, not the 1 MiB plan decoder, bounds evaluation input."""
+    from transformation_portal.core.execution_plan import MAX_PLAN_BODY_BYTES
+    from transformation_portal.materials_v4.evaluation import MAX_EVALUATION_INPUT_BYTES
+
+    mask = (np.arange(256)[None, :] < 128).repeat(256, axis=0).astype(int).tolist()
+    records = [
+        {
+            "record_id": f"r{index}",
+            "source_sha256": f"{index + 1:064x}",
+            "property_group": f"g{index}",
+            "split": "test",
+            "true_label": "water",
+            "predicted_label": "water",
+            "confidence": 0.9,
+            "predicted_mask": mask,
+            "target_mask": mask,
+        }
+        for index in range(6)
+    ]
+    source = tmp_path / "evaluation.json"
+    source.write_text(
+        json.dumps({"schema": "tp.materials.evaluation_input.v1", "records": records, "selection_sources": []}),
+        encoding="utf-8",
+    )
+    assert MAX_PLAN_BODY_BYTES < source.stat().st_size <= MAX_EVALUATION_INPUT_BYTES
+    assert main(["evaluate", "--input", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "measured"
+
+
+@pytest.mark.parametrize(
+    "body,message",
+    [
+        (b'{"schema": "a", "schema": "b"}', "duplicate object keys"),
+        (b'{"records": [], "confidence": 1e999}', "finite numbers"),
+        (b'{"records": [], "confidence": NaN}', "finite numbers"),
+        (b"[]", "one object"),
+        (b"[" * 100_000, "bounded finite UTF-8 object"),
+    ],
+    ids=["duplicate", "overflow", "nan", "array", "nesting"],
+)
+def test_evaluation_input_decoder_stays_strict(tmp_path, capsys, body, message):
+    source = tmp_path / "evaluation.json"
+    source.write_bytes(body)
+    assert main(["evaluate", "--input", str(source)]) == 1
+    assert message in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("kind", ["oversized_file", "oversized_header", "wrong_geometry"])
 def test_mask_resource_rejection_precedes_immutable_copy(supplied, monkeypatch, capsys, kind):
     from transformation_portal.materials_v4 import __main__ as cli
