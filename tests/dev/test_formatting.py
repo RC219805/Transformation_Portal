@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -84,6 +86,60 @@ class TestWriteFormatted:
             # Content should be written (may be reformatted)
             written = path.read_text()
             assert "def hello" in written
+
+    def test_write_formatted_preserves_existing_mode(self, tmp_path):
+        """An executable script must stay executable after a rewrite."""
+        from transformation_portal.dev import formatting
+
+        path = tmp_path / "tool.py"
+        path.write_text("print('hi')\n")
+        path.chmod(0o755)
+
+        with mock.patch.object(formatting, "format_file", return_value=True):
+            formatting.write_formatted(path, "print('hello')\n")
+
+        assert stat.S_IMODE(path.stat().st_mode) == 0o755
+        assert path.read_text() == "print('hello')\n"
+
+    def test_write_formatted_new_file_honours_umask(self, tmp_path):
+        """A new file gets 0o666 & ~umask, not mkstemp's private 0o600."""
+        from transformation_portal.dev import formatting
+
+        path = tmp_path / "fresh.py"
+        old_mask = os.umask(0o027)
+        try:
+            with mock.patch.object(formatting, "format_file", return_value=True):
+                formatting.write_formatted(path, "x = 1\n")
+        finally:
+            os.umask(old_mask)
+
+        assert stat.S_IMODE(path.stat().st_mode) == 0o640
+
+    def test_write_formatted_raises_and_keeps_destination_on_formatter_failure(self, tmp_path):
+        """A formatter failure must not publish the unformatted content."""
+        from transformation_portal.dev import formatting
+
+        path = tmp_path / "module.py"
+        path.write_text("x = 1\n")
+
+        with mock.patch.object(formatting, "format_file", return_value=False):
+            with pytest.raises(RuntimeError, match="Formatting failed"):
+                formatting.write_formatted(path, "x=2\n")
+
+        assert path.read_text() == "x = 1\n"
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["module.py"]
+
+    def test_write_canonical_raises_on_formatter_failure(self, tmp_path):
+        """write_canonical shares the fail-closed contract of write_formatted."""
+        from transformation_portal.dev import formatting
+
+        path = tmp_path / "gen.py"
+        with mock.patch.object(formatting, "format_file", return_value=False):
+            with pytest.raises(RuntimeError, match="Formatting failed"):
+                formatting.write_canonical(path, "x = {'b': 1, 'a': 2}\n")
+
+        assert not path.exists()
+        assert list(tmp_path.iterdir()) == []
 
 
 class TestCheckFormatting:
@@ -180,6 +236,65 @@ class TestFormatDirectory:
             assert formatted >= 0
             assert failed >= 0
             assert formatted + failed == 2
+
+    def test_format_directory_skips_hidden_and_vendored_trees(self, tmp_path):
+        """Virtualenvs, hidden dirs and vendored trees must never be rewritten."""
+        from transformation_portal.dev import formatting
+
+        kept = [tmp_path / "src" / "a.py", tmp_path / "b.py"]
+        skipped = [
+            tmp_path / ".venv" / "lib" / "site-packages" / "dep" / "mod.py",
+            tmp_path / "venv" / "lib" / "mod.py",
+            tmp_path / ".git" / "hooks" / "hook.py",
+            tmp_path / "node_modules" / "pkg" / "gen.py",
+            tmp_path / "src" / "__pycache__" / "a.py",
+            tmp_path / "build" / "lib" / "a.py",
+            tmp_path / "src" / ".hidden.py",
+        ]
+        for f in kept + skipped:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("x=1\n")
+
+        seen: list[Path] = []
+
+        def fake_format(path, *, quiet=True):
+            seen.append(path)
+            return True
+
+        with mock.patch.object(formatting, "format_file", side_effect=fake_format):
+            assert formatting.format_directory(tmp_path) == (2, 0)
+
+        assert sorted(seen) == sorted(kept)
+
+    def test_format_directory_allows_hidden_root(self, tmp_path):
+        """Only components below the formatted directory are filtered."""
+        from transformation_portal.dev import formatting
+
+        root = tmp_path / ".config_scripts"
+        root.mkdir()
+        (root / "a.py").write_text("x=1\n")
+
+        with mock.patch.object(formatting, "format_file", return_value=True):
+            assert formatting.format_directory(root) == (1, 0)
+
+
+class TestFormatFileSubprocesses:
+    """format_file runs each formatter once per file."""
+
+    def test_black_runs_once_per_file(self, tmp_path):
+        from transformation_portal.dev import formatting
+
+        path = tmp_path / "m.py"
+        path.write_text("x=1\n")
+
+        with (
+            mock.patch.object(formatting, "_tool_available", return_value=True),
+            mock.patch.object(formatting.subprocess, "run") as run,
+        ):
+            assert formatting.format_file(path) is True
+
+        tools = [call.args[0][0] for call in run.call_args_list]
+        assert tools == ["isort", "black"]
 
 
 class TestConstants:

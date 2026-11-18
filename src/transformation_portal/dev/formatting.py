@@ -20,7 +20,9 @@ This eliminates:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -31,6 +33,24 @@ logger = logging.getLogger(__name__)
 BLACK_LINE_LENGTH = 127
 BLACK_TARGET_VERSIONS = ["py311", "py312"]
 
+# Directory names format_directory() never descends into: black's default
+# exclude list plus vendored / cache trees. Explicit file paths handed to black
+# bypass black's own exclude, so the walk filters them itself. Every hidden
+# (dot-prefixed) path component below the formatted directory is skipped too.
+EXCLUDED_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        "__pypackages__",
+        "_build",
+        "buck-out",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "venv",
+    }
+)
+
 
 def _tool_available(tool: str) -> bool:
     """Check if a formatting tool is available in the environment."""
@@ -40,9 +60,10 @@ def _tool_available(tool: str) -> bool:
 def format_file(path: Path, *, quiet: bool = True) -> bool:
     """Apply canonical formatting to a Python file immediately after write.
 
-    The formatting order is: isort (import ordering) → Black → Black (final pass).
-    Running isort first ensures imports are sorted, then Black formats the code.
-    A final Black pass ensures any isort changes are also Black-compliant.
+    The formatting order is: isort (import ordering) → Black.
+    Running isort first ensures imports are sorted; Black then formats the
+    result, so isort's changes are already Black-compliant (Black is
+    idempotent, so a second Black pass would only cost another subprocess).
 
     Args:
         path: Path to the Python file to format.
@@ -97,21 +118,73 @@ def format_file(path: Path, *, quiet: bool = True) -> bool:
     else:
         logger.warning("Black not available - skipping formatting for %s", path)
 
-    # Step 3: Final Black pass to ensure isort changes are also Black-compliant
-    if _tool_available("black") and success:
-        try:
-            subprocess.run(
-                ["black", f"--line-length={BLACK_LINE_LENGTH}", str(path)],
-                check=True,
-                stdout=stdout,
-                stderr=stderr,
-            )
-            logger.debug("Final Black pass applied: %s", path)
-        except subprocess.CalledProcessError as e:
-            logger.warning("Final Black pass failed for %s: %s", path, e)
-            success = False
-
     return success
+
+
+def _current_umask() -> int:
+    """Return the process umask without leaving it modified."""
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+            if line.startswith("Umask:"):
+                return int(line.split()[1], 8)
+    except (OSError, ValueError, IndexError):
+        pass
+    mask = os.umask(0o022)
+    os.umask(mask)
+    return mask
+
+
+def _destination_mode(path: Path) -> int:
+    """Permission bits the written file should carry.
+
+    An existing file keeps its mode (an executable script stays executable);
+    a new file gets the regular ``0o666 & ~umask`` instead of mkstemp's 0o600.
+    """
+    try:
+        return stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        return 0o666 & ~_current_umask()
+
+
+def _write_formatted_atomically(path: Path, content: str, *, encoding: str, quiet: bool) -> None:
+    """Write ``content`` to a sibling temp file, format it, then rename it onto ``path``.
+
+    Raises:
+        RuntimeError: If a formatter failed; ``path`` is left untouched.
+    """
+    import tempfile
+
+    mode = _destination_mode(path)
+
+    # Create temp file in the same directory (so rename is atomic)
+    fd, tmp_path_str = tempfile.mkstemp(
+        suffix=path.suffix,
+        prefix=f".{path.stem}_",
+        dir=path.parent,
+    )
+    tmp_path = Path(tmp_path_str)
+
+    try:
+        # Write content to temp file (ensure fd is closed even on write failure)
+        try:
+            os.write(fd, content.encode(encoding))
+        finally:
+            os.close(fd)
+        tmp_path.chmod(mode)
+        logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
+
+        # Apply formatting to temp file; never publish an unformatted file.
+        if not format_file(tmp_path, quiet=quiet):
+            raise RuntimeError(f"Formatting failed for {path}; destination left unchanged")
+
+        # Atomic rename to final destination
+        tmp_path.replace(path)
+        logger.debug("Atomically moved %s to %s", tmp_path, path)
+
+    except BaseException:
+        # Clean up temp file on error (fd already closed by inner try/finally)
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def write_formatted(
@@ -130,12 +203,18 @@ def write_formatted(
     The write is atomic: content is written to a temporary file, formatted
     there, and only then renamed to the destination path. This ensures
     the destination is never left in a partially-written or unformatted state.
+    An existing destination keeps its permission bits; a new one gets the
+    usual ``0o666 & ~umask``.
 
     Args:
         path: Destination path for the file.
         content: Content to write to the file.
         encoding: File encoding (default: utf-8).
         quiet: If True, suppress stdout/stderr from formatters.
+
+    Raises:
+        RuntimeError: If isort or Black failed on the content (for example a
+            syntax error); the destination is left unchanged.
 
     Example:
         from transformation_portal.dev.formatting import write_formatted
@@ -146,9 +225,6 @@ def write_formatted(
         '''
         write_formatted(Path("src/module.py"), code)
     """
-    import os
-    import tempfile
-
     # Ensure parent directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -158,34 +234,13 @@ def write_formatted(
         logger.debug("Wrote %d bytes to %s (non-Python, no formatting)", len(content), path)
         return
 
-    # Create temp file in the same directory (so rename is atomic)
-    fd, tmp_path_str = tempfile.mkstemp(
-        suffix=path.suffix,
-        prefix=f".{path.stem}_",
-        dir=path.parent,
-    )
-    tmp_path = Path(tmp_path_str)
+    _write_formatted_atomically(path, content, encoding=encoding, quiet=quiet)
 
-    try:
-        # Write content to temp file (ensure fd is closed even on write failure)
-        try:
-            os.write(fd, content.encode(encoding))
-        finally:
-            os.close(fd)
-        logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
 
-        # Apply formatting to temp file
-        format_file(tmp_path, quiet=quiet)
-
-        # Atomic rename to final destination
-        tmp_path.replace(path)
-        logger.debug("Atomically moved %s to %s", tmp_path, path)
-
-    except Exception:
-        # Clean up temp file on error (fd already closed by inner try/finally)
-        if tmp_path.exists():
-            tmp_path.unlink()
-        raise
+def _is_excluded(file_path: Path, directory: Path) -> bool:
+    """True when ``file_path`` lies in a hidden, vendored or build tree below ``directory``."""
+    parts = file_path.relative_to(directory).parts
+    return any(part.startswith(".") or part in EXCLUDED_DIR_NAMES for part in parts)
 
 
 def format_directory(
@@ -195,6 +250,9 @@ def format_directory(
     quiet: bool = True,
 ) -> tuple[int, int]:
     """Format all Python files in a directory.
+
+    Hidden paths (any dot-prefixed component, e.g. ``.venv`` or ``.git``) and
+    the vendored / build trees in ``EXCLUDED_DIR_NAMES`` are skipped.
 
     Args:
         directory: Directory to format.
@@ -208,7 +266,7 @@ def format_directory(
         raise NotADirectoryError(f"Not a directory: {directory}")
 
     pattern = "**/*.py" if recursive else "*.py"
-    files = list(directory.glob(pattern))
+    files = [f for f in directory.glob(pattern) if f.is_file() and not _is_excluded(f, directory)]
 
     formatted = 0
     failed = 0
@@ -343,10 +401,11 @@ def write_canonical(
         '''
         write_canonical(Path("src/module.py"), code)
         # Result: x = {"a": 1, "b": 2}; foo(a=1, z=3)
-    """
-    import os
-    import tempfile
 
+    Raises:
+        RuntimeError: If isort or Black failed on the content; the destination
+            is left unchanged.
+    """
     # Ensure parent directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -370,34 +429,7 @@ def write_canonical(
         logger.debug("Wrote %d bytes to %s (non-Python, no formatting)", len(content), path)
         return
 
-    # Create temp file in the same directory (so rename is atomic)
-    fd, tmp_path_str = tempfile.mkstemp(
-        suffix=path.suffix,
-        prefix=f".{path.stem}_",
-        dir=path.parent,
-    )
-    tmp_path = Path(tmp_path_str)
-
-    try:
-        # Write content to temp file (ensure fd is closed even on write failure)
-        try:
-            os.write(fd, content.encode(encoding))
-        finally:
-            os.close(fd)
-        logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
-
-        # Apply formatting to temp file
-        format_file(tmp_path, quiet=quiet)
-
-        # Atomic rename to final destination
-        tmp_path.replace(path)
-        logger.debug("Atomically moved %s to %s", tmp_path, path)
-
-    except Exception:
-        # Clean up temp file on error (fd already closed by inner try/finally)
-        if tmp_path.exists():
-            tmp_path.unlink()
-        raise
+    _write_formatted_atomically(path, content, encoding=encoding, quiet=quiet)
 
 
 class CanonicalFileWriter:
