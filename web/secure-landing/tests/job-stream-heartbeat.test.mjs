@@ -100,47 +100,55 @@ test('malformed heartbeats and events from a replaced native stream cannot exten
   assert.deepEqual(h.job.logs, []);
 });
 
-test('live log pane appends lines, stays bounded and coalesces autoscroll per frame', () => {
+test('live log pane renders the retained buffer and coalesces autoscroll per frame', () => {
   const frames = [];
   let layoutReads = 0;
-  let hydrated = false;
+  let writes = 0;
+  let text = '';
   const pane = {
-    childNodes: [],
     scrollTop: 0,
-    get firstChild() { return this.childNodes[0]; },
-    get scrollHeight() { layoutReads += 1; return this.childNodes.length * 10; },
-    get textContent() { return this.childNodes.map((node) => node.data).join(''); },
-    set textContent(_value) {
-      if (hydrated) throw new Error('logToPane must not rewrite the whole pane per line');
-    },
-    appendChild(node) { this.childNodes.push(node); return node; },
-    removeChild(node) { assert.equal(node, this.childNodes[0]); this.childNodes.shift(); return node; },
+    get scrollHeight() { layoutReads += 1; return (text.split('\n').length - 1) * 10; },
+    get textContent() { return text; },
+    set textContent(value) { writes += 1; text = value; },
   };
-  const state = { selectedJobId: 'job-live', jobs: [{ id: 'job-live', logs: [] }] };
+  const job = { id: 'job-live', logs: [] };
+  const otherJob = { id: 'job-other', logs: [] };
+  const state = { selectedJobId: job.id, jobs: [job, otherJob] };
   const els = { logPane: pane };
-  // The operate tools own the log pane (search and follow); logToPane hands each
-  // live line to them. Creating the tools hydrates the pane once.
+  // The stream appends to the job buffer, and logToPane schedules a render.
   const tools = createOperateTools({
     state, els, maxLogLines: 1200,
-    document: { getElementById: () => null, createTextNode: (data) => ({ data }) },
-    requestAnimationFrame: (callback) => { frames.push(callback); return frames.length; },
+    document: { getElementById: () => null },
+    portalRenderScheduler: { schedule: (callback) => frames.push(callback) },
     _displayJobState: (job) => job.state, _portalPrivilegesReady: () => true,
   });
-  hydrated = true;
   layoutReads = 0;
-  const context = vm.createContext({ state, els, _deferredOperateSurfaceApi: () => tools });
-  vm.runInContext(section('function logToPane(', '// ===='), context);
+  const context = vm.createContext({ MAX_JOB_LOG_LINES: 1200, _deferredOperateSurfaceApi: () => tools });
+  vm.runInContext(
+    section('function appendJobLog(', 'function getReadableError(')
+    + section('function logToPane(', '// ===='),
+    context,
+  );
 
-  for (let index = 0; index < 3000; index += 1) context.logToPane('job-live', `[INFO] line ${index}`);
-  context.logToPane('job-other', '[INFO] not for the selected job');
+  for (let index = 0; index < 3000; index += 1) {
+    context.appendJobLog(job, `[INFO] line ${index}`);
+    context.logToPane(job.id);
+  }
+  context.appendJobLog(otherJob, '[INFO] not for the selected job');
+  context.logToPane(otherJob.id);
 
-  assert.equal(pane.childNodes.length, 1200, 'the pane is capped like job.logs');
-  assert.equal(pane.childNodes[0].data, '[INFO] line 1800\n');
-  assert.equal(pane.childNodes.at(-1).data, '[INFO] line 2999\n');
+  assert.equal(job.logs.length, 1200);
+  assert.equal(job.logs[0], '[INFO] line 1800');
+  assert.equal(job.logs.at(-1), '[INFO] line 2999');
+  assert.equal(writes, 0, 'no pane writes per appended line');
   assert.equal(layoutReads, 0, 'no forced reflow per appended line');
-  assert.equal(frames.length, 1, 'autoscroll is coalesced into one animation frame');
+  assert.equal(frames.length, 1, 'render and autoscroll share one frame');
   frames[0]();
+  assert.equal(pane.textContent, job.logs.join('\n') + '\n');
+  assert.equal(writes, 1);
+  assert.equal(layoutReads, 1);
   assert.equal(pane.scrollTop, 12_000);
-  context.logToPane('job-live', '[INFO] next frame');
+  context.appendJobLog(job, '[INFO] next frame');
+  context.logToPane(job.id);
   assert.equal(frames.length, 2, 'a later frame schedules a new autoscroll');
 });
