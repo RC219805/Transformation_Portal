@@ -286,21 +286,24 @@ class ResizeProcessor(ProcessorPlugin):
         if scale:
             return (int(orig_w * scale), int(orig_h * scale))
 
-        if width and height and not self._maintain_aspect:
-            return (width, height)
-
-        if width and self._maintain_aspect:
-            ratio = width / orig_w
-            return (width, int(orig_h * ratio))
-
-        if height and self._maintain_aspect:
-            ratio = height / orig_h
-            return (int(orig_w * ratio), height)
-
         if width and height:
+            if not self._maintain_aspect:
+                return (width, height)
             # Maintain aspect, fit within bounds
             ratio = min(width / orig_w, height / orig_h)
             return (int(orig_w * ratio), int(orig_h * ratio))
+
+        if width:
+            if not self._maintain_aspect:
+                return (width, orig_h)
+            ratio = width / orig_w
+            return (width, int(orig_h * ratio))
+
+        if height:
+            if not self._maintain_aspect:
+                return (orig_w, height)
+            ratio = height / orig_h
+            return (int(orig_w * ratio), height)
 
         # No resize specified, return original
         return original_size
