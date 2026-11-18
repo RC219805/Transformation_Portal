@@ -580,3 +580,62 @@ class TestExecutionEngineSummary:
             # Should be a copy
             assert executions is not engine._executions
             assert len(executions) == 1
+
+
+class TestExecutionEngineProvenanceDeterminism:
+    """Regression tests for T-09: provenance hashes must not carry volatile data."""
+
+    @staticmethod
+    def _engine(tmp_path: Path, manifests: list) -> ExecutionEngine:
+        from transformation_portal.runtime.process_executor import ProcessResult
+
+        config = EngineConfig(
+            workspace_root=tmp_path / "workspace",
+            cas_root=tmp_path / "cas",
+            enable_provenance=True,
+        )
+        with patch("transformation_portal.runtime.engine.ProcessExecutor") as mock_exec_cls:
+            mock_executor = MagicMock()
+            mock_executor.run.side_effect = [ProcessResult(outputs={"result_sha": "a" * 64}, manifest=m) for m in manifests]
+            mock_exec_cls.return_value = mock_executor
+            engine = ExecutionEngine(config)
+        engine.gpu_pool = None
+        return engine
+
+    def test_identical_runs_produce_identical_merkle_hash(self, tmp_path: Path) -> None:
+        """Wall-clock duration and the sandbox manifest stay out of the Merkle hash."""
+        engine = self._engine(
+            tmp_path,
+            [
+                {"workspace": "/ws/a", "metrics": {"duration_seconds": 0.11}},
+                {"workspace": "/ws/b", "metrics": {"duration_seconds": 0.97}},
+            ],
+        )
+        times = iter([100.0, 100.25, 200.0, 203.5])
+        with patch("transformation_portal.runtime.engine.time.time", side_effect=lambda: next(times)):
+            h1, _ = engine.run_node(MockProcessNode, inputs={"text": "hello"}, node_id="echo")
+            h2, _ = engine.run_node(MockProcessNode, inputs={"text": "hello"}, node_id="echo")
+
+        assert h1 == h2
+        meta = engine.dag.nodes[h1].metadata
+        assert "duration_seconds" not in meta
+        assert "manifest" not in meta
+        # The volatile data is still available on the execution records.
+        assert [r.duration_seconds for r in engine.executions] == [0.25, 3.5]
+        assert engine.executions[1].manifest["workspace"] == "/ws/b"
+
+    def test_inputs_and_kwargs_are_recorded_and_hashed(self, tmp_path: Path) -> None:
+        """Different inputs give different hashes; inputs/kwargs are recorded for replay."""
+        engine = self._engine(tmp_path, [{}, {}, {}])
+        with patch("transformation_portal.runtime.engine.time.time", return_value=5.0):
+            h1, _ = engine.run_node(MockProcessNode, inputs={"text": "a"}, node_id="n", node_kwargs={"output_sha": "x"})
+            h2, _ = engine.run_node(MockProcessNode, inputs={"text": "b"}, node_id="n", node_kwargs={"output_sha": "x"})
+            h3, _ = engine.run_node(MockProcessNode, inputs={"path": Path("/x")}, node_id="n")
+
+        assert h1 != h2
+        meta = engine.dag.nodes[h1].metadata
+        assert meta["original_inputs"] == {"text": "a"}
+        assert meta["node_kwargs"] == {"output_sha": "x"}
+        assert meta["node_class"] == f"{MockProcessNode.__module__}:MockProcessNode"
+        # Inputs that do not survive a JSON round trip are not recorded.
+        assert engine.dag.nodes[h3].metadata["original_inputs"] is None
