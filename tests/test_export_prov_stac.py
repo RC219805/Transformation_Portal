@@ -279,3 +279,62 @@ def test_provenance_id_with_path_separator_is_rejected(tmp_path: Path) -> None:
     assert "is not a safe filename" in result.stderr
     assert not (tmp_path / "escaped.json").exists()
     assert not catalog_path.exists()
+
+
+def test_links_stay_lexical_when_catalog_path_is_an_existing_symlink(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.jsonl"
+    catalog_path = tmp_path / "stac" / "catalog.json"
+    previous = tmp_path / "old" / "prev.json"
+    previous.parent.mkdir()
+    previous.write_text("{}\n", encoding="utf-8")
+    catalog_path.parent.mkdir()
+    catalog_path.symlink_to(previous)
+    _write_manifest_jsonl(manifest_path, [_geo_row("a/IMG_1.jpg", "0", provenance_id="p0")])
+
+    result = _run_tool(
+        "--manifest-jsonl",
+        str(manifest_path),
+        "--out-prov-jsonld",
+        str(tmp_path / "prov.jsonld"),
+        "--out-stac-catalog",
+        str(catalog_path),
+        "--out-summary",
+        str(tmp_path / "summary.json"),
+    )
+    assert result.returncode == 0, result.stderr
+
+    # The atomic write replaces the symlink itself, so the parent link must name the new catalog,
+    # not the file the symlink used to point at.
+    assert not catalog_path.is_symlink()
+    assert previous.read_text(encoding="utf-8") == "{}\n"
+    item_path = catalog_path.parent / "items" / "p0.json"
+    item = json.loads(item_path.read_text(encoding="utf-8"))
+    assert item["links"][0]["href"] == "../catalog.json"
+    assert json.loads((item_path.parent / item["links"][0]["href"]).read_text(encoding="utf-8"))["type"] == "Catalog"
+
+
+def test_default_layout_links_are_unchanged_when_items_dir_is_a_symlink(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.jsonl"
+    catalog_path = tmp_path / "stac" / "catalog.json"
+    real_items = tmp_path / "data_items"
+    real_items.mkdir()
+    catalog_path.parent.mkdir()
+    (catalog_path.parent / "items").symlink_to(real_items, target_is_directory=True)
+    _write_manifest_jsonl(manifest_path, [_geo_row("a/IMG_1.jpg", "0", provenance_id="p0")])
+
+    result = _run_tool(
+        "--manifest-jsonl",
+        str(manifest_path),
+        "--out-prov-jsonld",
+        str(tmp_path / "prov.jsonld"),
+        "--out-stac-catalog",
+        str(catalog_path),
+        "--out-summary",
+        str(tmp_path / "summary.json"),
+    )
+    assert result.returncode == 0, result.stderr
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert [link["href"] for link in catalog["links"]] == ["catalog.json", "items/p0.json"]
+    item = json.loads((real_items / "p0.json").read_text(encoding="utf-8"))
+    assert item["links"][0]["href"] == "../catalog.json"

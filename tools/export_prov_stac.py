@@ -144,7 +144,14 @@ def _validate_stac_item_ids(rows: list[dict[str, Any]], *, datetime_field: str) 
 
 
 def _relative_href(target: Path, start_dir: Path) -> str:
-    return Path(os.path.relpath(target.resolve(), start_dir.resolve())).as_posix()
+    """Return the relative reference from ``start_dir`` to ``target`` as the operator spelled them.
+
+    The relation is lexical (no symlink resolution), matching how a relative href is resolved.
+    Resolving symlinks would point the item ``parent`` link at the previous target of a catalog
+    path that is a symlink (the atomic write replaces the link itself) and would change the
+    default-layout hrefs whenever ``items`` is a symlinked directory.
+    """
+    return Path(os.path.relpath(target, start_dir)).as_posix()
 
 
 def _write_stac_outputs(
