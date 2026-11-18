@@ -161,3 +161,35 @@ def test_cas_normalizes_uppercase_hashes_for_object_and_lock_paths(tmp_path):
     assert store._object_path(uppercase_sha256) == obj.path
     assert store._get_lock(uppercase_sha256).lock_path == (store.locks_dir / obj.sha256[:2] / f"{obj.sha256}.lock")
     assert store.get_object(uppercase_sha256) == obj
+
+
+def test_open_verified_does_not_relabel_caller_os_error_as_cas_failure(tmp_path):
+    """An OSError raised by the caller's ``with`` body is the caller's, not the CAS's (STOR-07)."""
+    store = ArtifactStore(tmp_path / "cas")
+    obj = store.add_bytes(b"verified-payload")
+
+    with pytest.raises(FileNotFoundError, match="caller's unrelated file"):
+        with store.open_verified(obj.sha256) as stream:
+            assert stream.read() == b"verified-payload"
+            raise FileNotFoundError("caller's unrelated file is missing")
+
+
+def test_open_verified_still_wraps_its_own_open_failure(tmp_path):
+    store = ArtifactStore(tmp_path / "cas")
+    obj = store.add_bytes(b"verified-payload")
+    obj.path.unlink()
+
+    with pytest.raises(CASError, match="cannot be opened safely"):
+        with store.open_verified(obj.sha256):
+            pytest.fail("open_verified must not yield for a missing object")
+
+
+def test_open_verified_rejects_tampered_object(tmp_path):
+    store = ArtifactStore(tmp_path / "cas")
+    obj = store.add_bytes(b"verified-payload")
+    obj.path.chmod(0o644)
+    obj.path.write_bytes(b"tampered-payload")
+
+    with pytest.raises(CASError, match="integrity verification failed"):
+        with store.open_verified(obj.sha256):
+            pytest.fail("open_verified must not yield a tampered object")

@@ -325,19 +325,23 @@ class ArtifactStore:
             raise ValueError("max_bytes must be a positive integer")
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
             raise CASError("Verified CAS reads require no-follow directory descriptors")
-        descriptors = []
+        # The snapshot is produced (and every descriptor closed) before the
+        # caller's ``with`` body runs, so an OSError raised by that body is
+        # never relabelled as a CAS failure.
+        snapshot = tempfile.SpooledTemporaryFile(max_size=8 * 1024**2, mode="w+b")
         try:
-            directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-            root_fd = os.open(self.objects_dir, directory_flags)
-            descriptors.append(root_fd)
-            prefix_fd = os.open(sha256[:2], directory_flags, dir_fd=root_fd)
-            descriptors.append(prefix_fd)
-            object_fd = os.open(sha256, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=prefix_fd)
-            descriptors.append(object_fd)
-            before = os.fstat(object_fd)
-            if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
-                raise CASError("CAS object is not a bounded regular file")
-            with tempfile.SpooledTemporaryFile(max_size=8 * 1024**2, mode="w+b") as snapshot:
+            descriptors = []
+            try:
+                directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                root_fd = os.open(self.objects_dir, directory_flags)
+                descriptors.append(root_fd)
+                prefix_fd = os.open(sha256[:2], directory_flags, dir_fd=root_fd)
+                descriptors.append(prefix_fd)
+                object_fd = os.open(sha256, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=prefix_fd)
+                descriptors.append(object_fd)
+                before = os.fstat(object_fd)
+                if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
+                    raise CASError("CAS object is not a bounded regular file")
                 digest = hashlib.sha256()
                 total = 0
                 while chunk := os.read(object_fd, 1024**2):
@@ -355,12 +359,18 @@ class ArtifactStore:
                 ):
                     raise CASError("CAS object integrity verification failed")
                 snapshot.seek(0)
-                yield snapshot
-        except OSError as exc:
-            raise CASError("CAS object cannot be opened safely") from exc
+            except OSError as exc:
+                raise CASError("CAS object cannot be opened safely") from exc
+            finally:
+                for descriptor in reversed(descriptors):
+                    os.close(descriptor)
+        except BaseException:
+            snapshot.close()
+            raise
+        try:
+            yield snapshot
         finally:
-            for descriptor in reversed(descriptors):
-                os.close(descriptor)
+            snapshot.close()
 
     def _atomic_write_file(
         self,
