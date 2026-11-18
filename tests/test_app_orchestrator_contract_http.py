@@ -4564,6 +4564,39 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
+    client: TestClient, tmp_path: Path, jobs_base: str
+) -> None:
+    # The runner sets the terminal state before it indexes/mirrors artifacts and
+    # only stamps finished_at afterwards. A delete accepted in that window would
+    # report "deleted" while the finaliser mirrors every file afterwards.
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "payload.txt").write_text("payload", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_artifact_delete_finalizing",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="failed",
+        finished_at=None,
+        artifacts={
+            "items": [{"path": "payload.txt", "relative_path": "payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+
+    response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONFLICT"
+    assert orchestrator_app._artifacts_deleted(job) is False
+    assert orchestrator_app._artifact_retention_due(job, orchestrator_app._now() + 10**9) is False
+    assert (output_dir / "payload.txt").exists()
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_requires_api_key_before_store_access(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

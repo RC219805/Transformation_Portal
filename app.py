@@ -3644,8 +3644,19 @@ def _artifact_deletion_unconfirmed(job: "Job") -> bool:
     return status in ("pending", "failed") or (_uses_dispatch_authority() and _artifacts_deleted(job) and status != "deleted")
 
 
+def _job_artifacts_finalized(job: Job) -> bool:
+    """Return True once the runner has finished indexing/mirroring artifacts.
+
+    The runner writes the terminal ``state`` first, then indexes and mirrors
+    artifacts, and only then stamps ``finished_at``. Artifact deletion and
+    retention must wait for ``finished_at``; otherwise a delete accepted in that
+    window finds nothing indexed and the finaliser mirrors every file afterwards.
+    """
+    return job.state in _TERMINAL_JOB_STATES and job.finished_at is not None
+
+
 def _artifact_retention_due(job: Job, now: float) -> bool:
-    if job.state not in _TERMINAL_JOB_STATES:
+    if not _job_artifacts_finalized(job):
         return False
     unconfirmed = _artifact_deletion_unconfirmed(job)
     if _artifacts_deleted(job) and not unconfirmed:
@@ -11014,7 +11025,7 @@ async def _delete_job_artifacts(
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="artifact_delete", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
-    if job.state not in _TERMINAL_JOB_STATES:
+    if not _job_artifacts_finalized(job):
         return _error_response(
             409,
             code="CONFLICT",
