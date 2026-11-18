@@ -20,6 +20,7 @@ sys.modules["transformers"] = Mock()
 sys.modules["coremltools"] = Mock()
 
 import transformation_portal.depth.pipeline as pipeline_mod
+import transformation_portal.depth.utils.depth_utils as depth_utils_mod
 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 
 # Immediately restore sys.modules to prevent pollution
@@ -184,3 +185,33 @@ def test_depth_postprocessing_median_default_sigma_smooths_float_depth(monkeypat
     assert not np.array_equal(out, depth)
     # A median filter reduces the injected per-pixel noise.
     assert float(np.abs(np.diff(out, axis=0)).mean()) < float(np.abs(np.diff(depth, axis=0)).mean())
+
+
+@pytest.mark.skipif(not depth_utils_mod.CV2_AVAILABLE, reason="opencv-python required")
+@pytest.mark.parametrize("preserve_scale", [True, False])
+def test_depth_postprocessing_bilateral_keeps_depth_range(monkeypatch, preserve_scale):
+    """Regression (D-06): bilateral smoothing returned depth renormalised to [0, 1]."""
+    rng = np.random.default_rng(1)
+    ramp = np.tile(np.linspace(0.2, 0.9, 32, dtype=np.float32), (32, 1))
+    depth = (ramp + rng.normal(0, 0.01, (32, 32))).astype(np.float32)
+    config = {
+        "depth_model": {"variant": "small", "backend": "pytorch_cpu"},
+        "processing": {
+            "depth_postprocessing": {
+                "enabled": True,
+                "method": "bilateral",
+                "sigma": 2.0,
+                "edge_preserve": 0.1,
+                "preserve_scale": preserve_scale,
+            }
+        },
+    }
+
+    pipeline = _build_pipeline(monkeypatch, config, depth)
+    out = pipeline.process_render("dummy.png")["depth"]
+
+    assert out.shape == depth.shape
+    assert float(out.min()) >= float(depth.min()) - 1e-6
+    assert float(out.max()) <= float(depth.max()) + 1e-6
+    # Within the 8-bit quantisation step of the input span of the original values.
+    np.testing.assert_allclose(out, depth, atol=0.05)

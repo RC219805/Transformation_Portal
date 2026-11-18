@@ -269,7 +269,11 @@ def smooth_depth(
 
         smoothed = cv2.bilateralFilter(depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space)
 
-        return smoothed.astype(np.float32) / 255.0
+        # Map back to the input's depth range (identity for depth already
+        # spanning exactly [0, 1]) instead of returning renormalised data.
+        lo = float(depth.min())
+        span = float(depth.max()) - lo
+        return smoothed.astype(np.float32) / 255.0 * np.float32(span) + np.float32(lo)
 
     elif method == "median":
         if not CV2_AVAILABLE:

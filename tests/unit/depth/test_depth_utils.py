@@ -151,3 +151,38 @@ def test_create_depth_zones_percentile_and_linear_partition_unchanged(method):
     ]
     for zone, mask in zip(zones, expected):
         np.testing.assert_allclose(zone, mask.astype(np.float32), atol=1e-6)
+
+
+@requires_cv2
+def test_smooth_depth_bilateral_keeps_metric_depth_range():
+    """Regression (D-06): bilateral smoothing renormalised metric depth to [0, 1]."""
+    depth = np.tile(np.linspace(2.0, 30.0, 256, dtype=np.float32), (8, 1))
+
+    out = smooth_depth(depth, method="bilateral", sigma=2.0)
+
+    assert out.dtype == np.float32
+    assert float(out.min()) >= 2.0 - 1e-4
+    assert float(out.max()) <= 30.0 + 1e-4
+    # Within a few 8-bit quantisation steps of the 28 m span.
+    np.testing.assert_allclose(out, depth, atol=3 * 28.0 / 255.0)
+
+
+@requires_cv2
+def test_smooth_depth_bilateral_unit_range_output_unchanged():
+    """Depth already spanning exactly [0, 1] keeps the historical 8-bit bilateral result."""
+    import cv2
+
+    depth = _noisy_ramp().clip(0.0, 1.0)
+    depth[0, 0], depth[0, 1] = 0.0, 1.0
+    expected = cv2.bilateralFilter((depth * 255).astype(np.uint8), d=10, sigmaColor=0.1 * 255, sigmaSpace=5.0)
+
+    out = smooth_depth(depth, method="bilateral", sigma=5.0)
+
+    np.testing.assert_array_equal(out, expected.astype(np.float32) / 255.0)
+
+
+@requires_cv2
+def test_smooth_depth_bilateral_constant_depth_stays_constant():
+    depth = np.full((8, 8), 7.5, dtype=np.float32)
+
+    np.testing.assert_array_equal(smooth_depth(depth, method="bilateral", sigma=2.0), depth)
