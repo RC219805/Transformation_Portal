@@ -80,18 +80,23 @@ class DepthProcessorMixin:
             Processed image
         """
         if config:
-            # Temporarily override parameters
+            # Temporarily override parameters. Snapshot every attribute the
+            # override may touch (the declared config params plus any other
+            # existing attribute named in ``config``) and restore them even
+            # when ``process`` or an override raises, so one call can never
+            # leak its overrides into later calls.
             old_params = self._get_config_params()
+            for key in config:
+                if key not in old_params and hasattr(self, key):
+                    old_params[key] = getattr(self, key)
 
-            for key, value in config.items():
-                self._apply_config_override(key, value)
+            try:
+                for key, value in config.items():
+                    self._apply_config_override(key, value)
 
-            result = self.process(image, depth)
-
-            # Restore parameters
-            for key, value in old_params.items():
-                setattr(self, key, value)
-
-            return result
+                return self.process(image, depth)
+            finally:
+                for key, value in old_params.items():
+                    setattr(self, key, value)
         else:
             return self.process(image, depth)

@@ -5,7 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from transformation_portal.depth.processors import depth_aware_denoise, depth_guided_filters
+from transformation_portal.depth.processors import (
+    atmospheric_effects,
+    depth_aware_denoise,
+    depth_guided_filters,
+    zone_tone_mapping,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.regression]
 
@@ -123,3 +128,85 @@ def test_denoising_in_range_float_frames_keep_their_quantisation(
         depth_aware_denoise._from_8bit(image_8bit, value_range), image_8bit.astype(np.float32) / 255.0
     )
     assert processor_type().process(image, depth).dtype == np.float32
+
+
+def _depth_gradient(height: int = 24, width: int = 32) -> np.ndarray:
+    return np.tile(np.linspace(0.0, 1.0, width, dtype=np.float32), (height, 1))
+
+
+def test_config_override_restores_every_overridden_attribute() -> None:
+    """D-11: an override of an attribute outside _get_config_params() must not leak into later calls."""
+    processor = atmospheric_effects.AtmosphericEffects(depth_scale=100.0)
+    depth = _depth_gradient()
+    image = np.random.default_rng(0).random((*depth.shape, 3)).astype(np.float32)
+
+    processor(image, depth, config={"depth_scale": 5.0, "haze_density": 0.5})
+
+    assert processor.depth_scale == 100.0
+    assert processor.haze_density == 0.015
+
+
+def test_config_override_is_restored_when_process_raises() -> None:
+    """D-11: a failing call must not leave its config override behind."""
+    processor = atmospheric_effects.AtmosphericEffects()
+    depth = _depth_gradient()
+    image = np.zeros((*depth.shape, 3), dtype=np.float32)
+    haze_color = processor.haze_color.copy()
+
+    with pytest.raises(ValueError):
+        processor(image, depth[:10], config={"haze_density": 0.9, "haze_color": [0.1, 0.2, 0.3], "depth_scale": 7.0})
+
+    assert processor.haze_density == 0.015
+    assert processor.depth_scale == 100.0
+    np.testing.assert_array_equal(processor.haze_color, haze_color)
+
+
+def test_zone_tone_mapping_config_override_is_restored_when_process_raises() -> None:
+    processor = zone_tone_mapping.ZoneToneMapping(num_zones=3)
+    original_params = processor.zone_params
+    depth = _depth_gradient()
+    image = np.zeros((*depth.shape, 3), dtype=np.float32)
+
+    with pytest.raises(ValueError):
+        processor(image, depth[:10], config={"zone_params": [{"contrast": 2.0}] * 3})
+
+    assert processor.zone_params is original_params
+
+
+def test_depth_guided_filters_config_override_is_restored_when_process_raises() -> None:
+    processor = depth_guided_filters.DepthGuidedFilters(clarity_strength=0.5)
+    depth = _depth_gradient()
+    image = np.zeros((*depth.shape, 3), dtype=np.float32)
+
+    with pytest.raises(ValueError):
+        processor(image, depth[:10], config={"clarity_strength": 0.9})
+
+    assert processor.clarity_strength == 0.5
+
+
+@pytest.mark.parametrize("via_config", [False, True])
+def test_zone_tone_mapping_rejects_fewer_zone_params_than_zones(via_config: bool) -> None:
+    """D-11: zip() truncation used to leave the zones without parameters black."""
+    two = [{"contrast": 1.0, "saturation": 1.0, "exposure": 0.0, "gamma": 1.0}] * 2
+    depth = _depth_gradient()
+    image = np.full((*depth.shape, 3), 0.5, dtype=np.float32)
+
+    if via_config:
+        processor = zone_tone_mapping.ZoneToneMapping(num_zones=3, method="filmic")
+        with pytest.raises(ValueError, match="zone_params has 2 entries but num_zones is 3"):
+            processor(image, depth, config={"zone_params": two})
+    else:
+        processor = zone_tone_mapping.ZoneToneMapping(num_zones=3, zone_params=two, method="filmic")
+        with pytest.raises(ValueError, match="zone_params has 2 entries but num_zones is 3"):
+            processor(image, depth)
+
+
+def test_zone_tone_mapping_with_matching_zone_params_covers_every_zone() -> None:
+    three = [{"contrast": 1.0, "saturation": 1.0, "exposure": 0.0, "gamma": 1.0}] * 3
+    depth = _depth_gradient()
+    image = np.full((*depth.shape, 3), 0.5, dtype=np.float32)
+
+    result = zone_tone_mapping.ZoneToneMapping(num_zones=3, zone_params=three, method="filmic")(image, depth)
+
+    # The far third of the frame is tone-mapped like the near third instead of being left black.
+    np.testing.assert_allclose(result[:, -8:].mean(), result[:, :8].mean(), rtol=1e-3)
