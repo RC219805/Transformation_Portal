@@ -21,6 +21,7 @@ from transformation_portal.streaming.stages import (
     ImageData,
     ImageLoadStage,
     ImageSaveStage,
+    MaterialResponseStage,
 )
 
 
@@ -261,3 +262,21 @@ def test_color_grading_stage_matches_4k_pipeline_lut_lookup(tmp_path: Path) -> N
     graded = asyncio.run(runner())
     expected = _apply_lut((_LUT_PIXELS * 255).astype(np.uint8).astype(np.float32) / 255.0, cube, strength=1.0)
     np.testing.assert_allclose(graded, expected, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [(48, 64), (64, 64)])
+def test_material_response_stage_handles_2d_greyscale(shape: tuple, tmp_path: Path) -> None:
+    """M-13: (H, W) greyscale input must not broadcast masks against the image width."""
+    grey = np.random.default_rng(0).random(shape).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, shape[1], dtype=np.float32), (shape[0], 1))
+
+    stage = MaterialResponseStage()
+    flat = stage._enhance_sync(ImageData(array=grey.copy(), path=tmp_path / "g.png", depth_map=depth))
+    channel = stage._enhance_sync(ImageData(array=grey[..., None].copy(), path=tmp_path / "g.png", depth_map=depth))
+
+    assert flat.array.shape == shape
+    assert flat.metadata["material_enhanced"] is True
+    assert np.isfinite(flat.array).all()
+    assert flat.array.min() >= 0.0 and flat.array.max() <= 1.0
+    # Same result as the equivalent single-channel (H, W, 1) image.
+    np.testing.assert_allclose(flat.array, channel.array[..., 0], atol=1e-6)

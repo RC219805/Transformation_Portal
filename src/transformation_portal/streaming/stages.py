@@ -590,6 +590,13 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
         if array.max() > 1.0:
             array = array / 255.0
 
+        # Greyscale (H, W) input: work on an (H, W, 1) view so the per-pixel masks,
+        # which are broadcast with ``[..., np.newaxis]``, line up with the image;
+        # the singleton channel axis is squeezed again on exit.
+        squeeze_channel = array.ndim == 2
+        if squeeze_channel:
+            array = array[..., np.newaxis]
+
         h, w = array.shape[:2]
         intensity = self._intensity
 
@@ -780,7 +787,10 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
             depth_factor = np.clip(1.0 - depth * 0.3, 0.7, 1.0)
             enhanced = array + depth_factor[..., np.newaxis] * (enhanced - array)
 
-        image_data.array = np.clip(enhanced, 0.0, 1.0)
+        enhanced = np.clip(enhanced, 0.0, 1.0)
+        if squeeze_channel:
+            enhanced = enhanced[..., 0]
+        image_data.array = enhanced
         image_data.metadata["material_enhanced"] = True
         image_data.metadata["materials"] = self._materials
         image_data.metadata["material_response_version"] = "2.0"
