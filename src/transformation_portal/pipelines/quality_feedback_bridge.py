@@ -337,6 +337,7 @@ class QualityFeedbackBridge:
         self._perceptual_assessor = None
         self._lpips_checked = False
         self._lpips_available = False
+        self._perceptual_unavailable_reason = "perceptual assessor not initialized"
 
         logger.info(f"Initialized QualityFeedbackBridge " f"(hybrid_mode={hybrid_mode}, network={lpips_network})")
 
@@ -357,12 +358,18 @@ class QualityFeedbackBridge:
 
         # Check dependencies
         if not _check_torch_available():
-            logger.info("PyTorch not available, using heuristic-only mode")
+            self._perceptual_unavailable_reason = "PyTorch is not installed"
+            logger.warning("PyTorch not available; perceptual (LPIPS) metrics unavailable, using heuristic-only mode")
             self._lpips_available = False
             return False
 
         if not _check_perceptual_assessor_available():
-            logger.info("PerceptualQualityAssessor not available, using heuristic-only mode")
+            self._perceptual_unavailable_reason = (
+                "PerceptualQualityAssessor (enhancements.perceptual_quality_assessment) is not importable"
+            )
+            logger.warning(
+                "PerceptualQualityAssessor not available; perceptual (LPIPS) metrics unavailable, using heuristic-only mode"
+            )
             self._lpips_available = False
             return False
 
@@ -383,6 +390,7 @@ class QualityFeedbackBridge:
             return True
 
         except Exception as e:
+            self._perceptual_unavailable_reason = f"perceptual assessor failed to initialize: {e}"
             logger.warning(f"Failed to initialize perceptual assessor: {e}")
             self._lpips_available = False
             return False
@@ -424,6 +432,21 @@ class QualityFeedbackBridge:
 
         # Compute LPIPS perceptual metrics if available
         metrics.lpips_available = self._ensure_perceptual_assessor()
+
+        # Perceptual and material-fidelity fields keep their 0.0 defaults when
+        # they are not measured; an LPIPS of 0.0 reads as "identical", so say
+        # explicitly that they are placeholders and keep perceptual targets out.
+        if not metrics.lpips_available:
+            metrics.warnings.append(
+                f"Perceptual metrics unavailable ({self._perceptual_unavailable_reason}); "
+                "LPIPS, SSIM and material-fidelity fields are unmeasured placeholders, not scores"
+            )
+        elif original_np is None:
+            metrics.lpips_available = False
+            metrics.warnings.append(
+                "Perceptual metrics not computed (no reference image); "
+                "LPIPS, SSIM and material-fidelity fields are unmeasured placeholders, not scores"
+            )
 
         if metrics.lpips_available and original_np is not None:
             try:
