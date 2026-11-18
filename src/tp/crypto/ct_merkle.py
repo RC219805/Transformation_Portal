@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import operator
 from typing import Sequence
 
 # ---------------------------------------------------------------------------
@@ -462,7 +463,12 @@ def verify_ct_consistency_proof(
         authenticate each (tree size, root) pair together, as a signed tree
         head does.
     """
-    if not isinstance(first_tree_size, int) or not isinstance(second_tree_size, int):
+    # Integer-like sizes (for example numpy integers) keep working; floats,
+    # strings and None are malformed and fail closed.
+    try:
+        first_tree_size = operator.index(first_tree_size)
+        second_tree_size = operator.index(second_tree_size)
+    except TypeError:
         return False
     if first_tree_size < 1 or second_tree_size < first_tree_size:
         return False

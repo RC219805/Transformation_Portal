@@ -559,6 +559,25 @@ class TestCtConsistencyProof:
                 is False
             )
 
+    def test_verifier_accepts_integer_like_tree_sizes(self, consistency_corpus: _ConsistencyCorpus) -> None:
+        """numpy integer sizes verified before the RFC rewrite and must keep verifying."""
+        np = pytest.importorskip("numpy")
+        for first_size, second_size in ((np.int64(4), np.int64(8)), (np.int32(10), 13), (10, np.uint16(13))):
+            assert verify_ct_consistency_proof(
+                first_tree_size=first_size,
+                second_tree_size=second_size,
+                first_root=consistency_corpus.roots[int(first_size)],
+                second_root=consistency_corpus.roots[int(second_size)],
+                proof=consistency_corpus.proofs[(int(first_size), int(second_size))],
+            )
+        assert not verify_ct_consistency_proof(
+            first_tree_size=np.int64(4),
+            second_tree_size=np.int64(9),
+            first_root=consistency_corpus.roots[4],
+            second_root=consistency_corpus.roots[8],
+            proof=consistency_corpus.proofs[(4, 8)],
+        )
+
 
 class TestValidateSha256Digest:
     """Tests for validate_sha256_digest input validation helper."""
