@@ -5749,3 +5749,60 @@ def test_prepared_reconstruction_cache_relocation_preserves_historical_carriers(
     assert Path(first_results[0]["reconstruction_manifest_path"]) == Path(second_results[0]["reconstruction_manifest_path"])
     latest_manifest = json.loads(Path(second_results[0]["reconstruction_manifest_path"]).read_bytes())
     assert latest_manifest["dataset_root"] == str(roots[1])
+
+
+@pytest.mark.regression
+def test_prepared_run_card_reemission_hashes_each_settled_artifact_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-emitted prepared run cards reuse digests of unchanged artifacts with an identical index."""
+    import transformation_portal.lux_depth_v3.artifact_manager as artifact_manager
+    import transformation_portal.lux_depth_v3.orchestrator as orchestrator_module
+
+    # Every artifact of this tiny batch is younger than the production settle
+    # margin; remove the margin so the memo is exercised.
+    monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0, raising=False)
+    real_compute = artifact_manager.compute_file_sha256
+    reads: dict[Path, int] = {}
+
+    def counting_compute(path: Path, *args: Any, **kwargs: Any) -> str:
+        reads[Path(path)] = reads.get(Path(path), 0) + 1
+        return real_compute(path, *args, **kwargs)
+
+    monkeypatch.setattr(artifact_manager, "compute_file_sha256", counting_compute)
+    real_index = orchestrator_module._build_artifact_index
+    emitted_indexes: list[list[dict[str, Any]]] = []
+
+    def comparing_index(output_root: Path, artifact_paths: list[Path], **kwargs: Any) -> list[dict[str, Any]]:
+        index = real_index(output_root, artifact_paths, **kwargs)
+        # Byte identity: the memoised index equals a fresh uncached index.
+        saved_reads = dict(reads)
+        uncached = real_index(output_root, artifact_paths)
+        reads.clear()
+        reads.update(saved_reads)
+        assert canonicalize_json(index) == canonicalize_json(uncached)
+        emitted_indexes.append(index)
+        return index
+
+    monkeypatch.setattr(orchestrator_module, "_build_artifact_index", comparing_index)
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True, save_float_depth=True, generate_pbr=True)
+    output_root = tmp_path / "output"
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert results[0]["status"] == "ok"
+    assert len(emitted_indexes) >= 2
+    first_by_path = {entry["path"]: entry for entry in emitted_indexes[0]}
+    final_by_path = {entry["path"]: entry for entry in emitted_indexes[-1]}
+    unchanged = sorted(
+        path for path, entry in final_by_path.items() if first_by_path.get(path, {}).get("sha256") == entry["sha256"]
+    )
+    assert any(path.startswith("depth/") for path in unchanged)
+    resolved_root = output_root.resolve()
+    for relative_path in unchanged:
+        assert reads[resolved_root / relative_path] == 1, relative_path
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    verified = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(verified)

@@ -459,6 +459,72 @@ class TestBuildArtifactIndex:
         assert index[1]["relative_path"] == "manifests/file.png"
         assert index[2]["relative_path"] == "v2/file.png"
 
+    @staticmethod
+    def _counting_digests(monkeypatch):
+        import transformation_portal.lux_depth_v3.artifact_manager as artifact_manager
+
+        real_compute = artifact_manager.compute_file_sha256
+        reads: list[Path] = []
+
+        def counting(path, *args, **kwargs):
+            reads.append(Path(path))
+            return real_compute(path, *args, **kwargs)
+
+        monkeypatch.setattr(artifact_manager, "compute_file_sha256", counting)
+        return artifact_manager, reads
+
+    @pytest.mark.regression
+    def test_digest_cache_reuses_unchanged_files_with_identical_index(self, tmp_path: Path, monkeypatch):
+        """A shared digest memo avoids re-hashing settled files and never changes the index."""
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0)
+        depth_file = tmp_path / "depth" / "image_depth.png"
+        depth_file.parent.mkdir()
+        depth_file.write_bytes(b"depth bytes")
+
+        uncached = artifact_manager.build_artifact_index(tmp_path, [depth_file])
+        cache: dict = {}
+        first = artifact_manager.build_artifact_index(tmp_path, [depth_file], digest_cache=cache)
+        second = artifact_manager.build_artifact_index(tmp_path, [depth_file], digest_cache=cache)
+
+        assert first == uncached
+        assert second == uncached
+        assert reads.count(depth_file.resolve()) == 2
+
+    @pytest.mark.regression
+    def test_digest_cache_rehashes_changed_files(self, tmp_path: Path, monkeypatch):
+        """A rewrite (new size, mtime or inode) invalidates the memoised digest."""
+        import hashlib
+
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0)
+        carrier = tmp_path / "manifests" / "carrier.json"
+        carrier.parent.mkdir()
+        carrier.write_bytes(b"first")
+        cache: dict = {}
+        artifact_manager.build_artifact_index(tmp_path, [carrier], digest_cache=cache)
+
+        carrier.write_bytes(b"second carrier")
+        rewritten = artifact_manager.build_artifact_index(tmp_path, [carrier], digest_cache=cache)
+
+        assert rewritten[0]["sha256"] == hashlib.sha256(b"second carrier").hexdigest()
+        assert reads.count(carrier.resolve()) == 2
+
+    @pytest.mark.regression
+    def test_digest_cache_does_not_memoise_recently_changed_files(self, tmp_path: Path, monkeypatch):
+        """Files changed within the settle margin are always re-hashed (racily-clean guard)."""
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        fresh = tmp_path / "depth" / "fresh_depth.png"
+        fresh.parent.mkdir()
+        fresh.write_bytes(b"fresh")
+        cache: dict = {}
+
+        artifact_manager.build_artifact_index(tmp_path, [fresh], digest_cache=cache)
+        artifact_manager.build_artifact_index(tmp_path, [fresh], digest_cache=cache)
+
+        assert cache == {}
+        assert reads.count(fresh.resolve()) == 2
+
 
 class TestComputeArtifactMerkleRoot:
     """Test merkle root computation."""

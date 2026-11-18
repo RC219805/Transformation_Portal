@@ -86,6 +86,7 @@ from .apex_codes import APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
 # The XXHASH_AVAILABLE constant is imported from artifact_manager
 from .artifact_manager import (
     XXHASH_AVAILABLE,
+    ArtifactDigestCache,
     ArtifactManager,
     build_artifact_index,
     coerce_output_paths,
@@ -8642,8 +8643,11 @@ class EnhanceOrchestrator:
         batch_manifest_path = self.manifests_dir / f"batch_{batch_id}.json"
         bm.write(batch_manifest_path)
 
-        # Emit run card if enabled
+        # Emit run card if enabled. Prepared batches re-emit the card after
+        # rewriting carriers; share one digest memo so unchanged artifacts are
+        # not re-read and re-hashed for every emission.
         run_card_path: Optional[Path] = None
+        run_card_digest_cache: ArtifactDigestCache = {}
         if self.config.emit_run_card:
             run_card_path = self._emit_run_card(
                 batch_id,
@@ -8654,6 +8658,7 @@ class EnhanceOrchestrator:
                 outliers,
                 batch_manifest_path=batch_manifest_path,
                 requested_backend_defect=batch_requested_backend_defect,
+                artifact_digest_cache=run_card_digest_cache,
             )
 
         if prepared is not None:
@@ -8687,6 +8692,7 @@ class EnhanceOrchestrator:
                     outliers,
                     batch_manifest_path=batch_manifest_path,
                     requested_backend_defect=batch_requested_backend_defect,
+                    artifact_digest_cache=run_card_digest_cache,
                 )
                 if (run_card_path is None) != (indexed_run_card_path is None):
                     # Publication is intentionally non-blocking, so reconcile
@@ -8706,6 +8712,7 @@ class EnhanceOrchestrator:
                             outliers,
                             batch_manifest_path=batch_manifest_path,
                             requested_backend_defect=batch_requested_backend_defect,
+                            artifact_digest_cache=run_card_digest_cache,
                         )
                         if run_card_path is None:
                             # A failed final re-index leaves any earlier file
@@ -10491,6 +10498,8 @@ class EnhanceOrchestrator:
         outliers: List[Dict[str, Any]],
         batch_manifest_path: Optional[Path] = None,
         requested_backend_defect: Optional[str] = None,
+        *,
+        artifact_digest_cache: Optional[ArtifactDigestCache] = None,
     ) -> Optional[Path]:
         """Emit run card for batch reproducibility.
 
@@ -10511,6 +10520,7 @@ class EnhanceOrchestrator:
         artifact_index = _build_artifact_index(
             self.output_root,
             artifact_paths,
+            digest_cache=artifact_digest_cache,
         )
         run_card_version = str(getattr(self.config, "run_card_version", "v1") or "v1").strip().lower()
         if run_card_version not in {"v1", "v2"}:

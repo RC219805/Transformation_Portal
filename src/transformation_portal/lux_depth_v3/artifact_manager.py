@@ -42,6 +42,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -323,9 +324,44 @@ def segmentation_mask_artifact_path(
     return segmentation_dir / output_key.parent / f"{output_key.name}_materials_v3_masks.npz"
 
 
+# A memoised digest is reused only for files whose last change is older than the
+# start of the hash that produced it by at least this margin. File timestamps come
+# from a coarse clock (and are truncated to seconds on some filesystems), so a
+# same-size in-place rewrite shortly after hashing could otherwise keep an
+# identical (inode, size, mtime, ctime) key ("racily clean" in git terms).
+ARTIFACT_DIGEST_REUSE_MARGIN_NS = 2_000_000_000
+
+ArtifactDigestCache = Dict[tuple, str]
+
+
+def _artifact_digest(resolved: Path, stat_result: Any, digest_cache: Optional[ArtifactDigestCache]) -> str:
+    """Return the SHA-256 of ``resolved``, reusing a provably unchanged memoised digest."""
+    if digest_cache is None:
+        return compute_file_sha256(resolved)
+    key = (
+        str(resolved),
+        stat_result.st_dev,
+        stat_result.st_ino,
+        stat_result.st_size,
+        stat_result.st_mtime_ns,
+        stat_result.st_ctime_ns,
+    )
+    cached = digest_cache.get(key)
+    if cached is not None:
+        return cached
+    hash_started_ns = time.time_ns()
+    digest = compute_file_sha256(resolved)
+    last_change_ns = max(stat_result.st_mtime_ns, stat_result.st_ctime_ns)
+    if last_change_ns < hash_started_ns - ARTIFACT_DIGEST_REUSE_MARGIN_NS:
+        digest_cache[key] = digest
+    return digest
+
+
 def build_artifact_index(
     output_root: Path,
     artifact_paths: List[Path],
+    *,
+    digest_cache: Optional[ArtifactDigestCache] = None,
 ) -> List[Dict[str, Any]]:
     """Build a deterministic, non-authorizing compatibility artifact index.
 
@@ -346,6 +382,11 @@ def build_artifact_index(
     Args:
         output_root: Base directory for output artifacts
         artifact_paths: List of paths to include in index
+        digest_cache: Optional caller-scoped memo (for example one batch's
+            repeated run-card emissions). A digest is reused only while the
+            file's device, inode, size, mtime and ctime are unchanged and the
+            file had settled before it was hashed; the index is identical with
+            or without it.
 
     Returns:
         Sorted list of artifact index entries
@@ -387,7 +428,7 @@ def build_artifact_index(
             "path": relative_path,
             "relative_path": relative_path,
             "size_bytes": stat.st_size,
-            "sha256": compute_file_sha256(resolved),
+            "sha256": _artifact_digest(resolved, stat, digest_cache),
         }
 
     return [index_by_relative_path[path] for path in sorted(index_by_relative_path)]
