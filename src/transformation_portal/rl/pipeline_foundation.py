@@ -430,17 +430,24 @@ class PipelineFoundationTrainer:
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
         self.warmup_steps = warmup_steps
         self.step = 0
+        # Target learning rate of each param group; warm-up scales from these
+        # values instead of compounding onto the already scaled lr.
+        self.base_lrs = [float(pg["lr"]) for pg in self.optimizer.param_groups]
+
+    def _warmup_scale(self) -> float:
+        if self.warmup_steps <= 0:
+            return 1.0
+        return min(1.0, self.step / self.warmup_steps)
 
     def train_step(self, batch: dict[str, torch.Tensor]) -> dict[str, float]:
         """Execute single training step."""
         self.model.train()
         self.step += 1
 
-        # Learning rate warmup
-        if self.step < self.warmup_steps:
-            lr_scale = self.step / self.warmup_steps
-            for pg in self.optimizer.param_groups:
-                pg["lr"] = pg["lr"] * lr_scale
+        # Linear learning-rate warm-up to the base lr, then hold it.
+        lr_scale = self._warmup_scale()
+        for pg, base_lr in zip(self.optimizer.param_groups, self.base_lrs):
+            pg["lr"] = base_lr * lr_scale
 
         # Forward + backward
         losses = self.model.pretrain_step(batch)
