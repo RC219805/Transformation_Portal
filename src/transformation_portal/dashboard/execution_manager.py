@@ -401,8 +401,21 @@ class ExecutionManager:
                 # Mark as queued
                 run_state.nodes[node_id].status = NodeStatus.QUEUED
 
-            # Get execution order
-            execution_order = scheduler.get_execution_order()
+            # Fail closed on cyclic or dangling pipelines: the scheduler cannot
+            # order such nodes, so planning would silently drop them and the
+            # run would report COMPLETE with nothing executed.
+            validation_errors = scheduler.validate()
+            if validation_errors:
+                raise ValueError("Invalid pipeline: " + "; ".join(validation_errors))
+
+            # Get execution order. Execute each node id at most once, even if the
+            # scheduler ever hands back a duplicated plan, and refuse a plan that
+            # does not cover every node.
+            execution_order = list(dict.fromkeys(scheduler.get_execution_order()))
+            planned = set(execution_order)
+            unplanned = sorted(node_id for node_id in scheduler.nodes if node_id not in planned)
+            if unplanned or len(planned) != len(scheduler.nodes):
+                raise ValueError(f"Invalid pipeline: execution plan does not cover nodes {unplanned}")
 
             await broadcast(
                 {

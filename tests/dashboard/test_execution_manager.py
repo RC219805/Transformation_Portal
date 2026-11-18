@@ -286,6 +286,85 @@ async def test_run_error_is_broadcast_when_scheduling_raises(manager: ExecutionM
     assert "traceback" in error_event
 
 
+class _CountingNode(DAGNode):
+    """Registry node counting its run() calls per tag (D1 regression)."""
+
+    calls: Dict[str, int] = {}
+
+    def __init__(self, tag: str = "n") -> None:
+        self.tag = tag
+
+    def run(self, **inputs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        _CountingNode.calls[self.tag] = _CountingNode.calls.get(self.tag, 0) + 1
+        return {"ok": True}
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    ("nodes", "edges", "message"),
+    [
+        (["a", "b"], [{"source": "a", "target": "b"}, {"source": "b", "target": "a"}], "Cycle detected"),
+        (["a"], [{"source": "ghost", "target": "a"}], "missing node 'ghost'"),
+    ],
+    ids=["cycle", "dangling-dependency"],
+)
+async def test_invalid_pipeline_fails_instead_of_completing_empty(
+    nodes: List[str], edges: List[Dict[str, str]], message: str
+) -> None:
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {
+        "nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in nodes],
+        "edges": edges,
+    }
+    recorder = _Recorder()
+    run_id = await manager.run_pipeline(pipeline, recorder)
+
+    state = manager.get_run_state(run_id)
+    assert state.status == RunStatus.ERROR
+    assert message in state.error
+    assert "run_complete" not in recorder.types()
+    assert "execution_plan" not in recorder.types()
+    assert _CountingNode.calls == {}
+
+
+@pytest.mark.regression
+async def test_duplicated_plan_executes_each_node_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
+
+    monkeypatch.setattr(PriorityDAGScheduler, "get_execution_order", lambda self: ["a", "b", "b", "c", "c", "c", "c"])
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {
+        "nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in ("a", "b", "c")],
+        "edges": [],
+    }
+    recorder = _Recorder()
+    run_id = await manager.run_pipeline(pipeline, recorder)
+
+    assert manager.get_run_state(run_id).status == RunStatus.COMPLETE
+    assert _CountingNode.calls == {"a": 1, "b": 1, "c": 1}
+    plan = next(e for e in recorder.events if e["type"] == "execution_plan")
+    assert plan["order"] == ["a", "b", "c"]
+    assert recorder.types().count("node_complete") == 3
+
+
+@pytest.mark.regression
+async def test_plan_missing_a_node_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
+
+    monkeypatch.setattr(PriorityDAGScheduler, "get_execution_order", lambda self: ["a"])
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {"nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in ("a", "b")], "edges": []}
+    run_id = await manager.run_pipeline(pipeline, _Recorder())
+
+    state = manager.get_run_state(run_id)
+    assert state.status == RunStatus.ERROR
+    assert "['b']" in state.error
+    assert _CountingNode.calls == {}
+
+
 async def test_start_pipeline_background_returns_queryable_task(manager: ExecutionManager) -> None:
     run_id = manager.allocate_run_id()
     recorder = _Recorder()
