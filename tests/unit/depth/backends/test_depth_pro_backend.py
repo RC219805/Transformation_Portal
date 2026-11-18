@@ -332,3 +332,57 @@ def test_subprocess_accepts_valid_exit_zero_output(tmp_path: Path) -> None:
     assert result.depth_map.dtype == np.float32
     np.testing.assert_array_equal(result.depth_map, depth.astype(np.float32))
     assert result.input_size == (4, 5)
+
+
+def test_worker_env_strips_parent_interpreter_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    monkeypatch.setenv("PYTHONPATH", "/parent/site-packages")
+    monkeypatch.setenv("PYTHONHOME", "/parent/home")
+    monkeypatch.setenv("VIRTUAL_ENV", "/parent/.venv")
+    monkeypatch.setenv("TP_UNRELATED_SETTING", "kept")
+
+    env = backend._build_worker_env()
+
+    assert "PYTHONHOME" not in env
+    assert "VIRTUAL_ENV" not in env
+    assert "/parent/site-packages" not in env.get("PYTHONPATH", "")
+    assert env["PYTHONNOUSERSITE"] == "1"
+    assert env["PYTHONSAFEPATH"] == "1"
+    assert env["TP_UNRELATED_SETTING"] == "kept"
+    if backend._repo_src is not None and backend._repo_src.exists():
+        assert env["PYTHONPATH"] == str(backend._repo_src)
+
+
+def test_subprocess_calls_carry_timeout_and_fail_on_hung_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", "7")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    timeouts: list[object] = []
+
+    def hung_run(command, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout") or 0, output=b"partial", stderr=b"stuck")
+
+    with patch("transformation_portal.depth.backends.depth_pro.subprocess.run", side_effect=hung_run):
+        with pytest.raises(ImportError, match="timed out after 7s"):
+            backend.ensure_available()
+        with pytest.raises(RuntimeError, match="Depth Pro subprocess timed out") as exc_info:
+            backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert timeouts == [7, 7]
+    assert "stuck" in str(exc_info.value)
+
+
+def test_subprocess_timeout_defaults_and_rejects_invalid_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", raising=False)
+    assert DepthProBackend(_depth_pro_config(checkpoint))._subprocess_timeout_seconds == 900
+
+    for invalid in ("0", "-3", "soon"):
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", invalid)
+        with pytest.raises(ValueError, match="Depth Pro subprocess timeout"):
+            DepthProBackend(_depth_pro_config(checkpoint))

@@ -305,6 +305,17 @@ Then point the main pipeline at that environment:
 export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 ```
 
+The worker subprocess runs with the parent's `PYTHON*` and `VIRTUAL_ENV`
+variables removed (in a source checkout `PYTHONPATH` points only at the
+checkout's `src/`), and each worker call (readiness check and inference) is
+bounded by a timeout of 900 seconds by default. Override it with a positive
+integer number of seconds:
+```bash
+export TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS=1800
+```
+A worker that exceeds it fails the readiness check or the image with a
+"timed out" error instead of blocking the job.
+
 ### License flags missing
 
 **Error:**

@@ -30,6 +30,11 @@ from PIL import Image
 from ...core.platform_matrix import CURRENT_PLATFORM
 from ...lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
 from ._array_contract import parse_worker_input_size, to_rgb_uint8, validate_worker_depth_map
+from ._worker_env import (
+    DEFAULT_WORKER_SUBPROCESS_TIMEOUT_SECONDS,
+    build_isolated_worker_env,
+    resolve_worker_timeout_seconds,
+)
 from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
@@ -38,6 +43,17 @@ if TYPE_CHECKING:
     from ...stage_graph.stages.depth_pro import DepthProStage
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_DEPTH_PRO_SUBPROCESS_TIMEOUT_SECONDS = DEFAULT_WORKER_SUBPROCESS_TIMEOUT_SECONDS
+
+
+def _subprocess_text(value: str | bytes | None) -> str:
+    """Normalize ``TimeoutExpired`` output, which may be bytes even in text mode."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 class DepthProBackend:
@@ -103,6 +119,13 @@ class DepthProBackend:
             self._checkpoint_path = self._resolve_checkpoint_path(config)
         self._checkpoint_hash_cached: Optional[str] = None
         self._python_executable = self._resolve_python_executable(config)
+        self._subprocess_timeout_seconds = resolve_worker_timeout_seconds(
+            config,
+            config_attr="depth_pro_subprocess_timeout_seconds",
+            env_var="TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS",
+            label="Depth Pro",
+            default=DEFAULT_DEPTH_PRO_SUBPROCESS_TIMEOUT_SECONDS,
+        )
         self._subprocess_available_devices: set[str] = set()
 
     def _find_repo_root(self) -> Optional[Path]:
@@ -224,11 +247,18 @@ class DepthProBackend:
         return self._python_executable is not None
 
     def _build_worker_env(self) -> dict[str, str]:
-        """Build environment for the subprocess worker."""
-        env = os.environ.copy()
-        if self._repo_src is not None and self._repo_src.exists():
-            existing = env.get("PYTHONPATH")
-            env["PYTHONPATH"] = f"{self._repo_src}{os.pathsep}{existing}" if existing else str(self._repo_src)
+        """Build the subprocess worker environment without the parent's Python configuration.
+
+        Source checkouts import the worker from the checkout's ``src`` tree
+        only. Installed-package layouts have no checkout ``src`` to point at,
+        so the caller's ``PYTHONPATH`` is still forwarded there as the way the
+        dedicated runtime locates ``transformation_portal``.
+        """
+        env = build_isolated_worker_env(self._repo_src)
+        if "PYTHONPATH" not in env:
+            parent_pythonpath = os.environ.get("PYTHONPATH")
+            if parent_pythonpath:
+                env["PYTHONPATH"] = parent_pythonpath
         return env
 
     def _build_worker_command(self, *args: str) -> list[str]:
@@ -337,16 +367,27 @@ class DepthProBackend:
                 "--device",
                 use_device,
             )
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=self._worker_cwd(),
-            env=self._build_worker_env(),
-            check=False,
-            input=self._canonical_worker_input(),
-        )
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=self._worker_cwd(),
+                env=self._build_worker_env(),
+                check=False,
+                input=self._canonical_worker_input(),
+                timeout=self._subprocess_timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            output = self._format_subprocess_output(_subprocess_text(exc.stdout), _subprocess_text(exc.stderr))
+            raise ImportError(
+                "Depth Pro subprocess environment is not ready.\n\n"
+                f"Python: {self._python_executable}\n"
+                f"Command: {' '.join(command)}\n"
+                f"Readiness check timed out after {self._subprocess_timeout_seconds}s\n"
+                f"Output:\n{output}"
+            ) from exc
         if result.returncode != 0:
             output = self._format_subprocess_output(result.stdout, result.stderr)
             raise ImportError(
@@ -515,7 +556,17 @@ class DepthProBackend:
                     env=self._build_worker_env(),
                     check=True,
                     input=self._canonical_worker_input(),
+                    timeout=self._subprocess_timeout_seconds,
                 )
+            except subprocess.TimeoutExpired as exc:
+                output = self._format_subprocess_output(_subprocess_text(exc.stdout), _subprocess_text(exc.stderr))
+                raise RuntimeError(
+                    "Depth Pro subprocess timed out.\n\n"
+                    f"Python: {self._python_executable}\n"
+                    f"Command: {' '.join(command)}\n"
+                    f"Timeout: {self._subprocess_timeout_seconds}s\n"
+                    f"Output:\n{output}"
+                ) from exc
             except subprocess.CalledProcessError as exc:
                 output = self._format_subprocess_output(exc.stdout or "", exc.stderr or "")
                 raise RuntimeError(

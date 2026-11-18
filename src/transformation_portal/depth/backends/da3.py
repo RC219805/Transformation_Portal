@@ -50,6 +50,7 @@ from ...lux_depth_v3.model_resolution import (
     validate_authoritative_model_contract,
 )
 from ._array_contract import parse_worker_input_size, to_rgb_uint8, validate_worker_depth_map
+from ._worker_env import build_isolated_worker_env, resolve_worker_timeout_seconds
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -460,43 +461,17 @@ class DA3Backend:
         config: Optional["EnhanceConfig"],
     ) -> int:
         """Resolve subprocess timeout for DA3 worker execution."""
-        candidate: Any = None
-        if config is not None:
-            candidate = getattr(config, "da3_subprocess_timeout_seconds", None)
-
-        if candidate in (None, ""):
-            env_candidate = os.environ.get("TRANSFORMATION_PORTAL_DA3_TIMEOUT_SECONDS")
-            if env_candidate and env_candidate.strip():
-                candidate = env_candidate.strip()
-
-        if candidate in (None, ""):
-            return DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS
-
-        try:
-            timeout_seconds = int(candidate)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("DA3 subprocess timeout must be a positive integer number of seconds") from exc
-
-        if timeout_seconds <= 0:
-            raise ValueError("DA3 subprocess timeout must be greater than zero")
-        return timeout_seconds
+        return resolve_worker_timeout_seconds(
+            config,
+            config_attr="da3_subprocess_timeout_seconds",
+            env_var="TRANSFORMATION_PORTAL_DA3_TIMEOUT_SECONDS",
+            label="DA3",
+            default=DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS,
+        )
 
     def _build_worker_env(self) -> dict[str, str]:
         """Build a deterministic import environment for the subprocess worker."""
-        env = {
-            key: value
-            for key, value in os.environ.items()
-            if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
-        }
-        env.update(
-            {
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONNOUSERSITE": "1",
-                "PYTHONSAFEPATH": "1",
-            }
-        )
-        if self._repo_src is not None and self._repo_src.exists():
-            env["PYTHONPATH"] = str(self._repo_src)
+        env = build_isolated_worker_env(self._repo_src)
         if "MPLCONFIGDIR" not in env:
             if self._repo_root is not None:
                 mpl_config_dir = self._repo_root / ".runtime" / "mplconfig"
