@@ -144,6 +144,16 @@ Verification compares archive bytes against `hash_manifest.csv.gz`:
 Verification report (`verification_report.json`) contains deterministic mismatch details and exits non-zero
 on any mismatch.
 
+Verification fails closed when it has nothing to check:
+
+- `--archive-root` that is missing or not a directory exits `2` before any row is read and writes no report
+  (otherwise every row recorded as `missing` would "verify" against a root that does not exist).
+- A manifest without data rows exits `1` after writing the report (`rows_checked: 0`), because nothing was
+  verified. Pass `--allow-empty` when an empty manifest is the expected state.
+
+Exit codes: `0` verified, `1` mismatch / binding failure / empty manifest / unusable manifest input,
+`2` archive root missing or not a directory.
+
 ### Binding the manifest to the signed Merkle roots
 
 Row verification alone only shows that the archive bytes agree with `hash_manifest.csv.gz`. The detached

@@ -739,3 +739,56 @@ def test_check_merkle_binding_rejects_unsupported_method_and_malformed_blocks() 
         "partition": "Ghost",
         "issue": "partition_missing_from_manifest",
     } in VERIFY_HASH_MODULE.check_merkle_binding(rows, ghost_partition)
+
+
+@pytest.mark.parametrize("root_kind", ["absent", "regular_file"])
+def test_verify_rejects_archive_root_that_is_not_a_directory(tmp_path: Path, root_kind: str) -> None:
+    """Rows recorded as missing would otherwise "verify" against a root that does not exist."""
+    manifest_path = tmp_path / "hash_manifest.csv.gz"
+    _rewrite_hash_manifest(manifest_path, [["DriveA", "Part1", "DriveA/Part1/alpha.txt", "0", "", "missing", "missing"]])
+    archive_root = tmp_path / "archive_root"
+    if root_kind == "regular_file":
+        archive_root.write_text("not-a-directory", encoding="utf-8")
+    report_path = tmp_path / "verification_report.json"
+
+    result = _run_verify_tool(manifest_path, archive_root, report_path)
+
+    assert result.returncode == VERIFY_HASH_MODULE.EXIT_INPUT_ERROR
+    expected_reason = "must be a directory" if root_kind == "regular_file" else "not found"
+    assert f"Error: archive root {expected_reason}: {archive_root}" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert "Verification passed" not in result.stdout
+    assert not report_path.exists()
+
+
+def test_verify_fails_when_manifest_has_no_data_rows(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "hash_manifest.csv.gz"
+    _rewrite_hash_manifest(manifest_path, [])
+    archive_root = _copy_fixture_archive(tmp_path)
+    report_path = tmp_path / "verification_report.json"
+
+    result = _run_verify_tool(manifest_path, archive_root, report_path)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "nothing was verified" in result.stdout
+    assert "Verification passed" not in result.stdout
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["rows_checked"] == 0
+    assert report["rows_in_manifest"] == 0
+
+    allowed = _run_cli(
+        [
+            sys.executable,
+            str(VERIFY_TOOL),
+            "--hash-manifest",
+            str(manifest_path),
+            "--archive-root",
+            str(archive_root),
+            "--report-path",
+            str(report_path),
+            "--verify-all",
+            "--allow-empty",
+        ]
+    )
+    assert allowed.returncode == 0, allowed.stdout + allowed.stderr
+    assert "Verification passed" in allowed.stdout

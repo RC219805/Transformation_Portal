@@ -31,6 +31,7 @@ STATUS_OK = "ok"
 STATUS_MISSING = "missing"
 STATUS_UNREADABLE = "unreadable"
 STATUS_SKIPPED = "skipped"
+EXIT_INPUT_ERROR = 2
 
 # Merkle method emitted by tools/archive_hash_manifest.py::build_merkle_roots. A roots file that
 # declares anything else cannot be recomputed here, so the binding check rejects it.
@@ -531,6 +532,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="",
         help="Path to hash_summary.json. Fails when its row, status or byte counts disagree with the manifest rows",
     )
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Accept a hash manifest without data rows (default: fail, because nothing was verified)",
+    )
     return parser.parse_args(argv)
 
 
@@ -550,6 +556,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     manifest_path = Path(args.hash_manifest)
     archive_root = Path(args.archive_root)
+    # Without this check a root that does not exist "verifies" every row recorded as missing.
+    if not archive_root.is_dir():
+        reason = "must be a directory" if archive_root.exists() else "not found"
+        print(f"Error: archive root {reason}: {archive_root}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
     all_rows = _open_manifest_reader(manifest_path)
 
     if verify_mode == "sample":
@@ -605,7 +616,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"Hash summary binding failed with {len(summary_issues)} issue(s): manifest rows disagree with {args.hash_summary}"
         )
-    if mismatches or merkle_issues or summary_issues:
+    nothing_verified = rows_checked == 0 and not args.allow_empty
+    if nothing_verified:
+        print("Verification failed: the hash manifest has no data rows, so nothing was verified (see --allow-empty)")
+    if mismatches or merkle_issues or summary_issues or nothing_verified:
         return 1
 
     if args.merkle_roots:
