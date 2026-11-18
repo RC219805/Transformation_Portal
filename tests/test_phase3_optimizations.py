@@ -5,6 +5,9 @@ Validates pipeline parallelism, streaming, progressive processing, and Numba JIT
 """
 
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -15,6 +18,7 @@ from PIL import Image
 pytestmark = pytest.mark.unit
 
 # Import Phase 3 features
+from transformation_portal.depth import pipeline as depth_pipeline_module
 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 from transformation_portal.depth.processors.numba_kernels import NUMBA_AVAILABLE, get_numba_info
 
@@ -370,13 +374,13 @@ class TestBackwardCompatibility:
         output_dir.mkdir(exist_ok=True)
 
         # Use original batch processing
-        # Note: parallel=False because mock models can't be pickled for ProcessPoolExecutor
+        # Sequential fallback path; the default thread-based path is covered by TestParallelBatchProcessing
         results = pipeline.batch_process(
             dummy_images[:2],
             output_dir,
             save_depth=True,
             save_visualization=False,
-            parallel=False,  # Disabled for mock testing
+            parallel=False,
             preload_images=True,  # Phase 1 feature (async I/O)
         )
 
@@ -393,6 +397,186 @@ class TestBackwardCompatibility:
         assert "metadata" in result
 
         print(f"\n✓ Original process_render() still works")
+
+
+class NativeHandleDepthModel:
+    """Depth model stub that owns a native handle, like an ONNX session or a Core ML model.
+
+    It cannot be pickled, counts every pickling attempt, and records how many threads are inside
+    ``estimate_depth`` at once.
+    """
+
+    def __init__(self, error=None):
+        self.variant = Mock()
+        self.error = error
+        self.guard = threading.Lock()
+        self.native_handle = threading.Lock()
+        self.pickle_attempts = 0
+        self.active = 0
+        self.max_active = 0
+        self.completed = 0
+
+    def __reduce_ex__(self, protocol):
+        self.pickle_attempts += 1
+        raise TypeError("cannot pickle a native model handle")
+
+    def estimate_depth(self, image):
+        with self.guard:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.01)  # let a second, unserialised caller overlap
+            if self.error is not None:
+                raise self.error
+            depth = np.ascontiguousarray(image[..., 0], dtype=np.float32)
+            return {
+                "depth": depth,
+                "depth_raw": depth.copy(),
+                "metadata": {"inference_time_ms": 10.0, "backend": "stub"},
+            }
+        finally:
+            with self.guard:
+                self.active -= 1
+                self.completed += 1
+
+
+def make_pipeline(pipeline_config, depth_model):
+    """Create a pipeline around a stub depth model."""
+    with patch("transformation_portal.depth.pipeline.DepthAnythingV2Model", return_value=depth_model):
+        return ArchitecturalDepthPipeline(pipeline_config)
+
+
+class TestParallelBatchProcessing:
+    """batch_process(parallel=True), the default, shares the pipeline with worker threads."""
+
+    def test_default_batch_processes_a_model_that_cannot_be_pickled(self, pipeline_config, dummy_images, temp_output_dir):
+        """The default mode never pickles the pipeline and runs one inference at a time."""
+        model = NativeHandleDepthModel()
+        pipeline = make_pipeline(pipeline_config, model)
+        output_dir = temp_output_dir / "parallel_output"
+
+        results = pipeline.batch_process(dummy_images, output_dir, save_visualization=False, max_workers=3)
+
+        assert [result["metadata"]["input_path"] for result in results] == [str(path) for path in dummy_images]
+        assert model.pickle_attempts == 0
+        assert model.max_active == 1
+        assert pipeline.stats["images_processed"] == len(dummy_images)
+        for path in dummy_images:
+            assert (output_dir / f"{path.stem}_enhanced.png").is_file()
+            assert (output_dir / f"{path.stem}_depth.npy").is_file()
+
+    def test_parallel_batch_keeps_at_most_max_workers_decoded_images_in_flight(
+        self, pipeline_config, dummy_images, temp_output_dir, monkeypatch
+    ):
+        """Images are decoded by the workers, not all up front."""
+        model = NativeHandleDepthModel()
+        pipeline = make_pipeline(pipeline_config, model)
+        real_load_image = depth_pipeline_module.load_image
+        in_flight = []
+
+        def counting_load_image(path, **kwargs):
+            image = real_load_image(path, **kwargs)
+            with model.guard:
+                in_flight.append(len(in_flight) + 1 - model.completed)
+            return image
+
+        monkeypatch.setattr(depth_pipeline_module, "load_image", counting_load_image)
+
+        results = pipeline.batch_process(
+            dummy_images, temp_output_dir / "bounded_output", save_depth=False, save_visualization=False, max_workers=2
+        )
+
+        assert len(results) == len(dummy_images)
+        assert len(in_flight) == len(dummy_images)
+        assert max(in_flight) <= 2
+
+    def test_parallel_batch_matches_sequential_batch(self, pipeline_config, dummy_images, temp_output_dir):
+        """Threads change the scheduling, not the results or the files."""
+        parallel_dir = temp_output_dir / "parallel_output"
+        sequential_dir = temp_output_dir / "sequential_output"
+
+        parallel_results = make_pipeline(pipeline_config, NativeHandleDepthModel()).batch_process(
+            dummy_images, parallel_dir, save_visualization=False, max_workers=3
+        )
+        sequential_results = make_pipeline(pipeline_config, NativeHandleDepthModel()).batch_process(
+            dummy_images, sequential_dir, save_visualization=False, parallel=False
+        )
+
+        assert len(parallel_results) == len(sequential_results) == len(dummy_images)
+        for path, parallel_result, sequential_result in zip(dummy_images, parallel_results, sequential_results):
+            assert parallel_result["metadata"]["input_path"] == sequential_result["metadata"]["input_path"] == str(path)
+            np.testing.assert_array_equal(parallel_result["image"], sequential_result["image"])
+            np.testing.assert_array_equal(parallel_result["depth"], sequential_result["depth"])
+            for suffix in ("_enhanced.png", "_depth.npy"):
+                name = f"{path.stem}{suffix}"
+                assert (parallel_dir / name).read_bytes() == (sequential_dir / name).read_bytes()
+
+    @pytest.mark.parametrize("parallel", [True, False])
+    def test_batch_raises_when_every_image_fails(self, pipeline_config, dummy_images, temp_output_dir, parallel):
+        """A batch that produced nothing fails closed instead of returning an empty list."""
+        error = RuntimeError("model handle lost")
+        pipeline = make_pipeline(pipeline_config, NativeHandleDepthModel(error=error))
+        output_dir = temp_output_dir / "failed_output"
+
+        with pytest.raises(RuntimeError, match="failed for all 3 images.*model handle lost") as excinfo:
+            pipeline.batch_process(dummy_images[:3], output_dir, parallel=parallel, max_workers=2)
+
+        assert excinfo.value.__cause__ is error
+        assert list(output_dir.iterdir()) == []
+        assert pipeline.stats["images_processed"] == 0
+
+    @pytest.mark.parametrize("parallel", [True, False])
+    def test_batch_skips_a_failing_image_and_keeps_the_rest(self, pipeline_config, dummy_images, temp_output_dir, parallel):
+        """One bad input is logged and skipped; the other results keep their input order."""
+        pipeline = make_pipeline(pipeline_config, NativeHandleDepthModel())
+        missing = temp_output_dir / "missing_image.jpg"
+        image_paths = [dummy_images[0], missing, dummy_images[1]]
+
+        results = pipeline.batch_process(
+            image_paths, temp_output_dir / "partial_output", save_visualization=False, parallel=parallel, max_workers=2
+        )
+
+        assert [result["metadata"]["input_path"] for result in results] == [str(dummy_images[0]), str(dummy_images[1])]
+        assert pipeline.stats["images_processed"] == 2
+
+    def test_interrupted_parallel_batch_cancels_the_queued_images(
+        self, pipeline_config, dummy_images, temp_output_dir, monkeypatch
+    ):
+        """An interrupt propagates without first working through the rest of the queue."""
+        submitted = []
+
+        class RecordingExecutor(ThreadPoolExecutor):
+            def submit(self, fn, /, *args, **kwargs):
+                future = super().submit(fn, *args, **kwargs)
+                submitted.append(future)
+                return future
+
+        model = NativeHandleDepthModel()
+        estimate_depth = model.estimate_depth
+
+        def estimate_then_wait_for_the_interrupt(image):
+            result = estimate_depth(image)
+            if model.completed == 2:
+                # Hold the single worker until the interrupted caller has cancelled the queue.
+                deadline = time.monotonic() + 5.0
+                while not submitted[-1].cancelled() and time.monotonic() < deadline:
+                    time.sleep(0.005)
+            return result
+
+        def interrupt(*args, **kwargs):
+            raise KeyboardInterrupt
+
+        model.estimate_depth = estimate_then_wait_for_the_interrupt
+        pipeline = make_pipeline(pipeline_config, model)
+        monkeypatch.setattr(depth_pipeline_module, "ThreadPoolExecutor", RecordingExecutor)
+        monkeypatch.setattr(pipeline, "save_result", interrupt)
+
+        with pytest.raises(KeyboardInterrupt):
+            pipeline.batch_process(dummy_images, temp_output_dir / "interrupted_output", max_workers=1)
+
+        assert len(submitted) == len(dummy_images)
+        assert all(future.cancelled() for future in submitted[2:])
+        assert model.completed <= 2
 
 
 def test_phase3_integration_summary():

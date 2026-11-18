@@ -6,10 +6,11 @@ Integrates Depth Anything V2 with multiple depth-guided enhancement modules.
 """
 
 import logging
+import os
 import queue
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
 
@@ -451,17 +452,26 @@ class ArchitecturalDepthPipeline:
         """
         Process multiple renders in batch with parallel processing.
 
+        Parallel mode uses worker threads that share this pipeline: the pipeline (model, cache,
+        processors) is never pickled or copied. The workers decode the images, at most
+        ``max_workers`` at a time, while depth estimation and the depth-guided processors handle
+        one image at a time and the outputs are written by the calling thread.
+
         Args:
             image_paths: List of input image paths
             output_dir: Output directory
             save_depth: Save depth maps as numpy arrays
             save_visualization: Save depth visualizations
             parallel: Enable parallel processing (default: True)
-            max_workers: Max parallel workers (default: None = CPU count)
-            preload_images: Preload images async for faster access (default: True)
+            max_workers: Max worker threads (default: None = CPU count - 1, at most 8)
+            preload_images: Sequential mode only: decode every image up front on a thread pool
+                (default: True). Parallel mode always decodes inside its workers.
 
         Returns:
-            List of result dictionaries
+            List of result dictionaries, in input order; images that fail are logged and skipped
+
+        Raises:
+            RuntimeError: If every image of a non-empty batch fails
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -469,33 +479,40 @@ class ArchitecturalDepthPipeline:
         logger.info(f"Batch processing {len(image_paths)} images")
         logger.info(f"Parallel processing: {parallel}, Preload: {preload_images}")
 
-        # Async image loading (Phase 1 optimization)
+        # Async image loading (Phase 1 optimization). Parallel mode decodes inside its workers
+        # instead, so that only ``max_workers`` decoded images are in flight at any time.
         preloaded_images = {}
-        if preload_images:
+        if preload_images and not parallel:
             preloaded_images = self._async_load_images(image_paths, max_workers)
 
         results = []
+        first_error: Optional[Exception] = None
 
         if parallel:
-            # Parallel processing (Phase 1 optimization)
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                future_to_path = {}
-                for image_path in image_paths:
-                    path_str = str(image_path)
-                    preloaded = preloaded_images.get(path_str)
-                    future = executor.submit(
-                        self._process_single_image,
-                        image_path,
-                        preloaded,
-                    )
-                    future_to_path[future] = image_path
+            # Parallel processing (Phase 1 optimization) on threads that share this pipeline.
+            # A process pool would pickle ``self`` (model weights, cache, processors) once per
+            # image, and fail every image when the model holds a native handle.
+            if max_workers is None:
+                max_workers = min(max(1, (os.cpu_count() or 1) - 1), 8)
 
-                for future in tqdm(
-                    as_completed(future_to_path),
+            # The model, the unsynchronised depth cache and the processors (Numba's default
+            # threading layer aborts on concurrent parallel kernels) see one image at a time.
+            compute_lock = threading.Lock()
+
+            def process_in_worker(image_path: Union[str, Path]) -> Dict:
+                image = load_image(image_path, normalize=True)
+                with compute_lock:
+                    return self._process_single_image(image_path, image)
+
+            executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="depth-batch")
+            try:
+                futures = [executor.submit(process_in_worker, image_path) for image_path in image_paths]
+
+                for image_path, future in tqdm(
+                    zip(image_paths, futures),
                     total=len(image_paths),
                     desc="Processing renders",
                 ):
-                    image_path = future_to_path[future]
                     try:
                         result = future.result()
 
@@ -515,13 +532,19 @@ class ArchitecturalDepthPipeline:
 
                     except Exception as e:
                         logger.error(f"Failed to process {image_path}: {e}")
+                        if first_error is None:
+                            first_error = e
                         continue
+            finally:
+                # An interrupt must not run the rest of the queue before it propagates.
+                executor.shutdown(wait=True, cancel_futures=True)
         else:
             # Sequential processing (fallback)
             for image_path in tqdm(image_paths, desc="Processing renders"):
                 try:
                     path_str = str(image_path)
-                    preloaded = preloaded_images.get(path_str)
+                    # Release each preloaded image once it has been processed.
+                    preloaded = preloaded_images.pop(path_str, None)
                     result = self._process_single_image(image_path, preloaded)
 
                     # Save results
@@ -540,10 +563,18 @@ class ArchitecturalDepthPipeline:
 
                 except Exception as e:
                     logger.error(f"Failed to process {image_path}: {e}")
+                    if first_error is None:
+                        first_error = e
                     continue
 
         # Print summary
         self._print_batch_summary(results)
+
+        if first_error is not None and not results:
+            # Fail closed: a batch that produced nothing must not look like a successful run.
+            raise RuntimeError(
+                f"batch_process failed for all {len(image_paths)} images; first error: {first_error}"
+            ) from first_error
 
         return results
 
