@@ -158,3 +158,29 @@ def test_reingesting_the_same_dataset_still_replaces_its_manifest(tmp_path: Path
     assert [f.logical_path for f in loaded.files] == ["c.bin"]
     assert dataset.delete_dataset("train/v1", "1") is True
     assert dataset.get_manifest("train/v1", "1") is None
+
+
+def test_ingested_directory_with_whitespace_file_names_round_trips(tmp_path: Path) -> None:
+    """Every path ``ingest_directory`` records must pass its own containment check.
+
+    A file whose name is only whitespace is a legitimate entry inside the
+    dataset; rejecting it made the saved manifest unloadable (STOR-03 follow-up).
+    """
+    dataset, _sha = _dataset(tmp_path)
+    src = tmp_path / "raw"
+    (src / "sub").mkdir(parents=True)
+    (src / " ").write_bytes(b"space-named")
+    (src / "sub" / "\t").write_bytes(b"tab-named")
+    (src / "a.bin").write_bytes(b"plain")
+
+    ingested = dataset.ingest_directory("raw", src)
+
+    loaded = dataset.get_manifest("raw", "1.0.0")
+    assert loaded is not None
+    assert sorted(f.logical_path for f in loaded.files) == sorted(f.logical_path for f in ingested.files)
+    assert dataset.list_datasets() == [("raw", "1.0.0")]
+    target = tmp_path / "runtime"
+    dataset.materialize(loaded, target, use_symlinks=False)
+    assert (target / " ").read_bytes() == b"space-named"
+    assert (target / "sub" / "\t").read_bytes() == b"tab-named"
+    assert (target / "a.bin").read_bytes() == b"plain"

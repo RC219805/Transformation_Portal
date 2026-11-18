@@ -142,9 +142,11 @@ def _logical_parts(logical_path: Any) -> tuple[str, ...]:
     A logical path names a location *within* a dataset and is later joined
     under a caller-chosen directory. Absolute paths, drive or UNC anchors,
     ``..`` components, NUL bytes and empty paths can only point elsewhere, so
-    they are never valid.
+    they are never valid. A whitespace-only file name is unusual but stays
+    inside the dataset (``ingest_directory`` records such files verbatim), so
+    it is accepted.
     """
-    if not isinstance(logical_path, str) or not logical_path.strip() or "\x00" in logical_path:
+    if not isinstance(logical_path, str) or not logical_path or "\x00" in logical_path:
         raise DatasetCASError(f"Invalid dataset logical path: {logical_path!r}")
     candidate = Path(logical_path)
     if candidate.is_absolute() or candidate.anchor or ".." in candidate.parts or not candidate.parts:
