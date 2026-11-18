@@ -289,24 +289,36 @@ class ResizeProcessor(ProcessorPlugin):
         if width and height:
             if not self._maintain_aspect:
                 return (width, height)
-            # Maintain aspect, fit within bounds
-            ratio = min(width / orig_w, height / orig_h)
-            return (int(orig_w * ratio), int(orig_h * ratio))
+            # Maintain aspect, fit within bounds: the binding bound is met
+            # exactly and the other dimension follows from it. The full
+            # width is kept whenever its proportional height fits.
+            fit_height = self._scale_dimension(orig_h, width, orig_w)
+            if fit_height <= height:
+                return (width, fit_height)
+            return (self._scale_dimension(orig_w, height, orig_h), height)
 
         if width:
             if not self._maintain_aspect:
                 return (width, orig_h)
-            ratio = width / orig_w
-            return (width, int(orig_h * ratio))
+            return (width, self._scale_dimension(orig_h, width, orig_w))
 
         if height:
             if not self._maintain_aspect:
                 return (orig_w, height)
-            ratio = height / orig_h
-            return (int(orig_w * ratio), height)
+            return (self._scale_dimension(orig_w, height, orig_h), height)
 
         # No resize specified, return original
         return original_size
+
+    @staticmethod
+    def _scale_dimension(length: int, target: int, reference: int) -> int:
+        """Return ``length * target / reference`` rounded down.
+
+        The product is divided once so that an exactly integral result is
+        kept: ``int(length * (target / reference))`` loses a pixel whenever
+        the float quotient rounds down (19x19 at width 500 gave 500x499).
+        """
+        return int(length * target // reference)
 
     def validate(self) -> bool:
         """Validate configuration."""
