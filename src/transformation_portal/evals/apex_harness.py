@@ -123,7 +123,9 @@ class ApexEvaluationHarness:
             prompt_spec_builder: Optional builder for dimension-specific VLM prompts
             threshold: Pass/fail threshold (0.0-1.0)
             metric_weight: Weight for metric scores vs VLM (0.0-1.0)
-            fail_on_vlm_error: If True, fail evaluation on VLM errors
+            fail_on_vlm_error: If True, a VLM error fails the evaluation (passes=False)
+                whatever the combined score; if False, the VLM is skipped and the
+                metrics alone decide
         """
         self.llava_backend = llava_backend
         self.metric_fns = metric_fns or []
@@ -160,10 +162,15 @@ class ApexEvaluationHarness:
         # Combine scores
         combined_score = self._combine_scores(metric_avg, vlm_result)
 
+        # fail_on_vlm_error: a VLM error fails the gate outright. Blending the error's
+        # 0.0 VLM score by weight is not enough, since a high enough metric_weight
+        # times the metric average would still clear the threshold.
+        vlm_error_fails = bool(self.fail_on_vlm_error and "error" in vlm_result and not vlm_result.get("skipped", False))
+
         # Build result
         result = EvalResult(
             score=combined_score,
-            passes=combined_score >= self.threshold,
+            passes=combined_score >= self.threshold and not vlm_error_fails,
             metric_scores={r.name: r.score for r in metric_results},
             vlm_score=vlm_result.get("score", 0.0),
             vlm_issues=vlm_result.get("issues", []),
@@ -175,6 +182,7 @@ class ApexEvaluationHarness:
                     "vlm": self.vlm_weight,
                 },
                 "threshold": self.threshold,
+                "vlm_error_fails": vlm_error_fails,
             },
         )
 
@@ -357,6 +365,10 @@ def sharpness_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         # Laplacian variance
@@ -387,6 +399,10 @@ def contrast_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         # Standard deviation as contrast measure
@@ -416,6 +432,10 @@ def brightness_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         mean_val = float(np.mean(img))
