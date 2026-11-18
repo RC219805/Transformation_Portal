@@ -177,10 +177,85 @@ def _trusted_existing_entry_without_realpath(
     return None
 
 
+class _ArchiveRootListing:
+    """Per-scan directory listings plus the fingerprint of the directories they came from.
+
+    Each directory is listed once per scan (``os.scandir``) instead of once per index
+    row and path component. Every directory consulted is fingerprinted by
+    ``(st_dev, st_ino, st_mtime_ns, st_ctime_ns)`` before it is listed: adding,
+    removing or renaming an entry changes its parent directory's mtime/ctime, so a
+    cached verdict can be revalidated cheaply against the archive root's contents.
+    """
+
+    def __init__(self) -> None:
+        self._entries: Dict[str, Dict[str, Optional[bool]] | str] = {}
+        self._fingerprint: Dict[str, Tuple[int, int, int, int]] = {}
+        self.cacheable = True
+
+    def entries(self, directory: Path) -> Dict[str, Optional[bool]] | str:
+        """Return ``{name: is_symlink}`` for ``directory`` or a blocking reason."""
+
+        key = str(directory)
+        cached = self._entries.get(key)
+        if cached is not None:
+            return cached
+        listed: Dict[str, Optional[bool]] | str
+        try:
+            self._fingerprint[key] = _directory_fingerprint(directory)
+        except FileNotFoundError:
+            self.cacheable = False
+            listed = "missing"
+        except (OSError, RuntimeError, ValueError):
+            self.cacheable = False
+            listed = "unreadable"
+        else:
+            try:
+                names: Dict[str, Optional[bool]] = {}
+                with os.scandir(directory) as iterator:
+                    for entry in iterator:
+                        try:
+                            names[entry.name] = entry.is_symlink()
+                        except OSError:
+                            names[entry.name] = None
+                listed = names
+            except FileNotFoundError:
+                listed = "missing"
+            except (NotADirectoryError, OSError, RuntimeError, ValueError):
+                listed = "unreadable"
+        self._entries[key] = listed
+        return listed
+
+    def fingerprint(self) -> Tuple[Tuple[str, int, int, int, int], ...]:
+        return tuple(sorted((path, *signature) for path, signature in self._fingerprint.items()))
+
+
+def _directory_fingerprint(directory: Path | str) -> Tuple[int, int, int, int]:
+    stat_result = os.lstat(directory)
+    return (
+        int(stat_result.st_dev),
+        int(stat_result.st_ino),
+        int(stat_result.st_mtime_ns),
+        int(stat_result.st_ctime_ns),
+    )
+
+
+def _archive_root_fingerprint_unchanged(fingerprint: Any) -> bool:
+    if not isinstance(fingerprint, tuple) or not fingerprint:
+        return False
+    for path, *signature in fingerprint:
+        try:
+            if _directory_fingerprint(path) != tuple(signature):
+                return False
+        except (OSError, RuntimeError, ValueError):
+            return False
+    return True
+
+
 def _validate_archive_index_relpath(
     raw_relpath: Any,
     *,
     archive_root: Path,
+    listing_cache: Optional[_ArchiveRootListing] = None,
 ) -> Tuple[bool, str, str]:
     relpath = str(raw_relpath or "").strip()
     if not relpath:
@@ -199,22 +274,20 @@ def _validate_archive_index_relpath(
     if any(part == ".." for part in parts):
         return False, relpath, "parent_traversal"
 
+    listing = listing_cache if listing_cache is not None else _ArchiveRootListing()
     current = archive_root
     for part in parts:
-        try:
-            next_path = next((child for child in current.iterdir() if child.name == part), None)
-        except FileNotFoundError:
+        entries = listing.entries(current)
+        if isinstance(entries, str):
+            return False, relpath, entries
+        if part not in entries:
             return False, relpath, "missing"
-        except (NotADirectoryError, OSError, RuntimeError, ValueError):
+        is_symlink = entries[part]
+        if is_symlink is None:
             return False, relpath, "unreadable"
-        if next_path is None:
-            return False, relpath, "missing"
-        try:
-            if next_path.is_symlink():
-                return False, relpath, "symlink_traversal"
-        except (OSError, RuntimeError):
-            return False, relpath, "unreadable"
-        current = next_path
+        if is_symlink:
+            return False, relpath, "symlink_traversal"
+        current = current / part
 
     try:
         if current.is_dir():
@@ -355,8 +428,15 @@ def _validate_archive_index_against_root(
 
     with preflight_cache_lock:
         cached = preflight_cache.get(cache_key)
-    if cached is not None:
-        return _copy_archive_index_preflight_result(cached)
+    # The verdict depends on the archive root's contents, not only on the index file:
+    # reuse it only while every directory the cached scan consulted is unchanged.
+    if (
+        isinstance(cached, Mapping)
+        and isinstance(cached.get("result"), Mapping)
+        and _archive_root_fingerprint_unchanged(cached.get("root_fingerprint"))
+    ):
+        return _copy_archive_index_preflight_result(cached["result"])
+    listing = _ArchiveRootListing() if relpath_validator is _validate_archive_index_relpath else None
 
     rows_total = 0
     blocked_rows = 0
@@ -386,10 +466,17 @@ def _validate_archive_index_against_root(
 
             for row_number, row in enumerate(reader, start=2):
                 rows_total += 1
-                ok, relpath, reason = relpath_validator(
-                    row.get("relpath"),
-                    archive_root=archive_root_real,
-                )
+                if listing is not None:
+                    ok, relpath, reason = relpath_validator(
+                        row.get("relpath"),
+                        archive_root=archive_root_real,
+                        listing_cache=listing,
+                    )
+                else:
+                    ok, relpath, reason = relpath_validator(
+                        row.get("relpath"),
+                        archive_root=archive_root_real,
+                    )
                 if row_limit is not None and rows_total >= row_limit:
                     truncated = True
                 if ok:
@@ -442,8 +529,16 @@ def _validate_archive_index_against_root(
         scan_mode=scan_mode,
         truncated=truncated,
     )
-    with preflight_cache_lock:
-        if len(preflight_cache) >= cache_max_entries:
-            preflight_cache.pop(next(iter(preflight_cache)), None)
-        preflight_cache[cache_key] = _copy_archive_index_preflight_result(result)
+    # Only the built-in validator reports which directories it read; a verdict whose
+    # archive-root inputs cannot be fingerprinted is not cached.
+    root_fingerprint = listing.fingerprint() if listing is not None and listing.cacheable else ()
+    if root_fingerprint:
+        with preflight_cache_lock:
+            preflight_cache.pop(cache_key, None)
+            if len(preflight_cache) >= cache_max_entries:
+                preflight_cache.pop(next(iter(preflight_cache)), None)
+            preflight_cache[cache_key] = {
+                "result": _copy_archive_index_preflight_result(result),
+                "root_fingerprint": root_fingerprint,
+            }
     return result
