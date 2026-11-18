@@ -84,6 +84,34 @@ def test_pep503_name_variants_and_egg_fragments_are_detected(tmp_path: Path) -> 
         assert expected in result.stdout
 
 
+def test_pep508_name_is_not_masked_by_egg_fragment_bom_or_glued_text(tmp_path: Path) -> None:
+    """A banned PEP 508 name stays visible whatever follows it (T-05 review follow-up)."""
+    root = _sandbox(tmp_path)
+    (root / "requirements" / "base.txt").write_text(
+        "﻿basicsr==1.4.2\n"
+        "realesrgan @ https://example.invalid/r.whl#egg=harmless\n"
+        "gfpgan#sha256=00\n"
+        "pyiceberg\\\n"
+        "    --hash=sha256:00\n"
+        "numpy==2.0.0  # replaces basicsr, see https://example.invalid/x#egg=basicsr\n"
+        "-e ./local/checkout\n"
+        "https://example.invalid/wheels/some_wheel-1.0-py3-none-any.whl\n",
+        encoding="utf-8",
+    )
+    result = _run_gate(root)
+    assert result.returncode == 1, result.stdout + result.stderr
+    for expected in (
+        "base.txt:1 - basicsr",
+        "base.txt:2 - realesrgan",
+        "base.txt:3 - gfpgan",
+        "base.txt:4 - pyiceberg",
+    ):
+        assert expected in result.stdout
+    # Comments, option lines, editable paths and bare URLs name no project.
+    for line_number in (5, 6, 7, 8):
+        assert f"base.txt:{line_number} " not in result.stdout
+
+
 def test_constraints_hard_block_pins_remain_exempt_but_other_pins_fail(tmp_path: Path) -> None:
     root = _sandbox(tmp_path)
     constraints = root / "requirements" / "constraints.txt"

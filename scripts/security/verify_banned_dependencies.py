@@ -38,21 +38,21 @@ def _normalize_package_name(raw: str) -> str:
     requirements that name the project with a ``#egg=`` fragment. Comments
     follow pip's rule (``#`` at line start or after whitespace), so URL
     fragments are not mistaken for comments.
+
+    A leading PEP 508 name always wins: in ``name @ url#egg=other`` the
+    installed project is ``name``, so the fragment is only consulted for bare
+    URL, path and editable requirements.
     """
     text = re.sub(r"(^|\s)#.*$", "", raw).strip()
     if not text or text.startswith(("-r", "-c", "--requirement", "--constraint")):
         return ""
+    if not text.startswith(("-e", "--editable")):
+        name = re.split(r"[<>=!~@;#\s\[(\\]", text, maxsplit=1)[0].strip()
+        if name and "/" not in name and ":" not in name:
+            return name
+    # Bare URL, path or editable requirement: the only project name is an egg fragment.
     egg = _EGG_FRAGMENT_RE.search(text)
-    if egg is not None:
-        return egg.group(1)
-    if text.startswith(("-e", "--editable")):
-        return ""
-    text = text.split(";", 1)[0].strip()
-    text = re.split(r"[<>=!~@\s\[(]", text, maxsplit=1)[0].strip()
-    if "/" in text or ":" in text:
-        # Bare URL or path without an egg fragment: no project name to check.
-        return ""
-    return text
+    return egg.group(1) if egg is not None else ""
 
 
 def _is_hard_block_constraint(raw_line: str) -> bool:
@@ -142,7 +142,8 @@ def check_requirements_files(banned_registry: Dict[str, Dict[str, str]]) -> List
     for req_file in _requirement_files():
         is_constraints = req_file == CONSTRAINTS_PATH
 
-        with open(req_file, encoding="utf-8") as f:
+        # utf-8-sig: pip strips a UTF-8 BOM, so the first requirement of such a file is live.
+        with open(req_file, encoding="utf-8-sig") as f:
             for line_num, raw_line in enumerate(f, 1):
                 pkg = _normalize_package_name(raw_line)
                 if not pkg:
@@ -168,7 +169,7 @@ def check_constraints_sync(banned_registry: Dict[str, Dict[str, str]]) -> List[s
         return [f"Missing constraints file: {CONSTRAINTS_PATH}"]
 
     hard_blocked: Set[str] = set()
-    with open(CONSTRAINTS_PATH, encoding="utf-8") as f:
+    with open(CONSTRAINTS_PATH, encoding="utf-8-sig") as f:
         for raw_line in f:
             pkg = _normalize_package_name(raw_line)
             if not pkg:
