@@ -348,6 +348,8 @@ class GaussianBackend:
             if self.native_recipe != NATIVE_DEFAULT_RECIPE and iterations > MAX_NATIVE_SHUFFLED_UPDATES:
                 raise ValueError(f"Shuffled native recipes require 1..{MAX_NATIVE_SHUFFLED_UPDATES} optimizer updates")
         else:
+            if isinstance(iterations, bool) or not isinstance(iterations, (int, np.integer)) or iterations < 1:
+                raise ValueError(f"Gaussian reconstruction requires a positive integer iteration count, got {iterations!r}")
             self._load_model()
 
         start_time = time.time()
@@ -834,30 +836,32 @@ class GaussianBackend:
                     break
 
             # Compute final RMSE
-            final_loss = loss_history[-1] if loss_history else 0.0
-            training_final_loss = final_loss
+            training_final_loss = loss_history[-1]
             if self.implementation == "torch_native":
                 scales = scale_parameter.exp().detach()
-                # Report the saved, post-update scene with every initialized splat,
-                # rather than the previous step's loss or a capped subset.
-                with torch.no_grad():
-                    losses = []
-                    for target, camera in zip(target_images, cameras):
-                        rendered = render_gaussians_native(
-                            positions,
-                            colors,
-                            scales,
-                            rotations,
-                            opacities,
-                            _numpy_array_to_tensor(camera.intrinsics, device),
-                            _numpy_array_to_tensor(camera.extrinsics, device),
-                            (camera.height, camera.width),
-                            device=device,
-                        )
-                        losses.append(compute_rgb_loss(rendered, target))
-                    final_loss = torch.stack(losses).mean().item()
-                if not np.isfinite(final_loss):
-                    raise RuntimeError("torch_native saved scene produced a nonfinite final loss")
+            # Report the saved, post-update scene with every initialized splat, rendered
+            # as render_view renders it, rather than the previous step's loss or a capped subset.
+            final_render = render_gaussians_native if self.implementation == "torch_native" else render_gaussians
+            final_render_options = {} if self.implementation == "torch_native" else {"use_rotation": False}
+            with torch.no_grad():
+                losses = []
+                for target, camera in zip(target_images, cameras):
+                    rendered = final_render(
+                        positions,
+                        colors,
+                        scales,
+                        rotations,
+                        opacities,
+                        _numpy_array_to_tensor(camera.intrinsics, device),
+                        _numpy_array_to_tensor(camera.extrinsics, device),
+                        (camera.height, camera.width),
+                        device=device,
+                        **final_render_options,
+                    )
+                    losses.append(compute_rgb_loss(rendered, target))
+                final_loss = torch.stack(losses).mean().item()
+            if self.implementation == "torch_native" and not np.isfinite(final_loss):
+                raise RuntimeError("torch_native saved scene produced a nonfinite final loss")
             final_rmse = np.sqrt(final_loss)  # RMSE from MSE
 
             # Convergence status must follow Scene3D contract:
@@ -895,10 +899,10 @@ class GaussianBackend:
                     "final_loss": final_loss,
                     "optimization_max_gaussians": self.optimization_max_gaussians,
                     "loss_history": loss_history[:100],  # Store first 100 for analysis
+                    "last_pre_update_training_loss": training_final_loss,
+                    "rmse_scope": "all_training_views_post_update",
                     **(
                         {
-                            "last_pre_update_training_loss": training_final_loss,
-                            "rmse_scope": "all_training_views_post_update",
                             "gradient_accumulation_views": len(target_images),
                             "position_prior_weight": NATIVE_POSITION_PRIOR_WEIGHT,
                             "log_scale_prior_weight": NATIVE_LOG_SCALE_PRIOR_WEIGHT,

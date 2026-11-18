@@ -122,6 +122,32 @@ class TestGaussianBackend:
         assert scene.iteration == scene.metadata["actual_iterations"]
         assert scene.metadata["requested_iterations"] == requested
 
+        # Zero iterations would report RMSE 0 and "converged" for an unoptimized scene.
+        for invalid in (0, -1, True, 2.5):
+            with pytest.raises(ValueError, match="positive integer iteration count"):
+                backend.reconstruct(ri, iterations=invalid)
+
+        # The reported RMSE describes the saved scene: every splat after the last update,
+        # rendered as render_view renders it, not the capped pre-update training loss.
+        capped = GaussianBackend(tier="apex_research", device="cpu", optimization_seed=7, optimization_max_gaussians=50)
+        size = 24
+        intrinsics = np.array([[30.0, 0.0, 12.0], [0.0, 30.0, 12.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+        poses = [np.eye(4, dtype=np.float32) for _ in range(2)]
+        poses[1][0, 3] = -0.2
+        cameras = [CameraParams(intrinsics, pose, size, size) for pose in poses]
+        rng = np.random.default_rng(0)
+        images = [rng.random((size, size, 3)).astype(np.float32) for _ in range(2)]
+        depths = [np.full((size, size), 3.0, dtype=np.float32) for _ in range(2)]
+        ri = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, depth_maps=depths, tier="apex_research")
+        scene = capped.reconstruct(ri, iterations=3)
+
+        assert scene.splats.num_gaussians > capped.optimization_max_gaussians
+        saved_scene_rmse = np.sqrt(
+            np.mean([np.mean((capped.render_view(scene, cam) - img) ** 2) for cam, img in zip(cameras, images)])
+        )
+        assert scene.rmse == pytest.approx(saved_scene_rmse, rel=1e-5)
+        assert scene.splats.metadata["rmse_scope"] == "all_training_views_post_update"
+
 
 # ---------------------------------------------------------------------
 # Reconstruction Smoke Tests (Bounded)

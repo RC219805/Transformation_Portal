@@ -6,7 +6,7 @@
   "iteration": 8,
   "optimization_seed": 123,
   "requested_iterations": 8,
-  "rmse": 0.568629,
+  "rmse": 0.568398,
   "schema": "reconstruction_golden.v1",
-  "state_hash": "b03bfedd6b61564bcddd42b61c999a6eb441a79cad3288d36cdbb9ee3cbdd38e"
+  "state_hash": "d633d9fdb0dc60b6e4a3d48e3f3bfbd0b6dcd252728937c105fa0d8713734896"
 }
