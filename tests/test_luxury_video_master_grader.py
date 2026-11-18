@@ -365,6 +365,17 @@ def test_preset_with_its_repo_lut_is_accepted_by_ffmpeg(preset_key):
     assert completed.returncode == 0, completed.stderr
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg binary required")
+@pytest.mark.parametrize("deband", sorted(MODULE.DEBAND_PRESETS))
+def test_every_deband_preset_is_accepted_by_ffmpeg(tmp_path, deband):
+    config = {"lut": _write_identity_lut(tmp_path / "identity.cube"), "lut_strength": 1.0, "deband": deband}
+    graph, output_label = build_filter_graph(config)
+
+    completed = _run_graph_through_ffmpeg(graph, output_label)
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def _run_graph_through_ffmpeg(graph: str, output_label: str) -> subprocess.CompletedProcess:
     """Run a filter graph on a tiny lavfi source into the null muxer."""
 

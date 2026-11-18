@@ -145,6 +145,48 @@ def test_build_config_applies_choice_and_tint_overrides() -> None:
     assert config["deband"] == "of"
 
 
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_build_config_keeps_preset_deband_and_halation_when_flags_omitted(preset_key) -> None:
+    # M-12: argparse defaults used to overwrite the preset with deband="of", halation 0.0 / radius 18.0.
+    preset = grader.PRESETS[preset_key]
+    config = grader.build_config(grader.parse_arguments(["in.mov", "out.mov", "--preset", preset_key]))
+    assert config["deband"] == preset.deband
+    assert config["halation_intensity"] == preset.halation_intensity
+    assert config["halation_radius"] == preset.halation_radius
+    assert config["halation_threshold"] == preset.halation_threshold
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_preset_deband_is_a_known_deband_preset(preset_key) -> None:
+    deband = grader.PRESETS[preset_key].deband
+    assert deband is None or deband in grader.DEBAND_PRESETS
+
+
+def test_signature_estate_graph_carries_its_deband_and_halation(lut_file) -> None:
+    args = grader.parse_arguments(["in.mov", "out.mov", "--preset", "signature_estate", "--custom-lut", str(lut_file)])
+    graph, _ = grader.build_filter_graph(grader.build_config(args))
+    assert grader.DEBAND_PRESETS["soft"] in graph
+    assert "gblur=sigma=20.00:steps=2" in graph
+    assert "blend=all_expr='A+(0.140*B)'" in graph
+
+
+def test_explicit_flags_still_override_preset_deband_and_halation() -> None:
+    args = grader.parse_arguments(
+        ["in.mov", "out.mov", "--deband", "off", "--halation-intensity", "0", "--halation-radius", "4"]
+    )
+    config = grader.build_config(args)
+    assert config["deband"] == "off"
+    assert config["halation_intensity"] == 0.0
+    assert config["halation_radius"] == 4.0
+
+
+@pytest.mark.parametrize("name", sorted(grader.DEBAND_PRESETS))
+def test_deband_strengths_are_within_gradfun_range(name) -> None:
+    # gradfun rejects strength outside [0.51, 64] (ffmpeg exits 222 for the old soft=0.45).
+    strength = float(grader.DEBAND_PRESETS[name].split("strength=")[1].split(":")[0])
+    assert 0.51 <= strength <= 64.0
+
+
 def test_build_config_merges_enabled_tone_map_plan() -> None:
     args = grader.parse_arguments(["in.mov", "out.mov"])
     plan = grader.ToneMapPlan(enabled=True, note="x", config={"tone_map_peak": 600.0}, metadata=(None, None, None))

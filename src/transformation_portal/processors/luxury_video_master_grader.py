@@ -95,7 +95,7 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.010,
         sharpen="medium",
         grain=6.0,
-        deband="fine",
+        deband="soft",
         halation_intensity=0.14,
         halation_radius=20.0,
         halation_threshold=0.52,
@@ -134,7 +134,7 @@ PRESETS: Dict[str, GradePreset] = {
         cool=0.0,
         sharpen="strong",
         grain=0.0,
-        deband="fine",
+        deband="soft",
         halation_threshold=0.60,
         notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
     ),
@@ -161,8 +161,9 @@ UNSHARP_PRESETS = {
     "strong": "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.6:chroma_msize_x=3:chroma_msize_y=3:chroma_amount=0.8",
 }
 
+# gradfun accepts strength in [0.51, 64]; "soft" sits at that floor.
 DEBAND_PRESETS = {
-    "soft": "gradfun=strength=0.45:radius=12",
+    "soft": "gradfun=strength=0.51:radius=12",
     "medium": "gradfun=strength=0.70:radius=16",
     "strong": "gradfun=strength=0.90:radius=20",
 }
@@ -922,20 +923,17 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--deband",
         choices=list(DEBAND_PRESETS) + list(DISABLED_VALUES),
-        default="of",
-        help="Apply debanding (gradfun) smoothing after grain.",
+        help="Override debanding (gradfun) smoothing after grain (preset value when omitted).",
     )
     parser.add_argument(
         "--halation-intensity",
         type=float,
-        default=0.0,
-        help="Strength of halation bloom (0.0 disables).",
+        help="Override strength of halation bloom (0.0 disables; preset value when omitted).",
     )
     parser.add_argument(
         "--halation-radius",
         type=float,
-        default=18.0,
-        help="Radius of the halation blur kernel when enabled.",
+        help="Override radius of the halation blur kernel when enabled (preset value when omitted).",
     )
     parser.add_argument(
         "--halation-threshold",
