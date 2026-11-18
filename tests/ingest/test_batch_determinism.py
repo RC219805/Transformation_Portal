@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +118,9 @@ def test_failed_rerun_keeps_previous_outputs_consistent(tmp_path: Path) -> None:
 
     def failing_factory(input_path: Path) -> dict[str, Any]:
         if input_path.name == "b.jpg":
+            spool = list(output_dir.glob(".ingest-*"))
+            assert len(spool) == 1
+            assert (spool[0] / "0").is_file()
             raise RuntimeError("exiftool extraction failed")
         return good_factory(input_path)
 
@@ -125,6 +132,7 @@ def test_failed_rerun_keeps_previous_outputs_consistent(tmp_path: Path) -> None:
         on_disk = (output_dir / item["normalized_json_relpath"]).read_bytes()
         assert hashlib.sha256(on_disk).hexdigest() == item["normalized_json_sha256"]
     assert sorted(path.name for path in output_dir.rglob("*.tmp")) == []
+    assert not list(output_dir.glob(".ingest-*"))
 
 
 def test_failed_write_withdraws_previous_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,16 +147,46 @@ def test_failed_write_withdraws_previous_manifest(tmp_path: Path, monkeypatch: p
     run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
     (input_dir / "a.jpg").write_bytes(b"a2-changed")
 
-    def failing_write(output_path: Path, data: bytes) -> Path:
+    def failing_write(_source: Path, output_path: Path) -> Path:
         raise OSError(f"disk full writing {output_path.name}")
 
-    monkeypatch.setattr(batch_module, "atomic_write_bytes", failing_write, raising=False)
-    monkeypatch.setattr(Path, "write_bytes", lambda self, data: failing_write(self, data))
+    monkeypatch.setattr(batch_module.shutil, "copyfile", failing_write)
 
     with pytest.raises(OSError, match="disk full"):
         run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
 
     assert not (output_dir / BATCH_MANIFEST_FILENAME).exists()
+    assert not list(output_dir.glob(".ingest-*"))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file creation modes")
+def test_batch_respects_umask_and_preserves_private_manifest_on_replacement(tmp_path: Path) -> None:
+    source = tmp_path / "in"
+    source.mkdir()
+    (source / "a.jpg").write_bytes(b"a")
+    output = tmp_path / "shared"
+    output.mkdir(mode=0o755)
+    script = """
+import os
+import sys
+from pathlib import Path
+
+from transformation_portal.ingest.batch import run_ingest_batch
+
+source, output = map(Path, sys.argv[1:3])
+os.umask(int(sys.argv[3], 8))
+run_ingest_batch(input_dir=source, output_dir=output, ingest_payload_factory=lambda path: {"name": path.name})
+"""
+    first = output / "normalized" / "a.jpg.normalized.json"
+    manifest = output / BATCH_MANIFEST_FILENAME
+    subprocess.run([sys.executable, "-c", script, str(source), str(output), "077"], check=True)
+    assert stat.S_IMODE(first.stat().st_mode) == stat.S_IMODE(manifest.stat().st_mode) == 0o600
+
+    (source / "b.jpg").write_bytes(b"b")
+    subprocess.run([sys.executable, "-c", script, str(source), str(output), "022"], check=True)
+    assert _load_manifest(manifest)["item_count"] == 2
+    assert stat.S_IMODE(first.stat().st_mode) == stat.S_IMODE(manifest.stat().st_mode) == 0o600
+    assert stat.S_IMODE((output / "normalized" / "b.jpg.normalized.json").stat().st_mode) == 0o644
 
 
 def test_compute_batch_root_sha256_is_order_independent() -> None:

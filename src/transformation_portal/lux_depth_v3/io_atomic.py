@@ -341,7 +341,12 @@ def atomic_write_evidence_pair(
 
 @contextmanager
 def atomic_temp_file(
-    output_path: Path, suffix: str = ".tmp", prefix: str = ".tmp_", create_file: bool = False
+    output_path: Path,
+    suffix: str = ".tmp",
+    prefix: str = ".tmp_",
+    create_file: bool = False,
+    *,
+    new_file_mode: int | None = _DEFAULT_NEW_FILE_MODE,
 ) -> Generator[Path, None, None]:
     """Context manager for atomic temp file creation.
 
@@ -354,6 +359,8 @@ def atomic_temp_file(
         prefix: Temp file prefix (default: ".tmp_")
         create_file: If True, pre-create file with mkstemp (for FD-based writers).
                      If False, generate unique path only (for path-based writers).
+        new_file_mode: Mode for a new destination. None preserves the temporary
+            file's creation mode, including the umask applied by a path writer.
 
     Yields:
         Path to temporary file (may or may not exist yet)
@@ -377,7 +384,10 @@ def atomic_temp_file(
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    destination_mode = _destination_file_mode(output_path)
+    try:
+        destination_mode = stat.S_IMODE(output_path.stat().st_mode)
+    except FileNotFoundError:
+        destination_mode = new_file_mode
 
     if create_file:
         # Pre-create file with mkstemp (for FD-based or direct file access)
@@ -390,8 +400,8 @@ def atomic_temp_file(
 
             yield temp_path
 
-            # Preserve an existing mode or use the fixed new-file policy.
-            os.chmod(temp_path, destination_mode)
+            if destination_mode is not None:
+                os.chmod(temp_path, destination_mode)
             # Persist bytes and mode before the rename, and the rename after.
             _fsync_file(temp_path)
 
@@ -407,7 +417,7 @@ def atomic_temp_file(
             raise
     else:
         # Generate unique temp path without creating file
-        # The caller creates the file; its mode is normalized before publication.
+        # The caller creates the file before publication.
         import uuid
 
         temp_name = f"{prefix}{uuid.uuid4().hex}{suffix}"
@@ -418,7 +428,8 @@ def atomic_temp_file(
 
             # Atomic rename on success (temp_path should exist by now)
             if temp_path.exists():
-                os.chmod(temp_path, destination_mode)
+                if destination_mode is not None:
+                    os.chmod(temp_path, destination_mode)
                 # Persist bytes and mode before the rename, and the rename after.
                 _fsync_file(temp_path)
                 os.replace(temp_path, output_path)

@@ -4,6 +4,10 @@ Note: These tests assume the package is installed in development mode.
 Run `pip install -e .` from the repository root before running tests.
 """
 
+import os
+import stat
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -306,6 +310,26 @@ def test_save_image_failure_keeps_existing_file(tmp_path):
 
     assert target.read_bytes() == b"previous"
     assert [p.name for p in tmp_path.iterdir()] == ["out.png"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file creation modes")
+def test_save_image_respects_umask_in_shared_directory(tmp_path):
+    target = tmp_path / "out.png"
+    script = """
+import os
+import sys
+
+from PIL import Image
+
+from transformation_portal.utils.image_utils import save_image
+
+os.umask(0o077)
+save_image(Image.new("RGB", (2, 2)), sys.argv[1])
+"""
+    subprocess.run([sys.executable, "-c", script, str(target)], check=True)
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    with Image.open(target) as image:
+        assert image.size == (2, 2)
 
 
 class TestFitSizeWithin:

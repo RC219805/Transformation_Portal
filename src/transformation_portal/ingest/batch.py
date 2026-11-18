@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
+import stat
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..lux_depth_v3.io_atomic import atomic_write_bytes, durable_unlink
+from ..lux_depth_v3.io_atomic import atomic_temp_file, durable_unlink, publication_lock
 from .normalize_machine_json import DEFAULT_NORMALIZATION_PROFILE, canonical_json_bytes, normalize_machine_payload
 from .provenance import capture_provenance
 
@@ -136,55 +139,61 @@ def run_ingest_batch(
 
     inputs = discover_batch_inputs(input_dir, recursive=recursive)
     items: list[dict[str, str]] = []
-    # Every input is ingested and normalized before anything is written, so a
-    # failing ingest leaves a previous run's outputs untouched and consistent.
-    pending_writes: list[tuple[Path, bytes]] = []
+    # Keep only paths and digests in memory. Until all inputs have been staged,
+    # a failed ingest leaves the prior manifest and its outputs untouched.
+    with tempfile.TemporaryDirectory(prefix=".ingest-", dir=output_dir) as staging_dir:
+        spool = Path(staging_dir)
+        pending_writes: list[tuple[Path, Path]] = []
+        for input_path in inputs:
+            relative_path = input_path.relative_to(input_dir)
+            raw_payload = ingest_fn(input_path)
+            if not isinstance(raw_payload, Mapping):
+                raise TypeError(
+                    "ingest_payload_factory must return"
+                    " a mapping payload, got "
+                    f"{type(raw_payload).__name__}"
+                    f" for {input_path}"
+                )
 
-    for input_path in inputs:
-        relative_path = input_path.relative_to(input_dir)
-        raw_payload = ingest_fn(input_path)
-        if not isinstance(raw_payload, Mapping):
-            raise TypeError(
-                "ingest_payload_factory must return"
-                " a mapping payload, got "
-                f"{type(raw_payload).__name__}"
-                f" for {input_path}"
+            normalized_payload = normalize_machine_payload(dict(raw_payload), profile=profile)
+            normalized_bytes = canonical_json_bytes(normalized_payload)
+            normalized_sha256 = hashlib.sha256(normalized_bytes).hexdigest()
+            normalized_relpath = Path("normalized") / _normalized_relpath(relative_path)
+            staged_path = spool / str(len(items))
+            staged_path.write_bytes(normalized_bytes)
+            pending_writes.append((staged_path, output_dir / normalized_relpath))
+
+            items.append(
+                {
+                    "relative_path": relative_path.as_posix(),
+                    "normalized_json_relpath": normalized_relpath.as_posix(),
+                    "normalized_json_sha256": normalized_sha256,
+                }
             )
 
-        normalized_payload = normalize_machine_payload(
-            dict(raw_payload),
-            profile=profile,
-        )
-        normalized_bytes = canonical_json_bytes(normalized_payload)
-        normalized_sha256 = hashlib.sha256(normalized_bytes).hexdigest()
+        items.sort(key=lambda item: item["relative_path"])
+        manifest = {
+            "schema": BATCH_MANIFEST_SCHEMA,
+            "normalization_profile": profile,
+            "item_count": len(items),
+            "items": items,
+            "batch_root_sha256": compute_batch_root_sha256(items, profile=profile),
+        }
+        staged_manifest = spool / "manifest"
+        staged_manifest.write_bytes(canonical_json_bytes(manifest))
 
-        normalized_relpath = Path("normalized") / _normalized_relpath(relative_path)
-        pending_writes.append((output_dir / normalized_relpath, normalized_bytes))
-
-        items.append(
-            {
-                "relative_path": relative_path.as_posix(),
-                "normalized_json_relpath": normalized_relpath.as_posix(),
-                "normalized_json_sha256": normalized_sha256,
-            }
-        )
-
-    items = sorted(items, key=lambda item: item["relative_path"])
-    batch_root_sha256 = compute_batch_root_sha256(items, profile=profile)
-    manifest = {
-        "schema": BATCH_MANIFEST_SCHEMA,
-        "normalization_profile": profile,
-        "item_count": len(items),
-        "items": items,
-        "batch_root_sha256": batch_root_sha256,
-    }
-
-    manifest_path = output_dir / manifest_filename
-    # Withdraw the previous manifest before rewriting the files it describes: if
-    # a write fails below, no manifest claims hashes that no longer match disk.
-    durable_unlink(manifest_path)
-    for normalized_output_path, normalized_bytes in pending_writes:
-        normalized_output_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(normalized_output_path, normalized_bytes)
-    atomic_write_bytes(manifest_path, canonical_json_bytes(manifest))
+        manifest_path = output_dir / manifest_filename
+        with publication_lock(manifest_path):
+            try:
+                manifest_mode = stat.S_IMODE(manifest_path.stat().st_mode)
+            except FileNotFoundError:
+                manifest_mode = None
+            # A failed publication must leave no manifest attesting to a mix
+            # of old and new bytes. Publish its replacement only after the data.
+            durable_unlink(manifest_path)
+            for staged_path, destination in pending_writes:
+                with atomic_temp_file(destination, new_file_mode=None) as temp_path:
+                    shutil.copyfile(staged_path, temp_path)
+            with atomic_temp_file(manifest_path, new_file_mode=manifest_mode) as temp_path:
+                shutil.copyfile(staged_manifest, temp_path)
     return manifest

@@ -157,7 +157,7 @@ def atomic_output_path(path: Union[str, Path]) -> ContextManager[Path]:
     and removes the temporary file; parent directories are created when missing.
     """
     destination = Path(path)
-    return atomic_temp_file(destination, suffix=destination.suffix, prefix=f".{destination.stem}.")
+    return atomic_temp_file(destination, suffix=destination.suffix, prefix=f".{destination.stem}.", new_file_mode=None)
 
 
 def _stem_collision_key(stem: str) -> str:
