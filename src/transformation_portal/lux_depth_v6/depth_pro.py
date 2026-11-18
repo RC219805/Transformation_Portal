@@ -41,7 +41,7 @@ from transformation_portal.lux_depth_v5.evidence import _array
 from . import depth_pro_backend as backend
 from .color import GradeRecipe, RenderRecipe
 from .depth_pro_products import model_input_bytes, native_image_products
-from .evidence import VerifiedGradeEvidence
+from .evidence import MAX_COMPLETION_BYTES, VerifiedGradeEvidence, decode_completion, encode_completion
 from .pipeline import LuxDepthV6Result
 from .plan import MAX_PLAN_BYTES, OutputLimits, digest
 from .source import SourceLimits
@@ -483,7 +483,7 @@ def run(prepared: PreparedNativeDepthPro, *, cancellation: Callable[[], bool] | 
             ):
                 raise ValueError("Depth Pro runtime changed during execution")
             _verify_artifacts(root, plan, prepared.input_root, records, check, completed=False)
-            evidence = canonicalize_json(
+            evidence = encode_completion(
                 {
                     "schema": EVIDENCE_SCHEMA,
                     "plan_sha256": plan.sha256,
@@ -621,8 +621,8 @@ def verify(
             guarded = payload
         check = _guard(guarded, cancellation)
         check()
-        evidence_raw, evidence_record = snapshot(root, root / "evidence.json", maximum_bytes=MAX_PLAN_BYTES)
-        evidence = decode_bounded_json_object(evidence_raw)
+        evidence_raw, evidence_record = snapshot(root, root / "evidence.json", maximum_bytes=MAX_COMPLETION_BYTES)
+        evidence = decode_completion(evidence_raw)
         if (
             set(evidence) != {"schema", "plan_sha256", "artifacts", "input_count", "production_acceptance"}
             or evidence["schema"] != EVIDENCE_SCHEMA

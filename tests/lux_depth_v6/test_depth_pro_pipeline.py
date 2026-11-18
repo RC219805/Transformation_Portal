@@ -355,3 +355,25 @@ def test_native_original_aliases_fail_closed(native_case, link):
         alias.hardlink_to(source)
     with pytest.raises((ValueError, OSError, ArtifactEvidenceError)):
         native.prepare(native_case)
+
+
+def test_native_completion_uses_the_shared_completion_bound(native_case, monkeypatch):
+    """LN-2: Depth Pro completion is written and read under the V6 completion bound, not the 1 MiB plan decoder."""
+    from transformation_portal.lux_depth_v6 import evidence
+
+    result = native.run(native.prepare(native_case))
+    seen = []
+    decode = native.decode_completion
+
+    def spy(raw):
+        seen.append(raw)
+        return decode(raw)
+
+    monkeypatch.setattr(native, "decode_completion", spy)
+    native.verify(result.output_root, source_root=native_case.input_dir)
+    assert seen == [result.evidence_path.read_bytes()]
+    monkeypatch.setattr(evidence, "MAX_COMPLETION_BYTES", result.evidence_path.stat().st_size - 1)
+    output = native_case.output_dir.with_name("refused")
+    with pytest.raises(ValueError, match="completion evidence exceeds its byte limit"):
+        native.run(native.prepare(replace(native_case, output_dir=output)))
+    assert not (output / "evidence.json").exists()
