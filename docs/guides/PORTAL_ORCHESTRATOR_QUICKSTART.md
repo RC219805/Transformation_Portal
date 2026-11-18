@@ -157,6 +157,7 @@ disagreements between HEAD metadata and GET content report `unavailable`.
 
 - `GET /ready` and `GET /healthz` are liveness probes. They tell you the service answered, not that a given pipeline is dispatchable.
 - `GET /v1/readiness` is the execution-readiness contract. It reports per-pipeline `ready`, `degraded`, or `blocked` state plus `missing_prerequisites`, canonical command mapping, runner details, and safe operator notes.
+- `GET /v1/readiness` needs no API key, but when `TP_API_KEY` is configured a caller without a valid key gets the matrix with host paths removed: `runner_details.python_executable`, `runner_details.script_path` and `runner_details.command` are omitted, and the DA3 canary runtime note does not name the runtime path. Send the key to see them.
 - `lux-depth-v3` reports `base` readiness and a separate `canary_status`; canary unavailability does not block the safe local execution lane.
 - `archive-gate-a` is normally `degraded` until an archive index is supplied.
 - `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.

@@ -177,6 +177,10 @@ from transformation_portal.portal.job_artifacts import (
     JobRunMetadata,
 )
 from transformation_portal.portal.photographic_review_access import AppReviewAccess, forget_review_for_job
+from transformation_portal.portal.readiness_redaction import (
+    DA3_CANARY_RUNTIME_NOTE_PREFIX,
+    redact_pipeline_readiness_host_details,
+)
 from transformation_portal.portal.sam2_checkpoint_security import (
     ManagedSam2CheckpointValidationResult,
     _ManagedSam2BoundedChecksumCache,
@@ -2615,7 +2619,7 @@ def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any
             )
         )
     if canary_status == "ready":
-        notes.append(f"Repo-local DA3 canary runtime resolved at {canary_runtime}.")
+        notes.append(f"{DA3_CANARY_RUNTIME_NOTE_PREFIX}{canary_runtime}.")
     elif canary_status == "degraded":
         notes.append("ML libraries are present in the active environment, but no isolated DA3 runtime contract was found.")
     else:
@@ -9845,6 +9849,10 @@ async def readiness(request: Request) -> JSONResponse:
         "archive-gate-c",
     ):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
+    if not _has_valid_api_key(request):
+        # The route is public; interpreter, script and runtime paths are for
+        # authenticated operators only.
+        pipeline_data = redact_pipeline_readiness_host_details(pipeline_data)
 
     audit_response = await _record_pilot_audit(
         action="readiness",
