@@ -667,6 +667,42 @@ class TestStageExecution:
         with Image.open(result.output_path) as processed:
             assert processed.width >= 64  # Should be upscaled
 
+    def test_upscaling_4k_fallback_never_shrinks(self, pipeline_module, monkeypatch):
+        """D-22: an image already at target width must not be downscaled to fit."""
+        monkeypatch.setattr(pipeline_module, "HAS_4K_PIPELINE", False)
+        pipeline = pipeline_module.UnifiedPipeline(
+            {"name": "Upscale Test", "stages": ["upscaling_4k"], "quality_feedback": {"enabled": False}}
+        )
+        wide = Image.new("RGB", (4000, 2000))
+        assert pipeline._apply_upscaling_4k(wide, {}).size == (4000, 2000)
+        small = Image.new("RGB", (1920, 1080))
+        assert pipeline._apply_upscaling_4k(small, {}).size == (3840, 2160)
+
+    def test_depth_estimation_does_not_retain_depth_maps(self, pipeline_module, monkeypatch):
+        """D-23: the depth stage must not keep one depth map per processed image."""
+        calls = []
+
+        class StubDepthProcessor:
+            def __init__(self, device="cpu"):
+                pass
+
+            def estimate_depth(self, image):
+                calls.append(image.size)
+                return np.zeros((image.height, image.width), np.float32)
+
+        depth_module = _create_stub_module(
+            "transformation_portal.depth.depth_processor", {"DepthProcessor": StubDepthProcessor}
+        )
+        monkeypatch.setitem(sys.modules, "transformation_portal.depth.depth_processor", depth_module)
+        pipeline = pipeline_module.UnifiedPipeline(
+            {"name": "Depth Test", "stages": ["depth_estimation"], "quality_feedback": {"enabled": False}}
+        )
+        images = [Image.new("RGB", (32, 24), (i, i, i)) for i in range(3)]
+        for image in images:
+            assert pipeline._apply_depth_estimation(image, {}) is image
+        assert calls == [(32, 24)] * 3
+        assert not hasattr(pipeline, "_depth_maps")
+
     def test_unknown_stage_skipped(self, pipeline_module, sample_input_image, caplog):
         """Test unknown stage is skipped with warning logged."""
         # Create a minimal recipe with a known stage

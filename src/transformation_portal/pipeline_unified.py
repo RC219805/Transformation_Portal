@@ -795,6 +795,10 @@ class UnifiedPipeline:
             scale_w = target_w / current_w
             scale_h = target_h / current_h
             scale = min(scale_w, scale_h)
+            # Upscaling only: an image already at the target along one axis
+            # (e.g. 4000x2000 for 3840x2160) must not be shrunk to fit.
+            if scale <= 1.0:
+                return image
 
             new_w = int(current_w * scale)
             new_h = int(current_h * scale)
@@ -949,13 +953,10 @@ class UnifiedPipeline:
             if not hasattr(self, "_depth_processor"):
                 self._depth_processor = DepthProcessor(device=self.device)
 
-            # Generate depth map and apply depth-aware enhancements
-            depth_map = self._depth_processor.estimate_depth(image)
-
-            # Store depth map for potential use in later stages
-            if not hasattr(self, "_depth_maps"):
-                self._depth_maps = {}
-            self._depth_maps[id(image)] = depth_map
+            # Generate the depth map. No later stage consumes it, so it is not
+            # retained: keeping one HxW float32 map per image for the pipeline's
+            # lifetime (keyed by a reusable id()) only leaked memory.
+            self._depth_processor.estimate_depth(image)
 
             log.info("    ✓ Depth Estimation (depth-aware processing enabled)")
             return image
