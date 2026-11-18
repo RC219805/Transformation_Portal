@@ -364,8 +364,12 @@ class NotImplementedVisitor(ast.NodeVisitor):
         if isinstance(exc, ast.Call):
             if isinstance(exc.func, ast.Name) and exc.func.id == "NotImplementedError":
                 is_not_implemented = True
-                if exc.args and isinstance(exc.args[0], ast.Constant):
-                    message = str(exc.args[0].value)
+                if exc.args:
+                    first_arg = exc.args[0]
+                    # Non-literal messages (f-strings, concatenation, variables) still
+                    # carry a message; render their source so they are never mistaken
+                    # for a bare abstract stub.
+                    message = str(first_arg.value) if isinstance(first_arg, ast.Constant) else ast.unparse(first_arg)
 
         if is_not_implemented:
             is_abstract = _is_abstract_method_pattern(message)

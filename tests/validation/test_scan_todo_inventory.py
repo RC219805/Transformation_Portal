@@ -281,6 +281,36 @@ class TestAbstractMethodPatterns:
         assert items[0].has_governance_ref is False  # Not auto-governed (actionable message)
         assert "Need to implement this feature" in items[0].message
 
+    def test_non_literal_message_is_not_auto_governed(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """f-string / concatenated messages are messages, not bare abstract stubs (T-06)."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+
+        test_file = tmp_path / "test_non_literal.py"
+        test_file.write_text(dedent("""
+            def feature(kind):
+                raise NotImplementedError(f"export for {kind} is not implemented yet")
+
+            def other(msg):
+                raise NotImplementedError("pending " + msg)
+
+            def tracked(kind):
+                raise NotImplementedError(f"(ADR-044) export for {kind}")
+
+            class Base:
+                def run(self, name):
+                    raise NotImplementedError(f"Subclasses must implement {name}")
+        """).strip())
+
+        items, errors = scanner_module._scan_python_file(test_file)
+
+        assert errors == []
+        governed = {item.lineno: item.has_governance_ref for item in items}
+        assert governed == {2: False, 5: False, 8: True, 12: True}
+        assert "export for {kind} is not implemented yet" in items[0].message
+        assert "pending" in items[1].message
+
 
 # ============================================================================
 # TEST: Error Surfacing
