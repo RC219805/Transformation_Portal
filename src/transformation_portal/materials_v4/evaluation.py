@@ -300,7 +300,10 @@ def _confidence_metrics(records: list[dict], settings: dict) -> tuple[dict, dict
         return unavailable, unavailable.copy()
     confidence = np.array([record["confidence"] for record in candidates], dtype=np.float64)
     correct = np.array([record["predicted_label"] == record["true_label"] for record in candidates], dtype=np.float64)
-    bin_ids = np.minimum((confidence * settings["calibration_bins"]).astype(np.int64), settings["calibration_bins"] - 1)
+    # Assign membership from the same edges the report declares (index / bins); multiplying by the bin
+    # count misplaces boundary confidences such as 0.29 * 100 == 28.999999999999996 into the bin below.
+    upper_edges = np.arange(1, settings["calibration_bins"], dtype=np.int64) / settings["calibration_bins"]
+    bin_ids = np.searchsorted(upper_edges, confidence, side="right")
     bins, ece = [], 0.0
     for index in range(settings["calibration_bins"]):
         included = bin_ids == index
