@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -474,11 +475,7 @@ class QualityMetrics:
 
 def compute_lpips(image: Tensor, reference: Tensor, device: torch.device) -> float:
     """Compute LPIPS score."""
-    substrate = type(
-        "obj",
-        (object,),
-        {"get_device": lambda: device, "to_device": lambda x: x.to(device)},
-    )()
+    substrate = SimpleNamespace(get_device=lambda: device, to_device=lambda x: x.to(device))
     metrics = QualityMetrics(substrate, cache_models=True)
     score = metrics.compute_lpips(image, reference)
     return score.score
@@ -495,7 +492,7 @@ def compute_psnr(image: Tensor, reference: Tensor) -> float:
 def compute_ssim(image: Tensor, reference: Tensor) -> float:
     """Compute SSIM score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_ssim(image, reference)
     return score.score
@@ -504,7 +501,7 @@ def compute_ssim(image: Tensor, reference: Tensor) -> float:
 def compute_brisque(image: Tensor) -> float:
     """Compute BRISQUE score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_brisque(image)
     return score.score
@@ -513,7 +510,7 @@ def compute_brisque(image: Tensor) -> float:
 def compute_niqe(image: Tensor) -> float:
     """Compute NIQE score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_niqe(image)
     return score.score

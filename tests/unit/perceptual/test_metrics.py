@@ -231,3 +231,47 @@ class TestQualityMetricsComputeMse:
         b = torch.ones(1, 3, 16, 16)
         result = metrics.compute_mse(a, b)
         assert result.score > 0
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience wrappers (regression: M-04)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.ml
+@pytest.mark.regression
+class TestModuleConvenienceWrappers:
+    """The wrappers build their own substrate; it must accept a bound call."""
+
+    def test_compute_ssim_identical_is_one(self):
+        from transformation_portal.perceptual.metrics import compute_ssim
+
+        img = _rand_tensor((1, 3, 32, 32))
+        assert compute_ssim(img, img.clone()) == pytest.approx(1.0, abs=1e-4)
+
+    def test_compute_ssim_different_below_one(self):
+        from transformation_portal.perceptual.metrics import compute_ssim
+
+        torch.manual_seed(0)
+        assert compute_ssim(_rand_tensor(), _rand_tensor()) < 1.0
+
+    def test_compute_brisque_returns_finite_float(self):
+        from transformation_portal.perceptual.metrics import compute_brisque
+
+        score = compute_brisque(_rand_tensor((3, 32, 32)))
+        assert isinstance(score, float)
+        assert math.isfinite(score)
+
+    def test_compute_niqe_returns_finite_float(self):
+        from transformation_portal.perceptual.metrics import compute_niqe
+
+        score = compute_niqe(_rand_tensor((3, 32, 32)))
+        assert isinstance(score, float)
+        assert math.isfinite(score)
+
+    def test_compute_lpips_identical_is_zero(self):
+        from transformation_portal.perceptual.metrics import compute_lpips
+
+        img = _rand_tensor((1, 3, 32, 32))
+        score = compute_lpips(img, img.clone(), torch.device("cpu"))
+        assert score == pytest.approx(0.0, abs=1e-4)
