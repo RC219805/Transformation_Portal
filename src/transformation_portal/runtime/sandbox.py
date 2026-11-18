@@ -170,6 +170,11 @@ class Sandbox:
         # Node-specific workspace
         self.workspace = config.workspace_root / node_id
         self.workspace.mkdir(parents=True, exist_ok=True)
+        # Real (symlink-free) roots used for confinement checks. Lexical
+        # ``relative_to`` checks alone let ``..`` components, absolute paths
+        # and symlinks escape the workspace.
+        self._workspace_real = self.workspace.resolve()
+        self._cas_objects_real = Path(cas.objects_dir).resolve()
 
         # Scoped FS contexts for different trust levels
         self._user_ctx = FSContext(mode="user", base_dir=self.workspace)
@@ -185,6 +190,51 @@ class Sandbox:
             node_id,
             self.workspace,
         )
+
+    # -----------------------------
+    # WORKSPACE CONFINEMENT
+    # -----------------------------
+    @staticmethod
+    def _validated_parts(rel_path: str) -> List[str]:
+        """Split a workspace-relative path and reject escaping components.
+
+        Absolute paths, drive-qualified paths, empty / ``.`` / ``..``
+        components and NUL bytes are rejected. Directory components must
+        additionally be safe names (the same rule ``write`` applies).
+        """
+        text = str(rel_path)
+        if not text or "\x00" in text:
+            raise SandboxError(f"Invalid workspace path: {rel_path!r}")
+        normalized = text.replace("\\", "/")
+        if normalized.startswith("/") or (len(normalized) >= 2 and normalized[1] == ":"):
+            raise SandboxError(f"Path escapes workspace: {rel_path}")
+        parts = normalized.split("/")
+        for part in parts:
+            if part in ("", ".", ".."):
+                raise SandboxError(f"Path escapes workspace: {rel_path}")
+        for part in parts[:-1]:
+            try:
+                validate_safe_name(part)
+            except PathSafetyError as e:
+                raise SandboxError(f"Invalid path component: {e}")
+        return parts
+
+    def _confined_target(self, parts: List[str], *, allow_cas: bool) -> Path:
+        """Resolve ``parts`` under the workspace and fail closed on escape.
+
+        The fully resolved path must stay inside the real workspace, or,
+        when ``allow_cas`` is set, inside the CAS objects directory (inputs
+        materialised as symlinks into CAS remain readable).
+        """
+        try:
+            resolved = self._workspace_real.joinpath(*parts).resolve()
+        except (OSError, RuntimeError) as e:  # symlink loops
+            raise SandboxError(f"Cannot resolve workspace path {'/'.join(parts)}: {e}")
+        if resolved.is_relative_to(self._workspace_real):
+            return resolved
+        if allow_cas and resolved.is_relative_to(self._cas_objects_real):
+            return resolved
+        raise SandboxError(f"Path escapes workspace: {'/'.join(parts)}")
 
     # -----------------------------
     # CAS-ONLY IO ENFORCEMENT
@@ -205,18 +255,18 @@ class Sandbox:
         Raises:
             SandboxError: If SHA is invalid or CAS object not found
         """
-        # Validate rel_path components
-        parts = rel_path.replace("\\", "/").split("/")
-        for part in parts[:-1]:  # Validate directory parts
-            if part:
-                try:
-                    validate_safe_name(part)
-                except PathSafetyError as e:
-                    raise SandboxError(f"Invalid path component: {e}")
-
-        # Construct target path
-        target = self.workspace / rel_path
+        # Validate every component, then confine the (real) parent directory.
+        # The final component itself may be a symlink left by an earlier
+        # materialisation: CAS publishes by renaming over it, which replaces
+        # the link rather than writing through it.
+        parts = self._validated_parts(rel_path)
+        self._confined_target(parts[:-1], allow_cas=False)
+        target = self.workspace.joinpath(*parts)
         target.parent.mkdir(parents=True, exist_ok=True)
+        # Re-check after creating directories: mkdir follows symlinks.
+        self._confined_target(parts[:-1], allow_cas=False)
+        if target.is_dir() and not target.is_symlink():
+            raise SandboxError(f"Cannot materialize over a directory: {rel_path}")
 
         try:
             self.cas.materialize(sha, target, use_symlink=True)
@@ -249,17 +299,27 @@ class Sandbox:
         Raises:
             SandboxError: If path is outside workspace or file doesn't exist
         """
-        # Ensure path is within workspace
-        try:
-            path.relative_to(self.workspace)
-        except ValueError:
+        # Ensure path is within workspace (lexically and after resolution)
+        rel: Optional[Path] = None
+        for root in (self.workspace, self._workspace_real):
+            try:
+                rel = Path(path).relative_to(root)
+                break
+            except ValueError:
+                continue
+        if rel is None:
             raise SandboxError(f"Cannot persist file outside workspace: {path}")
+        try:
+            real_path = self._confined_target(self._validated_parts(rel.as_posix()), allow_cas=True)
+        except SandboxError:
+            raise SandboxError(f"Cannot persist file outside workspace: {path}")
+        path = self.workspace / rel
 
-        if not path.exists():
+        if not real_path.is_file():
             raise SandboxError(f"File does not exist: {path}")
 
         try:
-            obj = self.cas.add_file(path)
+            obj = self.cas.add_file(real_path)
         except CASError as e:
             raise SandboxError(f"Failed to persist output: {e}")
 
@@ -307,13 +367,7 @@ class Sandbox:
         Returns:
             File contents as string
         """
-        path = self.workspace / rel_path
-
-        # Verify within workspace
-        try:
-            path.relative_to(self.workspace)
-        except ValueError:
-            raise SandboxError(f"Path escapes workspace: {rel_path}")
+        path = self._confined_target(self._validated_parts(rel_path), allow_cas=True)
 
         content = self.fs.read_text(path)
         self.metrics.bytes_read += len(content.encode("utf-8"))
@@ -328,12 +382,7 @@ class Sandbox:
         Returns:
             File contents as bytes
         """
-        path = self.workspace / rel_path
-
-        try:
-            path.relative_to(self.workspace)
-        except ValueError:
-            raise SandboxError(f"Path escapes workspace: {rel_path}")
+        path = self._confined_target(self._validated_parts(rel_path), allow_cas=True)
 
         content = self.fs.read_bytes(path)
         self.metrics.bytes_read += len(content)

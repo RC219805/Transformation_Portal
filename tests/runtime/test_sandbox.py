@@ -164,6 +164,95 @@ class TestSandbox:
 
 
 @pytest.mark.security
+class TestSandboxWorkspaceConfinement:
+    """Workspace confinement must hold after resolution, not just lexically (T-03)."""
+
+    @pytest.fixture
+    def env(self, tmp_path: Path):
+        cas = ArtifactStore(tmp_path / "cas")
+        config = SandboxConfig(workspace_root=tmp_path / "ws", cas_root=tmp_path / "cas")
+        victim = Sandbox("tenant_b_node", config, FSGuard(), cas)
+        (victim.workspace / "secret.txt").write_text("tenant-b private data")
+        outside = tmp_path / "outside_secret.txt"
+        outside.write_text("host file")
+        attacker = Sandbox("tenant_a_node", config, FSGuard(), cas)
+        return attacker, cas, outside
+
+    @pytest.mark.parametrize(
+        "rel_path",
+        [
+            "../tenant_b_node/secret.txt",
+            "../../outside_secret.txt",
+            "./../../outside_secret.txt",
+            "..\\..\\outside_secret.txt",
+            "",
+        ],
+    )
+    def test_read_rejects_dotdot_escape(self, env, rel_path: str) -> None:
+        attacker, _cas, _outside = env
+        with pytest.raises(SandboxError):
+            attacker.read(rel_path)
+        with pytest.raises(SandboxError):
+            attacker.read_bytes(rel_path)
+
+    def test_read_rejects_absolute_path(self, env) -> None:
+        attacker, _cas, outside = env
+        with pytest.raises(SandboxError):
+            attacker.read_bytes(str(outside))
+
+    def test_read_rejects_symlink_out_of_workspace(self, env) -> None:
+        attacker, _cas, outside = env
+        (attacker.workspace / "link.txt").symlink_to(outside)
+        (attacker.workspace / "linkdir").symlink_to(outside.parent, target_is_directory=True)
+        with pytest.raises(SandboxError):
+            attacker.read("link.txt")
+        with pytest.raises(SandboxError):
+            attacker.read_bytes("linkdir/outside_secret.txt")
+
+    def test_persist_output_rejects_dotdot_and_symlink_escape(self, env) -> None:
+        attacker, cas, outside = env
+        before = sorted(p.name for p in cas.objects_dir.rglob("*") if p.is_file())
+        with pytest.raises(SandboxError):
+            attacker.persist_output(attacker.workspace / ".." / ".." / "outside_secret.txt")
+        (attacker.workspace / "exfil.txt").symlink_to(outside)
+        with pytest.raises(SandboxError):
+            attacker.persist_output(attacker.workspace / "exfil.txt")
+        assert sorted(p.name for p in cas.objects_dir.rglob("*") if p.is_file()) == before
+
+    def test_materialize_input_rejects_absolute_and_dotdot_target(self, env, tmp_path: Path) -> None:
+        attacker, cas, _outside = env
+        obj = cas.add_bytes(b"attacker controlled bytes")
+        target = tmp_path / "important_host_file.cfg"
+        target.write_text("original")
+        for rel_path in (str(target), "../../important_host_file.cfg", "..", "sub/.."):
+            with pytest.raises(SandboxError):
+                attacker.materialize_input(obj.sha256, rel_path)
+        assert not target.is_symlink()
+        assert target.read_text() == "original"
+
+    def test_materialize_input_rejects_symlinked_directory(self, env, tmp_path: Path) -> None:
+        attacker, cas, _outside = env
+        obj = cas.add_bytes(b"payload")
+        escape_dir = tmp_path / "escape_dir"
+        escape_dir.mkdir()
+        (attacker.workspace / "inputs").symlink_to(escape_dir, target_is_directory=True)
+        with pytest.raises(SandboxError):
+            attacker.materialize_input(obj.sha256, "inputs/x.bin")
+        assert list(escape_dir.iterdir()) == []
+
+    def test_materialized_input_stays_readable_and_rematerializable(self, env) -> None:
+        attacker, cas, _outside = env
+        first = cas.add_bytes(b"first")
+        second = cas.add_bytes(b"second")
+        path = attacker.materialize_input(first.sha256, "inputs/image.png")
+        assert path == attacker.workspace / "inputs" / "image.png"
+        assert attacker.read_bytes("inputs/image.png") == b"first"
+        attacker.materialize_input(second.sha256, "inputs/image.png")
+        assert attacker.read_bytes("inputs/image.png") == b"second"
+        assert attacker.persist_output(path) == second.sha256
+
+
+@pytest.mark.security
 class TestFSGuardIntegration:
     """Tests for FSGuard integration with sandbox."""
 
