@@ -209,6 +209,15 @@ class TestSandboxWorkspaceConfinement:
         with pytest.raises(SandboxError):
             attacker.read_bytes("linkdir/outside_secret.txt")
 
+    @pytest.mark.parametrize("rel_path", ["loop", "loop/missing/data.bin"])
+    def test_read_rejects_symlink_loop_as_unresolvable(self, env, rel_path: str) -> None:
+        attacker, _cas, _outside = env
+        (attacker.workspace / "loop").symlink_to("loop")
+        with pytest.raises(SandboxError, match="Cannot resolve workspace path"):
+            attacker.read(rel_path)
+        with pytest.raises(SandboxError, match="Cannot resolve workspace path"):
+            attacker.read_bytes(rel_path)
+
     def test_persist_output_rejects_dotdot_and_symlink_escape(self, env) -> None:
         attacker, cas, outside = env
         before = sorted(p.name for p in cas.objects_dir.rglob("*") if p.is_file())
