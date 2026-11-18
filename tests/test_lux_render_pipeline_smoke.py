@@ -150,3 +150,36 @@ def test_lux_render_batch_exits_nonzero_when_every_file_fails(monkeypatch, tmp_p
     assert result.exit_code == 1, result.output
     assert "all 2 file(s) failed" in (result.stdout or "") + (result.stderr or "")
     assert not list((tmp_path / "out").glob("*"))
+
+
+def test_lux_render_batch_same_stem_inputs_keep_separate_outputs(monkeypatch, tmp_path) -> None:
+    """M-02: kitchen.png and kitchen.jpg must not both write kitchen_lux.png."""
+    from PIL import Image
+
+    pipeline_module = importlib.import_module(PIPELINE_MODULE)
+
+    class _IdentityPipeline:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def enhance(self, **kwargs):
+            return kwargs["init_image"]
+
+    monkeypatch.setattr(pipeline_module, "_require_lux_render_runtime_dependencies", lambda: None)
+    monkeypatch.setattr(pipeline_module, "LuxuryRenderPipeline", _IdentityPipeline)
+    src = tmp_path / "in"
+    src.mkdir()
+    Image.new("RGB", (8, 8), color=(250, 250, 250)).save(src / "kitchen.jpg")
+    Image.new("RGB", (8, 8), color=(10, 10, 10)).save(src / "kitchen.png")
+    out = tmp_path / "out"
+
+    result = CliRunner().invoke(
+        pipeline_module.app,
+        ["--input-glob", f"{src / '*.jpg'},{src / '*.png'}", "--out", str(out), "--prompt", "luxury interior"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in out.iterdir()) == ["kitchen_lux.png", "kitchen_png_lux.png"]
+    with Image.open(out / "kitchen_lux.png") as bright, Image.open(out / "kitchen_png_lux.png") as dark:
+        assert bright.getpixel((0, 0))[0] > 200
+        assert dark.getpixel((0, 0))[0] < 50

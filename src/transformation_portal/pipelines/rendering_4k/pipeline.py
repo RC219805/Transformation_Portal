@@ -104,7 +104,14 @@ except ImportError:
 
 # Import internal utilities
 from ...core.security.model_lock import resolve_model_lock_revision
-from ...utils.image_utils import extract_output_metadata, load_image, np_to_pil, pil_to_np
+from ...utils.image_utils import (
+    OutputStemAllocator,
+    atomic_output_path,
+    extract_output_metadata,
+    load_image,
+    np_to_pil,
+    pil_to_np,
+)
 from .quality import GPUMemoryManager, QualityAssessor
 
 # isort: off
@@ -451,6 +458,8 @@ class Rendering4KPipeline:
         self,
         input_path: Union[str, Path],
         output_dir: Optional[Union[str, Path]] = None,
+        *,
+        output_stem: Optional[str] = None,
     ) -> ProcessingResult:
         """
         Process single image through complete pipeline.
@@ -458,6 +467,8 @@ class Rendering4KPipeline:
         Args:
             input_path: Path to input image
             output_dir: Output directory (optional)
+            output_stem: Base name of the output files (default: ``input_path.stem``);
+                batch processing passes a name no other input of the batch uses
 
         Returns:
             ProcessingResult with enhanced image and metadata
@@ -693,6 +704,7 @@ class Rendering4KPipeline:
                 Path(output_dir),
                 unified_metrics=unified_metrics,
                 source_metadata=source_metadata,
+                output_stem=output_stem,
             )
             logger.info(f"  Saved {len(output_paths)} files")
         stage_metrics.append(
@@ -997,14 +1009,17 @@ class Rendering4KPipeline:
         output_dir: Path,
         unified_metrics: Optional[UnifiedQualityMetrics] = None,
         source_metadata: Optional[Dict[str, Any]] = None,
+        output_stem: Optional[str] = None,
     ) -> Dict[str, Path]:
         """Save all output files.
 
         ``source_metadata`` (from :func:`extract_output_metadata`) carries the source
         ICC profile, DPI and EXIF onto the master TIFF (ICC + DPI) and delivery JPEG.
+        Files are named after ``output_stem`` (default ``input_path.stem``) and each is
+        written to a temporary sibling first, then moved into place with ``os.replace``.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
-        stem = input_path.stem
+        stem = output_stem or input_path.stem
         outputs = {}
         metadata = source_metadata or {}
 
@@ -1019,20 +1034,22 @@ class Rendering4KPipeline:
             if "dpi" in metadata:
                 tiff_kwargs["resolution"] = (float(metadata["dpi"][0]), float(metadata["dpi"][1]))
                 tiff_kwargs["resolutionunit"] = "INCH"
-            tifffile.imwrite(str(tiff_path), img_16bit, photometric="rgb", **tiff_kwargs)
+            with atomic_output_path(tiff_path) as temp_path:
+                tifffile.imwrite(str(temp_path), img_16bit, photometric="rgb", **tiff_kwargs)
             outputs["master_tiff"] = tiff_path
             logger.info(f"  Master TIFF: {tiff_path.name}")
 
         # Delivery JPEG
         if self.config.output.delivery_jpeg:
             jpeg_path = output_dir / f"{stem}_DELIVERY.jpg"
-            image.save(
-                jpeg_path,
-                quality=self.config.output.jpeg_quality,
-                progressive=self.config.output.jpeg_progressive,
-                optimize=True,
-                **metadata,
-            )
+            with atomic_output_path(jpeg_path) as temp_path:
+                image.save(
+                    temp_path,
+                    quality=self.config.output.jpeg_quality,
+                    progressive=self.config.output.jpeg_progressive,
+                    optimize=True,
+                    **metadata,
+                )
             outputs["delivery_jpeg"] = jpeg_path
             logger.info(f"  Delivery JPEG: {jpeg_path.name}")
 
@@ -1041,7 +1058,8 @@ class Rendering4KPipeline:
             depth_path = output_dir / f"{stem}_depth.png"
             depth_vis = (depth_map * 255).astype(np.uint8)
             depth_pil = Image.fromarray(depth_vis, mode="L")
-            depth_pil.save(depth_path)
+            with atomic_output_path(depth_path) as temp_path:
+                depth_pil.save(temp_path)
             outputs["depth_visualization"] = depth_path
             logger.info(f"  Depth Map: {depth_path.name}")
 
@@ -1057,7 +1075,7 @@ class Rendering4KPipeline:
             # Include unified metrics if available (RAG-indexable)
             if unified_metrics is not None:
                 report["unified_metrics"] = unified_metrics.to_dict()
-            with open(report_path, "w") as f:
+            with atomic_output_path(report_path) as temp_path, open(temp_path, "w") as f:
                 json.dump(report, f, indent=2, ensure_ascii=False, default=_json_default)
             outputs["quality_report"] = report_path
             logger.info(f"  Quality Report: {report_path.name}")
@@ -1065,7 +1083,7 @@ class Rendering4KPipeline:
         # Save unified metrics as separate RAG document if enabled
         if unified_metrics is not None and self.config.quality_feedback.rag_indexing_enabled:
             rag_path = output_dir / f"{stem}_unified_quality.json"
-            with open(rag_path, "w") as f:
+            with atomic_output_path(rag_path) as temp_path, open(temp_path, "w") as f:
                 json.dump(
                     unified_metrics.to_rag_document(),
                     f,
@@ -1096,6 +1114,9 @@ class Rendering4KPipeline:
             List of ProcessingResults
         """
         results = []
+        # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's outputs.
+        stem_allocator = OutputStemAllocator()
+        output_stems = [stem_allocator.claim(path) for path in input_paths]
 
         # Use tqdm if available, otherwise simple iteration
         if show_progress and HAS_TQDM and tqdm is not None:
@@ -1119,7 +1140,7 @@ class Rendering4KPipeline:
 
                 if show_progress and not HAS_TQDM:
                     logger.info(f"Processing {i+1}/{len(input_paths)}: {Path(path).name}")
-                result = self.process(path, output_dir)
+                result = self.process(path, output_dir, output_stem=output_stems[i])
                 results.append(result)
 
                 # Periodic cleanup every 5 images to prevent memory fragmentation

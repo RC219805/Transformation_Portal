@@ -119,6 +119,14 @@ The default batch pattern is `*.{jpg,jpeg,png,tif,tiff}`. OpenEXR (`.exr`) and
 other scene-referred HDR inputs are not supported: the loader rejects them with a
 `ValueError`, so convert them to a display-referred 16-bit TIFF first.
 
+Output files are named after the input stem (`kitchen.tif` → `kitchen_WEB_4K.jpg`).
+When two inputs of one batch share a stem, ignoring case (`kitchen.png` and
+`kitchen.tif`), the first keeps the plain name and each later one gets its
+extension appended (`kitchen_tif_WEB_4K.jpg`, then a short path digest if that is
+still taken), with a warning in the log, so no deliverable overwrites another.
+Every output is written to a temporary file next to its destination and moved into
+place, so an interrupted or failed save never leaves a truncated deliverable.
+
 `parallel_io` is opt-in for compatibility. It overlaps input loading and output
 writing for batch runs while preserving result ordering and per-image failure
 isolation. Keep it disabled when comparing against older timing baselines or

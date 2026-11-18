@@ -7,11 +7,19 @@ depth_tools.py, depth_pipeline/utils/image_utils.py).
 """
 
 import functools
+import hashlib
+import logging
+import threading
+import unicodedata
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, ContextManager, Dict, Union
 
 import numpy as np
 from PIL import Image
+
+from transformation_portal.lux_depth_v3.io_atomic import atomic_temp_file
+
+log = logging.getLogger(__name__)
 
 # Adobe Cube LUT Specification 1.0: LUT_3D_SIZE must lie in [2, 256].
 CUBE_LUT_3D_MIN_SIZE = 2
@@ -75,8 +83,75 @@ def save_image(img: Image.Image, path: Union[str, Path]) -> None:
         img: PIL Image to save
         path: Destination path
     """
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    img.save(path)
+    with atomic_output_path(path) as temp_path:
+        img.save(temp_path)
+
+
+def atomic_output_path(path: Union[str, Path]) -> ContextManager[Path]:
+    """Yield a temporary sibling of ``path`` that is moved onto it with ``os.replace``.
+
+    The temporary name keeps the destination suffix, so path-based writers (Pillow,
+    tifffile) infer the same format. A failed write leaves the destination untouched
+    and removes the temporary file; parent directories are created when missing.
+    """
+    destination = Path(path)
+    return atomic_temp_file(destination, suffix=destination.suffix, prefix=f".{destination.stem}.")
+
+
+def _stem_collision_key(stem: str) -> str:
+    """Case- and Unicode-normalised key: output names that differ only so collide on macOS."""
+    return unicodedata.normalize("NFC", unicodedata.normalize("NFC", stem).casefold())
+
+
+class OutputStemAllocator:
+    """Assign each distinct batch input an output stem no other input of the batch uses.
+
+    Output names are derived from ``input_path.stem``, so ``kitchen.png`` and
+    ``kitchen.tif`` (or ``a/kitchen.png`` and ``b/kitchen.png``) would write the same
+    deliverables and silently overwrite each other. The first input to claim a stem keeps
+    it unchanged; a later, different input whose stem collides (ignoring case) gets
+    ``<stem>_<ext>``, then ``<stem>_<ext>_<path digest>``, so only names that would collide
+    change. Claiming the same input again returns the same stem. Thread-safe.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._stem_by_input: Dict[str, str] = {}
+        self._input_by_key: Dict[str, str] = {}
+
+    def claim(self, input_path: Union[str, Path]) -> str:
+        """Return the output stem reserved for ``input_path`` in this batch."""
+        source = Path(input_path)
+        identity = str(source.resolve(strict=False))
+        with self._lock:
+            existing = self._stem_by_input.get(identity)
+            if existing is not None:
+                return existing
+            stem = source.stem
+            ext = source.suffix.lstrip(".").lower()
+            digest = hashlib.sha256(identity.encode("utf-8", "surrogateescape")).hexdigest()[:8]
+            candidates = [stem]
+            if ext:
+                candidates.append(f"{stem}_{ext}")
+            candidates.append(f"{candidates[-1]}_{digest}")
+            counter = 2
+            while True:
+                for candidate in candidates:
+                    key = _stem_collision_key(candidate)
+                    if key not in self._input_by_key:
+                        self._input_by_key[key] = identity
+                        self._stem_by_input[identity] = candidate
+                        if candidate != stem:
+                            log.warning(
+                                "Output name %r is already used by another input of this batch; "
+                                "writing outputs of %s as %r",
+                                stem,
+                                source,
+                                candidate,
+                            )
+                        return candidate
+                candidates = [f"{stem}_{ext or 'input'}_{digest}_{counter}"]
+                counter += 1
 
 
 def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:

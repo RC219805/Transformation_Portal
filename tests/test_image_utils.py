@@ -240,3 +240,44 @@ def test_extract_output_metadata_drops_non_rgb_icc_and_malformed_values():
 
     assert extract_output_metadata(img) == {}
     assert extract_output_metadata(Image.new("RGB", (4, 4))) == {}
+
+
+def test_output_stem_allocator_keeps_unique_stems_and_moves_only_colliders(tmp_path):
+    """M-02: same-stem batch inputs get distinct output stems; other names are unchanged."""
+    from transformation_portal.utils.image_utils import OutputStemAllocator
+
+    allocator = OutputStemAllocator()
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+
+    assert allocator.claim(tmp_path / "lounge.png") == "lounge"
+    assert allocator.claim(tmp_path / "kitchen.png") == "kitchen"
+    assert allocator.claim(tmp_path / "kitchen.tif") == "kitchen_tif"
+    # Case-only differences collide on case-insensitive filesystems (macOS default).
+    assert allocator.claim(tmp_path / "Kitchen.jpg") == "Kitchen_jpg"
+    # Same name in several directories: after the extension, a path digest separates them.
+    assert allocator.claim(tmp_path / "bath.png") == "bath"
+    assert allocator.claim(tmp_path / "a" / "bath.png") == "bath_png"
+    third = allocator.claim(tmp_path / "b" / "bath.png")
+    assert third.startswith("bath_png_") and len(third) == len("bath_png_") + 8
+    # Claiming the same input again is stable, and a real input named like a
+    # disambiguated stem does not take over that stem.
+    assert allocator.claim(tmp_path / "kitchen.tif") == "kitchen_tif"
+    assert allocator.claim(tmp_path / "a" / "kitchen_tif.png") != "kitchen_tif"
+
+
+def test_save_image_failure_keeps_existing_file(tmp_path):
+    """M-02: save_image writes through a temp file, so a failed save leaves the old file."""
+    target = tmp_path / "out.png"
+    target.write_bytes(b"previous")
+
+    class _Broken:
+        def save(self, path, **kwargs):
+            Path(path).write_bytes(b"partial")
+            raise OSError("disk full")
+
+    with pytest.raises(OSError, match="disk full"):
+        save_image(_Broken(), target)
+
+    assert target.read_bytes() == b"previous"
+    assert [p.name for p in tmp_path.iterdir()] == ["out.png"]

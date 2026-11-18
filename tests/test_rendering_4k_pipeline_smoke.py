@@ -149,3 +149,27 @@ def test_rendering_4k_cli_batch_exits_nonzero_when_every_image_fails(tmp_path: P
         assert pipeline_module.main() == 1
     finally:
         sys.modules.pop(PIPELINE_MODULE, None)
+
+
+def test_rendering_4k_batch_same_stem_inputs_keep_separate_deliveries(tmp_path: Path, monkeypatch) -> None:
+    """M-02: kitchen.png and kitchen.tif must not write the same _DELIVERY.jpg."""
+    import numpy as np
+
+    pipeline_module = _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch)
+
+    try:
+        bright = tmp_path / "kitchen.png"
+        dark = tmp_path / "kitchen.tif"
+        Image.new("RGB", (8, 6), color=(250, 250, 250)).save(bright)
+        Image.new("RGB", (8, 6), color=(10, 10, 10)).save(dark)
+        output_dir = tmp_path / "output"
+
+        pipeline = pipeline_module.Rendering4KPipeline.from_preset("preview")
+        results = pipeline.batch_process([bright, dark], output_dir, show_progress=False)
+
+        paths = [r.output_paths["delivery_jpeg"] for r in results]
+        assert paths == [output_dir / "kitchen_DELIVERY.jpg", output_dir / "kitchen_tif_DELIVERY.jpg"]
+        means = [float(np.asarray(Image.open(p)).mean()) for p in paths]
+        assert means[0] > means[1] + 100
+    finally:
+        sys.modules.pop(PIPELINE_MODULE, None)

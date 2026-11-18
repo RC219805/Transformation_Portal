@@ -54,7 +54,7 @@ from transformation_portal.pipelines.dimension_validation import (
 from transformation_portal.pipelines.dimension_validation import validate_sd_dimensions as _validate_sd_dimensions
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import load_image, np_to_pil, pil_to_np, save_image
+from transformation_portal.utils.image_utils import OutputStemAllocator, load_image, np_to_pil, pil_to_np, save_image
 
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN
@@ -1500,6 +1500,8 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     print(f"[Batch] {len(files)} file(s)")
 
     failures = 0
+    # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+    stem_allocator = OutputStemAllocator()
     for i, f in enumerate(files, 1):
         try:
             print(f"\n[{i}/{len(files)}] {f}")
@@ -1514,7 +1516,7 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
                 brand_text=brand_text,
                 export_4k=w4k,
             )
-            fname = Path(f).stem + "_lux.png"
+            fname = stem_allocator.claim(f) + "_lux.png"
             save_image(out_img, out_dir / fname)
             print(f"[Saved] {out_dir / fname}")
         except Exception as e:

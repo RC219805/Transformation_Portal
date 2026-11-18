@@ -44,7 +44,7 @@ import typer
 from PIL import Image
 from tqdm import tqdm
 
-from transformation_portal.utils.image_utils import extract_output_metadata
+from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path, extract_output_metadata
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -568,12 +568,14 @@ class ProPipeline:
                 self._material_response = None
         return self._material_response
 
-    def process_image(self, image_path: Path) -> Optional[Path]:
+    def process_image(self, image_path: Path, *, output_stem: Optional[str] = None) -> Optional[Path]:
         """
         Process a single image through the full pipeline.
 
         Args:
             image_path: Path to input image
+            output_stem: Base name of the output file (default: ``image_path.stem``);
+                batch processing passes a name no other input of the batch uses
 
         Returns:
             Path to output image, or None if processing failed
@@ -609,7 +611,7 @@ class ProPipeline:
                 image = self._apply_finishing_stage(image, image_path)
 
             # Save output
-            output_path = self._save_output(image, image_path, source_metadata=source_metadata)
+            output_path = self._save_output(image, image_path, source_metadata=source_metadata, output_stem=output_stem)
 
             # Update statistics
             elapsed = time.time() - start_time
@@ -795,6 +797,7 @@ class ProPipeline:
         image: Image.Image,
         input_path: Path,
         source_metadata: Optional[Dict[str, Any]] = None,
+        output_stem: Optional[str] = None,
     ) -> Path:
         """Save the processed image with appropriate format and metadata.
 
@@ -807,7 +810,7 @@ class ProPipeline:
         metadata = source_metadata or {}
 
         # Determine output filename
-        stem = input_path.stem
+        stem = output_stem or input_path.stem
         ext = _normalize_output_format(self.config.output_format)
 
         # Add preset suffix
@@ -847,14 +850,15 @@ class ProPipeline:
                 if "dpi" in metadata:
                     tiff_kwargs["resolution"] = (float(metadata["dpi"][0]), float(metadata["dpi"][1]))
                     tiff_kwargs["resolutionunit"] = "INCH"
-                tifffile.imwrite(
-                    output_path,
-                    output_array,
-                    compression="deflate",
-                    photometric="rgb",
-                    metadata={"colorspace": "linear"},
-                    **tiff_kwargs,
-                )
+                with atomic_output_path(output_path) as temp_path:
+                    tifffile.imwrite(
+                        temp_path,
+                        output_array,
+                        compression="deflate",
+                        photometric="rgb",
+                        metadata={"colorspace": "linear"},
+                        **tiff_kwargs,
+                    )
 
                 log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
 
@@ -883,7 +887,8 @@ class ProPipeline:
         elif ext.lower() in {"tif", "tiff"}:
             save_kwargs["compression"] = "tiff_adobe_deflate"
 
-        image.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            image.save(temp_path, **save_kwargs)
 
     def batch_process(self, input_paths: List[Path]) -> Dict[str, Any]:
         """
@@ -905,8 +910,10 @@ class ProPipeline:
 
         # Process images
         results = []
+        # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+        stem_allocator = OutputStemAllocator()
         for image_path in tqdm(input_paths, desc="Processing images"):
-            result = self.process_image(image_path)
+            result = self.process_image(image_path, output_stem=stem_allocator.claim(image_path))
             results.append(result)
 
         # Print statistics

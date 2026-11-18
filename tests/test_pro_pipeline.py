@@ -549,6 +549,24 @@ class TestProPipeline:
         assert stats["processed"] == 1
         assert stats["failed"] == 1
 
+    def test_batch_same_stem_inputs_keep_separate_outputs(self, pipeline_config, tmp_path):
+        """M-02: kitchen.png and kitchen.tif must not overwrite each other's output."""
+        bright = tmp_path / "kitchen.png"
+        dark = tmp_path / "kitchen.tif"
+        Image.new("RGB", (64, 64), color=(250, 250, 250)).save(bright)
+        Image.new("RGB", (64, 64), color=(10, 10, 10)).save(dark)
+
+        pipeline = ProPipeline(pipeline_config)
+        stats = pipeline.batch_process([bright, dark])
+
+        first, second = stats["results"]
+        assert stats["processed"] == 2
+        assert first != second
+        assert first.name.startswith("kitchen_") and not first.name.startswith("kitchen_tif")
+        assert second.name.startswith("kitchen_tif_")
+        assert first.exists() and second.exists()
+        assert np.asarray(Image.open(first)).mean() > np.asarray(Image.open(second)).mean() + 100
+
     def test_output_filename_generation(self, pipeline_config, temp_image_file):
         """Test output filename generation with presets."""
         # Test with architectural hero preset

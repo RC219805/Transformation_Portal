@@ -778,6 +778,67 @@ class TestBatchProcessing:
         assert pipeline.stats.images_processed == 1
         assert pipeline.stats.images_failed == 1
 
+    @pytest.mark.parametrize("parallel_io", [False, True])
+    def test_batch_same_stem_inputs_do_not_overwrite_each_other(self, temp_dir, parallel_io):
+        """kitchen.png and kitchen.tif (both in the default pattern) keep separate deliverables."""
+        src = temp_dir / "in"
+        src.mkdir()
+        bright = src / "kitchen.png"
+        dark = src / "kitchen.tif"
+        other = src / "lounge.png"
+        Image.fromarray(np.full((32, 32, 3), 250, np.uint8)).save(bright)
+        Image.fromarray(np.full((32, 32, 3), 10, np.uint8)).save(dark)
+        Image.fromarray(np.full((32, 32, 3), 128, np.uint8)).save(other)
+
+        out = temp_dir / "out"
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=out,
+            output_formats=[OutputFormat.WEB_4K],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=parallel_io,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        results = pipeline.batch_process([bright, dark, other], show_progress=False)
+
+        # Non-colliding and first-claimed names are unchanged; only the later collider moves.
+        assert results[bright]["web"] == out / "kitchen_WEB_4K.jpg"
+        assert results[dark]["web"] == out / "kitchen_tif_WEB_4K.jpg"
+        assert results[other]["web"] == out / "lounge_WEB_4K.jpg"
+        assert sorted(p.name for p in out.iterdir()) == [
+            "kitchen_WEB_4K.jpg",
+            "kitchen_tif_WEB_4K.jpg",
+            "lounge_WEB_4K.jpg",
+        ]
+        assert np.asarray(Image.open(results[bright]["web"])).mean() > 240
+        assert np.asarray(Image.open(results[dark]["web"])).mean() < 20
+        assert pipeline.stats.images_processed == 3
+
+    def test_failed_output_write_leaves_previous_deliverable_intact(self, temp_dir, sample_image):
+        """Outputs are written to a temp file and replaced, so a failed save keeps the old file."""
+        out = temp_dir / "out"
+        out.mkdir()
+        previous = out / "render_WEB_4K.jpg"
+        previous.write_bytes(b"previous deliverable")
+        config = UnifiedPipelineConfig(output_dir=out)
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        class _BrokenImage:
+            size = (10, 10)
+
+            def save(self, path, **kwargs):
+                Path(path).write_bytes(b"partial")
+                raise OSError("disk full")
+
+        with pytest.raises(OSError, match="disk full"):
+            pipeline._save_web_4k(_BrokenImage(), "render", None, out)
+
+        assert previous.read_bytes() == b"previous deliverable"
+        assert sorted(p.name for p in out.iterdir()) == ["render_WEB_4K.jpg"]
+
 
 class TestStatisticsSaving:
     """Test statistics tracking and saving."""

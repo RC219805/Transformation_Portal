@@ -230,6 +230,10 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
         self._suffix = suffix
         self._worker_pool = worker_pool
         self._owns_pool = worker_pool is None
+        # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+        from transformation_portal.utils.image_utils import OutputStemAllocator
+
+        self._stem_allocator = OutputStemAllocator()
 
     async def startup(self) -> None:
         """Initialize resources."""
@@ -250,8 +254,10 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
         import numpy as np
         from PIL import Image
 
+        from transformation_portal.utils.image_utils import atomic_output_path
+
         # Determine output path
-        stem = image_data.path.stem + self._suffix
+        stem = self._stem_allocator.claim(image_data.path) + self._suffix
         ext_map = {
             "TIFF": ".tiff",
             "JPEG": ".jpg",
@@ -272,20 +278,21 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
                 # Save as 8-bit for other formats
                 array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
 
-        if self._format == "TIFF":
-            try:
-                import tifffile
+        with atomic_output_path(output_path) as temp_path:
+            if self._format == "TIFF":
+                try:
+                    import tifffile
 
-                tifffile.imwrite(str(output_path), array, compression="lzw")
-            except ImportError:
-                img = Image.fromarray(array)
-                img.save(str(output_path), format="TIFF")
-        else:
-            img = Image.fromarray(array)
-            if self._format in ("JPEG", "WEBP"):
-                img.save(str(output_path), quality=self._quality)
+                    tifffile.imwrite(str(temp_path), array, compression="lzw")
+                except ImportError:
+                    img = Image.fromarray(array)
+                    img.save(str(temp_path), format="TIFF")
             else:
-                img.save(str(output_path))
+                img = Image.fromarray(array)
+                if self._format in ("JPEG", "WEBP"):
+                    img.save(str(temp_path), quality=self._quality)
+                else:
+                    img.save(str(temp_path))
 
         return output_path
 

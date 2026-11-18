@@ -67,6 +67,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from transformation_portal.pipelines.parallel_io import ParallelIOPipeline
+from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path
 
 # Optional imports with graceful fallback
 try:
@@ -291,6 +292,7 @@ class _OutputGenerationWork:
     config: UnifiedPipelineConfig
     started_at: float
     stage_times: Dict[str, float]
+    output_stem: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -390,12 +392,14 @@ class UnifiedLuxuryPipeline:
         if self.config.enable_vfx and self.config.profile == ProcessingProfile.PERFORMANCE:
             log.warning("VFX enabled with PERFORMANCE profile - may impact speed")
 
-    def process(self, input_path: Path, **overrides) -> Dict[str, Path]:
+    def process(self, input_path: Path, *, output_stem: Optional[str] = None, **overrides) -> Dict[str, Path]:
         """
         Process single image through unified pipeline.
 
         Args:
             input_path: Path to input image
+            output_stem: Base name of the output files (default: ``input_path.stem``);
+                batch processing passes a name no other input of the batch uses
             **overrides: Override config parameters for this image
 
         Returns:
@@ -471,6 +475,7 @@ class UnifiedLuxuryPipeline:
                 input_path,
                 metadata,
                 temp_config,
+                output_stem,
             )
 
             # Update statistics
@@ -514,11 +519,12 @@ class UnifiedLuxuryPipeline:
             return self._batch_process_parallel_io(input_paths, show_progress=show_progress)
 
         results = {}
+        output_stems = self._assign_output_stems(input_paths)
         iterator = tqdm(input_paths, desc="Processing") if show_progress else input_paths
 
         for input_path in iterator:
             try:
-                outputs = self.process(input_path)
+                outputs = self.process(input_path, output_stem=output_stems[input_path])
                 results[input_path] = outputs
             except Exception as e:
                 log.error(f"Failed to process {input_path.name}: {e}")
@@ -527,6 +533,16 @@ class UnifiedLuxuryPipeline:
         log.info(self.stats.summary())
 
         return results
+
+    @staticmethod
+    def _assign_output_stems(input_paths: List[Path]) -> Dict[Path, str]:
+        """Give every distinct input its own output base name, in input order.
+
+        Same-stem inputs (``kitchen.png`` and ``kitchen.tif``) would otherwise write the
+        same files and overwrite each other; only the later colliding names change.
+        """
+        allocator = OutputStemAllocator()
+        return {input_path: allocator.claim(input_path) for input_path in input_paths}
 
     def _batch_process_parallel_io(
         self,
@@ -553,7 +569,13 @@ class UnifiedLuxuryPipeline:
             thread_name_prefix="unified_luxury_io",
         )
 
-        io_results = io_pipeline.process_batch(input_paths, self._prepare_batch_output_work)
+        output_stems = self._assign_output_stems(input_paths)
+        io_results = io_pipeline.process_batch(
+            input_paths,
+            lambda input_path, loaded: self._prepare_batch_output_work(
+                input_path, loaded, output_stem=output_stems[input_path]
+            ),
+        )
 
         results: Dict[Path, Dict[str, Path]] = {}
         result_iterator = tqdm(io_results, desc="Processing") if show_progress else io_results
@@ -595,6 +617,7 @@ class UnifiedLuxuryPipeline:
         self,
         input_path: Path,
         loaded: _LoadedBatchImage,
+        output_stem: Optional[str] = None,
     ) -> _OutputGenerationWork:
         """Run compute stages for a loaded batch item and defer output I/O."""
 
@@ -647,6 +670,7 @@ class UnifiedLuxuryPipeline:
             config=temp_config,
             started_at=started_at,
             stage_times=self.stats.stage_times.copy(),
+            output_stem=output_stem,
         )
 
     def _save_batch_outputs(
@@ -657,7 +681,7 @@ class UnifiedLuxuryPipeline:
         """Write outputs for a prepared batch item."""
 
         start = time.time()
-        outputs = self._generate_outputs(work.image, input_path, work.metadata, work.config)
+        outputs = self._generate_outputs(work.image, input_path, work.metadata, work.config, work.output_stem)
         elapsed = time.time() - start
         stage_times = work.stage_times.copy()
         stage_times["Output Generation"] = elapsed
@@ -1421,6 +1445,7 @@ class UnifiedLuxuryPipeline:
         input_path: Path,
         metadata: Dict[str, Any],
         config: UnifiedPipelineConfig,
+        output_stem: Optional[str] = None,
     ) -> Dict[str, Path]:
         """
         Generate all requested output formats.
@@ -1430,13 +1455,14 @@ class UnifiedLuxuryPipeline:
             input_path: Original input path (for naming)
             metadata: Original image metadata
             config: Pipeline configuration
+            output_stem: Output base name (default: ``input_path.stem``)
 
         Returns:
             Dictionary mapping format names to output paths
         """
         log.info("  Generating output formats...")
 
-        basename = input_path.stem
+        basename = output_stem or input_path.stem
         outputs = {}
         failures: List[Tuple[OutputFormat, Exception]] = []
 
@@ -1566,18 +1592,20 @@ class UnifiedLuxuryPipeline:
                 extratags.append((34675, "B", len(icc_profile), icc_profile, False))
 
             # Save with proper 16-bit encoding
-            tifffile.imwrite(
-                output_path,
-                arr_16bit,
-                photometric="rgb",
-                compression="lzw",
-                extratags=extratags if extratags else None,
-            )
+            with atomic_output_path(output_path) as temp_path:
+                tifffile.imwrite(
+                    temp_path,
+                    arr_16bit,
+                    photometric="rgb",
+                    compression="lzw",
+                    extratags=extratags if extratags else None,
+                )
             log.info(f"    Master TIFF: {width}x{height}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
         else:
             # Fallback to PIL (8-bit only)
             log.warning("    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)")
-            image.save(output_path, compression="lzw", dpi=(300, 300))
+            with atomic_output_path(output_path) as temp_path:
+                image.save(temp_path, compression="lzw", dpi=(300, 300))
             log.info(
                 f"    Master TIFF: {image.size[0]}x{image.size[1]}, 8-bit, {output_path.stat().st_size / (1024**2):.1f} MB"
             )
@@ -1614,7 +1642,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Web 4K: {resized.size[0]}x{resized.size[1]}, Q96, {size_mb:.1f} MB")
@@ -1651,7 +1680,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Print 8K: {resized.size[0]}x{resized.size[1]}, Q98, {size_mb:.1f} MB")
@@ -1685,7 +1715,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Social: {resized.size[0]}x{resized.size[1]}, Q92, {size_mb:.1f} MB")
@@ -1722,7 +1753,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Magazine 2K: {resized.size[0]}x{resized.size[1]}, Q95, {size_mb:.1f} MB")

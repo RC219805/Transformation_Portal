@@ -89,6 +89,33 @@ def test_image_save_stage_writes_expected_output_suffix(tmp_path: Path) -> None:
     asyncio.run(runner())
 
 
+def test_image_save_stage_same_stem_inputs_do_not_overwrite_each_other(tmp_path: Path) -> None:
+    """M-02: kitchen.png and kitchen.tif in one stream keep separate saved files."""
+    output_dir = tmp_path / "output"
+    bright = ImageData(array=np.full((2, 2, 3), 250, dtype=np.uint8), path=tmp_path / "kitchen.png")
+    dark = ImageData(array=np.full((2, 2, 3), 10, dtype=np.uint8), path=tmp_path / "kitchen.tif")
+
+    async def runner() -> None:
+        stage = ImageSaveStage(output_dir=output_dir, output_format="PNG", suffix="_out")
+        await stage.startup()
+        try:
+            first = await stage(bright)
+            second = await stage(dark)
+        finally:
+            await stage.shutdown()
+
+        assert first.success and second.success
+        first_path = Path(first.data.metadata["output_path"])
+        second_path = Path(second.data.metadata["output_path"])
+        assert first_path == output_dir / "kitchen_out.png"
+        assert second_path == output_dir / "kitchen_tif_out.png"
+        assert sorted(p.name for p in output_dir.iterdir()) == ["kitchen_out.png", "kitchen_tif_out.png"]
+        assert np.asarray(Image.open(first_path)).mean() == 250
+        assert np.asarray(Image.open(second_path)).mean() == 10
+
+    asyncio.run(runner())
+
+
 def test_depth_stage_missing_runtime_fails_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_import_error(**_kwargs):
         raise ImportError("missing depth runtime")
