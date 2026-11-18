@@ -1565,6 +1565,33 @@ class TestSpatialAIPipelineProgressTracking:
 
         assert result.execution_time >= 0.0
 
+    def test_process_counts_its_own_stages_after_multiview_run(self, tmp_path):
+        """process() must not inherit the stage count process_multiview() pinned on the tracker.
+
+        Regression (O-1): process_multiview() sets the shared tracker to its two stages
+        (reconstruction + export) and nothing restored the configured count, so a later
+        process() on the same pipeline reported progress against the wrong total (above
+        100 % for three or more stages).
+        """
+        config = PipelineConfig(tier="standard", stages=["ingest"])
+        pipeline = SpatialAIPipeline(config)
+        # State left behind by process_multiview() (which needs torch to run for real).
+        pipeline.progress_tracker.total_stages = 2
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        mock_result = MagicMock(spec=LinearIngestResult)
+        mock_result.input_size = (32, 32)
+        mock_result.linear_rgb = np.random.rand(32, 32, 3).astype(np.float32)
+
+        with patch("transformation_portal.spatial_ai.orchestration.pipeline.LinearDecoder") as MockDecoder:
+            MockDecoder.return_value.decode.return_value = mock_result
+            pipeline.process(input_path=input_path, output_dir=tmp_path / "output", save_intermediates=False)
+
+        assert pipeline.progress_tracker.total_stages == 1
+        assert pipeline.progress_tracker.get_progress_percent() == 100.0
+
 
 class TestGraphModeExecution:
     """Test graph-mode execution path (ADR-029)."""

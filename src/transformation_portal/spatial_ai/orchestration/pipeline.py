@@ -256,6 +256,10 @@ class SpatialAIPipeline:
         logger.info(f"Starting pipeline: {input_path} -> {output_dir}")
         logger.info(f"Stages: {', '.join(self.config.stages)}")
 
+        # process_multiview() pins the shared tracker to its two stages; count this
+        # run's configured stages again so progress cannot exceed 100 %.
+        self.progress_tracker.total_stages = len(self.config.stages)
+
         # Use graph-based execution if enabled (ADR-029)
         if self.config.use_execution_graph:
             return self._process_with_graph(input_path, output_dir, save_intermediates)
