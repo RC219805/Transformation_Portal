@@ -1,3 +1,0 @@
-# Historical synthetic passwords from the frontdoor seed CLI regression tests.
-7d48f550f184e160b670e0ad915cf38b19294531:web/secure-landing/tests/seed-frontdoor-user.test.mjs:generic-api-key:221
-7d48f550f184e160b670e0ad915cf38b19294531:web/secure-landing/tests/seed-frontdoor-user.test.mjs:generic-api-key:225
