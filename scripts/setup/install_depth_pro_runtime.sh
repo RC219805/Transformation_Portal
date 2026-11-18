@@ -146,7 +146,7 @@ BOOTSTRAP_PYTHON="$("${PYTHON_RESOLVER}")"
 # an explicit --force-clear. Symlinked paths and the filesystem root are never
 # cleared. These checks are read-only, so they also run under --dry-run.
 validate_existing_venv_for_clear() {
-    local lexical_venv canonical_venv
+    local lexical_venv canonical_venv physical_repo_root entries
 
     if [[ ! -e "${VENV_DIR}" && ! -L "${VENV_DIR}" ]]; then
         return 0
@@ -156,17 +156,36 @@ validate_existing_venv_for_clear() {
         return 1
     fi
     lexical_venv="$("${BOOTSTRAP_PYTHON}" -I -S -c \
-        'import os, sys; print(os.path.abspath(sys.argv[1]))' "${VENV_DIR}")"
-    canonical_venv="$(cd "${VENV_DIR}" && pwd -P)"
+        'import os, sys; print(os.path.abspath(sys.argv[1]))' "${VENV_DIR}")" || lexical_venv=""
+    canonical_venv="$(cd "${VENV_DIR}" && pwd -P)" || canonical_venv=""
+    if [[ -z "${lexical_venv}" || -z "${canonical_venv}" ]]; then
+        printf '[ERROR] Refusing to clear --venv-dir that cannot be resolved: %s\n' "${VENV_DIR}" >&2
+        return 1
+    fi
     if [[ "${canonical_venv}" == "/" ]]; then
         printf '[ERROR] Refusing to clear the filesystem root as --venv-dir: %s\n' "${VENV_DIR}" >&2
         return 1
     fi
+    # REPO_ROOT keeps the logical path of the checkout, which may itself be
+    # reached through a symlink (for example /tmp on macOS). That is not a
+    # symlinked venv, so paths under the checkout are compared below its
+    # physical root; every other ancestor must be symlink-free.
+    physical_repo_root="$(cd "${REPO_ROOT}" && pwd -P)" || physical_repo_root=""
+    case "${lexical_venv}" in
+        "${REPO_ROOT}"/*)
+            lexical_venv="${physical_repo_root}${lexical_venv#"${REPO_ROOT}"}"
+            ;;
+    esac
     if [[ "${lexical_venv}" != "${canonical_venv}" ]]; then
         printf '[ERROR] Refusing to clear --venv-dir reached through a symlinked ancestor: %s\n' "${VENV_DIR}" >&2
         return 1
     fi
-    if [[ -z "$(ls -A "${VENV_DIR}")" ]]; then
+    # A listing failure must not read as "empty": fail closed.
+    if ! entries="$(ls -A -- "${VENV_DIR}" 2>/dev/null)"; then
+        printf '[ERROR] Refusing to clear --venv-dir whose contents cannot be listed: %s\n' "${VENV_DIR}" >&2
+        return 1
+    fi
+    if [[ -z "${entries}" ]]; then
         return 0
     fi
     if [[ -f "${VENV_DIR}/pyvenv.cfg" && ! -L "${VENV_DIR}/pyvenv.cfg" ]]; then
