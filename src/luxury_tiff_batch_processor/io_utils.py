@@ -645,7 +645,8 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
 
 # Tags the tifffile branch of ``save_image`` writes itself (from the array, the
 # keyword arguments or the ICC profile); tifffile refuses them as extratags.
-_TIFFFILE_WRITER_OWNED_TAGS = frozenset({258, 259, 262, 277, 278, 282, 283, 284, 296, 317, 338, 339, 34675})
+_TIFFFILE_WRITER_OWNED_TAGS = frozenset({258, 259, 262, 277, 278, 282, 283, 284, 296, 305, 317, 338, 339, 34675})
+_TIFF_SOFTWARE_TAG = 305
 _TIFF_ICC_PROFILE_TAG = 34675
 _TIFF_RESOLUTION_UNITS = frozenset({1, 2, 3})  # NONE, INCH, CENTIMETER
 _TIFF_DEFAULT_RESOLUTION_UNIT = 2  # TIFF 6.0 default when ResolutionUnit is absent
@@ -745,6 +746,10 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
         if extrasample_needed or (array_to_write.ndim == 3 and array_to_write.shape[2] > 3):
             tiff_kwargs["extrasamples"] = "unassalpha"
         tiff_kwargs.update(_tifffile_resolution_kwargs(metadata))
+        software = metadata.get(_TIFF_SOFTWARE_TAG) if metadata else None
+        if isinstance(software, str) and software:
+            # tifffile writes its own Software tag and refuses the source's as an extratag.
+            tiff_kwargs["software"] = software
         extratags = []
         if not icc_profile and metadata and isinstance(metadata.get(_TIFF_ICC_PROFILE_TAG), (bytes, bytearray)):
             icc_profile = bytes(metadata[_TIFF_ICC_PROFILE_TAG])

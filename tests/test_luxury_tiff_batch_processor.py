@@ -395,6 +395,25 @@ def test_save_image_16bit_writes_icc_from_metadata_when_no_profile_given(tmp_pat
     assert resolution_unit == 1  # no source resolution: tifffile's own default stays
 
 
+@pytest.mark.parametrize(("source_software", "expected"), [("Capture One 23", "Capture One 23"), (None, "tifffile.py")])
+def test_save_image_16bit_keeps_source_software_tag(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, source_software: str | None, expected: str
+):
+    """The tifffile writer replaced the source Software tag with its own, as Pillow's 8-bit writer does not."""
+
+    tifffile = pytest.importorskip("tifffile")
+    metadata: Dict[int, Any] = {270: "x"}
+    if source_software is not None:
+        metadata[305] = source_software
+    destination = tmp_path / "software.tif"
+    with caplog.at_level("WARNING", logger="tifffile"):
+        io_utils.save_image(destination, _fine_grained_uint16((4, 6, 3)), np.uint16, metadata, None, "none")
+    with tifffile.TiffFile(destination) as written:
+        software_values = [tag.value for tag in written.pages[0].tags if tag.code == 305]
+    assert software_values == [expected]
+    assert "not writing extratag 305" not in caplog.text
+
+
 def test_save_image_8bit_output_matches_direct_pillow_save(tmp_path: Path):
     """M-10 fix is confined to the tifffile writer: 8-bit deliverables are byte-identical to Pillow's."""
 
