@@ -252,7 +252,11 @@ def extract_backends(manifests: List[Dict[str, Any]]) -> List[str]:
     """Extract backend identifiers from manifests."""
     backends = []
     for manifest in manifests:
-        depth_meta = manifest.get("depth", {})
+        depth_meta = manifest.get("depth")
+        if depth_meta is None:
+            # No depth metadata means the run failed. extract_timings() counts it against the
+            # success rate; it has no backend, so it must not be reported as a backend mismatch.
+            continue
         backend = depth_meta.get("model", "unknown")
         backends.append(backend)
     return backends
@@ -386,9 +390,12 @@ def detect_regressions(
     """Compare current stats against baseline and detect regressions."""
     regressions = []
 
+    # Strict mode also reports a slowdown below the threshold ("potential regression"). An unchanged
+    # or faster metric is never a regression, strict or not.
+
     # Check p95 regression
     p95_change_pct = ((current_stats.p95_sec - baseline.statistics.p95_sec) / baseline.statistics.p95_sec) * 100.0
-    if strict or p95_change_pct > thresholds["p95_worsening_pct"]:
+    if p95_change_pct > thresholds["p95_worsening_pct"] or (strict and p95_change_pct > 0):
         status = "regression" if p95_change_pct > thresholds["p95_worsening_pct"] else "potential_regression"
         regressions.append(
             Regression(
@@ -403,7 +410,7 @@ def detect_regressions(
 
     # Check mean regression
     mean_change_pct = ((current_stats.mean_sec - baseline.statistics.mean_sec) / baseline.statistics.mean_sec) * 100.0
-    if strict or mean_change_pct > thresholds["mean_worsening_pct"]:
+    if mean_change_pct > thresholds["mean_worsening_pct"] or (strict and mean_change_pct > 0):
         status = "regression" if mean_change_pct > thresholds["mean_worsening_pct"] else "potential_regression"
         regressions.append(
             Regression(

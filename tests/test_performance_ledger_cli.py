@@ -246,12 +246,61 @@ class TestCLIStrictMode:
         )
         assert result_lenient.returncode == 0
 
-        # With --strict: might fail on potential regression
+        # With --strict: the sub-threshold slowdown is a potential regression and fails
         result_strict = run_ledger(
             "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path), "--strict"
         )
-        # Strict mode is more sensitive
-        assert result_strict.returncode in [0, 1]
+        assert result_strict.returncode == 1
+        assert "DO NOT MERGE" in report_path.read_text()
+
+    @pytest.mark.parametrize("current_mean_time", [10.0, 5.0], ids=["identical", "faster"])
+    def test_strict_mode_passes_when_nothing_got_slower(self, tmp_path, current_mean_time):
+        """An unchanged or faster run is not a potential regression, strict or not."""
+        baseline_manifests = tmp_path / "baseline"
+        create_test_manifests(baseline_manifests, count=10, mean_time=10.0)
+        baseline_path = tmp_path / "baseline.json"
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
+
+        current_manifests = tmp_path / "current"
+        create_test_manifests(current_manifests, count=10, mean_time=current_mean_time)
+        report_path = tmp_path / "report.md"
+
+        result = run_ledger(
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path), "--strict"
+        )
+
+        assert result.returncode == 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        report = report_path.read_text()
+        assert "OK TO MERGE" in report
+        assert "Regressions Detected" not in report
+
+
+class TestCLIFailedRuns:
+    """A manifest without depth metadata is a failed run, not a different backend."""
+
+    def test_failed_run_is_a_success_rate_regression_not_a_backend_mismatch(self, tmp_path):
+        baseline_manifests = tmp_path / "baseline"
+        create_test_manifests(baseline_manifests, count=10, mean_time=10.0)
+        baseline_path = tmp_path / "baseline.json"
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
+
+        current_manifests = tmp_path / "current"
+        create_test_manifests(current_manifests, count=10, mean_time=10.0)
+        failed_manifest = current_manifests / "manifest_0.json"
+        failed_payload = json.loads(failed_manifest.read_text())
+        del failed_payload["depth"]
+        failed_manifest.write_text(json.dumps(failed_payload))
+        report_path = tmp_path / "report.md"
+
+        result = run_ledger(
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
+        )
+
+        assert result.returncode == 1, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        assert "Backend mismatch" not in result.stderr
+        report = report_path.read_text()
+        assert "success_rate regression" in report
+        assert "| Success Rate | 100.0% | 90.0% | -10.0% |" in report
 
 
 class TestCLIEmitJSON:
