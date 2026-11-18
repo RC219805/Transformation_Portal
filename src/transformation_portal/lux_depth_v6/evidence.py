@@ -14,7 +14,7 @@ from transformation_portal.lux_depth_v4.io import directory_path, pinned_directo
 from .color import GradeRecipe, RenderRecipe
 from .plan import MAX_PLAN_BYTES, GradePlan, depth_recipe, digest, processing_identity, source_binding, validate_resources
 from .products import image_products
-from .source import SourceLimits, VerifiedV5Source, prepare_source, validate_source
+from .source import SourceLimits, VerifiedV5Source, preflight_source, prepare_source, validate_source
 
 EVIDENCE_SCHEMA = "tp.lux.grade.evidence.v1"
 
@@ -164,7 +164,10 @@ def verify_execution_evidence(
             # replay as well as retained-parent admission. Keep exact frozen
             # plan bytes/source identity unchanged after this extra preflight.
             validate_resources({**payload, "source": {**payload["source"], "limits": constrained.to_payload()}})
-            prepare_source(source_root, limits=constrained, cancellation=lambda: _cancelled(checkpoint))
+            # Only admission depends on the limits; the full V5 semantic replay
+            # below does not, so run it once (never twice) per verification.
+            if constrained != admitted_limits:
+                preflight_source(source_root, limits=constrained, cancellation=lambda: _cancelled(checkpoint))
         source = prepare_source(source_root, limits=admitted_limits, cancellation=lambda: _cancelled(checkpoint))
         verify_artifacts(root, plan, source, evidence["artifacts"], checkpoint=checkpoint, completed=True)
         if sum(record["size_bytes"] for record in evidence["artifacts"]) + len(raw) > payload["limits"]["max_output_bytes"]:

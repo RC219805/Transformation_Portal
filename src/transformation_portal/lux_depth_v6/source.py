@@ -225,6 +225,42 @@ def _inspect_image(root: Path, input_id: str, declared: dict[str, dict], target:
     return SourceImage(input_id, tuple(shape), master_record["sha256"], raw)
 
 
+def _admit_source(
+    root: Path, limits: SourceLimits, cancellation: Callable[[], bool] | None
+) -> tuple[bytes, Any, bytes, list[SourceImage]]:
+    """Run every limit-dependent admission check; the caller pins ``root``."""
+    maximum = min(MAX_EVIDENCE_BYTES, limits.max_input_bytes)
+    plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=maximum)
+    plan = parse_plan_v4(plan_bytes)
+    if plan.canonical_bytes != plan_bytes:
+        raise ValueError("V6 requires exact canonical V5 plan bytes")
+    evidence_bytes, completion = snapshot(root, root / "execution-evidence.json", maximum_bytes=maximum)
+    evidence = _decode_evidence(evidence_bytes)
+    declared = _preflight_inventory(evidence, completion, limits)
+    payload = plan.to_payload()
+    images = []
+    for item in payload["inputs"]:
+        _check(cancellation)
+        images.append(_inspect_image(root, item["id"], declared, payload["configuration"]["target_size"], limits))
+    return plan_bytes, plan, evidence_bytes, images
+
+
+def preflight_source(root: Path, *, limits: SourceLimits, cancellation: Callable[[], bool] | None = None) -> None:
+    """Admit the retained parent under ``limits`` without the V5 semantic replay.
+
+    Only inventory bytes and per-image geometry/memory depend on the limits; the
+    semantic replay in :func:`prepare_source` does not, so a tighter caller
+    budget needs this preflight and not a second full replay.
+    """
+    if type(limits) is not SourceLimits:
+        raise TypeError("V6 source requires exact SourceLimits")
+    _check(cancellation)
+    root = directory_path(root)
+    with pinned_directory(root):
+        _admit_source(root, limits, cancellation)
+        _check(cancellation)
+
+
 def prepare_source(
     root: Path, *, limits: SourceLimits = SourceLimits(), cancellation: Callable[[], bool] | None = None
 ) -> VerifiedV5Source:
@@ -234,19 +270,7 @@ def prepare_source(
     _check(cancellation)
     root = directory_path(root)
     with pinned_directory(root):
-        maximum = min(MAX_EVIDENCE_BYTES, limits.max_input_bytes)
-        plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=maximum)
-        plan = parse_plan_v4(plan_bytes)
-        if plan.canonical_bytes != plan_bytes:
-            raise ValueError("V6 requires exact canonical V5 plan bytes")
-        evidence_bytes, completion = snapshot(root, root / "execution-evidence.json", maximum_bytes=maximum)
-        evidence = _decode_evidence(evidence_bytes)
-        declared = _preflight_inventory(evidence, completion, limits)
-        payload = plan.to_payload()
-        images = []
-        for item in payload["inputs"]:
-            _check(cancellation)
-            images.append(_inspect_image(root, item["id"], declared, payload["configuration"]["target_size"], limits))
+        plan_bytes, plan, evidence_bytes, images = _admit_source(root, limits, cancellation)
         _check(cancellation)
         verified = verify_execution_evidence_v3(root, expected_plan_sha256=plan.plan_fingerprint_sha256)
         if verified.canonical_bytes != evidence_bytes:
