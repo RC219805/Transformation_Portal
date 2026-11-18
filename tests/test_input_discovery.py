@@ -309,3 +309,120 @@ class TestInputDiscovery:
 
         assert keep in images
         assert all(not path.resolve().is_relative_to(output_dir.resolve()) for path in images)
+
+
+def _touch_tree(root: Path, relative_names: list[str]) -> None:
+    for relative_name in relative_names:
+        path = root / relative_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+
+@pytest.mark.regression
+class TestDiscoveryIsRelativeToTheInputRoot:
+    """Hygiene rules describe the tree below the input directory, not its location."""
+
+    @pytest.mark.parametrize(
+        "ancestor",
+        ["v2", "output", "depth", "pbr", "logs", "manifests", "checkpoints", "_non_source", ".projects", "temp"],
+    )
+    def test_ancestors_of_the_input_root_never_exclude_its_images(self, tmp_path: Path, ancestor: str) -> None:
+        """A dataset stored below a folder called ``output`` is still a dataset."""
+        input_dir = tmp_path / ancestor / "shoot_01"
+        _touch_tree(input_dir, ["kitchen.jpg", "living.png", "depth/kitchen_preview.png"])
+
+        images = discover_images(input_dir, DiscoveryConfig())
+
+        assert [path.relative_to(input_dir).as_posix() for path in images] == ["kitchen.jpg", "living.png"]
+        # The remaining exclusion is the real one below the root, so strict
+        # mode reports exactly that file and not the whole dataset.
+        with pytest.raises(ValueError, match="Strict mode: 1 excluded artifacts found"):
+            discover_images(input_dir, DiscoveryConfig(strict_mode=True))
+
+    def test_every_spelling_of_one_root_finds_the_same_images(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``..``, ``.``, relative and absolute spellings must agree."""
+        input_dir = tmp_path / "client" / "shoot_01"
+        _touch_tree(
+            input_dir,
+            [
+                "kitchen.jpg",
+                "rooms/living.png",
+                # Derived artifacts directly below the root: a relative root
+                # used to have no leading separator for ``/v2/`` to match.
+                "v2/kitchen_enhanced.png",
+                "manifests/kitchen_preview.png",
+                "logs/debug_frame.png",
+                "output/result.jpg",
+                ".cache/cached.jpg",
+            ],
+        )
+        sibling = tmp_path / "client" / "cwd"
+        sibling.mkdir()
+        expected = ["kitchen.jpg", "rooms/living.png"]
+
+        def discovered(spelling: Path) -> list[str]:
+            return [path.relative_to(spelling).as_posix() for path in discover_images(spelling, DiscoveryConfig())]
+
+        assert discovered(input_dir) == expected
+        monkeypatch.chdir(sibling)
+        assert discovered(Path("../shoot_01")) == expected
+        monkeypatch.chdir(input_dir.parent)
+        assert discovered(Path("shoot_01")) == expected
+        monkeypatch.chdir(input_dir)
+        assert discovered(Path(".")) == expected
+
+    def test_kept_intermediates_reconstruction_and_captioning_outputs_are_excluded(self, tmp_path: Path) -> None:
+        """A previous run's output root inside the input tree must not feed back in."""
+        _touch_tree(
+            tmp_path,
+            [
+                "kitchen.jpg",
+                "prev_run/temp/kitchen_materials_v3_enhanced.png",
+                "prev_run/reconstruction/debug/inputs/kitchen.jpg",
+                "prev_run/reconstruction/debug/segmentation_overlay/kitchen_overlay.png",
+                "prev_run/reconstruction/debug/reprojection_preview.png",
+                "prev_run/captioning/kitchen_proxy.png",
+            ],
+        )
+
+        images = discover_images(tmp_path, DiscoveryConfig())
+
+        assert [path.relative_to(tmp_path).as_posix() for path in images] == ["kitchen.jpg"]
+        with pytest.raises(ValueError, match="Strict mode: 5 excluded artifacts found"):
+            discover_images(tmp_path, DiscoveryConfig(strict_mode=True))
+
+    def test_exclusions_below_the_root_still_apply_at_any_depth(self, tmp_path: Path) -> None:
+        """Anchoring at the root must not loosen the depth-of-depth guard."""
+        input_dir = tmp_path / "input"
+        _touch_tree(
+            input_dir,
+            [
+                "source.jpg",
+                "a/b/source2.jpg",
+                "depth/top.png",
+                "a/b/depth/nested.png",
+                "a/Depth/mixed_case.png",
+                "a/pbr/normal.png",
+                "a/b/c/v2/enhanced.jpg",
+                "a/_non_source/intermediate.jpg",
+                "a/.cache/cached.jpg",
+                "a/.hidden.jpg",
+                "a/checkpoints/checkpoint.jpg",
+                # Names that merely contain an excluded word are sources.
+                "depth2/keep.png",
+                "my-output/keep.jpg",
+            ],
+        )
+
+        images = discover_images(input_dir, DiscoveryConfig())
+
+        assert [path.relative_to(input_dir).as_posix() for path in images] == [
+            "a/b/source2.jpg",
+            "depth2/keep.png",
+            "my-output/keep.jpg",
+            "source.jpg",
+        ]
