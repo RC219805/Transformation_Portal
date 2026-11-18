@@ -525,6 +525,17 @@ def get_dag_editor_html() -> str:
         let dragOffset = { x: 0, y: 0 };
         let connecting = null;
 
+        // Escape a value for HTML text and quoted-attribute contexts. Loaded pipelines
+        // carry client-supplied labels, ids and port names (POST /api/editor/pipelines).
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Load node types
         async function loadNodeTypes() {
             const res = await fetch('/api/editor/node-types');
@@ -608,14 +619,14 @@ def get_dag_editor_html() -> str:
             div.style.top = node.position.y + 'px';
 
             div.innerHTML = `
-                <div class="node-header">${node.label}</div>
-                <div class="node-body">ID: ${node.id}</div>
+                <div class="node-header">${escapeHtml(node.label)}</div>
+                <div class="node-body">ID: ${escapeHtml(node.id)}</div>
                 <div class="node-ports">
                     <div class="ports-in">${(node.inputs || []).map(i =>
-                        `<div class="port input" title="${i}" data-port="${i}" data-dir="in"></div>`
+                        `<div class="port input" title="${escapeHtml(i)}" data-port="${escapeHtml(i)}" data-dir="in"></div>`
                     ).join('')}</div>
                     <div class="ports-out">${(node.outputs || []).map(o =>
-                        `<div class="port output" title="${o}" data-port="${o}" data-dir="out"></div>`
+                        `<div class="port output" title="${escapeHtml(o)}" data-port="${escapeHtml(o)}" data-dir="out"></div>`
                     ).join('')}</div>
                 </div>
             `;

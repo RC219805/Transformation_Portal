@@ -146,3 +146,26 @@ def test_router_has_no_cwd_side_effect_until_first_save(tmp_path, monkeypatch: p
     assert client.post("/api/editor/pipelines/demo", json=_pipeline_payload()).status_code == 200
     assert (tmp_path / "pipelines" / "demo.json").is_file()
     assert [p["name"] for p in client.get("/api/editor/pipelines").json()["pipelines"]] == ["demo"]
+
+
+@pytest.mark.parametrize(
+    "unescaped",
+    [
+        "${node.label}</div>",
+        "ID: ${node.id}</div>",
+        'title="${i}"',
+        'data-port="${i}"',
+        'title="${o}"',
+        'data-port="${o}"',
+    ],
+)
+def test_editor_ui_escapes_loaded_node_fields(unescaped: str) -> None:
+    # D8 follow-up: with ports persisted, loadPipeline() now reaches the
+    # renderNode() innerHTML template for saved (client-supplied) pipelines, so
+    # labels, ids and port names must be escaped before interpolation.
+    html = dag_editor_api.get_dag_editor_html()
+    assert "function escapeHtml(value)" in html
+    assert unescaped not in html
+    assert "${escapeHtml(node.label)}</div>" in html
+    assert 'data-port="${escapeHtml(i)}"' in html
+    assert 'data-port="${escapeHtml(o)}"' in html
