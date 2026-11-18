@@ -68,6 +68,7 @@ class PBRProcessor:
 
         Raises:
             ValueError: If save=True but base_name or output_dir not provided
+            OSError: If save=True and any of the three maps fails to write
         """
         # Generate maps
         normal, roughness, ao = generate_pbr_maps(depth, self.config)
@@ -111,6 +112,7 @@ class PBRProcessor:
         Raises:
             FileNotFoundError: If depth_path doesn't exist
             ValueError: If depth file is invalid
+            OSError: If any of the three maps fails to write
 
         Example:
             >>> from transformation_portal.lux_depth_v3 import get_preset
@@ -154,16 +156,14 @@ class PBRProcessor:
         if np.any(np.isnan(depth)) or np.any(np.isinf(depth)):
             raise ValueError("Depth contains NaN or Inf values")
 
-        # Generate PBR maps
+        # Generate PBR maps, then write them and return the paths the writer
+        # actually produced (it raises if any of the three maps failed).
         processor = cls(config=config, output_dir=output_dir)
-        maps = processor.from_depth(depth, save=True, base_name=base_name)
-
-        # Return paths
-        return {
-            "normal": output_dir / f"{base_name}_normal.png",
-            "roughness": output_dir / f"{base_name}_roughness.png",
-            "ao": output_dir / f"{base_name}_ao.png",
-        }
+        maps = processor.from_depth(depth, save=False)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        paths = write_pbr_maps(maps["normal"], maps["roughness"], maps["ao"], output_dir, base_name)
+        logger.info(f"Saved PBR maps to {output_dir / base_name}_*.png")
+        return paths
 
     def __enter__(self) -> "PBRProcessor":
         """Context manager entry."""
