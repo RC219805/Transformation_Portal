@@ -54,7 +54,14 @@ from transformation_portal.pipelines.dimension_validation import (
 from transformation_portal.pipelines.dimension_validation import validate_sd_dimensions as _validate_sd_dimensions
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import OutputStemAllocator, load_image, np_to_pil, pil_to_np, save_image
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    convert_to_rgb,
+    load_image,
+    np_to_pil,
+    pil_to_np,
+    save_image,
+)
 
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN
@@ -241,7 +248,7 @@ def _load_texture_base(path: str) -> np.ndarray:
 
     try:
         with Image.open(path) as img:
-            texture = img.convert("RGB")
+            texture = convert_to_rgb(img)
             return np.asarray(texture, dtype=np.float32) / 255.0
     except FileNotFoundError as exc:  # pragma: no cover - defensive
         raise FileNotFoundError(f"Texture file not found: {path}") from exc

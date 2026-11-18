@@ -16,7 +16,14 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
-from transformation_portal.utils.image_utils import load_image, load_image_rgb, np_to_pil, pil_to_np, save_image
+from transformation_portal.utils.image_utils import (
+    convert_to_rgb,
+    load_image,
+    load_image_rgb,
+    np_to_pil,
+    pil_to_np,
+    save_image,
+)
 
 
 def test_load_image():
@@ -327,3 +334,67 @@ class TestFitSizeWithin:
 
         with pytest.raises(ValueError):
             fit_size_within(size, bounds)
+
+
+def _grey16_ramp() -> np.ndarray:
+    """Return a 4x256 uint16 ramp covering the full 0..65535 range."""
+    return np.linspace(0, 65535, 256, dtype=np.uint16)[None, :].repeat(4, axis=0)
+
+
+@pytest.mark.parametrize(
+    ("filename", "source_dtype", "expected_mode"),
+    [
+        ("grey16.png", np.uint16, "I;16"),
+        ("grey16.tif", np.uint16, "I;16"),
+        ("grey16_be.tif", ">u2", "I;16B"),
+        ("grey16.pgm", np.uint16, "I"),
+    ],
+)
+def test_load_image_scales_16bit_greyscale(tmp_path, filename, source_dtype, expected_mode):
+    """Regression for H-05: 16-bit greyscale was clipped at 255 and loaded almost pure white."""
+    path = tmp_path / filename
+    Image.fromarray(_grey16_ramp().astype(source_dtype)).save(path)
+    with Image.open(path) as probe:
+        assert probe.mode == expected_mode
+
+    rgb = np.asarray(load_image(path))
+
+    assert rgb.dtype == np.uint8
+    assert rgb.shape == (4, 256, 3)
+    assert np.array_equal(rgb[..., 0], rgb[..., 1]) and np.array_equal(rgb[..., 1], rgb[..., 2])
+    # Ramp step i holds round(i * 65535 / 255), which maps back onto level i.
+    assert np.array_equal(rgb[0, :, 0], np.arange(256, dtype=np.uint8))
+
+
+def test_load_image_rgb_scales_16bit_greyscale(tmp_path):
+    """load_image_rgb returns the 16-bit greyscale level as a [0, 1] float, not 1.0."""
+    path = tmp_path / "grey16.png"
+    Image.fromarray(np.full((4, 4), 32768, dtype=np.uint16)).save(path)
+
+    arr = load_image_rgb(path)
+
+    assert arr.shape == (4, 4, 3)
+    assert np.allclose(arr, 128 / 255.0)
+
+
+def test_convert_to_rgb_keeps_info_and_scales_grey16_transparency(tmp_path):
+    """The 16-bit path keeps the image info and maps a grey transparency key onto 8 bits."""
+    path = tmp_path / "grey16_trns.png"
+    Image.fromarray(_grey16_ramp()).save(path, transparency=32896, dpi=(300, 300))
+
+    with Image.open(path) as img:
+        rgb = convert_to_rgb(img)
+
+    assert rgb.mode == "RGB"
+    assert rgb.info["transparency"] == (128, 128, 128)
+    assert rgb.info["dpi"] == pytest.approx((300, 300), abs=0.01)
+
+
+@pytest.mark.parametrize("mode", ["L", "LA", "RGB", "RGBA", "P", "CMYK"])
+def test_convert_to_rgb_matches_pillow_for_8bit_modes(mode):
+    """Only 16-bit greyscale takes the scaling path; 8-bit modes convert exactly as before."""
+    rng = np.random.default_rng(7)
+    base = Image.fromarray(rng.integers(0, 256, (6, 5, 3), dtype=np.uint8))
+    img = base.convert(mode)
+
+    assert np.array_equal(np.asarray(convert_to_rgb(img)), np.asarray(img.convert("RGB")))

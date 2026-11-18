@@ -28,9 +28,60 @@ CUBE_LUT_3D_MAX_SIZE = 256
 # Largest EXIF payload a JPEG APP1 segment holds (Pillow refuses to save more).
 _JPEG_MAX_EXIF_BYTES = 65533
 
+# Pillow modes holding 16-bit unsigned greyscale (16-bit PNG, TIFF and JPEG 2000).
+_GREY16_MODES = frozenset({"I;16", "I;16L", "I;16B", "I;16N"})
+_GREY16_MAX = 65535
+
+
+def _is_grey16(img: Image.Image) -> bool:
+    """Return True when ``img`` carries 16-bit greyscale with a 0..65535 full scale.
+
+    Besides the ``I;16*`` modes this covers 16-bit PGM/PPM files, which Pillow
+    decodes as mode ``I`` with values rescaled to 0..65535. Other ``I`` images
+    (32-bit integer TIFFs) have no agreed full scale and are left to Pillow.
+    """
+    return img.mode in _GREY16_MODES or (img.mode == "I" and img.format == "PPM")
+
+
+def _grey16_to_8bit(value: np.ndarray) -> np.ndarray:
+    """Map 16-bit greyscale values onto 0..255 with rounding (``round(v / 257)``)."""
+    clipped = np.clip(np.asarray(value), 0, _GREY16_MAX).astype(np.uint32)
+    return ((clipped + 128) // 257).astype(np.uint8)
+
+
+def convert_to_rgb(img: Image.Image) -> Image.Image:
+    """Convert ``img`` to 8-bit RGB, scaling 16-bit greyscale instead of clipping it.
+
+    ``Image.convert("RGB")`` clips 16-bit greyscale values at 255, so a 16-bit
+    greyscale PNG/TIFF/PGM comes back almost pure white, and it cannot convert
+    big-endian ``I;16B`` TIFFs at all. Such images are mapped from their 0..65535
+    full scale to 0..255; ``info`` (ICC profile, DPI, EXIF) is kept and an integer
+    ``transparency`` key is scaled the same way. Every other mode uses Pillow's
+    conversion unchanged.
+
+    Args:
+        img: PIL Image in any mode
+
+    Returns:
+        PIL Image in RGB mode
+    """
+    if not _is_grey16(img):
+        return img.convert("RGB")
+
+    rgb = Image.fromarray(_grey16_to_8bit(np.asarray(img))).convert("RGB")
+    info = dict(img.info)
+    transparency = info.pop("transparency", None)
+    if isinstance(transparency, int):
+        level = int(_grey16_to_8bit(np.asarray(transparency)))
+        info["transparency"] = (level, level, level)
+    rgb.info.update(info)
+    return rgb
+
 
 def load_image(path: Union[str, Path]) -> Image.Image:
     """Load path into an RGB Image instance.
+
+    16-bit greyscale inputs are scaled to 8 bits (see :func:`convert_to_rgb`).
 
     Args:
         path: Path to image file
@@ -38,7 +89,7 @@ def load_image(path: Union[str, Path]) -> Image.Image:
     Returns:
         PIL Image in RGB mode
     """
-    img = Image.open(path).convert("RGB")
+    img = convert_to_rgb(Image.open(path))
     return img
 
 

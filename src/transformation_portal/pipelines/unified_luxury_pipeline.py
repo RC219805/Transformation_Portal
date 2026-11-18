@@ -67,7 +67,12 @@ from PIL import Image
 from tqdm import tqdm
 
 from transformation_portal.pipelines.parallel_io import ParallelIOPipeline
-from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path, fit_size_within
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    atomic_output_path,
+    convert_to_rgb,
+    fit_size_within,
+)
 
 # Optional imports with graceful fallback
 try:
@@ -826,7 +831,7 @@ class UnifiedLuxuryPipeline:
 
         if image.mode != "RGB":
             log.info(f"  Converting {image.mode} → RGB")
-            image = image.convert("RGB")
+            image = convert_to_rgb(image)
 
         image.load()
 

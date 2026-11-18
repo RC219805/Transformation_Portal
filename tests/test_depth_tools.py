@@ -372,5 +372,22 @@ class TestDepthEffectShape:
         assert out.shape == (H, W, 3)
 
 
+class TestLoadImageRgb16Bit:
+    """Regression for H-05: 16-bit greyscale inputs were clipped at 255 and loaded as white."""
+
+    @pytest.mark.parametrize("module_path", _DEPTH_TOOLS_MODULES)
+    def test_16bit_greyscale_png_keeps_its_levels(self, module_path, tmp_path):
+        import importlib
+
+        load_image_rgb = importlib.import_module(module_path).load_image_rgb
+        path = tmp_path / "grey16.png"
+        Image.fromarray(np.array([[0, 16448, 32896, 65535]], dtype=np.uint16)).save(path)
+
+        rgb = load_image_rgb(str(path))
+
+        assert rgb.shape == (1, 4, 3)
+        assert np.allclose(rgb[0, :, 0], np.array([0, 64, 128, 255]) / 255.0)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

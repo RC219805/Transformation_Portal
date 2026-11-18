@@ -44,7 +44,12 @@ import typer
 from PIL import Image
 from tqdm import tqdm
 
-from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path, extract_output_metadata
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    atomic_output_path,
+    convert_to_rgb,
+    extract_output_metadata,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -585,7 +590,7 @@ class ProPipeline:
 
         try:
             # Load image
-            image = Image.open(image_path).convert("RGB")
+            image = convert_to_rgb(Image.open(image_path))
             # ICC profile / DPI / EXIF of the source, re-attached to the output
             source_metadata = extract_output_metadata(image) if self.config.preserve_metadata else {}
             log.info(f"  Image size: {image.size[0]}x{image.size[1]}")

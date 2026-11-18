@@ -625,6 +625,24 @@ class TestProPipeline:
         assert stats["avg_time"] > 0
 
 
+def test_process_image_scales_16bit_greyscale_input(tmp_path):
+    """Regression for H-05: a 16-bit grey PNG (mode I;16) was clipped at 255 and came out white."""
+    source = tmp_path / "grey16.png"
+    Image.fromarray(np.full((8, 8), 32896, dtype=np.uint16)).save(source)
+    config = ProPipelineConfig(
+        input_path=source, output_dir=tmp_path / "out", preset=PipelinePreset.CUSTOM, device="cpu", output_format="png"
+    )
+    for stage in (config.depth_stage, config.ai_stage, config.material_stage, config.grading_stage, config.finishing_stage):
+        stage.enabled = False
+
+    result = ProPipeline(config).process_image(source)
+
+    assert result is not None
+    with Image.open(result) as out:
+        assert out.mode == "RGB"
+        assert np.array_equal(np.asarray(out), np.full((8, 8, 3), 128, dtype=np.uint8))
+
+
 class TestUnsharpStagesStaySpatial:
     """The clarity / micro-contrast / sharpen stages are unsharp masks over the spatial axes only.
 

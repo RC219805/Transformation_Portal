@@ -457,6 +457,20 @@ class TestMetadataPreservation:
         assert "size" in metadata
         assert metadata["mode"] == "RGB"
 
+    def test_16bit_greyscale_png_is_scaled_not_clipped(self, temp_dir):
+        """Regression for H-05: a 16-bit grey PNG (mode I;16) loaded almost pure white."""
+        png_path = temp_dir / "grey16.png"
+        Image.fromarray(np.array([[0, 16448, 32896, 65535]], dtype=np.uint16)).save(png_path)
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        image, metadata = pipeline._load_image(png_path)
+
+        assert metadata["mode"] == "I;16"
+        assert image.mode == "RGB"
+        assert np.asarray(image)[0, :, 0].tolist() == [0, 64, 128, 255]
+
     @pytest.mark.skipif(not HAS_TIFFFILE, reason="tifffile fast TIFF path requires tifffile")
     def test_tiff_loading_uses_tifffile_fast_path_for_16bit_rgb(self, temp_dir):
         """Test 16-bit TIFF inputs use the tifffile loader path."""

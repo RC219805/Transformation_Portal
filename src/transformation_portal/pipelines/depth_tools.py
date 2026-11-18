@@ -43,6 +43,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 from ..depth.depth_aware_dof import DepthAwareDofOptions, DepthAwareDofResult, run_depth_aware_dof
+from ..utils.image_utils import convert_to_rgb
 
 # ----- Optional accelerated libraries -----
 
@@ -411,7 +412,7 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
 @retry_on_io_error()
 def load_image_rgb(path: str) -> np.ndarray:
     validate_file_exists(path, "Image")
-    arr = np.asarray(Image.open(path).convert("RGB"))
+    arr = np.asarray(convert_to_rgb(Image.open(path)))
     return arr.astype(np.float32) / 255.0
 
 
