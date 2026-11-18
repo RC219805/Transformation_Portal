@@ -7,6 +7,7 @@ and outbox entry. Redis delivery and staged objects are never authority.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -31,6 +32,7 @@ from transformation_portal.orchestrator.models import (
     OperationalOutboxModel,
     OperationalRecordModel,
 )
+from transformation_portal.orchestrator.photographic_admission import drain_owned
 from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import PostgresOperationalAuditStore, append_event_in_session
 from transformation_portal.orchestrator.submissions import (
@@ -228,6 +230,16 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                         return self._locator(prior)
                     if submission.intent_sha256 != submission_intent(record.request):
                         raise RepositoryError("submission fingerprint differs from admitted request")
+                from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths, bind_upload_references
+
+                # Descriptor snapshots may perform bounded filesystem reads.
+                # Accepted replay returns above; new admission drains the owner
+                # before transaction exit, without holding capacity row locks.
+                frozen_read_paths = await drain_owned(
+                    asyncio.to_thread(
+                        _admitted_source_paths, plan_bytes, execution_bindings, upload_read_base=upload_read_base
+                    )
+                )
                 capacities = await self._capacities(session, tenant_id, (global_limit, tenant_limit))
                 for capacity in capacities:
                     if capacity.active >= capacity.limit:
@@ -256,8 +268,6 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                     }
                 )
                 session.add(model)
-                from transformation_portal.orchestrator.upload_receipts import bind_upload_references
-
                 # Flush the parent before adding its foreign-key reference;
                 # publication and the pin still commit in this transaction.
                 await session.flush()
@@ -265,8 +275,7 @@ class PostgresOperationalRecordStore(PostgresOperationalAuditStore):
                     session,
                     record,
                     tenant_id,
-                    plan_bytes=plan_bytes,
-                    execution_bindings=execution_bindings,
+                    frozen_read_paths=frozen_read_paths,
                     upload_read_base=upload_read_base,
                 )
                 attempt = DispatchAttemptModel(

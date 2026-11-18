@@ -102,13 +102,13 @@ def reservation(root, *, request_id=None, owner="a" * 64, expiry=None, batch_id=
     )
 
 
-async def sealed(store, root, *, filename="source.txt", **kwargs):
+async def sealed(store, root, *, filename="source.txt", data=b"body", **kwargs):
     item = reservation(root, **kwargs)
     await store.reserve(item)
     initialize_batch(item)
     result = stage_upload_batch(
         upload_root=root,
-        uploads=[IncomingUpload(filename, io.BytesIO(b"body"))],
+        uploads=[IncomingUpload(filename, io.BytesIO(data))],
         now=item.created_at,
         reserved_batch_id=item.batch_id,
         cleanup_on_error=False,
@@ -738,6 +738,10 @@ async def test_archive_derived_read_default_pins_batch_in_both_postgres_admissio
     reads = archive_command_read_paths("archive-gate-a", command)
     assert str(result.input_dir / "hash_manifest.csv.gz") in reads
     plan = prepare_dispatch_plan(request, trusted_argv=command)
+    # The file lives outside the selected source root: this valid canonical
+    # archive plan has no selected members, but must retain its root and the
+    # independently frozen operation's read paths.
+    assert json.loads(plan)["input_selection"]["files"] == []
     jobs = []
     for distributed in [True, False]:
         job_id = "job_default_archive_" + uuid.uuid4().hex[:10]
@@ -1067,7 +1071,7 @@ async def test_admission_checks_current_expiry_after_waiting_for_all_upload_row_
     assert result.input_dir.exists()
 
 
-async def test_accepted_submission_replay_survives_upload_expiry_without_new_admission(store, tmp_path):
+async def test_accepted_submission_replay_survives_upload_expiry_without_new_admission(store, tmp_path, monkeypatch):
     from tests.core.test_execution_plan import _valid_payload
     from transformation_portal.core.execution_plan import CanonicalExecutionPlan
     from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
@@ -1092,6 +1096,13 @@ async def test_accepted_submission_replay_survives_upload_expiry_without_new_adm
     }
     accepted = await operational.admit(record, plan, **options)
     await _expire_receipt(store, item)
+
+    def forbidden_descriptors(*args, **kwargs):
+        pytest.fail("accepted replay must not read frozen descriptors or paths")
+
+    from transformation_portal.orchestrator import upload_receipts
+
+    monkeypatch.setattr(upload_receipts, "_admitted_source_paths", forbidden_descriptors)
     replay = await operational.admit(replace(record, id="job_not_created"), plan, **options)
     assert replay == accepted
     async with store._session() as session:
@@ -1117,6 +1128,281 @@ async def _admission_snapshot(store):
             ).all()
             for table in tables
         }
+
+
+def _frozen_upload_plan(root, selected):
+    from tests.core.test_execution_plan import _refingerprint, _valid_payload
+    from transformation_portal.core.execution_plan import CanonicalExecutionPlan
+
+    payload = _valid_payload()
+    payload["input_selection"] = {
+        "root": str(root),
+        "files": [{"id": "input-000001", "path": selected.relative_to(root).as_posix()}],
+    }
+    return CanonicalExecutionPlan.from_payload(_refingerprint(payload)).to_canonical_json().encode()
+
+
+def _freeze_photographic_upload(root, family):
+    from transformation_portal.ingest.canonical_json import canonicalize_json
+    from transformation_portal.lux_depth.lifecycle import prepare
+    from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request
+    from transformation_portal.lux_depth_v6.managed import ManagedLuxDepthV6Request
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.lux_depth_adapter import UnifiedBindings
+    from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
+
+    request = LuxDepthV5Request(root, root.parent / "output", input_color="srgb", device="cpu")
+    composite = family in {"v6", "unified-process"}
+    prepared = prepare(
+        ManagedLuxDepthV6Request(request) if composite else request,
+        publisher=GenerationPublisher(artifact_store=None, record_store=None),
+    )
+    bindings = PhotographyBindings.from_payload(
+        {
+            "schema": "tp.job.photography.bindings.v1",
+            "input_root": str(root),
+            "runtime_python": "/not/mounted/worker/runtime/bin/python",
+            "raw_python": None,
+            "cache_root": None,
+            "companion_root": None,
+            "materials_root": None,
+        }
+    ).canonical_bytes
+    if family.startswith("unified-"):
+        workflow = family.removeprefix("unified-")
+        bindings = UnifiedBindings(
+            canonicalize_json(
+                {
+                    "schema": "tp.job.lux_depth.bindings.v1",
+                    "pipeline": "lux-depth",
+                    "workflow": workflow,
+                    "photography_bindings": json.loads(bindings),
+                }
+            )
+        ).canonical_bytes
+        return prepared.canonical_plan_bytes, bindings, "lux-depth", {"workflow": workflow}
+    return prepared.canonical_plan_bytes, bindings, "lux-depth-v6" if composite else "lux-depth-v5", {}
+
+
+async def _frozen_upload_authority(store, root, family):
+    from PIL import Image
+
+    image = io.BytesIO()
+    Image.new("RGB", (3, 2)).save(image, format="PNG")
+    item, result, digest = await sealed(store, root, filename="image.png", data=image.getvalue())
+    await store.complete(item, digest, result.to_response_data())
+    selected = result.input_dir / "image.png"
+    authority = (
+        (_frozen_upload_plan(root, selected), None, "lux-depth-v3", {})
+        if family == "v3"
+        else _freeze_photographic_upload(root, family)
+    )
+    return item, result, selected, authority
+
+
+async def _admit_frozen_upload_plan(store, root, plan, *, execution_bindings=None, pipeline="lux-depth-v3", args=None):
+    from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+
+    request = {"pipeline": pipeline, "tenant_id": "tenant_a", "args": {"input_dir": str(root), **(args or {})}}
+    record = JobRecord(
+        id="job_frozen_" + uuid.uuid4().hex[:10], created_at=time.time(), request=request, effective_request=request
+    )
+    await PostgresOperationalRecordStore(database_url=store._database_url).admit(
+        record,
+        plan,
+        tenant_id="tenant_a",
+        output_root=str(root.parent / "output"),
+        requested_output_root=str(root.parent / "output"),
+        global_limit=8,
+        tenant_limit=8,
+        execution_bindings=execution_bindings,
+    )
+    return record
+
+
+@pytest.mark.parametrize("family", ["v3", "v5", "v6", "unified-infer", "unified-process"])
+async def test_frozen_selected_member_deleted_before_admission_rejects_atomically(store, tmp_path, family):
+    item, result, selected, (plan, bindings, pipeline, args) = await _frozen_upload_authority(store, tmp_path, family)
+    assert selected.is_file(), "freeze while the exact selected member still exists"
+    await _expire_receipt(store, item)
+    assert await cleanup_correlated_batches(store, tmp_path, time.time(), set()) == [item.batch_id]
+    assert not selected.exists()
+    assert (await store.get(item.tenant_id, item.owner_sha256, item.request_id)).state == "expired"
+    before = await _admission_snapshot(store)
+    with pytest.raises(UploadOwnershipLost, match="expired"):
+        await _admit_frozen_upload_plan(store, tmp_path, plan, execution_bindings=bindings, pipeline=pipeline, args=args)
+    assert await _admission_snapshot(store) == before
+
+
+@pytest.mark.parametrize("family", ["v3", "v5", "v6", "unified-infer", "unified-process"])
+async def test_frozen_live_member_admission_ignores_unrelated_deleted_sibling(store, tmp_path, family):
+    retired, old_result, digest = await sealed(store, tmp_path)
+    await store.complete(retired, digest, old_result.to_response_data())
+    await _expire_receipt(store, retired)
+    assert await cleanup_correlated_batches(store, tmp_path, time.time(), set()) == [retired.batch_id]
+    live, result, _, (plan, bindings, pipeline, args) = await _frozen_upload_authority(store, tmp_path, family)
+    record = await _admit_frozen_upload_plan(store, tmp_path, plan, execution_bindings=bindings, pipeline=pipeline, args=args)
+    async with store._session() as session:
+        assert (
+            await session.scalars(select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id))
+        ).all() == [live.batch_id]
+    assert await cleanup_correlated_batches(store, tmp_path, time.time() + 7200, set()) == []
+    assert result.input_dir.is_dir()
+
+
+async def _frozen_material_mask_authority(store, root):
+    import hashlib
+
+    import numpy as np
+    from PIL import Image
+
+    from transformation_portal.ingest.canonical_json import canonicalize_json
+    from transformation_portal.lux_depth_v4.materials import MATERIALS_MANIFEST_SCHEMA
+    from transformation_portal.lux_depth_v5.lifecycle import LuxDepthV5Request, prepare
+    from transformation_portal.materials_v4.artifacts import load_evidence, write_evidence
+    from transformation_portal.materials_v4.contracts import MaterialEvidence, RegionEvidence
+    from transformation_portal.orchestrator.artifact_store.generation import GenerationPublisher
+    from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
+
+    source = root / "photographs"
+    source.mkdir()
+    image = source / "image.png"
+    Image.new("RGB", (3, 2)).save(image)
+    source_digest = hashlib.sha256(image.read_bytes()).hexdigest()
+    materials = root / "materials"
+    materials.mkdir()
+    evidence = MaterialEvidence(source_digest, (2, 3), (RegionEvidence("water-1", "water", np.ones((2, 3), np.float32), 0.9),))
+    descriptor = materials / "evidence.json"
+    write_evidence(evidence, descriptor)
+    payload = json.loads(descriptor.read_bytes())
+    mask = payload["regions"][0]["mask"]
+    original = materials / mask["path"]
+    item, result, digest = await sealed(store, materials, filename="mask.npy", data=original.read_bytes())
+    await store.complete(item, digest, result.to_response_data())
+    original.unlink()
+    mask["path"] = (result.input_dir / "mask.npy").relative_to(materials).as_posix()
+    descriptor.write_bytes(canonicalize_json(payload))
+    # Imported bundles permit contained nested locations without changing the
+    # source-bound semantic identity. This is a real valid supported layout.
+    assert load_evidence(descriptor, source_digest, (2, 3)).content_hash() == evidence.content_hash()
+    manifest = materials / "materials.json"
+    manifest.write_bytes(
+        canonicalize_json(
+            {
+                "schema": MATERIALS_MANIFEST_SCHEMA,
+                "inputs": [
+                    {
+                        "path": "image.png",
+                        "source_sha256": source_digest,
+                        "evidence_path": "evidence.json",
+                        "evidence_sha256": hashlib.sha256(descriptor.read_bytes()).hexdigest(),
+                        "shape": [2, 3],
+                    }
+                ],
+            }
+        )
+    )
+    prepared = prepare(
+        LuxDepthV5Request(source, root / "output", input_color="srgb", materials_manifest=manifest),
+        publisher=GenerationPublisher(artifact_store=None, record_store=None),
+    )
+    bindings = PhotographyBindings.from_payload(
+        {
+            "schema": "tp.job.photography.bindings.v1",
+            "input_root": str(source),
+            "runtime_python": "/not/mounted/worker/runtime/bin/python",
+            "raw_python": None,
+            "cache_root": None,
+            "companion_root": None,
+            "materials_root": str(materials),
+        }
+    ).canonical_bytes
+    return item, result, source, descriptor, manifest, prepared.canonical_plan_bytes, bindings
+
+
+@pytest.mark.parametrize("expired", [False, True])
+async def test_nested_frozen_material_mask_pins_exact_batch_or_rejects_expired_atomically(store, tmp_path, expired):
+    item, result, source, descriptor, manifest, plan, bindings = await _frozen_material_mask_authority(store, tmp_path)
+    materials = Path(item.batch_root).parent
+    unrelated, old_result, digest = await sealed(store, materials)
+    await store.complete(unrelated, digest, old_result.to_response_data())
+    await _expire_receipt(store, unrelated)
+    if expired:
+        await _expire_receipt(store, item)
+    deleted = await cleanup_correlated_batches(store, materials, time.time(), set())
+    assert set(deleted) == {unrelated.batch_id, *([item.batch_id] if expired else [])}
+    assert descriptor.is_file() and manifest.is_file()
+    before = await _admission_snapshot(store)
+
+    async def admit():
+        return await _admit_frozen_upload_plan(
+            store,
+            source,
+            plan,
+            execution_bindings=bindings,
+            pipeline="lux-depth-v5",
+            args={"materials_manifest": str(manifest)},
+        )
+
+    if expired:
+        assert not result.input_dir.exists()
+        with pytest.raises(UploadOwnershipLost, match="expired"):
+            await admit()
+        assert await _admission_snapshot(store) == before
+    else:
+        record = await admit()
+        async with store._session() as session:
+            assert (
+                await session.scalars(
+                    select(UploadJobReferenceModel.batch_id).where(UploadJobReferenceModel.job_id == record.id)
+                )
+            ).all() == [item.batch_id]
+        assert await cleanup_correlated_batches(store, materials, time.time() + 7200, set()) == []
+        assert result.input_dir.is_dir()
+
+
+@pytest.mark.parametrize("expired", [False, True])
+async def test_large_frozen_readset_uses_one_array_without_dropping_last_batch(store, tmp_path, expired):
+    from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+    item, result, digest = await sealed(store, tmp_path)
+    await store.complete(item, digest, result.to_response_data())
+    if expired:
+        await _expire_receipt(store, item)
+        assert await cleanup_correlated_batches(store, tmp_path, time.time(), set()) == [item.batch_id]
+    record = JobRecord(id="job_large_readset", created_at=time.time(), request={"pipeline": "lux-depth-v3", "args": {}})
+    await PostgresJobRepository(database_url=store._database_url).create(record)
+    paths = tuple(tmp_path / f"missing-{index:05d}" for index in range(5000)) + (result.input_dir / "source.txt",)
+    captured = []
+    engine, _ = await _SharedEngine.get(store._database_url)
+
+    def capture(_conn, _cursor, statement, parameters, _context, _executemany):
+        if "FROM upload_receipts" in statement and "FOR UPDATE" in statement:
+            captured.append((statement, parameters))
+
+    before = await _admission_snapshot(store)
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        async with store._session() as session:
+            if expired:
+                with pytest.raises(UploadOwnershipLost, match="expired"):
+                    async with session.begin():
+                        await bind_upload_references(session, record, item.tenant_id, frozen_read_paths=paths)
+            else:
+                async with session.begin():
+                    await bind_upload_references(session, record, item.tenant_id, frozen_read_paths=paths)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    assert len(captured) == 1
+    statement, parameters = captured[0]
+    assert "unnest(" in statement and "::TEXT[]" in statement
+    assert len(parameters) < 16
+    assert len(next(value for value in parameters if isinstance(value, list))) == len(paths)
+    if expired:
+        assert await _admission_snapshot(store) == before
+    else:
+        async with store._session() as session:
+            assert (await session.scalars(select(UploadJobReferenceModel.batch_id))).all() == [item.batch_id]
 
 
 @pytest.mark.parametrize("distributed", [False, True])

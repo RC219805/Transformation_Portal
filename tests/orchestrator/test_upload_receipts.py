@@ -75,6 +75,37 @@ def partial_multipart(boundary: bytes) -> bytes:
     )
 
 
+def material_descriptor_fixture(root: Path, relative: str = "bundle/evidence.json"):
+    import numpy as np
+
+    from transformation_portal.materials_v4.artifacts import write_evidence
+    from transformation_portal.materials_v4.contracts import MaterialEvidence, RegionEvidence
+
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    evidence = MaterialEvidence("a" * 64, (1, 1), (RegionEvidence("wall", "wall", np.ones((1, 1), dtype=np.float32)),))
+    write_evidence(evidence, path)
+    payload = json.loads(path.read_bytes())
+    mask = payload["regions"][0]["mask"]
+    original_mask = path.parent / mask["path"]
+    mask["path"] = "nested/" + mask["path"]
+    mask_path = path.parent / mask["path"]
+    mask_path.parent.mkdir()
+    original_mask.rename(mask_path)
+    data = json.dumps(payload).encode()
+    path.write_bytes(data)
+    receipt = {
+        "path": relative,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size_bytes": len(data),
+        "source_sha256": evidence.source_sha256,
+        "shape": [1, 1],
+        "content_sha256": evidence.content_hash(),
+    }
+    mask_path.unlink()  # The read-set collector must never open/decode NPY.
+    return SimpleNamespace(path=path, mask=mask_path, payload=payload, receipt=receipt)
+
+
 @pytest.fixture
 def relative_read_app(tmp_path, monkeypatch):
     import app
@@ -228,7 +259,10 @@ def caption_selector_paths(field, value, **kwargs):
     if field == "selector":
         from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths
 
-        plan = {"nodes": [{"configuration": {"captioning": {"enabled": True, "selector": value}}}]}
+        plan = {
+            "input_selection": {"root": "/frozen/input", "files": [{"id": "selected", "path": "photo.jpg"}]},
+            "nodes": [{"configuration": {"captioning": {"enabled": True, "selector": value}}}],
+        }
         return _admitted_source_paths(json.dumps(plan).encode(), None, **kwargs)
     return upload_source_paths({"pipeline": "lux-depth-v3", "args": {field: value}}, **kwargs)
 
@@ -241,11 +275,16 @@ def test_closed_caption_roles_are_symbolic_only_in_caption_selector_fields(monke
 
     assert role in FASTVLM_CHECKPOINT_DIRS
 
-    def unexpected(*_args, **_kwargs):
-        pytest.fail("a closed caption role must not resolve a physical path or require a base")
+    original_path = upload_receipts.Path
 
-    monkeypatch.setattr(upload_receipts, "Path", unexpected)
-    assert caption_selector_paths(field, role) == ()
+    def checked_path(value, *args, **kwargs):
+        if isinstance(value, str) and value.strip().lower() in FASTVLM_CHECKPOINT_DIRS:
+            pytest.fail("a closed caption role must not resolve a physical path or require a base")
+        return original_path(value, *args, **kwargs)
+
+    monkeypatch.setattr(upload_receipts, "Path", checked_path)
+    expected = (Path("/frozen/input"), Path("/frozen/input/photo.jpg")) if field == "selector" else ()
+    assert caption_selector_paths(field, role) == expected
 
 
 @pytest.mark.parametrize("field", ["vlm_captioning_model", "vlmCaptioningModel", "selector"])
@@ -253,7 +292,323 @@ def test_closed_caption_roles_are_symbolic_only_in_caption_selector_fields(monke
 def test_relative_caption_paths_and_unknown_roles_require_server_base(tmp_path, field, value):
     with pytest.raises(UploadOwnershipLost, match="explicit server-owned base"):
         caption_selector_paths(field, value)
-    assert caption_selector_paths(field, value, upload_read_base=tmp_path) == ((tmp_path / value).resolve(),)
+    expected = {(tmp_path / value).resolve()}
+    if field == "selector":
+        expected.update((Path("/frozen/input"), Path("/frozen/input/photo.jpg")))
+    assert set(caption_selector_paths(field, value, upload_read_base=tmp_path)) == expected
+
+
+def frozen_selection_paths(selection, **kwargs):
+    from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths
+
+    return _admitted_source_paths(json.dumps({"input_selection": selection, "nodes": []}).encode(), None, **kwargs)
+
+
+@pytest.mark.parametrize("relative_root", [False, True])
+def test_frozen_selected_members_resolve_against_selection_root(tmp_path, monkeypatch, relative_root):
+    base, cwd = tmp_path / "server", tmp_path / "cwd"
+    base.mkdir()
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    root = base / "uploads"
+    selection = {
+        "root": "uploads" if relative_root else str(root),
+        "files": [{"id": "selected", "path": "upload_selected/input/photo.jpg"}],
+    }
+    paths = frozen_selection_paths(selection, upload_read_base=base if relative_root else None)
+    assert paths == (root, root / "upload_selected/input/photo.jpg")
+
+
+def test_relative_frozen_selection_requires_explicit_server_base():
+    with pytest.raises(UploadOwnershipLost, match="explicit server-owned base"):
+        frozen_selection_paths({"root": "uploads", "files": [{"id": "selected", "path": "photo.jpg"}]})
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        None,
+        [],
+        {"root": "/frozen/input"},
+        {"root": "/frozen/input", "files": None},
+        {"root": "/frozen/input", "files": {}},
+        {"root": None, "files": []},
+        {"root": "", "files": []},
+        {"root": 7, "files": []},
+        {"root": "/frozen/input", "files": [None]},
+        {"root": "/frozen/input", "files": [{}]},
+        *(
+            {"root": "/frozen/input", "files": [{"path": path}]}
+            for path in (7, "", "/absolute", "../escape", "./photo", "a\\b", "a\x00b")
+        ),
+    ],
+)
+def test_malformed_or_noncontained_frozen_members_fail_closed(selection):
+    with pytest.raises(UploadOwnershipLost):
+        frozen_selection_paths(selection)
+
+
+@pytest.mark.parametrize("v6", [False, True])
+@pytest.mark.parametrize("unified", [False, True])
+def test_photographic_frozen_members_use_their_closed_binding_roots(tmp_path, v6, unified):
+    from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
+    from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths
+
+    source, companions, materials = (tmp_path / name for name in ("sources", "companions", "materials"))
+    descriptor = material_descriptor_fixture(materials, "upload_material/input/evidence.json")
+    runtime = tmp_path / "runtime" / "python"
+    bound = {
+        "schema": "tp.job.photography.bindings.v1",
+        "input_root": str(source),
+        "companion_root": str(companions),
+        "materials_root": str(materials),
+        "runtime_python": str(runtime),
+        "raw_python": None,
+        "cache_root": None,
+    }
+    binding_bytes = PhotographyBindings.from_payload(bound).canonical_bytes
+    if unified:
+        binding_bytes = json.dumps(
+            {
+                "schema": "tp.job.lux_depth.bindings.v1",
+                "pipeline": "lux-depth",
+                "workflow": "process",
+                "photography_bindings": bound,
+            }
+        ).encode()
+    plan = {
+        "schema": "tp.execution.plan.v4",
+        "resources": {"max_input_bytes": 1024 * 1024, "max_pixels": 1},
+        "inputs": [
+            {
+                "path": "upload_source/input/source.jpg",
+                "companions": {"materials": {"masks": {"window": {"path": "upload_companion/input/window.png"}}}},
+                "materials_v4": descriptor.receipt,
+            }
+        ],
+        "companions_manifest": {"path": "upload_companion/input/companions.json"},
+        "materials_manifest": {"path": "upload_material/input/materials.json"},
+    }
+    if v6:
+        plan = {"schema": "tp.execution.plan.v5", "inference": plan}
+    paths = _admitted_source_paths(
+        json.dumps(plan).encode(), binding_bytes, upload_read_base=tmp_path / "unrelated-server-base"
+    )
+    assert set(paths) == {
+        source,
+        companions,
+        materials,
+        runtime,
+        source / "upload_source/input/source.jpg",
+        companions / "upload_companion/input/window.png",
+        companions / "upload_companion/input/companions.json",
+        descriptor.path,
+        descriptor.mask,
+        materials / "upload_material/input/materials.json",
+    }
+
+
+def test_frozen_material_read_set_snapshots_only_json_and_keeps_exact_mask_locators(tmp_path, monkeypatch):
+    from transformation_portal.orchestrator import upload_receipts
+
+    fixture = material_descriptor_fixture(tmp_path)
+    observed = []
+    original = upload_receipts.snapshot
+
+    def snapshot(root, path, **kwargs):
+        assert path == fixture.path and path.suffix == ".json"
+        assert kwargs["maximum_bytes"] == fixture.receipt["size_bytes"] <= 1024 * 1024
+        observed.append(path)
+        return original(root, path, **kwargs)
+
+    monkeypatch.setattr(upload_receipts, "snapshot", snapshot)
+    assert upload_receipts._material_source_paths(
+        tmp_path, fixture.receipt, {"max_input_bytes": 1024 * 1024, "max_pixels": 1}
+    ) == (fixture.mask,)
+    assert observed == [fixture.path]
+    assert not fixture.mask.exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing",
+        "digest",
+        "size",
+        "oversized",
+        "source",
+        "content",
+        "shape",
+        "unknown_field",
+        "regions",
+        "mask_path",
+        "mask_dtype",
+        "mask_size",
+        "mask_shape",
+        "mask_hash",
+        "aggregate_bytes",
+    ],
+)
+def test_frozen_material_descriptors_fail_closed_on_identity_metadata_and_bounds(tmp_path, mutation):
+    from transformation_portal.materials_v4.contracts import MaterialLimits
+    from transformation_portal.orchestrator.upload_receipts import _material_source_paths
+
+    fixture = material_descriptor_fixture(tmp_path)
+    receipt, payload = fixture.receipt, fixture.payload
+    resources = {"max_input_bytes": 1024 * 1024, "max_pixels": 1}
+    if mutation == "missing":
+        fixture.path.unlink()
+    elif mutation == "digest":
+        receipt["sha256"] = "b" * 64
+    elif mutation == "size":
+        receipt["size_bytes"] += 1
+    elif mutation == "oversized":
+        receipt["size_bytes"] = MaterialLimits().max_manifest_bytes + 1
+    elif mutation == "aggregate_bytes":
+        resources["max_input_bytes"] = receipt["size_bytes"] + payload["regions"][0]["mask"]["size_bytes"] - 1
+    else:
+        if mutation == "source":
+            payload["source_sha256"] = "b" * 64
+        elif mutation == "content":
+            payload["content_sha256"] = "b" * 64
+        elif mutation == "shape":
+            payload["shape"] = [2, 2]
+        elif mutation == "unknown_field":
+            payload["extra"] = "unsupported"
+        elif mutation == "regions":
+            payload["regions"] *= MaterialLimits().max_regions + 1
+        else:
+            key, value = {
+                "mask_path": ("path", "../outside.npy"),
+                "mask_dtype": ("dtype", "float64"),
+                "mask_size": ("size_bytes", True),
+                "mask_shape": ("shape", [2, 2]),
+                "mask_hash": ("file_sha256", "not-a-digest"),
+            }[mutation]
+            payload["regions"][0]["mask"][key] = value
+        data = json.dumps(payload).encode()
+        fixture.path.write_bytes(data)
+        receipt["sha256"], receipt["size_bytes"] = hashlib.sha256(data).hexdigest(), len(data)
+    with pytest.raises(UploadOwnershipLost):
+        _material_source_paths(tmp_path, receipt, resources)
+
+
+@pytest.mark.parametrize("budget", ["manifest", "input"])
+def test_over_budget_material_receipts_are_rejected_before_opening_json(tmp_path, monkeypatch, budget):
+    from transformation_portal.materials_v4.contracts import MaterialLimits
+    from transformation_portal.orchestrator import upload_receipts
+
+    fixture = material_descriptor_fixture(tmp_path)
+    resources = {"max_input_bytes": 1024 * 1024, "max_pixels": 1}
+    if budget == "manifest":
+        fixture.receipt["size_bytes"] = MaterialLimits().max_manifest_bytes + 1
+    else:
+        resources["max_input_bytes"] = fixture.receipt["size_bytes"] - 1
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("a frozen byte-budget rejection must precede descriptor I/O")
+
+    monkeypatch.setattr(upload_receipts, "snapshot", unexpected)
+    with pytest.raises(UploadOwnershipLost):
+        upload_receipts._material_source_paths(tmp_path, fixture.receipt, resources)
+
+
+@pytest.mark.asyncio
+async def test_large_frozen_read_sets_use_one_typed_array_parameter(tmp_path):
+    from sqlalchemy import Text
+    from sqlalchemy.dialects.postgresql import ARRAY, dialect
+
+    selected = tuple(tmp_path / "frozen" / f"member-{index:05d}.jpg" for index in range(4096))
+
+    class Session:
+        statement = None
+
+        async def scalars(self, statement):
+            self.statement = statement
+            return SimpleNamespace(all=lambda: [])
+
+        async def scalar(self, _statement):
+            pytest.fail("no matched upload rows must not sample a ledger clock")
+
+    session = Session()
+    await bind_upload_references(
+        session, JobRecord(id="job_large_readset", created_at=1.0, request={}), "tenant_a", frozen_read_paths=selected
+    )
+    statement = session.statement.compile(dialect=dialect())
+    assert statement.params["upload_read_paths"] == [str(path) for path in selected]
+    assert len(statement.params) < 16
+    assert str(statement).count("unnest(") == 1
+    array = statement.binds["upload_read_paths"].type
+    assert isinstance(array, ARRAY) and isinstance(array.item_type, Text)
+
+
+@pytest.mark.parametrize("pipeline", ["lux-depth", "lux-depth-v5", "lux-depth-v6"])
+def test_legacy_material_manifest_retention_keeps_nested_untracked_batches(tmp_path, pipeline):
+    import app
+
+    root = tmp_path / "uploads"
+    result = stage_upload_batch(upload_root=root, uploads=[IncomingUpload("nested/mask.npy", io.BytesIO(b"old"))], now=1.0)
+    manifest = root / "legacy-materials.json"
+    manifest.write_text("{}")
+    payload = {"pipeline": pipeline, "args": {"materials_manifest": str(manifest)}}
+    assert upload_source_paths(payload) == (manifest,)
+    retained = set()
+    app._add_staged_input_dir(retained, app.Job(id="job_legacy_material", created_at=1.0, request=payload))
+    assert cleanup_expired_batches(root, now=1e12, ttl_seconds=1, retained_input_dirs=retained) == []
+    assert result.input_dir.exists()
+    assert str(root) in retained
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"pipeline": "unknown", "args": {"materials_manifest": "manifest.json"}},
+        {"pipeline": "lux-depth-v5", "args": {"other_manifest": "manifest.json"}},
+        {"pipeline": "lux-depth-v5", "args": {"materialsManifest": "manifest.json"}},
+    ],
+)
+def test_retention_namespace_fallback_is_field_and_workflow_scoped(tmp_path, payload):
+    assert upload_source_paths(payload, upload_read_base=tmp_path, retention_only=True) == ()
+
+
+@pytest.mark.parametrize("mutation", ["outside", "contained_alias", "loop"])
+def test_frozen_member_symlinks_cannot_change_containment_or_identity(tmp_path, mutation):
+    root = tmp_path / "frozen"
+    root.mkdir()
+    member = root / "photo.jpg"
+    if mutation == "loop":
+        member.symlink_to("photo.jpg")
+    else:
+        target = (tmp_path if mutation == "outside" else root) / "actual.jpg"
+        target.write_bytes(b"retained source")
+        member.symlink_to(target)
+    with pytest.raises(UploadOwnershipLost):
+        frozen_selection_paths({"root": str(root), "files": [{"id": "selected", "path": "photo.jpg"}]})
+
+
+def test_photographic_frozen_members_keep_their_existing_portable_path_limits(tmp_path):
+    from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
+    from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths
+
+    root, runtime = tmp_path / "source", tmp_path / "runtime" / "python"
+    binding = PhotographyBindings.from_payload(
+        {
+            "schema": "tp.job.photography.bindings.v1",
+            "input_root": str(root),
+            "runtime_python": str(runtime),
+            "raw_python": None,
+            "cache_root": None,
+            "companion_root": None,
+            "materials_root": None,
+        }
+    )
+    relative = "/".join([*(f"directory-{index}" for index in range(65)), "photo.jpg"])
+    plan = {"schema": "tp.execution.plan.v4", "inputs": [{"path": relative}]}
+    assert set(_admitted_source_paths(json.dumps(plan).encode(), binding.canonical_bytes)) == {
+        root,
+        runtime,
+        root / relative,
+    }
 
 
 @pytest.mark.asyncio

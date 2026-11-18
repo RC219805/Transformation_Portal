@@ -3848,7 +3848,10 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
 def _add_staged_input_dir(retained: set[str], job: Job) -> None:
     from transformation_portal.orchestrator.upload_receipts import upload_source_paths
 
-    retained.update(str(path) for path in upload_source_paths(job.request, job.effective_request, upload_read_base=REPO_ROOT))
+    retained.update(
+        str(path)
+        for path in upload_source_paths(job.request, job.effective_request, upload_read_base=REPO_ROOT, retention_only=True)
+    )
 
 
 async def _retained_staged_input_dirs() -> Optional[set[str]]:
