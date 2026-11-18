@@ -26,6 +26,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -144,21 +145,20 @@ class SandboxExecutor:
             config: Executor configuration
             fs: FSGuard instance (uses global if not provided)
             cas: CAS store (creates one if not provided)
-            gpu_semaphore: GPU semaphore (creates one if not provided and GPUs available)
+            gpu_semaphore: GPU semaphore (if not provided and
+                ``config.max_concurrent_gpu > 0``, one is created on the first
+                GPU run and shut down by :meth:`close`)
         """
         self.config = config
         self.fs = fs or get_fs_guard()
         self.cas = cas or ArtifactStore(config.cas_root)
 
-        # Initialize GPU semaphore if not provided
-        if gpu_semaphore is None and config.max_concurrent_gpu > 0:
-            try:
-                self.gpu_semaphore = GPUSemaphore(num_devices=config.max_concurrent_gpu)
-            except Exception as e:
-                logger.warning("Failed to initialize GPU semaphore: %s", e)
-                self.gpu_semaphore = None
-        else:
-            self.gpu_semaphore = gpu_semaphore
+        # A GPUSemaphore starts a multiprocessing.Manager server process, so an
+        # owned one is only created when a node actually asks for a GPU.
+        self.gpu_semaphore: Optional[GPUSemaphore] = gpu_semaphore
+        self._create_gpu_semaphore = gpu_semaphore is None and config.max_concurrent_gpu > 0
+        self._owns_gpu_semaphore = False
+        self._gpu_semaphore_lock = threading.Lock()
 
         # Create workspace root
         config.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -171,8 +171,42 @@ class SandboxExecutor:
             "SandboxExecutor initialized: workspace=%s, cas=%s, gpu=%s",
             config.workspace_root,
             config.cas_root,
-            "enabled" if self.gpu_semaphore else "disabled",
+            "enabled" if self._gpu_enabled else "disabled",
         )
+
+    @property
+    def _gpu_enabled(self) -> bool:
+        return self.gpu_semaphore is not None or self._create_gpu_semaphore
+
+    def _get_gpu_semaphore(self) -> Optional[GPUSemaphore]:
+        """Return the GPU semaphore, creating the owned one on first use."""
+        with self._gpu_semaphore_lock:
+            if self.gpu_semaphore is None and self._create_gpu_semaphore:
+                self._create_gpu_semaphore = False
+                try:
+                    self.gpu_semaphore = GPUSemaphore(num_devices=self.config.max_concurrent_gpu)
+                    self._owns_gpu_semaphore = True
+                except Exception as e:
+                    logger.warning("Failed to initialize GPU semaphore: %s", e)
+            return self.gpu_semaphore
+
+    def close(self) -> None:
+        """Shut down the GPU semaphore this executor created (idempotent).
+
+        A semaphore passed in by the caller is left to the caller.
+        """
+        with self._gpu_semaphore_lock:
+            self._create_gpu_semaphore = False
+            if self._owns_gpu_semaphore and self.gpu_semaphore is not None:
+                self.gpu_semaphore.close()
+                self.gpu_semaphore = None
+            self._owns_gpu_semaphore = False
+
+    def __enter__(self) -> "SandboxExecutor":
+        return self
+
+    def __exit__(self, *exc_info: Any) -> None:
+        self.close()
 
     def create_sandbox(
         self,
@@ -234,9 +268,10 @@ class SandboxExecutor:
         sandbox.start()
 
         try:
-            if use_gpu and self.gpu_semaphore:
+            gpu_semaphore = self._get_gpu_semaphore() if use_gpu else None
+            if gpu_semaphore is not None:
                 # Acquire GPU with semaphore
-                with self.gpu_semaphore.acquire(timeout=timeout) as slot:
+                with gpu_semaphore.acquire(timeout=timeout) as slot:
                     gpu_slot = slot
                     logger.debug(
                         "Node %s acquired GPU: device_id=%d",
@@ -355,5 +390,5 @@ class SandboxExecutor:
             "successful": successful,
             "failed": failed,
             "total_duration_seconds": total_duration,
-            "gpu_enabled": self.gpu_semaphore is not None,
+            "gpu_enabled": self._gpu_enabled,
         }

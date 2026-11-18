@@ -386,6 +386,96 @@ class TestExecutionEngineGPU:
             mock_pool.acquire.assert_called_once()
             mock_pool.release.assert_called_once_with(mock_lease)
 
+    def test_run_node_fails_closed_when_gpu_lease_unavailable(self, tmp_path: Path) -> None:
+        """A use_gpu node whose lease cannot be granted must not run unpinned (T-14)."""
+        from transformation_portal.runtime.gpu_pool import GPUPoolError
+
+        config = EngineConfig(
+            workspace_root=tmp_path / "workspace",
+            cas_root=tmp_path / "cas",
+            gpu_devices=[0],
+        )
+
+        with (
+            patch("transformation_portal.runtime.engine.ProcessExecutor") as mock_exec_cls,
+            patch("transformation_portal.runtime.engine.GPUPool") as mock_pool_cls,
+        ):
+            mock_executor = MagicMock()
+            mock_exec_cls.return_value = mock_executor
+            mock_pool = MagicMock()
+            mock_pool.total_devices = 1
+            mock_pool.acquire.side_effect = GPUPoolError("No GPU available (timeout=30s)")
+            mock_pool_cls.return_value = mock_pool
+
+            engine = ExecutionEngine(config)
+
+            with pytest.raises(ExecutionEngineError, match="requested a GPU"):
+                engine.run_node(MockProcessNode, inputs={}, node_id="gpu_node", use_gpu=True)
+
+            mock_executor.run.assert_not_called()
+            mock_pool.release.assert_not_called()
+
+
+def _acquire_in_thread(pool, **kwargs):
+    """Run pool.acquire in a thread with a watchdog so a regression cannot hang the suite."""
+    import threading
+
+    outcome: Dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            outcome["lease"] = pool.acquire(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - recorded for the assertion
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    thread.join(timeout=5)
+    return thread.is_alive(), outcome
+
+
+class TestGPUPoolAcquire:
+    """GPUPool.acquire timeout and empty-pool behaviour (T-14)."""
+
+    def test_timeout_zero_does_not_wait_forever(self) -> None:
+        from transformation_portal.runtime.gpu_pool import GPUPool, GPUPoolError
+
+        pool = GPUPool(devices=[0])
+        held = pool.acquire()
+
+        still_blocked, outcome = _acquire_in_thread(pool, timeout=0)
+
+        assert still_blocked is False
+        assert isinstance(outcome.get("error"), GPUPoolError)
+        pool.release(held)
+
+    def test_empty_pool_raises_instead_of_blocking(self) -> None:
+        from transformation_portal.runtime.gpu_pool import GPUPool, GPUPoolError
+
+        pool = GPUPool(devices=[])
+
+        still_blocked, outcome = _acquire_in_thread(pool)
+
+        assert still_blocked is False
+        assert isinstance(outcome.get("error"), GPUPoolError)
+        assert "no devices" in str(outcome["error"])
+
+    def test_positive_timeout_still_waits_for_release(self) -> None:
+        import threading
+
+        from transformation_portal.runtime.gpu_pool import GPUPool
+
+        pool = GPUPool(devices=[3])
+        held = pool.acquire()
+        releaser = threading.Timer(0.05, pool.release, args=(held,))
+        releaser.start()
+
+        still_blocked, outcome = _acquire_in_thread(pool, timeout=4)
+        releaser.join()
+
+        assert still_blocked is False
+        assert outcome["lease"].device_id == 3
+
 
 class TestExecutionEngineLineage:
     """Tests for lineage and provenance in ExecutionEngine."""

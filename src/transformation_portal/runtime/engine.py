@@ -278,14 +278,16 @@ class ExecutionEngine:
         gpu_lease: Optional[GPULease] = None
         gpu_device: Optional[int] = None
 
-        # Acquire GPU if requested
+        # Acquire GPU if requested. A GPU was requested and a pool exists, so a
+        # failed lease must fail the node: running it unpinned would put it on
+        # whichever device the child picks, alongside the current lease holder.
         if use_gpu and self.gpu_pool:
             try:
                 gpu_lease = self.gpu_pool.acquire(timeout=30)
-                gpu_device = gpu_lease.device_id
-                logger.debug("Acquired GPU %d for node %s", gpu_device, node_id)
             except GPUPoolError as e:
-                logger.warning("Failed to acquire GPU: %s", e)
+                raise ExecutionEngineError(f"Node {node_id} requested a GPU but no lease was granted: {e}") from e
+            gpu_device = gpu_lease.device_id
+            logger.debug("Acquired GPU %d for node %s", gpu_device, node_id)
 
         try:
             # Build sandbox config
