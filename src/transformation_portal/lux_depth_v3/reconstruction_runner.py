@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import shutil
 import zipfile
@@ -394,7 +395,10 @@ def run_scene_reconstruction(
     else:
         execution_manifest = manifest
         execution_image_paths = list(context.images)
-        execution_cameras = [camera.params for camera in context.cameras]
+        # The builder hands these cameras to the returned scene, which is then
+        # rescaled in place; copy them so the caller's immutable context keeps
+        # matching the manifest just written (a retry with it must align).
+        execution_cameras = [copy.deepcopy(camera.params) for camera in context.cameras]
 
     iterations_value = int(execution_manifest.reconstruction_parameters.get("iterations", iterations))
     tier_value = str(execution_manifest.reconstruction_parameters.get("tier", tier))
