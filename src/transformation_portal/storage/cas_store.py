@@ -741,17 +741,43 @@ class ArtifactStore:
 
         dest.parent.mkdir(parents=True, exist_ok=True)
 
-        if dest.exists() or dest.is_symlink():
-            if not overwrite:
-                raise CASError(f"Destination exists and overwrite=False: {dest}")
-            dest.unlink()
+        if not overwrite and (dest.exists() or dest.is_symlink()):
+            raise CASError(f"Destination exists and overwrite=False: {dest}")
+
+        # Build the link or copy in a private staging directory next to
+        # ``dest`` and publish it with a single rename (or an exclusive link
+        # when overwrite=False). Unlinking ``dest`` and then recreating it
+        # raced with concurrent materializations of the same destination
+        # (FileExistsError / FileNotFoundError) and could expose a partially
+        # copied file.
+        staging_dir = Path(tempfile.mkdtemp(prefix=".cas_materialize_", dir=dest.parent))
+        staged = staging_dir / "object"
+        try:
+            # Use absolute path for symlink
+            target = src.resolve()
+            if overwrite:
+                if use_symlink:
+                    staged.symlink_to(target)
+                else:
+                    shutil.copy2(src, staged)
+                os.replace(staged, dest)
+            else:
+                # Exclusive publish: a destination created after the check
+                # above is still refused instead of being replaced.
+                try:
+                    if use_symlink:
+                        dest.symlink_to(target)
+                    else:
+                        shutil.copy2(src, staged)
+                        os.link(staged, dest)
+                except FileExistsError as exc:
+                    raise CASError(f"Destination exists and overwrite=False: {dest}") from exc
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
         if use_symlink:
-            # Use absolute path for symlink
-            dest.symlink_to(src.resolve())
             logger.debug("CAS symlink: %s -> %s", dest, sha256[:8])
         else:
-            shutil.copy2(src, dest)
             logger.debug("CAS copy: %s -> %s", dest, sha256[:8])
 
         return dest

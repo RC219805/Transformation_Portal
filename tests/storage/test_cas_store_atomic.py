@@ -314,6 +314,57 @@ class TestMaterializeCorruptionHandling:
         assert dest.exists()
 
 
+class TestMaterializeConcurrency:
+    """STOR-06: materialize() publishes the destination atomically."""
+
+    @pytest.mark.parametrize("use_symlink", [True, False])
+    def test_concurrent_materialize_of_one_destination(self, tmp_path, use_symlink):
+        store = ArtifactStore(tmp_path / "cas")
+        data = b"model weights" * 512
+        obj = store.add_bytes(data)
+        dest = tmp_path / "runtime" / "model.bin"
+        errors: list[str] = []
+
+        def worker() -> None:
+            for _ in range(200):
+                try:
+                    store.materialize(obj.sha256, dest, use_symlink=use_symlink, verify=False)
+                except (CASError, OSError) as exc:
+                    errors.append(type(exc).__name__)
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        assert dest.is_symlink() is use_symlink
+        assert dest.read_bytes() == data
+        # No staging leftovers next to the destination.
+        assert [p.name for p in dest.parent.iterdir()] == ["model.bin"]
+
+    def test_overwrite_false_refuses_destination_created_during_copy(self, tmp_path, monkeypatch):
+        from transformation_portal.storage import cas_store
+
+        store = ArtifactStore(tmp_path / "cas")
+        obj = store.add_bytes(b"fresh")
+        dest = tmp_path / "out" / "file.bin"
+        real_copy2 = cas_store.shutil.copy2
+
+        def racing_copy2(src, dst, *args, **kwargs):
+            # Another writer creates the destination after the existence check.
+            if not dest.exists():
+                dest.write_bytes(b"written by another writer")
+            return real_copy2(src, dst, *args, **kwargs)
+
+        monkeypatch.setattr(cas_store.shutil, "copy2", racing_copy2)
+        with pytest.raises(CASError, match="overwrite=False"):
+            store.materialize(obj.sha256, dest, use_symlink=False, overwrite=False)
+        assert dest.read_bytes() == b"written by another writer"
+        assert [p.name for p in dest.parent.iterdir()] == ["file.bin"]
+
+
 class TestQuarantineGC:
     """Tests for gc_quarantine() lifecycle policy."""
 
