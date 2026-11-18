@@ -4755,15 +4755,20 @@ class EnhanceOrchestrator:
                     raise
                 if self.config.depth_fallback == "fail":
                     raise
-                if selected_attempt_index is None:
+                if selected_attempt_index is None and self._prepared_execution is None:
                     # No backend produced depth: do not carry the start-up
-                    # "success" selection into this image's manifest/result.
+                    # "success" selection into this image's manifest. Only the
+                    # returned (manifest) selection changes: the active state
+                    # keeps feeding result and error rows the start-up backend,
+                    # which the run-card validator and the prepared evidence
+                    # authority require to be a real candidate. Prepared runs
+                    # are left alone for the same reason; they fail closed at
+                    # final evidence because the depth outputs are required.
                     active_backend_metadata = build_failed_backend_metadata(
                         depth_attempts,
                         self._backend_metadata,
                         str(self.config.depth_fallback),
                     )
-                    self._set_active_depth_state(active_backend_metadata, depth_attempts, None)
                 if self.config.depth_fallback == "skip":
                     return (
                         None,
