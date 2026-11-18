@@ -43,6 +43,10 @@ watermarking, and anchor payload generation.
 - Anchor payload hashes use SHA3-256 for the manifest, each supplied asset, and
   the combined hero+web asset bundle.
 - Watermark helpers preserve the original LSB and DCT embedding behavior.
+  Both fail closed instead of embedding a truncated payload: DCT mode needs at
+  least 256 full 8x8 blocks (for example 128x128 pixels), and `watermark --mode
+  lsb` refuses output formats other than PNG, BMP, TIFF or PPM because lossy or
+  palettised encoders (JPEG, WebP, GIF) destroy the LSB payload.
 - The Solidity contract is a reference skeleton with an owner-gated license
   setter; production deployment still requires the target auth and treasury
   model.

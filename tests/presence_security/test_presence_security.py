@@ -17,6 +17,7 @@ from PIL import Image
 from transformation_portal.presence_security import (
     PresenceParameters,
     add_dither,
+    embed_dct_luma,
     embed_lsb_rgb,
     extract_lsb_rgb,
     manifest_session_from_lsb,
@@ -217,3 +218,45 @@ def test_presence_cli_watermark_lsb_writes_extractable_image(tmp_path: Path) -> 
     manifest_hash16, session_id16 = manifest_session_from_lsb(Image.open(out))
     assert manifest_hash16 == hashlib.sha3_256(MANIFEST_EXAMPLE_PATH.read_bytes()).digest()[:16]
     assert session_id16 == hashlib.sha256(b"demo-session").digest()[:16]
+
+
+def test_dct_watermark_rejects_images_with_too_few_blocks_for_payload() -> None:
+    """T-18: fewer than 256 full 8x8 blocks must raise instead of embedding a truncated payload."""
+    manifest_hash = sha3_manifest_hex(b'{"presence": true}')
+    small = Image.fromarray(np.full((64, 64, 3), 128, dtype=np.uint8), mode="RGB")  # 64 blocks
+
+    with pytest.raises(ValueError, match="Image too small for DCT payload"):
+        embed_dct_luma(small, manifest_hash, "demo-session")
+
+    # Exactly 256 full blocks (128x128) still embeds; partial edge blocks do not count.
+    exact = Image.fromarray(np.full((128, 128, 3), 128, dtype=np.uint8), mode="RGB")
+    assert embed_dct_luma(exact, manifest_hash, "demo-session").size == (128, 128)
+    partial = Image.fromarray(np.full((127, 135, 3), 128, dtype=np.uint8), mode="RGB")  # 15 x 16 full blocks
+    with pytest.raises(ValueError, match="Image too small for DCT payload"):
+        embed_dct_luma(partial, manifest_hash, "demo-session")
+
+
+@pytest.mark.parametrize("suffix", [".jpg", ".jpeg", ".webp", ".gif", ".unknownext"])
+def test_presence_cli_watermark_lsb_refuses_lossy_output_formats(tmp_path: Path, suffix: str) -> None:
+    """T-18: LSB mode must not exit 0 while writing a format that destroys the watermark."""
+    source = tmp_path / "source.png"
+    out = tmp_path / f"watermarked{suffix}"
+    Image.fromarray(np.full((16, 16, 3), 128, dtype=np.uint8), mode="RGB").save(source)
+
+    result = _run_module(
+        "watermark",
+        "--image",
+        str(source),
+        "--manifest",
+        str(MANIFEST_EXAMPLE_PATH),
+        "--session",
+        "demo-session",
+        "--mode",
+        "lsb",
+        "--out",
+        str(out),
+    )
+
+    assert result.returncode != 0
+    assert "lossless output format" in result.stderr
+    assert not out.exists()
