@@ -1,6 +1,7 @@
 """Unit tests for Gaussian rasterizer (Phase 6A)."""
 
 import itertools
+import weakref
 
 import numpy as np
 import pytest
@@ -267,7 +268,7 @@ class TestRendering:
         center_pixel = rendered[H // 2, W // 2]
         assert center_pixel[0] > 0.1  # Red channel should be bright
 
-    def test_render_multiple_gaussians(self):
+    def test_render_multiple_gaussians(self, monkeypatch):
         """Test rendering multiple Gaussians with occlusion."""
         # Two Gaussians: red in back, blue in front
         positions = torch.tensor([[0.0, 0.0, 10.0], [0.0, 0.0, 5.0]])  # Blue closer
@@ -314,6 +315,29 @@ class TestRendering:
                 assert torch.allclose(
                     stacked_center, torch.tensor(STACKED_CENTER_RGB), atol=1e-5
                 ), f"{render.__name__} composited input order {input_order} as {stacked_center.tolist()}"
+
+        from transformation_portal.spatial_ai.reconstruction import gaussian_rasterizer
+
+        # Observe window lifetimes while rendering an overlapping scene. At most
+        # the previous alpha may remain live when the next one is yielded.
+        iterate_windows = gaussian_rasterizer._iter_alpha_windows
+        observed = []
+
+        def track_windows(*args):
+            for index, alpha, bounds in iterate_windows(*args):
+                assert sum(reference() is not None for reference in observed) <= 1
+                observed.append(weakref.ref(alpha))
+                yield index, alpha, bounds
+
+        monkeypatch.setattr(gaussian_rasterizer, "_iter_alpha_windows", track_windows)
+        monkeypatch.setattr(gaussian_rasterizer, "_IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA", 0)
+        scene = _overlapping_scene(40, IMAGE_SIZE)
+        with torch.inference_mode():
+            streamed = render_gaussians(*scene, IMAGE_SIZE)
+            reference = _render_gaussians_in_place_reference(*scene[:3], *scene[4:], IMAGE_SIZE)
+        assert len(observed) == 40
+        assert all(reference() is None for reference in observed)
+        assert torch.equal(streamed, reference)
 
     def test_render_empty_scene(self):
         """Test rendering with no visible Gaussians."""

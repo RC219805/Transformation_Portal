@@ -136,7 +136,7 @@ Notes:
 - `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps managed portal/bootstrap RUM disabled even when the hard flag is on.
 - `TP_FRONTDOOR_RUM_ENABLED=0` independently disables landing, login, logout, and front-door payloads submitted through the RUM proxy after the shared hard flag is on.
 - `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT=0` samples out front-door RUM even when both hard flags are on.
-- When RUM is on, the front door caps `/v1/portal/rum` bodies at 16 KiB and answers larger ones with `413 REQUEST_TOO_LARGE` without contacting FastAPI. Only the `Accept` and `Content-Type` client headers are forwarded upstream with the backend credentials.
+- When RUM is on, the front door caps `/v1/portal/rum` bodies at 16 KiB and answers larger ones with `413 REQUEST_TOO_LARGE` without contacting FastAPI. The client header allowlist covers `Accept` and `Content-Type`. The proxy also supplies trace and forwarding context and backend credentials.
 - `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
 - `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.
 - Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
@@ -201,7 +201,7 @@ Notes:
 - A successful file or folder upload replaces Input Directory only. Output Directory must separately name an authorized destination; staging does not dispatch a job.
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
 - Each multipart part's header block is capped at 16 KiB (not configurable). Larger or unparseable part headers return typed `400` with reason `invalid_multipart_payload`.
-- `TP_PORTAL_UPLOAD_TTL_SECONDS` is the age at which the cleanup loop removes a staged batch that no job reads from. A batch is kept while any job's Input Directory is the staged input directory, a directory inside the batch, or a directory that contains the batch (such as the upload root). A batch whose staging was interrupted before its receipt was written is removed once it is older than both the TTL and one hour; a batch that carries an upload-receipt ledger marker or lock identity is never removed by this path (see Request-correlated upload recovery).
+- `TP_PORTAL_UPLOAD_TTL_SECONDS` is the age at which legacy TTL cleanup can remove an unreferenced staged batch. An input directory inside or above the batch protects it. After an interrupted staging operation leaves a batch without a receipt, legacy cleanup waits for both the TTL and one hour. The request-correlated upload ledger governs batches that carry its marker or lock identity.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
 
 

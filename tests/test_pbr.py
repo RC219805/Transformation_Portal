@@ -205,7 +205,7 @@ def test_write_pbr_maps_partial_failure_cleanup():
 def _pbr_parity_depths():
     rng = np.random.default_rng(1)
     h, w = 96, 128
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    yy, xx = np.indices((h, w), dtype=np.float32)
     scene = (0.5 + 0.2 * np.sin(xx / 20) * np.cos(yy / 15) + 0.01 * rng.standard_normal((h, w))).astype(np.float32)
     scene[30:60, 40:90] -= 0.15
     ramp = np.tile(np.linspace(0.0, 1.0, w, dtype=np.float32), (h, 1))

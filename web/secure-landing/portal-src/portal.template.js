@@ -6108,7 +6108,7 @@ function resumeBlockedJobStreamsAfterAuthUpdate() {
         if (!_isJobStreamRecoverable(job)) return;
         if (_jobHasActiveStream(job)) return;
         appendJobLog(job, '[INFO] API key updated. Reconnecting event stream...');
-        logToPane(job.id, '[INFO] API key updated. Reconnecting event stream...');
+        logToPane(job.id);
         startJobEventStream(job, job.eventStreamUrl);
     });
 }
@@ -7284,7 +7284,7 @@ function scheduleSseReconnect(job) {
     job.sseRetry.attempt = attempt;
     _noteTransportWarning(job, 'reconnect_pending', `Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`, 'warn');
     appendJobLog(job, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
-    logToPane(job.id, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
+    logToPane(job.id);
     scheduleRenderJobQueue();
 
     job.sseRetry.timer = setTimeout(() => {
@@ -11045,11 +11045,8 @@ function handleArtifactRailKeydown(event) {
     if (nextButton) nextButton.focus();
 }
 
-function logToPane(jobId, line) {
-    // The operate tools own the pane (selected-run filter, log search, follow). They
-    // ignore other runs' lines, append the line as one node, keep the pane bounded and
-    // coalesce the autoscroll per frame instead of rewriting the whole pane per line.
-    _deferredOperateSurfaceApi()?.appendLog?.(jobId, line);
+function logToPane(jobId) {
+    _deferredOperateSurfaceApi()?.appendLog?.(jobId);
 }
 
 // ============================================================================
@@ -11136,7 +11133,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
     if (eventName === 'log') {
         const line = String(parsed.line || '');
         appendJobLog(job, line);
-        logToPane(job.id, line);
+        logToPane(job.id);
         return;
     }
     if (eventName === 'progress') {
@@ -11205,7 +11202,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
             if (readable) {
                 const line = `[ERROR] ${readable}`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
             }
         }
         if (parsed.artifacts && parsed.artifacts.items) {
@@ -11218,7 +11215,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         _reconcileJobTimeline(job);
         const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
         appendJobLog(job, endLine);
-        logToPane(job.id, endLine);
+        logToPane(job.id);
         stopJobActivity(job);
         if (state.selectedJobId === job.id) void refreshJobStatus(job);
         scheduleRenderJobQueue();
@@ -11281,7 +11278,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                     ? `[ERROR] Event stream authorization failed (${status}). Restore the managed session to resume live job events.`
                     : `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
                 createToast(
                     _isManagedAuthMode()
                         ? 'Event stream authorization failed. Restore the managed session to resume live logs.'
@@ -11292,7 +11289,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                 _noteTransportWarning(job, `stream_status_${status}`, `Event stream subscribe failed with status ${status}. ${parsedError.message}`, isRetryableStatus ? 'warn' : 'error');
                 const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
             }
             scheduleRenderJobQueue();
             return;
@@ -11377,7 +11374,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
             _noteTransportWarning(job, 'stream_error', `Event stream error: ${err instanceof Error ? err.message : String(err)}`, 'warn');
             const line = `[WARN] Event stream error: ${err instanceof Error ? err.message : String(err)}`;
             appendJobLog(job, line);
-            logToPane(job.id, line);
+            logToPane(job.id);
             scheduleRenderJobQueue();
         }
     } finally {
@@ -11481,7 +11478,7 @@ function startJobEventStream(job, eventsUrl) {
             : '[WARN] Native SSE transport failed. Reconnecting...';
         _noteTransportWarning(job, warningCode, warningDetail, 'warn');
         appendJobLog(job, logLine);
-        logToPane(job.id, logLine);
+        logToPane(job.id);
         _teardownJobEventStream(job);
         scheduleRenderJobQueue();
         scheduleSseReconnect(job);
@@ -11622,7 +11619,7 @@ async function cancelJob(id) {
             job.finishedAt = job.finishedAt || Date.now();
             job.updatedAt = Date.now();
             appendJobLog(job, '[WARN] Canceled by user.');
-            logToPane(id, '[WARN] Canceled by user.');
+            logToPane(id);
             _reconcileJobTimeline(job);
             scheduleRenderJobQueue();
             if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
@@ -11660,7 +11657,7 @@ async function cancelJob(id) {
             : rawMessage;
         job.cancelError = message || 'Cancellation failed.';
         appendJobLog(job, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
-        logToPane(id, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
+        logToPane(id);
         scheduleRenderJobQueue();
         _announceCancellationStatus(job, `Cancellation was not confirmed for job ${id}. The job remains active. Retry Cancel.`);
         await refreshJobStatus(job);
@@ -11874,7 +11871,7 @@ function startSseWatchdog() {
                 : '[WARN] Native SSE stream stalled. Reconnecting...';
             _noteTransportWarning(job, 'stream_stalled', stalledDetail, 'warn');
             appendJobLog(job, stalledLine);
-            logToPane(job.id, stalledLine);
+            logToPane(job.id);
             _teardownJobEventStream(job);
             scheduleSseReconnect(job);
         });

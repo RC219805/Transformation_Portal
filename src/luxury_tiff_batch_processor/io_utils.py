@@ -440,7 +440,7 @@ def _tag_ints(tags: Any, tag: int) -> Tuple[int, ...]:
 
 
 def read_full_precision_pixels(source: Path, image: Image.Image) -> Optional[np.ndarray]:
-    """Return the stored samples of a TIFF whose Pillow decode holds fewer bits than the file.
+    """Return full-precision TIFF samples with straight alpha when present.
 
     Pillow opens 16-bit RGB and RGBA TIFFs as 8-bit ``RGB``/``RGBA`` images, so
     reading pixels through Pillow alone drops the low byte of every sample. For
@@ -481,6 +481,7 @@ def read_full_precision_pixels(source: Path, image: Image.Image) -> Optional[np.
             page = tif.pages[0]
             samples = page.asarray()
             axes = page.axes
+            associated_alpha = tifffile.EXTRASAMPLE.ASSOCALPHA in page.extrasamples
     except Exception as exc:  # pylint: disable=broad-exception-caught  # tifffile/codec errors are not a closed set
         LOGGER.warning("%s: tifffile could not decode it (%s: %s).", reduced, type(exc).__name__, exc)
         return None
@@ -497,7 +498,30 @@ def read_full_precision_pixels(source: Path, image: Image.Image) -> Optional[np.
             "%s: tifffile returned %s %s samples, Pillow describes %s.", reduced, samples.dtype, samples.shape, expected
         )
         return None
-    return np.ascontiguousarray(samples, dtype=samples.dtype.newbyteorder("="))
+    samples = np.ascontiguousarray(samples, dtype=samples.dtype.newbyteorder("="))
+    if associated_alpha:
+        if samples.dtype != np.uint16 or bands not in (2, 4):
+            raise ValueError(f"{source}: associated alpha requires unsigned 16-bit LA or RGBA samples")
+        if not samples.flags.writeable:
+            samples = samples.copy()
+        _straighten_uint16_alpha(samples)
+    return samples
+
+
+def _straighten_uint16_alpha(samples: np.ndarray) -> None:
+    """Convert premultiplied colors in place with one channel of uint32 scratch."""
+    maximum = np.iinfo(np.uint16).max
+    alpha = samples[..., -1]
+    nonzero = alpha != 0
+    half_alpha = alpha // 2
+    for channel in np.moveaxis(samples[..., :-1], -1, 0):
+        # Round to the nearest native sample. Even the largest numerator fits uint32.
+        straight = np.multiply(channel, maximum, dtype=np.uint32)
+        straight += half_alpha
+        np.floor_divide(straight, alpha, out=straight, where=nonzero)
+        np.copyto(straight, 0, where=~nonzero)
+        np.minimum(straight, maximum, out=straight)
+        channel[:] = straight
 
 
 def float_to_dtype_array(  # pylint: disable=too-many-branches

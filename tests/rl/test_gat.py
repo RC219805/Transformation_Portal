@@ -73,10 +73,12 @@ def test_attention_rows_cover_input_edges_then_added_loops():
     _, attn = layer.forward(torch.randn(3, 4), edges, return_attention=True)
 
     # 2 input edges + 3 self-loops; incoming attention per node sums to one.
+    assert isinstance(attn, torch.Tensor)
     assert attn.shape == (5, 2)
     dst = torch.cat([edges[1], torch.arange(3)])
     for node in range(3):
-        assert torch.allclose(attn[dst == node].sum(dim=0), torch.ones(2))
+        incoming = torch.index_select(attn, 0, torch.nonzero(dst == node).flatten())
+        assert torch.allclose(incoming.sum(dim=0), torch.ones(2))
 
 
 def test_self_loops_can_be_disabled():

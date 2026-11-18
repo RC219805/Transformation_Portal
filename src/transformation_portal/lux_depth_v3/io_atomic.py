@@ -74,12 +74,12 @@ _FCNTL = _optional_platform_module("fcntl")
 _MSVCRT = _optional_platform_module("msvcrt")
 
 
-def _destination_file_mode(output_path: Path) -> int:
-    """Return the existing destination mode or the fixed new-file mode."""
+def _destination_file_mode(output_path: Path, *, new_file_mode: int = _DEFAULT_NEW_FILE_MODE) -> int:
+    """Return the existing destination mode or the supplied creation mode."""
     try:
         return stat.S_IMODE(output_path.stat().st_mode)
     except FileNotFoundError:
-        return _DEFAULT_NEW_FILE_MODE
+        return new_file_mode
 
 
 def _apply_file_mode(path: Path, descriptor: int, mode: int) -> None:
@@ -357,10 +357,10 @@ def atomic_temp_file(
         output_path: Final destination path
         suffix: Temp file suffix (default: ".tmp")
         prefix: Temp file prefix (default: ".tmp_")
-        create_file: If True, pre-create file with mkstemp (for FD-based writers).
-                     If False, generate unique path only (for path-based writers).
+        create_file: Always pre-create the file with mkstemp when True.
         new_file_mode: Mode for a new destination. None preserves the temporary
             file's creation mode, including the umask applied by a path writer.
+            Replacements using this policy always start with a private file.
 
     Yields:
         Path to temporary file (may or may not exist yet)
@@ -389,8 +389,8 @@ def atomic_temp_file(
     except FileNotFoundError:
         destination_mode = new_file_mode
 
-    if create_file:
-        # Pre-create file with mkstemp (for FD-based or direct file access)
+    if create_file or (new_file_mode is None and destination_mode is not None):
+        # Existing generic outputs stay private until their mode is restored.
         temp_fd, temp_path_str = tempfile.mkstemp(suffix=suffix, dir=output_path.parent, prefix=prefix)
         temp_path = Path(temp_path_str)
 
@@ -445,12 +445,19 @@ def atomic_temp_file(
             raise
 
 
-def atomic_write_bytes(output_path: Path, data: bytes, *, _preserved_mode: int | None = None) -> Path:
+def atomic_write_bytes(
+    output_path: Path,
+    data: bytes,
+    *,
+    new_file_mode: int = _DEFAULT_NEW_FILE_MODE,
+    _preserved_mode: int | None = None,
+) -> Path:
     """Atomically and durably write bytes to a file.
 
     Args:
         output_path: Destination file path
         data: Bytes to write
+        new_file_mode: Mode applied only when creating a missing destination.
         _preserved_mode: Internal pair-publication override captured before a
             stale sidecar is invalidated. Ordinary callers must leave this
             unset so the destination mode is discovered immediately before
@@ -475,7 +482,9 @@ def atomic_write_bytes(output_path: Path, data: bytes, *, _preserved_mode: int |
 
     try:
         _ensure_durable_directory(output_path.parent)
-        destination_mode = _destination_file_mode(output_path) if _preserved_mode is None else _preserved_mode
+        destination_mode = (
+            _destination_file_mode(output_path, new_file_mode=new_file_mode) if _preserved_mode is None else _preserved_mode
+        )
         temp_fd, temp_path_str = tempfile.mkstemp(
             suffix=".tmp",
             dir=output_path.parent,

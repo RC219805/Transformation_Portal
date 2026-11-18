@@ -38,7 +38,7 @@ def test_namespaced_key_distinguishes_shape_and_dtype():
 
 def test_namespaced_key_distinguishes_sub_quantum_float_images():
     cache = DepthCache(max_size=8, namespace=_NAMESPACE)
-    image = np.linspace(0.0, 1.0, 16 * 16 * 3, dtype=np.float32).reshape(16, 16, 3)
+    image = np.linspace(0.0, 1.0, num=16 * 16 * 3, dtype=np.float32).reshape((16, 16, 3))
     nudged = image.copy()
     nudged[0, 0, 1] += np.float32(1e-4)  # below one 8-bit step after min-max normalisation
 

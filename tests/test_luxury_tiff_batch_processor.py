@@ -299,6 +299,31 @@ def test_process_single_image_keeps_16bit_tiff_precision(tmp_path: Path, layout:
     assert extrasamples == ((2,) if layout == "rgba" else ())
 
 
+@pytest.mark.parametrize("planar", [False, True])
+def test_process_single_image_converts_associated_16bit_tiff_to_straight_alpha(tmp_path: Path, planar: bool):
+    tifffile = pytest.importorskip("tifffile")
+    # Opacity 1/3 and 2/3 allow exact native recovery of these color samples.
+    samples = np.array([[[101, 12938, 21111, 21845], [40318, 4074, 912, 43690], [0, 0, 0, 0]]], dtype=np.uint16)
+    expected = np.array([[[303, 38814, 63333, 21845], [60477, 6111, 1368, 43690], [0, 0, 0, 0]]], dtype=np.uint16)
+    source = tmp_path / "associated16.tif"
+    tifffile.imwrite(
+        source,
+        np.moveaxis(samples, -1, 0) if planar else samples,
+        photometric="rgb",
+        planarconfig="separate" if planar else "contig",
+        extrasamples="assocalpha",
+    )
+    destination = tmp_path / "straight16.tif"
+    ltiff.process_single_image(source, destination, ltiff.AdjustmentSettings(), compression="tiff_lzw")
+
+    with tifffile.TiffFile(destination) as written:
+        page = written.pages[0]
+        assert page.extrasamples == (tifffile.EXTRASAMPLE.UNASSALPHA,)
+        output = page.asarray()
+    assert output.dtype == np.uint16
+    np.testing.assert_array_equal(output, expected)
+
+
 @pytest.mark.parametrize("profile_name", ["quality", "balanced", "performance"])
 def test_process_single_image_8bit_output_is_unchanged_pillow_route(tmp_path: Path, profile_name: str):
     """8-bit sources keep the Pillow decode, so their deliverables stay byte-identical."""

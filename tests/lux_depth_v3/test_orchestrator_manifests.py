@@ -619,7 +619,7 @@ class TestDottedInputNamesKeepSeparateArtifacts:
         assert back_masks == mask_dir / f"{back_key.name}_materials_v3_masks.npz"
         # The second image's masks must not have replaced the first image's.
         with np.load(front_masks) as archive:
-            assert float(archive["sky"].min()) == 1.0
+            assert float(np.min(archive["sky"])) == 1.0
 
     @pytest.mark.parametrize("relative_input", ["image.jpg", "scene1/IMG_0042.png", "a/b/render final.tiff", "noext"])
     def test_artifact_names_are_unchanged_without_interior_dots(self, tmp_path: Path, relative_input: str) -> None:

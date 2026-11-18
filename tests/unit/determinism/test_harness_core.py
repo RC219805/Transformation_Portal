@@ -149,7 +149,7 @@ def _store_artifact(cas_root: Path, tensor: np.ndarray, *, with_npy: bool = True
 
 @pytest.mark.parametrize("with_npy", [True, False], ids=["npy", "bin"])
 def test_load_tensor_from_cas_returns_the_payload_named_by_the_id(tmp_path: Path, with_npy: bool):
-    tensor = np.linspace(0.0, 1.0, 24, dtype=np.float32).reshape(2, 4, 3)
+    tensor = np.linspace(0.0, 1.0, num=24, dtype=np.float32).reshape((2, 4, 3))
     artifact_id = _store_artifact(tmp_path, tensor, with_npy=with_npy)
 
     loaded = _load_tensor_from_cas(tmp_path, artifact_id)

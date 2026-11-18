@@ -317,19 +317,31 @@ def test_save_image_respects_umask_in_shared_directory(tmp_path):
     target = tmp_path / "out.png"
     script = """
 import os
+import stat
 import sys
+from pathlib import Path
 
 from PIL import Image
 
 from transformation_portal.utils.image_utils import save_image
 
+class InspectingWriter:
+    def save(self, path):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        Image.new("RGB", (2, 2), color="red").save(path)
+
+target = Path(sys.argv[1])
 os.umask(0o077)
-save_image(Image.new("RGB", (2, 2)), sys.argv[1])
+save_image(Image.new("RGB", (2, 2)), target)
+assert stat.S_IMODE(target.stat().st_mode) == 0o600
+os.umask(0o022)
+save_image(InspectingWriter(), target)
 """
     subprocess.run([sys.executable, "-c", script, str(target)], check=True)
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
     with Image.open(target) as image:
         assert image.size == (2, 2)
+        assert image.getpixel((0, 0)) == (255, 0, 0)
 
 
 class TestFitSizeWithin:

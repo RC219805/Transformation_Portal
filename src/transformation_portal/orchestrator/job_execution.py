@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from contextlib import suppress
+from contextlib import AbstractAsyncContextManager, nullcontext, suppress
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,6 +105,7 @@ class JobExecutionRuntime(Generic[_JobT]):
     resolve_output_root: Callable[[str], Path]
     allow_legacy_commands: bool = False
     release_job: Callable[[str], None] | None = None
+    legacy_terminal_guard: Callable[[_JobT], AbstractAsyncContextManager[Any]] | None = None
 
 
 def execution_error(
@@ -696,34 +697,40 @@ class JobExecutionService(Generic[_JobT]):
                     self.runtime.cache_job(self.runtime.job_from_record(committed))
                 return
 
-            # Index artifacts and publish terminal events BEFORE setting finished_at.
-            # This ensures late-connecting SSE clients can deterministically check
-            # done_published_at to know if they need to wait for real events or can
-            # safely synthesize a 'done' from job state. Indexing also computes
-            # bounded SHA-256 fingerprints, so run it in a worker thread to keep
-            # the event loop responsive while large jobs are wrapping up.
-            # A failure here must still finish the job: without the ``done``
-            # event and ``finished_at`` the row stays non-terminal for SSE
-            # clients and retention forever. A successful run whose outputs
-            # could not be recorded is not reported as a success, matching
-            # the managed publication branch above.
-            indexed_artifacts: list[dict[str, Any]] = []
-            try:
-                indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
-                await self.runtime.mirror_artifacts(job)
-                self.runtime.refresh_summary(job)
-            except Exception:
-                LOGGER.exception("job %s artifact recording failed", job.id)
-                if job.state in {"succeeded", "partial"}:
-                    job.state = "failed"
-                    job.error = execution_error("ARTIFACT_STORE_UNAVAILABLE", "Job artifacts could not be recorded.")
-            for artifact in indexed_artifacts:
-                await self.runtime.publish_event(
-                    job.id,
-                    "artifact",
-                    {"id": job.id, **artifact},
-                )
+            await self._finalize_legacy_job(job)
 
+    async def _finalize_legacy_job(self, job: _JobT) -> None:
+        """Finalize only while the runner still owns the legacy outcome."""
+        indexed_artifacts: list[dict[str, Any]] = []
+        try:
+            if not _lease_lost():
+                indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
+                if job.finished_at is not None or job.done_published_at is not None:
+                    return
+                if not _lease_lost():
+                    await self.runtime.mirror_artifacts(job)
+                    if job.finished_at is not None or job.done_published_at is not None:
+                        return
+                    if not _lease_lost():
+                        self.runtime.refresh_summary(job)
+        except Exception:
+            LOGGER.exception("job %s artifact recording failed", job.id)
+            if job.state in {"succeeded", "partial"}:
+                job.state = "failed"
+                job.error = execution_error("ARTIFACT_STORE_UNAVAILABLE", "Job artifacts could not be recorded.")
+
+        # The memory broker and API share this job object. Serialize only the
+        # final publication with reclamation so a stalled mirror cannot hold
+        # up the reclaim sweep, and exactly one path owns the terminal event.
+        guard = self.runtime.legacy_terminal_guard
+        async with guard(job) if guard is not None else nullcontext():
+            if job.finished_at is not None or job.done_published_at is not None:
+                return
+            if not _lease_lost():
+                for artifact in indexed_artifacts:
+                    await self.runtime.publish_event(job.id, "artifact", {"id": job.id, **artifact})
+            if _stop_requested(job):
+                _mark_stopped(job)
             await self.runtime.publish_event(
                 job.id,
                 "done",
@@ -736,8 +743,8 @@ class JobExecutionService(Generic[_JobT]):
                     "run_summary": job.run_summary or None,
                 },
             )
-            # Mark timestamps AFTER all events are published, so SSE endpoint knows
-            # it's safe to synthesize 'done' if done_published_at is set.
+            # Completion evidence follows indexing, mirroring and event
+            # publication. A provisional terminal state remains reclaimable.
             job.done_published_at = self.runtime.now()
             job.finished_at = job.done_published_at
             try:
@@ -745,4 +752,4 @@ class JobExecutionService(Generic[_JobT]):
             except Exception:  # noqa: BLE001 - repository lag must not rewrite runner outcome
                 LOGGER.exception("job repository final state persist failed for %s", job.id)
             self.runtime.cache_job(job)
-            await self.runtime.cleanup_jobs(self.runtime.now(), force=False)
+        await self.runtime.cleanup_jobs(self.runtime.now(), force=False)

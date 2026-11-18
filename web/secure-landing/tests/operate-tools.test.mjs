@@ -59,7 +59,7 @@ test('empty and filtered-empty logs stay distinct without implying durable full-
 });
 
 
-function controlsFixture() {
+function controlsFixture(portalRenderScheduler) {
   class Control {
     value = ''; textContent = ''; disabled = false; scrollTop = 0; scrollHeight = 1000;
     listeners = new Map(); attributes = new Map(); dataset = {};
@@ -73,7 +73,7 @@ function controlsFixture() {
     selectedJobId: 'job-b', jobs: structuredClone(jobs).map(job => ({ ...job, logs: ['first', 'second'] })) };
   const logPane = new Control(), copied = [];
   let filters = 0, privileged = true;
-  const api = createOperateTools({ state, els: { logPane }, maxLogLines: 1200,
+  const api = createOperateTools({ state, els: { logPane }, maxLogLines: 1200, portalRenderScheduler,
     document: { getElementById: id => controls.get(id), createElement: () => new Control() },
     _displayJobState: job => job.state, _portalPrivilegesReady: () => privileged,
     copyToClipboard: value => copied.push(value), onFilterChange: () => { filters += 1; } });
@@ -126,31 +126,29 @@ test('exports recheck current privileges at the click and searches clear across 
   assert.equal(h.api.visibleJobs().length, 3);
 });
 
-test('live appended lines honour log search and paused follow without rewriting the pane', () => {
+test('live log bursts reconcile the filtered pane and summary after bounded buffer eviction', () => {
   const frames = [];
-  const h = controlsFixture();
-  const pane = h.logPane;
-  pane.childNodes = [];
-  pane.appendChild = node => { pane.childNodes.push(node); return node; };
-  pane.removeChild = node => { pane.childNodes.splice(pane.childNodes.indexOf(node), 1); return node; };
-  Object.defineProperty(pane, 'firstChild', { get: () => pane.childNodes[0] });
-  // A second tool set over the same controls takes over their listeners.
-  const api = createOperateTools({ state: h.state, els: { logPane: pane }, maxLogLines: 1200,
-    document: { getElementById: id => h.controls.get(id), createElement: () => ({}), createTextNode: data => ({ data }) },
-    requestAnimationFrame: callback => { frames.push(callback); return frames.length; },
-    _displayJobState: job => job.state, _portalPrivilegesReady: () => true, onFilterChange: () => {} });
-  const job = h.state.jobs.find(item => item.id === 'job-b');
-  const logSearch = h.controls.get('loadedLogSearch'); logSearch.value = 'warn'; logSearch.trigger('input');
-  const hydratedText = pane.textContent;
-  for (const line of ['[INFO] skipped', '[WARN] shown']) { job.logs.push(line); api.appendLog('job-b', line); }
-  assert.equal(pane.textContent, hydratedText, 'appending never rewrites the hydrated pane');
-  assert.deepEqual(pane.childNodes.map(node => node.data), ['[WARN] shown\n']);
-  assert.equal(frames.length, 1, 'autoscroll and summary are coalesced into one frame');
-  h.controls.get('toggleLogFollowBtn').trigger('click');
-  pane.scrollTop = 7;
-  frames[0]();
-  assert.equal(pane.scrollTop, 7, 'paused follow keeps the scroll position');
-  assert.match(h.controls.get('loadedLogSummary').textContent, /^1 matching \/ 4 loaded lines/);
-  api.appendLog('job-c', '[WARN] another run');
-  assert.deepEqual(pane.childNodes.map(node => node.data), ['[WARN] shown\n'], 'lines of another run are not appended');
+  const { api, state, logPane, controls } = controlsFixture({ schedule: callback => frames.push(callback) });
+  const job = state.jobs.find(item => item.id === 'job-b');
+  job.logs = ['[WARN] evicted', ...Array.from({ length: 1199 }, (_, index) => `[INFO] loaded ${index}`)];
+  const logSearch = controls.get('loadedLogSearch');
+  logSearch.value = 'warn'; logSearch.trigger('input');
+  assert.equal(logPane.textContent, '[WARN] evicted\n');
+  controls.get('toggleLogFollowBtn').trigger('click');
+  logPane.scrollTop = 7;
+
+  for (const line of ['[INFO] first append', '[WARN] retained']) {
+    job.logs.shift();
+    job.logs.push(line);
+    api.appendLog(job.id);
+  }
+  api.appendLog('job-c');
+  assert.equal(frames.length, 1);
+  assert.equal(logPane.textContent, '[WARN] evicted\n');
+  frames.shift()();
+  assert.equal(logPane.textContent, '[WARN] retained\n');
+  assert.equal(logPane.scrollTop, 7);
+  assert.match(controls.get('loadedLogSummary').textContent, /^1 matching \/ 1200 loaded lines/);
+  api.appendLog('job-c');
+  assert.deepEqual(frames, []);
 });

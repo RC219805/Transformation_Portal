@@ -5609,7 +5609,8 @@ def test_run_job_does_not_spawn_or_rewrite_startup_terminal_authority(
 
 
 @pytest.mark.parametrize("in_memory", [True, False])
-def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: bool) -> None:
+@pytest.mark.parametrize("stranded_state", ["running", "succeeded"])
+def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: bool, stranded_state: str) -> None:
     class _ExpiredLeaseBroker:
         def __init__(self, job_ids: list[str]) -> None:
             self._job_ids = job_ids
@@ -5636,7 +5637,8 @@ def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: b
             id=f"job_reclaim_stranded_{in_memory}",
             created_at=finished - 10.0,
             started_at=finished - 9.0,
-            state="running",
+            state=stranded_state,
+            exit_code=0 if stranded_state == "succeeded" else None,
         )
         await _seed_job_async(done)
         await _seed_job_async(stranded)
@@ -5656,6 +5658,90 @@ def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: b
         stranded_record = await repository.get(stranded.id)
         assert stranded_record is not None and stranded_record.state == "worker_lost"
         assert stranded_record.error["code"] == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+        assert stranded_record.finished_at is not None and stranded_record.done_published_at is not None
+        await orchestrator_app._reclaim_sweep_once(_ExpiredLeaseBroker([stranded.id]), repository)
+        events = [event async for event in orchestrator_app._job_event_store().events_since(stranded.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_during_legacy_mirror_keeps_the_reclaimed_terminal_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        mirror_entered, mirror_released = asyncio.Event(), asyncio.Event()
+        job = orchestrator_app.Job(id="job_reclaim_during_mirror", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+
+        async def stalled_mirror(_job):
+            mirror_entered.set()
+            await mirror_released.wait()
+
+        class ExpiredLeaseBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+        monkeypatch.setattr(orchestrator_app, "_mirror_job_artifacts_to_store", stalled_mirror)
+        monkeypatch.setattr(orchestrator_app, "_index_job_run_artifacts", lambda _job: [{"path": "result.txt"}])
+        runner = asyncio.create_task(orchestrator_app._run_job(job, [sys.executable, "-c", "pass"]))
+        repository = orchestrator_app._job_repository()
+        try:
+            await asyncio.wait_for(mirror_entered.wait(), timeout=5)
+            provisional = await repository.get(job.id)
+            assert provisional is not None and provisional.state == "succeeded"
+            assert provisional.finished_at is None and provisional.done_published_at is None
+            await orchestrator_app._reclaim_sweep_once(ExpiredLeaseBroker(), repository)
+        finally:
+            mirror_released.set()
+            await asyncio.wait_for(runner, timeout=5)
+
+        completed = await repository.get(job.id)
+        assert completed is not None and completed.state == "worker_lost"
+        assert completed.finished_at is not None and completed.done_published_at is not None
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+        assert not any(event.event_type == "artifact" for event in events)
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_retries_legacy_terminal_projection_without_a_duplicate_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_reclaim_transient_store", created_at=orchestrator_app._now(), state="succeeded")
+        await _seed_job_async(job)
+        repository = orchestrator_app._job_repository()
+        original_get, original_update = repository.get, repository.update
+        terminal_writes = 0
+
+        async def unavailable_read(_job_id):
+            raise ConnectionError("interrupted reclaim lookup")
+
+        async def interrupted_projection(job_id, **fields):
+            nonlocal terminal_writes
+            if fields.get("state") == "worker_lost":
+                terminal_writes += 1
+                if terminal_writes == 1:
+                    raise ConnectionError("interrupted terminal write")
+            return await original_update(job_id, **fields)
+
+        class ExpiredLeaseBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+        monkeypatch.setattr(repository, "get", unavailable_read)
+        monkeypatch.setattr(repository, "update", interrupted_projection)
+        await orchestrator_app._reclaim_sweep_once(ExpiredLeaseBroker(), repository)
+
+        completed = await original_get(job.id)
+        assert completed is not None and completed.state == "worker_lost"
+        assert terminal_writes == 2
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
 
     asyncio.run(scenario())
 

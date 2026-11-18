@@ -6,6 +6,7 @@
 
 import { test, expect } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -5017,6 +5018,47 @@ test('@portal-browser UX08 loaded log tools pause follow and export the complete
   await page.locator('#clearLogsBtn').click();
   await expect(pane).toBeEmpty();
   await expect(page.locator('#downloadLoadedLogsBtn')).toBeDisabled();
+});
+
+test('@portal-browser live log search drops evicted matches from the full loaded buffer', async ({ page }) => {
+  const jobs = loadedOperateJobs();
+  Object.assign(jobs[0], { state: 'running', progress: 30, finished_at: undefined,
+    logs_tail: ['warning evicted', ...Array.from({ length: 1199 }, (_, index) => `info loaded ${index}`)] });
+  await installHydratedPortalRoutes(page, { jobs });
+
+  let stream;
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Access-Control-Allow-Origin': '*' });
+    response.flushHeaders();
+    stream = response;
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    await page.route('**/v1/jobs/job-b/events', route => route.continue({ url: `http://127.0.0.1:${server.address().port}/events` }));
+    await gotoHydratedPortal(page, '/portal?view=operate&job=job-b');
+    await page.locator('#inspectorLogsTab').click();
+    await expect.poll(() => Boolean(stream)).toBe(true);
+    await page.locator('#toggleLogFollowBtn').click();
+    await page.locator('#loadedLogSearch').fill('warning');
+    const pane = page.locator('#logPane');
+    const summary = page.locator('#loadedLogSummary');
+    await expect(pane).toHaveText('warning evicted');
+    await expect(summary).toContainText('1 matching / 1200 loaded lines');
+
+    stream.write('event: log\ndata: {"line":"info appended"}\n\n');
+    await expect(summary).toContainText('0 matching / 1200 loaded lines');
+    await expect(pane).toBeEmpty();
+    stream.write('event: log\ndata: {"line":"warning retained"}\n\n');
+    await expect(summary).toContainText('1 matching / 1200 loaded lines');
+    await expect(pane).toHaveText('warning retained');
+    await expect(page.locator('#toggleLogFollowBtn')).toHaveAttribute('aria-pressed', 'false');
+  } finally {
+    stream?.end();
+    await new Promise(resolve => {
+      server.close(resolve);
+      server.closeAllConnections();
+    });
+  }
 });
 
 test('@portal-browser rejected configuration imports preserve the active draft and preview', async ({ page }) => {

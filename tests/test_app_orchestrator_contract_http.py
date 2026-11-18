@@ -4512,6 +4512,94 @@ def test_artifact_retention_cleanup_never_unlinks_files_the_jobs_run_did_not_pro
     assert rewritten_later.exists()
 
 
+@pytest.mark.parametrize("peer_state", ["overlapping", "running", "unknown_window"])
+def test_overlapping_legacy_outputs_refuse_explicit_and_retention_deletion(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, peer_state: str
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_overlap_a")
+    peer_file = own_file.with_name("peer-only.txt")
+    peer_file.write_bytes(b"second job output")
+    written_at = job.started_at + 50.0
+    os.utime(peer_file, (written_at, written_at))
+    job.artifacts["items"].append({"relative_path": peer_file.name})
+    _sync_seeded_job(job)
+    peer = orchestrator_app.Job(
+        id="job_artifact_overlap_b",
+        created_at=job.created_at,
+        started_at=None if peer_state == "unknown_window" else job.started_at + 10.0,
+        finished_at=job.finished_at + 10.0 if peer_state == "overlapping" else None,
+        state="running" if peer_state == "running" else "succeeded",
+        request=job.request,
+    )
+    _seed_job(peer)
+    # Only the repository knows about the second job.
+    orchestrator_app.JOBS.pop(peer.id)
+
+    def forbidden_store():
+        pytest.fail("ambiguous ownership must be rejected before storage deletion")
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", forbidden_store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    expired_at = job.finished_at + orchestrator_app.ARTIFACT_RETENTION_SECONDS + 1.0
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(expired_at))
+
+    assert peer_file.read_bytes() == b"second job output"
+    assert own_file.exists()
+    assert not orchestrator_app._artifacts_deleted(job)
+
+
+def test_legacy_artifact_delete_fails_closed_when_job_scan_is_incomplete(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_scan_incomplete")
+    repository = orchestrator_app._job_repository()
+    list_records = repository.list
+
+    async def incomplete_inventory(*, limit=None):
+        records, total = await list_records(limit=limit)
+        return records, total + 1
+
+    def forbidden_store():
+        pytest.fail("incomplete inventory must be rejected before touching storage")
+
+    monkeypatch.setattr(repository, "list", incomplete_inventory)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", forbidden_store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert response.status_code == 503
+    assert own_file.exists()
+    assert not orchestrator_app._artifacts_deleted(job)
+
+
+def test_legacy_unlink_rechecks_jobs_started_during_mirror_deletion(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_delete_new_peer")
+
+    class Store:
+        backend = "local"
+
+        async def delete(self, _job_id):
+            peer = orchestrator_app.Job(
+                id="job_artifact_delete_late_peer",
+                created_at=job.finished_at + 1,
+                started_at=job.finished_at + 1,
+                state="running",
+                request=job.request,
+            )
+            orchestrator_app.JOBS[peer.id] = peer
+            return 0
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", Store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    assert own_file.exists()
+
+
 @pytest.mark.parametrize("state", ["canceled", "worker_lost"])
 def test_delete_job_artifacts_unlinks_nothing_for_a_job_that_was_never_launched(
     client: TestClient,

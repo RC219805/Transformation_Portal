@@ -24,6 +24,7 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
+from itertools import chain
 from pathlib import Path, PurePosixPath
 from typing import (
     TYPE_CHECKING,
@@ -32,6 +33,7 @@ from typing import (
     Callable,
     Deque,
     Dict,
+    Iterable,
     Iterator,
     List,
     Mapping,
@@ -1164,6 +1166,7 @@ class Job:
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
     error: Optional[Dict[str, Any]] = None
+    terminal_lock: asyncio.Lock = dataclass_field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     def add_log(self, line: str, limit: int = LOG_TAIL_LIMIT) -> None:
         self.logs_tail.append(line)
@@ -3719,10 +3722,68 @@ def _artifact_retention_due(job: Job, now: float) -> bool:
     return isinstance(expires_at, (int, float)) and float(expires_at) <= now
 
 
-def _delete_legacy_job_artifact_files(job: Job) -> int:
+class _AmbiguousLegacyArtifactOwnership(ValueError):
+    """Legacy inventory cannot attribute files to one of the overlapping runs."""
+
+
+async def _require_unambiguous_legacy_artifact_deletion(
+    job: Job, retained: Optional[Tuple[List[JobRecord], int]] = None
+) -> Optional[Tuple[Path, List[JobRecord]]]:
+    if (job.started_at is None and job.state in _UNLAUNCHED_JOB_STATES) or not _artifact_known_relative_paths(job):
+        return None
     output_dir = _job_output_dir(job)
-    if output_dir is None or not output_dir.exists() or not output_dir.is_dir():
+    if output_dir is None:
+        return None
+    try:
+        records, total = retained if retained is not None else await _job_repository().list(limit=None)
+        if len(records) != total:
+            raise _JobRepositoryUnavailable("legacy artifact ownership scan incomplete")
+    except _JobRepositoryUnavailable:
+        raise
+    except Exception as exc:
+        raise _JobRepositoryUnavailable("legacy artifact ownership scan failed") from exc
+    _check_legacy_artifact_output_overlap(job, output_dir, chain(records, JOBS.values()))
+    return output_dir, records
+
+
+def _check_legacy_artifact_output_overlap(job: Job, output_dir: Path, peers: Iterable[Job | JobRecord]) -> None:
+    # Retained rows cover other processes and restarts. Also inspect the runtime
+    # view in case the runner start has not reached the repository yet.
+    for peer in peers:
+        if peer.id == job.id or (peer.started_at is None and peer.state in {"canceled", "worker_lost"}):
+            continue
+        if peer.state not in ACTIVE_JOB_STATES:
+            if job.finished_at is not None and peer.started_at is not None and job.finished_at < peer.started_at:
+                continue
+            if peer.finished_at is not None and job.started_at is not None and peer.finished_at < job.started_at:
+                continue
+        requested = _job_requested_output_dir(peer)
+        if not requested:
+            continue
+        try:
+            # Inspect identity even if the peer's historical root is outside
+            # today's allowlist. This grants no authority over that path.
+            peer_output = _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise _AmbiguousLegacyArtifactOwnership("legacy peer output identity is unavailable") from exc
+        if output_dir.is_relative_to(peer_output) or peer_output.is_relative_to(output_dir):
+            raise _AmbiguousLegacyArtifactOwnership("legacy jobs share an overlapping output directory and run window")
+
+
+def _delete_legacy_job_artifact_files(
+    job: Job,
+    ownership: Optional[Tuple[Path, List[JobRecord]]],
+    runtime_peers: Tuple[Job, ...],
+) -> int:
+    if ownership is None:
         return 0
+    checked_root, records = ownership
+    output_dir = _job_output_dir(job)
+    if output_dir != checked_root:
+        raise _AmbiguousLegacyArtifactOwnership("legacy output identity changed before deletion")
+    if not checked_root.is_dir():
+        return 0
+    _check_legacy_artifact_output_overlap(job, checked_root, chain(records, runtime_peers))
 
     if not job.artifact_lookup:
         _hydrate_artifact_lookup_from_items(job)
@@ -3754,11 +3815,14 @@ def _delete_legacy_job_artifact_files(job: Job) -> int:
         if resolved_artifact in seen:
             continue
         seen.add(resolved_artifact)
-        if not resolved_artifact.exists():
+        try:
+            metadata = resolved_artifact.stat(follow_symlinks=False)
+        except FileNotFoundError:
             continue
-        if not resolved_artifact.is_file():
+        if not stat.S_ISREG(metadata.st_mode):
             raise ArtifactPathValidationError("artifact_path_not_file")
-        if not _portal_job_artifacts._path_changed_within(resolved_artifact, not_before=not_before, not_after=not_after):
+        changed_at = max(metadata.st_mtime, metadata.st_ctime)
+        if (not_before is not None and changed_at < not_before) or (not_after is not None and changed_at > not_after):
             preserved += 1
             continue
         resolved_artifact.unlink()
@@ -3777,6 +3841,7 @@ async def _delete_job_artifacts_for_job(
     *,
     reason: str,
     fail_closed_on_repository: bool = False,
+    retained: Optional[Tuple[List[JobRecord], int]] = None,
 ) -> Optional[int]:
     if _uses_dispatch_authority():
         try:
@@ -3805,6 +3870,7 @@ async def _delete_job_artifacts_for_job(
             raise _JobRepositoryUnavailable("generation deletion record unavailable") from exc
         await _flush_operational_outbox_best_effort()
         return count
+    ownership = await _require_unambiguous_legacy_artifact_deletion(job, retained)
     try:
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - callers surface this as 503
@@ -3823,7 +3889,9 @@ async def _delete_job_artifacts_for_job(
     lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
     try:
         store_deleted_count = await store.delete(_artifact_storage_job_id(job))
-        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job)
+        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job, ownership, tuple(JOBS.values()))
+    except _AmbiguousLegacyArtifactOwnership:
+        raise
     except Exception as exc:  # noqa: BLE001 - cleanup/deletion must be observable and non-fatal
         lifecycle.update(
             {
@@ -3886,7 +3954,8 @@ async def _cleanup_expired_job_artifacts(
         # Bounded request-path sweeps are only opportunistic. The periodic
         # cleanup loop invokes this with ``scan_limit=None`` so old artifact
         # rows are not permanently starved by repository ordering.
-        records, _ = await _job_repository().list(limit=scan_limit)
+        retained = await _job_repository().list(limit=scan_limit)
+        records, _ = retained
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job artifact retention scan failed")
         return
@@ -3901,7 +3970,10 @@ async def _cleanup_expired_job_artifacts(
                     "artifact retention preserved legacy job %s without dispatch authority; migration required", job.id
                 )
                 continue
-            deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
+            deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired", retained=retained)
+        except _AmbiguousLegacyArtifactOwnership:
+            LOGGER.info("artifact retention preserved legacy job %s because output ownership is ambiguous", record.id)
+            continue
         except Exception:  # noqa: BLE001 - one authority/store failure must not starve later jobs
             LOGGER.exception("artifact retention cleanup failed for job %s", record.id)
             continue
@@ -7355,25 +7427,29 @@ async def _request_cancel(job: Job) -> None:
         job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
 
 
-def _job_output_dir(job: Job) -> Optional[Path]:
+def _job_output_dir(job: Job | JobRecord) -> Optional[Path]:
     fence = current_dispatch_fence()
     if fence is not None and fence.locator.job_id == job.id:
         return Path(fence.output_root)
-    request_payload = (
-        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
-    )
-    args = request_payload.get("args") if isinstance(request_payload, dict) else None
-    if not isinstance(args, dict):
-        return None
-    output_dir = str(
-        _pick(args, "output_dir", "outputDir", default=""),
-    ).strip()
+    output_dir = _job_requested_output_dir(job)
     if not output_dir:
         return None
     try:
         return _resolve_allowed_request_path(output_dir, ALLOWED_OUTPUT_ROOTS)
     except ValueError:
         return None
+
+
+def _job_requested_output_dir(job: Job | JobRecord) -> str:
+    request_payload = (
+        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+    )
+    args = request_payload.get("args") if isinstance(request_payload, dict) else None
+    if not isinstance(args, dict):
+        return ""
+    return str(
+        _pick(args, "output_dir", "outputDir", default=""),
+    ).strip()
 
 
 def _resolve_portal_asset(asset_path: str) -> PortalAssetSpec:
@@ -11410,6 +11486,13 @@ async def _delete_job_artifacts(
                 reason="explicit_delete",
                 fail_closed_on_repository=True,
             )
+        except _AmbiguousLegacyArtifactOwnership:
+            return _error_response(
+                409,
+                code="CONFLICT",
+                message="legacy artifact ownership is ambiguous",
+                details={"job_id": job_id, "reason": "ambiguous_artifact_ownership"},
+            )
         except _JobRepositoryUnavailable:
             return _repository_unavailable_response()
         if deleted is None:
@@ -11876,6 +11959,7 @@ def _job_execution_service() -> JobExecutionService[Job]:
             validate_paths=_revalidate_dispatch_paths,
             resolve_output_root=lambda value: _resolve_allowed_request_path(value, ALLOWED_OUTPUT_ROOTS),
             allow_legacy_commands=True,
+            legacy_terminal_guard=lambda job: job.terminal_lock,
         ),
         ExecutionSettings(
             log_tail_limit=LOG_TAIL_LIMIT,
@@ -11941,51 +12025,33 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     closed) collapses this to a no-op so the terminal event is not
     duplicated.
     """
-    if job.finished_at is not None:
-        return
-    job.state = "worker_lost"
-    if job.exit_code is None:
-        job.exit_code = None  # explicitly preserve "no exit" semantics
-    job.error = {
-        "code": reason_code,
-        "message": "Worker lease expired without heartbeat; job marked worker_lost.",
-        "retriable": True,
-    }
-    now = _now()
-    await _publish_event(
-        job.id,
-        "done",
-        {
-            "id": job.id,
-            "state": job.state,
-            "exit_code": job.exit_code,
-            "error": job.error,
-            "artifacts": job.artifacts,
-            "run_summary": job.run_summary or None,
-        },
-    )
-    job.done_published_at = now
-    job.finished_at = now
-    await _persist_job_state(job)
-
-
-async def _reclaimed_job_already_terminal(jid: str, job: Optional["Job"], repository: Any) -> bool:
-    """Whether a job reported by a lease reclaim has already finished.
-
-    Checks the in-process job first, then the durable row. A repository
-    read failure counts as "not terminal" so a genuinely stranded job is
-    still marked ``worker_lost``.
-    """
-    if job is not None and job.finished_at is not None:
-        return True
-    if repository is None:
-        return False
-    try:
-        record = await repository.get(jid)
-    except Exception:  # noqa: BLE001 - fall back to the reclaim outcome
-        LOGGER.exception("repository read for reclaimed job %s failed", jid)
-        return False
-    return record is not None and (record.finished_at is not None or record.state in _TERMINAL_JOB_STATES)
+    async with job.terminal_lock:
+        if job.finished_at is not None or job.done_published_at is not None:
+            return
+        error = {
+            "code": reason_code,
+            "message": "Worker lease expired without heartbeat; job marked worker_lost.",
+            "retriable": True,
+        }
+        await _publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": "worker_lost",
+                "exit_code": job.exit_code,
+                "error": error,
+                "artifacts": job.artifacts,
+                "run_summary": job.run_summary or None,
+            },
+        )
+        now = _now()
+        job.state = "worker_lost"
+        job.error = error
+        job.last_event_at = now
+        job.done_published_at = now
+        job.finished_at = now
+        await _persist_job_state(job)
 
 
 async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
@@ -12034,35 +12100,32 @@ async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[st
         return []
     for jid in reclaimed:
         job = JOBS.get(jid)
-        if await _reclaimed_job_already_terminal(jid, job, repository):
-            # The job finished before its lease lapsed (e.g. completion raced
-            # the release); never rewrite a terminal outcome as worker_lost.
-            LOGGER.info("reclaim sweep skipped job %s: already terminal", jid)
-            continue
-        if job is not None:
+        record = None
+        if repository is not None:
             try:
-                await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
-            except Exception:  # noqa: BLE001 - one job's failure must not block others
-                LOGGER.exception("publish worker_lost terminal failed for job %s", jid)
-        if repository is None:
-            LOGGER.warning("reclaim sweep skipped repository update for job %s (no repository configured)", jid)
-            continue
+                record = await repository.get(jid)
+            except Exception:  # noqa: BLE001 - the local worker can still be stopped
+                LOGGER.exception("repository read for reclaimed job %s failed", jid)
         try:
-            now_ts = _now()
-            await repository.update(
-                jid,
-                state="worker_lost",
-                finished_at=now_ts,
-                done_published_at=now_ts,
-                last_event_at=now_ts,
-                error={
-                    "code": WORKER_LOST_REASON_RECLAIMED,
-                    "message": "Worker lease expired without heartbeat; job marked worker_lost.",
-                    "retriable": True,
-                },
-            )
-        except Exception:  # noqa: BLE001 - persistence failure must not block the loop
-            LOGGER.exception("repository update for reclaimed job %s failed", jid)
+            # The subprocess can report a terminal state before indexing,
+            # mirroring and publishing done. Only completion markers prove
+            # that the persisted terminal outcome survived finalization.
+            if record is not None and (record.finished_at is not None or record.done_published_at is not None):
+                LOGGER.info("reclaim sweep skipped job %s: already finalized", jid)
+                continue
+            if job is None and record is not None:
+                job = _job_from_record(record)
+            if job is not None:
+                try:
+                    await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
+                except _JobRepositoryUnavailable:
+                    # The terminal event has already gone out. Retry only the
+                    # projection write while preserving its exact outcome.
+                    await _persist_job_state(job)
+            elif repository is None:
+                LOGGER.warning("reclaim sweep skipped job %s (no repository configured)", jid)
+        except Exception:  # noqa: BLE001 - one job's failure must not block others
+            LOGGER.exception("reclaim reconciliation failed for job %s", jid)
     return list(reclaimed)
 
 

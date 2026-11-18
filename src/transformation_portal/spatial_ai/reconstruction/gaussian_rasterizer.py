@@ -30,6 +30,7 @@ References:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator, Sequence
 from typing import List, Optional, Tuple
 
 import torch
@@ -37,8 +38,8 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
-# render_gaussians composites in place while (drawn splats x image area) is at most this many
-# times the summed window area, and layer by layer otherwise (measured CPU cost crossover).
+# The differentiable render composites layer by layer when the full-image
+# autograd copies would cost more than processing individual covered pixels.
 _IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA = 16
 
 
@@ -345,11 +346,32 @@ def render_gaussians(
         cov_2d = cov_2d + torch.eye(2, device=device) * 1e-3
         cov_2d_inv = torch.inverse(cov_2d)
 
-    splat_ids: List[int] = []
-    alpha_patches: List[torch.Tensor] = []
-    windows: List[Tuple[int, int, int, int]] = []
-
     bounds_by_splat = _compute_splat_bounds_batch(mean_2d, cov_2d, image_size)
+    alpha_windows = _iter_alpha_windows(mean_2d, cov_2d_inv, opacities, bounds_by_splat, device)
+    use_layered_compositor = False
+    if torch.is_grad_enabled() and any(tensor.requires_grad for tensor in (mean_2d, cov_2d_inv, colors, opacities)):
+        # The layer path avoids full-image copies in backward for small windows.
+        nonempty_windows = [bounds for bounds in bounds_by_splat if bounds is not None]
+        drawn_area = sum((u_max - u_min) * (v_max - v_min) for u_min, u_max, v_min, v_max in nonempty_windows)
+        use_layered_compositor = len(nonempty_windows) * H * W > _IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA * drawn_area
+
+    if use_layered_compositor:
+        splat_ids, alpha_patches, windows = zip(*alpha_windows)
+        rendered = _composite_windows_layered(splat_ids, alpha_patches, windows, colors, image_size, device)
+    else:
+        # Inference uses image buffers and scratch bounded by the largest window.
+        rendered = _composite_windows_in_place(alpha_windows, colors, image_size, device)
+    return torch.clamp(rendered, 0.0, 1.0)
+
+
+def _iter_alpha_windows(
+    mean_2d: torch.Tensor,
+    cov_2d_inv: torch.Tensor,
+    opacities: torch.Tensor,
+    bounds_by_splat: Sequence[Optional[Tuple[int, int, int, int]]],
+    device,
+) -> Iterator[Tuple[int, torch.Tensor, Tuple[int, int, int, int]]]:
+    """Evaluate alpha lazily inside each depth-sorted footprint."""
     for i, bounds in enumerate(bounds_by_splat):
         if bounds is None:
             continue
@@ -367,39 +389,20 @@ def render_gaussians(
         mahal_sq = (tmp * diff).sum(dim=-1)
         weight = torch.exp(-0.5 * mahal_sq)
 
-        opacity = opacities[i, 0]
-        splat_ids.append(i)
-        alpha_patches.append(weight * opacity)
-        windows.append(bounds)
-
-    # Both compositors give bit-identical images and gradients; pick the cheaper one. The
-    # in-place one costs about one full-image copy per splat in the backward pass, the layered
-    # one a constant number of gathers per covered (splat, pixel) pair.
-    drawn_area = sum((u_max - u_min) * (v_max - v_min) for u_min, u_max, v_min, v_max in windows)
-    if len(windows) * H * W <= _IN_PLACE_COMPOSITE_MAX_IMAGE_TO_WINDOW_AREA * drawn_area:
-        rendered = _composite_windows_in_place(splat_ids, alpha_patches, windows, colors, image_size, device)
-    else:
-        rendered = _composite_windows_layered(splat_ids, alpha_patches, windows, colors, image_size, device)
-
-    # Clamp to [0, 1]
-    rendered = torch.clamp(rendered, 0.0, 1.0)
-
-    return rendered
+        yield i, weight * opacities[i, 0], bounds
 
 
 def _composite_windows_in_place(
-    splat_ids: List[int],
-    alpha_patches: List[torch.Tensor],
-    windows: List[Tuple[int, int, int, int]],
+    alpha_windows: Iterable[Tuple[int, torch.Tensor, Tuple[int, int, int, int]]],
     colors: torch.Tensor,
     image_size: Tuple[int, int],
     device,
 ) -> torch.Tensor:
-    """Alpha composite per-splat windows in list order (nearest first) by writing full-image buffers in place."""
+    """Composite one depth-sorted window at a time into full-image buffers."""
     H, W = image_size
     rendered = torch.zeros(H, W, 3, device=device)
     accumulated_alpha = torch.zeros(H, W, device=device)
-    for splat_id, alpha_i, (u_min, u_max, v_min, v_max) in zip(splat_ids, alpha_patches, windows):
+    for splat_id, alpha_i, (u_min, u_max, v_min, v_max) in alpha_windows:
         rendered_patch = rendered[v_min:v_max, u_min:u_max, :]
         alpha_patch = accumulated_alpha[v_min:v_max, u_min:u_max]
         transmittance = 1.0 - alpha_patch
@@ -412,9 +415,9 @@ def _composite_windows_in_place(
 
 
 def _composite_windows_layered(
-    splat_ids: List[int],
-    alpha_patches: List[torch.Tensor],
-    windows: List[Tuple[int, int, int, int]],
+    splat_ids: Sequence[int],
+    alpha_patches: Sequence[torch.Tensor],
+    windows: Sequence[Tuple[int, int, int, int]],
     colors: torch.Tensor,
     image_size: Tuple[int, int],
     device,

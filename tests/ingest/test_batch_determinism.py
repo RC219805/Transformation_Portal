@@ -147,10 +147,10 @@ def test_failed_write_withdraws_previous_manifest(tmp_path: Path, monkeypatch: p
     run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
     (input_dir / "a.jpg").write_bytes(b"a2-changed")
 
-    def failing_write(_source: Path, output_path: Path) -> Path:
+    def failing_write(output_path: Path, _data: bytes, *, new_file_mode: int) -> Path:
         raise OSError(f"disk full writing {output_path.name}")
 
-    monkeypatch.setattr(batch_module.shutil, "copyfile", failing_write)
+    monkeypatch.setattr(batch_module, "atomic_write_bytes", failing_write)
 
     with pytest.raises(OSError, match="disk full"):
         run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
@@ -168,13 +168,22 @@ def test_batch_respects_umask_and_preserves_private_manifest_on_replacement(tmp_
     output.mkdir(mode=0o755)
     script = """
 import os
+import stat
 import sys
 from pathlib import Path
 
 from transformation_portal.ingest.batch import run_ingest_batch
+from transformation_portal.lux_depth_v3 import io_atomic
 
 source, output = map(Path, sys.argv[1:3])
 os.umask(int(sys.argv[3], 8))
+write_all = io_atomic._write_all
+
+def observe_private_write(handle, data):
+    assert stat.S_IMODE(os.fstat(handle.fileno()).st_mode) == 0o600
+    return write_all(handle, data)
+
+io_atomic._write_all = observe_private_write
 run_ingest_batch(input_dir=source, output_dir=output, ingest_payload_factory=lambda path: {"name": path.name})
 """
     first = output / "normalized" / "a.jpg.normalized.json"

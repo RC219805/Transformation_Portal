@@ -2,7 +2,7 @@
   "summary": {
     "total": 25,
     "ungoverned": 0,
-    "files_scanned": 1811,
+    "files_scanned": 2265,
     "by_type": {
       "NotImplementedError": 25
     }
@@ -31,13 +31,15 @@
       "lineno": 167,
       "col_offset": 12,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "f'Backend {self.backend} not implemented (@specialist)'",
       "has_governance_ref": true,
-      "governance_refs": []
+      "governance_refs": [
+        "(@specialist)"
+      ]
     },
     {
       "path": "src/transformation_portal/comfyui/custom_nodes.py",
-      "lineno": 62,
+      "lineno": 63,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "(no message)",
@@ -46,7 +48,7 @@
     },
     {
       "path": "src/transformation_portal/comfyui/custom_nodes.py",
-      "lineno": 68,
+      "lineno": 69,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "(no message)",
@@ -55,7 +57,7 @@
     },
     {
       "path": "src/transformation_portal/comfyui/custom_nodes.py",
-      "lineno": 73,
+      "lineno": 74,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "(no message)",
@@ -64,25 +66,29 @@
     },
     {
       "path": "src/transformation_portal/comfyui/executor.py",
-      "lineno": 139,
+      "lineno": 140,
       "col_offset": 12,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "f'No executor implementation for node type {node.node_type.name} ({node.node_type.value}) (@specialist)'",
       "has_governance_ref": true,
-      "governance_refs": []
+      "governance_refs": [
+        "(@specialist)"
+      ]
     },
     {
       "path": "src/transformation_portal/depth/models/depth_anything_v2.py",
       "lineno": 369,
       "col_offset": 12,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "f'Backend {self.backend} not implemented (@specialist)'",
       "has_governance_ref": true,
-      "governance_refs": []
+      "governance_refs": [
+        "(@specialist)"
+      ]
     },
     {
       "path": "src/transformation_portal/depth/processors/base.py",
-      "lineno": 38,
+      "lineno": 57,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "Subclass must implement process()",
@@ -91,7 +97,7 @@
     },
     {
       "path": "src/transformation_portal/depth/processors/base.py",
-      "lineno": 49,
+      "lineno": 68,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "Subclass must implement _get_config_params()",
@@ -109,7 +115,7 @@
     },
     {
       "path": "src/transformation_portal/spatial_ai/orchestration/pipeline.py",
-      "lineno": 1234,
+      "lineno": 1258,
       "col_offset": 12,
       "type": "NotImplementedError",
       "message": "3D reconstruction requires multi-view input. Single-view reconstruction is not yet implemented. (TODO_INVENTORY.md) Use SceneBuilder directly with multiple views for 3DGS.",
@@ -120,25 +126,29 @@
     },
     {
       "path": "src/transformation_portal/spatial_ai/reconstruction/gaussian_backend.py",
-      "lineno": 261,
+      "lineno": 315,
       "col_offset": 8,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "f\"GaussianBackend production checkpoint loading is pending SHA verification. model_revision='{self.model_revision}' is a non-placeholder revision but checkpoint integration into the optimization loop is not yet implemented. Run: python scripts/validation/verify_3dgs_artifacts.py (@specialist)\"",
       "has_governance_ref": true,
-      "governance_refs": []
+      "governance_refs": [
+        "(@specialist)"
+      ]
     },
     {
       "path": "src/transformation_portal/spatial_ai/reconstruction/scene_builder.py",
-      "lineno": 269,
+      "lineno": 288,
       "col_offset": 12,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "f\"Interpolation method '{interpolation}' not implemented. Supported methods: 'linear', 'spline'. (@specialist)\"",
       "has_governance_ref": true,
-      "governance_refs": []
+      "governance_refs": [
+        "(@specialist)"
+      ]
     },
     {
       "path": "src/transformation_portal/utils/security.py",
-      "lineno": 418,
+      "lineno": 669,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "timeout() requires signal.SIGALRM (Unix-only). (TODO_INVENTORY.md \u00a72.4) Use multiprocessing or threading-based timeout on Windows.",
@@ -230,7 +240,7 @@
     },
     {
       "path": "tests/unit/depth/test_depth_protocol.py",
-      "lineno": 526,
+      "lineno": 556,
       "col_offset": 16,
       "type": "NotImplementedError",
       "message": "(no message)",

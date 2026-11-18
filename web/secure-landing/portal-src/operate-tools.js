@@ -73,10 +73,6 @@ export function createOperateTools(host) {
       if (els.logPane.textContent !== snapshot.text) els.logPane.textContent = snapshot.text;
       els.logPane.scrollTop = following ? els.logPane.scrollHeight : previousTop;
     }
-    syncLogControls(job, snapshot);
-    return snapshot;
-  }
-  function syncLogControls(job, snapshot) {
     if (follow) { follow.textContent = following ? 'Pause follow' : 'Resume follow'; follow.setAttribute('aria-pressed', String(following)); follow.disabled = !job; }
     if (logSearch) logSearch.disabled = !job;
     const available = Boolean(job && snapshot.lines.length && _portalPrivilegesReady());
@@ -84,44 +80,22 @@ export function createOperateTools(host) {
     if (download) download.disabled = !available;
     if (summary) summary.textContent = !job ? 'Select a run. These tools inspect only the loaded log buffer.'
       : `${snapshot.matching.length} matching / ${snapshot.lines.length} loaded lines · at most ${host.maxLogLines || 1200} · ${following ? 'following' : 'follow paused'}. Copy and download include all loaded lines.`;
+    return snapshot;
   }
-  const scheduleFrame = typeof host.requestAnimationFrame === 'function' ? callback => host.requestAnimationFrame(callback)
-    : typeof globalThis.requestAnimationFrame === 'function' ? callback => globalThis.requestAnimationFrame(callback) : null;
-  let logFrameId = null;
-  // A live line is appended as one text node: rewriting the whole pane per line
-  // re-serialises everything already shown and forces a reflow, which grows
-  // quadratically for a busy stream. The pane stays bounded by trimming the
-  // oldest nodes (a pane hydrated by renderLogs is one node, so it holds under
-  // twice the cap until that block is trimmed), and the autoscroll plus the
-  // summary are coalesced into one animation frame.
-  function appendLog(jobId, line) {
-    // A line of a run that is not the selected one never touches the pane.
-    if (!els.logPane || (state.selectedJobId && state.selectedJobId !== jobId)) return;
-    reconcileOwner();
-    const job = currentJob();
-    const pane = els.logPane;
-    if (!pane || !job || job.id !== jobId || selectedLogJob !== job.id
-      || typeof pane.appendChild !== 'function' || typeof doc?.createTextNode !== 'function') {
+
+  let logRenderPending = false;
+  // Reconcile the pane and its controls against the same bounded buffer once per frame.
+  function appendLog(jobId) {
+    if (!els.logPane || state.selectedJobId !== jobId || logRenderPending) return;
+    if (!host.portalRenderScheduler) {
       renderLogs();
       return;
     }
-    const text = String(line);
-    const needle = searchText(logQuery);
-    if (!needle || text.toLowerCase().includes(needle)) {
-      pane.appendChild(doc.createTextNode(text + '\n'));
-      const limit = Math.max(1, Math.min(1200, Math.trunc(Number(host.maxLogLines) || 1200)));
-      while (pane.childNodes.length > limit) pane.removeChild(pane.firstChild);
-    }
-    if (logFrameId !== null) return;
-    const flush = () => {
-      logFrameId = null;
-      const current = currentJob();
-      if (!current || current.id !== selectedLogJob) return;
-      if (following && els.logPane) els.logPane.scrollTop = els.logPane.scrollHeight;
-      syncLogControls(current, loadedLogSnapshot(current, logQuery, host.maxLogLines));
-    };
-    if (scheduleFrame) logFrameId = scheduleFrame(flush);
-    else flush();
+    logRenderPending = true;
+    host.portalRenderScheduler.schedule(() => {
+      logRenderPending = false;
+      renderLogs();
+    });
   }
   function clearLogs() { const job = currentJob(); if (job) job.logs = []; renderLogs(); }
   search?.addEventListener('input', () => { criteria.query = search.value; host.onFilterChange(); });

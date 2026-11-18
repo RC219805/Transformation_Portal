@@ -229,11 +229,11 @@ class UpscalingStage(Stage):
         # Hash image content
         image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
 
-        # Configuration string. The scale factor is written in full: rounding
-        # it would let 1.25 reuse the cached result of 1.2.
+        # Separate the full-precision scale key from the legacy namespace,
+        # where a cached scale of 1.25 could have been written as 1.2.
         config_str = f"{self.backend}_{float(self.scale_factor)!r}_{self.version}"
 
-        return f"upscale_{config_str}_{image_hash}"
+        return f"upscale-v2_{config_str}_{image_hash}"
 
     def _load_upscaler(self, device: str):
         """

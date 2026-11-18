@@ -19,6 +19,8 @@ import app as orchestrator_app
 from transformation_portal.orchestrator import reset_singletons
 from transformation_portal.orchestrator.artifact_store import reset_singleton as reset_artifact_store_singleton
 from transformation_portal.orchestrator.queue import reset_singleton as reset_queue_singleton
+from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
+from transformation_portal.orchestrator.queue.memory import MemoryQueueBroker
 from transformation_portal.orchestrator.recovery import WORKER_LOST_REASON_CODE, sweep_orphaned_jobs
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -224,3 +226,76 @@ async def test_postgres_restart_sweep_exposes_worker_lost_after_runtime_cache_cl
     body = response.json()["data"]
     assert body["state"] == "worker_lost"
     assert body["error"]["code"] == WORKER_LOST_REASON_CODE
+
+
+async def test_postgres_legacy_artifact_delete_refuses_an_overlapping_durable_job(
+    postgres_app_client: tuple[AsyncClient, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    client, repo = postgres_app_client
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_OUTPUT_ROOTS", [tmp_path.resolve()])
+    now = orchestrator_app._now()
+    output = tmp_path / "shared"
+    output.mkdir()
+    files = [output / "first.txt", output / "second.txt"]
+    for path in files:
+        path.write_text(path.name, encoding="utf-8")
+    first = orchestrator_app.Job(
+        id="pg_overlap_first",
+        created_at=now - 100,
+        started_at=now - 80,
+        finished_at=now + 10,
+        state="succeeded",
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output)}},
+    )
+    second = orchestrator_app.Job(
+        id="pg_overlap_second",
+        created_at=now - 70,
+        started_at=now - 60,
+        finished_at=now + 20,
+        state="succeeded",
+        request=first.request,
+    )
+    orchestrator_app._index_job_run_artifacts(first)
+    assert set(first.artifact_lookup) == {"first.txt", "second.txt"}
+    for job in (first, second):
+        await repo.create(orchestrator_app._record_from_job(job))
+
+    response = await client.delete(f"/v1/jobs/{first.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    assert [path.read_text(encoding="utf-8") for path in files] == ["first.txt", "second.txt"]
+
+
+async def test_postgres_reclaim_recovers_job_between_runner_exit_and_finalization(
+    postgres_app_client: tuple[AsyncClient, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, repo = postgres_app_client
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="pg_reclaim_unfinalized",
+        created_at=now - 100,
+        started_at=now - 80,
+        state="succeeded",
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    await repo.create(orchestrator_app._record_from_job(job))
+    broker = MemoryQueueBroker()
+    await broker.enqueue(JobEnqueueRequest(job.id, ["unused"]))
+    lease = await broker.acquire_lease("departed-worker", lease_seconds=1)
+    assert lease is not None
+
+    async def expired_time() -> float:
+        return lease.deadline + 1
+
+    monkeypatch.setattr(broker, "server_time", expired_time)
+    assert await orchestrator_app._reclaim_sweep_once(broker, repo) == [job.id]
+
+    response = await client.get(f"/v1/jobs/{job.id}")
+    assert response.status_code == 200
+    assert response.json()["data"]["state"] == "worker_lost"
+    completed = await repo.get(job.id)
+    assert completed is not None and completed.finished_at is not None and completed.done_published_at is not None
+    events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+    assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]

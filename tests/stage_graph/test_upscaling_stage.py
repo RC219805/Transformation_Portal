@@ -1,5 +1,6 @@
 """Unit tests for UpscalingStage (StageGraph integration with Phase 4 backend)."""
 
+import hashlib
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -123,6 +124,13 @@ class TestUpscalingStageUnit:
         def run(scale_factor):
             context = StageContext(artifacts={"image": img}, device="cpu", cache_enabled=True, cache_dir=tmp_path)
             return UpscalingStage(scale_factor=scale_factor).execute(context)
+
+        image_hash = hashlib.sha256(img.tobytes()).hexdigest()[:16]
+        legacy_key = f"upscale_bicubic_1.2_1.0.0_{image_hash}"
+        with patch.object(UpscalingStage, "get_cache_key", return_value=legacy_key):
+            legacy = run(1.25)
+        assert legacy.artifacts["upscaled_image"].shape == (50, 50, 3)
+        assert (tmp_path / f"{legacy_key}.json").is_file()
 
         first = run(1.25)
         second = run(1.2)

@@ -316,7 +316,7 @@ class GaussianBackend:
             f"GaussianBackend production checkpoint loading is pending SHA verification. "
             f"model_revision='{self.model_revision}' is a non-placeholder revision but "
             "checkpoint integration into the optimization loop is not yet implemented. "
-            "Run: python scripts/validation/verify_3dgs_artifacts.py"
+            "Run: python scripts/validation/verify_3dgs_artifacts.py (@specialist)"
         )
 
     def reconstruct(

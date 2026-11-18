@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
 import stat
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..lux_depth_v3.io_atomic import atomic_temp_file, durable_unlink, publication_lock
+from ..lux_depth_v3.io_atomic import atomic_write_bytes, durable_unlink, publication_lock
 from .normalize_machine_json import DEFAULT_NORMALIZATION_PROFILE, canonical_json_bytes, normalize_machine_payload
 from .provenance import capture_provenance
 
@@ -187,13 +186,12 @@ def run_ingest_batch(
             try:
                 manifest_mode = stat.S_IMODE(manifest_path.stat().st_mode)
             except FileNotFoundError:
-                manifest_mode = None
+                manifest_mode = stat.S_IMODE(staged_manifest.stat().st_mode)
             # A failed publication must leave no manifest attesting to a mix
             # of old and new bytes. Publish its replacement only after the data.
             durable_unlink(manifest_path)
             for staged_path, destination in pending_writes:
-                with atomic_temp_file(destination, new_file_mode=None) as temp_path:
-                    shutil.copyfile(staged_path, temp_path)
-            with atomic_temp_file(manifest_path, new_file_mode=manifest_mode) as temp_path:
-                shutil.copyfile(staged_manifest, temp_path)
+                staged_mode = stat.S_IMODE(staged_path.stat().st_mode)
+                atomic_write_bytes(destination, staged_path.read_bytes(), new_file_mode=staged_mode)
+            atomic_write_bytes(manifest_path, staged_manifest.read_bytes(), new_file_mode=manifest_mode)
     return manifest

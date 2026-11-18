@@ -124,6 +124,10 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
 - `GET /v1/jobs/{id}/artifacts/{path}` retrieves an authorized indexed artifact.
+- `DELETE /v1/jobs/{id}/artifacts` removes the authorized job's artifacts. Legacy
+  deletion returns `409 CONFLICT` with reason `ambiguous_artifact_ownership`
+  when retained jobs have overlapping run windows and output roots. Retention
+  preserves those files as well.
 
 Quiet SSE streams also emit an ephemeral `heartbeat` event every 15 seconds
 alongside the heartbeat comment. Heartbeats do not persist or advance replay
@@ -148,6 +152,9 @@ Shutdown cancellation publishes `canceled` after child cleanup. Runner failures
 also clean up the child before publishing terminal artifacts and events. If
 another path already published a terminal outcome, cleanup preserves its state,
 exit code, and error and emits no second `done` event.
+Legacy lease reclaim uses durable completion markers. A subprocess may report
+success before artifact indexing, mirroring, and the `done` event finish. If
+the worker is lost in that interval, reconciliation records `worker_lost`.
 
 S3 fingerprinting checks both object metadata and streamed bytes against its
 per-object byte budget. Oversized content reports `skipped_size`; other size

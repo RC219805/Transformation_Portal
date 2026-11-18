@@ -88,7 +88,7 @@ def test_pep508_name_is_not_masked_by_egg_fragment_bom_or_glued_text(tmp_path: P
     """A banned PEP 508 name stays visible whatever follows it (T-05 review follow-up)."""
     root = _sandbox(tmp_path)
     (root / "requirements" / "base.txt").write_text(
-        "﻿basicsr==1.4.2\n"
+        "\ufeffbasicsr==1.4.2\n"
         "realesrgan @ https://example.invalid/r.whl#egg=harmless\n"
         "gfpgan#sha256=00\n"
         "pyiceberg\\\n"
