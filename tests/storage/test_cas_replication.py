@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from transformation_portal.storage.cas_replication import CASPeer, CASReplicator
+from transformation_portal.storage.cas_replication import CASPeer, CASReplicator, ReplicationError
 from transformation_portal.storage.cas_store import ArtifactStore, CASError
 
 pytestmark = pytest.mark.unit
@@ -149,3 +149,66 @@ def test_pull_rejects_bytes_that_do_not_match_their_address(tmp_path: Path, monk
     assert replicator.pull_many(_PEER, [wanted]) == 0
     assert not local.has_object(wanted)
     assert not local.has_object(_sha(b"something else"))
+
+
+# --------------------------------------------------------------------------- #
+# has_many / push_many
+# --------------------------------------------------------------------------- #
+
+
+def _three_local_objects(tmp_path: Path) -> tuple[ArtifactStore, list[str]]:
+    source = ArtifactStore(tmp_path / "source")
+    return source, [source.add_bytes(b"object-%d" % index).sha256 for index in range(3)]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {},
+        {"present": None},
+        {"present": []},
+        {"present": [False, False]},
+        {"present": [False, False, False, False]},
+        {"present": "false"},
+        {"present": ["false", "false", "false"]},
+        {"present": [0, 0, 0]},
+    ],
+    ids=["missing", "null", "empty", "short", "long", "not-a-list", "strings", "integers"],
+)
+def test_push_fails_closed_when_the_peer_does_not_answer_for_every_object(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: dict[str, Any]
+) -> None:
+    source, shas = _three_local_objects(tmp_path)
+    replicator = CASReplicator(source)
+    requests = _serve(monkeypatch, replicator, answer, {"ok": True})
+
+    # Reading an incomplete answer as "the peer has everything" would report
+    # success while replicating nothing.
+    with pytest.raises(ReplicationError, match="Malformed has_many response"):
+        replicator.push_many(_PEER, shas)
+
+    assert [request["op"] for request in requests] == ["has_many"]
+    assert replicator.get_stats()["objects_pushed"] == 0
+
+
+def test_push_sends_exactly_the_objects_the_peer_lacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source, shas = _three_local_objects(tmp_path)
+    replicator = CASReplicator(source, compress=False)
+    requests = _serve(monkeypatch, replicator, {"present": [True, False, True]}, {"ok": True})
+
+    assert replicator.push_many(_PEER, shas) == 1
+
+    assert requests[0] == {"op": "has_many", "shas": shas}
+    assert requests[1]["op"] == "put_many"
+    assert [item["sha"] for item in requests[1]["items"]] == [shas[1]]
+    assert base64.b64decode(requests[1]["items"][0]["data_b64"]) == b"object-1"
+
+
+def test_has_many_returns_one_flag_per_requested_object(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source, shas = _three_local_objects(tmp_path)
+    replicator = CASReplicator(source)
+    _serve(monkeypatch, replicator, {"present": [True, False, True]}, {"error": "peer is read-only"})
+
+    assert replicator.has_many(_PEER, shas) == [True, False, True]
+    with pytest.raises(ReplicationError, match="peer is read-only"):
+        replicator.has_many(_PEER, shas)

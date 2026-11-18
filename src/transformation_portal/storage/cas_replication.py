@@ -195,7 +195,11 @@ class CASReplicator:
             shas: List of SHA256 hashes to check
 
         Returns:
-            List of booleans (True if present)
+            List of booleans (True if present), one per requested SHA
+
+        Raises:
+            ReplicationError: If the peer reports an error or its answer is
+                not exactly one boolean per requested SHA
         """
         # Validate all SHAs first
         for sha in shas:
@@ -206,7 +210,12 @@ class CASReplicator:
         if "error" in response:
             raise ReplicationError(response["error"])
 
-        return response.get("present", [])
+        present = response.get("present")
+        if not isinstance(present, list) or len(present) != len(shas) or not all(isinstance(flag, bool) for flag in present):
+            # A missing, short or non-boolean answer must never read as "the
+            # peer already has it": callers would silently skip the transfer.
+            raise ReplicationError(f"Malformed has_many response from {peer.address}")
+        return present
 
     def push_many(
         self,
