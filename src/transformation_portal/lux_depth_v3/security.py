@@ -165,7 +165,18 @@ _SHORTENED_NAME_DIGEST_CHARS = 16
 
 
 def _utf8_len(value: str) -> int:
-    return len(value.encode("utf-8", "surrogatepass"))
+    """Return the bytes ``value`` occupies in a UTF-8 file name.
+
+    Undecodable name bytes reach Python as ``surrogateescape`` code points and
+    are written back as one byte each, so they are counted as one byte: a name
+    that fits on disk today must not be measured as over-long and renamed.
+    """
+
+    try:
+        return len(value.encode("utf-8", "surrogateescape"))
+    except UnicodeEncodeError:
+        # Other lone surrogates cannot be written to a UTF-8 filesystem at all.
+        return len(value.encode("utf-8", "surrogatepass"))
 
 
 def bounded_file_name(component: str, suffix: str) -> str:
