@@ -412,16 +412,19 @@ def verify_phase4_chain_payloads(
     }
 
 
-# Mirrors the ``inputs.*.*_contract_version`` pattern of
+# Mirrors the ``inputs.*.*_contract_version`` pattern and maxLength of
 # schemas/phase4/verification_report.schema.json. The inputs block echoes values
 # read from untrusted artifacts, so anything that does not conform is reported
 # as null instead of making the failure report itself schema-invalid.
 _REPORT_CONTRACT_VERSION_RE = re.compile(r"^tp\.meta\.[a-z0-9_]+\.v[0-9]+$")
+_REPORT_CONTRACT_VERSION_MAX_LENGTH = 128
 
 
 def _contract_version_or_none(value: Any) -> str | None:
     version = string_or_none(value)
-    if version is None or _REPORT_CONTRACT_VERSION_RE.fullmatch(version) is None:
+    if version is None or len(version) > _REPORT_CONTRACT_VERSION_MAX_LENGTH:
+        return None
+    if _REPORT_CONTRACT_VERSION_RE.fullmatch(version) is None:
         return None
     return version
 
