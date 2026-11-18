@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections import deque
-from typing import TYPE_CHECKING, Deque, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -89,9 +88,13 @@ class DepthCrafterBackend:
         self._max_buffer_size = max_buffer_size
 
         # Temporal state
-        self._temporal_buffer: Deque[np.ndarray] = deque(
-            maxlen=max_buffer_size,
-        )
+        if max_buffer_size < 0:
+            raise ValueError("max_buffer_size must be non-negative")
+        # Number of frames in the temporal window, capped at max_buffer_size.
+        # Only the count is observable (metadata, temporal_buffer_length), so
+        # no frame copies are kept: 30 full-resolution frames would pin about
+        # 1 GiB at 3840x2160.
+        self._temporal_buffer_length = 0
         self._ema_state: Optional[np.ndarray] = None
 
         # Checkpoint availability (lazy-checked)
@@ -201,8 +204,8 @@ class DepthCrafterBackend:
         # Apply temporal EMA filter
         smoothed_depth = self._apply_temporal_filter(raw_depth)
 
-        # Track in temporal buffer
-        self._temporal_buffer.append(smoothed_depth.copy())
+        # Track the temporal window length
+        self._temporal_buffer_length = min(self._temporal_buffer_length + 1, self._max_buffer_size)
 
         checkpoint_used = self._checkpoint_available and self._model is not None
         is_synthetic = not checkpoint_used
@@ -210,7 +213,7 @@ class DepthCrafterBackend:
             "backend": self.name,
             "version": __version__,
             "temporal_alpha": self._temporal_alpha,
-            "temporal_buffer_length": len(self._temporal_buffer),
+            "temporal_buffer_length": self._temporal_buffer_length,
             "checkpoint_used": checkpoint_used,
             "fallback_mode": is_synthetic,
             "synthetic": is_synthetic,
@@ -394,7 +397,7 @@ class DepthCrafterBackend:
         temporal blending between unrelated sequences.
         """
         self._ema_state = None
-        self._temporal_buffer.clear()
+        self._temporal_buffer_length = 0
         logger.debug("DepthCrafter temporal state reset")
 
     def reset_state(self, sequence_id: Optional[str] = None) -> None:
@@ -419,7 +422,7 @@ class DepthCrafterBackend:
     @property
     def temporal_buffer_length(self) -> int:
         """Return current temporal buffer length."""
-        return len(self._temporal_buffer)
+        return self._temporal_buffer_length
 
     def __repr__(self) -> str:
         mode = "model" if (self._checkpoint_available and self._model) else "fallback"

@@ -192,6 +192,30 @@ class TestTemporalFilter:
 
         assert backend.temporal_buffer_length == 3
 
+    def test_temporal_window_keeps_no_frame_copies(self):
+        """Only the EMA state may hold a depth frame; the window is a count (D-26)."""
+        backend = DepthCrafterBackend(max_buffer_size=30)
+
+        for i in range(6):
+            backend.compute(Image.fromarray(np.full((64, 48, 3), i * 40, dtype=np.uint8)))
+
+        def _array_bytes(value) -> int:
+            if isinstance(value, np.ndarray):
+                return value.nbytes
+            if isinstance(value, dict):
+                return sum(_array_bytes(item) for item in value.values())
+            if isinstance(value, (list, tuple, set, frozenset)) or type(value).__name__ == "deque":
+                return sum(_array_bytes(item) for item in value)
+            return 0
+
+        held = sum(_array_bytes(value) for value in vars(backend).values())
+        assert backend.temporal_buffer_length == 6
+        assert held == backend._ema_state.nbytes
+
+    def test_negative_buffer_size_is_rejected(self):
+        with pytest.raises(ValueError, match="non-negative"):
+            DepthCrafterBackend(max_buffer_size=-1)
+
     def test_alpha_zero_full_smoothing(self):
         """alpha=0 means full smoothing: always returns first frame."""
         backend = DepthCrafterBackend(temporal_alpha=0.0)
