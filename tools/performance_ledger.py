@@ -35,7 +35,7 @@ import platform
 import random
 import sys
 import warnings
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -263,6 +263,12 @@ def extract_backends(manifests: List[Dict[str, Any]]) -> List[str]:
     return backends
 
 
+def _validate_finite_statistics(statistics: Statistics, label: str) -> None:
+    for metric, value in asdict(statistics).items():
+        if value is not None and not math.isfinite(value):
+            raise ValueError(f"{label} statistic {metric} must be finite")
+
+
 def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, enable_bootstrap: bool = True) -> Statistics:
     """Compute runtime statistics with optional bootstrap CI."""
     if not timings:
@@ -291,16 +297,13 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
         max_val = max(timings)
         total_val = sum(timings)
 
-    if not math.isfinite(mean_val) or not math.isfinite(p95_val):
-        raise ValueError("Computed mean and p95 must be finite")
-
     # Bootstrap CI
     bootstrap_ci_lower = None
     bootstrap_ci_upper = None
     if enable_bootstrap and bootstrap_iterations > 0:
         bootstrap_ci_lower, bootstrap_ci_upper = _bootstrap_confidence_interval(timings, iterations=bootstrap_iterations)
 
-    return Statistics(
+    statistics = Statistics(
         count=len(timings),
         mean_sec=mean_val,
         median_sec=median_val,
@@ -314,6 +317,8 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
         bootstrap_ci_95_lower=bootstrap_ci_lower,
         bootstrap_ci_95_upper=bootstrap_ci_upper,
     )
+    _validate_finite_statistics(statistics, "Computed")
+    return statistics
 
 
 def capture_environment() -> EnvironmentMetadata:
@@ -394,9 +399,8 @@ def detect_regressions(
     baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float], strict: bool = False
 ) -> List[Regression]:
     """Compare current stats against baseline and detect regressions."""
-    for label, stats in (("Baseline", baseline.statistics), ("Current", current_stats)):
-        if not all(math.isfinite(value) for value in (stats.mean_sec, stats.p95_sec, stats.success_rate)):
-            raise ValueError(f"{label} mean, p95 and success rate must be finite")
+    _validate_finite_statistics(baseline.statistics, "Baseline")
+    _validate_finite_statistics(current_stats, "Current")
     if not all(math.isfinite(value) for value in thresholds.values()):
         raise ValueError("Regression thresholds must be finite")
     regressions = []
@@ -554,6 +558,7 @@ def load_baseline(path: Path) -> Baseline:
 
 def save_baseline(baseline: Baseline, path: Path):
     """Save baseline to JSON file."""
+    _validate_finite_statistics(baseline.statistics, "Baseline")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to dict and filter None values for cleaner JSON

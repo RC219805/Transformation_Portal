@@ -183,7 +183,7 @@ class TestCLIExitCodes:
         assert result.returncode == 3
         assert "Insufficient data" in result.stderr
 
-    @pytest.mark.parametrize("metric", ["total_seconds", "mean_sec", "p95_sec"])
+    @pytest.mark.parametrize("metric", ["total_seconds", "mean_sec", "p95_sec", "median_sec"])
     @pytest.mark.parametrize("invalid_value", [float("nan"), float("inf")], ids=["nan", "infinity"])
     def test_nonfinite_timing_exits_3_without_publishing_report(self, tmp_path, metric, invalid_value):
         baseline_manifests = tmp_path / "baseline"

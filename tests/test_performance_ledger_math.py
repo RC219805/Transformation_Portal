@@ -275,6 +275,11 @@ class TestComputeStatisticsNumPyVsPython:
         assert stats.bootstrap_ci_95_lower is None
         assert stats.bootstrap_ci_95_upper is None
 
+    def test_overflow_in_computed_statistics_is_rejected(self):
+        with np.errstate(over="ignore"):
+            with pytest.raises(ValueError, match="std_sec must be finite"):
+                compute_statistics([1e200, 2e200, 3e200, 4e200, 5e200], enable_bootstrap=False)
+
 
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
