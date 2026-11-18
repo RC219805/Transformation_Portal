@@ -41,6 +41,14 @@ from transformation_portal.lux_depth_v3.provenance import (
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _fresh_tool_probes():
+    """Tool probes are memoised per process; isolate every test from the others."""
+    provenance_module.clear_tool_probe_caches()
+    yield
+    provenance_module.clear_tool_probe_caches()
+
+
 @pytest.fixture
 def sample_tiff_image(tmp_path: Path) -> Path:
     """Create a small TIFF test image with EXIF data.
@@ -157,6 +165,49 @@ _UNUSABLE_TOOL_OS_ERROR_IDS = ["unsearchable-path-entry", "path-entry-is-a-file"
 
 class TestExiftoolAvailability:
     """Test exiftool detection and version extraction."""
+
+    @pytest.mark.parametrize("require_exiftool", [True, False])
+    def test_batch_capture_probes_invariant_tools_once(self, sample_tiff_image: Path, require_exiftool: bool):
+        """exiftool -ver and convert -version are batch invariants, not per-image work."""
+        commands: list[tuple[str, ...]] = []
+
+        def fake_run(command, *args, **kwargs):
+            commands.append(tuple(command[:2]))
+            if list(command[:2]) == ["exiftool", "-ver"]:
+                return MagicMock(returncode=0, stdout="12.76\n", stderr="")
+            if list(command[:2]) == ["convert", "-version"]:
+                return MagicMock(returncode=0, stdout="Version: ImageMagick 7.1.1-0\n", stderr="")
+            if list(command[:1]) == ["exiftool"]:
+                return MagicMock(returncode=0, stdout=json.dumps([{"EXIF:Make": "Cam"}]), stderr="")
+            return MagicMock(returncode=0, stdout="abc123\n", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            records = [
+                capture_provenance(
+                    image_path=sample_tiff_image,
+                    config_fingerprint="sha256:abc123",
+                    require_exiftool=require_exiftool,
+                )
+                for _ in range(4)
+            ]
+
+        assert commands.count(("exiftool", "-ver")) == 1
+        assert commands.count(("convert", "-version")) == 1
+        # Recorded values are unchanged by the memo.
+        assert {record.toolchain["exiftool_version"] for record in records} == {"12.76"}
+        assert {record.toolchain["imagemagick_version"] for record in records} == {"ImageMagick 7.1.1-0"}
+        assert all(record.exif == {"EXIF:Make": "Cam"} for record in records)
+
+    def test_failed_exiftool_probe_is_not_memoised(self):
+        """A tool missing now must be found once it is installed, without a restart."""
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            assert provenance_module._check_exiftool_available() is False
+            assert get_exiftool_version() is None
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="12.76\n")
+            assert provenance_module._check_exiftool_available() is True
+            assert get_exiftool_version() == "12.76"
+            mock_run.assert_called_once()
 
     def test_get_exiftool_version_when_available(self):
         """Test exiftool version retrieval when exiftool is available."""

@@ -29,6 +29,7 @@ Policy Boundaries:
 from __future__ import annotations
 
 import datetime
+import functools
 import hashlib
 import json
 import logging
@@ -65,11 +66,21 @@ class SchemaValidationError(ProvenanceError):
     """Raised when schema validation fails."""
 
 
-def _check_exiftool_available() -> bool:
-    """Check if exiftool is available in PATH.
+class _ToolProbeUnavailable(Exception):
+    """A tool probe could not run the tool or the tool exited non-zero.
 
-    Returns:
-        True if exiftool is available, False otherwise
+    Raised instead of returned so that ``functools.lru_cache`` keeps only
+    successful probes: a tool that is missing now is probed again later.
+    """
+
+
+@functools.lru_cache(maxsize=1)
+def _probe_exiftool_version() -> str:
+    """Run ``exiftool -ver`` once per process and return its stripped output.
+
+    The installed exiftool is invariant for a batch, so a successful probe is
+    memoised instead of spawning a Perl interpreter several times per image.
+    Failures are not cached. Use :func:`clear_tool_probe_caches` to re-probe.
     """
     try:
         result = subprocess.run(
@@ -79,9 +90,52 @@ def _check_exiftool_available() -> bool:
             timeout=5,
             check=False,
         )
-        return result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise _ToolProbeUnavailable(f"exiftool probe failed: {e}") from e
+    if result.returncode != 0:
+        raise _ToolProbeUnavailable(f"exiftool -ver exited with code {result.returncode}")
+    return result.stdout.strip()
+
+
+@functools.lru_cache(maxsize=1)
+def _probe_imagemagick_version() -> Optional[str]:
+    """Run ``convert -version`` once per process (successful probes only)."""
+    try:
+        result = subprocess.run(
+            ["convert", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise _ToolProbeUnavailable(f"ImageMagick probe failed: {e}") from e
+    if result.returncode != 0:
+        raise _ToolProbeUnavailable(f"convert -version exited with code {result.returncode}")
+    # Extract version from first line: "Version: ImageMagick 7.1.0-..."
+    first_line = result.stdout.split("\n")[0]
+    if "Version:" in first_line:
+        return first_line.split("Version:")[-1].strip()
+    return None
+
+
+def clear_tool_probe_caches() -> None:
+    """Forget memoised exiftool/ImageMagick probes so the next call re-probes."""
+    _probe_exiftool_version.cache_clear()
+    _probe_imagemagick_version.cache_clear()
+
+
+def _check_exiftool_available() -> bool:
+    """Check if exiftool is available in PATH.
+
+    Returns:
+        True if exiftool is available, False otherwise
+    """
+    try:
+        _probe_exiftool_version()
+    except _ToolProbeUnavailable:
         return False
+    return True
 
 
 def get_exiftool_version() -> Optional[str]:
@@ -91,16 +145,8 @@ def get_exiftool_version() -> Optional[str]:
         Version string or None if not available
     """
     try:
-        result = subprocess.run(
-            ["exiftool", "-ver"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired) as e:
+        return _probe_exiftool_version()
+    except _ToolProbeUnavailable as e:
         logger.debug(f"Failed to get exiftool version: {e}")
     return None
 
@@ -263,23 +309,8 @@ def get_toolchain_versions() -> Dict[str, Optional[str]]:
 
     # Try to get ImageMagick version (optional - used in some pipelines)
     try:
-        result = subprocess.run(
-            ["convert", "-version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if result.returncode == 0:
-            # Extract version from first line: "Version: ImageMagick 7.1.0-..."
-            first_line = result.stdout.split("\n")[0]
-            if "Version:" in first_line:
-                versions["imagemagick_version"] = first_line.split("Version:")[-1].strip()
-            else:
-                versions["imagemagick_version"] = None
-        else:
-            versions["imagemagick_version"] = None
-    except (OSError, subprocess.TimeoutExpired):
+        versions["imagemagick_version"] = _probe_imagemagick_version()
+    except _ToolProbeUnavailable:
         versions["imagemagick_version"] = None
 
     return versions
