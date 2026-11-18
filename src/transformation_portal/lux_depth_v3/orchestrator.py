@@ -8322,7 +8322,7 @@ class EnhanceOrchestrator:
 
         # Inert scene-group bridge: preserve
         # existing per-image behavior and order.
-        sorted_images = sorted(images)
+        sorted_images = list(images) if prepared is not None else sorted(images)
         scene_groups = build_scene_groups(
             sorted_images,
             dataset_root=input_dir,

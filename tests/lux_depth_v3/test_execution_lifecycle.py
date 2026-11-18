@@ -136,6 +136,39 @@ def test_prepared_inputs_are_real_absolute_and_exactly_authorized(tmp_path: Path
     assert authorize_prepared_input(prepared, image) == image.resolve()
 
 
+@pytest.mark.regression
+def test_plan_input_order_is_sorted_relative_strings_whatever_the_supplied_order(tmp_path: Path) -> None:
+    """The carried input order is contract-bearing plan bytes, not a runtime choice.
+
+    Consumers follow this order; they must never be "fixed" by re-sorting the
+    plan, because that would change the canonical bytes of every existing plan.
+    """
+
+    root = tmp_path / "inputs"
+    names = ["living/a.png", "kitchen/b.png", "kitchen/a.png", "z.png", "kitchen-2/a.png", "hero/detail.png", "hero.png"]
+    images = []
+    for name in names:
+        image = root / name
+        image.parent.mkdir(parents=True, exist_ok=True)
+        image.write_bytes(b"not-decoded-by-plan-preparation")
+        images.append(image)
+    string_order = sorted(names)
+    component_order = [path.relative_to(root).as_posix() for path in sorted(images)]
+    assert string_order != component_order
+    config = _synthetic_config()
+
+    prepared = prepare_lux_execution(config, root, images)
+
+    assert [item.path for item in prepared.plan.inputs] == string_order
+    assert [item.input_id for item in prepared.plan.inputs] == [f"input-{index:06d}" for index in range(1, len(names) + 1)]
+    assert prepared.input_files == tuple((root / name).resolve() for name in string_order)
+    assert json.loads(prepared.canonical_plan_bytes)["input_selection"]["files"] == [
+        {"id": f"input-{index:06d}", "path": name} for index, name in enumerate(string_order, start=1)
+    ]
+    for reordered in (sorted(images), list(reversed(images)), [root / name for name in string_order]):
+        assert prepare_lux_execution(config, root, reordered).canonical_plan_bytes == prepared.canonical_plan_bytes
+
+
 @pytest.mark.parametrize("names", [("scene.png", "SCENE.png"), ("caf\u00e9.png", "cafe\u0301.png")])
 def test_consumed_plan_rejects_portable_input_collisions(tmp_path: Path, names: tuple[str, str]) -> None:
     root = tmp_path / "inputs"

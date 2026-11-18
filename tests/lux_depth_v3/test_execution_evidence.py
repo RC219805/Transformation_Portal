@@ -301,6 +301,60 @@ def test_prepared_batch_result_carries_snapshot_identity_and_dimensions(tmp_path
     assert combined.timing.total_seconds == pytest.approx(result["runtime_s"])
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("kitchen/a.png", "kitchen-2/a.png"),
+        ("room/a.png", "room 2/a.png"),
+        ("shoot/a.png", "shoot.old/a.png"),
+        ("hero.png", "hero/detail.png"),
+    ],
+)
+def test_prepared_batch_follows_plan_order_for_sibling_names_sorting_before_separator(
+    tmp_path: Path,
+    names: tuple[str, str],
+) -> None:
+    """Plan order is string order; the runtime must not re-sort by path components.
+
+    ``kitchen-2/a.png`` sorts before ``kitchen/a.png`` as a string but after it
+    as a ``Path``.  The batch manifest is bound to the plan positionally, so a
+    component-wise re-sort made every such batch fail after all work was done.
+    """
+
+    input_root = tmp_path / "inputs"
+    image_paths: list[Path] = []
+    for index, name in enumerate(names):
+        image_path = input_root / name
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (4, 4), color=(index + 1, index + 2, index + 3)).save(image_path)
+        image_paths.append(image_path)
+    plan_order = sorted(names)
+    assert plan_order != [path.relative_to(input_root).as_posix() for path in sorted(image_paths)]
+
+    prepared = prepare_lux_execution(
+        EnhanceConfig(depth_backend="synthetic", enable_v2=False, emit_run_card=True),
+        input_root=input_root,
+        input_files=image_paths,
+    )
+    assert [item.path for item in prepared.plan.inputs] == plan_order
+    output_root = tmp_path / "output"
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    # Exactly the CLI call shape: the frozen plan selection, no rescan.
+    results = orchestrator.enhance_batch(prepared.input_root)
+
+    assert [result["status"] for result in results] == ["ok", "ok"]
+    assert [Path(result["image"]) for result in results] == list(prepared.input_files)
+    batch_path = next((output_root / "manifests").glob("batch_*.json"))
+    batch = json.loads(batch_path.read_bytes())
+    assert [row["image"] for row in batch["results"]] == plan_order
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(evidence)
+    assert [row["path"] for row in evidence["requested_inputs"]] == plan_order
+
+
 def test_prepared_rerun_preserves_prior_completion_carriers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
