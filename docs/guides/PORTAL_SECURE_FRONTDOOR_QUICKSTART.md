@@ -201,6 +201,104 @@ Notes:
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
 
+
+### Request-correlated upload recovery
+
+Apply the additive `0010_upload_receipts` migration after
+`0009_job_submissions` before deploying the matching Postgres backend. The
+ledger reads are required for new job admission, including keyless requests,
+even while correlated writes are disabled. Deploy backend reads before the
+matching client. Enable new
+correlated writes separately with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=1`; the
+default is disabled. The managed capability requires the current signed tenant
+and composite Access-email/portal-username identity plus Postgres operational
+storage. Direct-debug and informational actor headers grant no receipt access.
+
+`POST /v1/uploads/staging` accepts an optional canonical UUID in
+`X-TP-Upload-Request-ID`. Its successful response retains the existing upload
+staging envelope. A duplicate scoped ID returns `409` before multipart parsing
+or another batch; this header does not make upload bodies replayable.
+`GET /v1/uploads/staging/receipts/{request_id}` returns
+`tp.orchestrator.upload_receipt.v1` with `request_id`, `status` (`pending`,
+`ready`, `expired`, or `unknown`) and a staging `receipt` only when verified
+ready. Unknown or missing evidence is not proof that a POST was rejected.
+Every lookup rechecks current tenant/path authority and exact retained bytes.
+Before publishing ready, the writer verifies the same completion seal and exact
+input inventory used by lookup. Unexpected entries, symlinks and multiply-linked
+files fail closed. Recovery metadata, including its completion seal, retains
+its 4 MiB per-file ceiling; uploads
+whose metadata exceeds that ceiling return `413` without publishing ready. The
+writer uses the configured upload file limit; later lookup uses the exact sealed
+count, so reducing that setting does not invalidate an accepted receipt.
+
+Recovery covers API-process restart on the same intact filesystem and database.
+It does not promise host/power-loss persistence, storage synchronization, or
+resumption of an incomplete upload. Browser cancellation stops client waiting;
+it does not revoke a running staging thread or delete a completed batch. The
+server retains streams and its stable cross-process lock until the worker and
+completion transaction finish. A sealed filesystem completion can be reconciled
+after a crash before its database-ready update.
+
+Completion and new job admission check expiry against fresh database time after
+acquiring the matching ledger-row locks. Expiry at that check prevents
+publishing ready or admitting a new job. Receipt lookup returns the existing `expired`
+status with a null receipt; a staging POST whose completion expires returns
+`409 CONFLICT` with `details.reason=upload_expired`. These responses do not
+authorize automatically repeating an upload POST.
+
+The existing TTL and cleanup loop remain in force. Ledger-owned batches require
+an atomic deletion claim under the stable filesystem lock and ledger-row lock.
+Retained job references prevent deletion, including jobs admitted without a
+submission key. Admission pins every distinct staged batch named by read inputs,
+including input/archive aliases, photographic manifests and sidecars, nested or
+metadata paths, and ancestor directories, from both the submitted and effective
+request. Matching uses absolute server-owned ledger locators, independent of
+the process working directory. Portal-relative read selectors resolve against
+the server application's `REPO_ROOT`; client root fields and headers cannot
+replace that base. Tracked inputs require verified tenant scope
+and must be ready and unexpired; trusted and keyless calls do not bypass this
+requirement. Frozen plans
+and physical bindings retain their exact read locators; legacy archive admission
+also retains the read defaults from its server-built command. Command output
+fields never pin a batch. For frozen Materials constituents, the read-set pass
+snapshots only SHA/size-bound evidence JSON within existing `MaterialLimits`
+(at most 1 MiB per descriptor) and frozen resource bounds. It runs before global
+capacity locks; accepted submission replays return before these reads. The API
+drains the background read after cancellation. This pass does not open or decode
+NPY masks or initialize models.
+
+Older retained jobs without exact frozen read-set references conservatively
+retain the parent namespace of a recognized `materials_manifest`. That
+retention-only fallback can overretain batches until job removal and cannot
+reconstruct historical mask inputs. New admissions use the precise frozen read
+set.
+
+Admission locks batches in a stable order in the same
+transaction. Cleanup also protects retained nested and ancestor selectors.
+Failed deletion remains fenced for retry by the existing loop, including a
+partial deletion that removed its marker. Such a retry requires the ledger's
+deleting claim and stable lock; a stale worker cannot republish ready. Permanent
+lock identities keep markerless ledger remnants out of legacy cleanup. They
+live outside deletable batch directories and are not reused. Do not remove
+lock files manually.
+
+Rollback disables new writes with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
+restarts the serving process. Keep the additive schema, receipt reads and
+ownership-aware cleanup for outstanding attempts; no down-migration is required.
+A recovered receipt requires explicit operator acceptance before replacing the
+current input path. Never automatically repeat its POST.
+
+Validate the restart/concurrency/fencing lane against a dedicated migrated
+`*_test` Postgres database:
+
+```bash
+TP_UPLOAD_RECEIPT_TEST_DATABASE_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tp_upload_recovery_test make test-upload-recovery-services
+```
+
+The lane covers cancellation ownership, sealed-completion recovery, duplicate
+requests, retained-job pinning and bounded cleanup fairness. It uses no Redis
+queue or model runtime and is not host/power-loss qualification.
+
 ## Local Development
 
 From the repository root, create the local shared environment once. The writer

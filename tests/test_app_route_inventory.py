@@ -106,6 +106,7 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/v1/presets"): "presets",
     ("GET", "/v1/readiness"): "readiness",
     ("POST", "/v1/uploads/staging"): "uploads",
+    ("GET", "/v1/uploads/staging/receipts/{request_id}"): "uploads",
     ("GET", "/v2/job-submissions/{request_id}"): "jobs",
     ("GET", "/v2/jobs"): "jobs",
     ("POST", "/v2/jobs"): "jobs",

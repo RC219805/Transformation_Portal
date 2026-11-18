@@ -137,7 +137,7 @@ def _absolute_path(value: str, *, directory: bool = False, must_exist: bool = Tr
     return path
 
 
-def _archive_parameters(trusted_argv: Sequence[str], output_root: Path) -> tuple[str, dict[str, Any]]:
+def _archive_parameters(trusted_argv: Sequence[str], output_root: Path | None) -> tuple[str, dict[str, Any]]:
     if len(trusted_argv) < 4 or list(trusted_argv[:3]) != [sys.executable, str(_ARCHIVE_RUNNER), "--json"]:
         raise ExecutionPlanError("Archive preparation requires the trusted archive runner")
     operation_name = trusted_argv[3]
@@ -164,16 +164,30 @@ def _archive_parameters(trusted_argv: Sequence[str], output_root: Path) -> tuple
         if name in operation.integers:
             parameters[name] = int(raw)
         elif name in operation.outputs:
-            try:
-                parameters[name] = _absolute_path(raw, must_exist=False).relative_to(output_root).as_posix()
-            except ValueError as exc:
-                raise ExecutionPlanError("Archive outputs must stay inside the requested job output root") from exc
+            if output_root is None:
+                # Legacy retention reads only input roles. Its already-authorized
+                # output selectors retain their existing path contracts.
+                parameters[name] = raw
+            else:
+                try:
+                    parameters[name] = _absolute_path(raw, must_exist=False).relative_to(output_root).as_posix()
+                except ValueError as exc:
+                    raise ExecutionPlanError("Archive outputs must stay inside the requested job output root") from exc
         elif name in operation.files + operation.directories:
             parameters[name] = str(_absolute_path(raw, directory=name in operation.directories))
         else:
             parameters[name] = raw
         index += 2
     return operation_name, parameters
+
+
+def archive_command_read_paths(pipeline: str, trusted_argv: Sequence[str]) -> tuple[str, ...]:
+    """Freeze exact legacy archive read locators from the server-built command."""
+    name, parameters = _archive_parameters(trusted_argv, None)
+    operation = ARCHIVE_OPERATIONS[name]
+    if operation.pipeline != pipeline:
+        raise ExecutionPlanError("Archive operation does not match the requested pipeline")
+    return tuple(parameters[name] for name in operation.files + operation.directories if name in parameters)
 
 
 def prepare_dispatch_plan(job_request: Mapping[str, Any], *, trusted_argv: Sequence[str]) -> bytes:

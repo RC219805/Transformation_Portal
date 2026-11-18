@@ -44,6 +44,8 @@ from transformation_portal.api.v1.telemetry import (
 )
 from transformation_portal.api.v1.uploads import (
     UploadArtifacts,
+    UploadReceiptData,
+    UploadReceiptEnvelope,
     UploadStagingData,
     UploadStagingEnvelope,
     UploadSummary,
@@ -90,6 +92,8 @@ __all__ = [
     "ScenePage",
     "SceneSummary",
     "UploadArtifacts",
+    "UploadReceiptData",
+    "UploadReceiptEnvelope",
     "UploadStagingData",
     "UploadStagingEnvelope",
     "UploadSummary",
