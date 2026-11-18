@@ -617,6 +617,17 @@ def test_upload_read_base_through_a_symlink_loop_is_not_server_owned(tmp_path):
         _resolved_source_paths([str(selected)], upload_read_base=tmp_path / "loop")
 
 
+@pytest.mark.parametrize("absolute", [False, True])
+def test_upload_read_selector_cannot_normalize_through_a_symlink_loop(tmp_path, absolute):
+    (tmp_path / "loop").symlink_to("loop", target_is_directory=True)
+    (tmp_path / "selected").mkdir()
+    selector = Path("missing/../loop/../selected")
+    payload = {"pipeline": "lux-depth-v5", "args": {"input_dir": str(tmp_path / selector if absolute else selector)}}
+
+    with pytest.raises(UploadOwnershipLost, match="path resolution is unavailable"):
+        upload_source_paths(payload, upload_read_base=tmp_path)
+
+
 def test_photographic_frozen_members_keep_their_existing_portable_path_limits(tmp_path):
     from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
     from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths

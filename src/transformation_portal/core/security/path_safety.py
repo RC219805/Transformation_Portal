@@ -34,6 +34,7 @@ import errno
 import logging
 import os
 import re
+import stat
 from pathlib import Path
 from typing import List
 
@@ -243,6 +244,7 @@ def safe_cas_path(
 
 # Windows reports an unresolvable reparse-point cycle with this code.
 _WINERROR_CANT_RESOLVE_FILENAME = 1921
+_WINDOWS_JUNCTION_TAG = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
 
 
 class SymlinkLoopError(OSError, RuntimeError):
@@ -254,32 +256,71 @@ class SymlinkLoopError(OSError, RuntimeError):
     """
 
 
+def _symlink_target(path: Path) -> Path | None:
+    try:
+        metadata = path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None  # Preserve a missing suffix for paths that will be created later.
+    if not stat.S_ISLNK(metadata.st_mode) and getattr(metadata, "st_reparse_tag", None) != _WINDOWS_JUNCTION_TAG:
+        return None
+    return path.readlink()
+
+
+def _resolve_path_components(path: Path) -> Path:
+    """Walk raw components when the platform resolver cannot check them in order."""
+    absolute = path.absolute()
+    resolved = Path(os.sep if os.name == "posix" else absolute.anchor)
+    pending: list[str | Path] = list(reversed(absolute.parts[1:]))
+    links: dict[Path, Path | None] = {}
+    while pending:
+        component = pending.pop()
+        if isinstance(component, Path):
+            links[component] = resolved
+            continue
+        if component == "..":
+            resolved = resolved.parent
+            continue
+        candidate = resolved / component
+        if candidate in links:
+            cached = links[candidate]
+            if cached is None:
+                raise OSError(errno.ELOOP, "Symlink loop", candidate)
+            resolved = cached
+            continue
+        target = _symlink_target(candidate)
+        if target is None:
+            resolved = candidate
+            continue
+        links[candidate] = None
+        pending.append(candidate)  # Complete this link after resolving all its target components.
+        if target.anchor:
+            resolved /= os.sep if os.name == "posix" else target.anchor
+            pending.extend(reversed(target.parts[1:]))
+        else:
+            pending.extend(reversed(target.parts))
+    return resolved
+
+
 def resolve_rejecting_symlink_loops(path: str | os.PathLike[str]) -> Path:
-    """Resolve ``path`` non-strictly, failing on a symlink loop on every Python.
+    """Resolve a path and reject cycles before a later ``..`` can hide them.
 
-    Up to Python 3.12, ``Path.resolve(strict=False)`` raised ``RuntimeError``
-    for a symlink loop; Python 3.13 returns a best-effort path instead. Call
-    sites that fail closed on that exception use this helper so the loop is
-    detected explicitly rather than by relying on interpreter behaviour.
-
-    The result is exactly ``Path(path).resolve()`` when no loop is present.
-    Missing components remain allowed: the existing prefix is resolved and
-    the missing tail is kept lexically.
-
-    Raises:
-        SymlinkLoopError: If following the resolved path's symlinks loops
-            (or exceeds the platform's symlink depth limit).
+    Keep missing components lexically so an output path can be resolved before
+    its creation. Check traversal inside symlink targets as well as the input.
     """
+    candidate = Path(path)
     try:
-        resolved = Path(path).resolve()
-    except RuntimeError as exc:
-        # Python <= 3.12 reports the loop itself; normalize its type.
-        raise SymlinkLoopError(errno.ELOOP, "Symlink loop", os.fspath(path)) from exc
-    # Non-strict resolution keeps a looping component lexically on Python
-    # 3.13+, so probe the result: the kernel reports ELOOP for any loop on it.
-    try:
-        os.stat(resolved)
+        if os.name == "posix":
+            try:
+                return Path(os.path.realpath(candidate, strict=True))
+            except (FileNotFoundError, NotADirectoryError, RecursionError):
+                # Strict resolution stops at the first absent component. The
+                # walk permits that component but keeps checking later links.
+                pass
+        resolved = _resolve_path_components(candidate)
+        # Windows normalizes '..' before checking links. After checking the
+        # original traversal, preserve its canonical drive, casing and spelling.
+        return candidate.resolve() if os.name == "nt" else resolved
     except OSError as exc:
         if exc.errno == errno.ELOOP or getattr(exc, "winerror", None) == _WINERROR_CANT_RESOLVE_FILENAME:
             raise SymlinkLoopError(errno.ELOOP, "Symlink loop", os.fspath(path)) from exc
-    return resolved
+        raise

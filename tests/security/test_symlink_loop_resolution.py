@@ -41,6 +41,27 @@ def test_loop_in_middle_component_with_missing_tail(tmp_path):
     _assert_loop(tmp_path / "loop" / "missing" / "tail.jpg")
 
 
+@pytest.mark.parametrize("prefix", [".", "missing/.."])
+def test_parent_component_cannot_discard_a_loop(tmp_path, prefix):
+    os.symlink("loop", tmp_path / "loop")
+    safe = tmp_path / "safe.jpg"
+    safe.write_bytes(b"safe")
+    _assert_loop(tmp_path / prefix / "loop" / ".." / safe.name)
+
+
+@pytest.mark.parametrize("prefix", [".", "missing/.."])
+def test_parent_component_cannot_discard_a_loop_inside_a_link_target(tmp_path, prefix):
+    os.symlink("cycle", tmp_path / "cycle")
+    os.symlink(f"{prefix}/cycle/../safe.jpg", tmp_path / "link")
+    (tmp_path / "safe.jpg").write_bytes(b"safe")
+    _assert_loop(tmp_path / "link")
+
+
+def test_cycle_inside_a_target_with_an_initial_missing_component(tmp_path):
+    os.symlink("missing/../cycle/../safe.jpg", tmp_path / "cycle")
+    _assert_loop(tmp_path / "cycle")
+
+
 def test_self_referential_link(tmp_path):
     os.symlink(tmp_path / "self", tmp_path / "self")
     _assert_loop(tmp_path / "self")
@@ -85,12 +106,21 @@ def test_missing_path_resolves_lexically(tmp_path):
     assert not resolved.exists()
 
 
+def test_repeated_link_and_missing_tail_preserve_normal_resolution(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    os.symlink("target", tmp_path / "link", target_is_directory=True)
+    path = tmp_path / "link" / ".." / "link" / "missing" / "image.jpg"
+    assert resolve_rejecting_symlink_loops(path) == target.resolve() / "missing" / "image.jpg"
+
+
 def test_plain_path_matches_path_resolve(tmp_path):
     plain = tmp_path / "dir" / "file.txt"
     plain.parent.mkdir()
     plain.write_text("x", encoding="utf-8")
     assert resolve_rejecting_symlink_loops(plain) == plain.resolve(strict=True)
     assert resolve_rejecting_symlink_loops(tmp_path / "dir" / ".." / "dir") == plain.parent.resolve()
+    assert resolve_rejecting_symlink_loops(plain / ".." / "absent") == plain.parent.resolve() / "absent"
 
 
 def test_relative_path_resolves_against_working_directory(tmp_path, monkeypatch):

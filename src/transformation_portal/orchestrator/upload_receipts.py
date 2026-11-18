@@ -378,10 +378,7 @@ def _resolved_source_paths(values: list[Any], *, upload_read_base: Path | None =
         if not Path(raw).is_absolute() and base is None:
             raise UploadOwnershipLost("relative upload reads require an explicit server-owned base")
         try:
-            resolved = path_security._resolve_untrusted_request_path(raw, repo_root=base)
-            # Preserve loop/error detection after shared resolution has produced
-            # an absolute path; this never consults a process or module CWD.
-            paths.add(resolve_rejecting_symlink_loops(resolved))
+            paths.add(path_security._resolve_untrusted_request_path(raw, repo_root=base))
         except (OSError, RuntimeError, ValueError) as error:
             raise UploadOwnershipLost("upload read path resolution is unavailable") from error
     return tuple(sorted(paths))
