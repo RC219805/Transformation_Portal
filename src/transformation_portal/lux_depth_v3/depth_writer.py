@@ -383,10 +383,26 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
     # Prefer opencv for performance, fallback to PIL for CI compatibility
     if HAS_CV2:
         # Read raw 16-bit with opencv
-        img_u16 = opencv.imread(str(depth_path), opencv.IMREAD_UNCHANGED)
-        if img_u16 is None:
+        img_raw = opencv.imread(str(depth_path), opencv.IMREAD_UNCHANGED)
+        if img_raw is None:
             raise IOError(f"Failed to read depth map: {depth_path}")
-        img_f32 = img_u16.astype(np.float32) / 65535.0
+        if img_raw.ndim == 3 and img_raw.shape[2] in (3, 4):
+            # OpenCV decodes colour as BGR(A); match the PIL fallback's RGB(A) order.
+            img_raw = opencv.cvtColor(
+                img_raw,
+                opencv.COLOR_BGR2RGB if img_raw.shape[2] == 3 else opencv.COLOR_BGRA2RGBA,
+            )
+        # Scale by the decoded bit depth exactly like the PIL fallback, so the
+        # same file yields the same values whichever decoder is installed.
+        if img_raw.dtype == np.uint16:
+            img_f32 = img_raw.astype(np.float32) / 65535.0
+        elif img_raw.dtype == np.uint8:
+            img_f32 = img_raw.astype(np.float32) / 255.0
+        else:
+            img_f32 = img_raw.astype(np.float32)
+            maxv = float(np.nanmax(img_f32)) if img_f32.size else 1.0
+            if maxv > 1.0:
+                img_f32 /= maxv
     else:
         # Fallback to PIL (CI-compatible)
         from PIL import Image

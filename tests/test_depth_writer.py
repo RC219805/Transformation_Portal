@@ -480,3 +480,38 @@ def test_normalizer_and_writer_agree_on_metric_units(tmp_path: Path) -> None:
 
     assert normalization == stats.normalization
     np.testing.assert_array_equal(read_depth_u16_png(path), np.rint(normalized * 65535.0).astype(np.float32) / 65535.0)
+
+
+@pytest.mark.parametrize("channels", [None, 3, 4])
+@pytest.mark.parametrize("dtype", [np.uint8, np.uint16])
+def test_reader_scales_like_the_pil_fallback_whatever_the_decoder(tmp_path: Path, monkeypatch, dtype, channels) -> None:
+    """LC-16: the OpenCV and PIL decode paths must return the same values for the same file."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3 import depth_writer
+
+    full_scale = np.iinfo(dtype).max
+    ramp = np.linspace(0, full_scale, 40).astype(dtype).reshape(5, 8)
+    if channels is None:
+        pixels = ramp
+    else:
+        planes = [ramp, (full_scale - ramp).astype(dtype), (ramp // 2).astype(dtype), np.full_like(ramp, full_scale)]
+        pixels = np.dstack(planes[:channels])
+    path = tmp_path / "depth.png"
+    if dtype == np.uint8:
+        Image.fromarray(pixels).save(path)
+    else:
+        import cv2
+
+        bgr = pixels if channels is None else pixels[..., [2, 1, 0, 3][:channels]]
+        assert cv2.imwrite(str(path), bgr)
+
+    via_cv2 = read_depth_u16_png(path)
+    monkeypatch.setattr(depth_writer, "HAS_CV2", False)
+    expected = pixels.astype(np.float32) / float(full_scale)
+
+    assert via_cv2.dtype == np.float32
+    np.testing.assert_array_equal(via_cv2, expected)
+    if dtype == np.uint8 or channels is None:
+        # Pillow decodes 16-bit colour PNGs lossily, so compare decoders only where it is exact.
+        np.testing.assert_array_equal(read_depth_u16_png(path), via_cv2)
