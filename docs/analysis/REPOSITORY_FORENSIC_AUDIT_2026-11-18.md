@@ -2,7 +2,8 @@
 
 Audit date: 2026-11-18.
 Audited baseline: `9e2e25e7869c57cc2f8d189851dfe3db8f183d0c` (`origin/main` when the audit began).
-Implementation branch: `claude/eloquent-galileo-smk78g`, 430 commits ahead of the baseline at the time of writing (`a915b7202de0`).
+Implementation branch: `claude/eloquent-galileo-smk78g`, 440 commits ahead of `main` at the time of writing (`2132e397df81`).
+`main` moved during the audit and was merged in afterwards; see the section on the merge below.
 
 This is dated audit evidence, not live guidance. It records what a whole-repository review found, what was
 repaired on the branch above, and what was left for an owner decision. It does not establish photographic
@@ -48,9 +49,9 @@ fidelity, physical depth accuracy, hosted deployment acceptance or behaviour aga
 
 - Baseline core suite as found: 20,227 passed, 10 failed, 6 errors. All sixteen were test or environment coupling
   (tests that assume a non-root user, tests that need torch without a guard), repaired first.
-- Core suite on the branch head above: 22,482 passed, 637 skipped, 0 failed.
-- ML tier (Python 3.11, CPU torch): 1,151 passed, 72 skipped, 0 failed (894 passed at the baseline).
-- Managed front door (Node 22): npm test 989 passed, 0 failed; npm run build compiled.
+- Core suite on the branch head above: 22,782 passed, 714 skipped, 0 failed on Python 3.13, after main was merged in (22,482 passed before the merge).
+- ML tier (Python 3.11, CPU torch): 1,151 passed, 72 skipped, 0 failed, last run before main was merged in (894 passed at the baseline).
+- Managed front door (Node 22): npm test 1,149 passed, 0 failed; npm run build compiled.
 - Governance gates: check-json-serialization, check-yaml-governance, check-python-headers, check-piptools-cache, check-requirements-lock-contract, check-dependency-pinning, check-ci-sync, check-portal-asset-budgets, validate-ci, the test-marker audit, the tautological-test ban and the TODO scan pass; black, isort, flake8 and the CI mypy allowlist are clean on every changed file apart from one mypy report in api/docs.py:101 that predates the audit and appears only with a newer local mypy.
 - Not exercised here: live Postgres, Redis and S3 backends (their contract suites skip without service URLs),
   GPU and MPS paths, inference with real model weights, browser behaviour of the portal and dashboard pages,
@@ -585,6 +586,39 @@ start with another top-level directory.
 | M-21 | low | `foundation/performance_monitor.py:503-520, :135-137` | PerformanceMonitor: enabling the monitor inside a block that was entered while disabled leaves start_time at 0.0, so the recorded elapsed time is seconds since 1970. Once the 10 000 cap is r | fixed: d283524c0 |
 | M-27 | low | `dev/formatting.py:162-182, :355-375, :178, :371, :210-217` | write_formatted and format_directory | fixed: 55b529779 |
 | M-31 | low | `metrics/ledger.py:386-387, :458, :529; metrics/aggregator.py:76-79` | performance ledger descriptive statistics | fixed: b2b90926e |
+
+## Merge with main and a Python 3.13 finding
+
+`main` gained six commits while the audit ran. It was merged into the branch at `c0b0355`.
+
+- Conflicts in `ingest/upload_staging.py` and `web/secure-landing/portal-src/portal.template.js` were resolved
+  keeping both sides. One audit assertion was adapted to `main`'s retention rule: a job that reads an ancestor of
+  the upload root now keeps every staged batch. The generated portal bundles were rebuilt.
+- The merged `portal.js` was 38 gzip bytes over its governed size budget. The budget is unchanged; the audit's
+  start-up guard for denied site storage was restructured and the log pane's selected-run filter moved into the
+  deferred bundle that owns the pane (`9cb8b00`, `6a11aa8`). `portal.js` is 104,737 of 104,750 gzip bytes.
+
+The merge surfaced one more finding, which is not among the 374 above. Up to Python 3.12, `Path.resolve()`
+raised `RuntimeError` for a symlink loop even when not strict; Python 3.13, which `requires-python >= 3.11`
+admits, returns a best-effort path. Fail-closed branches written as `except RuntimeError` around a
+non-strict `resolve()` therefore never fired on 3.13, and three of `main`'s upload-receipt tests failed there
+while passing on 3.11.
+
+- Repair: `resolve_rejecting_symlink_loops()` and `SymlinkLoopError` in `core/security/path_safety.py` detect
+  the loop explicitly on every interpreter and keep the exception types the existing handlers catch
+  (`4e4e526`). Eleven sites now use it: upload read identity and read-base resolution in
+  `orchestrator/upload_receipts.py` (`44883a6`), tenant access in `core/security/tenant.py` and pilot request
+  paths in `app.py` (`ac728f9`), `PathValidator` and `safe_resolve_path` (`f08f04e`), sandbox confinement
+  (`b6336c7`) and `utils.security.validate_filepath` (`18bb839`). Eighteen other candidates were executed with
+  a real loop on both interpreters and behave identically.
+- Each regression test fails on Python 3.13 without its source change and passes on 3.11 and 3.13 with it.
+- Left for the owner: `upload_receipts.claim_deletion` resolves a batch root without a handler (on 3.11 a
+  looping root aborted the whole cleanup pass, on 3.13 only that row stays fenced; both prevent deletion, and
+  choosing between them is a ledger decision that needs Postgres to test), and
+  `photographic_delivery/native_resources.py` now raises `OSError` where it raised `ValueError` for a loop in
+  strict resolution (it still fails closed).
+- Noted from `main`, not changed here: `docs/reference/LUX_DEPTH.md`, `LUX_DEPTH_V5.md` and `LUX_DEPTH_V6.md`
+  say migrations run through `0007_photography_bindings`, while the merged upload-receipts feature needs `0010`.
 
 ## Preserved contracts and remaining limits
 

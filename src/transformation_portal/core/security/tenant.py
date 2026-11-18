@@ -34,6 +34,7 @@ from transformation_portal.core.security.fs_guard import (
 )
 from transformation_portal.core.security.path_safety import (
     PathSafetyError,
+    resolve_rejecting_symlink_loops,
     validate_safe_name,
 )
 
@@ -269,13 +270,13 @@ class TenantManager:
             raise TenantError(f"Cross-tenant access denied: parent traversal for tenant {tenant.tenant_id}")
         try:
             absolute_path = path.absolute()
-            resolved_path = path.resolve()
-            resolved_parent = path.parent.resolve()
+            resolved_path = resolve_rejecting_symlink_loops(path)
+            resolved_parent = resolve_rejecting_symlink_loops(path.parent)
             # Resolve configured bases, but keep the tenant namespace fixed:
             # a tenant directory symlink must not authorize another tenant.
             tenant_roots = (
-                tenant.workspace_root.resolve() / tenant.tenant_id,
-                tenant.cas_root.resolve() / tenant.tenant_id,
+                resolve_rejecting_symlink_loops(tenant.workspace_root) / tenant.tenant_id,
+                resolve_rejecting_symlink_loops(tenant.cas_root) / tenant.tenant_id,
             )
             lexical_roots = (
                 tenant.workspace_root.absolute() / tenant.tenant_id,

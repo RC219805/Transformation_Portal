@@ -2,7 +2,7 @@
   "summary": {
     "total": 25,
     "ungoverned": 0,
-    "files_scanned": 2265,
+    "files_scanned": 2267,
     "by_type": {
       "NotImplementedError": 25
     }
@@ -148,7 +148,7 @@
     },
     {
       "path": "src/transformation_portal/utils/security.py",
-      "lineno": 669,
+      "lineno": 672,
       "col_offset": 8,
       "type": "NotImplementedError",
       "message": "timeout() requires signal.SIGALRM (Unix-only). (TODO_INVENTORY.md \u00a72.4) Use multiprocessing or threading-based timeout on Windows.",

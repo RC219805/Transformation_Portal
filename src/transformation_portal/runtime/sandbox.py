@@ -58,6 +58,7 @@ from transformation_portal.core.security.fs_guard import (
 )
 from transformation_portal.core.security.path_safety import (
     PathSafetyError,
+    resolve_rejecting_symlink_loops,
     validate_safe_name,
 )
 from transformation_portal.storage.cas_store import ArtifactStore, CASError
@@ -227,7 +228,7 @@ class Sandbox:
         materialised as symlinks into CAS remain readable).
         """
         try:
-            resolved = self._workspace_real.joinpath(*parts).resolve()
+            resolved = resolve_rejecting_symlink_loops(self._workspace_real.joinpath(*parts))
         except (OSError, RuntimeError) as e:  # symlink loops
             raise SandboxError(f"Cannot resolve workspace path {'/'.join(parts)}: {e}")
         if resolved.is_relative_to(self._workspace_real):

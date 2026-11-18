@@ -4512,7 +4512,7 @@ def test_artifact_retention_cleanup_never_unlinks_files_the_jobs_run_did_not_pro
     assert rewritten_later.exists()
 
 
-@pytest.mark.parametrize("peer_state", ["overlapping", "running", "unknown_window"])
+@pytest.mark.parametrize("peer_state", ["overlapping", "running", "unknown_window", "looped_peer_root"])
 def test_overlapping_legacy_outputs_refuse_explicit_and_retention_deletion(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, peer_state: str
 ) -> None:
@@ -4523,13 +4523,21 @@ def test_overlapping_legacy_outputs_refuse_explicit_and_retention_deletion(
     os.utime(peer_file, (written_at, written_at))
     job.artifacts["items"].append({"relative_path": peer_file.name})
     _sync_seeded_job(job)
+    request = job.request
+    if peer_state == "looped_peer_root":
+        loop = tmp_path / "looped-peer"
+        try:
+            loop.symlink_to(loop.name)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation unavailable")
+        request = {**job.request, "args": {**job.request["args"], "output_dir": str(loop)}}
     peer = orchestrator_app.Job(
         id="job_artifact_overlap_b",
         created_at=job.created_at,
         started_at=None if peer_state == "unknown_window" else job.started_at + 10.0,
         finished_at=job.finished_at + 10.0 if peer_state == "overlapping" else None,
         state="running" if peer_state == "running" else "succeeded",
-        request=job.request,
+        request=request,
     )
     _seed_job(peer)
     # Only the repository knows about the second job.

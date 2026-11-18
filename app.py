@@ -83,6 +83,7 @@ from transformation_portal.core.security.frontdoor_identity import (
     parse_actor_tenants,
     verify_actor_assertion,
 )
+from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
 from transformation_portal.core.security.tenant import (
     TenantAwareFSGuard,
     TenantContext,
@@ -1592,7 +1593,10 @@ async def _pilot_enforce_request_paths(
                 # before constructing/resolving any user-controlled Path.
                 candidate = os.path.abspath(os.path.join(os.fspath(REPO_ROOT), raw))
                 shared_roots = runtime_roots.get(field, [])
-                allowed_roots = [*tenant_roots, *(base for root in shared_roots for base in (root.absolute(), root.resolve()))]
+                allowed_roots = [
+                    *tenant_roots,
+                    *(base for root in shared_roots for base in (root.absolute(), resolve_rejecting_symlink_loops(root))),
+                ]
                 for root in allowed_roots:
                     root_text = os.path.abspath(root)
                     prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
@@ -1603,11 +1607,11 @@ async def _pilot_enforce_request_paths(
                         path = Path(candidate)
                     else:
                         continue
-                    resolved = path.resolve()
+                    resolved = resolve_rejecting_symlink_loops(path)
                     # Shared selectors retain downstream provenance checks.
                     # Keep the admitted lexical path for tenant validation;
                     # passing only its target would erase namespace escapes.
-                    if not any(resolved.is_relative_to(shared.resolve()) for shared in shared_roots):
+                    if not any(resolved.is_relative_to(resolve_rejecting_symlink_loops(shared)) for shared in shared_roots):
                         guard.enforce_path(path)
                     break
                 else:
@@ -3763,7 +3767,9 @@ def _check_legacy_artifact_output_overlap(job: Job, output_dir: Path, peers: Ite
         try:
             # Inspect identity even if the peer's historical root is outside
             # today's allowlist. This grants no authority over that path.
-            peer_output = _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
+            peer_output = resolve_rejecting_symlink_loops(
+                _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             raise _AmbiguousLegacyArtifactOwnership("legacy peer output identity is unavailable") from exc
         if output_dir.is_relative_to(peer_output) or peer_output.is_relative_to(output_dir):

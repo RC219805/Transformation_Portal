@@ -88,7 +88,10 @@ def validate_filepath(
         if must_exist:
             resolved = filepath.resolve(strict=True)
         else:
-            resolved = filepath.resolve(strict=False)
+            # Local import keeps this module's import surface stdlib-only.
+            from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
+
+            resolved = resolve_rejecting_symlink_loops(filepath)
     except (OSError, RuntimeError) as e:
         raise SecurityError(f"Cannot resolve path {filepath}: {e}")
 
