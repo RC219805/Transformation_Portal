@@ -310,6 +310,16 @@ def test_cohesion_flags_outliers_without_adjusting_or_neutralizing_twilight() ->
         cohesion_diagnostics([reference, outlier], [{**group, "members": [reference.source_sha256]}])
 
 
+@pytest.mark.parametrize("valid_member_first", [True, False])
+def test_cohesion_rejects_unknown_reference_with_value_error(valid_member_first: bool) -> None:
+    """D-21: an unknown reference hash is a ValueError whatever the member order."""
+    image = _image(np.full((8, 12, 3), 12000, dtype=np.uint16), scene="Warm room")
+    unknown = "f" * 64
+    members = [image.source_sha256, unknown] if valid_member_first else [unknown, image.source_sha256]
+    with pytest.raises(ValueError):
+        cohesion_diagnostics([image], [{"name": "g", "reference_sha256": unknown, "members": members}])
+
+
 def test_shared_editorial_primitives_keep_precision_and_require_explicit_sdr() -> None:
     samples = np.linspace(0.3, 0.302, 80 * 100 * 3, dtype=np.float32).reshape((80, 100, 3))
     resized = resize_long_edge(samples, 40)

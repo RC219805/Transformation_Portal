@@ -269,7 +269,13 @@ def cohesion_diagnostics(images: Sequence[DeliveryImage], lighting_groups: Seque
         reference = group["reference_sha256"]
         validate_source_sha256(reference)
         members = group["members"]
-        if name in group_names or not isinstance(members, (tuple, list)) or not members or reference not in members:
+        if (
+            name in group_names
+            or not isinstance(members, (tuple, list))
+            or not members
+            or reference not in members
+            or reference not in stats
+        ):
             raise ValueError("Lighting group needs a unique name and an included explicit reference photograph")
         group_names.add(name)
         rows = []
