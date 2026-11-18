@@ -3677,15 +3677,30 @@ def _artifact_deletion_unconfirmed(job: "Job") -> bool:
     return status in ("pending", "failed") or (_uses_dispatch_authority() and _artifacts_deleted(job) and status != "deleted")
 
 
-def _job_artifacts_finalized(job: Job) -> bool:
-    """Return True once the runner has finished indexing/mirroring artifacts.
+# Job ids whose runner (subprocess plus artifact finalisation) is executing in
+# this process, with a count so overlapping runs of one id stay registered.
+_LOCAL_RUNNER_JOB_IDS: Dict[str, int] = {}
 
-    The runner writes the terminal ``state`` first, then indexes and mirrors
-    artifacts, and only then stamps ``finished_at``. Artifact deletion and
-    retention must wait for ``finished_at``; otherwise a delete accepted in that
-    window finds nothing indexed and the finaliser mirrors every file afterwards.
+
+def _job_artifacts_finalized(job: Job) -> bool:
+    """Return True once no runner can still be indexing/mirroring artifacts.
+
+    The runner writes (and persists) the terminal ``state`` first, then indexes
+    and mirrors artifacts, and only then stamps ``finished_at``. Artifact
+    deletion and retention must wait for that; otherwise a delete accepted in
+    the window finds nothing indexed and the finaliser mirrors every file
+    afterwards.
+
+    A terminal job without ``finished_at`` is therefore held back only while
+    its runner is live in this process. If the process died or was shut down
+    inside the window, the durable row keeps the terminal state with no
+    ``finished_at`` and nothing will ever stamp it (restart recovery only
+    sweeps active states): such a row must stay deletable and subject to
+    retention, as it was before the window was closed.
     """
-    return job.state in _TERMINAL_JOB_STATES and job.finished_at is not None
+    if job.state not in _TERMINAL_JOB_STATES:
+        return False
+    return job.finished_at is not None or job.id not in _LOCAL_RUNNER_JOB_IDS
 
 
 def _artifact_retention_due(job: Job, now: float) -> bool:
@@ -11812,7 +11827,17 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
 
 async def _run_job(job: Job, argv: List[str]) -> None:
     """Retain the legacy Python helper while sharing the production runner."""
-    await _job_execution_service().run(job, argv)
+    # Registered for the whole run, including the artifact finalisation that
+    # follows the terminal state (see ``_job_artifacts_finalized``).
+    _LOCAL_RUNNER_JOB_IDS[job.id] = _LOCAL_RUNNER_JOB_IDS.get(job.id, 0) + 1
+    try:
+        await _job_execution_service().run(job, argv)
+    finally:
+        remaining = _LOCAL_RUNNER_JOB_IDS.get(job.id, 0) - 1
+        if remaining > 0:
+            _LOCAL_RUNNER_JOB_IDS[job.id] = remaining
+        else:
+            _LOCAL_RUNNER_JOB_IDS.pop(job.id, None)
 
 
 async def _create_distributed_job(

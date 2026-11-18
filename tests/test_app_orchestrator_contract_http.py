@@ -4637,18 +4637,13 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
     assert response.json()["error"]["code"] == "CONFLICT"
 
 
-@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
-def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
-    client: TestClient, tmp_path: Path, jobs_base: str
-) -> None:
-    # The runner sets the terminal state before it indexes/mirrors artifacts and
-    # only stamps finished_at afterwards. A delete accepted in that window would
-    # report "deleted" while the finaliser mirrors every file afterwards.
+def _seed_terminal_job_without_finished_at(tmp_path: Path, job_id: str) -> tuple[Any, Path]:
     output_dir = tmp_path / "out"
     output_dir.mkdir()
-    (output_dir / "payload.txt").write_text("payload", encoding="utf-8")
+    payload = output_dir / "payload.txt"
+    payload.write_text("payload", encoding="utf-8")
     job = orchestrator_app.Job(
-        id="job_artifact_delete_finalizing",
+        id=job_id,
         created_at=orchestrator_app._now(),
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
         state="failed",
@@ -4660,6 +4655,18 @@ def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
         },
     )
     _seed_job(job)
+    return job, payload
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, jobs_base: str
+) -> None:
+    # The runner sets the terminal state before it indexes/mirrors artifacts and
+    # only stamps finished_at afterwards. A delete accepted in that window would
+    # report "deleted" while the finaliser mirrors every file afterwards.
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_finalizing")
+    monkeypatch.setitem(orchestrator_app._LOCAL_RUNNER_JOB_IDS, job.id, 1)
 
     response = client.delete(f"{jobs_base}/{job.id}/artifacts")
 
@@ -4667,7 +4674,85 @@ def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
     assert response.json()["error"]["code"] == "CONFLICT"
     assert orchestrator_app._artifacts_deleted(job) is False
     assert orchestrator_app._artifact_retention_due(job, orchestrator_app._now() + 10**9) is False
-    assert (output_dir / "payload.txt").exists()
+    assert payload.exists()
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_accepts_terminal_job_orphaned_before_finished_at(
+    client: TestClient, tmp_path: Path, jobs_base: str
+) -> None:
+    # A process that dies between the persisted terminal state and finished_at
+    # leaves this row behind for good: restart recovery only sweeps active
+    # states. With no runner alive for it, its artifacts must stay deletable
+    # and subject to retention instead of answering 409 forever.
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_orphaned")
+    assert job.id not in orchestrator_app._LOCAL_RUNNER_JOB_IDS
+    assert orchestrator_app._artifact_retention_due(job, orchestrator_app._now() + 10**9) is True
+
+    response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["artifacts"]["lifecycle"]["deletion_status"] == "deleted"
+    assert not payload.exists()
+
+
+def test_run_job_holds_artifact_deletion_until_the_runner_returns(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_runner_window")
+    job.state = "running"
+    _sync_seeded_job(job)
+    window: dict[str, Any] = {}
+
+    class _FinalizingExecutionService:
+        async def run(self, running_job: Any, _argv: list[str]) -> None:
+            # Same order as the production runner: terminal state first, then
+            # (here: the delete attempt) the finalisation, then finished_at.
+            running_job.state = "failed"
+            await orchestrator_app._persist_job_fields_best_effort(running_job, "runner_terminal", state="failed")
+            window["status"] = (await orchestrator_app._delete_job_artifacts(running_job.id)).status_code
+            window["retention_due"] = orchestrator_app._artifact_retention_due(running_job, orchestrator_app._now() + 10**9)
+            window["payload_exists"] = payload.exists()
+            running_job.finished_at = orchestrator_app._now()
+            await orchestrator_app._persist_job_state(running_job)
+
+    monkeypatch.setattr(orchestrator_app, "_job_execution_service", lambda: _FinalizingExecutionService())
+
+    async def scenario() -> int:
+        await orchestrator_app._run_job(job, [])
+        return (await orchestrator_app._delete_job_artifacts(job.id)).status_code
+
+    status_after_run = asyncio.run(scenario())
+
+    assert window == {"status": 409, "retention_due": False, "payload_exists": True}
+    assert orchestrator_app._LOCAL_RUNNER_JOB_IDS == {}
+    assert status_after_run == 200
+    assert not payload.exists()
+
+
+def test_run_job_releases_its_registration_when_the_runner_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = orchestrator_app.Job(
+        id="job_runner_registration_released",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3"},
+        state="failed",
+        finished_at=None,
+    )
+    seen: list[bool] = []
+
+    class _RaisingExecutionService:
+        async def run(self, running_job: Any, _argv: list[str]) -> None:
+            seen.append(orchestrator_app._job_artifacts_finalized(running_job))
+            raise RuntimeError("finalisation failed")
+
+    monkeypatch.setattr(orchestrator_app, "_job_execution_service", lambda: _RaisingExecutionService())
+
+    with pytest.raises(RuntimeError, match="finalisation failed"):
+        asyncio.run(orchestrator_app._run_job(job, []))
+
+    assert seen == [False]
+    assert orchestrator_app._LOCAL_RUNNER_JOB_IDS == {}
+    assert orchestrator_app._job_artifacts_finalized(job) is True
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
