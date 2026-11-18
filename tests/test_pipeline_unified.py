@@ -1157,6 +1157,48 @@ class TestOutputGeneration:
         assert result.success is True
         assert (tmp_path / "custom_output").exists()
 
+    def test_recipe_name_with_path_separator_stays_in_output_dir(self, pipeline_module, sample_input_image, tmp_path: Path):
+        """D-08: a '/' in the recipe name must not point the output into a missing subdirectory."""
+        recipe = {
+            "name": "Interior/Exterior Blend",
+            "stages": ["color_grading"],
+            "color_grading": {"enabled": True},
+            "quality_feedback": {"enabled": False},
+            "output": {"format": "png"},
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        result = pipeline.process_single(sample_input_image, output_dir=tmp_path / "out")
+
+        assert result.success is True
+        assert result.output_path.parent == tmp_path / "out"
+        assert result.output_path.name == "input_interior_exterior_blend.png"
+
+    def test_output_name_unchanged_for_names_without_separators(self, pipeline_module, sample_input_image):
+        """Names that save today keep byte-identical output filenames."""
+        recipe = {"name": "Signature Estate-v2 (Golden)", "stages": ["color_grading"], "output": {"format": "png"}}
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+
+        assert pipeline._get_output_name(sample_input_image) == "input_signature_estate_v2_(golden).png"
+
+    def test_null_sections_are_treated_as_empty(self, pipeline_module, sample_input_image, tmp_path: Path):
+        """D-08: a stage/output/quality section that loads as YAML null must not crash construction."""
+        recipe = {
+            "name": "Null Sections",
+            "stages": ["color_grading"],
+            "color_grading": None,
+            "quality_feedback": {"enabled": False},
+            "output": None,
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        result = pipeline.process_single(sample_input_image, output_dir=tmp_path / "out")
+
+        assert result.success is True
+        assert result.stages_executed == ["color_grading"]
+        assert result.output_path.suffix == ".tif"
+
 
 # =============================================================================
 # Error Handling Tests

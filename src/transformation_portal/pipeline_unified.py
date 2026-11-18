@@ -228,7 +228,7 @@ class UnifiedPipeline:
 
     def _init_quality_feedback(self) -> None:
         """Initialize RAG-based quality feedback bridge."""
-        quality_config = self.recipe.get("quality_feedback", {})
+        quality_config = self.recipe.get("quality_feedback") or {}
         if not quality_config.get("enabled", True):
             return
 
@@ -259,7 +259,7 @@ class UnifiedPipeline:
 
     def _create_rag_callback(self) -> Optional[Callable[[Dict], None]]:
         """Create callback for RAG indexing of quality metrics."""
-        rag_config = self.recipe.get("quality_feedback", {})
+        rag_config = self.recipe.get("quality_feedback") or {}
         rag_index_path = rag_config.get("rag_index_path")
 
         if not rag_index_path:
@@ -323,7 +323,8 @@ class UnifiedPipeline:
         for stage_name in stage_order:
             if stage_name in stage_definitions:
                 display_name, required = stage_definitions[stage_name]
-                stage_config = self.recipe.get(stage_name, {})
+                # A section with every option commented out loads as YAML null.
+                stage_config = self.recipe.get(stage_name) or {}
                 enabled = stage_config.get("enabled", True)
 
                 stages.append(
@@ -337,7 +338,7 @@ class UnifiedPipeline:
                 )
 
         # Always add quality assessment at the end if quality feedback is enabled
-        quality_config = self.recipe.get("quality_feedback", {})
+        quality_config = self.recipe.get("quality_feedback") or {}
         if quality_config.get("enabled", True) and "quality_assessment" not in stage_order:
             stages.append(
                 PipelineStage(
@@ -597,7 +598,7 @@ class UnifiedPipeline:
     def _rag_indexing_enabled(self) -> bool:
         """Return True when the current recipe config enables RAG indexing."""
 
-        quality_config = self.recipe.get("quality_feedback", {})
+        quality_config = self.recipe.get("quality_feedback") or {}
         return bool(
             quality_config.get("enabled", True)
             and quality_config.get("rag_indexing_enabled", False)
@@ -607,7 +608,7 @@ class UnifiedPipeline:
     def _append_rag_document(self, document: Dict[str, Any]) -> None:
         """Append a RAG document to the configured JSONL index."""
 
-        rag_index_path = self.recipe.get("quality_feedback", {}).get("rag_index_path")
+        rag_index_path = (self.recipe.get("quality_feedback") or {}).get("rag_index_path")
         if not rag_index_path:
             return
 
@@ -725,7 +726,7 @@ class UnifiedPipeline:
 
         log.info("")
         log.info("Output configuration:")
-        output_config = self.recipe.get("output", {})
+        output_config = self.recipe.get("output") or {}
         log.info(f"  Format: {output_config.get('format', 'tiff')}")
         log.info(f"  Quality: {output_config.get('quality', 95)}")
 
@@ -1125,7 +1126,7 @@ class UnifiedPipeline:
         Returns:
             Path to output file.
         """
-        output_config = self.recipe.get("output", {})
+        output_config = self.recipe.get("output") or {}
         output_format = output_config.get("format", "tiff").lower()
         quality = output_config.get("quality", 95)
 
@@ -1177,7 +1178,7 @@ class UnifiedPipeline:
         Returns:
             Output filename.
         """
-        output_config = self.recipe.get("output", {})
+        output_config = self.recipe.get("output") or {}
         output_format = output_config.get("format", "tiff").lower()
 
         ext_map = {
@@ -1190,6 +1191,10 @@ class UnifiedPipeline:
 
         # Use recipe name in output filename
         recipe_slug = self.name.lower().replace(" ", "_").replace("-", "_")
+        # Path separators (and NUL) in the recipe name would point the output into a
+        # missing subdirectory or abort the save; names without them are unchanged.
+        for separator in ("/", os.sep, os.altsep or "/", "\x00"):
+            recipe_slug = recipe_slug.replace(separator, "_")
         return f"{input_path.stem if stem is None else stem}_{recipe_slug}{ext}"
 
 
