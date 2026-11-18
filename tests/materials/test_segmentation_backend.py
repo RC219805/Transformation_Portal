@@ -1100,6 +1100,74 @@ def test_segment_materials_cache_rejects_missing_confidence(sample_image, tmp_pa
     assert calls["segment"] == 2
 
 
+def test_segment_materials_does_not_cache_degraded_heuristic_fallback(tmp_path, monkeypatch):
+    """LC-02: heuristic fallback masks must not be replayed as the requested backend's results."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    image = np.full((120, 160, 3), 90, dtype=np.uint8)
+    image[60:, :80] = (40, 160, 50)  # foliage-like block
+    image[:40, 80:] = (60, 80, 220)  # blue block
+
+    # A loaded EfficientSAM backend running in heuristic mode (efficientvit unavailable).
+    heuristic_backend = EfficientSAMBackend()
+    heuristic_backend._model_loaded = True
+    heuristic_backend._use_real_model = False
+    heuristic_backend._device = "cpu"
+
+    calls = {"healthy": 0}
+    healthy_mask = np.zeros(image.shape[:2], dtype=np.float32)
+    healthy_mask[10:60, 10:60] = 1.0
+
+    class HealthyBackend:
+        info = SegmentationBackendInfo("Fake", "fake", False, False, 1, "test")
+        _device = "cpu"
+
+        def segment(self, _image):
+            calls["healthy"] += 1
+            return {"glass": (healthy_mask, 0.93)}
+
+        def segmentation_degraded(self):
+            return False
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        depth_device="cpu",
+    )
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: heuristic_backend)
+    degraded = segment_materials(image, config, cache_dir=tmp_path)
+    degraded_metadata = get_last_segmentation_runtime_metadata()
+    assert degraded, "heuristic fallback should still serve masks for this run"
+    assert heuristic_backend.segmentation_degraded() is True
+    assert {ev["confidence_score_type"] for ev in degraded_metadata["material_confidence_evidence"].values()} == {
+        "heuristic_material_confidence_v1"
+    }
+    assert list(tmp_path.rglob("*.json")) == []
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: HealthyBackend())
+    healthy = segment_materials(image, config, cache_dir=tmp_path)
+    healthy_metadata = get_last_segmentation_runtime_metadata()
+
+    assert calls["healthy"] == 1
+    assert healthy_metadata["cache_hit"] is False
+    assert set(healthy) == {"glass"}
+    # The healthy result is cached and replayed normally.
+    segment_materials(image, config, cache_dir=tmp_path)
+    assert get_last_segmentation_runtime_metadata()["cache_hit"] is True
+    assert calls["healthy"] == 1
+
+
+def test_efficientsam_segmentation_degraded_tracks_clip_evidence():
+    """A CLIP-classified result is not degraded; a heuristic one is."""
+    backend = EfficientSAMBackend()
+    backend._material_confidence_evidence = {"glass": {"confidence_score_type": "clip_softmax_margin_v1"}}
+    assert backend.segmentation_degraded() is False
+    backend._material_confidence_evidence = {"glass": {"confidence_score_type": "heuristic_material_confidence_v1"}}
+    assert backend.segmentation_degraded() is True
+
+
 def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
     """Strict mode should raise when SAM2 backend dependencies are unavailable."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module

@@ -201,6 +201,20 @@ class EfficientSAMBackend:
             return None
         return metadata
 
+    def segmentation_degraded(self) -> bool:
+        """Return True when the last ``segment()`` call served a fallback result.
+
+        The heuristic labelling path (efficientvit missing, a real-model or CLIP
+        failure, ``SKIP_CLIP_INFERENCE``) is a degraded stand-in for the
+        requested backend. Such results must never be cached under the key a
+        healthy run would read, otherwise later runs replay them without the
+        backend executing.
+        """
+        degraded_types = {HEURISTIC_MATERIAL_SCORE_TYPE, MISSING_CLIP_SCORE_FALLBACK_TYPE}
+        return any(
+            evidence.get("confidence_score_type") in degraded_types for evidence in self._material_confidence_evidence.values()
+        )
+
     def _load_clip_runtime(self) -> Tuple[Any, Any, Any]:
         """Load CLIP model/tokenizer with cache-first offline-safe resolution."""
         if self._clip_model is not None:
