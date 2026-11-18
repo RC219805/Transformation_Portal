@@ -216,13 +216,14 @@ test("seed-frontdoor-user rejects an empty output path", () => {
 test("seed-frontdoor-user keeps everything after the first '=' in an inline flag value", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-user-"));
   const usersFile = path.join(tempDir, "frontdoor-users.json");
+  const passwordFixture = "a=deliberately fake test passphrase==";
 
   try {
-    const result = runSeed([`--output=${usersFile}`, "--password=a=long-and-strong-passphrase==", "--quiet"]);
+    const result = runSeed([`--output=${usersFile}`, `--password=${passwordFixture}`, "--quiet"]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
 
     const parsed = JSON.parse(readFileSync(usersFile, "utf-8"));
-    assert.equal(await argon2.verify(parsed[0].password_hash, "a=long-and-strong-passphrase=="), true);
+    assert.equal(await argon2.verify(parsed[0].password_hash, passwordFixture), true);
     assert.equal(await argon2.verify(parsed[0].password_hash, "a"), false);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });

@@ -132,6 +132,7 @@ def test_governed_root_dotfile_configs_are_allowed(tmp_path: Path) -> None:
         ".git-blame-ignore-revs",
         ".gitignore",
         ".gitleaks.toml",
+        ".gitleaksignore",
         ".pre-commit-config.yaml",
         ".pylintrc",
     ]
