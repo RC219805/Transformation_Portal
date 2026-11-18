@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 from pathlib import Path
@@ -201,3 +202,60 @@ def test_process_rejects_reconstruction_before_graph_bridge(monkeypatch: pytest.
 
     assert exc_info.value.stage == "reconstruction"
     assert "process_multiview" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("suffix", [".png", ".tiff"])
+def test_graph_mode_reports_decoded_ingest_metadata_like_imperative_mode(tmp_path: Path, suffix: str) -> None:
+    """Graph mode reports the decoded format and content hash, fresh and on a cache hit (G-5)."""
+    tifffile = pytest.importorskip("tifffile")
+    from PIL import Image
+
+    pixels = (np.random.default_rng(0).random((16, 16)) * 65535).astype(np.uint16)
+    input_path = tmp_path / f"in{suffix}"
+    if suffix == ".png":
+        Image.fromarray(pixels).save(input_path)
+    else:
+        tifffile.imwrite(input_path, np.stack([pixels] * 3, axis=-1))
+
+    imperative = SpatialAIPipeline(PipelineConfig(tier="standard", stages=["ingest"])).process(
+        input_path, tmp_path / "imperative", save_intermediates=False
+    )
+    graph = SpatialAIPipeline(PipelineConfig(tier="standard", stages=["ingest"], use_execution_graph=True))
+    fresh = graph.process(input_path, tmp_path / "graph", save_intermediates=False)
+    cached = graph.process(input_path, tmp_path / "graph", save_intermediates=False)
+
+    expected = imperative.linear_image
+    assert expected is not None and expected.content_hash
+    for result in (fresh, cached):
+        linear = result.linear_image
+        assert linear is not None
+        assert linear.input_format == expected.input_format
+        assert linear.content_hash == expected.content_hash
+        assert linear.color_space == expected.color_space
+        assert linear.input_size == expected.input_size
+        assert all(type(v) is int for v in linear.input_size)
+    assert cached.stage_reports[0]["status"] == "cached"
+
+
+def test_graph_result_derives_missing_ingest_metadata_instead_of_placeholders(tmp_path: Path) -> None:
+    """Without format/hash outputs the bridge derives them rather than reporting TIFF / no hash (G-5)."""
+    graph_pipeline = _import_graph_pipeline()
+    linear_rgb = np.arange(12, dtype=np.float32).reshape(2, 2, 3)
+    exec_result = SimpleNamespace(
+        stages_executed=1,
+        stages_cached=0,
+        total_time_ms=1.0,
+        stage_results=[SimpleNamespace(stage_id="ingest", cache_hit=False, execution_time_ms=1.0, cache_key="k")],
+        outputs={"ingest.linear_rgb": linear_rgb, "ingest.input_size": (2, 2)},
+    )
+
+    result = graph_pipeline._build_pipeline_result(
+        pipeline=_make_pipeline(),
+        input_path=tmp_path / "view.png",
+        output_dir=tmp_path,
+        exec_result=exec_result,
+    )
+
+    assert result.linear_image is not None
+    assert result.linear_image.input_format == "PNG"
+    assert result.linear_image.content_hash == hashlib.sha256(linear_rgb.tobytes()).hexdigest()

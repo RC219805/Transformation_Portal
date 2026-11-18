@@ -93,6 +93,10 @@ class IngestStage:
         input_size: (height, width) tuple.
         input_dtype: Original input dtype string.
         gamma: Always 1.0 (enforced).
+        input_format: Detected input format (e.g. "TIFF", "PNG", "RAW_DNG").
+        color_space: Color space of linear_rgb (e.g. "linear_sRGB").
+        content_hash: SHA-256 of linear_rgb bytes.
+        ingest_fingerprint: RAW ingest fingerprint (RAW inputs only).
 
     Resource Profile:
         GPU: 0 MB (CPU-only)
@@ -113,7 +117,9 @@ class IngestStage:
         """Stage metadata for IngestStage."""
         return StageMetadata(
             name="linear_ingest",
-            version="1.0.0",
+            # 1.1.0: outputs carry input_format / color_space / content_hash
+            # (/ ingest_fingerprint), so 1.0.0 cache entries without them are not reused.
+            version="1.1.0",
             description="Linear RGB ingest with gamma=1.0 enforcement (Phase 1)",
             resource_requirements=ResourceRequirements(
                 gpu_memory_mb=0,
@@ -136,7 +142,8 @@ class IngestStage:
             context: ExecutionContext with device, config, output_dir.
 
         Returns:
-            Dict with linear_rgb, input_size, input_dtype, gamma.
+            Dict with linear_rgb, input_size, input_dtype, gamma, input_format,
+            color_space, content_hash and (RAW only) ingest_fingerprint.
 
         Raises:
             ValueError: If input_path missing or invalid.
@@ -174,12 +181,18 @@ class IngestStage:
             emit_provenance=emit_prov and output_dir is not None,
         )
 
-        return {
+        outputs: Dict[str, Any] = {
             "linear_rgb": result.linear_rgb,
             "input_size": result.input_size,
             "input_dtype": result.dtype,
             "gamma": 1.0,
+            "input_format": result.input_format,
+            "color_space": result.color_space,
+            "content_hash": result.content_hash,
         }
+        if result.ingest_fingerprint is not None:
+            outputs["ingest_fingerprint"] = result.ingest_fingerprint
+        return outputs
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: Any) -> str:
         """Compute content-addressed cache key.

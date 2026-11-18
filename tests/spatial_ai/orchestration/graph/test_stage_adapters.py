@@ -45,7 +45,7 @@ class TestIngestStageMetadata:
         meta = stage.metadata
 
         assert meta.name == "linear_ingest"
-        assert meta.version == "1.0.0"
+        assert meta.version == "1.1.0"
         assert meta.description
         assert meta.resource_requirements.gpu_memory_mb == 0
         assert meta.resource_requirements.cpu_memory_mb > 0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from transformation_portal.reporting.contracts import build_stage_report
-from transformation_portal.spatial_ai.ingest.linear_decoder import LinearIngestResult
+from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationResult
 
 from .error_handler import ErrorRecoveryStrategy, PipelineError
@@ -65,18 +66,30 @@ def _build_pipeline_result(
     )
 
     if "ingest.linear_rgb" in exec_result.outputs:
-        linear_rgb = exec_result.outputs["ingest.linear_rgb"]
-        input_size = exec_result.outputs.get("ingest.input_size", linear_rgb.shape[:2])
+        outputs = exec_result.outputs
+        linear_rgb = outputs["ingest.linear_rgb"]
+        input_size = outputs.get("ingest.input_size", linear_rgb.shape[:2])
+
+        # Report what the ingest stage decoded instead of fixed placeholders; the
+        # fallbacks reproduce the decoder's own (path- and pixel-derived) values.
+        input_format = outputs.get("ingest.input_format")
+        if input_format is None:
+            input_format = LinearDecoder()._detect_format(input_path)
+        content_hash = outputs.get("ingest.content_hash")
+        if content_hash is None:
+            content_hash = hashlib.sha256(linear_rgb.tobytes()).hexdigest()
 
         result.linear_image = LinearIngestResult(
             linear_rgb=linear_rgb,
             input_path=input_path,
-            input_size=tuple(input_size) if not isinstance(input_size, tuple) else input_size,
+            input_size=tuple(int(v) for v in input_size),
             gamma=1.0,
             bit_depth=32,
             dtype="float32",
-            input_format=exec_result.outputs.get("ingest.input_format", "TIFF"),
-            color_space=exec_result.outputs.get("ingest.color_space", "linear_sRGB"),
+            input_format=str(input_format),
+            color_space=outputs.get("ingest.color_space", "linear_sRGB"),
+            content_hash=str(content_hash),
+            ingest_fingerprint=outputs.get("ingest.ingest_fingerprint"),
         )
 
     if "segment.masks" in exec_result.outputs:
