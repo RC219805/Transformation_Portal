@@ -530,7 +530,7 @@ exists it exits `5`, because nothing was verified. Exit codes: `0` verified,
 GPG verification of the DSSE envelope applies the same signer binding to
 `signatures[0].keyid`: a good signature made by any other key in the keyring is
 rejected, so record a GPG-resolvable `--key-id` for every format. Both paths
-decide on GnuPG's machine-readable signature verdict rather than its exit code.
+decide on GnuPG's machine-readable signature verdict, not on its exit code alone.
 A signature made by a revoked or expired key, an expired signature, and any
 verdict the verifier does not recognise are rejected (GnuPG itself exits 0 for
 revoked and expired keys).
