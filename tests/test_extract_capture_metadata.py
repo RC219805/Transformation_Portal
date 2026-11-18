@@ -476,10 +476,18 @@ def test_phase4c_progress_callback_reports_direct_function_sequence(tmp_path: Pa
         ({"Orientation": "1e999999999"}, "WARN_INVALID_ORIENTATION"),
         ({"FocalLength": "NaN"}, None),
         ({"GPSLatitude": "nan"}, "WARN_GPS_PARSE_FAIL"),
+        # decimal.Overflow is an ArithmeticError but not an InvalidOperation.
+        ({"FocalLength": "1e999999/1e-999999"}, None),
+        ({"GPSLatitude": "1e999999/1e-999999"}, "WARN_GPS_PARSE_FAIL"),
+        # List-form GPS time: datetime() raises OverflowError for an hour beyond a C int,
+        # and int() of a huge exponent would allocate a billion-digit integer.
+        ({"GPSDateStamp": "2026:01:02", "GPSTimeStamp": ["1e30", "1", "1"]}, "WARN_GPS_PARSE_FAIL"),
+        ({"GPSDateStamp": "2026:01:02", "GPSTimeStamp": ["1", "-1e30", "1"]}, "WARN_GPS_PARSE_FAIL"),
+        ({"GPSDateStamp": "2026:01:02", "GPSTimeStamp": ["1e999999999", "1", "1"]}, "WARN_GPS_PARSE_FAIL"),
     ],
 )
 def test_phase4c_hostile_exif_values_degrade_to_warning_codes(
-    tmp_path: Path, hostile_tags: dict[str, str], expected_warning: str | None
+    tmp_path: Path, hostile_tags: dict[str, object], expected_warning: str | None
 ) -> None:
     """T-20: hostile EXIF values must map to governed WARN_* codes, never raw exceptions."""
     config = load_capture_metadata_config(CAPTURE_CONFIG_PATH)
@@ -506,5 +514,30 @@ def test_phase4c_hostile_exif_values_degrade_to_warning_codes(
         assert expected_warning in record["extraction_warnings"]
     if "FocalLength" in hostile_tags:
         assert record["focal_length_mm"] is None
-    if "OffsetTimeOriginal" in hostile_tags:
+    if "OffsetTimeOriginal" in hostile_tags or "GPSTimeStamp" in hostile_tags:
         assert record["capture_datetime_utc"] is None
+
+
+def test_phase4c_list_form_gps_time_still_derives_capture_datetime(tmp_path: Path) -> None:
+    """T-20 follow-up: bounding GPS time components must not change valid list-form values."""
+    config = load_capture_metadata_config(CAPTURE_CONFIG_PATH)
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "sample_01.dng").write_bytes(b"phase4-gps-list")
+
+    def _fake_runner(file_paths: list[Path], tag_whitelist: list[str]) -> dict[str, dict[str, object]]:
+        del tag_whitelist
+        tags = {"GPSDateStamp": "2026:01:02", "GPSTimeStamp": ["3", "4.9", "5.5"]}
+        return {str(path.resolve()): dict(tags) for path in file_paths}
+
+    records = extract_capture_metadata_records(
+        input_root=input_root,
+        config=config,
+        strict=False,
+        schema_path=SCHEMA_PATH,
+        exif_runner=_fake_runner,
+    )
+
+    # Hours and minutes truncate, seconds round half-even, exactly as before.
+    assert records[0]["capture_datetime_utc"] == "2026-01-02T03:04:06Z"
+    assert "WARN_GPS_PARSE_FAIL" not in records[0]["extraction_warnings"]

@@ -306,13 +306,28 @@ def _parse_gps_time(value: Any) -> tuple[int, int, int] | None:
         return hour, minute, min(second, 59)
     if isinstance(value, (list, tuple)) and len(value) >= 3:
         try:
-            hour = int(_parse_decimal(value[0]))
-            minute = int(_parse_decimal(value[1]))
+            hour = _bounded_int(_parse_decimal(value[0]))
+            minute = _bounded_int(_parse_decimal(value[1]))
             second = int(_parse_decimal(value[2]).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN))
         except (ArithmeticError, ValueError):
             return None
         return hour, minute, min(second, 59)
     return None
+
+
+def _bounded_int(value: Decimal, limit: int = 1_000_000) -> int:
+    """Truncate a finite Decimal to int without materialising a huge integer.
+
+    ``int(Decimal("1e999999999"))`` allocates a billion-digit integer and hangs
+    the extractor. Every integer tag component handled here is far below
+    ``limit``, so a larger magnitude is clamped to ``+/-limit``: it stays out of
+    range for the caller, which reports its usual WARN_* code.
+    """
+    if value >= limit:
+        return limit
+    if value <= -limit:
+        return -limit
+    return int(value)
 
 
 def _parse_datetime_original(value: Any) -> datetime | None:
@@ -398,7 +413,7 @@ def _parse_rounded_optional(
         return None
     try:
         rounded = _round_half_even(value, places)
-    except (InvalidOperation, ValueError, ZeroDivisionError):
+    except (ArithmeticError, ValueError):
         if warning_code:
             warnings.add(warning_code)
         return None
