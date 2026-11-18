@@ -3,13 +3,13 @@
 Implements a PyTorch-native, MPS-compatible rasterizer for 3D Gaussian Splatting:
 - Project 3D Gaussians to 2D screen space
 - Differentiable alpha compositing
-- Painter's algorithm (depth sort)
+- Global depth sort (near splats occlude far ones)
 - Support for Apple Silicon (MPS), CUDA, and CPU
 
 Simplifications for Phase 6A:
 - Isotropic Gaussians (ignore rotation for now)
 - Simple pinhole projection (no lens distortion)
-- Back-to-front alpha compositing (no tile-based rendering)
+- Front-to-back alpha compositing (no tile-based rendering)
 - Fixed opacity (no learned alpha blending)
 
 Performance targets:
@@ -282,8 +282,8 @@ def render_gaussians(
     Approach:
     1. Project 3D Gaussians to 2D screen space
     2. Compute 2D Gaussian footprint for each splat
-    3. Sort by depth (painter's algorithm)
-    4. Alpha composite in back-to-front order
+    3. Sort by depth, nearest first
+    4. Alpha composite in front-to-back order, so near splats occlude far ones
 
     Args:
         positions: (N, 3) 3D positions in world coordinates.
@@ -323,8 +323,10 @@ def render_gaussians(
     colors = colors[valid_mask]
     opacities = opacities[valid_mask]
 
-    # Sort by depth (back to front for alpha compositing)
-    depth_order = torch.argsort(depths, descending=True)
+    # Sort by depth, nearest first: the loop below accumulates transmittance, so each
+    # splat is attenuated by everything composited before it. Compositing the farthest
+    # splat first would let far splats occlude near ones.
+    depth_order = torch.argsort(depths, stable=True)
     mean_2d = mean_2d[depth_order]
     cov_2d = cov_2d[depth_order]
     colors = colors[depth_order]
@@ -339,7 +341,7 @@ def render_gaussians(
         cov_2d = cov_2d + torch.eye(2, device=device) * 1e-3
         cov_2d_inv = torch.inverse(cov_2d)
 
-    # Alpha composite (back to front)
+    # Alpha composite (front to back)
     rendered = torch.zeros(H, W, 3, device=device)
     accumulated_alpha = torch.zeros(H, W, device=device)
 

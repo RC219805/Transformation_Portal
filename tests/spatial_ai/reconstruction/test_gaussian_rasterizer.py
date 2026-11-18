@@ -1,5 +1,7 @@
 """Unit tests for Gaussian rasterizer (Phase 6A)."""
 
+import itertools
+
 import numpy as np
 import pytest
 
@@ -25,7 +27,30 @@ from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import 
     quaternion_to_rotation_matrix,
     render_gaussians,
     render_gaussians_fast,
+    render_gaussians_native,
 )
+
+# Compositing weight of three stacked splats at the centre pixel, nearest first:
+# a1, (1 - a1) * a2, (1 - a1) * (1 - a2) * a3 for opacities 0.6, 0.5 and 0.9.
+STACKED_CENTER_RGB = (0.6, 0.4 * 0.5, 0.4 * 0.5 * 0.9)
+
+
+def _stacked_splats(input_order):
+    """Three splats on the optical axis, all centred on the centre pixel.
+
+    Nearest to farthest they are red, green and blue, so each colour channel of the
+    centre pixel is the compositing weight of one splat. ``input_order`` permutes the
+    tensors, because the result must not depend on the order the caller supplies.
+    """
+    index = torch.tensor(input_order)
+    positions = torch.tensor([[0.0, 0.0, 2.0], [0.0, 0.0, 4.0], [0.0, 0.0, 6.0]])
+    colors = torch.eye(3)
+    # Same 10 px screen-space sigma for every splat (scale * FX / depth).
+    scales = torch.tensor([[0.2, 0.2, 0.2], [0.4, 0.4, 0.4], [0.6, 0.6, 0.6]])
+    opacities = torch.tensor([[0.6], [0.5], [0.9]])
+    rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(3, 1)
+    intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
+    return positions[index], colors[index], scales[index], rotations[index], opacities[index], intrinsics, torch.eye(4)
 
 
 class TestQuaternionRotation:
@@ -274,6 +299,21 @@ class TestRendering:
         # Check that center has some color (not completely black)
         center_pixel = rendered[H // 2, W // 2]
         assert center_pixel.sum() > 0.1, "Center should have visible color"
+
+        # Both splats are centred on this pixel (footprint weight 1): the near blue splat
+        # contributes its full opacity and lets 20 % of the opaque red splat behind it through.
+        assert torch.allclose(center_pixel, torch.tensor([0.2, 0.0, 0.8]), atol=1e-5)
+
+        # Near splats occlude far ones whatever order the caller supplies them in, and every
+        # entry point (full, capped training render, native reference) composites the same way.
+        for input_order in itertools.permutations(range(3)):
+            scene = _stacked_splats(input_order)
+            for render in (render_gaussians, render_gaussians_fast, render_gaussians_native):
+                with torch.inference_mode():
+                    stacked_center = render(*scene, IMAGE_SIZE)[H // 2, W // 2]
+                assert torch.allclose(
+                    stacked_center, torch.tensor(STACKED_CENTER_RGB), atol=1e-5
+                ), f"{render.__name__} composited input order {input_order} as {stacked_center.tolist()}"
 
     def test_render_empty_scene(self):
         """Test rendering with no visible Gaussians."""
