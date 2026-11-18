@@ -54,3 +54,20 @@ def test_bands_are_isotropic_for_non_square_images(analyzer):
 def test_constant_image_has_no_band_energy(analyzer):
     result = analyzer.analyze(np.full((64, 64), 200, dtype=np.uint8))
     assert (result.lsf_energy, result.msf_energy, result.hsf_energy) == (0, 0, 0)
+
+
+@pytest.mark.parametrize("shape", [(63, 97), (101, 37), (480, 640)])
+@pytest.mark.parametrize("value", [1, 200, 255])
+def test_flat_image_of_any_size_has_no_band_energy(analyzer, shape, value):
+    # Without the DC term, a flat non-power-of-two image leaves only FFT
+    # rounding residue; it must not be normalised into arbitrary band shares.
+    result = analyzer.analyze(np.full(shape, value, dtype=np.uint8))
+    assert (result.lsf_energy, result.msf_energy, result.hsf_energy) == (0, 0, 0)
+    assert not any("Excellent" in rec for rec in result.recommendations)
+
+
+def test_tiny_real_structure_is_still_measured(analyzer):
+    image = np.full((480, 640), 200, dtype=np.uint8)
+    image[0, 0] = 201
+    result = analyzer.analyze(image)
+    assert result.lsf_energy + result.msf_energy + result.hsf_energy == pytest.approx(1.0)

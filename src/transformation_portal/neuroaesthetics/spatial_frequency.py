@@ -70,6 +70,11 @@ class SpatialFrequencyAnalyzer:
     # Assuming ~60 pixels per degree at typical viewing distance
     LSF_THRESHOLD = 0.1  # Low: 0-0.1 (large structures)
     MSF_THRESHOLD = 0.3  # Mid: 0.1-0.3 (medium details)
+
+    # Non-DC energy at or below this fraction of the whole power spectrum is
+    # floating-point residue, not structure. A single 1-level step in a flat
+    # 480x640 uint8 image is ~1e-10, rounding residue of a flat image ~1e-32.
+    _STRUCTURE_ENERGY_FLOOR = 1e-20
     # High: >0.3 (fine details)
 
     # Optimal energy distribution
@@ -104,8 +109,13 @@ class SpatialFrequencyAnalyzer:
         # Calculate frequency band energies
         lsf_energy, msf_energy, hsf_energy = self._calculate_band_energies(spectrum, viewing_distance_factor)
 
-        # Normalize energies
+        # Normalize energies. The bands exclude the DC term, so a flat image
+        # leaves only FFT rounding residue (~1e-32 of the spectrum for
+        # non-power-of-two sizes); normalising that residue would yield
+        # arbitrary band shares. Treat it as no structural energy.
         total_energy = lsf_energy + msf_energy + hsf_energy
+        if total_energy <= self._STRUCTURE_ENERGY_FLOOR * float(np.sum(spectrum)):
+            total_energy = 0.0
         lsf_norm = lsf_energy / total_energy if total_energy > 0 else 0
         msf_norm = msf_energy / total_energy if total_energy > 0 else 0
         hsf_norm = hsf_energy / total_energy if total_energy > 0 else 0
