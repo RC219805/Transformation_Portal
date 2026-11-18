@@ -9,17 +9,24 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-from sqlalchemy import and_, func, literal, or_, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Text, and_, bindparam, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from transformation_portal.core.archive_execution_plan import ARCHIVE_OPERATIONS
-from transformation_portal.core.execution_plan import decode_bounded_json_object
+from transformation_portal.core.execution_plan import (
+    _validate_relative_input_path,
+    decode_bounded_json_object,
+)
 from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.lux_depth_v4.io import snapshot
+from transformation_portal.materials_v4 import artifacts as material_artifacts
+from transformation_portal.materials_v4.contracts import EVIDENCE_SCHEMA, MaterialLimits, validate_digest
+from transformation_portal.materials_v4.taxonomy import TAXONOMY_VERSION
 from transformation_portal.orchestrator.models import UploadJobReferenceModel, UploadReceiptModel
 from transformation_portal.orchestrator.storage.base import JobRecord, RepositoryError
 from transformation_portal.orchestrator.storage.postgres import PostgresOperationalAuditStore
@@ -221,6 +228,7 @@ async def bind_upload_references(
     plan_bytes: bytes | None = None,
     execution_bindings: bytes | None = None,
     read_paths: tuple[str, ...] = (),
+    frozen_read_paths: tuple[Path, ...] = (),
     upload_read_base: Path | None = None,
 ) -> None:
     """Called only for NEW jobs inside admission, including keyless requests.
@@ -231,29 +239,40 @@ async def bind_upload_references(
     """
     paths = set(upload_source_paths(record.request, record.effective_request, upload_read_base=upload_read_base))
     paths.update(_resolved_source_paths(list(read_paths), upload_read_base=upload_read_base))
+    for path in frozen_read_paths:
+        try:
+            if not path.is_absolute() or path.resolve() != path:
+                raise ValueError("frozen read changed through an alias")
+        except (OSError, RuntimeError, ValueError) as error:
+            raise UploadOwnershipLost("frozen read must retain its absolute identity") from error
+        paths.add(path)
     if plan_bytes is not None:
         paths.update(_admitted_source_paths(plan_bytes, execution_bindings, upload_read_base=upload_read_base))
     if not paths:
         return
-    overlaps = []
-    for path in sorted(paths):
-        value = str(path)
-        prefix = value.rstrip("/") + "/"
-        # Ledger locators are server-owned absolute paths. Compare complete
-        # segments literally, including '%' and '_', without a CWD/env anchor.
-        # Expired tombstones cannot block an ancestor forever after deletion,
-        # but an explicit read inside one must still fail admission.
-        overlaps.extend(
-            (
-                UploadReceiptModel.batch_root == value,
-                func.left(literal(value), func.length(UploadReceiptModel.batch_root) + 1)
-                == UploadReceiptModel.batch_root + "/",
+    # One array parameter also covers valid imported evidence bundles with
+    # many mask descriptors; never drop reads or expand one bind per path.
+    read_path = func.unnest(
+        bindparam("upload_read_paths", [str(path) for path in sorted(paths)], type_=ARRAY(Text))
+    ).column_valued("upload_read_path")
+    prefix = func.rtrim(read_path, "/") + "/"
+    # Preserve literal segment comparisons and the expired-discovery-root
+    # exception. An exact frozen descendant still selects its tombstone.
+    overlaps = (
+        select(literal(1))
+        .where(
+            or_(
+                UploadReceiptModel.batch_root == read_path,
+                func.left(read_path, func.length(UploadReceiptModel.batch_root) + 1) == UploadReceiptModel.batch_root + "/",
                 and_(
                     UploadReceiptModel.state != "expired",
-                    func.left(UploadReceiptModel.batch_root, len(prefix)) == prefix,
+                    func.left(UploadReceiptModel.batch_root, func.length(prefix)) == prefix,
                 ),
             )
         )
+        .correlate(UploadReceiptModel)
+        .exists()
+    )
     # Every admission takes the same lock order even when a request's input
     # and archive selectors refer to different batches or use opposite aliases.
     rows = (
@@ -268,7 +287,7 @@ async def bind_upload_references(
                     raiseload=True,
                 )
             )
-            .where(or_(*overlaps))
+            .where(overlaps)
             .order_by(UploadReceiptModel.batch_id)
             .with_for_update()
         )
@@ -282,7 +301,9 @@ async def bind_upload_references(
         session.add(UploadJobReferenceModel(batch_id=row.batch_id, job_id=record.id))
 
 
-def upload_source_paths(*requests: dict[str, Any], upload_read_base: Path | None = None) -> tuple[Path, ...]:
+def upload_source_paths(
+    *requests: dict[str, Any], upload_read_base: Path | None = None, retention_only: bool = False
+) -> tuple[Path, ...]:
     """Collect read selectors using only an explicit server-owned relative base.
 
     Absolute reads need no base. Missing or failed relative resolution cannot
@@ -290,6 +311,7 @@ def upload_source_paths(*requests: dict[str, Any], upload_read_base: Path | None
     Command output fields never retain a batch.
     """
     values: list[Any] = []
+    material_manifests: list[Any] = []
     for request in requests:
         args = request.get("args") if isinstance(request, dict) else None
         if not isinstance(args, dict):
@@ -322,7 +344,15 @@ def upload_source_paths(*requests: dict[str, Any], upload_read_base: Path | None
                 value = args.get(name)
                 if field != "vlm_captioning_model" or not _caption_role(value):
                     values.append(value)
-    return _resolved_source_paths(values, upload_read_base=upload_read_base)
+                if retention_only and field == "materials_manifest":
+                    material_manifests.append(value)
+    paths = set(_resolved_source_paths(values, upload_read_base=upload_read_base))
+    # Older jobs have no exact durable frozen-read references. The Materials
+    # manifest confines evidence below its parent, and each evidence JSON
+    # confines its masks below its own parent. Retention may conservatively
+    # retain that namespace; new admission always uses exact frozen reads.
+    paths.update(path.parent for path in _resolved_source_paths(material_manifests, upload_read_base=upload_read_base))
+    return tuple(sorted(paths))
 
 
 def _caption_role(value: Any) -> bool:
@@ -356,15 +386,140 @@ def _resolved_source_paths(values: list[Any], *, upload_read_base: Path | None =
     return tuple(sorted(paths))
 
 
+def _frozen_source_paths(
+    root: Any, members: Any, *, upload_read_base: Path | None, core_selection: bool = False, allow_empty: bool = False
+) -> tuple[Path, ...]:
+    """Retain exact frozen reads even when cleanup already removed a member.
+
+    Admission already validates the plan's versioned schema. Do not rediscover
+    inputs or require existence here: a missing selected file must still match
+    its expired ledger tombstone. Existing aliases may not change its identity.
+    """
+    if not isinstance(root, str) or not root.strip() or not isinstance(members, list) or (not members and not allow_empty):
+        raise UploadOwnershipLost("frozen input selection requires a root and members")
+    resolved_root = _resolved_source_paths([root], upload_read_base=upload_read_base)[0]
+    paths = {resolved_root}
+    for member in members:
+        relative = member.get("path") if isinstance(member, dict) else None
+        if not isinstance(relative, str):
+            raise UploadOwnershipLost("frozen input member requires a contained relative path")
+        try:
+            if core_selection:
+                _validate_relative_input_path(relative)
+            # Photography plans have their own versioned path limits; preserve
+            # those instead of imposing the core V1 selection's component cap.
+            portable = PurePosixPath(relative)
+            if (
+                not relative
+                or portable.is_absolute()
+                or portable.as_posix() != relative
+                or any(part in {".", ".."} for part in portable.parts)
+                or relative == "."
+                or "\x00" in relative
+                or "\\" in relative
+            ):
+                raise ValueError("noncontained frozen input")
+            resolved = (resolved_root / relative).resolve()
+            if resolved.relative_to(resolved_root).as_posix() != relative:
+                raise ValueError("frozen input changed through an alias")
+        except (OSError, RuntimeError, ValueError) as error:
+            raise UploadOwnershipLost("frozen input member must retain its contained relative identity") from error
+        paths.add(resolved)
+    return tuple(sorted(paths))
+
+
+def _material_source_paths(root: Path, record: dict[str, Any], resources: dict[str, Any]) -> tuple[Path, ...]:
+    """Read frozen JSON descriptors only; mask bytes remain worker-owned.
+
+    The exact evidence-file digest freezes its relative mask locations even
+    though the plan carries only the evidence receipt and semantic identity.
+    """
+    limits = MaterialLimits()
+    maximum = min(resources["max_input_bytes"], limits.max_manifest_bytes)
+    try:
+        size = record["size_bytes"]
+        if type(size) is not int or not 0 < size <= maximum:
+            raise ValueError("material descriptor exceeds its frozen byte budget")
+        evidence_path = root / record["path"]
+        data, observed = snapshot(root, evidence_path, maximum_bytes=size)
+        if any(observed[name] != record[name] for name in ("path", "sha256", "size_bytes")):
+            raise ValueError("material descriptor differs from frozen evidence")
+        payload = material_artifacts._object(decode_bounded_json_object(data), material_artifacts._MANIFEST_KEYS)
+        if (
+            payload["schema"] != EVIDENCE_SCHEMA
+            or payload["taxonomy"] != TAXONOMY_VERSION
+            or payload["coordinate_space"] != "canonical_master"
+            or any(payload[name] != record[name] for name in ("source_sha256", "shape", "content_sha256"))
+        ):
+            raise ValueError("material descriptor identity differs from frozen evidence")
+        regions = payload["regions"]
+        if not isinstance(regions, list) or len(regions) > limits.max_regions:
+            raise ValueError("material descriptor region count exceeds its budget")
+        shape = material_artifacts._shape(payload["shape"])
+        pixels = shape[0] * shape[1]
+        if pixels > min(resources["max_pixels"], limits.max_pixels) or pixels * 4 * len(regions) > limits.max_mask_bytes:
+            raise ValueError("material descriptor mask geometry exceeds its budget")
+        members = []
+        region_ids: set[str] = set()
+        bundle_bytes = len(data)
+        for region in regions:
+            region = material_artifacts._object(region, material_artifacts._REGION_KEYS)
+            identity = region["region_id"]
+            if not isinstance(identity, str) or identity in region_ids:
+                raise ValueError("material descriptor region IDs must be unique strings")
+            region_ids.add(identity)
+            mask = material_artifacts._object(region["mask"], material_artifacts._MASK_KEYS)
+            relative = material_artifacts._relative_path(mask["path"])
+            validate_digest(mask["sha256"], "mask sha256")
+            validate_digest(mask["file_sha256"], "mask file_sha256")
+            size = mask["size_bytes"]
+            if (
+                type(size) is not int
+                or not pixels * 4 < size <= pixels * 4 + limits.max_header_bytes + 12
+                or material_artifacts._shape(mask["shape"]) != shape
+                or mask["dtype"] != "float32"
+            ):
+                raise ValueError("material descriptor mask differs from its frozen geometry or budget")
+            bundle_bytes += size
+            members.append({"path": relative})
+        if bundle_bytes > min(resources["max_input_bytes"], limits.max_bundle_bytes):
+            raise ValueError("material descriptor bundle exceeds its byte budget")
+        return (
+            tuple(
+                path
+                for path in _frozen_source_paths(str(evidence_path.parent), members, upload_read_base=None)
+                if path != evidence_path.parent
+            )
+            if members
+            else ()
+        )
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError) as error:
+        raise UploadOwnershipLost("material descriptor cannot bind its frozen read identities") from error
+
+
 def _admitted_source_paths(
     plan_bytes: bytes, execution_bindings: bytes | None, *, upload_read_base: Path | None = None
 ) -> tuple[Path, ...]:
     """Read only the already-validated immutable plan and physical bindings."""
     plan = decode_bounded_json_object(plan_bytes)
-    values = []
-    selection = plan.get("input_selection")
-    if isinstance(selection, dict):
-        values.append(selection.get("root"))
+    values: list[Any] = []
+    paths: set[Path] = set()
+    if "input_selection" in plan:
+        selection = plan["input_selection"]
+        if not isinstance(selection, dict):
+            raise UploadOwnershipLost("frozen input selection must be an object")
+        paths.update(
+            _frozen_source_paths(
+                selection.get("root"),
+                selection.get("files"),
+                upload_read_base=upload_read_base,
+                core_selection=True,
+                allow_empty=plan.get("planned_backend") == "archive",
+            )
+        )
+    # Managed V6 embeds the unchanged photographic inference authority.
+    if plan.get("schema") == "tp.execution.plan.v5":
+        plan = plan["inference"]
     for node in plan.get("nodes", []):
         configuration = node.get("configuration", {})
         if plan.get("planned_backend") == "archive":
@@ -394,7 +549,31 @@ def _admitted_source_paths(
         bindings = decode_bounded_json_object(execution_bindings)
         if bindings.get("schema") == "tp.job.lux_depth.bindings.v1":
             bindings = bindings["photography_bindings"]
+        if plan.get("schema") in {"tp.execution.plan.v2", "tp.execution.plan.v3", "tp.execution.plan.v4"}:
+            inputs = plan["inputs"]
+            paths.update(_frozen_source_paths(bindings.get("input_root"), inputs, upload_read_base=upload_read_base))
+            companions = []
+            materials = []
+            if "companions_manifest" in plan:
+                companions.append(plan["companions_manifest"])
+            if "materials_manifest" in plan:
+                materials.append(plan["materials_manifest"])
+            for item in inputs:
+                legacy_materials = item.get("companions", {}).get("materials")
+                if legacy_materials is not None:
+                    companions.extend(legacy_materials["masks"].values())
+                if "materials_v4" in item:
+                    materials.append(item["materials_v4"])
+            for name, members in (("companion_root", companions), ("materials_root", materials)):
+                if members:
+                    paths.update(_frozen_source_paths(bindings.get(name), members, upload_read_base=upload_read_base))
+            if materials:
+                material_root = _resolved_source_paths([bindings["materials_root"]], upload_read_base=upload_read_base)[0]
+                for item in inputs:
+                    if "materials_v4" in item:
+                        paths.update(_material_source_paths(material_root, item["materials_v4"], plan["resources"]))
         values.extend(
             bindings.get(name) for name in ("input_root", "companion_root", "materials_root", "runtime_python", "raw_python")
         )
-    return _resolved_source_paths(values, upload_read_base=upload_read_base)
+    paths.update(_resolved_source_paths(values, upload_read_base=upload_read_base))
+    return tuple(sorted(paths))
