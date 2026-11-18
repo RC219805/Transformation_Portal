@@ -22,6 +22,7 @@ See Also:
 import os
 import re
 import signal
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -650,19 +651,36 @@ def timeout(seconds: int):
             "Use multiprocessing or threading-based timeout on Windows."
         )
 
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"Operation exceeded {seconds}s timeout")
+    started = time.monotonic()
+    own_deadline = started + seconds if seconds > 0 else None
 
-    # Set signal handler
+    def timeout_handler(signum, frame):
+        if own_deadline is not None and time.monotonic() >= own_deadline:
+            raise TimeoutError(f"Operation exceeded {seconds}s timeout")
+        # The alarm belongs to an enclosing timeout() whose deadline is earlier
+        # than ours: let its handler decide.
+        if callable(old_handler):
+            old_handler(signum, frame)
+
+    # Set signal handler. setitimer shares the ITIMER_REAL timer with
+    # signal.alarm and returns the remaining time of an enclosing alarm, which
+    # must not be cancelled by a nested timeout().
     old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(seconds)
+    outer_remaining, _ = signal.setitimer(signal.ITIMER_REAL, 0)
+    outer_deadline = started + outer_remaining if outer_remaining > 0 else None
+    arm = [d for d in (own_deadline, outer_deadline) if d is not None]
+    if arm:
+        signal.setitimer(signal.ITIMER_REAL, max(min(arm) - time.monotonic(), 1e-3))
 
     try:
         yield
     finally:
-        # Restore old handler and cancel alarm
-        signal.alarm(0)
+        # Cancel our alarm, restore the old handler, then re-arm the enclosing
+        # alarm with its remaining time (fire it promptly if already overdue).
+        signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, old_handler)
+        if outer_deadline is not None:
+            signal.setitimer(signal.ITIMER_REAL, max(outer_deadline - time.monotonic(), 1e-3))
 
 
 # Deprecated alias for backwards compatibility

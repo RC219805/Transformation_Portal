@@ -795,6 +795,38 @@ class TestTimeout:
         remaining = signal.alarm(0)
         assert remaining == 0
 
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_nested_timeout_preserves_outer_alarm(self) -> None:
+        """L-11: a nested timeout() must not cancel the enclosing alarm."""
+        import time
+
+        started = time.monotonic()
+        with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+            with timeout(1):
+                with timeout(5):
+                    pass
+                time.sleep(3)
+        assert time.monotonic() - started < 2.5
+
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_nested_longer_timeout_does_not_extend_outer_deadline(self) -> None:
+        """L-11: the earlier outer deadline still fires inside a longer inner timeout."""
+        import time
+
+        started = time.monotonic()
+        with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+            with timeout(1):
+                with timeout(10):
+                    time.sleep(3)
+        assert time.monotonic() - started < 2.5
+        assert signal.alarm(0) == 0
+
 
 # =============================================================================
 # Test: Deprecated Functions
