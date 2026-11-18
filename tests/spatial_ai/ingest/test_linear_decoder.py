@@ -32,6 +32,7 @@ from transformation_portal.spatial_ai.ingest import (
     ColorSpaceError,
     LinearDecoder,
     LinearIngestResult,
+    RangeViolationError,
     UnsupportedFormatError,
     decode,
 )
@@ -473,6 +474,57 @@ class TestSixteenBitPngDecode:
 
         with pytest.raises(RuntimeError, match="could not decode 16-bit PNG"):
             decode(png_path)
+
+
+class TestLinearOutputRangeValidation:
+    """Decoded samples that are NaN, Inf or negative fail ingest (finding I-2)."""
+
+    @pytest.mark.parametrize(
+        "bad_value, issue",
+        [(np.nan, "NaN values detected"), (np.inf, "Infinite values detected"), (-0.25, "Negative values detected")],
+    )
+    @pytest.mark.parametrize("strict_ingest", [False, True])
+    def test_float_tiff_with_invalid_samples_fails_closed(
+        self, tmp_path: Path, bad_value: float, issue: str, strict_ingest: bool
+    ) -> None:
+        samples = np.full((4, 5, 3), 0.5, dtype=np.float32)
+        samples[1, 2, 0] = bad_value
+        tiff_path = tmp_path / "bad.tif"
+        tifffile.imwrite(str(tiff_path), samples, photometric="rgb")
+        out_dir = tmp_path / "out"
+
+        with pytest.raises(RangeViolationError, match=issue):
+            LinearDecoder(gamma=1.0, strict_ingest=strict_ingest).decode(tiff_path, output_dir=out_dir, emit_provenance=True)
+
+        assert list(out_dir.iterdir()) == []
+
+    def test_float_tiff_with_hdr_samples_still_decodes(self, tmp_path: Path) -> None:
+        samples = np.full((4, 5, 3), 0.0, dtype=np.float32)
+        samples[0, 0] = [3.5, 1.25, 7.0]
+        tiff_path = tmp_path / "hdr.tif"
+        tifffile.imwrite(str(tiff_path), samples, photometric="rgb")
+
+        result = LinearDecoder(gamma=1.0, strict_ingest=True).decode(tiff_path)
+
+        assert np.array_equal(result.linear_rgb, samples)
+
+    def test_raw_subprocess_output_with_nan_fails_closed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        raw_path = tmp_path / "test.cr2"
+        raw_path.write_text("dummy")
+        bad_linear = np.full((4, 5, 3), 0.25, dtype=np.float32)
+        bad_linear[3, 4, 2] = np.nan
+
+        def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+            return bad_linear, {"input_size": [4, 5], "color_space": "linear_sRGB", "dtype": "float32"}
+
+        monkeypatch.setattr(
+            "transformation_portal.spatial_ai.ingest.linear_decoder.run_raw_worker",
+            fake_run_raw_worker,
+        )
+
+        decoder = LinearDecoder(gamma=1.0, raw_python_executable="./.venv-raw/bin/python")
+        with pytest.raises(RangeViolationError, match="NaN values detected"):
+            decoder.decode(raw_path)
 
 
 class TestLinearIngestIntegration:

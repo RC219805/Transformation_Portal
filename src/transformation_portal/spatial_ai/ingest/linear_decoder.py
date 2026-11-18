@@ -268,6 +268,8 @@ class LinearDecoder:
         Raises:
             FileNotFoundError: If input file doesn't exist.
             ValueError: If input format not supported.
+            RangeViolationError: If the decoded samples contain NaN, Inf or
+                negative values.
         """
         input_path = Path(input_path)
         if not input_path.exists():
@@ -299,6 +301,10 @@ class LinearDecoder:
 
             # Decode to linear RGB
             linear_rgb, input_size, ingest_fingerprint = self._decode_linear(input_path, format_str)
+
+        # Fail closed on NaN / Inf / negative samples, a non-float32 dtype or a
+        # non-(H, W, 3) shape before anything is hashed, recorded or emitted.
+        validate_linear_output(linear_rgb, self.gamma, input_path)
 
         # Compute content hash
         content_hash = self._compute_content_hash(linear_rgb)
