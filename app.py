@@ -1174,6 +1174,9 @@ ACTIVE_JOB_STATES = {"queued", "running"}
 # terminal-state guard, and operator tooling all agree on what "done"
 # means.
 _TERMINAL_JOB_STATES = {"succeeded", "partial", "failed", "canceled", "worker_lost"}
+# States a job can be in without its runner ever having been launched. Paired
+# with a missing ``started_at`` they mean the job has produced no files.
+_UNLAUNCHED_JOB_STATES = frozenset({"queued", "canceled", "worker_lost"})
 JOB_RUN_SUMMARY_MAX_BYTES = 1024 * 1024
 
 
@@ -3676,7 +3679,12 @@ def _delete_legacy_job_artifact_files(job: Job) -> int:
             continue
         candidates[normalized] = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
 
+    # The inventory is not proof of ownership: it may predate run-bound indexing,
+    # and a later run or the operator may have replaced a listed file since. Only
+    # unlink what was created or changed while this job's own runner was alive.
+    not_before, not_after = _job_run_window(job)
     deleted = 0
+    preserved = 0
     seen: set[Path] = set()
     for candidate in candidates.values():
         _, resolved_artifact, _ = _validate_resolved_job_artifact_path(job, candidate)
@@ -3687,8 +3695,17 @@ def _delete_legacy_job_artifact_files(job: Job) -> int:
             continue
         if not resolved_artifact.is_file():
             raise ArtifactPathValidationError("artifact_path_not_file")
+        if not _portal_job_artifacts._path_changed_within(resolved_artifact, not_before=not_before, not_after=not_after):
+            preserved += 1
+            continue
         resolved_artifact.unlink()
         deleted += 1
+    if preserved:
+        LOGGER.warning(
+            "artifact deletion for job %s preserved %d listed file(s) that its run did not produce",
+            job.id,
+            preserved,
+        )
     return deleted
 
 
@@ -7414,6 +7431,29 @@ def _build_scoped_job_artifacts_from_run_metadata(
     )
 
 
+def _job_run_window(job: Job) -> Tuple[Optional[float], Optional[float]]:
+    """Return the ``(not_before, not_after)`` window in which ``job``'s runner could write files.
+
+    A request-supplied ``output_dir`` may be shared with other jobs and with
+    operator files. Artifact indexing, run-card lookup and artifact deletion
+    therefore only accept paths created or changed between this job's runner
+    start and its completion. A job that was never launched owns nothing, which
+    the empty ``(inf, None)`` window expresses. ``(None, None)`` leaves the
+    lookup unbounded: a fenced attempt root is created empty for exactly one
+    attempt, and a record that reports a runner outcome without a recorded start
+    carries no window to apply.
+    """
+
+    fence = current_dispatch_fence()
+    if fence is not None and fence.locator.job_id == job.id:
+        return None, None
+    if job.started_at is not None:
+        return job.started_at, job.finished_at
+    if job.state in _UNLAUNCHED_JOB_STATES:
+        return math.inf, None
+    return None, None
+
+
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
     return _execution_summary.refresh_job_run_summary(job, _job_output_dir(job))
 
@@ -7459,7 +7499,12 @@ def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
     return lookup
 
 
-def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
+def _index_job_artifacts(
+    job: Job,
+    *,
+    not_before: Optional[float] = None,
+    not_after: Optional[float] = None,
+) -> List[Dict[str, Any]]:
     result = _portal_job_artifacts._index_job_artifacts(
         job_id=job.id,
         output_dir=_job_output_dir(job),
@@ -7467,10 +7512,25 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         fingerprint_max_bytes=ARTIFACT_FINGERPRINT_MAX_BYTES,
         fingerprint_chunk_bytes=_ARTIFACT_FINGERPRINT_CHUNK_BYTES,
         run_summary_max_bytes=JOB_RUN_SUMMARY_MAX_BYTES,
+        not_before=not_before,
+        not_after=not_after,
     )
     job.artifacts = result.artifacts
     job.artifact_lookup = result.artifact_lookup
     return result.items
+
+
+def _index_job_run_artifacts(job: Job) -> List[Dict[str, Any]]:
+    """Index only what ``job``'s own run left in its output directory.
+
+    Every path that indexes on behalf of a real job (runner finalization and the
+    first artifact fetch of an unindexed job) goes through here, so files that
+    other runs or the operator keep in a shared ``output_dir`` never become this
+    job's to serve, mirror or delete.
+    """
+
+    not_before, not_after = _job_run_window(job)
+    return _index_job_artifacts(job, not_before=not_before, not_after=not_after)
 
 
 def _artifact_store() -> ArtifactStore:
@@ -10769,7 +10829,7 @@ async def _get_job_artifact(
             # Fingerprint computation can do bounded synchronous IO; offload
             # the indexing pass to a worker thread to keep the event loop
             # responsive for SSE subscribers and concurrent API callers.
-            await asyncio.to_thread(_index_job_artifacts, job)
+            await asyncio.to_thread(_index_job_run_artifacts, job)
             await _persist_job_artifact_metadata(job, fail_closed=False)
         known_paths = _artifact_known_relative_paths(job)
     if requested_relative_path not in known_paths:
@@ -11422,7 +11482,7 @@ def _job_execution_service() -> JobExecutionService[Job]:
             terminate_process=_terminate_process,
             redact_log=_redact_log_line,
             extract_progress=_extract_progress_percent,
-            index_artifacts=_index_job_artifacts,
+            index_artifacts=_index_job_run_artifacts,
             refresh_summary=_refresh_job_run_summary,
             artifact_store=_artifact_store,
             operational_records=get_operational_record_store,

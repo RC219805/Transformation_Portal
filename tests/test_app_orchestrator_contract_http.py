@@ -4251,6 +4251,168 @@ def test_delete_job_artifacts_removes_legacy_files_when_store_is_empty(
     assert fetch_response.json()["error"]["code"] == "ARTIFACT_DELETED"
 
 
+def _seed_job_with_shared_output_dir_inventory(tmp_path: Path, job_id: str) -> tuple[Any, Path, Path, Path]:
+    """Seed a finished job whose stored inventory lists files its run never produced.
+
+    The inventory mirrors what indexing a shared ``output_dir`` recorded before it
+    was bound to the job's run: an operator file that predates the run, the one
+    file the run produced, and a file a later run has rewritten since.
+    """
+
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    operator_file = output_dir / "archive_index_normalized.csv.gz"
+    operator_file.write_bytes(b"operator supplied index")
+    # The operator file keeps its real timestamps, which precede a run window
+    # that opens later; the other two are stamped explicitly, so no clock race.
+    started_at = operator_file.stat().st_ctime + 100.0
+    finished_at = started_at + 100.0
+    produced = output_dir / "bag_validate_report.json"
+    produced.write_text("{}", encoding="utf-8")
+    os.utime(produced, (started_at + 50.0, started_at + 50.0))
+    rewritten_later = output_dir / "hash_summary.json"
+    rewritten_later.write_text('{"owner": "a later run"}', encoding="utf-8")
+    os.utime(rewritten_later, (finished_at + 50.0, finished_at + 50.0))
+
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=started_at - 1.0,
+        started_at=started_at,
+        finished_at=finished_at,
+        done_published_at=finished_at,
+        state="failed",
+        exit_code=4,
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": path.name, "relative_path": path.name} for path in (operator_file, produced, rewritten_later)],
+            "indexed_count": 3,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+    return job, operator_file, produced, rewritten_later
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_never_unlinks_files_the_jobs_run_did_not_produce(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    job, operator_file, produced, rewritten_later = _seed_job_with_shared_output_dir_inventory(
+        tmp_path, "job_artifact_delete_shared_dir"
+    )
+
+    delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["legacy_deleted_count"] == 1
+    assert not produced.exists()
+    assert operator_file.read_bytes() == b"operator supplied index"
+    assert rewritten_later.read_text(encoding="utf-8") == '{"owner": "a later run"}'
+    # The job's artifacts are gone from the API either way.
+    fetch_response = client.get(f"{jobs_base}/{job.id}/artifacts/{operator_file.name}")
+    assert fetch_response.status_code == 410
+
+
+def test_artifact_retention_cleanup_never_unlinks_files_the_jobs_run_did_not_produce(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    job, operator_file, produced, rewritten_later = _seed_job_with_shared_output_dir_inventory(
+        tmp_path, "job_artifact_retention_shared_dir"
+    )
+    assert job.finished_at is not None
+    expired_at = job.finished_at + orchestrator_app.ARTIFACT_RETENTION_SECONDS + 1.0
+
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(expired_at))
+
+    assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    assert job.artifacts["lifecycle"]["deletion_reason"] == "retention_expired"
+    assert job.artifacts["lifecycle"]["legacy_deleted_count"] == 1
+    assert not produced.exists()
+    assert operator_file.exists()
+    assert rewritten_later.exists()
+
+
+@pytest.mark.parametrize("state", ["canceled", "worker_lost"])
+def test_delete_job_artifacts_unlinks_nothing_for_a_job_that_was_never_launched(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir()
+    operator_file = output_dir / "NOTES.txt"
+    operator_file.write_text("hand written operator notes", encoding="utf-8")
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=f"job_artifact_delete_unlaunched_{state}",
+        created_at=now,
+        finished_at=now,
+        done_published_at=now,
+        state=state,
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": "NOTES.txt", "relative_path": "NOTES.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+
+    delete_response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["legacy_deleted_count"] == 0
+    assert operator_file.read_text(encoding="utf-8") == "hand written operator notes"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_artifact_fetch_for_a_queued_job_does_not_claim_files_already_in_its_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir()
+    operator_file = output_dir / "NOTES.txt"
+    operator_file.write_text("hand written operator notes", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_artifact_fetch_queued",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+    )
+    _seed_job(job)
+
+    response = client.get(f"{jobs_base}/{job.id}/artifacts/NOTES.txt")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None
+    assert not record.artifacts.get("items")
+    assert record.artifact_lookup == {}
+    assert asyncio.run(store.delete(job.id)) == 0
+
+
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_reports_partial_mirror_unique_count(
     client: TestClient,

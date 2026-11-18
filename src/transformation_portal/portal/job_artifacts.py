@@ -494,6 +494,36 @@ def _artifact_recency_key(relative_path: str, artifact_path: Path) -> Tuple[str,
     return (batch_hint, modified_time, relative_path)
 
 
+def _path_changed_within(
+    path: Path,
+    *,
+    not_before: Optional[float],
+    not_after: Optional[float],
+) -> bool:
+    """Return whether ``path`` was created or changed inside a job's run window.
+
+    A request-supplied output directory can be shared with other runs and with
+    operator files, so a job may only claim what changed while its own runner
+    was alive. ``st_ctime`` is consulted next to ``st_mtime`` because runners
+    copy payloads with the source mtime preserved (``shutil.copy2``); the inode
+    change time still records when the copy landed. An unbounded window accepts
+    every path, and a path that cannot be inspected is never claimed.
+    """
+
+    if not_before is None and not_after is None:
+        return True
+    try:
+        stat_result = path.stat()
+    except OSError:
+        return False
+    changed_at = max(stat_result.st_mtime, stat_result.st_ctime)
+    if not_before is not None and changed_at < not_before:
+        return False
+    if not_after is not None and changed_at > not_after:
+        return False
+    return True
+
+
 def _find_newest_artifact_path(output_dir: Path, candidates: List[Path]) -> Optional[Path]:
     normalized_candidates: List[Tuple[str, Path]] = []
     for candidate in candidates:
@@ -543,7 +573,16 @@ def _resolve_job_run_metadata(
     output_dir: Optional[Path],
     *,
     max_bytes: int = JOB_RUN_SUMMARY_MAX_BYTES,
+    not_before: Optional[float] = None,
+    not_after: Optional[float] = None,
 ) -> Optional[JobRunMetadata]:
+    """Resolve the run card and batch manifest that describe one run.
+
+    ``not_before``/``not_after`` bind the lookup to a job's run window so that a
+    run card or manifest left behind by another run into the same directory is
+    never mistaken for this job's own.
+    """
+
     if output_dir is None:
         return None
     output_dir = Path(os.path.realpath(output_dir.expanduser()))
@@ -558,6 +597,8 @@ def _resolve_job_run_metadata(
             relative_path = _relative_artifact_path(resolved_candidate, output_dir)
         except (OSError, ValueError):
             continue
+        if not _path_changed_within(resolved_candidate, not_before=not_before, not_after=not_after):
+            continue
         run_card_payload = _load_bounded_run_card_payload(resolved_candidate, max_bytes=max_bytes)
         if run_card_payload is None:
             continue
@@ -565,7 +606,11 @@ def _resolve_job_run_metadata(
         matching_manifest_path: Optional[Path] = None
         if batch_id:
             manifest_candidate = batch_manifest_dir / f"batch_{batch_id}.json"
-            if manifest_candidate.exists() and manifest_candidate.is_file():
+            if (
+                manifest_candidate.exists()
+                and manifest_candidate.is_file()
+                and _path_changed_within(manifest_candidate, not_before=not_before, not_after=not_after)
+            ):
                 matching_manifest_path = Path(os.path.realpath(manifest_candidate))
         run_card_candidates.append(
             (
@@ -591,7 +636,11 @@ def _resolve_job_run_metadata(
     elif batch_manifest_dir.exists() and batch_manifest_dir.is_dir():
         batch_manifest_path = _find_newest_artifact_path(
             output_dir,
-            list(batch_manifest_dir.glob("batch_*.json")),
+            [
+                manifest_candidate
+                for manifest_candidate in batch_manifest_dir.glob("batch_*.json")
+                if _path_changed_within(manifest_candidate, not_before=not_before, not_after=not_after)
+            ],
         )
         if batch_manifest_path is not None:
             batch_manifest_payload = _load_bounded_json_object(batch_manifest_path, max_bytes=max_bytes)
@@ -779,7 +828,19 @@ def _index_job_artifacts(
     fingerprint_max_bytes: int = ARTIFACT_FINGERPRINT_MAX_BYTES,
     fingerprint_chunk_bytes: int = _ARTIFACT_FINGERPRINT_CHUNK_BYTES,
     run_summary_max_bytes: int = JOB_RUN_SUMMARY_MAX_BYTES,
+    not_before: Optional[float] = None,
+    not_after: Optional[float] = None,
 ) -> JobArtifactIndexResult:
+    """Index the artifacts of one job.
+
+    With ``not_before``/``not_after`` the index is bound to the job's run
+    window: only a run card or manifest written inside it is trusted, and the
+    directory walk used when neither exists claims only files created or
+    changed inside it. Everything else in a shared output directory belongs to
+    another run or to the operator and must not become this job's to serve,
+    mirror or delete.
+    """
+
     if output_dir is None:
         artifacts = {
             "output_dir": None,
@@ -798,7 +859,12 @@ def _index_job_artifacts(
         return JobArtifactIndexResult(items=[], artifact_lookup={}, artifacts=artifacts)
 
     output_dir = Path(os.path.realpath(output_dir.expanduser()))
-    metadata = _resolve_job_run_metadata(output_dir, max_bytes=run_summary_max_bytes)
+    metadata = _resolve_job_run_metadata(
+        output_dir,
+        max_bytes=run_summary_max_bytes,
+        not_before=not_before,
+        not_after=not_after,
+    )
     if metadata is not None:
         scoped_artifacts = _build_scoped_job_artifacts_from_run_metadata(
             job_id=job_id,
@@ -828,6 +894,8 @@ def _index_job_artifacts(
         try:
             resolved_path.relative_to(output_dir)
         except ValueError:
+            continue
+        if not _path_changed_within(resolved_path, not_before=not_before, not_after=not_after):
             continue
         total_files += 1
         try:

@@ -7456,6 +7456,158 @@ def test_refresh_job_run_summary_uses_current_output_metadata_not_scoped_items(t
     assert job.error["code"] == "RUNNER_EXIT_NONZERO"
 
 
+def _runner_write_delay_seconds(directory: Path) -> float:
+    """How long a test runner waits so its files are stamped after its recorded start."""
+
+    probe = directory / ".timestamp-probe"
+    probe.write_bytes(b"")
+    try:
+        whole_second_timestamps = probe.stat().st_mtime_ns % 1_000_000_000 == 0
+    finally:
+        probe.unlink()
+    return 1.1 if whole_second_timestamps else 0.05
+
+
+def _file_writing_runner_argv(output_dir: Path, files: Dict[str, str], *, exit_code: int = 0) -> list[str]:
+    child = (
+        "import json, pathlib, sys, time\n"
+        "time.sleep(float(sys.argv[2]))\n"
+        "for name, text in json.loads(sys.argv[4]).items():\n"
+        "    target = pathlib.Path(sys.argv[1], name)\n"
+        "    target.parent.mkdir(parents=True, exist_ok=True)\n"
+        "    target.write_text(text, encoding='utf-8')\n"
+        "raise SystemExit(int(sys.argv[3]))\n"
+    )
+    return [
+        sys.executable,
+        "-c",
+        child,
+        str(output_dir),
+        str(_runner_write_delay_seconds(output_dir)),
+        str(exit_code),
+        json.dumps(files),
+    ]
+
+
+def _use_local_artifact_store(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
+    store = LocalArtifactStore(root_dir=root)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+
+def _write_shared_output_dir(output_dir: Path) -> Dict[Path, str]:
+    """Files an operator and other jobs already keep in a shared ``output_dir``."""
+
+    existing = {
+        output_dir / "NOTES.txt": "hand written operator notes",
+        output_dir / "archive_index_normalized.csv.gz": "operator supplied index",
+        output_dir / "bag" / "bagit.txt": "BagIt-Version: 1.0\n",
+        output_dir / "client_deliverables" / "final_render.png": "another job's deliverable",
+    }
+    for path, text in existing.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return existing
+
+
+def test_run_job_indexes_and_deletes_only_what_its_own_run_produced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "shared-out"
+    existing = _write_shared_output_dir(output_dir)
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_shared_output_dir",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(
+            job,
+            _file_writing_runner_argv(output_dir, {"bag_validate_report.json": "{}"}, exit_code=4),
+        )
+
+        assert job.state == "failed" and job.exit_code == 4
+        assert [item["relative_path"] for item in job.artifacts["items"]] == ["bag_validate_report.json"]
+        assert set(job.artifact_lookup) == {"bag_validate_report.json"}
+        assert job.artifacts["truncated"] is False
+
+        deleted = await orchestrator_app._delete_job_artifacts_for_job(job, reason="retention_expired")
+
+        assert deleted == 1
+        assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+        assert job.artifacts["lifecycle"]["legacy_deleted_count"] == 1
+        assert not (output_dir / "bag_validate_report.json").exists()
+        for path, text in existing.items():
+            assert path.read_text(encoding="utf-8") == text
+
+    asyncio.run(scenario())
+
+
+def test_run_job_cancelled_before_launch_claims_nothing_in_shared_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "shared-out"
+    existing = _write_shared_output_dir(output_dir)
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_cancelled_before_launch",
+            created_at=orchestrator_app._now(),
+            cancel_requested=True,
+            request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(job, ["must-not-spawn"])
+
+        assert job.state == "canceled" and job.started_at is None and job.finished_at is not None
+        assert job.artifacts["items"] == []
+        assert job.artifact_lookup == {}
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None and not stored.artifacts.get("items") and stored.artifact_lookup == {}
+
+    asyncio.run(scenario())
+    for path, text in existing.items():
+        assert path.read_text(encoding="utf-8") == text
+
+
+def test_job_run_window_is_unbounded_only_for_fenced_or_startless_runner_outcomes(tmp_path: Path) -> None:
+    from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
+    from transformation_portal.orchestrator.dispatch import _dispatch_fence as dispatch_fence_var
+
+    def job(**fields: Any) -> Any:
+        return orchestrator_app.Job(id="job_window", created_at=10.0, **fields)
+
+    assert orchestrator_app._job_run_window(job(state="running", started_at=11.0)) == (11.0, None)
+    assert orchestrator_app._job_run_window(job(state="failed", started_at=11.0, finished_at=12.0)) == (11.0, 12.0)
+    # A job that was never launched owns nothing: no timestamp reaches an infinite lower bound.
+    for unlaunched_state in ("queued", "canceled", "worker_lost"):
+        assert orchestrator_app._job_run_window(job(state=unlaunched_state)) == (float("inf"), None)
+    # A runner outcome without a recorded start (hand-built or imported records) has no window to apply.
+    for outcome in ("running", "succeeded", "partial", "failed"):
+        assert orchestrator_app._job_run_window(job(state=outcome, finished_at=12.0)) == (None, None)
+
+    # A fenced attempt root is created empty for exactly one attempt of exactly this job.
+    locator = DispatchLocator(
+        job_id="job_window",
+        attempt_id="attempt_1",
+        dispatch_id="dispatch_1",
+        plan_digest="0" * 64,
+        tenant_id="default",
+    )
+    fence = DispatchFence(locator, "worker", 1, 0.0, str(tmp_path / "attempt"), str(tmp_path))
+    token = dispatch_fence_var.set(fence)
+    try:
+        assert orchestrator_app._job_run_window(job(state="failed", started_at=11.0, finished_at=12.0)) == (None, None)
+        assert orchestrator_app._job_run_window(job(state="canceled")) == (None, None)
+    finally:
+        dispatch_fence_var.reset(token)
+
+
 def test_create_job_validation_uses_typed_error_envelope() -> None:
     response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
     body = json.loads(response.body.decode("utf-8"))
