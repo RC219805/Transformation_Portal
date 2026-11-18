@@ -28,6 +28,12 @@ const FRONTDOOR_RUM_EVENT_TYPES = new Set([
 ]);
 const FRONTDOOR_RUM_ROUTES = new Set(["/", "/login"]);
 const FRONTDOOR_RUM_VIEWS = new Set(["landing", "login"]);
+// RUM samples are a handful of short scalar fields plus token-only metadata;
+// this unauthenticated route must never buffer or re-sign arbitrary bodies.
+const MAX_RUM_BODY_BYTES = 16 * 1024;
+// Only these client headers are forwarded; the backend auth, forwarding and
+// traceparent headers are set by buildUpstreamHeaders itself.
+const FORWARDED_RUM_REQUEST_HEADERS = ["accept", "content-type"];
 
 function successEnvelope(data, traceparent = "") {
   return applySecurityHeaders(
@@ -73,6 +79,58 @@ function errorEnvelope(status, code, message, details = {}, traceparent = "") {
   );
 }
 
+function requestTooLargeEnvelope(traceparent) {
+  return errorEnvelope(
+    413,
+    "REQUEST_TOO_LARGE",
+    "portal rum payload exceeds the maximum request size",
+    { path: PUBLIC_RUM_PATH, max_request_bytes: MAX_RUM_BODY_BYTES },
+    traceparent
+  );
+}
+
+function declaredContentLengthExceedsLimit(headers) {
+  const raw = String(headers.get("content-length") || "").trim();
+  // A malformed value is left to the capped reader below.
+  if (!/^\d+$/.test(raw)) return false;
+  return Number(raw) > MAX_RUM_BODY_BYTES;
+}
+
+// Returns the decoded body, or null when it exceeds MAX_RUM_BODY_BYTES. Stops
+// reading (and cancels the stream) as soon as the cap is crossed.
+async function readCappedBodyText(request) {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RUM_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function pickForwardedRumHeaders(sourceHeaders) {
+  const headers = new Headers();
+  for (const name of FORWARDED_RUM_REQUEST_HEADERS) {
+    const value = sourceHeaders.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return headers;
+}
+
 function isFrontdoorRumPayload(bodyText) {
   try {
     const parsed = JSON.parse(bodyText || "{}");
@@ -107,7 +165,13 @@ export async function POST(request) {
     return successEnvelope({ accepted: false, disabled: true }, requestTraceparent);
   }
 
-  const bodyText = await request.text();
+  if (declaredContentLengthExceedsLimit(request.headers)) {
+    return requestTooLargeEnvelope(requestTraceparent);
+  }
+  const bodyText = await readCappedBodyText(request);
+  if (bodyText === null) {
+    return requestTooLargeEnvelope(requestTraceparent);
+  }
   if (
     isFrontdoorRumPayload(bodyText)
     && !isFrontdoorRumTelemetryEnabled({ traceparent: requestTraceparent })
@@ -134,7 +198,7 @@ export async function POST(request) {
     );
   }
 
-  const upstreamHeaders = buildUpstreamHeaders(request.headers, {
+  const upstreamHeaders = buildUpstreamHeaders(pickForwardedRumHeaders(request.headers), {
     backendApiKey: config.backendApiKey,
     actor: null,
     traceparent: requestTraceparent,
