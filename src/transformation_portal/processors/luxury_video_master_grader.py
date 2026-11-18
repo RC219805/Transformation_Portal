@@ -168,6 +168,17 @@ DEBAND_PRESETS = {
 }
 
 
+# Spellings that switch an optional stage off.  "off" is the documented value;
+# "of" is the historical CLI spelling, kept as an alias for existing scripts.
+DISABLED_VALUES = ("off", "of")
+
+
+def is_disabled(value: object) -> bool:
+    """Return True when a choice-style option is set to one of the "off" spellings."""
+
+    return str(value).lower() in DISABLED_VALUES
+
+
 @dataclass
 class ToneMapPlan:
     """Description of the tone-mapping strategy for the current clip."""
@@ -341,7 +352,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     tone_map_peak = args.tone_map_peak
     tone_map_desat = args.tone_map_desat
 
-    if method == "off":
+    if is_disabled(method):
         return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
 
     video = extract_video_stream(probe)
@@ -550,7 +561,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
 
     tone_map = config.get("tone_map")
-    if tone_map and str(tone_map).lower() != "of":
+    if tone_map and not is_disabled(tone_map):
         tone_map_peak = config.get("tone_map_peak")
         pre_tonemap_args = ["transfer=linear"]
         if tone_map_peak is not None:
@@ -580,7 +591,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     denoise = config.get("denoise")
-    if denoise and denoise.lower() != "of":
+    if denoise and not is_disabled(denoise):
         expr = HQDN3D_PRESETS.get(denoise.lower())
         if not expr:
             raise ValueError(f"Unsupported denoise preset: {denoise}")
@@ -666,7 +677,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = blend_label
 
     sharpen = config.get("sharpen")
-    if sharpen and sharpen.lower() != "of":
+    if sharpen and not is_disabled(sharpen):
         expr = UNSHARP_PRESETS.get(sharpen.lower())
         if not expr:
             raise ValueError(f"Unsupported sharpen preset: {sharpen}")
@@ -681,7 +692,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     deband = config.get("deband")
-    if deband and str(deband).lower() != "of":
+    if deband and not is_disabled(deband):
         expr = DEBAND_PRESETS.get(str(deband).lower())
         if not expr:
             raise ValueError(f"Unsupported deband preset: {deband}")
@@ -875,7 +886,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--denoise",
-        choices=list(HQDN3D_PRESETS) + ["of"],
+        choices=list(HQDN3D_PRESETS) + list(DISABLED_VALUES),
         help="Override denoise strength.",
     )
     parser.add_argument("--contrast", type=float, help="Override contrast multiplier.")
@@ -886,15 +897,15 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
     parser.add_argument(
         "--sharpen",
-        choices=list(UNSHARP_PRESETS) + ["of"],
+        choices=list(UNSHARP_PRESETS) + list(DISABLED_VALUES),
         help="Override clarity setting.",
     )
     parser.add_argument("--grain", type=float, help="Override film-grain intensity.")
     parser.add_argument(
         "--tone-map",
-        choices=["auto", "of", "hable", "mobius", "reinhard", "bt2390"],
+        choices=["auto", *DISABLED_VALUES, "hable", "mobius", "reinhard", "bt2390"],
         default="auto",
-        help="Tone-mapping operator to apply (auto = detect HDR metadata).",
+        help="Tone-mapping operator to apply (auto = detect HDR metadata, off = never tone-map; 'of' is a legacy alias).",
     )
     parser.add_argument(
         "--tone-map-peak",
@@ -910,7 +921,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--deband",
-        choices=list(DEBAND_PRESETS) + ["of"],
+        choices=list(DEBAND_PRESETS) + list(DISABLED_VALUES),
         default="of",
         help="Apply debanding (gradfun) smoothing after grain.",
     )

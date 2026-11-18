@@ -153,6 +153,55 @@ def test_build_config_merges_enabled_tone_map_plan() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# "off" switches (M-11): "off" is accepted, "of" stays a legacy alias
+# --------------------------------------------------------------------------- #
+
+
+def _hdr_probe() -> dict:
+    probe = _probe()
+    probe["streams"][0].update({"color_trc": "smpte2084", "color_primaries": "bt2020", "color_space": "bt2020nc"})
+    return probe
+
+
+@pytest.mark.parametrize("value", ["off", "of"])
+def test_tone_map_off_spellings_disable_tone_mapping_on_hdr_source(
+    stub_environment, monkeypatch, video_paths, lut_file, value, capsys
+) -> None:
+    monkeypatch.setattr(grader, "probe_source", lambda path: _hdr_probe())
+    src, out = video_paths
+    argv = [str(src), str(out), "--dry-run", "--print-filter-graph", "--custom-lut", str(lut_file), "--tone-map", value]
+
+    args = grader.parse_arguments(argv)
+    plan = grader.plan_tone_mapping(args, _hdr_probe())
+    assert not plan.enabled
+    assert "disabled" in plan.note.lower()
+
+    rc = grader.main(argv)
+    assert rc == 0
+    stdout = capsys.readouterr().out
+    assert "tonemap=" not in stdout
+    # A disabled tone map must not re-tag the untouched HDR signal as BT.709.
+    assert "-color_primaries" not in stdout
+    assert "-color_trc" not in stdout
+
+
+def test_build_filter_graph_ignores_off_tone_map_value(lut_file) -> None:
+    graph, _ = grader.build_filter_graph({"lut": lut_file, "tone_map": "off", "tone_map_peak": 1000.0})
+    assert "tonemap=" not in graph
+    assert "zscale=" not in graph
+
+
+@pytest.mark.parametrize(
+    ("flag", "filter_name"), [("--denoise", "hqdn3d="), ("--sharpen", "unsharp="), ("--deband", "gradfun=")]
+)
+@pytest.mark.parametrize("value", ["off", "of"])
+def test_stage_off_spellings_are_accepted_and_skip_the_stage(lut_file, flag, filter_name, value) -> None:
+    args = grader.parse_arguments(["in.mov", "out.mov", "--custom-lut", str(lut_file), flag, value])
+    graph, _ = grader.build_filter_graph(grader.build_config(args))
+    assert filter_name not in graph
+
+
+# --------------------------------------------------------------------------- #
 # main() — success paths
 # --------------------------------------------------------------------------- #
 

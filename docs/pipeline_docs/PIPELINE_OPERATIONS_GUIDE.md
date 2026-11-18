@@ -203,6 +203,7 @@ Useful options:
 | `--list-presets` | Print available grading presets |
 | `--preset signature_estate` | Select the baseline grade |
 | `--tone-map hable` | Force a tone-mapping operator |
+| `--tone-map off` | Never tone-map (`off` also disables `--denoise`, `--sharpen`, `--deband`; legacy `of` is an alias) |
 | `--dry-run` | Print the FFmpeg command without executing |
 | `--print-filter-graph` | Inspect the generated filter graph |
 
