@@ -298,46 +298,63 @@ FFMPEG_UNCONFINABLE_FILTERS = frozenset(
 )
 
 # Path-valued options of file-accessing filters (option names per the FFmpeg
-# filter documentation): filter -> (named path options, index of the positional
-# argument that is a path, or None). Any other positional argument of these
-# filters is rejected, because FFmpeg maps positional arguments onto options in
-# declaration order (e.g. drawtext's first positional argument is fontfile).
+# filter documentation): filter -> (named path options, positional slots that
+# are paths). FFmpeg maps positional arguments onto options in declaration
+# order (e.g. drawtext's slot 0 is fontfile and slot 2 textfile; the slots were
+# checked against the FFmpeg 6.1 option tables). A positional argument before
+# the first path slot is accepted, one in a path slot is validated as a path,
+# and any other positional argument is rejected; with no known slots every
+# positional argument of the filter is rejected.
 FFMPEG_FILTER_PATH_OPTIONS = {
-    "drawtext": (frozenset({"fontfile", "textfile"}), None),
-    "qrencode": (frozenset({"textfile"}), None),
-    "subtitles": (frozenset({"filename", "f", "fontsdir"}), 0),
-    "ass": (frozenset({"filename", "f", "fontsdir"}), 0),
-    "movie": (frozenset({"filename"}), 0),
-    "amovie": (frozenset({"filename"}), 0),
-    "lut3d": (frozenset({"file"}), 0),
-    "lut1d": (frozenset({"file"}), 0),
-    "curves": (frozenset({"psfile"}), None),
-    "selectivecolor": (frozenset({"psfile"}), None),
-    "removelogo": (frozenset({"filename", "f"}), 0),
-    "cover_rect": (frozenset({"cover"}), None),
-    "find_rect": (frozenset({"object"}), None),
-    "fieldhint": (frozenset({"hint"}), 0),
-    "metadata": (frozenset({"file"}), None),
-    "ametadata": (frozenset({"file"}), None),
-    "psnr": (frozenset({"stats_file", "f"}), 0),
-    "ssim": (frozenset({"stats_file", "f"}), 0),
-    "vmafmotion": (frozenset({"stats_file"}), None),
-    "signature": (frozenset({"filename"}), None),
-    "vidstabdetect": (frozenset({"result"}), 0),
-    "vidstabtransform": (frozenset({"input"}), 0),
-    "lensfun": (frozenset({"db_path"}), None),
-    "ocr": (frozenset({"datapath"}), 0),
-    "sofalizer": (frozenset({"sofa"}), 0),
-    "arnndn": (frozenset({"model", "m"}), 0),
-    "derain": (frozenset({"model"}), None),
-    "sr": (frozenset({"model"}), None),
-    "dnn_processing": (frozenset({"model"}), None),
-    "dnn_detect": (frozenset({"model", "labels"}), None),
-    "dnn_classify": (frozenset({"model", "labels"}), None),
-    "program_opencl": (frozenset({"source"}), 0),
-    "openclsrc": (frozenset({"source"}), 0),
-    "libplacebo": (frozenset({"custom_shader_path"}), None),
-    "whisper": (frozenset({"model", "destination"}), 0),
+    "drawtext": (frozenset({"fontfile", "textfile"}), (0, 2)),
+    "qrencode": (frozenset({"textfile"}), ()),
+    "qrencodesrc": (frozenset({"textfile"}), ()),
+    "subtitles": (frozenset({"filename", "f", "fontsdir"}), (0, 2)),
+    "ass": (frozenset({"filename", "f", "fontsdir"}), (0, 2)),
+    "movie": (frozenset({"filename"}), (0,)),
+    "amovie": (frozenset({"filename"}), (0,)),
+    "lut3d": (frozenset({"file"}), (0,)),
+    "lut1d": (frozenset({"file"}), (0,)),
+    "curves": (frozenset({"psfile", "plot"}), (6, 7)),  # plot writes a file
+    "selectivecolor": (frozenset({"psfile"}), (10,)),
+    "removelogo": (frozenset({"filename", "f"}), (0,)),
+    "cover_rect": (frozenset({"cover"}), (0,)),
+    "find_rect": (frozenset({"object"}), (0,)),
+    "fieldhint": (frozenset({"hint"}), (0,)),
+    "metadata": (frozenset({"file"}), (5,)),
+    "ametadata": (frozenset({"file"}), (5,)),
+    "psnr": (frozenset({"stats_file", "f"}), (0,)),
+    "ssim": (frozenset({"stats_file", "f"}), (0,)),
+    "ssim360": (frozenset({"stats_file", "f"}), (0,)),
+    "xpsnr": (frozenset({"stats_file", "f"}), (0,)),
+    "vmafmotion": (frozenset({"stats_file"}), (0,)),
+    "signature": (frozenset({"filename"}), (2,)),
+    "vidstabdetect": (frozenset({"result"}), (0,)),
+    "vidstabtransform": (frozenset({"input"}), (0,)),
+    "lensfun": (frozenset({"db_path"}), ()),
+    "ocr": (frozenset({"datapath"}), (0,)),
+    "sofalizer": (frozenset({"sofa"}), (0,)),
+    "arnndn": (frozenset({"model", "m"}), (0,)),
+    "asr": (frozenset({"hmm", "dict", "lm", "lmctl", "logfn"}), (1, 2, 3, 4, 6)),
+    "flite": (frozenset({"textfile"}), (3,)),
+    "firequalizer": (frozenset({"dumpfile"}), (9,)),  # writes a file
+    "derain": (frozenset({"model"}), (2,)),
+    "sr": (frozenset({"model"}), (2,)),
+    "dnn_processing": (frozenset({"model"}), (1,)),
+    "dnn_detect": (frozenset({"model", "labels"}), (1, 7)),
+    "dnn_classify": (frozenset({"model", "labels"}), (1, 7)),
+    "nnedi": (frozenset({"weights"}), (0,)),
+    "program_opencl": (frozenset({"source"}), (0,)),
+    "openclsrc": (frozenset({"source"}), (0,)),
+    "xfade_opencl": (frozenset({"source"}), (1,)),
+    "libplacebo": (frozenset({"custom_shader_path", "lut"}), (69,)),
+    "whisper": (frozenset({"model", "destination", "vad_model"}), (0,)),
+    "cellauto": (frozenset({"filename", "f"}), (0,)),
+    "life": (frozenset({"filename", "f"}), (0,)),
+    "deshake": (frozenset({"filename"}), (10,)),  # writes a log file
+    "paletteuse": (frozenset({"debug_kdtree"}), (5,)),  # writes a file
+    "showcqt": (frozenset({"fontfile", "axisfile"}), (19, 22)),
+    "fsync": (frozenset({"file", "f"}), (0,)),
 }
 
 # FFmpeg options that add inputs or filter graphs (or, FFmpeg >= 7, load an
@@ -368,8 +385,10 @@ def _ffmpeg_get_token(text: str, pos: int, terminators: str) -> Tuple[str, int]:
                 out.append(text[pos])
                 pos += 1
             if pos < len(text):
+                # Like FFmpeg, only a closed quote protects its content from
+                # trailing-whitespace trimming.
                 pos += 1
-            protected = len(out)
+                protected = len(out)
         else:
             out.append(char)
     while len(out) > protected and out[-1] in _FILTER_WHITESPACE:
@@ -383,10 +402,12 @@ def _skip_link_labels(text: str, pos: int) -> int:
             pos += 1
         if pos >= len(text) or text[pos] != "[":
             return pos
-        end = text.find("]", pos)
-        if end < 0:
+        # FFmpeg reads a link label with av_get_token(..., "]"), so escapes and
+        # quotes apply inside labels too.
+        _, pos = _ffmpeg_get_token(text, pos + 1, "]")
+        if pos >= len(text):
             raise SecurityError(f"Unterminated link label in filter graph: {text}")
-        pos = end + 1
+        pos += 1
 
 
 def _parse_filter_graph(filter_graph: str) -> List[Tuple[str, str]]:
@@ -395,14 +416,13 @@ def _parse_filter_graph(filter_graph: str) -> List[Tuple[str, str]]:
     pos = 0
     while True:
         pos = _skip_link_labels(filter_graph, pos)
-        end = pos
-        while end < len(filter_graph) and filter_graph[end] not in "=,;[":
-            end += 1
-        raw_name = filter_graph[pos:end].strip(_FILTER_WHITESPACE)
+        # FFmpeg reads "name[@instance]" with av_get_token(..., "=,;["), so
+        # quotes and escapes apply to it: in "drawtext@a\=b=textfile=x" the
+        # filter is drawtext (instance "a=b") and its argument is textfile=x.
+        raw_name, pos = _ffmpeg_get_token(filter_graph, pos, "=,;[")
         name = raw_name.split("@", 1)[0]
         if not _FILTER_NAME_RE.match(name):
             raise SecurityError(f"Unparseable filter name {raw_name!r} in filter graph: {filter_graph}")
-        pos = end
         args = ""
         if pos < len(filter_graph) and filter_graph[pos] == "=":
             args, pos = _ffmpeg_get_token(filter_graph, pos + 1, "[],;")
@@ -459,7 +479,7 @@ def _validate_filter_file_access(filter_graph: str, allowed_dirs: Optional[List[
         lowered = name.lower()
         if lowered in FFMPEG_UNCONFINABLE_FILTERS:
             raise SecurityError(f"Filter '{name}' is not allowed: its file, code or command access cannot be confined")
-        path_options, positional_path_index = FFMPEG_FILTER_PATH_OPTIONS.get(lowered, (frozenset(), None))
+        path_options, path_slots = FFMPEG_FILTER_PATH_OPTIONS.get(lowered, (frozenset(), ()))
         for index, (key, value) in enumerate(_parse_filter_options(args)):
             if key is not None and key.startswith("/"):
                 # FFmpeg >= 7: "/option=path" loads the option value from a file.
@@ -468,11 +488,12 @@ def _validate_filter_file_access(filter_graph: str, allowed_dirs: Optional[List[
                 if key in path_options:
                     _validate_filter_path(name, key, value, allowed_dirs)
             elif path_options:
-                if index != positional_path_index:
+                if index in path_slots:
+                    _validate_filter_path(name, f"#{index}", value, allowed_dirs)
+                elif not path_slots or index > min(path_slots):
                     raise SecurityError(
                         f"Filter '{name}' takes file paths; use named options instead of positional argument {index}"
                     )
-                _validate_filter_path(name, f"#{index}", value, allowed_dirs)
 
 
 def build_ffmpeg_command(

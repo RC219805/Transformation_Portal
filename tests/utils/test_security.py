@@ -724,6 +724,51 @@ class TestFilterGraphFileConfinement:
                 allowed_dirs=[allowed],
             )
 
+    @pytest.mark.parametrize(
+        "template",
+        [
+            # FFmpeg tokenises "name@instance" with quotes/escapes, so these are
+            # all drawtext with textfile=<secret> (verified with ffmpeg -loglevel debug).
+            "drawtext@a\\=b=textfile={secret}",
+            "drawtext@a'=b'=textfile={secret}",
+            "drawte'xt'=textfile={secret}",
+            # Escaped ']' inside a link label does not end the label.
+            "[in\\]x]drawtext=textfile={secret}",
+            # Unclosed quote: FFmpeg trims the trailing whitespace ("<allowed>/..").
+            "drawtext=textfile=\\'{allowed}/..\\ ",
+            # Write/read path options of filters added to the table.
+            "curves=plot={secret}",
+            "curves=vintage:a:b:c:d:e:x:{secret}",  # positional slot 7 is plot
+            "paletteuse=debug_kdtree={secret}",
+            "firequalizer=dumpfile={secret}",
+            "deshake=filename={secret}",
+            "nnedi=weights={secret}",
+            "life=f={secret}",
+            "showcqt=axisfile={secret}",
+            "ssim360=stats_file={secret}",
+            "metadata=print:k:v:f:0:{secret}",  # positional slot 5 is file
+            "metadata=print:k:v:f:0:x:extra",  # positional beyond the path slot
+        ],
+    )
+    def test_rejects_parser_differentials_and_more_path_options(self, allowed: Path, template: str) -> None:
+        graph = template.format(secret=allowed.parent / "secret.txt", allowed=allowed)
+        with pytest.raises(SecurityError):
+            validate_filter_graph(graph, allowed_dirs=[allowed])
+
+    @pytest.mark.parametrize(
+        "graph",
+        [
+            "curves=vintage",
+            "curves=preset=vintage:interp=pchip",
+            "metadata=print",
+            "metadata=mode=print:key=lavfi.signalstats.YAVG",
+            "paletteuse=dither=bayer",
+            "[in]scale=1920:-2[out]",
+        ],
+    )
+    def test_accepts_positional_arguments_before_path_slots(self, allowed: Path, graph: str) -> None:
+        assert validate_filter_graph(graph, allowed_dirs=[allowed]) == graph
+
 
 # =============================================================================
 # Test: timeout - Resource Exhaustion Prevention (CWE-400)
