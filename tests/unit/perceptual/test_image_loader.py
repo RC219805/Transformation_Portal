@@ -65,6 +65,26 @@ def test_sixteen_bit_gray_resize_stays_in_range(tmp_path: Path) -> None:
 
     assert tuple(tensor.shape) == (3, 16, 20)
     assert float(tensor.mean()) == pytest.approx(samples.mean() / 65535.0, abs=0.02)
+    assert 0.0 <= float(tensor.min()) and float(tensor.max()) <= 1.0
+
+
+def test_sixteen_bit_step_edge_resize_does_not_ring_out_of_range(tmp_path: Path) -> None:
+    # A hard black/white step makes LANCZOS overshoot (about -0.08 .. 1.17 here);
+    # the float resize path must clamp like the 8-bit path does.
+    samples = np.zeros((64, 64), dtype=np.uint16)
+    samples[:, 32:] = 65535
+    samples[20:24, :] = 0
+    path = tmp_path / "edge16.tif"
+    Image.fromarray(samples).save(path)
+
+    tensor, _ = _loader(target_size=(23, 23)).load(path)
+    raw, _ = _loader(target_size=(23, 23), normalize=False).load(path)
+
+    assert float(tensor.min()) >= 0.0
+    assert float(tensor.max()) <= 1.0
+    assert float(raw.min()) >= 0.0
+    assert float(raw.max()) <= 255.0
+    assert float(tensor.max()) == pytest.approx(1.0, abs=1e-6)
 
 
 def test_eight_bit_rgb_png_metadata_and_values(tmp_path: Path) -> None:

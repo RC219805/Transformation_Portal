@@ -214,11 +214,16 @@ class ImageLoader:
         return samples
 
     def _resize_float_rgb(self, rgb_float: np.ndarray, target_size: tuple) -> np.ndarray:
-        """Resize a float32 (H, W, 3) array channel-wise in PIL ``F`` mode."""
+        """Resize a float32 (H, W, 3) array channel-wise in PIL ``F`` mode.
+
+        LANCZOS rings at edges and, unlike the 8-bit path, ``F`` mode does not
+        clamp, so the result is clipped back onto the 0..255 scale.
+        """
         channels = [
             self._resize_image(Image.fromarray(np.ascontiguousarray(rgb_float[:, :, c])), target_size) for c in range(3)
         ]
-        return np.stack([np.asarray(ch, dtype=np.float32) for ch in channels], axis=2)
+        resized = np.stack([np.asarray(ch, dtype=np.float32) for ch in channels], axis=2)
+        return np.clip(resized, 0.0, 255.0)
 
     def _extract_metadata(
         self,
