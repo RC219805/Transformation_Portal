@@ -80,6 +80,34 @@ class TestSceneBuilderFileLoading:
         with pytest.raises(FileNotFoundError):
             builder.build_from_images(image_paths=fake_paths, cameras=cameras)
 
+    def test_load_16bit_image_scaled_by_type_range(self, tmp_path):
+        """P-1: 16-bit samples are scaled by 65535, not 255; 8-bit scaling is unchanged."""
+        from PIL import Image
+
+        builder = SceneBuilder(tier="apex_research")
+        gray16 = tmp_path / "gray16.png"
+        Image.fromarray(np.full((H, W), 40000, dtype=np.uint16)).save(gray16)
+        rgb8 = tmp_path / "rgb8.png"
+        rgb8_values = np.full((H, W, 3), 200, dtype=np.uint8)
+        Image.fromarray(rgb8_values).save(rgb8)
+
+        loaded16, loaded8 = builder._load_images([gray16, rgb8], gamma=1.0)
+
+        assert loaded16.shape == (H, W, 3)
+        np.testing.assert_allclose(loaded16, 40000 / 65535, rtol=1e-6)
+        np.testing.assert_array_equal(loaded8, rgb8_values.astype(np.float32) / 255.0)
+
+    def test_load_signed_integer_image_fails_closed(self, tmp_path):
+        """P-1: samples without an unambiguous range are rejected, not divided by 255."""
+        from PIL import Image
+
+        builder = SceneBuilder(tier="apex_research")
+        path = tmp_path / "int32.tif"
+        Image.fromarray(np.full((H, W), 7, dtype=np.int32)).save(path)
+
+        with pytest.raises(ValueError, match="Unsupported pixel format"):
+            builder._load_images([path], gamma=1.0)
+
     def test_load_grayscale_image(self):
         """Test loading grayscale images (auto-converted to RGB)."""
         from PIL import Image

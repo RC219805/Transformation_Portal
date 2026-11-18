@@ -1077,6 +1077,43 @@ class TestSpatialAIPipelineReconstructionStage:
             )
 
 
+class TestMultiviewImageLoading:
+    """P-1: the multi-view loader scales samples by their type's range, not by 255."""
+
+    @staticmethod
+    def _load(tmp_path: Path, array: np.ndarray, name: str) -> np.ndarray:
+        from PIL import Image
+
+        path = tmp_path / name
+        Image.fromarray(array).save(path)
+        request = MagicMock(images=None, image_paths=[path])
+        pipeline = SpatialAIPipeline(PipelineConfig(tier="standard", stages=["ingest"]))
+        (loaded,) = pipeline._load_multiview_images(request)
+        return loaded
+
+    def test_16bit_gray_png_is_scaled_to_unit_range(self, tmp_path):
+        loaded = self._load(tmp_path, np.full((4, 4), 40000, dtype=np.uint16), "gray16.png")
+
+        assert loaded.shape == (4, 4, 3) and loaded.dtype == np.float32
+        np.testing.assert_allclose(loaded, 40000 / 65535, rtol=1e-6)
+
+    def test_8bit_rgb_png_scaling_is_unchanged(self, tmp_path):
+        rgb = np.arange(48, dtype=np.uint8).reshape(4, 4, 3)
+        loaded = self._load(tmp_path, rgb, "rgb8.png")
+
+        np.testing.assert_array_equal(loaded, rgb.astype(np.float32) / 255.0)
+
+    def test_float_tiff_is_not_divided_by_255(self, tmp_path):
+        values = np.linspace(0.0, 2.0, 16, dtype=np.float32).reshape(4, 4)
+        loaded = self._load(tmp_path, values, "float.tif")
+
+        np.testing.assert_array_equal(loaded[..., 0], values)
+
+    def test_signed_integer_samples_fail_closed(self, tmp_path):
+        with pytest.raises(ValueError, match="Unsupported pixel format"):
+            self._load(tmp_path, np.full((4, 4), 7, dtype=np.int32), "int32.tif")
+
+
 class TestSpatialAIPipelineE2E:
     """Test end-to-end pipeline execution."""
 

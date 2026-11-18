@@ -618,7 +618,20 @@ class SpatialAIPipeline:
                 raise FileNotFoundError(f"Image not found: {path}")
 
             with Image.open(path) as img:
-                img_array = np.array(img).astype(np.float32) / 255.0
+                # Scale by the sample type's range, not by 255: 16-bit images would
+                # otherwise exceed 1.0 by up to 257x. Float samples are already in range units.
+                raw = np.array(img)
+                if raw.dtype == np.bool_:
+                    img_array = raw.astype(np.float32)
+                elif np.issubdtype(raw.dtype, np.unsignedinteger):
+                    img_array = raw.astype(np.float32) / float(np.iinfo(raw.dtype).max)
+                elif np.issubdtype(raw.dtype, np.floating):
+                    img_array = raw.astype(np.float32)
+                else:
+                    raise ValueError(
+                        f"Unsupported pixel format {img.mode!r} ({raw.dtype}) in {path}: "
+                        "expected unsigned integer or floating-point samples"
+                    )
 
                 # Ensure RGB
                 if img_array.ndim == 2:
