@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import platform
 import random
 import sys
@@ -266,6 +267,8 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
     """Compute runtime statistics with optional bootstrap CI."""
     if not timings:
         raise ValueError("No timings provided")
+    if not all(math.isfinite(timing) for timing in timings):
+        raise ValueError("Manifest timings must be finite")
 
     if HAS_NUMPY:
         timings_array = np.array(timings)
@@ -287,6 +290,9 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
         min_val = min(timings)
         max_val = max(timings)
         total_val = sum(timings)
+
+    if not math.isfinite(mean_val) or not math.isfinite(p95_val):
+        raise ValueError("Computed mean and p95 must be finite")
 
     # Bootstrap CI
     bootstrap_ci_lower = None
@@ -388,6 +394,11 @@ def detect_regressions(
     baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float], strict: bool = False
 ) -> List[Regression]:
     """Compare current stats against baseline and detect regressions."""
+    for label, stats in (("Baseline", baseline.statistics), ("Current", current_stats)):
+        if not all(math.isfinite(value) for value in (stats.mean_sec, stats.p95_sec, stats.success_rate)):
+            raise ValueError(f"{label} mean, p95 and success rate must be finite")
+    if not all(math.isfinite(value) for value in thresholds.values()):
+        raise ValueError("Regression thresholds must be finite")
     regressions = []
 
     # Strict mode also reports a slowdown below the threshold ("potential regression"). An unchanged

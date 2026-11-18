@@ -183,6 +183,32 @@ class TestCLIExitCodes:
         assert result.returncode == 3
         assert "Insufficient data" in result.stderr
 
+    @pytest.mark.parametrize("metric", ["total_seconds", "mean_sec", "p95_sec"])
+    @pytest.mark.parametrize("invalid_value", [float("nan"), float("inf")], ids=["nan", "infinity"])
+    def test_nonfinite_timing_exits_3_without_publishing_report(self, tmp_path, metric, invalid_value):
+        baseline_manifests = tmp_path / "baseline"
+        baseline_path = tmp_path / "baseline.json"
+        create_test_manifests(baseline_manifests, count=5)
+        assert run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path)).returncode == 0
+
+        current_manifests = tmp_path / "current"
+        if metric == "total_seconds":
+            create_test_manifests(current_manifests, count=5, mean_time=invalid_value)
+        else:
+            create_test_manifests(current_manifests, count=5)
+            baseline = json.loads(baseline_path.read_text())
+            baseline["statistics"][metric] = invalid_value
+            baseline_path.write_text(json.dumps(baseline))
+
+        report = tmp_path / "report.md"
+        result = run_ledger(
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report), "--strict"
+        )
+
+        assert result.returncode == 3
+        assert "must be finite" in result.stderr
+        assert not report.exists()
+
 
 class TestCLIBackwardCompatibility:
     """Test backward compatibility (Condition #1)."""

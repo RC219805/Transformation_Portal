@@ -191,9 +191,9 @@ Execution still performs full decoding and validation. Shared heartbeat and
 same-origin managed artifact delivery behavior is described in the
 [portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
 
-Deploy matching API and worker code and the packaged plan schema together.
-Apply `make db-upgrade` through `0007_photography_bindings`; V6 reuses that
-migration's immutable physical bindings and needs no additional migration.
+Apply `make db-upgrade` to the current head, at least `0010_upload_receipts`.
+Then deploy matching API and worker code with the packaged plan schema.
+V6 uses the immutable physical bindings introduced in `0007_photography_bindings`.
 Before upgrades or rollback, stop admission and drain workers. An older worker
 cannot consume `tp.execution.plan.v5`; disable V6 admission and drain those jobs
 before returning to older worker code.
