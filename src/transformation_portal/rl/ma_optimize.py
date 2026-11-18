@@ -280,6 +280,10 @@ def optimize_with_central_critic(
 
     logger.info("Starting QMIX optimization: %d agents", n_agents)
 
+    # Train once a full batch is available; a run shorter than one batch trains
+    # on everything it collected by its last iteration instead of never training.
+    train_threshold = max(1, min(batch_size, iterations))
+
     for t in range(iterations):
         joint_actions: list[NodeAction] = []
         actions_dict: dict[str, int] = {}
@@ -314,7 +318,7 @@ def optimize_with_central_critic(
         total_reward += result.reward
 
         # Train
-        if len(replay) >= batch_size:
+        if len(replay) >= train_threshold:
             batch = replay[-batch_size:]
             loss = trainer.step(batch)
             loss_history.append(loss)

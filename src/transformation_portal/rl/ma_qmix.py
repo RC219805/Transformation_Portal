@@ -125,6 +125,10 @@ class MixingNetwork:
 
         return q_total.view(B, 1)
 
+    def __call__(self, agent_qs: Any, global_state: Any) -> Any:
+        """Mix agent Q-values (plain class, so delegate explicitly to ``forward``)."""
+        return self.forward(agent_qs, global_state)
+
     def parameters(self):
         """Get all parameters."""
         params = []
@@ -204,6 +208,10 @@ class CentralCritic:
 
         # Blend
         return self.alpha * qmix + (1.0 - self.alpha) * vdn
+
+    def __call__(self, agent_qs: Any, global_state: Any) -> Any:
+        """Compute Q_total (plain class, so delegate explicitly to ``forward``)."""
+        return self.forward(agent_qs, global_state)
 
     def parameters(self):
         """Get parameters."""
