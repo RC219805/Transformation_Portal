@@ -12,7 +12,7 @@ import logging
 import threading
 import unicodedata
 from pathlib import Path
-from typing import Any, ContextManager, Dict, Union
+from typing import Any, ContextManager, Dict, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -182,6 +182,31 @@ def np_to_pil(arr: np.ndarray) -> Image.Image:
     arr = np.clip(arr, 0, 1)
     arr = (arr * 255.0 + 0.5).astype(np.uint8)
     return Image.fromarray(arr)
+
+
+def fit_size_within(size: Tuple[int, int], bounds: Tuple[int, int]) -> Tuple[int, int]:
+    """Scale ``size`` to fit ``bounds`` keeping the aspect ratio.
+
+    The binding edge lands exactly on its bound and the other edge is rounded
+    to the nearest pixel (at least 1, at most its bound). Computing both edges
+    as ``int(edge * ratio)`` instead truncates, so float error leaves the
+    binding edge one pixel short of the target for many sizes.
+
+    Args:
+        size: Source ``(width, height)`` in pixels (both positive)
+        bounds: Target ``(max_width, max_height)`` in pixels (both positive)
+
+    Returns:
+        New ``(width, height)``
+    """
+    width, height = int(size[0]), int(size[1])
+    max_w, max_h = int(bounds[0]), int(bounds[1])
+    if width <= 0 or height <= 0 or max_w <= 0 or max_h <= 0:
+        raise ValueError(f"fit_size_within needs positive sizes, got size={size!r} bounds={bounds!r}")
+    # Compare max_w/width <= max_h/height exactly in integers.
+    if max_w * height <= max_h * width:
+        return max_w, min(max_h, max(1, round(height * max_w / width)))
+    return min(max_w, max(1, round(width * max_h / height))), max_h
 
 
 def load_image_rgb(path: Union[str, Path]) -> np.ndarray:

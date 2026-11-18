@@ -1133,3 +1133,26 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestDeliverableResizeTargets:
+    """Downscaled deliverables must hit their long-edge target exactly (finding L-06)."""
+
+    @pytest.mark.parametrize(
+        ("method", "size", "expected"),
+        [
+            ("_save_web_4k", (4269, 12), (3840, 11)),
+            ("_save_web_4k", (12, 4269), (11, 3840)),
+            ("_save_print_8k", (8538, 10), (7680, 9)),
+            ("_save_social", (2140, 12), (1080, 6)),
+            ("_save_magazine", (4269, 12), (2048, 6)),
+        ],
+    )
+    def test_long_edge_hits_target(self, temp_dir, method, size, expected):
+        pipeline = UnifiedLuxuryPipeline(UnifiedPipelineConfig(output_dir=temp_dir))
+        image = Image.new("RGB", size, (120, 90, 60))
+
+        output_path = getattr(pipeline, method)(image, "edge", None)
+
+        with Image.open(output_path) as loaded:
+            assert loaded.size == expected

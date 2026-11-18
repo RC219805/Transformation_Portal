@@ -379,3 +379,12 @@ class TestApplyUpscaling:
 
         assert result is wide
         assert result.size == wide.size
+
+    def test_binding_edge_lands_exactly_on_target(self):
+        """int() truncation turned 104x52 -> 3840x2160 into 3839x1919 (finding L-06)."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import UpscalingConfig, apply_upscaling
+
+        config = UpscalingConfig(enabled=True, target_resolution=(3840, 2160), preserve_sharpness=False)
+        result = apply_upscaling(_pil_image(104, 52), config)
+
+        assert result.size == (3840, 1920)

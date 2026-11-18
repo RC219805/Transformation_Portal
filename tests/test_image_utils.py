@@ -281,3 +281,31 @@ def test_save_image_failure_keeps_existing_file(tmp_path):
 
     assert target.read_bytes() == b"previous"
     assert [p.name for p in tmp_path.iterdir()] == ["out.png"]
+
+
+class TestFitSizeWithin:
+    """fit_size_within pins the binding edge to its bound (finding L-06)."""
+
+    @pytest.mark.parametrize("max_dim", [1080, 2048, 3840, 7680])
+    def test_long_edge_always_reaches_target(self, max_dim):
+        from transformation_portal.utils.image_utils import fit_size_within
+
+        for long_edge in range(max_dim + 1, max_dim * 2 + 600):
+            assert fit_size_within((long_edge, 1000), (max_dim, max_dim))[0] == max_dim
+            assert fit_size_within((1000, long_edge), (max_dim, max_dim))[1] == max_dim
+
+    def test_short_edge_is_rounded_and_bounded(self):
+        from transformation_portal.utils.image_utils import fit_size_within
+
+        assert fit_size_within((104, 52), (3840, 2160)) == (3840, 1920)
+        assert fit_size_within((4269, 10), (3840, 3840)) == (3840, 9)
+        assert fit_size_within((100000, 1), (1080, 1080)) == (1080, 1)
+        assert fit_size_within((640, 480), (640, 480)) == (640, 480)
+        assert fit_size_within((16, 9), (3840, 3840)) == (3840, 2160)
+
+    @pytest.mark.parametrize("size,bounds", [((0, 10), (10, 10)), ((10, 10), (10, -1))])
+    def test_rejects_non_positive_sizes(self, size, bounds):
+        from transformation_portal.utils.image_utils import fit_size_within
+
+        with pytest.raises(ValueError):
+            fit_size_within(size, bounds)

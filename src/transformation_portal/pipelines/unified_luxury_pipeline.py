@@ -67,7 +67,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from transformation_portal.pipelines.parallel_io import ParallelIOPipeline
-from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path
+from transformation_portal.utils.image_utils import OutputStemAllocator, atomic_output_path, fit_size_within
 
 # Optional imports with graceful fallback
 try:
@@ -1625,8 +1625,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 4K
         max_dim = 3840
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image
@@ -1663,8 +1662,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 8K
         max_dim = 7680
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image
@@ -1700,8 +1698,7 @@ class UnifiedLuxuryPipeline:
 
         # Resize to 1080p
         max_dim = 1080
-        ratio = max_dim / max(image.size)
-        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        new_size = fit_size_within(image.size, (max_dim, max_dim))
         resized = image.resize(new_size, Image.Resampling.LANCZOS)
 
         # Save optimized for social media
@@ -1736,8 +1733,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 2K
         max_dim = 2048
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image

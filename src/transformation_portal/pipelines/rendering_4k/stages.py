@@ -11,7 +11,7 @@ from typing import Optional, Union
 import numpy as np
 from PIL import Image, ImageFilter
 
-from ...utils.image_utils import apply_cube_lut, load_cube_lut
+from ...utils.image_utils import apply_cube_lut, fit_size_within, load_cube_lut
 from .types import (
     ColorGradingConfig,
     MaterialResponseConfig,
@@ -347,8 +347,7 @@ def apply_upscaling(
         )
         return image
 
-    new_w = int(current_w * scale)
-    new_h = int(current_h * scale)
+    new_w, new_h = fit_size_within((current_w, current_h), (target_w, target_h))
 
     # Apply upscaling method
     if config.method == "esrgan":
