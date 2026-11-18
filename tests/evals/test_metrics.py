@@ -21,6 +21,8 @@ import pytest
 
 from transformation_portal.evals.metrics import (
     _to_numpy,
+    _to_numpy_pair,
+    _to_torch_pair,
     dice_coefficient,
     lpips_score,
     lpips_to_score,
@@ -87,6 +89,88 @@ class TestToNumpy:
         result = _to_numpy(arr)
 
         assert result.max() <= 1.0
+
+    @pytest.mark.parametrize("dtype", [np.uint16, np.dtype(">u2")])
+    def test_uint16_normalised_by_dtype_not_by_255(self, dtype):
+        """uint16 data is scaled by 65535, so the PSNR matches the same pixels as floats (M-02)."""
+        rng = np.random.default_rng(0)
+        ref = rng.random((32, 32, 3)).astype(np.float32)
+        noisy = np.clip(ref + rng.normal(0, 0.1, ref.shape).astype(np.float32), 0, 1)
+        ref16 = np.round(ref * 65535).astype(dtype)
+        noisy16 = np.round(noisy * 65535).astype(dtype)
+
+        result = _to_numpy(ref16)
+
+        np.testing.assert_allclose(result, ref16.astype(np.float32) / 65535.0)
+        assert result.max() <= 1.0
+        assert psnr(noisy16, ref16) == pytest.approx(psnr(noisy, ref), abs=1e-3)
+        assert ssim(noisy16, ref16) == pytest.approx(ssim(noisy, ref), abs=1e-3)
+
+    def test_dark_uint16_image_is_not_read_as_unit_range(self):
+        """A uint16 image whose values are all <= 1 is still near black, not white (M-02)."""
+        dark = np.ones((4, 4), dtype=np.uint16)
+
+        assert _to_numpy(dark).max() == pytest.approx(1.0 / 65535.0)
+
+    def test_pair_scaled_identically_when_only_prediction_overshoots(self):
+        """One overshooting sample must not put the prediction on a 1/255 scale (M-02)."""
+        rng = np.random.default_rng(0)
+        ref = rng.random((64, 64, 3)).astype(np.float32)
+        pred = np.clip(ref + rng.normal(0, 0.1, ref.shape).astype(np.float32), 0, 1)
+        pred_overshoot = pred.copy()
+        pred_overshoot[0, 0, 0] = 1.0001  # un-clipped sharpening
+
+        arr_pred, arr_ref = _to_numpy_pair(pred_overshoot, ref)
+
+        np.testing.assert_array_equal(arr_pred, pred_overshoot)
+        np.testing.assert_array_equal(arr_ref, ref)
+        # The overshoot changes one sample; before the fix the PSNR collapsed to ~4.8 dB.
+        assert psnr(pred_overshoot, ref) == pytest.approx(psnr(pred, ref), abs=0.05)
+        assert psnr(ref, pred_overshoot) == pytest.approx(psnr(ref, pred), abs=0.05)
+        assert ssim(pred_overshoot, ref) == pytest.approx(ssim(pred, ref), abs=0.01)
+
+    def test_pair_of_0_255_floats_keeps_the_255_convention(self):
+        """Two 0-255 float images are still both read as 0-255 data."""
+        rng = np.random.default_rng(1)
+        ref = rng.random((32, 32, 3)).astype(np.float32)
+        pred = np.clip(ref + rng.normal(0, 0.05, ref.shape).astype(np.float32), 0, 1)
+
+        arr_pred, arr_ref = _to_numpy_pair(pred * 255, ref * 255)
+
+        np.testing.assert_allclose(arr_pred, pred, atol=1e-6)
+        np.testing.assert_allclose(arr_ref, ref, atol=1e-6)
+        assert psnr(pred * 255, ref * 255) == pytest.approx(psnr(pred, ref), abs=1e-3)
+
+    def test_bit_depth_member_does_not_rescale_the_float_member(self):
+        """With a uint8 target, a 0-255 float prediction is still decided on its own values."""
+        rng = np.random.default_rng(2)
+        ref8 = rng.integers(0, 256, (16, 16, 3), dtype=np.uint8)
+        pred = ref8.astype(np.float32)
+
+        arr_pred, arr_ref = _to_numpy_pair(pred, ref8)
+
+        np.testing.assert_allclose(arr_pred, arr_ref)
+        assert psnr(pred, ref8) == float("inf")
+
+    def test_torch_pair_normalises_by_dtype_and_scales_identically(self):
+        """The LPIPS tensor conversion follows the same pair rules as the numpy path (M-02)."""
+        torch = pytest.importorskip("torch")
+
+        dark = torch.tensor([[0, 1], [1, 0]], dtype=torch.uint8)
+        dark_t, _ = _to_torch_pair(dark, dark)
+        assert float(dark_t.max()) == pytest.approx(1.0 / 255.0)
+
+        ref = torch.rand(8, 8, 3, generator=torch.Generator().manual_seed(0))
+        overshoot = ref.clone()
+        overshoot[0, 0, 0] = 1.0001
+        over_t, ref_t = _to_torch_pair(overshoot, ref)
+        assert over_t.shape == (3, 8, 8)
+        assert float(over_t.max()) == pytest.approx(1.0001)
+        assert torch.allclose(ref_t, ref.permute(2, 0, 1))
+
+        tensor_t, array_t = _to_torch_pair(ref * 255, (ref * 255).numpy())
+        assert torch.allclose(tensor_t, ref.permute(2, 0, 1), atol=1e-6)
+        assert torch.allclose(array_t, ref.permute(2, 0, 1), atol=1e-6)
 
     def test_path_loading_pil(self, tmp_path):
         """Test loading from path using PIL."""

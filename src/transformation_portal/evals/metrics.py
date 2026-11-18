@@ -40,15 +40,24 @@ def _torch_tensor_to_numpy(img: "torch.Tensor") -> np.ndarray:
         return np.asarray(tensor.tolist(), dtype=np.float32)
 
 
-def _to_numpy(img: ImageLike) -> np.ndarray:
-    """Convert image to numpy array.
+# Torch counterparts of the 8/16-bit unsigned image dtypes handled by ``_bit_depth_divisor``.
+_TORCH_BIT_DEPTH_DIVISORS = {"torch.uint8": 255.0, "torch.uint16": 65535.0}
 
-    Args:
-        img: Image as numpy array, torch tensor, or path
 
-    Returns:
-        Numpy array in [0, 1] range
+def _bit_depth_divisor(dtype: np.dtype) -> Optional[float]:
+    """Return the full-scale value of an 8/16-bit unsigned image dtype, else ``None``.
+
+    The range of uint8/uint16 image data is fixed by the dtype, never by the pixel content.
+    Wider or signed integers are generic containers (``np.asarray`` of Python ints is int64),
+    so, like floats, they keep the content convention applied by ``_range_divisors``.
     """
+    if dtype.kind == "u" and dtype.itemsize <= 2:
+        return float(np.iinfo(dtype).max)
+    return None
+
+
+def _raw_array(img: ImageLike) -> np.ndarray:
+    """Load ``img`` as a numpy array without changing its value range (paths load as 8-bit RGB)."""
     if isinstance(img, Path):
         try:
             import cv2
@@ -56,56 +65,98 @@ def _to_numpy(img: ImageLike) -> np.ndarray:
             arr = cv2.imread(str(img))
             if arr is None:
                 raise ValueError(f"Failed to load image: {img}")
-            arr = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
-            return arr.astype(np.float32) / 255.0
+            return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
         except ImportError:
             from PIL import Image
 
             pil_img = Image.open(img).convert("RGB")
-            return np.array(pil_img).astype(np.float32) / 255.0
+            return np.array(pil_img)
 
     if hasattr(img, "detach") and hasattr(img, "cpu") and hasattr(img, "numpy"):  # torch.Tensor
-        arr = _torch_tensor_to_numpy(img)
-    else:
-        arr = np.asarray(img)
-
-    # Normalize to [0, 1] if needed
-    if arr.dtype == np.uint8:
-        arr = arr.astype(np.float32) / 255.0
-    elif arr.max() > 1.0:
-        arr = arr.astype(np.float32) / 255.0
-
-    return arr.astype(np.float32)
+        return _torch_tensor_to_numpy(img)
+    return np.asarray(img)
 
 
-def _to_torch(img: ImageLike) -> "torch.Tensor":
-    """Convert image to torch tensor.
+def _range_divisors(known: list[Optional[float]], peaks: list[Optional[float]]) -> list[float]:
+    """Return the divisor that maps each member of an image pair into [0, 1].
+
+    ``known`` holds the full-scale value fixed by a bit-depth dtype (``None`` when the
+    dtype fixes nothing, e.g. floats); ``peaks`` holds the maximum of each such member.
+    Data whose range the dtype does not fix follows the pinned convention that values
+    above 1.0 are 0-255 data. The decision is made once for the whole pair, so both
+    members are always scaled identically, and it is taken only when every one of them
+    exceeds 1.0: dividing an image that lies in [0, 1] by 255 would shrink the error and
+    inflate PSNR/SSIM, whereas leaving a 0-255 member unscaled can only make it score worse.
+    """
+    unknown_peaks = [peak for divisor, peak in zip(known, peaks) if divisor is None]
+    content_divisor = 255.0 if unknown_peaks and all(peak is not None and peak > 1.0 for peak in unknown_peaks) else 1.0
+    return [divisor if divisor is not None else content_divisor for divisor in known]
+
+
+def _numpy_member(img: ImageLike) -> tuple[np.ndarray, Optional[float], Optional[float]]:
+    """Return ``(raw array, dtype full-scale value, content peak)`` for one image."""
+    arr = _raw_array(img)
+    known = _bit_depth_divisor(arr.dtype)
+    return arr, known, None if known is not None else float(arr.max())
+
+
+def _scaled(arr: np.ndarray, divisor: float) -> np.ndarray:
+    """Return ``arr`` as float32 divided by ``divisor``."""
+    scaled = arr.astype(np.float32)
+    return scaled / divisor if divisor != 1.0 else scaled
+
+
+def _to_numpy(img: ImageLike) -> np.ndarray:
+    """Convert image to numpy array.
 
     Args:
         img: Image as numpy array, torch tensor, or path
 
     Returns:
-        Torch tensor in [0, 1] range, shape (C, H, W)
+        Numpy array in [0, 1] range (uint8/uint16 are scaled by their dtype's full-scale value)
     """
+    arr, known, peak = _numpy_member(img)
+    (divisor,) = _range_divisors([known], [peak])
+    return _scaled(arr, divisor)
+
+
+def _to_numpy_pair(img1: ImageLike, img2: ImageLike) -> tuple[np.ndarray, np.ndarray]:
+    """Convert a prediction/target pair to numpy arrays in [0, 1], scaled consistently."""
+    arr1, known1, peak1 = _numpy_member(img1)
+    arr2, known2, peak2 = _numpy_member(img2)
+    divisor1, divisor2 = _range_divisors([known1, known2], [peak1, peak2])
+    return _scaled(arr1, divisor1), _scaled(arr2, divisor2)
+
+
+def _to_torch_pair(img1: ImageLike, img2: ImageLike) -> tuple["torch.Tensor", "torch.Tensor"]:
+    """Convert a prediction/target pair to torch tensors in [0, 1], shape (C, H, W), scaled consistently."""
     import torch
 
-    if isinstance(img, torch.Tensor):
-        tensor = img.float()
-        # Ensure [0, 1] range
-        if tensor.max() > 1.0:
-            tensor = tensor / 255.0
-        # Ensure (C, H, W) format
-        if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
-            tensor = tensor.permute(2, 0, 1)
-        return tensor
+    members: list[tuple[Union[np.ndarray, "torch.Tensor"], Optional[float], Optional[float]]] = []
+    for img in (img1, img2):
+        if isinstance(img, torch.Tensor):
+            known = _TORCH_BIT_DEPTH_DIVISORS.get(str(img.dtype))
+            tensor = img.float()
+            members.append((tensor, known, None if known is not None else float(tensor.max())))
+        else:
+            members.append(_numpy_member(img))
 
-    arr = _to_numpy(img)
-
-    # Convert (H, W, C) to (C, H, W)
-    if arr.ndim == 3 and arr.shape[-1] in (1, 3, 4):
-        arr = np.transpose(arr, (2, 0, 1))
-
-    return torch.from_numpy(arr).float()
+    divisors = _range_divisors([known for _, known, _ in members], [peak for _, _, peak in members])
+    tensors = []
+    for (data, _, _), divisor in zip(members, divisors):
+        if isinstance(data, torch.Tensor):
+            tensor = data / divisor if divisor != 1.0 else data
+            # Ensure (C, H, W) format
+            if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
+                tensor = tensor.permute(2, 0, 1)
+        else:
+            arr = _scaled(data, divisor)
+            # Convert (H, W, C) to (C, H, W)
+            if arr.ndim == 3 and arr.shape[-1] in (1, 3, 4):
+                arr = np.transpose(arr, (2, 0, 1))
+            tensor = torch.from_numpy(arr).float()
+        tensors.append(tensor)
+    return tensors[0], tensors[1]
 
 
 # ============================================================================
@@ -131,8 +182,7 @@ def psnr(
     Returns:
         PSNR value in dB
     """
-    arr1 = _to_numpy(img1)
-    arr2 = _to_numpy(img2)
+    arr1, arr2 = _to_numpy_pair(img1, img2)
 
     # Ensure same shape
     if arr1.shape != arr2.shape:
@@ -198,8 +248,7 @@ def ssim(
     Returns:
         SSIM value
     """
-    arr1 = _to_numpy(img1)
-    arr2 = _to_numpy(img2)
+    arr1, arr2 = _to_numpy_pair(img1, img2)
 
     # Try using skimage if available
     try:
@@ -274,8 +323,7 @@ def lpips_score(
         if torch.cuda.is_available():
             _lpips_model = _lpips_model.cuda()
 
-    tensor1 = _to_torch(img1)
-    tensor2 = _to_torch(img2)
+    tensor1, tensor2 = _to_torch_pair(img1, img2)
 
     # LPIPS expects (N, C, H, W) and range [-1, 1]
     if tensor1.ndim == 3:
