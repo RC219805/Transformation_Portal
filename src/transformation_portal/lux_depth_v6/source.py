@@ -8,6 +8,7 @@ accepted as a replayable V6 source.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import math
 from dataclasses import dataclass
@@ -352,25 +353,53 @@ def validate_source(source: VerifiedV5Source, *, cancellation: Callable[[], bool
         _check(cancellation)
 
 
+def _frozen_view(source: VerifiedV5Source) -> tuple[dict, dict[str, list[dict]], dict[str, dict]]:
+    """Parse the frozen plan and preflight the frozen inventory once per source.
+
+    The result is a pure function of the immutable plan bytes, evidence bytes
+    and limits, so it is memoised on the carrier and keyed on the identity of
+    exactly those values; per-image file bytes are still re-bound by callers.
+    """
+    cached = source.__dict__.get("_frozen_view_cache")
+    if (
+        cached is not None
+        and cached[0] is source.canonical_plan_bytes
+        and cached[1] is source.canonical_evidence_bytes
+        and cached[2] is source.limits
+    ):
+        return cached[3]
+    payload = parse_plan_v4(source.canonical_plan_bytes).to_payload()
+    inputs: dict[str, list[dict]] = {}
+    for item in payload["inputs"]:
+        inputs.setdefault(item["id"], []).append(item)
+    declared = _preflight_inventory(
+        _decode_evidence(source.canonical_evidence_bytes),
+        {"size_bytes": len(source.canonical_evidence_bytes)},
+        source.limits,
+    )
+    view = (payload, inputs, declared)
+    object.__setattr__(
+        source,
+        "_frozen_view_cache",
+        (source.canonical_plan_bytes, source.canonical_evidence_bytes, source.limits, view),
+    )
+    return view
+
+
 def _selected(source: VerifiedV5Source, input_id: str) -> tuple[SourceImage, dict, dict, dict]:
     if type(source) is not VerifiedV5Source:
         raise TypeError("V6 requires an exact verified source carrier")
     images = [image for image in source.images if image.input_id == input_id]
     if len(images) != 1:
         raise ValueError("V6 source does not contain the requested image")
-    payload = parse_plan_v4(source.canonical_plan_bytes).to_payload()
-    inputs = [item for item in payload["inputs"] if item["id"] == input_id]
+    payload, inputs_by_id, declared = _frozen_view(source)
+    inputs = inputs_by_id.get(input_id, [])
     if len(inputs) != 1:
         raise ValueError("V6 image differs from its frozen V5 plan")
-    declared = _preflight_inventory(
-        _decode_evidence(source.canonical_evidence_bytes),
-        {"size_bytes": len(source.canonical_evidence_bytes)},
-        source.limits,
-    )
     image = _inspect_image(source.root, input_id, declared, payload["configuration"]["target_size"], source.limits)
     if image != images[0]:
         raise ValueError("V6 image descriptor changed after verification")
-    return image, image.descriptor, inputs[0], declared
+    return image, image.descriptor, copy.deepcopy(inputs[0]), declared
 
 
 def _load_image(
@@ -401,7 +430,7 @@ def load_depth_inputs(source: VerifiedV5Source, input_id: str) -> tuple[ImageMas
     with pinned_directory(source.root):
         image, descriptor, input_record, declared = _selected(source, input_id)
         original = _load_image(source, image, descriptor, input_record, declared, original=True)
-        configuration = parse_plan_v4(source.canonical_plan_bytes).to_payload()["configuration"]
+        configuration = copy.deepcopy(_frozen_view(source)[0]["configuration"])
         proxy = create_proxy(original, configuration["target_size"])
         native = _array(
             source.root,
