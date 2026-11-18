@@ -1272,6 +1272,157 @@ class TestCachedRunFidelity:
         assert loaded.v2 is not None
         assert loaded.v2.status == "ok"
 
+    @staticmethod
+    def _run_materials_v2_batch(input_root: Path, output_root: Path, **overrides):
+        """Run a real batch with stub depth, Materials V3 and V2 collaborators."""
+        import numpy as np
+
+        from transformation_portal.depth.backends.protocol import DepthResult
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        class _License:
+            value = "commercial"
+
+        class _StubDepth:
+            name = "da3"
+            license_type = _License()
+
+            def __init__(self):
+                self.calls = 0
+
+            def ensure_available(self):
+                return None
+
+            def compute(self, pil_image):
+                self.calls += 1
+                width, height = pil_image.size
+                ramp = np.linspace(0.0, 1.0, width * height, dtype=np.float32).reshape(height, width)
+                return DepthResult(
+                    depth_map=ramp,
+                    original_image=np.asarray(pil_image.convert("RGB")),
+                    metadata={},
+                    depth_units="relative",
+                    backend_id="da3",
+                    device="cpu",
+                )
+
+        class _Registry:
+            def __init__(self, backend):
+                self.backend = backend
+
+            def get_backend(self, backend_id, config, **kwargs):
+                return self.backend
+
+        class _InvertingMaterials:
+            def __init__(self):
+                self.calls = 0
+
+            def process(self, image, segmentation_result, depth_map):
+                self.calls += 1
+                return {
+                    "enhanced_image": np.clip(1.0 - np.asarray(image, dtype=np.float32), 0.0, 1.0),
+                    "material_masks": {},
+                    "materials_v3_pixel_ops": {
+                        "enabled": True,
+                        "applied": [{"material": "sky", "ops": ["sky_gradient"]}],
+                        "blocked": [],
+                    },
+                    "materials_v3_response_plan": {"per_class": {}},
+                    "materials_v3_metadata": {"version": "3.1", "segmentation_metadata": {}},
+                }
+
+        class _RecordingV2:
+            def __init__(self):
+                self.input_bytes: list[bytes] = []
+
+            def run(self, *, input_path, output_dir, asset_key, **kwargs):
+                payload = Path(input_path).read_bytes()
+                self.input_bytes.append(payload)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output = output_dir / f"{asset_key}_enhanced.png"
+                output.write_bytes(payload)
+                report = output_dir / f"{asset_key}_report.json"
+                report.write_text('{"depth_consumed": true}', encoding="utf-8")
+                return {
+                    "status": "ok",
+                    "output": str(output),
+                    "report_path": str(report),
+                    "runtime_s": 0.01,
+                    "depth_consumed": True,
+                }
+
+        config_values = {
+            "depth_backend": "da3",
+            "enable_v2": True,
+            "v2_preset": "default",
+            "enable_materials_v3": True,
+            "quality_tier": "premium",
+            "v2_input_color": "srgb",
+            "emit_run_card": False,
+            "enable_parallel_processing": False,
+        }
+        config_values.update(overrides)
+        depth = _StubDepth()
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=_Registry(depth)):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(**config_values), output_root)
+
+        class _PassThrough:
+            @staticmethod
+            def process(result):
+                return result
+
+        orchestrator.postprocessor = _PassThrough()
+        materials = _InvertingMaterials()
+        v2 = _RecordingV2()
+        orchestrator.materials_v3_engine = materials
+        orchestrator.v2_runner = v2
+        results = orchestrator.enhance_batch(input_root)
+        assert [result["status"] for result in results] == ["ok"]
+        return depth, materials, v2
+
+    @staticmethod
+    def _write_gradient_png(path: Path) -> Path:
+        import numpy as np
+        from PIL import Image
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pixels = np.zeros((24, 32, 3), dtype=np.uint8)
+        pixels[..., 0] = np.linspace(0, 255, 32, dtype=np.uint8)[None, :]
+        pixels[..., 1] = 60
+        Image.fromarray(pixels).save(path)
+        return path
+
+    def test_depth_reuse_v2_rerun_recomputes_missing_materials_handoff(self, tmp_path):
+        """A cached-depth rerun that re-executes V2 must feed V2 the Materials V3 hand-off, not the raw source."""
+        input_root = tmp_path / "in"
+        source = self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+
+        _depth1, materials1, v2_first = self._run_materials_v2_batch(input_root, output_root)
+        assert materials1.calls == 1
+        assert not list((output_root / "temp").glob("*_materials_v3_enhanced*"))
+
+        # Only the V2 preset changes: depth is reused, V2 must rerun.
+        depth2, materials2, v2_second = self._run_materials_v2_batch(input_root, output_root, v2_preset="luxury")
+
+        assert depth2.calls == 0
+        assert materials2.calls == 1
+        assert v2_second.input_bytes[0] != source.read_bytes()
+        assert v2_second.input_bytes == v2_first.input_bytes
+
+    def test_depth_reuse_v2_skip_does_not_recompute_materials(self, tmp_path):
+        """When V2 is skipped on a cached-depth rerun, Materials V3 is restored without recomputation."""
+        input_root = tmp_path / "in"
+        self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+
+        self._run_materials_v2_batch(input_root, output_root)
+        depth2, materials2, v2_second = self._run_materials_v2_batch(input_root, output_root)
+
+        assert depth2.calls == 0
+        assert materials2.calls == 0
+        assert v2_second.input_bytes == []
+
 
 def _completed_prepared_depth_run(tmp_path: Path, **config_overrides):
     from PIL import Image

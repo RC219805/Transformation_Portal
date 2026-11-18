@@ -5615,6 +5615,80 @@ class EnhanceOrchestrator:
             recomputed_enhanced_path,
         )
 
+    def _ensure_materials_handoff_for_v2_rerun(
+        self,
+        *,
+        image_input: ImageInput,
+        output_key: Path,
+        depth_path: Path,
+        float_depth_path: Path,
+        manifest_path: Path,
+        skip_depth: bool,
+        materials_v3_result: Optional[dict],
+        materials_v3_runtime_s: float,
+        enhanced_image_path: Optional[Path],
+        prepared_reuse: Optional[_PreparedReuseSnapshot],
+    ) -> tuple[Optional[dict], float, Optional[Path]]:
+        """Rebuild a missing Materials V3 hand-off before a non-APEX V2 rerun.
+
+        Cached-depth reruns restore Materials V3 metadata from the manifest,
+        but the enhanced hand-off image is a temporary file deleted after the
+        previous run. When V2 then reruns (changed V2 config, ``force_v2``,
+        failed V2), it must not silently consume the un-enhanced source while
+        the manifest still records the applied pixel ops. APEX has its own
+        stricter recovery in ``_ensure_apex_canonical_materials_execution``.
+        """
+        unchanged = (materials_v3_result, materials_v3_runtime_s, enhanced_image_path)
+        restored_without_handoff = (
+            enhanced_image_path is None
+            and isinstance(materials_v3_result, dict)
+            and "enhanced_image" not in materials_v3_result
+            and "material_masks" not in materials_v3_result
+        )
+        if (
+            not restored_without_handoff
+            or self._is_apex_materials_gate_enabled()
+            or self._uses_corrected_geometry()
+            or self.materials_v3_engine is None
+            or self.v2_runner is None
+            or not self.config.enable_v2
+            or not depth_path.exists()
+        ):
+            return unchanged
+        if not self.config.force_v2 and self.should_skip_v2(
+            find_v2_report(self.v2_dir, output_key.name),
+            manifest_path,
+            image_input,
+            skip_depth,
+            prepared_reuse=prepared_reuse,
+        ):
+            return unchanged
+
+        logger.info(
+            "Depth was reused and V2 will rerun but the Materials V3 hand-off is missing;"
+            " recomputing Materials V3 from cached depth.",
+        )
+        depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
+        if depth_for_materials is None:
+            logger.warning(
+                "Cached depth could not be reloaded for Materials V3 recomputation;"
+                " dropping restored Materials V3 metadata so V2 input and manifest agree.",
+            )
+            return None, 0.0, None
+
+        from .preprocessing import preprocess_image, validate_image_format
+
+        validated_path = validate_image_format(image_input.path)
+        preprocessed_array, _ = preprocess_image(validated_path, raw_config=self.config)
+        depth_array = np.asarray(depth_for_materials, dtype=np.float32)
+        return self._run_materials_v3_stage(
+            preprocessed_array=preprocessed_array,
+            source_path=image_input.path,
+            depth_map=depth_array,
+            output_key=output_key,
+            artifact_shape=_shape_2d(depth_array),
+        )
+
     def _enforce_apex_v2_canonical_input_preflight(
         self,
         *,
@@ -6885,6 +6959,22 @@ class EnhanceOrchestrator:
                 materials_v3_result=materials_v3_result,
                 materials_v3_runtime_s=materials_v3_runtime_s,
                 enhanced_image_path=enhanced_image_path,
+            )
+            (
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+            ) = self._ensure_materials_handoff_for_v2_rerun(
+                image_input=processing_image_input,
+                output_key=output_key,
+                depth_path=depth_path,
+                float_depth_path=float_depth_path,
+                manifest_path=manifest_path,
+                skip_depth=skip_depth,
+                materials_v3_result=materials_v3_result,
+                materials_v3_runtime_s=materials_v3_runtime_s,
+                enhanced_image_path=enhanced_image_path,
+                prepared_reuse=prepared_reuse,
             )
 
         # --- STAGE B: V2 ENHANCEMENT ---
