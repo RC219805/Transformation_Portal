@@ -420,3 +420,63 @@ def test_omitted_support_retains_legacy_bytes_and_statistics(tmp_path: Path) -> 
     )
     assert first.read_bytes() == second.read_bytes() == full.read_bytes()
     assert first_stats == second_stats == full_stats
+
+
+def _close_up_metric_depth() -> np.ndarray:
+    # A close-up scene in metres whose range happens to fit inside [-0.5, 1.5].
+    return np.linspace(0.4, 1.4, 120 * 160, dtype=np.float32).reshape(120, 160)
+
+
+def test_metric_depth_inside_the_clip_window_is_stretched_not_clipped(tmp_path: Path) -> None:
+    depth = _close_up_metric_depth()
+
+    path, _, stats = atomic_write_depth_u16_png_with_stats(tmp_path / "metric.png", depth, depth_units="meters")
+
+    encoded = read_depth_u16_png(path)
+    assert stats.normalization["mode"] == "percentile_1_99"
+    # Only the top 1% tail saturates; nothing beyond 1 m is collapsed onto 1.0.
+    assert float(np.mean(encoded >= 1.0)) <= 0.011
+    assert float(np.mean(depth > 1.0)) > 0.39
+    assert float(encoded.min()) == 0.0
+
+
+def test_metric_depth_already_inside_unit_range_keeps_identity_bytes(tmp_path: Path) -> None:
+    depth = np.linspace(0.4, 0.95, 64, dtype=np.float32).reshape(8, 8)
+    legacy, _, legacy_stats = atomic_write_depth_u16_png_with_stats(tmp_path / "legacy.png", depth)
+    metric, _, metric_stats = atomic_write_depth_u16_png_with_stats(tmp_path / "metric.png", depth, depth_units="meters")
+
+    assert metric_stats.normalization["mode"] == "identity_0_1"
+    assert legacy.read_bytes() == metric.read_bytes()
+    assert legacy_stats == metric_stats
+
+
+@pytest.mark.parametrize("depth_units", [None, "relative"])
+def test_relative_or_unspecified_units_keep_legacy_clip_behaviour(tmp_path: Path, depth_units) -> None:
+    depth = np.linspace(-0.2, 1.2, 64, dtype=np.float32).reshape(8, 8)
+    legacy, _, legacy_stats = atomic_write_depth_u16_png_with_stats(tmp_path / "legacy.png", depth)
+    explicit, _, explicit_stats = atomic_write_depth_u16_png_with_stats(
+        tmp_path / "explicit.png", depth, depth_units=depth_units
+    )
+
+    assert explicit_stats.normalization["mode"] == "clip_0_1"
+    assert legacy.read_bytes() == explicit.read_bytes()
+    assert legacy_stats == explicit_stats
+
+
+@pytest.mark.parametrize("depth_units", ["metric", "unknown", "", 1])
+def test_unknown_depth_units_fail_closed_before_publication(tmp_path: Path, depth_units) -> None:
+    path = tmp_path / "bad-units.png"
+    with pytest.raises(ValueError, match="Unsupported depth units"):
+        atomic_write_depth_u16_png_with_stats(path, _close_up_metric_depth(), depth_units=depth_units)
+    assert not path.exists()
+
+
+def test_normalizer_and_writer_agree_on_metric_units(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.depth_writer import normalize_depth_for_u16_png
+
+    depth = _close_up_metric_depth()
+    normalized, normalization = normalize_depth_for_u16_png(depth, depth_units="meters")
+    path, _, stats = atomic_write_depth_u16_png_with_stats(tmp_path / "metric.png", depth, depth_units="meters")
+
+    assert normalization == stats.normalization
+    np.testing.assert_array_equal(read_depth_u16_png(path), np.rint(normalized * 65535.0).astype(np.float32) / 65535.0)

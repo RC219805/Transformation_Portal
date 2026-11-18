@@ -4574,6 +4574,7 @@ class EnhanceOrchestrator:
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
                     compute_encoded_unique_values=self._is_apex_tier(),
+                    depth_units=getattr(result, "depth_units", None),
                     **({"support_mask": geometry_result.transform.support()} if geometry_result is not None else {}),
                 )
                 produced_depth_sha256 = None
@@ -4582,7 +4583,9 @@ class EnhanceOrchestrator:
                     from .geometry_handoff import snapshot_geometry_artifact
 
                     produced_depth_bytes = snapshot_geometry_artifact(depth_path, math.prod(original_shape) * 2 + 1024**2)
-                    normalized_expected, _ = normalize_depth_for_u16_png(png_depth)
+                    normalized_expected, _ = normalize_depth_for_u16_png(
+                        png_depth, depth_units=getattr(result, "depth_units", None)
+                    )
                     expected_u16 = np.rint(normalized_expected * 65535.0).astype(np.uint16)
                     expected_u16[~geometry_result.transform.support()] = 0
                     encoded_expected = expected_u16.astype(np.float32) / 65535.0
