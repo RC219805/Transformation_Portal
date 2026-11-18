@@ -424,6 +424,57 @@ def test_verify_cli_rejects_native_missing_or_ambiguous_validsig(tmp_path: Path,
     assert "exactly one VALIDSIG record" in result.stderr
 
 
+def test_verify_cli_rejects_dsse_signed_by_a_key_other_than_the_recorded_keyid(tmp_path: Path) -> None:
+    """The DSSE keyid names one key while the verified signature came from another keyring key."""
+    run_card_path, native_path, _, _ = _build_inputs(tmp_path)
+    native_path.unlink()
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-dsse",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_RESOLVED_FINGERPRINT": "B" * 40},
+    )
+
+    assert result.returncode == 5
+    assert "detached signature primary fingerprint does not match recorded key_id" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "status_mode, expected_reason",
+    [
+        ("revoked_key", "the signing key has been revoked"),
+        ("expired_key", "the signing key has expired"),
+    ],
+)
+@pytest.mark.parametrize("attestation_kind", ["native", "dsse"])
+def test_verify_cli_rejects_signatures_made_by_revoked_or_expired_keys(
+    tmp_path: Path,
+    attestation_kind: str,
+    status_mode: str,
+    expected_reason: str,
+) -> None:
+    """GnuPG exits 0 for these verdicts, so only the status keyword can reject them."""
+    run_card_path, native_path, dsse_path, _ = _build_inputs(tmp_path)
+    (dsse_path if attestation_kind == "native" else native_path).unlink()
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        f"--require-{attestation_kind}",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_STATUS_MODE": status_mode},
+    )
+
+    assert result.returncode == 5
+    assert expected_reason in result.stderr
+
+
 def test_verify_cli_rejects_explicit_sigstore_bundle_without_dsse_attestation(tmp_path: Path) -> None:
     run_card_path, _, dsse_path, bundle_path = _build_inputs(tmp_path)
     dsse_path.unlink()

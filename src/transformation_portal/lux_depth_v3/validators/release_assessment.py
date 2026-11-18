@@ -157,6 +157,7 @@ def assess_run_card_release(
                     gpg_verify_detached_signature_bytes(
                         decode_dsse_signature_bytes(dsse_envelope),
                         pre_auth_encode(DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, decode_dsse_payload(dsse_envelope)),
+                        key_id=str(dsse_envelope["signatures"][0]["keyid"]),
                     )
             except Exception as exc:  # noqa: BLE001 - normalized assessment surface
                 dsse_errors.append(str(exc))

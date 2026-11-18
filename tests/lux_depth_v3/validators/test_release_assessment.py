@@ -183,7 +183,10 @@ class TestDsseAttestation:
 
     def test_full_chain_passes_when_helpers_succeed(self, tmp_path):
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
-        run_card.with_suffix(".attestation.dsse.json").write_text("{}", encoding="utf-8")
+        run_card.with_suffix(".attestation.dsse.json").write_text(
+            json.dumps({"signatures": [{"keyid": "A" * 40, "sig": "c2ln"}]}),
+            encoding="utf-8",
+        )
         with (
             patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
             patch.object(release_assessment, "decode_run_card_statement_from_envelope", return_value={}),
@@ -198,7 +201,8 @@ class TestDsseAttestation:
                 require_dsse_attestation=True,
                 verify_gpg=True,
             )
-        assert mock_gpg.call_count == 1
+        # The recorded DSSE keyid must reach the verifier so the signer is bound to it.
+        mock_gpg.assert_called_once_with(b"sig", b"pae", key_id="A" * 40)
         dsse = _check(report, "dsse_attestation")
         assert dsse["status"] == "PASS"
         assert dsse["details"]["errors"] == []
