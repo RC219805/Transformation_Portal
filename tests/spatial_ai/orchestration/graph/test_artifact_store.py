@@ -881,6 +881,63 @@ class TestCommitMarker:
         # exists() should return False for corrupted entries
         assert not store.exists(cache_key)
 
+    def test_load_survives_unreadable_stats_file(self, store: ArtifactStore):
+        """A stats.json problem on a hit is bookkeeping, not artifact corruption (G-3)."""
+        cache_key = _make_cache_key("stats_unreadable_on_hit")
+        store.store(cache_key, {"data": np.arange(4)}, self._make_provenance(cache_key))
+        store.stats_path.write_text("{ not json", encoding="utf-8")
+
+        loaded = store.load(cache_key)
+
+        np.testing.assert_array_equal(loaded["data"], np.arange(4))
+
+    def test_load_restores_python_value_types(self, store: ArtifactStore):
+        """Tuples, lists and 0-d arrays come back as the types that were stored (G-3)."""
+        cache_key = _make_cache_key("value_kinds_roundtrip")
+        artifact = {
+            "size": (480, 640),
+            "names": ["a", "b"],
+            "zero_d": np.array(5, dtype=np.int16),
+            "count": 3,
+            "label": "wood",
+        }
+        store.store(cache_key, artifact, self._make_provenance(cache_key))
+
+        loaded = store.load(cache_key)
+
+        assert loaded["size"] == (480, 640) and type(loaded["size"]) is tuple
+        assert loaded["names"] == ["a", "b"] and type(loaded["names"]) is list
+        assert type(loaded["zero_d"]) is np.ndarray and loaded["zero_d"].dtype == np.int16 and loaded["zero_d"] == 5
+        assert loaded["count"] == 3 and type(loaded["count"]) is int
+        assert loaded["label"] == "wood"
+        assert set(loaded) == set(artifact)
+
+    @pytest.mark.parametrize("value", [[1, "x"], [1, 2.5], [True, 2], ((1, 2), (3, 4))], ids=str)
+    def test_store_rejects_sequences_numpy_would_alter(self, store: ArtifactStore, value: Any):
+        """A sequence whose values or element types change in array conversion is not cached (G-3)."""
+        cache_key = _make_cache_key(f"lossy_{value!r}")
+        with pytest.raises(ValueError, match="cannot be cached"):
+            store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+        assert not store.exists(cache_key)
+
+    def test_store_rejects_reserved_value_kinds_key(self, store: ArtifactStore):
+        """The payload key recording value kinds cannot be overwritten by a stage output."""
+        cache_key = _make_cache_key("reserved_kinds_key")
+        with pytest.raises(ValueError, match="reserved"):
+            store.store(cache_key, {"__tp_value_kinds__": "x"}, self._make_provenance(cache_key))
+
+    def test_legacy_entry_without_value_kinds_still_loads(self, store: ArtifactStore):
+        """Entries written before the kinds record keep the legacy conversion."""
+        cache_key = _make_cache_key("legacy_no_kinds")
+        store.store(cache_key, {"size": (2, 3), "n": 4}, self._make_provenance(cache_key))
+        artifact_path = store._artifact_path(cache_key)
+        np.savez_compressed(artifact_path, size=np.array([2, 3]), n=np.array(4))
+
+        loaded = store.load(cache_key)
+
+        np.testing.assert_array_equal(loaded["size"], np.array([2, 3]))
+        assert loaded["n"] == 4
+
 
 class TestScavenger:
     """Tests for scavenger/GC cleanup (Issue #929).

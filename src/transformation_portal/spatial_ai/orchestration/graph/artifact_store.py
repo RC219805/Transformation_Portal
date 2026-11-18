@@ -97,7 +97,7 @@ from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
 
-from ....ingest.canonical_json import dump_json
+from ....ingest.canonical_json import dump_json, dumps_json
 
 # Platform-specific imports (guarded for cross-platform safety)
 try:
@@ -150,6 +150,63 @@ def _is_artifact_temp_name(name: str) -> bool:
         return not SAFE_CACHE_KEY.match(stem)
 
     return False
+
+
+# Reserved payload key recording the Python kind of every stored value, so a
+# cache hit returns the same types as a fresh stage run (a tuple stays a tuple,
+# a list stays a list, a 0-d array stays an array). Entries written before this
+# record existed load with the legacy conversion.
+_VALUE_KINDS_KEY = "__tp_value_kinds__"
+_SEQUENCE_KINDS = ("list", "tuple", "list_of_ndarray", "tuple_of_ndarray")
+
+
+def _value_kind(value: Any) -> str:
+    """Classify a stage output value for type-faithful restoration on load."""
+    if isinstance(value, np.ndarray):
+        return "ndarray"
+    if isinstance(value, np.generic):
+        return "numpy_scalar"
+    if isinstance(value, (list, tuple)):
+        container = "list" if isinstance(value, list) else "tuple"
+        if value and all(isinstance(item, np.ndarray) for item in value):
+            return f"{container}_of_ndarray"
+        return container
+    return "python_scalar"
+
+
+def _restore_value(arr: np.ndarray, kind: str) -> Any:
+    """Rebuild a stored value from its array and recorded kind."""
+    if kind == "ndarray":
+        return arr
+    if kind == "numpy_scalar":
+        return arr[()]
+    if kind == "python_scalar":
+        return arr.item()
+    if kind == "list":
+        return arr.tolist()
+    if kind == "tuple":
+        return tuple(arr.tolist())
+    if kind == "list_of_ndarray":
+        return [np.array(item) for item in arr]
+    if kind == "tuple_of_ndarray":
+        return tuple(np.array(item) for item in arr)
+    raise ValueError(f"Unknown artifact value kind: {kind!r}")
+
+
+def _same_value(original: Any, restored: Any) -> bool:
+    """Return True when ``restored`` equals ``original`` with the same types."""
+    if type(original) is not type(restored):
+        return False
+    if isinstance(original, np.ndarray):
+        if original.dtype != restored.dtype or original.shape != restored.shape:
+            return False
+        equal_nan = original.dtype.kind in "fc"
+        return bool(np.array_equal(original, restored, equal_nan=equal_nan))
+    if isinstance(original, (list, tuple)):
+        return len(original) == len(restored) and all(_same_value(a, b) for a, b in zip(original, restored))
+    if isinstance(original, float) and original != original:
+        return restored != restored
+    return bool(original == restored)
 
 
 class CacheLockTimeout(Exception):
@@ -636,23 +693,35 @@ class ArtifactStore:
                 data = np.load(artifact_path, allow_pickle=False)
 
                 # Convert to dict
+                kinds: Optional[Dict[str, str]] = None
+                if _VALUE_KINDS_KEY in data.files:
+                    kinds = json.loads(str(data[_VALUE_KINDS_KEY].item()))
+                    if not isinstance(kinds, dict):
+                        raise ValueError("artifact value kinds record is not an object")
                 result = {}
                 for key in data.files:
+                    if key == _VALUE_KINDS_KEY:
+                        continue
                     value = data[key]
-                    # Handle scalar arrays
-                    if value.shape == ():
+                    if kinds is not None:
+                        result[key] = _restore_value(value, kinds[key])
+                    elif value.shape == ():
+                        # Legacy entry: scalar arrays become Python scalars
                         result[key] = value.item()
                     else:
                         result[key] = value
 
-                # Update stats
-                self._record_cache_hit()
-
-                logger.debug(f"Cache hit: {cache_key}")
-                return result
-
             except Exception as e:
                 raise ValueError(f"Corrupted artifact: {cache_key}") from e
+
+            # Stats bookkeeping must not turn a valid hit into a corruption error.
+            try:
+                self._record_cache_hit()
+            except Exception as e:
+                logger.warning(f"Failed to update cache hit stats for {cache_key}: {e}")
+
+            logger.debug(f"Cache hit: {cache_key}")
+            return result
 
     def store(
         self,
@@ -705,7 +774,10 @@ class ArtifactStore:
             # Validate and convert artifacts BEFORE entering try/except
             # This ensures dtype validation errors propagate with clear messages
             np_dict: Dict[str, np.ndarray] = {}
+            kinds: Dict[str, str] = {}
             for key, value in artifact.items():
+                if key == _VALUE_KINDS_KEY:
+                    raise ValueError(f"Artifact key '{key}' is reserved by the artifact store")
                 # Convert to numpy array (let NumPy infer dtype)
                 if isinstance(value, np.ndarray):
                     arr = value
@@ -723,7 +795,19 @@ class ArtifactStore:
                         "Supported types: numeric arrays, bool arrays, string arrays, scalars."
                     )
 
+                # A cache hit must return what the stage returned: refuse values
+                # that NumPy conversion would change (e.g. [1, "x"] -> ["1", "x"]).
+                kind = _value_kind(value)
+                if kind in _SEQUENCE_KINDS and not _same_value(value, _restore_value(arr, kind)):
+                    raise ValueError(
+                        f"Artifact value for key '{key}' ({type(value).__name__}) does not survive "
+                        "array conversion with its types and values intact and cannot be cached."
+                    )
+
                 np_dict[key] = arr
+                kinds[key] = kind
+
+            np_dict[_VALUE_KINDS_KEY] = np.array(dumps_json(kinds, sort_keys=True))
 
             tmp_artifact_path: Optional[Path] = None
             tmp_prov_path: Optional[Path] = None

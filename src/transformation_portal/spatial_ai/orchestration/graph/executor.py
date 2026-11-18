@@ -306,12 +306,18 @@ class Executor:
                     execution_time_ms = (time.time() - stage_start) * 1000
                     stages_executed += 1
                     logger.info(f"Executed {node.stage_id} in {execution_time_ms:.1f}ms")
+                except Exception as e:
+                    logger.error(f"Stage {node.stage_id} failed: {e}")
+                    raise RuntimeError(f"Stage '{node.stage_id}' failed: {e}") from e
 
-                    # Store in cache if enabled and checkpoint_policy is not NEVER
-                    checkpoint_policy = node.stage.metadata.checkpoint_policy
-                    should_cache = self.artifact_store is not None and checkpoint_policy != CheckpointPolicy.NEVER
+                # Store in cache if enabled and checkpoint_policy is not NEVER.
+                # Caching is transparent: the stage already succeeded, so a value the
+                # store cannot cache (or any store failure) only costs the cache entry.
+                checkpoint_policy = node.stage.metadata.checkpoint_policy
+                should_cache = self.artifact_store is not None and checkpoint_policy != CheckpointPolicy.NEVER
 
-                    if should_cache:
+                if should_cache:
+                    try:
                         provenance = self._create_provenance(
                             cache_key=cache_key,
                             stage_id=node.stage_id,
@@ -320,14 +326,12 @@ class Executor:
                             context=context,
                         )
                         self.artifact_store.store(cache_key, outputs, provenance)
-                    else:
-                        logger.debug(
-                            f"Skipping cache storage for {node.stage_id}: " f"checkpoint_policy={checkpoint_policy.value}"
-                        )
-
-                except Exception as e:
-                    logger.error(f"Stage {node.stage_id} failed: {e}")
-                    raise RuntimeError(f"Stage '{node.stage_id}' failed: {e}") from e
+                    except Exception as store_error:
+                        logger.warning(f"Not caching outputs of {node.stage_id} ({cache_key}): {store_error}")
+                else:
+                    logger.debug(
+                        f"Skipping cache storage for {node.stage_id}: " f"checkpoint_policy={checkpoint_policy.value}"
+                    )
 
             # Record result
             stage_result = StageExecutionResult(

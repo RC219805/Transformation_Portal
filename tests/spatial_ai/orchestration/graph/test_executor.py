@@ -547,6 +547,76 @@ class TestExecutor:
         assert evicted == []
         assert store.exists(cache_key)
 
+    def test_uncacheable_output_does_not_fail_successful_stage(
+        self, executor: Executor, store: ArtifactStore, output_dir: Path
+    ):
+        """A store failure after a successful stage costs only the cache entry (G-3)."""
+        calls = {"n": 0}
+
+        def transform(x):
+            calls["n"] += 1
+            return {"label": "wood", "value": x}  # dict -> object array, not cacheable
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=transform), inputs={})
+
+        result1 = executor.execute(graph=graph, inputs={"value": 3}, output_dir=output_dir)
+        assert result1.outputs["stage1.output"] == {"label": "wood", "value": 3}
+        assert result1.stage_results[0].cache_hit is False
+        assert not store.exists(result1.stage_results[0].cache_key)
+
+        result2 = executor.execute(graph=graph, inputs={"value": 3}, output_dir=output_dir)
+        assert result2.outputs["stage1.output"] == {"label": "wood", "value": 3}
+        assert result2.stage_results[0].cache_hit is False
+        assert calls["n"] == 2
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            (480, 640),
+            ["a", "b"],
+            [],
+            [[1, 2], [3, 4]],
+            np.array(7, dtype=np.int16),
+            np.float32(0.5),
+            [np.zeros((2, 2), dtype=np.float32), np.ones((2, 2), dtype=np.float32)],
+        ],
+        ids=["tuple", "str_list", "empty_list", "nested_list", "zero_d_array", "numpy_scalar", "list_of_arrays"],
+    )
+    def test_cache_hit_returns_same_types_as_fresh_run(self, executor: Executor, output_dir: Path, value: Any):
+        """A cache hit returns the value types the stage returned on the fresh run (G-3)."""
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: value), inputs={})
+
+        fresh = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        cached = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert cached.stage_results[0].cache_hit is True
+        fresh_value = fresh.outputs["stage1.output"]
+        cached_value = cached.outputs["stage1.output"]
+        assert type(cached_value) is type(fresh_value)
+        if isinstance(fresh_value, (list, tuple)) and fresh_value and isinstance(fresh_value[0], np.ndarray):
+            assert len(cached_value) == len(fresh_value)
+            for got, want in zip(cached_value, fresh_value):
+                assert type(got) is np.ndarray and got.dtype == want.dtype
+                np.testing.assert_array_equal(got, want)
+        elif isinstance(fresh_value, (np.ndarray, np.generic)):
+            assert cached_value.dtype == fresh_value.dtype
+            np.testing.assert_array_equal(cached_value, fresh_value)
+        else:
+            assert cached_value == fresh_value
+
+    def test_lossy_sequence_output_is_not_cached(self, executor: Executor, output_dir: Path):
+        """A list NumPy would coerce ([1, 'x'] -> ['1', 'x']) is recomputed, never served altered (G-3)."""
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: [1, "x"]), inputs={})
+
+        executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        second = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert second.stage_results[0].cache_hit is False
+        assert second.outputs["stage1.output"] == [1, "x"]
+
 
 class TestExecutionContext:
     """Tests for ExecutionContext."""
