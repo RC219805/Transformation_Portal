@@ -405,6 +405,43 @@ class TestErrorHandlerCPUFallback:
             error = RuntimeError(msg)
             assert handler._is_gpu_oom(error) is True
 
+    @pytest.mark.parametrize(
+        "msg",
+        [
+            "Input file not found: /renders/living_room_03.tiff",
+            "invalid zoom factor",
+            "mask for bedroom window is empty",
+            "bloom pass failed",
+        ],
+    )
+    def test_oom_detection_ignores_words_containing_oom(self, msg):
+        """Regression (O-2): "oom" inside another word is not a GPU out-of-memory error."""
+        assert ErrorHandler()._is_gpu_oom(ValueError(msg)) is False
+
+    def test_cpu_fallback_not_triggered_by_path_containing_room(self):
+        """Regression (O-2): a non-OOM error naming a "room" path must not switch to CPU."""
+        handler = ErrorHandler(max_retries=3, initial_delay=0.0)
+        calls = []
+        device_changes = []
+
+        def fail_once(**kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ValueError("SAM2 produced no masks for /shots/living_room.tiff")
+            return "ok"
+
+        with patch("time.sleep"):
+            result = handler.execute_with_retry(
+                func=fail_once,
+                stage="segment",
+                strategy=ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+                device="cuda",
+                on_device_change=lambda device, attempt, error: device_changes.append(device),
+            )
+
+        assert result == "ok"
+        assert device_changes == []
+
     def test_cpu_fallback_non_oom_error(self):
         """Test non-OOM errors don't trigger device switch."""
         handler = ErrorHandler(max_retries=2, initial_delay=0.01)

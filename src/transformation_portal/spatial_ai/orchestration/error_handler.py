@@ -27,12 +27,16 @@ Example:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# GPU out-of-memory indicators, matched case-insensitively on word boundaries.
+_GPU_OOM_PATTERN = re.compile(r"\b(?:out of memory|oom|cudnn error|allocation failed)\b", re.IGNORECASE)
 
 
 if "ErrorRecoveryStrategy" not in globals():
@@ -332,15 +336,10 @@ class ErrorHandler:
         Returns:
             True if OOM error.
         """
-        error_str = str(error).lower()
-        oom_indicators = [
-            "out of memory",
-            "oom",
-            "cuda out of memory",
-            "cudnn error",
-            "allocation failed",
-        ]
-        return any(indicator in error_str for indicator in oom_indicators)
+        # "oom" must be a whole word: a bare substring test also matched
+        # "room", "zoom" or "bloom" in paths and messages, so any unrelated
+        # failure triggered the CPU fallback.
+        return _GPU_OOM_PATTERN.search(str(error)) is not None
 
     def _record_error(self, stage: str, attempt: int, device: str, error: Exception) -> None:
         """Record error in history.
