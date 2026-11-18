@@ -268,6 +268,11 @@ class CASDAGExecutor:
         self.locks_dir = self.cache_dir / ".locks"
         self.locks_dir.mkdir(exist_ok=True)
 
+        # Verified reads refuse every symlink below the cache root. The root
+        # itself may be a link the operator configured; resolve it once so the
+        # entries written through it can be read back.
+        self._cache_read_root = self.cache_dir.resolve()
+
         # Pre-compute code hash
         self._code_hash = compute_code_hash(self.config.code_paths)
 
@@ -529,7 +534,7 @@ class CASDAGExecutor:
         descriptors = []
         try:
             flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-            descriptor = os.open(self.cache_dir, flags)
+            descriptor = os.open(self._cache_read_root, flags)
             descriptors.append(descriptor)
             for component in cache_path.relative_to(self.cache_dir).parts[:-1]:
                 descriptor = os.open(component, flags, dir_fd=descriptor)
