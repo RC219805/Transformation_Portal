@@ -11,6 +11,7 @@ lux_depth_v3 scene groups and spatial_ai reconstruction.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional, Tuple, get_args
@@ -58,6 +59,9 @@ class CoreCameraParams:
 
     def __post_init__(self) -> None:
         """Validate camera parameters."""
+        # NaN compares false with everything, so the sign checks alone let it through.
+        if not all(math.isfinite(value) for value in (self.fx, self.fy, self.cx, self.cy)):
+            raise ValueError(f"Camera intrinsics must be finite: fx={self.fx}, fy={self.fy}, cx={self.cx}, cy={self.cy}")
         if self.fx <= 0 or self.fy <= 0:
             raise ValueError(f"Focal lengths must be positive: fx={self.fx}, fy={self.fy}")
         if self.width <= 0 or self.height <= 0:

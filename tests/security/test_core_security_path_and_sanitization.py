@@ -92,6 +92,18 @@ def test_sanitize_filename_strips_path_dangerous_chars_hidden_prefix_and_length(
     assert len(sanitize_filename("a" * 300 + ".png")) == 255
 
 
+@pytest.mark.parametrize("unsafe", ["..", "...", ".", "", "/", "../..", "dir/.."])
+def test_sanitize_filename_rejects_names_with_nothing_left(unsafe: str) -> None:
+    """An empty result joined to a directory would name the directory itself."""
+    with pytest.raises(ValidationError, match="empty after sanitization"):
+        sanitize_filename(unsafe)
+
+
+def test_sanitize_filename_keeps_the_rest_of_a_dotted_name() -> None:
+    assert sanitize_filename("..hidden.png") == "hidden.png"
+    assert sanitize_filename(".a") == "a"
+
+
 def test_validate_input_file_raises_for_missing_path(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="File not found"):
         validate_input_file(tmp_path / "missing.jpg")

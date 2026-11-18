@@ -9,6 +9,7 @@ import types
 import pytest
 
 from transformation_portal.core.ml_dependency_health import (
+    _version_tuple,
     detect_transformers_torch_runtime_issue,
     detect_transformers_torch_version_issue,
 )
@@ -76,6 +77,43 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
     assert "disabled its PyTorch backend" in message
     assert "torch 2.2.2" in message
     assert "transformers 5.3.0" in message
+
+
+@pytest.mark.parametrize(
+    ("raw_version", "expected"),
+    [
+        ("5.10.1", (5, 10, 1)),
+        ("5.10.0rc1", (5, 10, 0)),
+        ("5.10.0.dev0", (5, 10, 0)),
+        ("2.13.0+cu130", (2, 13, 0)),
+        ("2.13.0a0+git1a2b3c4", (2, 13, 0)),
+        ("2.4", (2, 4)),
+        ("3", (3,)),
+        ("", ()),
+        (None, ()),
+        ("unknown", ()),
+    ],
+)
+def test_version_tuple_takes_release_digits_only(raw_version, expected) -> None:
+    """Digits of a pre-release or local label must not be read as release digits."""
+    assert _version_tuple(raw_version) == expected
+
+
+def test_prerelease_below_the_security_baseline_is_not_read_as_the_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """5.10.0rc1 used to parse as (5, 10, 1) and pass the 5.10.1 floor."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "2.4.3",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: False,
+    )
+
+    message = detect_transformers_torch_version_issue("2.13.0", "5.10.0rc1")
+
+    assert message is not None
+    assert "transformers 5.10.0rc1 is below the supported security baseline 5.10.1" in message
 
 
 def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:

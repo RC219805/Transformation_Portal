@@ -22,7 +22,12 @@ MIN_SUPPORTED_TRANSFORMERS_VERSION_TEXT = "5.10.1"
 
 
 def _version_tuple(raw_version: Any) -> Tuple[int, ...]:
-    """Extract a best-effort numeric version tuple from a package version string."""
+    """Extract a best-effort numeric version tuple from a package version string.
+
+    Parsing stops at the first component that is not purely numeric, keeping
+    only its leading digits: ``5.10.0rc1`` is ``(5, 10, 0)``. Digits after the
+    suffix belong to the pre-release or local label, not to the release.
+    """
     text = str(raw_version or "").strip()
     if not text:
         return ()
@@ -30,12 +35,11 @@ def _version_tuple(raw_version: Any) -> Tuple[int, ...]:
     for token in text.replace("+", ".").replace("-", ".").split("."):
         if token.isdigit():
             parts.append(int(token))
-        else:
-            numeric_prefix = "".join(ch for ch in token if ch.isdigit())
-            if numeric_prefix:
-                parts.append(int(numeric_prefix))
-            else:
-                break
+            continue
+        leading_digits = token[: len(token) - len(token.lstrip("0123456789"))]
+        if leading_digits:
+            parts.append(int(leading_digits))
+        break
     return tuple(parts)
 
 
