@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -101,3 +102,33 @@ def test_parse_exif_fields_reads_gps_reference_from_ungrouped_tags() -> None:
     )
 
     assert (exif.gps_latitude, exif.gps_longitude) == (-12.5, -45.25)
+
+
+@pytest.mark.parametrize(
+    ("file_path", "expected_argument"),
+    [
+        (Path("-x.jpg"), "./-x.jpg"),
+        (Path("-sub") / "y.jpg", "./-sub/y.jpg"),
+        (Path("frame.jpg"), "frame.jpg"),
+        (Path("dir") / "-z.jpg", "dir/-z.jpg"),
+        (Path("/abs/-w.jpg"), "/abs/-w.jpg"),
+    ],
+)
+def test_extract_exif_never_passes_a_dash_prefixed_file_argument(monkeypatch, file_path, expected_argument) -> None:
+    """D-13: a bare ``-x.jpg`` (input dir ``.``) must not reach exiftool as an option.
+
+    Only names that would parse as an option are rewritten; other paths are
+    passed unchanged so ``SourceFile`` and the sidecar bytes do not move.
+    """
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        calls.append(list(argv))
+        return MagicMock(returncode=0, stdout='[{"SourceFile": "x"}]', stderr="")
+
+    monkeypatch.setattr(ingest_provenance, "_check_exiftool_available", lambda: True)
+    monkeypatch.setattr("transformation_portal.ingest.provenance.subprocess.run", fake_run)
+
+    assert ingest_provenance._extract_exif_with_exiftool(file_path) == {"SourceFile": "x"}
+    assert calls[0][-1] == expected_argument
+    assert not any(argument.startswith("-") and argument.endswith(".jpg") for argument in calls[0])

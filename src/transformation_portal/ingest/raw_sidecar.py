@@ -103,9 +103,16 @@ def _get_exiftool_version(exiftool_path: str) -> str:
     return completed.stdout.strip()
 
 
+def _exiftool_file_argument(input_path: Path) -> str:
+    # A bare name such as ``-x.cr2`` (relative input directory) would parse as
+    # an exiftool option; prefix only those names so other paths stay unchanged.
+    text = str(input_path)
+    return f"./{text}" if text.startswith("-") else text
+
+
 def _run_exiftool_json(input_path: Path, exiftool_path: str) -> Dict[str, Any]:
     completed = subprocess.run(
-        [exiftool_path, "-json", "-G1", "-a", "-u", "-n", str(input_path)],
+        [exiftool_path, "-json", "-G1", "-a", "-u", "-n", _exiftool_file_argument(input_path)],
         check=True,
         capture_output=True,
         text=True,

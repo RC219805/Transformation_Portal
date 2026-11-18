@@ -105,6 +105,18 @@ def _get_exiftool_version() -> Optional[str]:
     return None
 
 
+def _exiftool_file_argument(file_path: Path) -> str:
+    """Return ``file_path`` as an exiftool argument that cannot parse as an option.
+
+    Discovery under a relative input directory such as ``.`` yields bare names,
+    and a file named ``-x.jpg`` would otherwise reach exiftool as the ``-x``
+    option. Only such names get a ``./`` prefix; every other path is passed
+    unchanged so exiftool's ``SourceFile`` stays byte-identical.
+    """
+    text = str(file_path)
+    return f"./{text}" if text.startswith("-") else text
+
+
 def _extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
     """Extract complete EXIF metadata using exiftool.
 
@@ -136,7 +148,7 @@ def _extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
                 "-struct",  # Enable struct feature
                 "-coordFormat",
                 "%.8f",  # GPS coordinate format
-                str(file_path),
+                _exiftool_file_argument(file_path),
             ],
             capture_output=True,
             text=True,
