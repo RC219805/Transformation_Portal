@@ -349,6 +349,24 @@ def lpips_score(
 # ============================================================================
 
 
+def _binary_mask(mask: ImageLike, threshold: float) -> np.ndarray:
+    """Binarise a segmentation mask.
+
+    Bool and integer masks (``{0, 1}`` / ``{0, 255}`` masks, class-id maps, and mask files,
+    which load as 8-bit) hold labels, not intensities: any non-zero value is foreground and
+    they never go through image range normalisation, which would divide a ``{0, 1}`` uint8
+    mask by 255 and empty it. Float masks are soft masks: they keep the image range
+    convention and are compared against ``threshold``.
+    """
+    if not isinstance(mask, (np.ndarray, Path)) and hasattr(mask, "is_floating_point") and not mask.is_floating_point():
+        # torch bool/integer tensor: binarise before a conversion that may fall back to float32
+        return _torch_tensor_to_numpy(mask > 0) > 0
+    arr = _raw_array(mask)
+    if arr.dtype.kind in "biu":
+        return arr > 0
+    return _to_numpy(arr) > threshold
+
+
 def segmentation_iou(
     mask1: ImageLike,
     mask2: ImageLike,
@@ -362,23 +380,20 @@ def segmentation_iou(
     Args:
         mask1: First mask (prediction)
         mask2: Second mask (ground truth)
-        threshold: Binarization threshold for soft masks
+        threshold: Binarization threshold for soft (float) masks; bool and integer
+            masks count every non-zero value as foreground
 
     Returns:
         IoU score
     """
-    arr1 = _to_numpy(mask1)
-    arr2 = _to_numpy(mask2)
+    mask1_bin = _binary_mask(mask1, threshold)
+    mask2_bin = _binary_mask(mask2, threshold)
 
     # Handle multi-channel masks (take first channel or max)
-    if arr1.ndim == 3:
-        arr1 = arr1[..., 0] if arr1.shape[-1] > 1 else arr1.squeeze()
-    if arr2.ndim == 3:
-        arr2 = arr2[..., 0] if arr2.shape[-1] > 1 else arr2.squeeze()
-
-    # Binarize
-    mask1_bin = arr1 > threshold
-    mask2_bin = arr2 > threshold
+    if mask1_bin.ndim == 3:
+        mask1_bin = mask1_bin[..., 0] if mask1_bin.shape[-1] > 1 else mask1_bin.squeeze()
+    if mask2_bin.ndim == 3:
+        mask2_bin = mask2_bin[..., 0] if mask2_bin.shape[-1] > 1 else mask2_bin.squeeze()
 
     intersection = np.logical_and(mask1_bin, mask2_bin).sum()
     union = np.logical_or(mask1_bin, mask2_bin).sum()
@@ -402,21 +417,19 @@ def dice_coefficient(
     Args:
         mask1: First mask
         mask2: Second mask
-        threshold: Binarization threshold
+        threshold: Binarization threshold for soft (float) masks; bool and integer
+            masks count every non-zero value as foreground
 
     Returns:
         Dice coefficient
     """
-    arr1 = _to_numpy(mask1)
-    arr2 = _to_numpy(mask2)
+    mask1_bin = _binary_mask(mask1, threshold)
+    mask2_bin = _binary_mask(mask2, threshold)
 
-    if arr1.ndim == 3:
-        arr1 = arr1[..., 0]
-    if arr2.ndim == 3:
-        arr2 = arr2[..., 0]
-
-    mask1_bin = arr1 > threshold
-    mask2_bin = arr2 > threshold
+    if mask1_bin.ndim == 3:
+        mask1_bin = mask1_bin[..., 0]
+    if mask2_bin.ndim == 3:
+        mask2_bin = mask2_bin[..., 0]
 
     intersection = np.logical_and(mask1_bin, mask2_bin).sum()
     total = mask1_bin.sum() + mask2_bin.sum()

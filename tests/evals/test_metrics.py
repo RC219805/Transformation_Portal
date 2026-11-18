@@ -432,6 +432,60 @@ class TestSegmentationIoU:
 
         assert result == pytest.approx(1.0)
 
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.int32, np.int64])
+    @pytest.mark.parametrize("label", [1, 2, 255])
+    def test_integer_label_masks_binarised_by_nonzero(self, dtype, label):
+        """Disjoint integer label masks score 0.0 instead of a perfect 1.0 (M-03)."""
+        top = np.zeros((64, 64), dtype=dtype)
+        top[:32] = label
+        bottom = np.zeros((64, 64), dtype=dtype)
+        bottom[32:] = label
+        middle = np.zeros((64, 64), dtype=dtype)
+        middle[16:48] = label
+
+        assert segmentation_iou(top, bottom) == 0.0
+        assert segmentation_iou(top, middle) == pytest.approx(16 / 48)
+        assert segmentation_iou(top, top.copy()) == pytest.approx(1.0)
+
+    def test_class_id_map_counts_every_class_as_foreground(self):
+        """Every non-zero class id is foreground, whatever its value (M-03)."""
+        pred = np.zeros((8, 8), dtype=np.int32)
+        pred[:4] = 3
+        gt = np.zeros((8, 8), dtype=np.int32)
+        gt[:4, :4] = 3
+        gt[:4, 4:] = 7
+
+        assert segmentation_iou(pred, gt) == pytest.approx(1.0)
+        assert segmentation_iou(pred, np.zeros_like(gt)) == 0.0
+
+    def test_mask_files_holding_zero_one_labels(self, tmp_path):
+        """A {0, 1} mask PNG is read as labels, not as an almost-black image (M-03)."""
+        from PIL import Image
+
+        top = np.zeros((32, 32), dtype=np.uint8)
+        top[:16] = 1
+        top_path = tmp_path / "top.png"
+        bottom_path = tmp_path / "bottom.png"
+        Image.fromarray(top).save(top_path)
+        Image.fromarray(1 - top).save(bottom_path)
+
+        assert segmentation_iou(top_path, bottom_path) == 0.0
+        assert segmentation_iou(top_path, top_path) == pytest.approx(1.0)
+
+    def test_torch_integer_masks(self):
+        """torch integer/bool masks follow the same non-zero rule, with or without the NumPy bridge (M-03)."""
+        torch = pytest.importorskip("torch")
+
+        top = torch.zeros((16, 16), dtype=torch.uint8)
+        top[:8] = 1
+        bottom = 1 - top
+
+        assert segmentation_iou(top, bottom) == 0.0
+        assert segmentation_iou(top.to(torch.int64) * 2, top.to(torch.int64) * 2) == pytest.approx(1.0)
+        with patch.object(torch.Tensor, "numpy", side_effect=RuntimeError("Numpy is not available")):
+            assert segmentation_iou(top.to(torch.int64) * 2, bottom.to(torch.int64) * 2) == 0.0
+            assert dice_coefficient(top, top.bool()) == pytest.approx(1.0)
+
 
 class TestDiceCoefficient:
     """Test Dice coefficient computation."""
@@ -487,6 +541,32 @@ class TestDiceCoefficient:
         result = dice_coefficient(mask1, mask2)
 
         assert result == pytest.approx(1.0)
+
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.int32, np.int64])
+    @pytest.mark.parametrize("label", [1, 2, 255])
+    def test_integer_label_masks_binarised_by_nonzero(self, dtype, label):
+        """Disjoint integer label masks score 0.0 instead of a perfect 1.0 (M-03)."""
+        top = np.zeros((64, 64), dtype=dtype)
+        top[:32] = label
+        bottom = np.zeros((64, 64), dtype=dtype)
+        bottom[32:] = label
+        middle = np.zeros((64, 64), dtype=dtype)
+        middle[16:48] = label
+
+        assert dice_coefficient(top, bottom) == 0.0
+        assert dice_coefficient(top, middle) == pytest.approx(2 * 16 / 64)
+        assert dice_coefficient(top, top.copy()) == pytest.approx(1.0)
+
+    def test_soft_masks_keep_threshold(self):
+        """Float masks remain soft masks compared against the threshold."""
+        soft = np.zeros((8, 8), dtype=np.float32)
+        soft[:4] = 0.4
+        soft[4:] = 0.6
+        upper = np.zeros((8, 8), dtype=bool)
+        upper[:4] = True
+
+        assert dice_coefficient(soft, upper) == 0.0
+        assert dice_coefficient(soft, upper, threshold=0.3) == pytest.approx(2 * 32 / (64 + 32))
 
 
 class TestNormalizeScore:
