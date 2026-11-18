@@ -10,13 +10,16 @@ fan-out, the manager accessor, and the WebSocket ping/pong.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List
 
+import numpy as np
 import pytest
 
 pytestmark = pytest.mark.unit
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from transformation_portal.dashboard import execution_api
@@ -82,6 +85,77 @@ async def test_broadcast_prunes_disconnected_clients() -> None:
     assert sent == [{"type": "tick"}]
     assert bad not in execution_api._websocket_clients
     assert good in execution_api._websocket_clients
+
+
+class _StrictClient:
+    """WebSocket stand-in that serialises like Starlette's strict JSON path."""
+
+    def __init__(self) -> None:
+        self.sent: List[Any] = []
+
+    async def send_json(self, msg):
+        # JSONResponse.render uses allow_nan=False and raises TypeError on
+        # objects json cannot encode, which is what a real send would hit.
+        self.sent.append(JSONResponse(content=msg).body)
+
+
+def _unserialisable_outputs() -> Dict[str, Any]:
+    return {
+        "depth": np.zeros((2, 3), dtype=np.float32),
+        "file": Path("/tmp/depth.npy"),
+        "loss": float("nan"),
+        "scale": np.float32(1.5),
+    }
+
+
+async def test_broadcast_unserialisable_payload_keeps_client_subscribed() -> None:
+    # D2: a node output such as an ndarray used to raise TypeError inside
+    # send_json, which broadcast treated as a disconnect, so every client was
+    # silently unsubscribed while its socket stayed open.
+    client = _StrictClient()
+    execution_api._websocket_clients.append(client)
+
+    await execution_api.broadcast({"type": "node_complete", "outputs": _unserialisable_outputs()})
+    await execution_api.broadcast({"type": "run_complete"})
+
+    assert client in execution_api._websocket_clients
+    assert len(client.sent) == 2
+
+
+async def test_broadcast_unexpected_send_error_keeps_client() -> None:
+    class _Flaky:
+        async def send_json(self, msg):
+            raise ValueError("not a disconnect")
+
+    flaky = _Flaky()
+    execution_api._websocket_clients.append(flaky)
+    await execution_api.broadcast({"type": "tick"})
+    assert flaky in execution_api._websocket_clients
+
+
+def test_to_json_safe_summarises_unserialisable_values() -> None:
+    safe = execution_api.to_json_safe(_unserialisable_outputs())
+    assert safe == {
+        "depth": {"type": "ndarray", "shape": [2, 3], "dtype": "float32"},
+        "file": "/tmp/depth.npy",
+        "loss": None,
+        "scale": 1.5,
+    }
+
+
+def test_get_run_with_unserialisable_outputs_returns_200(client: TestClient, manager: ExecutionManager) -> None:
+    # D2: raw node outputs used to go straight into JSONResponse -> 500.
+    manager.prepare_run("r1", _pipeline())
+    state = manager.get_run_state("r1")
+    state.nodes["a"].outputs = _unserialisable_outputs()
+    state.results = {"a": _unserialisable_outputs()}
+
+    resp = client.get("/api/exec/runs/r1")
+    assert resp.status_code == 200
+    outputs = resp.json()["nodes"]["a"]["outputs"]
+    assert outputs["depth"] == {"type": "ndarray", "shape": [2, 3], "dtype": "float32"}
+    assert outputs["loss"] is None
+    assert resp.json()["results"]["a"]["file"] == "/tmp/depth.npy"
 
 
 # --------------------------------------------------------------------------- #
