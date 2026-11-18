@@ -100,6 +100,57 @@ def test_mixed_media_batch_determinism_run_twice_identical(tmp_path: Path) -> No
     assert canonical_json_bytes(persisted_manifest_a) == canonical_json_bytes(persisted_manifest_b)
 
 
+def test_failed_rerun_keeps_previous_outputs_consistent(tmp_path: Path) -> None:
+    """D-19: an ingest failure must not leave a manifest describing rewritten files."""
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    (input_dir / "a.jpg").write_bytes(b"a1")
+    (input_dir / "b.jpg").write_bytes(b"b1")
+    output_dir = tmp_path / "out"
+    good_factory = _fake_ingest_payload_factory("run-a")
+
+    run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=good_factory)
+    (input_dir / "a.jpg").write_bytes(b"a2-changed")
+
+    def failing_factory(input_path: Path) -> dict[str, Any]:
+        if input_path.name == "b.jpg":
+            raise RuntimeError("exiftool extraction failed")
+        return good_factory(input_path)
+
+    with pytest.raises(RuntimeError, match="exiftool extraction failed"):
+        run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=failing_factory)
+
+    manifest = _load_manifest(output_dir / BATCH_MANIFEST_FILENAME)
+    for item in manifest["items"]:
+        on_disk = (output_dir / item["normalized_json_relpath"]).read_bytes()
+        assert hashlib.sha256(on_disk).hexdigest() == item["normalized_json_sha256"]
+    assert sorted(path.name for path in output_dir.rglob("*.tmp")) == []
+
+
+def test_failed_write_withdraws_previous_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-19: once rewriting starts, a write failure leaves no stale manifest behind."""
+    import transformation_portal.ingest.batch as batch_module
+
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    (input_dir / "a.jpg").write_bytes(b"a1")
+    output_dir = tmp_path / "out"
+    factory = _fake_ingest_payload_factory("run-a")
+    run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
+    (input_dir / "a.jpg").write_bytes(b"a2-changed")
+
+    def failing_write(output_path: Path, data: bytes) -> Path:
+        raise OSError(f"disk full writing {output_path.name}")
+
+    monkeypatch.setattr(batch_module, "atomic_write_bytes", failing_write, raising=False)
+    monkeypatch.setattr(Path, "write_bytes", lambda self, data: failing_write(self, data))
+
+    with pytest.raises(OSError, match="disk full"):
+        run_ingest_batch(input_dir=input_dir, output_dir=output_dir, ingest_payload_factory=factory)
+
+    assert not (output_dir / BATCH_MANIFEST_FILENAME).exists()
+
+
 def test_compute_batch_root_sha256_is_order_independent() -> None:
     items_a = [
         {"relative_path": "b/file.mov", "normalized_json_sha256": "2" * 64},

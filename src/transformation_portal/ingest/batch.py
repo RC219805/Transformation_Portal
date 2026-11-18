@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from ..lux_depth_v3.io_atomic import atomic_write_bytes, durable_unlink
 from .normalize_machine_json import DEFAULT_NORMALIZATION_PROFILE, canonical_json_bytes, normalize_machine_payload
 from .provenance import capture_provenance
 
@@ -135,6 +136,9 @@ def run_ingest_batch(
 
     inputs = discover_batch_inputs(input_dir, recursive=recursive)
     items: list[dict[str, str]] = []
+    # Every input is ingested and normalized before anything is written, so a
+    # failing ingest leaves a previous run's outputs untouched and consistent.
+    pending_writes: list[tuple[Path, bytes]] = []
 
     for input_path in inputs:
         relative_path = input_path.relative_to(input_dir)
@@ -155,9 +159,7 @@ def run_ingest_batch(
         normalized_sha256 = hashlib.sha256(normalized_bytes).hexdigest()
 
         normalized_relpath = Path("normalized") / _normalized_relpath(relative_path)
-        normalized_output_path = output_dir / normalized_relpath
-        normalized_output_path.parent.mkdir(parents=True, exist_ok=True)
-        normalized_output_path.write_bytes(normalized_bytes)
+        pending_writes.append((output_dir / normalized_relpath, normalized_bytes))
 
         items.append(
             {
@@ -178,5 +180,11 @@ def run_ingest_batch(
     }
 
     manifest_path = output_dir / manifest_filename
-    manifest_path.write_bytes(canonical_json_bytes(manifest))
+    # Withdraw the previous manifest before rewriting the files it describes: if
+    # a write fails below, no manifest claims hashes that no longer match disk.
+    durable_unlink(manifest_path)
+    for normalized_output_path, normalized_bytes in pending_writes:
+        normalized_output_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_bytes(normalized_output_path, normalized_bytes)
+    atomic_write_bytes(manifest_path, canonical_json_bytes(manifest))
     return manifest
