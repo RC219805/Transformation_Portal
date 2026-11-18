@@ -8,6 +8,20 @@ from transformation_portal.spatial_ai.segmentation.tiling.config import Segmenta
 from transformation_portal.spatial_ai.segmentation.tiling.types import BBox, GlobalSeedHints, TileManifest, TileSpec
 
 
+def _tile_origins(extent: int, tile_size_px: int, stride: int) -> list[int]:
+    """Start offsets along one axis, stopping at the first tile that reaches the edge.
+
+    A further origin would start a tile wholly inside the previous one (down to a 1 px sliver), which adds no
+    coverage but costs a segmentation pass and feeds duplicate instances to the merger.
+    """
+    origins: list[int] = []
+    for origin in range(0, extent, stride):
+        origins.append(origin)
+        if origin + tile_size_px >= extent:
+            break
+    return origins
+
+
 class UniformTilingPlanner:
     """Plan deterministic row-major uniform tiles."""
 
@@ -50,8 +64,8 @@ class UniformTilingPlanner:
 
         tiles: list[TileSpec] = []
         tile_idx = 0
-        for y0 in range(0, H, stride):
-            for x0 in range(0, W, stride):
+        for y0 in _tile_origins(H, config.tile_size_px, stride):
+            for x0 in _tile_origins(W, config.tile_size_px, stride):
                 x1 = min(x0 + config.tile_size_px, W)
                 y1 = min(y0 + config.tile_size_px, H)
                 tiles.append(

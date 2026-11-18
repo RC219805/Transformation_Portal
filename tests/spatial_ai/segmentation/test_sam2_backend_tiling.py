@@ -852,8 +852,8 @@ def test_tiling_retries_with_doubled_overlap_when_seam_validation_fails():
 
     result = _run_default_engine_on_seam_object(backend, config)
 
-    # Two tiles at the configured 50 px, then [0, 400), [300, 700) and [600, 700) at 100 px.
-    assert backend.overlaps_seen == [50, 50, 100, 100, 100]
+    # Two tiles at the configured 50 px, then [0, 400) and [300, 700) at 100 px.
+    assert backend.overlaps_seen == [50, 50, 100, 100]
     assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
     assert np.array_equal(result.masks[0], _SEAM_OBJECT)
     assert config.overlap_px == 50
@@ -868,7 +868,7 @@ def test_tiling_fails_closed_when_seam_validation_retries_are_exhausted():
     ):
         _run_default_engine_on_seam_object(backend, _seam_config())
 
-    assert backend.overlaps_seen == [50, 50, 100, 100, 100]
+    assert backend.overlaps_seen == [50, 50, 100, 100]
 
 
 def test_tiling_retry_overlap_stops_at_half_the_tile_size():
@@ -877,7 +877,7 @@ def test_tiling_retry_overlap_stops_at_half_the_tile_size():
     with pytest.raises(RuntimeError, match=r"SAM2 tiling validation failed after 2 retries \(overlap_px 50 -> 200\): "):
         _run_default_engine_on_seam_object(backend, _seam_config(validation=ValidationConfig(max_retries=5)))
 
-    assert backend.overlaps_seen == [50] * 2 + [100] * 3 + [200] * 4
+    assert backend.overlaps_seen == [50] * 2 + [100] * 2 + [200] * 3
 
 
 @pytest.mark.parametrize(
@@ -885,7 +885,7 @@ def test_tiling_retry_overlap_stops_at_half_the_tile_size():
     [
         (50, ValidationConfig(max_retries=0), 2),
         (50, ValidationConfig(auto_increase_overlap=False), 2),
-        (200, ValidationConfig(), 4),
+        (200, ValidationConfig(), 3),
     ],
     ids=["no-retries-allowed", "overlap-increase-disabled", "overlap-already-half-the-tile"],
 )
@@ -905,6 +905,31 @@ def test_tiling_returns_the_merged_pair_without_retry_when_seam_validation_is_di
 
     assert backend.overlaps_seen == [50, 50]
     assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "expected"),
+    [
+        (1536, 1536, [(0, 0, 1536, 1536)]),
+        (1281, 1281, [(0, 0, 1281, 1281)]),
+        (2816, 1536, [(0, 0, 1536, 1536), (1280, 0, 2816, 1536)]),
+        (2817, 1300, [(0, 0, 1536, 1300), (1280, 0, 2816, 1300), (2560, 0, 2817, 1300)]),
+    ],
+    ids=["exactly-one-tile", "one-pixel-past-the-stride", "two-tiles-reach-the-edge", "edge-tile-still-needed"],
+)
+def test_planner_stops_at_the_first_tile_that_reaches_the_image_edge(width, height, expected):
+    """No tile lies wholly inside an earlier one (the 1x1 px and 256 px slivers past the edge tile)."""
+    config = SegmentationTilingConfig(enabled=True)  # 1536 px tiles, 256 px overlap, stride 1280
+    manifest = UniformTilingPlanner().plan(
+        image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
+    )
+
+    assert [(t.bbox.x0, t.bbox.y0, t.bbox.x1, t.bbox.y1) for t in manifest.tiles] == expected
+    assert [t.tile_id for t in manifest.tiles] == [f"tile_{i}" for i in range(len(expected))]
+    covered = np.zeros((height, width), dtype=bool)
+    for tile in manifest.tiles:
+        covered[tile.bbox.y0 : tile.bbox.y1, tile.bbox.x0 : tile.bbox.x1] = True
+    assert covered.all()
 
 
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):
