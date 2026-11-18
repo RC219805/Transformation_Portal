@@ -68,30 +68,111 @@ class TestCanonicalizer:
         assert result.index("getcwd") < result.index("listdir") < result.index("path")
 
     def test_none_comparison_normalization(self):
-        """x == None should become x is None."""
+        """x == None should become x is None in aggressive mode."""
         from transformation_portal.dev.ast_canonicalizer import Canonicalizer
 
         source = "x == None"
         tree = ast.parse(source, mode="eval")
 
-        canonicalizer = Canonicalizer()
+        canonicalizer = Canonicalizer(aggressive=True)
         new_tree = canonicalizer.visit(tree)
 
         result = ast.unparse(new_tree)
         assert result == "x is None"
 
     def test_not_none_comparison_normalization(self):
-        """x != None should become x is not None."""
+        """x != None should become x is not None in aggressive mode."""
         from transformation_portal.dev.ast_canonicalizer import Canonicalizer
 
         source = "x != None"
         tree = ast.parse(source, mode="eval")
 
-        canonicalizer = Canonicalizer()
+        canonicalizer = Canonicalizer(aggressive=True)
         new_tree = canonicalizer.visit(tree)
 
         result = ast.unparse(new_tree)
         assert result == "x is not None"
+
+
+class TestCanonicalizerPreservesSemantics:
+    """Regression tests (M-23): default canonicalization must not change behaviour."""
+
+    @staticmethod
+    def _run(source: str) -> dict:
+        namespace: dict = {}
+        exec(compile(source, "<canonical-test>", "exec"), namespace)  # noqa: S102 - test-controlled source
+        return namespace
+
+    def test_dict_with_spread_is_not_reordered(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        source = 'o = {"b": 99}\nx = {"b": 1, **o, "a": 2}\n'
+        canonical = canonicalize_code(source)
+
+        assert self._run(canonical)["x"] == self._run(source)["x"] == {"b": 99, "a": 2}
+
+    def test_dict_with_side_effecting_values_is_not_reordered(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        source = 'q = [1, 2]\nx = {"b": q.pop(), "a": q.pop()}\n'
+        canonical = canonicalize_code(source)
+
+        assert self._run(canonical)["x"] == self._run(source)["x"] == {"b": 2, "a": 1}
+
+    def test_side_effecting_keyword_arguments_are_not_reordered(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        source = "q = [1, 2]\nr = dict(b=q.pop(), a=q.pop())\n"
+        canonical = canonicalize_code(source)
+
+        assert self._run(canonical)["r"] == self._run(source)["r"] == {"b": 2, "a": 1}
+
+    def test_keyword_arguments_with_names_are_still_sorted(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        assert canonicalize_code("foo(z=y, a=1, **kw)") == "foo(a=1, z=y, **kw)"
+
+    def test_eq_none_is_preserved_by_default(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        source = (
+            "class Col:\n"
+            "    def __eq__(self, other):\n"
+            "        return 'deleted_at IS NULL'\n"
+            "c = Col()\n"
+            "clause = c == None\n"
+        )
+        canonical = canonicalize_code(source)
+
+        assert self._run(canonical)["clause"] == "deleted_at IS NULL"
+
+    def test_eq_none_and_is_none_are_not_equivalent(self):
+        from transformation_portal.dev.ast_normalize import are_semantically_equivalent
+
+        assert not are_semantically_equivalent("m = a == None", "m = a is None")
+
+    def test_write_canonical_keeps_comments(self, tmp_path):
+        from unittest import mock
+
+        from transformation_portal.dev import formatting
+
+        source = "#!/usr/bin/env python3\nimport subprocess  # nosec B404\nx = {'b': 1, 'a': 2}\n"
+        target = tmp_path / "module.py"
+        with mock.patch.object(formatting, "format_file"):
+            formatting.write_canonical(target, source)
+
+        assert target.read_text(encoding="utf-8") == source
+
+    def test_write_canonical_canonicalizes_comment_free_source(self, tmp_path):
+        from unittest import mock
+
+        from transformation_portal.dev import formatting
+
+        target = tmp_path / "module.py"
+        with mock.patch.object(formatting, "format_file"):
+            formatting.write_canonical(target, "x = {'b': 1, 'a': 2}\n")
+
+        assert target.read_text(encoding="utf-8") == "x = {'a': 2, 'b': 1}"
 
 
 class TestCanonicalizeCode:

@@ -291,6 +291,18 @@ class FormattedFileWriter:
         self._content.extend(lines)
 
 
+def _has_comments(content: str) -> bool:
+    """Return True when ``content`` contains a comment token (or cannot be tokenized)."""
+    import io
+    import tokenize
+
+    try:
+        return any(tok.type == tokenize.COMMENT for tok in tokenize.generate_tokens(io.StringIO(content).readline))
+    except (tokenize.TokenError, SyntaxError):
+        # Unknown structure: treat as commented so nothing is silently dropped.
+        return True
+
+
 def write_canonical(
     path: Path,
     content: str,
@@ -311,6 +323,9 @@ def write_canonical(
     - Semantic equivalence
     - Deterministic structure
     - Zero stylistic drift across generators
+
+    Content that contains comments is formatted but not canonicalized, because
+    ast.unparse() would drop them.
 
     Args:
         path: Destination path for the file.
@@ -335,8 +350,12 @@ def write_canonical(
     # Ensure parent directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Apply AST canonicalization if requested
-    if canonicalize and path.suffix in (".py", ".pyi"):
+    # Apply AST canonicalization if requested. ast.unparse() drops every
+    # comment (shebang, licence header, ``# noqa`` / ``# nosec`` / ``# pragma``),
+    # so sources that carry comments are only formatted, never canonicalized.
+    if canonicalize and path.suffix in (".py", ".pyi") and _has_comments(content):
+        logger.info("Skipping AST canonicalization for %s: source contains comments", path)
+    elif canonicalize and path.suffix in (".py", ".pyi"):
         try:
             from transformation_portal.dev.ast_normalize import canonicalize_code
 

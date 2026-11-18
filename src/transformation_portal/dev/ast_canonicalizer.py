@@ -13,7 +13,10 @@ Pipeline:
 
 Safety rules (DO NOT normalize):
 - Non-constant dict keys (may change semantics)
-- Function call order (side effects)
+- Function call order (side effects): dict entries and keyword arguments
+  are only reordered when every value is a constant or a plain name
+- Dicts containing ``**`` spreads (position decides which value wins)
+- ``== None`` comparisons, outside aggressive mode (``__eq__`` overloads)
 - Floating-point expressions (precision drift)
 - List order with non-constants (semantic meaning)
 """
@@ -27,6 +30,11 @@ from typing import TypeVar
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=ast.AST)
+
+
+def _is_side_effect_free(node: ast.expr) -> bool:
+    """Return True when evaluating ``node`` cannot run user code (constant or plain name)."""
+    return isinstance(node, ast.Constant) or (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load))
 
 
 class Canonicalizer(ast.NodeTransformer):
@@ -46,7 +54,10 @@ class Canonicalizer(ast.NodeTransformer):
 
         Args:
             aggressive: If True, apply more aggressive normalizations
-                       that may change code appearance significantly.
+                       that may change code appearance significantly. These
+                       are NOT guaranteed to preserve semantics (e.g.
+                       ``x == None`` -> ``x is None`` for objects that
+                       overload ``__eq__``).
         """
         super().__init__()
         self.aggressive = aggressive
@@ -69,10 +80,14 @@ class Canonicalizer(ast.NodeTransformer):
             return node
 
         try:
-            # Check if all keys are constant strings
-            if all(isinstance(k, ast.Constant) and isinstance(k.value, str) for k in node.keys if k is not None):
+            # Sort only when every key is a constant string (a ``None`` key is a
+            # ``**`` spread whose position decides which value wins) and every
+            # value is side-effect free (values are evaluated left to right).
+            if all(isinstance(k, ast.Constant) and isinstance(k.value, str) for k in node.keys) and all(
+                _is_side_effect_free(v) for v in node.values
+            ):
                 items = list(zip(node.keys, node.values))
-                items.sort(key=lambda kv: kv[0].value if kv[0] else "")
+                items.sort(key=lambda kv: kv[0].value)
 
                 node.keys = [k for k, _ in items]
                 node.values = [v for _, v in items]
@@ -159,8 +174,10 @@ class Canonicalizer(ast.NodeTransformer):
         """Normalize function calls by sorting keyword arguments."""
         self.generic_visit(node)
 
-        # Sort keyword arguments alphabetically
-        if node.keywords:
+        # Sort keyword arguments alphabetically, but only when every keyword
+        # value (including ``**`` spreads) is side-effect free: argument
+        # expressions are evaluated in source order.
+        if node.keywords and all(_is_side_effect_free(kw.value) for kw in node.keywords):
             try:
                 # Separate **kwargs (arg=None) from regular kwargs
                 regular_kwargs = [kw for kw in node.keywords if kw.arg is not None]
@@ -212,8 +229,10 @@ class Canonicalizer(ast.NodeTransformer):
         """Normalize comparison expressions."""
         self.generic_visit(node)
 
-        # Normalize `x == None` to `x is None` (PEP 8)
-        if len(node.ops) == 1 and len(node.comparators) == 1:
+        # Normalize `x == None` to `x is None` (PEP 8). Aggressive mode only:
+        # objects that overload ``__eq__`` (SQLAlchemy columns, numpy arrays)
+        # return a different value for ``==`` than ``is``.
+        if self.aggressive and len(node.ops) == 1 and len(node.comparators) == 1:
             op = node.ops[0]
             comp = node.comparators[0]
 
