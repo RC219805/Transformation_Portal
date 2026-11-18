@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, HTTPException, Query
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
     FASTAPI_AVAILABLE = True
@@ -26,6 +26,9 @@ except ImportError:
     FASTAPI_AVAILABLE = False
     APIRouter = None
 
+
+# Upper bound for thumbnail size and text preview length.
+_MAX_PREVIEW_UNITS = 65536
 
 # Global CAS reference
 _global_cas: Optional["ArtifactStore"] = None  # type: ignore
@@ -40,6 +43,9 @@ def set_preview_cas(cas: "ArtifactStore") -> None:  # type: ignore
     global _global_cas
     _global_cas = cas
 
+
+# Image modes the PNG encoder can write directly.
+_PNG_MODES = frozenset({"1", "L", "LA", "I", "I;16", "P", "RGB", "RGBA"})
 
 # Extended MIME type mappings
 MIME_EXTENSIONS = {
@@ -203,7 +209,7 @@ def create_preview_router() -> "APIRouter":
         )
 
     @router.get("/artifact/{hash}/thumbnail")
-    async def artifact_thumbnail(hash: str, size: int = 256):
+    async def artifact_thumbnail(hash: str, size: int = Query(default=256, ge=1, le=_MAX_PREVIEW_UNITS)):
         """Generate thumbnail for image artifact.
 
         Args:
@@ -227,11 +233,13 @@ def create_preview_router() -> "APIRouter":
 
             from PIL import Image
 
-            img = Image.open(path)
-            img.thumbnail((size, size))
-
             buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
+            with Image.open(path) as img:
+                img.thumbnail((size, size))
+                # PNG cannot store e.g. CMYK or YCbCr; convert those first.
+                if img.mode not in _PNG_MODES:
+                    img = img.convert("RGBA" if img.mode in ("PA", "RGBa") else "RGB")
+                img.save(buffer, format="PNG")
             buffer.seek(0)
 
             return Response(
@@ -245,7 +253,7 @@ def create_preview_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.get("/artifact/{hash}/text")
-    async def artifact_text(hash: str, max_chars: int = 10000):
+    async def artifact_text(hash: str, max_chars: int = Query(default=10000, ge=1, le=_MAX_PREVIEW_UNITS)):
         """Get text content of artifact.
 
         Args:
@@ -258,8 +266,10 @@ def create_preview_router() -> "APIRouter":
 
         try:
             with path.open("r", encoding="utf-8") as f:
-                content = f.read(max_chars)
-                truncated = len(content) >= max_chars
+                # Read one extra character so an exact-length text is not truncated.
+                content = f.read(max_chars + 1)
+            truncated = len(content) > max_chars
+            content = content[:max_chars]
 
             return JSONResponse(
                 {
