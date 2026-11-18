@@ -3034,6 +3034,74 @@ def compute_execution_evidence_fingerprint(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonicalize_json(body)).hexdigest()
 
 
+_OUTCOME_PROJECTION_BUCKETS = ("produced_artifacts", "omitted_artifacts", "failed_artifacts")
+
+
+class _CarrierOutcomeProjections:
+    """Memoised ``build_manifest_outcome_projection`` results for one evidence payload.
+
+    Validating every carrier used to rebuild a projection per carrier, each
+    walking every outcome row (O(inputs x outcomes)). The execution-scope
+    projection is built once, and outcome rows are bucketed by ``input_id``
+    once so an input-scope projection only walks that input's rows. The
+    projector skips rows of other inputs, so projecting the bucketed view
+    yields exactly the same result; when the buckets cannot be indexed
+    (malformed rows or unhashable ids) the full payload is projected so the
+    same errors surface.
+    """
+
+    def __init__(self, payload: Mapping[str, Any], *, evidence_path: str) -> None:
+        self._payload = payload
+        self._evidence_path = evidence_path
+        self._projections: dict[Optional[str], dict[str, Any]] = {}
+        self._rows_by_input: Optional[dict[Any, dict[str, list[Any]]]] = None
+        self._indexed = False
+
+    def _index_rows_by_input(self) -> Optional[dict[Any, dict[str, list[Any]]]]:
+        rows_by_input: dict[Any, dict[str, list[Any]]] = {}
+        for field_name in _OUTCOME_PROJECTION_BUCKETS:
+            raw_bucket = self._payload.get(field_name)
+            if not isinstance(raw_bucket, list) or not all(isinstance(item, Mapping) for item in raw_bucket):
+                return None
+            for raw_item in raw_bucket:
+                try:
+                    buckets = rows_by_input.setdefault(raw_item.get("input_id"), {})
+                except TypeError:
+                    return None
+                buckets.setdefault(field_name, []).append(raw_item)
+        return rows_by_input
+
+    def _input_view(self, input_id: str) -> Mapping[str, Any]:
+        if not self._indexed:
+            self._rows_by_input = self._index_rows_by_input()
+            self._indexed = True
+        if self._rows_by_input is None:
+            return self._payload
+        try:
+            buckets = self._rows_by_input.get(input_id, {})
+        except TypeError:
+            return self._payload
+        view = dict(self._payload)
+        for field_name in _OUTCOME_PROJECTION_BUCKETS:
+            view[field_name] = buckets.get(field_name, [])
+        return view
+
+    def __call__(self, input_id: Optional[str]) -> dict[str, Any]:
+        try:
+            cached = self._projections.get(input_id)
+        except TypeError:
+            cached = None
+        if cached is not None:
+            return cached
+        source = self._payload if input_id is None else self._input_view(input_id)
+        projection = build_manifest_outcome_projection(source, evidence_path=self._evidence_path, input_id=input_id)
+        try:
+            self._projections[input_id] = projection
+        except TypeError:
+            pass
+        return projection
+
+
 def _validate_carrier_outcome_projections(
     payload: Mapping[str, Any],
     *,
@@ -3045,14 +3113,11 @@ def _validate_carrier_outcome_projections(
     carriers = context.carrier_outcome_projections
     if not require_all:
         return
+    expected_projection = _CarrierOutcomeProjections(payload, evidence_path=context.projector.evidence_path)
     for artifact_kind, input_id, projection in carriers:
         if not projection:
             raise _invalid_manifest_binding(f"{artifact_kind} is missing its execution outcome projection")
-        expected = build_manifest_outcome_projection(
-            payload,
-            evidence_path=context.projector.evidence_path,
-            input_id=input_id if artifact_kind == "combined_manifest_json" else None,
-        )
+        expected = expected_projection(input_id if artifact_kind == "combined_manifest_json" else None)
         if projection != expected:
             raise _invalid_manifest_binding(f"{artifact_kind} execution outcome projection does not match detached evidence")
 

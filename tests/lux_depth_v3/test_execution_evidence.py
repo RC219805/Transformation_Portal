@@ -5806,3 +5806,95 @@ def test_prepared_run_card_reemission_hashes_each_settled_artifact_once(
     evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
     verified = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
     require_required_artifacts(verified)
+
+
+class _IterationCountingList(list):
+    """A list that counts how often its rows are walked."""
+
+    iterations = 0
+
+    def __iter__(self):
+        type(self).iterations += 1
+        return super().__iter__()
+
+
+def _many_input_outcome_payload(input_count: int) -> dict[str, Any]:
+    kinds = ("depth_u16_png", "depth_metadata_json", "combined_manifest_json")
+    requested = [
+        {
+            "declaration_id": f"lux.test.output.{kind}",
+            "stage_registry_id": "lux.test.stage",
+            "artifact_kind": kind,
+            "scope": "per_input",
+            "cardinality": "one",
+            "required": True,
+        }
+        for kind in kinds
+    ]
+    produced: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for index in range(input_count):
+        input_id = f"input-{index + 1:06d}"
+        for declaration in requested:
+            row = {**declaration, "input_id": input_id}
+            if index % 7 == 3 and declaration["artifact_kind"] == "depth_metadata_json":
+                omitted.append({**row, "reason_code": "not_requested_for_input"})
+            elif index % 11 == 5 and declaration["artifact_kind"] == "depth_u16_png":
+                failed.append({**row, "reason_code": "stage_failed"})
+            else:
+                produced.append({**row, "artifacts": [{"path": f"depth/{input_id}_{declaration['artifact_kind']}"}]})
+    return {
+        "schema": EXECUTION_EVIDENCE_SCHEMA,
+        "requested_artifacts": requested,
+        "produced_artifacts": produced,
+        "omitted_artifacts": omitted,
+        "failed_artifacts": failed,
+    }
+
+
+@pytest.mark.regression
+def test_carrier_outcome_projection_validation_walks_outcome_rows_a_bounded_number_of_times() -> None:
+    """Validating N combined-manifest carriers must not rebuild a full projection per carrier (F-11)."""
+    import copy
+    from types import SimpleNamespace
+
+    from transformation_portal.lux_depth_v3 import execution_evidence as evidence_module
+
+    evidence_path = "manifests/execution_evidence.json"
+    input_count = 60
+    reference = _many_input_outcome_payload(input_count)
+    input_ids = [f"input-{index + 1:06d}" for index in range(input_count)]
+    carriers: list[tuple[str, Any, Any]] = [
+        (
+            "combined_manifest_json",
+            input_id,
+            build_manifest_outcome_projection(reference, evidence_path=evidence_path, input_id=input_id),
+        )
+        for input_id in input_ids
+    ]
+    execution_projection = build_manifest_outcome_projection(reference, evidence_path=evidence_path)
+    carriers.append(("batch_manifest_json", None, execution_projection))
+    carriers.append(("run_card_json", None, execution_projection))
+    assert any(projection["omitted_artifacts"] for _, _, projection in carriers[:input_count])
+    assert any(projection["failed_artifacts"] for _, _, projection in carriers[:input_count])
+
+    counted = dict(reference)
+    for field_name in ("produced_artifacts", "omitted_artifacts", "failed_artifacts"):
+        counted[field_name] = _IterationCountingList(reference[field_name])
+    context = SimpleNamespace(
+        carrier_outcome_projections=carriers,
+        projector=SimpleNamespace(evidence_path=evidence_path),
+    )
+    _IterationCountingList.iterations = 0
+
+    evidence_module._validate_carrier_outcome_projections(counted, context=context, require_all=True)
+
+    # One execution-scope projection plus one indexing pass, independent of the input count.
+    assert _IterationCountingList.iterations <= 12
+
+    tampered_projection = copy.deepcopy(carriers[17][2])
+    tampered_projection["produced_artifacts"][0]["artifact_count"] = 2
+    carriers[17] = (carriers[17][0], carriers[17][1], tampered_projection)
+    with pytest.raises(ArtifactEvidenceError, match="execution outcome projection does not match"):
+        evidence_module._validate_carrier_outcome_projections(counted, context=context, require_all=True)
