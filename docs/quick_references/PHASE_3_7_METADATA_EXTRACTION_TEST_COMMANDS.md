@@ -296,6 +296,12 @@ python tools/regulatory_export.py \
     --verify-governance-export /tmp/governance_export.json
 ```
 
+Verification fails (exit 31) unless the export file is byte-identical to the canonical
+export regenerated from the supplied bundle manifest and governance records, so
+`verification_commands`, `verification_expected_exit_codes` and the serialization are
+bound too. Pass `--governance-profile-id <ID>` during verification to also require the
+exported `governance_profile_id` to equal `<ID>`.
+
 ## See Also
 
 - [Ingest Contract v1.0.0](../apex/ingest_contract.md) - Full contract documentation

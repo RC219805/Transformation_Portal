@@ -1338,8 +1338,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--governance-profile-id",
-        default=DEFAULT_GOVERNANCE_PROFILE_ID,
-        help=f"Governance profile identifier (default: {DEFAULT_GOVERNANCE_PROFILE_ID})",
+        default=None,
+        help=(
+            f"Governance profile identifier (default: {DEFAULT_GOVERNANCE_PROFILE_ID}); "
+            "with --verify-governance-export, the exported profile id must match it when given"
+        ),
     )
     parser.add_argument(
         "--top-n",
@@ -1419,7 +1422,11 @@ def _run_governance_export_verification(args: argparse.Namespace) -> int:
         )
         if governance_export_payload["governance_export_mode_version"] != GOVERNANCE_EXPORT_MODE_VERSION:
             raise ValueError("governance-export.governance_export_mode_version must be " f"{GOVERNANCE_EXPORT_MODE_VERSION!r}")
-        _require_string(governance_export_payload, "governance_profile_id", "governance-export")
+        exported_profile_id = _require_string(governance_export_payload, "governance_profile_id", "governance-export")
+        if not exported_profile_id.strip() or exported_profile_id != exported_profile_id.strip():
+            raise ValueError("governance-export.governance_profile_id must be a non-empty, trimmed string")
+        if args.governance_profile_id is not None and exported_profile_id != args.governance_profile_id.strip():
+            raise ValueError("governance-export.governance_profile_id does not match --governance-profile-id")
 
         bundle_binding = _require_object(governance_export_payload, "bundle_binding", "governance-export")
         _validate_exact_fields(
@@ -1521,6 +1528,8 @@ def _run_governance_export_verification(args: argparse.Namespace) -> int:
         if not has_admt_payload and args.admt_governance is not None:
             raise ValueError("--admt-governance was provided but governance export does not include admt_governance")
 
+        admt_governance: dict[str, object] | None = None
+        admt_governance_path: Path | None = None
         if args.admt_governance is not None:
             admt_governance_path = Path(args.admt_governance)
             admt_governance = validate_admt_governance(_load_json_object(admt_governance_path, context="admt-governance"))
@@ -1539,6 +1548,25 @@ def _run_governance_export_verification(args: argparse.Namespace) -> int:
             raise ValueError(
                 "governance-export.governance_artifact_digests.admt_governance_sha256 "
                 "is present but admt_governance payload is absent"
+            )
+
+        # Every field (including verification_commands and verification_expected_exit_codes) and the
+        # contract-frozen serialization are bound: the export must be byte-identical to the canonical
+        # export regenerated from the verified inputs.
+        expected_payload = build_governance_export_payload(
+            manifest=manifest,
+            manifest_path=manifest_path,
+            governance_profile_id=exported_profile_id,
+            risk_assessment_report=risk_assessment_report,
+            risk_assessment_report_path=risk_assessment_report_path,
+            cybersecurity_audit_record=cybersecurity_audit_record,
+            cybersecurity_audit_record_path=cybersecurity_audit_record_path,
+            admt_governance=admt_governance,
+            admt_governance_path=admt_governance_path,
+        )
+        if governance_export_path.read_bytes() != _canonical_json_bytes(expected_payload):
+            raise ValueError(
+                "governance-export is not byte-identical to the canonical export regenerated from the verified inputs"
             )
 
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
@@ -1637,7 +1665,9 @@ def _run_export_generation(args: argparse.Namespace) -> int:
             governance_payload = build_governance_export_payload(
                 manifest=manifest,
                 manifest_path=manifest_path,
-                governance_profile_id=args.governance_profile_id.strip(),
+                governance_profile_id=(
+                    args.governance_profile_id if args.governance_profile_id is not None else DEFAULT_GOVERNANCE_PROFILE_ID
+                ).strip(),
                 risk_assessment_report=risk_assessment_report,
                 risk_assessment_report_path=risk_assessment_report_path,
                 cybersecurity_audit_record=cybersecurity_audit_record,
