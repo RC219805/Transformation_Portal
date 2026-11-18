@@ -143,7 +143,9 @@ def optimize_multi_agent(
         iterations,
     )
 
+    completed = 0  # steps actually taken; stays 0 when iterations <= 0
     for t in range(iterations):
+        completed = t + 1
         joint_actions: list[NodeAction] = []
 
         # Each agent selects action
@@ -229,7 +231,7 @@ def optimize_multi_agent(
     return MAOptimizationResult(
         best_pipeline=best_pipeline,
         best_score=best_score,
-        iterations=t + 1,
+        iterations=completed,
         total_reward=total_reward,
         score_history=score_history,
         loss_history=loss_history,
@@ -289,7 +291,9 @@ def optimize_with_central_critic(
     # on everything it collected by its last iteration instead of never training.
     train_threshold = max(1, min(batch_size, iterations))
 
+    completed = 0  # steps actually taken; stays 0 when iterations <= 0
     for t in range(iterations):
+        completed = t + 1
         joint_actions: list[NodeAction] = []
         actions_dict: dict[str, int] = {}
 
@@ -343,7 +347,7 @@ def optimize_with_central_critic(
     return MAOptimizationResult(
         best_pipeline=best_pipeline,
         best_score=best_score,
-        iterations=t + 1,
+        iterations=completed,
         total_reward=total_reward,
         score_history=score_history,
         loss_history=loss_history,

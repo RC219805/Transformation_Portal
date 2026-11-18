@@ -372,3 +372,49 @@ class TestWorldModelInferenceAndCheckpoints:
         loaded = PolicyValueNet.load(str(path))
 
         assert (loaded.hidden_dim, loaded.num_layers) == (256, 2)
+
+
+@pytest.mark.ml
+class TestZeroIterationRuns:
+    """R3: a run with no iterations returns an empty result instead of crashing."""
+
+    def test_train_rl_with_zero_iterations_returns_initial_state(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.action_space import enumerate_actions
+        from transformation_portal.rl.env import MockPipelineEnv
+        from transformation_portal.rl.model import create_model
+        from transformation_portal.rl.optimize_rl import RLOptimizationConfig, train_rl
+        from transformation_portal.rl.state_encoder import get_state_dim
+        from transformation_portal.rl.trainer import RLTrainer
+
+        actions = enumerate_actions()
+        pipeline = {"nodes": [{"id": "sam2", "config": {}}]}
+        env = MockPipelineEnv(actions)
+        trainer = RLTrainer(create_model(get_state_dim(), len(actions)), actions)
+
+        result = train_rl(env, trainer, pipeline, RLOptimizationConfig(max_iterations=0, save_model=False))
+
+        assert result.iterations == 0
+        assert result.best_pipeline == pipeline
+        assert result.score_history == [result.best_score]
+        assert result.loss_history == []
+        assert result.total_reward == 0.0
+
+    @pytest.mark.parametrize("entry_point", ["optimize_multi_agent", "optimize_with_central_critic"])
+    def test_multi_agent_runs_with_zero_iterations_return_initial_state(self, entry_point):
+        pytest.importorskip("torch")
+        from transformation_portal.rl import ma_optimize
+        from transformation_portal.rl.ma_action_space import DEFAULT_AGENT_NODES
+        from transformation_portal.rl.ma_env import MockMultiAgentEnv
+
+        pipeline = {"nodes": [{"id": n, "config": {}} for n in DEFAULT_AGENT_NODES]}
+        env = MockMultiAgentEnv(DEFAULT_AGENT_NODES)
+        if entry_point == "optimize_multi_agent":
+            result = ma_optimize.optimize_multi_agent(env, ma_optimize.create_agents(), pipeline, iterations=0)
+        else:
+            result = ma_optimize.optimize_with_central_critic(env, pipeline, iterations=0)
+
+        assert result.iterations == 0
+        assert result.best_pipeline == pipeline
+        assert result.score_history == [result.best_score]
+        assert result.loss_history == []

@@ -94,7 +94,9 @@ def train_rl(
 
     logger.info("Starting RL optimization: %d iterations", config.max_iterations)
 
+    completed = 0  # steps actually taken; stays 0 when max_iterations <= 0
     for step in range(config.max_iterations):
+        completed = step + 1
         # Select action
         action_idx, log_prob, value = trainer.select_action(state)
 
@@ -156,7 +158,7 @@ def train_rl(
     return RLOptimizationResult(
         best_pipeline=best_pipeline,
         best_score=best_score,
-        iterations=step + 1,
+        iterations=completed,
         total_reward=total_reward,
         score_history=score_history,
         loss_history=loss_history,
