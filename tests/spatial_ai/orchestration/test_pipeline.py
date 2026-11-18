@@ -521,6 +521,44 @@ class TestSpatialAIPipelinePresetLoading:
         assert config.ingest == {"strict_ingest": True, "emit_exr": True}
         assert config.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
 
+    def test_dict_to_config_treats_empty_yaml_sections_as_defaults(self):
+        """Empty YAML stage sections (parsed as None) enable the stage with defaults (P-2)."""
+        data = yaml.safe_load("tier: apex_research\npipeline:\n  ingest:\n  segment:\n  materials:\n  reconstruct:\n")
+        assert data["pipeline"] == {"ingest": None, "segment": None, "materials": None, "reconstruct": None}
+
+        config = SpatialAIPipeline._dict_to_config(data)
+
+        assert config.stages == ["ingest", "segmentation", "materials", "reconstruction"]
+        assert config.ingest == {}
+        assert config.segmentation == {"cache_policy": "read_write"}
+        assert isinstance(config.materials, dict)
+        assert isinstance(config.reconstruction, dict)
+
+    def test_dict_to_config_accepts_empty_pipeline_section(self):
+        """An empty 'pipeline:' section parses as None and means no stages (P-2)."""
+        config = SpatialAIPipeline._dict_to_config({"tier": "standard", "pipeline": None})
+
+        assert config.stages == []
+        assert config.ingest == {}
+
+    @pytest.mark.parametrize("section", ["ingest", "segment", "materials", "reconstruction"])
+    def test_dict_to_config_rejects_non_mapping_sections(self, section):
+        """A stage section that is not a mapping fails with a clear configuration error (P-2)."""
+        with pytest.raises(ValueError, match="must be a mapping"):
+            SpatialAIPipeline._dict_to_config({"tier": "standard", "pipeline": {section: ["oops"]}})
+
+    def test_process_runs_ingest_with_empty_yaml_section(self, tmp_path):
+        """A pipeline built from 'ingest:' (None) runs ingest instead of crashing (P-2)."""
+        tifffile = pytest.importorskip("tifffile")
+        tif = tmp_path / "in.tif"
+        tifffile.imwrite(tif, (np.random.default_rng(0).random((8, 8, 3)) * 65535).astype(np.uint16))
+
+        pipeline = SpatialAIPipeline({"tier": "standard", "pipeline": {"ingest": None}})
+        result = pipeline.process(tif, tmp_path / "out", save_intermediates=False)
+
+        assert result.stages_completed == ["ingest"]
+        assert result.linear_image is not None
+
 
 class TestSpatialAIPipelineIngestStage:
     """Test ingest stage execution."""

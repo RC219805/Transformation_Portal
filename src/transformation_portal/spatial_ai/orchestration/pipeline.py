@@ -1345,8 +1345,18 @@ class SpatialAIPipeline:
         Returns:
             PipelineConfig.
         """
+
+        def _section(value: Any, name: str) -> Dict[str, Any]:
+            # An empty YAML section ("ingest:") parses as None: treat it as "use
+            # defaults"; anything that is not a mapping is a configuration error.
+            if value is None:
+                return {}
+            if not isinstance(value, dict):
+                raise ValueError(f"Pipeline config section '{name}' must be a mapping, got {type(value).__name__}")
+            return dict(value)
+
         # Extract pipeline section
-        pipeline_data = data.get("pipeline", {})
+        pipeline_data = _section(data.get("pipeline"), "pipeline")
 
         # Parse resource limits if provided
         resource_limits = None
@@ -1378,9 +1388,11 @@ class SpatialAIPipeline:
                 logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
 
         # Normalize stage aliases while preserving backward compatibility.
-        segmentation_data = pipeline_data.get("segmentation") or pipeline_data.get("segment", {})
-        reconstruction_data = pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct", {})
-        materials_data = dict(pipeline_data.get("materials", {}))
+        segmentation_data = _section(pipeline_data.get("segmentation") or pipeline_data.get("segment"), "segmentation")
+        reconstruction_data = _section(
+            pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct"), "reconstruction"
+        )
+        materials_data = _section(pipeline_data.get("materials"), "materials")
         materials_data.update(_extract_materials_governance_overrides(data))
         stages = list(pipeline_data.keys())
         stage_aliases = {"segment": "segmentation", "reconstruct": "reconstruction"}
@@ -1393,7 +1405,7 @@ class SpatialAIPipeline:
         config = PipelineConfig(
             tier=data.get("tier", "standard"),
             stages=stages,
-            ingest=pipeline_data.get("ingest", {}),
+            ingest=_section(pipeline_data.get("ingest"), "ingest"),
             segmentation=segmentation_data,
             materials=materials_data,
             reconstruction=reconstruction_data,
