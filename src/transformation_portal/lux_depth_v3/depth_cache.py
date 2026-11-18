@@ -355,6 +355,11 @@ class DepthCache:
         self.max_size_gb = max_size_gb
         self._fenced_shards_lock = threading.Lock()
         self._fenced_shards: set[tuple[Path, str, int, int]] = set()
+        # CAS objects this instance fully verified during its latest scan.
+        # Only a quota-pressure scan consults it, and only for an object that
+        # still has the exact inode state that was verified; it is read and
+        # replaced under the cache-wide lock.
+        self._verified_objects: dict[Path, _VerifiedObject] = {}
         self._configured_max_size_bytes = self._max_size_bytes
         # Missing or prepared quota state is reconciled under the cache-wide
         # descriptor lock. A clean state is the durable fast path, so opening
@@ -1987,7 +1992,19 @@ class DepthCache:
                         force_scan = True
                         existing_record = None
                 if force_scan or periodic_audit or pressure_audit:
-                    snapshot = self._scan_cache_locked()
+                    if force_scan or periodic_audit:
+                        snapshot = self._scan_cache_locked()
+                    else:
+                        # A full cache needs an eviction plan on every store,
+                        # but not a fresh hash of every object this instance
+                        # already verified. The object this store publishes
+                        # against is always verified again, and so is any
+                        # object whose inode state changed since.
+                        snapshot = self._scan_cache_locked(
+                            reuse_verified_objects={
+                                path: record for path, record in self._verified_objects.items() if path != object_path
+                            }
+                        )
                     cleanup_paths = {(item.root, item.path) for item in snapshot.cleanup}
                     candidate_record = snapshot.objects.get(object_path)
                     if candidate_record is not None and (self._objects_dir, object_path) not in cleanup_paths:
@@ -2053,8 +2070,48 @@ class DepthCache:
     def _object_paths(self) -> list[Path]:
         return self._namespace_paths(self._objects_dir, ".npy")
 
-    def _scan_cache_locked(self) -> _CacheSnapshot:
-        """Inspect the namespace without deleting membership entries."""
+    @staticmethod
+    def _object_stat_matches_record(current_stat: os.stat_result, record: _VerifiedObject) -> bool:
+        """Return whether an object still has the exact inode state that was verified."""
+
+        return (
+            os.path.samestat(current_stat, record.file_stat)
+            and current_stat.st_nlink == 1
+            and current_stat.st_size == record.file_stat.st_size
+            and current_stat.st_mtime_ns == record.file_stat.st_mtime_ns
+            and current_stat.st_ctime_ns == record.file_stat.st_ctime_ns
+        )
+
+    def _reusable_verified_object(
+        self,
+        object_path: Path,
+        reuse_verified_objects: Mapping[Path, _VerifiedObject],
+    ) -> Optional[_VerifiedObject]:
+        """Return an earlier verification of ``object_path`` if nothing touched it since."""
+
+        record = reuse_verified_objects.get(object_path)
+        if record is None or record.path != object_path:
+            return None
+        try:
+            current_stat = self._stat_namespace(object_path, self._objects_dir)
+        except (OSError, ValueError):
+            # Let the full inspection report why the object is unusable.
+            return None
+        return record if self._object_stat_matches_record(current_stat, record) else None
+
+    def _scan_cache_locked(
+        self,
+        *,
+        reuse_verified_objects: Optional[Mapping[Path, _VerifiedObject]] = None,
+    ) -> _CacheSnapshot:
+        """Inspect the namespace without deleting membership entries.
+
+        Every referenced object is fully verified unless ``reuse_verified_objects``
+        holds a record of this instance's earlier verification and the object
+        is still the same unmodified inode (identity, link count, size, mtime
+        and ctime). Recovery, the periodic audit, ``stats`` and ``clear`` never
+        pass it; reads through ``get`` always verify the bytes they return.
+        """
 
         entries: list[_CacheEntry] = []
         cleanup: list[_Removal] = []
@@ -2073,21 +2130,18 @@ class DepthCache:
                     raise ValueError("cache object failed a prior physical validation")
                 record = validated_objects.get(object_path)
                 if record is None:
-                    try:
-                        _, record = self._inspect_verified_object(object_path)
-                    except (OSError, ValueError, TypeError):
-                        failed_objects.add(object_path)
-                        raise
+                    if reuse_verified_objects is not None:
+                        record = self._reusable_verified_object(object_path, reuse_verified_objects)
+                    if record is None:
+                        try:
+                            _, record = self._inspect_verified_object(object_path)
+                        except (OSError, ValueError, TypeError):
+                            failed_objects.add(object_path)
+                            raise
                     validated_objects[object_path] = record
                 else:
                     current_stat = self._stat_namespace(object_path, self._objects_dir)
-                    if (
-                        not os.path.samestat(current_stat, record.file_stat)
-                        or current_stat.st_nlink != 1
-                        or current_stat.st_size != record.file_stat.st_size
-                        or current_stat.st_mtime_ns != record.file_stat.st_mtime_ns
-                        or current_stat.st_ctime_ns != record.file_stat.st_ctime_ns
-                    ):
+                    if not self._object_stat_matches_record(current_stat, record):
                         raise ValueError("shared cache object changed during housekeeping")
                 self._assert_pointer_matches_object(pointer, record)
                 self._set_namespace_access_time(pointer_path, self._entries_dir, pointer_stat.st_atime_ns)
@@ -2124,11 +2178,13 @@ class DepthCache:
             removal_stat = self._stat_root_namespace(removal_path, self.cache_dir)
             if self._removal_name_matches_stat(removal_path.name, removal_stat):
                 cleanup.append(_Removal(removal_path, self.cache_dir, removal_stat))
+        physical_size_bytes = self._physical_size_bytes()
+        self._verified_objects = dict(validated_objects)
         return _CacheSnapshot(
             entries=tuple(entries),
             objects=validated_objects,
             cleanup=tuple(cleanup),
-            physical_size_bytes=self._physical_size_bytes(),
+            physical_size_bytes=physical_size_bytes,
         )
 
     def _snapshot_for_pointer_change(
