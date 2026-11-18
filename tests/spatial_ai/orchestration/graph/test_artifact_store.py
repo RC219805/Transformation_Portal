@@ -333,6 +333,77 @@ class TestArtifactStore:
 
         assert store.get_cache_size_mb() == 0.0
 
+    @staticmethod
+    def _size_provenance(cache_key: str) -> ProvenanceMetadata:
+        return ProvenanceMetadata(
+            cache_key=cache_key,
+            stage_id="test",
+            stage_version="1.0.0",
+            input_fingerprints={},
+            config_snapshot={},
+            timestamp="2026-02-12T10:00:00Z",
+            hostname="testhost",
+            python_version="3.11",
+            numpy_version="1.26.0",
+            device="cpu",
+        )
+
+    def test_store_does_not_walk_whole_cache_on_every_store(self, monkeypatch: pytest.MonkeyPatch, store: ArtifactStore):
+        """The advisory size check must not make every store O(cache entries) (G-4)."""
+        walks = []
+        original_rglob = Path.rglob
+
+        def counting_rglob(self: Path, pattern: str, *args: Any, **kwargs: Any) -> Any:
+            if self == store.artifacts_dir:
+                walks.append(pattern)
+            return original_rglob(self, pattern, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "rglob", counting_rglob)
+
+        for i in range(64):
+            key = _make_cache_key(f"walk_count_{i}")
+            store.store(key, {"a": np.full(8, i, dtype=np.int64)}, self._size_provenance(key))
+
+        assert len(walks) <= 8, f"{len(walks)} full cache walks for 64 stores"
+
+    def test_size_warning_matches_full_walk_across_stores_and_evictions(
+        self, caplog: pytest.LogCaptureFixture, cache_dir: Path, tmp_path: Path
+    ):
+        """Amortized size accounting warns on exactly the stores a full walk would (G-4)."""
+
+        def payload(i: int) -> Dict[str, Any]:
+            return {"a": np.random.default_rng(i).random(256 * (1 + i % 3))}
+
+        reference = ArtifactStore(cache_dir=tmp_path / "reference", max_size_gb=1.0)
+        sizes = []
+        for i in range(10):
+            key = _make_cache_key(f"size_warn_{i}")
+            reference.store(key, payload(i), self._size_provenance(key))
+            sizes.append(reference.get_cache_size_mb())
+        limit_mb = sizes[5]
+
+        store = ArtifactStore(cache_dir=cache_dir, max_size_gb=limit_mb / 1024)
+        logger_name = artifact_store_module.logger.name
+        expected, actual = [], []
+
+        def store_one(i: int) -> None:
+            key = _make_cache_key(f"size_warn_{i}")
+            caplog.clear()
+            with caplog.at_level("WARNING", logger=logger_name):
+                store.store(key, payload(i), self._size_provenance(key))
+            actual.append(any("exceeds limit" in record.getMessage() for record in caplog.records))
+            expected.append(store.get_cache_size_mb() > limit_mb)
+
+        for i in range(10):
+            store_one(i)
+        for i in (9, 8, 7, 6):
+            store.evict(_make_cache_key(f"size_warn_{i}"))
+        for i in (10, 11, 6, 12, 13):
+            store_one(i)
+
+        assert actual == expected
+        assert any(expected) and not all(expected)
+
     def test_two_level_directory_hierarchy(self, store: ArtifactStore, cache_dir: Path):
         """Test artifacts are stored in two-level directory hierarchy."""
         # Generate a key that starts with "ab" for testing directory structure

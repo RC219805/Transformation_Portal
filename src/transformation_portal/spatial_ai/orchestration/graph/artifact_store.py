@@ -90,6 +90,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -377,6 +378,15 @@ class ArtifactStore:
         self.eviction_policy = eviction_policy
         self.lock_timeout_seconds = lock_timeout_seconds
         self.durable_commits = durable_commits
+
+        # Size accounting for the advisory limit check: a full walk of artifacts/
+        # is taken lazily and then only after as many stores as there were files
+        # in the last walk (amortized O(1) per store); in between, the walk total
+        # is adjusted by the bytes this instance stored or evicted.
+        self._size_lock = threading.Lock()
+        self._size_estimate_bytes: Optional[int] = None
+        self._files_at_last_scan = 0
+        self._stores_since_scan = 0
 
         # Cache statistics
         self.stats_path = self.cache_dir / "stats.json"
@@ -768,6 +778,9 @@ class ArtifactStore:
                     logger.warning(f"Corrupted entry detected (marker without files): {cache_key}")
                     committed_path.unlink(missing_ok=True)
 
+            # Bytes of uncommitted remnants this write replaces (size accounting).
+            replaced_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
+
             # Create directory
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -893,6 +906,7 @@ class ArtifactStore:
                 # Best-effort cleanup of renamed-but-uncommitted files
                 artifact_path.unlink(missing_ok=True)
                 provenance_path.unlink(missing_ok=True)
+                self._invalidate_size_estimate()
 
                 raise ValueError(f"Failed to store artifact: {cache_key}") from e
 
@@ -904,9 +918,10 @@ class ArtifactStore:
                 logger.warning(f"Failed to update cache miss stats for {cache_key}: {e}")
 
             logger.debug(f"Stored artifact: {cache_key}")
+            stored_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path) - replaced_bytes
 
-            # Check cache size (warn if over limit)
-            self._check_cache_size()
+        # Check cache size (warn if over limit) after releasing the per-key lock.
+        self._check_cache_size(stored_bytes)
 
     def load_provenance(self, cache_key: str) -> ProvenanceMetadata:
         """Load provenance metadata for artifact with shared lock.
@@ -970,6 +985,7 @@ class ArtifactStore:
             artifact_path = self._artifact_path(cache_key)
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
+            removed_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
 
             # Remove marker first (ensures readers see entry as uncommitted)
             if committed_path.exists():
@@ -978,6 +994,10 @@ class ArtifactStore:
                 artifact_path.unlink()
             if provenance_path.exists():
                 provenance_path.unlink()
+
+            with self._size_lock:
+                if self._size_estimate_bytes is not None:
+                    self._size_estimate_bytes -= removed_bytes
 
             logger.debug(f"Evicted artifact: {cache_key}")
 
@@ -992,7 +1012,13 @@ class ArtifactStore:
             temp files while this method walks artifacts/, so vanished entries
             are skipped instead of failing an already committed write.
         """
+        total_size, _ = self._scan_cache_size()
+        return total_size / (1024 * 1024)
+
+    def _scan_cache_size(self) -> tuple[int, int]:
+        """Walk artifacts/ and return (total bytes, file count) of non-temp files."""
         total_size = 0
+        file_count = 0
         for path in self.artifacts_dir.rglob("*"):
             try:
                 if not path.is_file():
@@ -1000,9 +1026,10 @@ class ArtifactStore:
                 if _is_artifact_temp_name(path.name):
                     continue
                 total_size += path.stat().st_size
+                file_count += 1
             except OSError:
                 logger.debug("Skipping concurrently removed cache entry during size accounting: %s", path)
-        return total_size / (1024 * 1024)
+        return total_size, file_count
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics.
@@ -1237,8 +1264,11 @@ class ArtifactStore:
                 logger.debug(f"Scavenger: skipping locked key {cache_key}")
                 continue
 
+        if report["orphaned_artifacts_removed"] or report["orphaned_provenance_removed"]:
+            self._invalidate_size_estimate()
+
         logger.info(
-            f"Scavenger complete: {report['orphaned_artifacts_removed']} orphaned artifacts, "
+            f"Scavenger complete:{report['orphaned_artifacts_removed']} orphaned artifacts, "
             f"{report['orphaned_provenance_removed']} orphaned provenance, "
             f"{report['stale_temp_files_removed']} stale temp files removed"
         )
@@ -1337,14 +1367,46 @@ class ArtifactStore:
             self._stats = current_stats
             self._save_stats_atomic()
 
-    def _check_cache_size(self) -> None:
+    @staticmethod
+    def _entry_bytes(*paths: Path) -> int:
+        """Return the summed size of those of the given cache files that exist."""
+        total = 0
+        for path in paths:
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+        return total
+
+    def _invalidate_size_estimate(self) -> None:
+        """Make the next size check walk artifacts/ again."""
+        with self._size_lock:
+            self._size_estimate_bytes = None
+
+    def _check_cache_size(self, stored_bytes: int = 0) -> None:
         """Check cache size and warn if over limit.
+
+        Args:
+            stored_bytes: Net bytes the calling store() just added to artifacts/.
 
         Design notes:
         - L1: Warns only, no auto-eviction.
         - L2: Implements LRU eviction.
+        - Walking artifacts/ on every store made each store O(cache entries).
+          The size is the last full walk plus the net bytes this instance has
+          stored or evicted since; the walk is repeated once more stores have
+          happened than the last walk counted files, so writes by other
+          processes are picked up at amortized O(1) cost per store. Within one
+          process the size equals a full walk.
         """
-        size_mb = self.get_cache_size_mb()
+        with self._size_lock:
+            self._stores_since_scan += 1
+            if self._size_estimate_bytes is None or self._stores_since_scan > self._files_at_last_scan:
+                self._size_estimate_bytes, self._files_at_last_scan = self._scan_cache_size()
+                self._stores_since_scan = 0
+            else:
+                self._size_estimate_bytes += stored_bytes
+            size_mb = self._size_estimate_bytes / (1024 * 1024)
         limit_mb = self.max_size_gb * 1024
 
         if size_mb > limit_mb:
