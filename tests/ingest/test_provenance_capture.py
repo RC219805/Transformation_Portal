@@ -65,3 +65,39 @@ def test_optional_tool_probes_treat_any_os_error_as_unavailable(monkeypatch, err
     assert "exiftool" not in by_name
     assert "ImageMagick" not in by_name
     assert "python" in by_name
+
+
+@pytest.mark.parametrize(
+    ("lat_ref", "lon_ref", "expected"),
+    [
+        ("South", "West", (-33.8688, -70.6693)),
+        ("S", "W", (-33.8688, -70.6693)),
+        ("North", "East", (33.8688, 70.6693)),
+        (None, None, (33.8688, 70.6693)),
+    ],
+    ids=["south-west-printconv", "south-west-short", "north-east", "no-ref"],
+)
+def test_parse_exif_fields_applies_gps_hemisphere_reference(lat_ref, lon_ref, expected) -> None:
+    """EXIF GPS magnitudes are unsigned; the ``Ref`` tags carry the hemisphere.
+
+    ``exiftool -G -coordFormat %.8f`` emits ``EXIF:GPSLatitude`` as a positive
+    number, so a Sydney / Santiago capture must still come out as signed
+    decimal degrees.
+    """
+    tags = {"EXIF:GPSLatitude": 33.8688, "EXIF:GPSLongitude": 70.6693}
+    if lat_ref is not None:
+        tags["EXIF:GPSLatitudeRef"] = lat_ref
+    if lon_ref is not None:
+        tags["EXIF:GPSLongitudeRef"] = lon_ref
+
+    exif = ingest_provenance._parse_exif_fields(tags)
+
+    assert (exif.gps_latitude, exif.gps_longitude) == expected
+
+
+def test_parse_exif_fields_reads_gps_reference_from_ungrouped_tags() -> None:
+    exif = ingest_provenance._parse_exif_fields(
+        {"GPSLatitude": 12.5, "GPSLatitudeRef": "S", "GPSLongitude": 45.25, "GPSLongitudeRef": "W"}
+    )
+
+    assert (exif.gps_latitude, exif.gps_longitude) == (-12.5, -45.25)
