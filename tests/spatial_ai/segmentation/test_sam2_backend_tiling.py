@@ -1,5 +1,6 @@
 """Tiling routing tests that do not require torch."""
 
+import weakref
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -933,6 +934,45 @@ def test_tiling_retries_with_doubled_overlap_when_seam_validation_fails():
     assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
     assert np.array_equal(result.masks[0], _SEAM_OBJECT)
     assert config.overlap_px == 50
+
+
+def test_tiling_releases_the_rejected_attempt_before_the_retry_segments():
+    """The retry must not run while the rejected attempt's (N, H, W) mask stack is still referenced."""
+
+    class _RecordingMerger(BinaryUnionTileMerger):
+        def __init__(self):
+            self.mask_stacks = []
+
+        def merge(self, **kwargs):
+            merged = super().merge(**kwargs)
+            self.mask_stacks.append(weakref.ref(merged[0]))
+            return merged
+
+    class _RetryObservingBackend(_SeamDisagreementBackend):
+        def __init__(self, merger):
+            super().__init__(agree_from_overlap_px=100)
+            self._merger = merger
+            self.rejected_stack_alive_during_retry = []
+
+        def segment_tile(self, **kwargs):
+            if kwargs["tile_spec"].overlap_px == 100:
+                self.rejected_stack_alive_during_retry.append(self._merger.mask_stacks[0]() is not None)
+            return super().segment_tile(**kwargs)
+
+    merger = _RecordingMerger()
+    backend = _RetryObservingBackend(merger)
+    engine = TiledSegmentationEngine(planner=UniformTilingPlanner(), merger=merger, validator=SeamMergeValidator())
+
+    result = engine.run(
+        backend=backend,
+        seg_input=SegmentationInput(image=np.zeros((_SEAM_HEIGHT, _SEAM_WIDTH, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=_seam_config(),
+    )
+
+    assert len(merger.mask_stacks) == 2
+    assert backend.rejected_stack_alive_during_retry == [False, False]
+    assert np.array_equal(result.masks[0], _SEAM_OBJECT)
 
 
 def test_tiling_fails_closed_when_seam_validation_retries_are_exhausted():

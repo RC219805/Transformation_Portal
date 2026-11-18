@@ -83,6 +83,9 @@ class TiledSegmentationEngine:
                 retry_config.overlap_px,
             )
             attempt_config = retry_config
+            # Drop the rejected attempt before the next one is built: its
+            # (N, H, W) mask stack is gigabytes on the frames that are tiled.
+            del manifest, masks, scores, metadata, merge_stats
 
         return SegmentationResult(
             masks=masks,
