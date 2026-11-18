@@ -384,6 +384,7 @@ def atomic_temp_file(
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    destination_mode: int | None
     try:
         destination_mode = stat.S_IMODE(output_path.stat().st_mode)
     except FileNotFoundError:
