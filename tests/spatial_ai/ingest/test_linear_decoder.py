@@ -14,8 +14,10 @@ Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra)
 from __future__ import annotations
 
 import json
+import struct
 import sys
 import types
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -376,6 +378,101 @@ class TestLinearDecoder:
         # Also test default behavior (strict_ingest not specified)
         result_default = decode(test_img_path, gamma=1.0)
         assert result_default.linear_rgb.dtype == np.float32
+
+
+def _write_png16(path: Path, samples: np.ndarray, color_type: int) -> None:
+    """Write an unfiltered, non-interlaced 16-bit PNG (Pillow cannot write 16-bit RGB).
+
+    ``samples`` is (H, W, C) uint16; ``color_type`` is the IHDR color type
+    (0 gray, 2 RGB, 4 gray+alpha, 6 RGBA).
+    """
+    height, width = samples.shape[:2]
+
+    def chunk(tag: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", zlib.crc32(tag + payload))
+
+    rows = samples.astype(">u2").reshape(height, -1)
+    scanlines = b"".join(b"\x00" + rows[y].tobytes() for y in range(height))
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 16, color_type, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
+
+
+class TestSixteenBitPngDecode:
+    """16-bit PNG must be ingested at its true bit depth, never reduced to 8 bits."""
+
+    HEIGHT = 6
+    WIDTH = 9
+
+    def _samples(self, channels: int) -> np.ndarray:
+        samples = np.random.default_rng(1601).integers(0, 65536, size=(self.HEIGHT, self.WIDTH, channels), dtype=np.uint16)
+        # Neighbours that differ only in the low byte are indistinguishable after an 8-bit decode.
+        samples[0, 0] = 0x1200
+        samples[0, 1] = 0x12FF
+        return samples
+
+    @pytest.mark.parametrize("strict_ingest", [False, True], ids=["non_strict", "strict"])
+    @pytest.mark.parametrize(
+        ("color_type", "channels"),
+        [(0, 1), (2, 3), (4, 2), (6, 4)],
+        ids=["gray", "rgb", "gray_alpha", "rgba"],
+    )
+    def test_16bit_png_is_decoded_at_true_bit_depth(self, tmp_path: Path, color_type: int, channels: int, strict_ingest: bool):
+        """Every 16-bit PNG layout round-trips exactly, in RGB order, with alpha dropped."""
+        samples = self._samples(channels)
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, samples, color_type)
+        rgb = samples[:, :, :3] if channels >= 3 else np.repeat(samples[:, :, :1], 3, axis=2)
+
+        result = decode(png_path, strict_ingest=strict_ingest)
+
+        np.testing.assert_array_equal(result.linear_rgb, rgb.astype(np.float32) / 65535.0)
+        assert result.linear_rgb[0, 0, 0] != result.linear_rgb[0, 1, 0]
+        assert result.input_size == (self.HEIGHT, self.WIDTH)
+        assert result.input_format == "PNG"
+
+    def test_8bit_rgba_png_keeps_pillow_decode(self, tmp_path: Path):
+        """8-bit PNG is not routed to the 16-bit decoder; values stay sample / 255."""
+        samples = np.random.default_rng(801).integers(0, 256, size=(self.HEIGHT, self.WIDTH, 4), dtype=np.uint8)
+        png_path = tmp_path / "shallow.png"
+        Image.fromarray(samples).save(png_path)
+
+        result = decode(png_path)
+
+        np.testing.assert_array_equal(result.linear_rgb, samples[:, :, :3].astype(np.float32) / 255.0)
+
+    def test_16bit_rgb_png_fails_closed_without_opencv(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Without a true-depth decoder the file is rejected, not ingested at 8 bits."""
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        monkeypatch.setitem(sys.modules, "cv2", None)
+
+        with pytest.raises(RuntimeError, match="Refusing to silently reduce it to 8-bit"):
+            decode(png_path)
+
+    def test_16bit_rgb_png_rejects_reduced_decode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """A decoder result that is not uint16 at the declared size is never normalized."""
+        cv2 = pytest.importorskip("cv2")
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        reduced = np.zeros((self.HEIGHT, self.WIDTH, 3), dtype=np.uint8)
+        monkeypatch.setattr(cv2, "imdecode", lambda buffer, flags: reduced)
+
+        with pytest.raises(RuntimeError, match="Refusing to ingest a reduced decode"):
+            decode(png_path)
+
+    def test_16bit_rgb_png_with_truncated_pixel_data_fails_closed(self, tmp_path: Path):
+        """A readable header with incomplete pixel data is an error, not a partial image."""
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        data = png_path.read_bytes()
+        png_path.write_bytes(data[: len(data) // 2])
+
+        with pytest.raises(RuntimeError, match="could not decode 16-bit PNG"):
+            decode(png_path)
 
 
 class TestLinearIngestIntegration:
