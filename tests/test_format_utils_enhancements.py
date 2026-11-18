@@ -466,5 +466,92 @@ class TestIntegration:
         assert stats["success"] >= 1  # At least one should convert
 
 
+# ==============================================================================
+# Regression tests: truncated literals (M-17) and 16-bit depth detection (M-18)
+# ==============================================================================
+
+
+@pytest.mark.regression
+class TestTruncatedLiteralAndBitDepthRegressions:
+    """Pin the '.tiff' / MIME literals and the 16-bit conversion paths."""
+
+    def test_batch_convert_includes_tiff_extension(self, temp_dir):
+        src = temp_dir / "in"
+        src.mkdir()
+        Image.new("RGB", (8, 8), color="red").save(src / "a.tiff")
+        Image.new("RGB", (8, 8), color="red").save(src / "b.tif")
+
+        stats = batch_convert_directory(src, temp_dir / "out", ".png")
+
+        assert stats == {"total": 2, "success": 2, "failed": 0, "skipped": 0}
+        assert (temp_dir / "out" / "a.png").read_bytes()[:4] == b"\x89PNG"
+
+    def test_mime_types_for_tiff_and_gif(self, sample_tiff_8bit, temp_dir):
+        gif = temp_dir / "x.gif"
+        Image.new("L", (4, 4)).save(gif)
+
+        assert get_mime_type(sample_tiff_8bit) == "image/tiff"
+        assert get_mime_type(gif) == "image/gif"
+
+    def test_convert_image_format_compresses_dot_tif(self, sample_jpg, temp_dir):
+        output = temp_dir / "out.tif"
+
+        assert convert_image_format(sample_jpg, output, preserve_metadata=False) is True
+        with Image.open(output) as img:
+            assert img.info.get("compression") == "tiff_lzw"
+
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_smart_convert_16bit_grey_tiff_to_png_writes_png(self, temp_dir):
+        import tifffile
+
+        arr = np.linspace(0, 65535, 64 * 64).reshape(64, 64).astype(np.uint16)
+        tifffile.imwrite(temp_dir / "g16.tif", arr)
+        output = temp_dir / "g16.png"
+
+        assert smart_convert(temp_dir / "g16.tif", output) is True
+        assert output.read_bytes()[:4] == b"\x89PNG"
+        with Image.open(output) as img:
+            np.testing.assert_array_equal(np.array(img), arr)
+
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_smart_convert_16bit_rgb_tiff_to_png_keeps_depth_and_channels(self, temp_dir):
+        cv2 = pytest.importorskip("cv2")
+        import tifffile
+
+        arr = np.random.default_rng(0).integers(0, 65535, (16, 16, 3)).astype(np.uint16)
+        tifffile.imwrite(temp_dir / "rgb16.tif", arr, photometric="rgb")
+        output = temp_dir / "rgb16.png"
+
+        assert smart_convert(temp_dir / "rgb16.tif", output) is True
+        decoded = cv2.imread(str(output), cv2.IMREAD_UNCHANGED)
+        assert decoded.dtype == np.uint16
+        np.testing.assert_array_equal(cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB), arr)
+
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_metadata_reports_16bit_for_rgb_tiff(self, sample_tiff_16bit):
+        assert get_image_metadata(sample_tiff_16bit)["bit_depth"] == 16
+
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_smart_convert_preserves_16bit_rgb_tiff(self, sample_tiff_16bit, temp_dir):
+        import tifffile
+
+        output = temp_dir / "out16.tif"
+
+        assert smart_convert(sample_tiff_16bit, output, preserve_bit_depth=True) is True
+        np.testing.assert_array_equal(tifffile.imread(output), tifffile.imread(sample_tiff_16bit))
+
+    @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
+    def test_save_tiff_16bit_accepts_documented_zip_compression(self, temp_dir):
+        import tifffile
+
+        arr = np.random.default_rng(1).integers(0, 65535, (16, 16, 3)).astype(np.uint16)
+        output = temp_dir / "zip.tif"
+
+        assert save_tiff_16bit(arr, output, compression="zip") is True
+        with tifffile.TiffFile(output) as tif:
+            assert int(tif.pages[0].compression) == 8  # Adobe Deflate
+            np.testing.assert_array_equal(tif.asarray(), arr)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
