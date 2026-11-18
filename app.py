@@ -9555,6 +9555,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
     actor = _portal_actor_from_request(request)
     recovery_context = None
     submission_receipts = False
+    catalogue_thumbnails = False
     if PILOT_CONTROL_PLANE_ENABLED:
         try:
             tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context", materialize=False)
@@ -9571,6 +9572,16 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                         tenant.tenant_id, submission_owner(tenant.tenant_id, verified), "capability-probe"
                     )
                     submission_receipts = True
+                if (
+                    _env_bool("TP_PHOTO_REVIEW_ENABLED", False)
+                    and os.getenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "0").strip() == "1"
+                ):
+                    from transformation_portal.orchestrator.photographic_review_store import get_review_store
+
+                    # Establish the actual projection provider/schema, without
+                    # reading job artifacts or creating a review projection.
+                    await get_review_store().get("thumbnail-capability-probe", tenant.tenant_id)
+                    catalogue_thumbnails = True
         except Exception:  # noqa: BLE001 - preserve bootstrap, fail closed for new capability
             LOGGER.warning("durable recovery bootstrap context unavailable", exc_info=True)
     return JSONResponse(
@@ -9592,6 +9603,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
                 "photographicPagedCatalogue": os.getenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", "0").strip() == "1",
                 "jobSubmissionReceipts": submission_receipts,
+                "photographicCatalogueThumbnails": catalogue_thumbnails,
             },
         },
         headers={"Cache-Control": "no-store"},

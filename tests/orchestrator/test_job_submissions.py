@@ -586,6 +586,62 @@ async def test_bootstrap_exposes_only_verified_composite_context_without_feature
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("admission", "thumbnails", "signed", "expected"),
+    [
+        (False, None, True, False),
+        (True, None, True, False),
+        (False, "1", True, False),
+        (True, "1", False, False),
+        (True, "1", True, True),
+        (True, " 1 ", True, True),
+        (True, "0", True, False),
+        (True, "true", True, False),
+        (True, "yes", True, False),
+        (True, "on", True, False),
+    ],
+)
+async def test_thumbnail_bootstrap_requires_independent_enablement_and_verified_context(
+    receipts, monkeypatch, admission, thumbnails, signed, expected
+):
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1" if admission else "0")
+    if thumbnails is None:
+        monkeypatch.delenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", thumbnails)
+    from transformation_portal.orchestrator import photographic_review_store
+
+    monkeypatch.setattr(photographic_review_store, "get_review_store", photographic_review_store.MemoryReviewStore)
+    path = "/portal/bootstrap"
+    headers = _headers("GET", path) if signed else {"x-api-key": "contract-secret"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["features"]["photographicCatalogueThumbnails"] is expected
+
+
+@pytest.mark.asyncio
+async def test_thumbnail_bootstrap_provider_failure_keeps_capability_false(receipts, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from transformation_portal.orchestrator import photographic_review_store
+
+    monkeypatch.setenv("TP_PHOTO_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "1")
+    monkeypatch.setattr(
+        photographic_review_store,
+        "get_review_store",
+        lambda: type("UnavailableStore", (), {"get": AsyncMock(side_effect=RuntimeError("provider unavailable"))})(),
+    )
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200
+    assert response.json()["features"]["photographicCatalogueThumbnails"] is False
+    assert response.json()["recoveryContext"] is not None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["tenant_storage", "receipt_store"])
 async def test_optional_upload_capability_failure_preserves_signed_bootstrap(receipts, monkeypatch, failure):
     monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
