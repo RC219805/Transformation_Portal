@@ -79,6 +79,149 @@ def _seed(saved, *, key="attempt-1", state="running", retired=False):
     return receipt
 
 
+def _deny_tenant_mkdir(monkeypatch):
+    calls = []
+    original = Path.mkdir
+    roots = (application.PILOT_TENANT_WORKSPACE_ROOT, application.PILOT_TENANT_CAS_ROOT)
+
+    def read_only(path, *args, **kwargs):
+        if any(path.is_relative_to(root) for root in roots):
+            calls.append(path)
+            raise PermissionError("tenant storage is read-only")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", read_only)
+    return calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("operation", ["replay", "lookup"])
+@pytest.mark.parametrize("manager_state", ["cold", "warm_without_tenant"])
+async def test_accepted_receipt_access_never_provisions_tenant_storage(
+    receipts, monkeypatch, version, operation, manager_state
+):
+    _seed(receipts, state="succeeded")
+    if manager_state == "warm_without_tenant":
+        assert application._pilot_tenant_manager().get_tenant("tenant_a") is None
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = f"/{version}/jobs" if operation == "replay" else f"/{version}/job-submissions/attempt-1"
+    method = "POST" if operation == "replay" else "GET"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.request(
+            method,
+            path,
+            headers=_headers(method, path, key="attempt-1" if operation == "replay" else None),
+            **({"json": BODY} if operation == "replay" else {}),
+        )
+    assert response.status_code == 200, response.text
+    result = response.json()["data"]
+    job = result if operation == "replay" else result["job"]
+    assert job == {"id": "job_original", "state": "succeeded", "events_url": f"/{version}/jobs/job_original/events"}
+    assert mkdirs == []
+    if manager_state == "cold":
+        assert application._PILOT_TENANT_MANAGER is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("key", [None, "new-attempt"])
+async def test_new_and_keyless_http_work_still_requires_tenant_provisioning(receipts, monkeypatch, version, key):
+    monkeypatch.setenv("TP_JOB_SUBMISSION_RECOVERY_ENABLED", "1")
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("failed provisioning must not reach path checks or preview")
+
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", forbidden)
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    path = f"/{version}/jobs"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.post(path, json=BODY, headers=_headers("POST", path, key=key))
+    assert response.status_code >= 400
+    assert mkdirs, "New work must still materialize its authorized tenant, even when storage is unavailable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_http_wrapper_without_request_retains_typed_authority_failure(receipts, monkeypatch, version):
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("a wrapper without a signed request must fail before preview")
+
+    monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
+    wrapper = application.create_job_http if version == "v1" else application.create_job_v2_http
+    response = await wrapper(request=None, payload=BODY)
+    assert response.status_code == 401
+    assert json.loads(response.body)["error"]["details"]["reason"] == "authenticated_actor_required"
+    assert mkdirs == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["replay", "lookup"])
+@pytest.mark.parametrize("policy_source", ["configured", "cached"])
+async def test_read_only_receipts_still_enforce_current_pipeline_policy(receipts, monkeypatch, operation, policy_source):
+    _seed(receipts)
+    if policy_source == "cached":
+        manager = application._pilot_tenant_manager()
+        manager.create_tenant("tenant_a", policy=application.TenantPolicy(allowed_node_types={"archive-gate-a"}))
+    else:
+        monkeypatch.setattr(application, "PILOT_ALLOWED_PIPELINES", {"archive-gate-a"})
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = "/v1/jobs" if operation == "replay" else "/v1/job-submissions/attempt-1"
+    method = "POST" if operation == "replay" else "GET"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.request(
+            method,
+            path,
+            headers=_headers(method, path, key="attempt-1" if operation == "replay" else None),
+            **({"json": BODY} if operation == "replay" else {}),
+        )
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["details"]["reason"] == "pipeline_not_allowed"
+    assert mkdirs == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["replay", "lookup"])
+async def test_read_only_scope_rejects_conflicting_tenant_selector(receipts, monkeypatch, operation):
+    _seed(receipts)
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = "/v1/jobs" if operation == "replay" else "/v1/job-submissions/attempt-1"
+    method = "POST" if operation == "replay" else "GET"
+    headers = {
+        **_headers(method, path, key="attempt-1" if operation == "replay" else None),
+        application.PILOT_TENANT_HEADER: "tenant_b",
+    }
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.request(method, path, headers=headers, **({"json": BODY} if operation == "replay" else {}))
+    assert response.status_code == 403
+    assert response.json()["error"]["details"]["reason"] == "tenant_actor_mismatch"
+    assert mkdirs == []
+
+
+@pytest.mark.asyncio
+async def test_read_only_scope_still_rejects_invalid_tenant_membership_configuration(receipts, monkeypatch):
+    monkeypatch.setattr(application, "PILOT_ACTOR_TENANTS_JSON", '{"shared@example.com":"../outside"}')
+    monkeypatch.setattr(application, "PILOT_ALLOWED_TENANTS", {"../outside"})
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = "/v1/job-submissions/attempt-1"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "AUTH_CONFIGURATION_ERROR"
+    assert mkdirs == []
+
+
 def test_intent_is_order_stable_and_changes_with_every_request_field():
     assert submission_intent(BODY) == submission_intent({"args": BODY["args"], "pipeline": BODY["pipeline"]})
     assert submission_intent(BODY) != submission_intent({**BODY, "additional": "new intent"})
@@ -155,6 +298,7 @@ def _direct_request(version="v1", *, actor=None, key="attempt-1"):
 @pytest.mark.parametrize("prepared", [False, True])
 async def test_direct_entry_repeats_receipt_lookup_before_mutable_checks(receipts, monkeypatch, version, prepared):
     _seed(receipts, state="succeeded")
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
 
     async def forbidden(*_args, **_kwargs):
         pytest.fail("direct accepted replay must not re-enter mutable admission")
@@ -171,16 +315,23 @@ async def test_direct_entry_repeats_receipt_lookup_before_mutable_checks(receipt
         "state": "succeeded",
         "events_url": f"/{version}/jobs/job_original/events",
     }
+    assert mkdirs == []
 
 
 @pytest.mark.asyncio
-async def test_route_to_direct_entry_receipt_commit_race_replays_before_preview(receipts, monkeypatch):
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_route_to_direct_entry_receipt_commit_race_replays_before_preview(receipts, monkeypatch, version):
     monkeypatch.setenv("TP_JOB_SUBMISSION_RECOVERY_ENABLED", "1")
     checked = []
+    blocked_mkdirs = []
 
     async def commit_after_route_lookup(*_args, **_kwargs):
         checked.append("paths")
+        tenant = _args[0]
+        assert tenant.tenant_workspace.is_dir() and tenant.tenant_cas.is_dir()
         _seed(receipts, state="running")
+        monkeypatch.setattr(application, "_PILOT_TENANT_MANAGER", None)
+        blocked_mkdirs.append(_deny_tenant_mkdir(monkeypatch))
         return None
 
     async def forbidden(*_args, **_kwargs):
@@ -188,12 +339,15 @@ async def test_route_to_direct_entry_receipt_commit_race_replays_before_preview(
 
     monkeypatch.setattr(application, "_pilot_enforce_request_paths", commit_after_route_lookup)
     monkeypatch.setattr(application, "_build_config_preview_threaded", forbidden)
-    path = "/v1/jobs"
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+    path = f"/{version}/jobs"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
         response = await client.post(path, json=BODY, headers=_headers("POST", path, key="attempt-1"))
     assert response.status_code == 200
     assert response.json()["data"]["id"] == "job_original"
     assert checked == ["paths"]
+    assert blocked_mkdirs == [[]]
 
 
 @pytest.mark.asyncio
@@ -353,8 +507,9 @@ async def test_different_intent_conflicts_without_mutable_admission(receipts):
 
 
 @pytest.mark.asyncio
-async def test_retired_projection_retains_consumed_key_and_typed_lookup(receipts):
+async def test_retired_projection_retains_consumed_key_and_typed_lookup(receipts, monkeypatch):
     _seed(receipts, state="canceled", retired=True)
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
         post = await client.post("/v1/jobs", json=BODY, headers=_headers("POST", "/v1/jobs", key="attempt-1"))
         path = "/v2/job-submissions/attempt-1"
@@ -364,15 +519,18 @@ async def test_retired_projection_retains_consumed_key_and_typed_lookup(receipts
     assert post.json()["error"]["details"]["job_id"] == "job_original"
     assert read.json()["data"]["status"] == "expired"
     assert "events_url" not in read.json()["data"]["job"]
+    assert mkdirs == []
 
 
 @pytest.mark.asyncio
-async def test_new_key_is_default_off_while_old_receipts_remain_readable(receipts):
+async def test_new_key_is_default_off_while_old_receipts_remain_readable(receipts, monkeypatch):
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
     path = "/v1/jobs"
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
         response = await client.post(path, json=BODY, headers=_headers("POST", path, key="new-attempt"))
     assert response.status_code == 503
     assert response.json()["error"]["details"]["reason"] == "submission_recovery_unavailable"
+    assert mkdirs == []
 
 
 @pytest.mark.asyncio
@@ -399,18 +557,21 @@ async def test_current_pipeline_revocation_prevents_receipt_replay(receipts, mon
 
 
 @pytest.mark.asyncio
-async def test_unsigned_actor_headers_cannot_authorize_receipts(receipts):
+async def test_unsigned_actor_headers_cannot_authorize_receipts(receipts, monkeypatch):
     _seed(receipts)
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
     path = "/v1/job-submissions/attempt-1"
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
         response = await client.get(path, headers={"x-api-key": "contract-secret", "x-tp-actor": ACTOR["username"]})
         unauthenticated = await client.get(path)
     assert response.status_code == 401
     assert unauthenticated.status_code == 401
+    assert mkdirs == []
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_exposes_only_verified_composite_context_without_feature_enablement(receipts):
+async def test_bootstrap_exposes_only_verified_composite_context_without_feature_enablement(receipts, monkeypatch):
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
     path = "/portal/bootstrap"
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
         response = await client.get(path, headers=_headers("GET", path))
@@ -420,6 +581,8 @@ async def test_bootstrap_exposes_only_verified_composite_context_without_feature
         "ownerId": verified_actor_owner("tenant_a", ACTOR),
     }
     assert response.json()["features"]["jobSubmissionReceipts"] is False
+    assert mkdirs == []
+    assert application._PILOT_TENANT_MANAGER is None
 
 
 @pytest.mark.asyncio
@@ -476,6 +639,156 @@ async def test_thumbnail_bootstrap_provider_failure_keeps_capability_false(recei
     assert response.status_code == 200
     assert response.json()["features"]["photographicCatalogueThumbnails"] is False
     assert response.json()["recoveryContext"] is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["tenant_storage", "receipt_store"])
+async def test_optional_upload_capability_failure_preserves_signed_bootstrap(receipts, monkeypatch, failure):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    if failure == "tenant_storage":
+        mkdirs = _deny_tenant_mkdir(monkeypatch)
+    else:
+
+        def unavailable_store():
+            raise OSError("optional upload receipt provider unavailable")
+
+        monkeypatch.setattr(application, "_upload_receipt_store", unavailable_store)
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["features"]["uploadReceipts"] is False
+    assert result["features"]["jobSubmissionReceipts"] is False
+    assert result["recoveryContext"] == {
+        "schema": "tp.portal.recovery_context.v1",
+        "tenantId": "tenant_a",
+        "ownerId": verified_actor_owner("tenant_a", ACTOR),
+    }
+    assert response.headers["cache-control"] == "no-store"
+    if failure == "tenant_storage":
+        assert mkdirs, "The enabled probe must encounter the failing tenant storage"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verified", [False, True])
+async def test_optional_upload_capability_requires_current_tenant_identity(receipts, monkeypatch, verified):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+    path = "/portal/bootstrap"
+    headers = (
+        _headers("GET", path, actor={**ACTOR, "accessEmail": "not-a-member@example.com"})
+        if verified
+        else {"x-api-key": "contract-secret", "x-tp-actor": ACTOR["username"]}
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["features"]["uploadReceipts"] is False
+    assert response.json()["recoveryContext"] is None
+    assert mkdirs == []
+    assert application._PILOT_TENANT_MANAGER is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "GET"])
+@pytest.mark.parametrize("failure", ["tenant_storage", "receipt_store"])
+async def test_upload_receipt_routes_contain_provider_context_failures(receipts, monkeypatch, tmp_path, method, failure):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1" if method == "POST" else "0")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path)
+    if failure == "tenant_storage":
+        mkdirs = _deny_tenant_mkdir(monkeypatch)
+    else:
+
+        def unavailable_store():
+            raise OSError("upload receipt provider unavailable")
+
+        monkeypatch.setattr(application, "_upload_receipt_store", unavailable_store)
+
+    async def unexpected_parse(*_args, **_kwargs):
+        pytest.fail("context failure must not parse or replay an upload body")
+
+    monkeypatch.setattr(application, "_parse_portal_upload_multipart", unexpected_parse)
+    request_id = "11111111-1111-4111-8111-111111111111"
+    path = "/v1/uploads/staging" if method == "POST" else f"/v1/uploads/staging/receipts/{request_id}"
+    headers = _headers(method, path)
+    if method == "POST":
+        headers["X-TP-Upload-Request-ID"] = request_id
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application.app, raise_app_exceptions=False), base_url="http://testserver"
+    ) as client:
+        response = await client.request(method, path, headers=headers)
+    assert response.status_code == 503, response.text
+    assert response.json()["schema"] == "tp.orchestrator.error.v1"
+    assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+    if failure == "tenant_storage":
+        assert mkdirs
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "GET"])
+@pytest.mark.parametrize("denial", ["membership", "selector"])
+async def test_upload_receipt_routes_preserve_signed_tenant_denials(receipts, monkeypatch, tmp_path, method, denial):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path)
+    mkdirs = _deny_tenant_mkdir(monkeypatch)
+
+    def unexpected_store():
+        pytest.fail("tenant denial must precede receipt provider access")
+
+    monkeypatch.setattr(application, "_upload_receipt_store", unexpected_store)
+    request_id = "11111111-1111-4111-8111-111111111111"
+    path = "/v1/uploads/staging" if method == "POST" else f"/v1/uploads/staging/receipts/{request_id}"
+    actor = {**ACTOR, "accessEmail": "not-a-member@example.com"} if denial == "membership" else ACTOR
+    headers = _headers(method, path, actor=actor)
+    if denial == "selector":
+        headers[application.PILOT_TENANT_HEADER] = "tenant_b"
+    if method == "POST":
+        headers["X-TP-Upload-Request-ID"] = request_id
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.request(method, path, headers=headers)
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+    assert mkdirs == []
+    assert application._PILOT_TENANT_MANAGER is None
+
+
+@pytest.mark.asyncio
+async def test_optional_upload_capability_remains_available_after_successful_probe(receipts, monkeypatch, tmp_path):
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    calls = []
+
+    class Store:
+        async def get(self, tenant_id, owner, request_id):
+            calls.append((tenant_id, owner, request_id))
+            return None
+
+    async def authorized(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(application, "_upload_receipt_store", Store)
+    monkeypatch.setattr(application, "_resolved_portal_upload_root", lambda: tmp_path / "uploads")
+    monkeypatch.setattr(application, "_pilot_enforce_request_paths", authorized)
+    path = "/portal/bootstrap"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application.app), base_url="http://testserver") as client:
+        response = await client.get(path, headers=_headers("GET", path))
+    assert response.status_code == 200
+    assert response.json()["features"]["uploadReceipts"] is True
+    assert len(calls) == 1
+    assert calls[0][0] == "tenant_a"
+    assert calls[0][2] == "00000000-0000-0000-0000-000000000000"
 
 
 @pytest.mark.asyncio

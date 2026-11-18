@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -29,6 +30,7 @@ MARKER_FILENAME = ".upload-request.v1.json"
 SEAL_FILENAME = "upload_completion.tp.upload_staging.seal.v1.json"
 MAX_RECOVERY_METADATA_BYTES = 4 * 1024 * 1024
 _BATCH_ID = re.compile(r"upload_[A-Za-z0-9_-]{1,56}")
+LOGGER = logging.getLogger(__name__)
 
 
 class UploadBatchLock:
@@ -108,12 +110,14 @@ def seal_completion(reservation: UploadReservation, result: StagedUploadResult) 
     }
     raw = canonicalize_json(payload)
     if len(raw) > MAX_RECOVERY_METADATA_BYTES:
-        raise ValueError("upload completion seal exceeds metadata bound")
+        raise UploadStagingError(
+            "upload_recovery_metadata_limit", "staged upload metadata exceeds recovery capacity", status_code=413
+        )
     _write_bytes_atomic(metadata / SEAL_FILENAME, raw)
     return hashlib.sha256(raw).hexdigest()
 
 
-def _read(path: Path) -> bytes:
+def _read(path: Path, *, verified: dict[Path, tuple[int, ...]] | None = None) -> bytes:
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, "rb") as stream:
         before = os.fstat(stream.fileno())
@@ -131,6 +135,8 @@ def _read(path: Path) -> bytes:
         or _identity(after) != _identity(path.lstat())
     ):
         raise ValueError("upload recovery metadata changed during verification")
+    if verified is not None:
+        verified[path] = _identity(after)
     return raw
 
 
@@ -138,7 +144,7 @@ def _identity(info: os.stat_result) -> tuple[int, ...]:
     return info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
 
-def _source_digest(directory_fd: int, name: str, size: int) -> str:
+def _source_digest(directory_fd: int, name: str, size: int) -> tuple[str, tuple[int, ...]]:
     hasher = hashlib.sha256()
     descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
     with os.fdopen(descriptor, "rb") as stream:
@@ -157,7 +163,7 @@ def _source_digest(directory_fd: int, name: str, size: int) -> str:
     current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     if _identity(before) != _identity(after) or _identity(after) != _identity(current):
         raise ValueError("sealed upload source changed during verification")
-    return hasher.hexdigest()
+    return hasher.hexdigest(), _identity(after)
 
 
 def _exact_directory(path: Path, directories: set[str], files: set[str]) -> tuple[int, ...]:
@@ -182,7 +188,7 @@ def _exact_directory(path: Path, directories: set[str], files: set[str]) -> tupl
     return before
 
 
-def _verify_input_inventory(root: Path, records: list[dict[str, Any]]) -> int:
+def _verify_input_inventory(root: Path, records: list[dict[str, Any]], *, verified: dict[Path, tuple[int, ...]]) -> int:
     expected: dict[str, dict[str, Any]] = {}
     total = 0
     for record in records:
@@ -226,11 +232,14 @@ def _verify_input_inventory(root: Path, records: list[dict[str, Any]]) -> int:
                     record = expected.get(relative)
                     if record is None or not stat.S_ISREG(info.st_mode):
                         raise ValueError("unexpected or linked file in sealed upload input")
-                    if _source_digest(directory_fd, entry.name, record["size_bytes"]) != record["sha256"]:
+                    digest, identity = _source_digest(directory_fd, entry.name, record["size_bytes"])
+                    if digest != record["sha256"]:
                         raise ValueError("sealed upload source changed")
+                    verified[root / relative] = identity
                     seen.add(relative)
         if _identity(os.fstat(directory_fd)) != before:
             raise ValueError("sealed upload input directory changed during verification")
+        verified[root / parent] = before
 
     directory_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
@@ -246,12 +255,17 @@ def _verify_input_inventory(root: Path, records: list[dict[str, Any]]) -> int:
 
 
 def verify_completion(reservation: UploadReservation, *, max_files: int | None = None) -> tuple[str, dict[str, Any]]:
-    """Re-read exact retained bytes; a receipt alone cannot authorize ready."""
+    """Verify retained bytes and ending identities, without claiming an atomic snapshot.
+
+    A receipt alone cannot authorize ready. External changes after this call
+    remain subject to the existing admission and worker revalidation.
+    """
     root = Path(reservation.batch_root)
     if root.is_symlink() or root.name != reservation.batch_id:
         raise ValueError("reserved upload directory changed")
     root_identity = _exact_directory(root, {"input", "_portal"}, {MARKER_FILENAME})
-    marker = json.loads(_read(root / MARKER_FILENAME))
+    verified = {root: root_identity}
+    marker = json.loads(_read(root / MARKER_FILENAME, verified=verified))
     if marker != _binding(reservation):
         raise ValueError("upload request binding changed")
     metadata = root / "_portal"
@@ -260,7 +274,8 @@ def verify_completion(reservation: UploadReservation, *, max_files: int | None =
     metadata_identity = _exact_directory(
         metadata, set(), {SEAL_FILENAME, BASELINE_MANIFEST_FILENAME, CAPTURE_METADATA_FILENAME, UPLOAD_RECEIPT_FILENAME}
     )
-    seal_raw = _read(metadata / SEAL_FILENAME)
+    verified[metadata] = metadata_identity
+    seal_raw = _read(metadata / SEAL_FILENAME, verified=verified)
     seal_digest = hashlib.sha256(seal_raw).hexdigest()
     if reservation.receipt_sha256 is not None and reservation.receipt_sha256 != seal_digest:
         raise ValueError("upload completion differs from its durable seal digest")
@@ -276,7 +291,7 @@ def verify_completion(reservation: UploadReservation, *, max_files: int | None =
         raise ValueError("invalid sealed upload metadata identities")
     retained_metadata = {}
     for name in (BASELINE_MANIFEST_FILENAME, CAPTURE_METADATA_FILENAME, UPLOAD_RECEIPT_FILENAME):
-        raw = _read(metadata / name)
+        raw = _read(metadata / name, verified=verified)
         if metadata_digests.get(name) != hashlib.sha256(raw).hexdigest():
             raise ValueError("sealed upload metadata changed")
         if name != CAPTURE_METADATA_FILENAME:
@@ -301,7 +316,7 @@ def verify_completion(reservation: UploadReservation, *, max_files: int | None =
         or baseline.get("record_count") != len(records)
     ):
         raise ValueError("invalid sealed upload inventory")
-    total = _verify_input_inventory(root / "input", records)
+    total = _verify_input_inventory(root / "input", records, verified=verified)
     receipt = json.loads(retained_metadata[UPLOAD_RECEIPT_FILENAME])
     if not isinstance(receipt, dict):
         raise ValueError("invalid sealed upload receipt")
@@ -327,8 +342,12 @@ def verify_completion(reservation: UploadReservation, *, max_files: int | None =
         or data.get("summary", {}).get("total_bytes") != total
     ):
         raise ValueError("upload response differs from sealed inventory")
-    if _identity(root.lstat()) != root_identity or _identity(metadata.lstat()) != metadata_identity:
-        raise ValueError("sealed upload directory changed during verification")
+    # Keep each identity from its actual descriptor read through the end of the
+    # whole pass. A later file must not hide a rewrite of an earlier source or
+    # metadata file, nor a replaced ancestor that redirects an already-read file.
+    for path, identity in verified.items():
+        if _identity(path.lstat()) != identity:
+            raise ValueError("sealed upload file or directory changed during verification")
     return seal_digest, data
 
 
@@ -340,19 +359,18 @@ def delete_owned_batch(reservation: UploadReservation, upload_root: Path) -> Non
         # Both incomplete and ready batches are ledger-owned. The caller has
         # already fenced every completion and retained reference transaction.
         marker_path = root / MARKER_FILENAME
-        if marker_path.exists():
+        if marker_path.exists() or marker_path.is_symlink():
             marker = json.loads(_read(marker_path))
-            if (
-                marker.get("batch_id") != reservation.batch_id
-                or marker.get("request_id") != reservation.request_id
-                or marker.get("owner_sha256") != reservation.owner_sha256
+            if not isinstance(marker, dict) or any(
+                marker.get(field) != getattr(reservation, field)
+                for field in ("batch_id", "tenant_id", "request_id", "owner_sha256", "batch_root")
             ):
                 raise ValueError("upload cleanup ownership changed")
-        elif reservation.receipt_sha256 is not None or reservation.response_data is not None:
-            raise ValueError("completed upload lost its ownership marker")
-        # A crash between mkdir and the initial atomic marker rename leaves
-        # no marker. The ledger's never-reused server locator still owns that
-        # incomplete directory; no ready job could have referenced it.
+        elif reservation.state != "deleting":
+            raise ValueError("markerless upload deletion requires fenced ownership")
+        # The caller holds the stable lock and a deleting ledger generation.
+        # An interrupted rmtree may already have removed the marker; its
+        # never-reused locator still belongs to that durable deletion claim.
         shutil.rmtree(root)
 
 
@@ -368,9 +386,15 @@ async def cleanup_correlated_batches(
     for candidate in await store.cleanup_candidates(now):
         if Path(candidate.batch_root).parent != root:
             continue
-        lock = UploadBatchLock(root, candidate.batch_id)
+        lock = None
         try:
-            if not lock.acquire():
+            try:
+                lock = UploadBatchLock(root, candidate.batch_id)
+                acquired = lock.acquire()
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Upload cleanup lock unavailable for batch %s (%s)", candidate.batch_id, type(error).__name__)
+                continue
+            if not acquired:
                 continue
             claimed = await store.claim_deletion(candidate, now, retained)
             if claimed is None:
@@ -387,5 +411,6 @@ async def cleanup_correlated_batches(
                 # Leave deleting fenced; the same cleanup loop retries it.
                 continue
         finally:
-            lock.close()
+            if lock is not None:
+                lock.close()
     return removed

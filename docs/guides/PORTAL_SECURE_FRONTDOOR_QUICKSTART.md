@@ -204,8 +204,11 @@ Notes:
 
 ### Request-correlated upload recovery
 
-Deploy the additive `0010_upload_receipts` migration after
-`0009_job_submissions`, with matching backend and frontdoor code. Enable new
+Apply the additive `0010_upload_receipts` migration after
+`0009_job_submissions` before deploying the matching Postgres backend. The
+ledger reads are required for new job admission, including keyless requests,
+even while correlated writes are disabled. Deploy backend reads before the
+matching client. Enable new
 correlated writes separately with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=1`; the
 default is disabled. The managed capability requires the current signed tenant
 and composite Access-email/portal-username identity plus Postgres operational
@@ -222,7 +225,8 @@ ready. Unknown or missing evidence is not proof that a POST was rejected.
 Every lookup rechecks current tenant/path authority and exact retained bytes.
 Before publishing ready, the writer verifies the same completion seal and exact
 input inventory used by lookup. Unexpected entries, symlinks and multiply-linked
-files fail closed. Recovery metadata retains its 4 MiB per-file ceiling; uploads
+files fail closed. Recovery metadata, including its completion seal, retains
+its 4 MiB per-file ceiling; uploads
 whose metadata exceeds that ceiling return `413` without publishing ready. The
 writer uses the configured upload file limit; later lookup uses the exact sealed
 count, so reducing that setting does not invalidate an accepted receipt.
@@ -235,19 +239,48 @@ server retains streams and its stable cross-process lock until the worker and
 completion transaction finish. A sealed filesystem completion can be reconciled
 after a crash before its database-ready update.
 
+Completion and new job admission check expiry against fresh database time after
+acquiring the matching ledger-row locks. Expiry at that check prevents
+publishing ready or admitting a new job. Receipt lookup returns the existing `expired`
+status with a null receipt; a staging POST whose completion expires returns
+`409 CONFLICT` with `details.reason=upload_expired`. These responses do not
+authorize automatically repeating an upload POST.
+
 The existing TTL and cleanup loop remain in force. Ledger-owned batches require
 an atomic deletion claim under the stable filesystem lock and ledger-row lock.
 Retained job references prevent deletion, including jobs admitted without a
 submission key. Admission pins every distinct staged batch named by read inputs,
-including input/archive aliases, photographic manifests and sidecars, and nested
-or metadata paths, from both the submitted and effective request. Frozen plans
+including input/archive aliases, photographic manifests and sidecars, nested or
+metadata paths, and ancestor directories, from both the submitted and effective
+request. Matching uses absolute server-owned ledger locators, independent of
+the process working directory. Portal-relative read selectors resolve against
+the server application's `REPO_ROOT`; client root fields and headers cannot
+replace that base. Tracked inputs require verified tenant scope
+and must be ready and unexpired; trusted and keyless calls do not bypass this
+requirement. Frozen plans
 and physical bindings retain their exact read locators; legacy archive admission
 also retains the read defaults from its server-built command. Command output
-fields never pin a batch. Admission locks batches in a stable order in the same
-transaction. Cleanup also protects retained nested selectors. Failed deletion
-remains fenced for retry by the existing loop;
-a stale worker cannot republish ready. Lock identities live outside deletable
-batch directories and are not reused. Do not remove lock files manually.
+fields never pin a batch. For frozen Materials constituents, the read-set pass
+snapshots only SHA/size-bound evidence JSON within existing `MaterialLimits`
+(at most 1 MiB per descriptor) and frozen resource bounds. It runs before global
+capacity locks; accepted submission replays return before these reads. The API
+drains the background read after cancellation. This pass does not open or decode
+NPY masks or initialize models.
+
+Older retained jobs without exact frozen read-set references conservatively
+retain the parent namespace of a recognized `materials_manifest`. That
+retention-only fallback can overretain batches until job removal and cannot
+reconstruct historical mask inputs. New admissions use the precise frozen read
+set.
+
+Admission locks batches in a stable order in the same
+transaction. Cleanup also protects retained nested and ancestor selectors.
+Failed deletion remains fenced for retry by the existing loop, including a
+partial deletion that removed its marker. Such a retry requires the ledger's
+deleting claim and stable lock; a stale worker cannot republish ready. Permanent
+lock identities keep markerless ledger remnants out of legacy cleanup. They
+live outside deletable batch directories and are not reused. Do not remove
+lock files manually.
 
 Rollback disables new writes with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
 restarts the serving process. Keep the additive schema, receipt reads and

@@ -373,7 +373,10 @@ existing `tp.orchestrator.job.v1` envelope. Replay returns the original job ID,
 current canonical dispatch state and an events URL using the requested API
 prefix. Replay checks current authentication, tenant membership and pipeline
 permission, then returns before mutable path, preview, readiness and admission
-capacity checks. API abuse throttling still applies. A different canonical
+capacity checks, including tenant-directory provisioning. Verified receipt reads
+and replay do not initialize tenant storage, including after process restart;
+new admissions still provision it after a receipt miss. API abuse throttling
+still applies. A different canonical
 request under a consumed key returns HTTP 409 `CONFLICT`. Keys remain consumed
 for the lifetime of the existing dispatch ledger, including after job cleanup;
 replaying a retired job returns HTTP 410 `SUBMISSION_EXPIRED` with its original

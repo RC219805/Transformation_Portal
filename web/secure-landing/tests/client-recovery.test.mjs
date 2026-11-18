@@ -101,6 +101,106 @@ test("storage denial or malformed persisted references prevents a durable POST",
   assert.equal(denied.available(), false);
 });
 
+for (const status of [400, 404, 413, 422]) {
+  test(`confirmed job rejection ${status} does not become an unresolved attempt after reload`, async () => {
+    const h = harness(async () => json({ success: false, error: { message: "Invalid request" } }, status));
+    await h.api.submit({ pipeline: "lux-depth-v3", args: {} });
+    assert.equal(h.api.snapshot()[0].status, "rejected");
+    assert.deepEqual(JSON.parse(h.saved.raw()).attempts, []);
+    const reloaded = harness(async () => json({ success: true, schema: "tp.orchestrator.job.v1", data: job }), h.saved.raw());
+    assert.deepEqual(reloaded.api.snapshot(), []);
+    assert.deepEqual(await reloaded.api.submit({ pipeline: "lux-depth-v3", args: {} }), { ...job, pipeline: "lux-depth-v3" });
+    assert.equal(reloaded.calls.length, 1);
+    assert.equal(reloaded.calls[0][1].method, "POST");
+  });
+
+  test(`confirmed upload rejection ${status} releases only its own opaque reference before reload`, async () => {
+    const h = harness();
+    void h.api.submit({ pipeline: "lux-depth-v3", args: {} });
+    const uploadId = h.api.upload(selection);
+    h.requests[0].status = status;
+    h.requests[0].response = { success: false, error: { message: "Invalid upload" } };
+    h.requests[0].onload();
+    assert.equal(h.api.snapshot().find((row) => row.request_id === uploadId).status, "rejected");
+    const retained = JSON.parse(h.saved.raw()).attempts;
+    assert.equal(retained.length, 1);
+    assert.equal(retained[0].type, "job");
+    assert.deepEqual(Object.keys(retained[0]).sort(), ["created_at", "request_id", "scope", "type"]);
+    const reloaded = harness(undefined, h.saved.raw());
+    assert.equal(reloaded.api.snapshot().length, 1);
+    assert.equal(reloaded.api.snapshot()[0].type, "job");
+    reloaded.api.upload(selection);
+    assert.equal(reloaded.requests.length, 1);
+  });
+}
+
+for (const status of [401, 403, 408, 409, 410, 429, 503]) {
+  test(`job response ${status} retains its recovery reference across reload`, async () => {
+    const h = harness(async () => json({ success: false }, status));
+    await h.api.submit({});
+    assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+    const reloaded = harness(undefined, h.saved.raw());
+    await assert.rejects(reloaded.api.submit({}, { separate: true }), /unresolved/);
+    assert.equal(reloaded.calls.length, 0);
+  });
+}
+
+for (const status of [401, 403, 408, 409, 410, 429, 503]) {
+  test(`upload response ${status} retains its recovery reference across reload`, () => {
+    const h = harness();
+    h.api.upload(selection);
+    h.requests[0].status = status;
+    h.requests[0].response = { success: false };
+    h.requests[0].onload();
+    assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+    const reloaded = harness(undefined, h.saved.raw());
+    assert.throws(() => reloaded.api.upload(selection), /unresolved/);
+    assert.equal(reloaded.requests.length, 0);
+  });
+}
+
+test("failed rejection-reference removal retains recovery and blocks another durable POST", async () => {
+  let raw = null, writes = 0;
+  const saved = { getItem: () => raw, setItem(_, value) { if (++writes > 1) throw new Error("Storage denied"); raw = value; } };
+  const h = harness(async () => json({ success: false }, 422), null, { sessionStorage: saved });
+  await h.api.submit({});
+  assert.equal(writes, 2);
+  assert.equal(JSON.parse(raw).attempts.length, 1);
+  assert.equal(h.api.snapshot()[0].status, "rejected");
+  await assert.rejects(h.api.submit({}), /storage/);
+  assert.equal(h.calls.length, 1);
+  const reloaded = harness(undefined, raw);
+  await assert.rejects(reloaded.api.submit({}), /unresolved/);
+});
+
+test("malformed rejection bodies retain an unresolved reference across reload", async () => {
+  const h = harness(async () => new Response("invalid JSON", { status: 400 }));
+  await h.api.submit({});
+  assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+  const reloaded = harness(undefined, h.saved.raw());
+  await assert.rejects(reloaded.api.submit({}, { separate: true }), /unresolved/);
+  assert.equal(reloaded.calls.length, 0);
+});
+
+test("unapplied accepted runs and later expired tombstones retain explicit recovery across reload", async () => {
+  const h = harness(async (_, options) => options.method === "POST"
+    ? json({ success: true, schema: "tp.orchestrator.job.v1", data: job })
+    : json({ success: true, schema: "tp.orchestrator.job_submission.v1", data: { request_id: id(2), status: "expired" } }),
+  null, { acceptJob: () => false });
+  await h.api.submit({});
+  assert.equal(h.api.snapshot()[0].status, "accepted");
+  assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+  await h.api.check(id(2));
+  assert.equal(h.api.snapshot()[0].status, "expired");
+  assert.equal(JSON.parse(h.saved.raw()).attempts.length, 1);
+  const reloaded = harness(async () => json({ success: true, schema: "tp.orchestrator.job_submission.v1", data: { request_id: id(2), status: "expired" } }), h.saved.raw());
+  assert.equal(reloaded.api.snapshot()[0].status, "unknown");
+  await reloaded.api.check(id(2));
+  assert.equal(reloaded.api.snapshot()[0].status, "expired");
+  assert.equal(reloaded.calls.length, 1);
+  assert.equal(reloaded.calls[0][1].method, "GET");
+});
+
 test("the 30 second deadline includes a stalled response body and rejects oversized bodies", async () => {
   const timers = clock(); let signal;
   const pending = boundedRecoveryJson(async (_, options) => { signal = options.signal; return new Response(new ReadableStream({ start() {} })); }, "/post", {}, 30000, timers);

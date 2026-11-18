@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -609,7 +610,7 @@ def cleanup_expired_batches(
     except OSError:
         return []
 
-    retained = {str(Path(os.path.realpath(str(path)))) for path in retained_input_dirs if str(path).strip()}
+    retained = {Path(os.path.realpath(str(path))) for path in retained_input_dirs if str(path).strip()}
     removed: list[str] = []
     for batch_dir in upload_root.iterdir():
         try:
@@ -618,7 +619,7 @@ def cleanup_expired_batches(
             if not _is_managed_staged_batch_dir(batch_dir):
                 continue
             batch_root_real = Path(os.path.realpath(batch_dir))
-            if any(Path(path).is_relative_to(batch_root_real) for path in retained):
+            if any(path.is_relative_to(batch_root_real) or batch_root_real.is_relative_to(path) for path in retained):
                 continue
             age_seconds = now - batch_dir.stat().st_mtime
             if age_seconds < ttl_seconds:
@@ -632,11 +633,33 @@ def cleanup_expired_batches(
 
 def _is_managed_staged_batch_dir(batch_dir: Path) -> bool:
     name = str(batch_dir.name or "").strip()
-    if (batch_dir / ".upload-request.v1.json").exists():
+    try:
+        (batch_dir / ".upload-request.v1.json").lstat()
+    except FileNotFoundError:
+        pass
+    else:
         # Ledger batches require an atomic ownership/reference claim first.
         return False
     if not name.startswith("upload_"):
         return False
+    # Permanent external lock identities outlive markers and partial deletion.
+    # A linked/invalid lock directory or any lock entry (even a dangling link)
+    # is not legacy-cleanup authority. Other filesystem errors fail closed in
+    # the caller, rather than turning an unreadable identity into absence.
+    lock_directory = batch_dir.parent / ".upload-locks"
+    try:
+        lock_info = lock_directory.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if not stat.S_ISDIR(lock_info.st_mode):
+            return False
+        try:
+            (lock_directory / (name + ".lock")).lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            return False
     input_dir = batch_dir / "input"
     portal_dir = batch_dir / "_portal"
     if not input_dir.is_dir() or not portal_dir.is_dir():

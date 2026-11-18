@@ -6,8 +6,11 @@ Postgres tests remain authoritative for SQL isolation, locks, and triggers.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import threading
+import uuid
 from collections import deque
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -88,7 +91,7 @@ class Session:
         assert self.get_values, "unexpected get"
         return self.get_values.popleft()
 
-    async def execute(self, statement):
+    async def execute(self, statement, parameters=None):
         self.trace.append(str(statement))
         return Result(self.rows)
 
@@ -282,9 +285,122 @@ async def test_admission_reserves_both_scopes_before_atomic_copied_record_and_ou
     evidence = next(model for model in session.added if isinstance(model, OperationalRecordModel))
     assert hashlib.sha256(evidence.canonical_bytes).hexdigest() == evidence.digest
     locks = [query for query in session.trace if "FOR UPDATE" in query]
-    assert len(locks) == 2
+    assert len(locks) == 3
     assert "= 'global'" in locks[0] and "= 'tenant:tenant'" in locks[1]
+    assert "FROM upload_receipts" in locks[2] and "ORDER BY upload_receipts.batch_id" in locks[2]
     assert session.trace[-1] == "COMMIT"
+
+
+async def test_accepted_submission_replay_skips_descriptor_reads_and_capacity(monkeypatch):
+    from transformation_portal.orchestrator import upload_receipts
+    from transformation_portal.orchestrator.submissions import SubmissionIdentity, submission_intent
+
+    record = _record()
+    intent = submission_intent(record.request)
+    prior = _attempt(submission_intent_sha256=intent)
+    session = Session(scalars=[prior])
+    store = _store(session)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("accepted replay must not inspect descriptor files")
+
+    async def capacity(*args, **kwargs):
+        pytest.fail("accepted replay must return before capacity locks")
+
+    monkeypatch.setattr(upload_receipts, "_admitted_source_paths", forbidden)
+    monkeypatch.setattr(store, "_capacities", capacity)
+    result = await _admit(store, record=record, submission=SubmissionIdentity(str(uuid.uuid4()), "a" * 64, intent))
+    assert result == store._locator(prior)
+    assert "pg_advisory_xact_lock" in session.trace[1]
+    assert session.trace[-1] == "COMMIT"
+    assert not session.added
+
+
+async def test_new_submission_collects_descriptors_after_key_lookup_before_capacity(monkeypatch):
+    from transformation_portal.orchestrator import upload_receipts
+    from transformation_portal.orchestrator.submissions import SubmissionIdentity, submission_intent
+
+    record = _record()
+    record.request["pipeline"] = record.effective_request["pipeline"] = "lux-depth-v3"
+    session = Session(scalars=[None, *_capacities(active=0), 100.0], gets=[SimpleNamespace(canonical_bytes=_plan())])
+    original = upload_receipts._admitted_source_paths
+    observations = []
+
+    def collect(*args, **kwargs):
+        observations.append(list(session.trace))
+        assert any("pg_advisory_xact_lock" in entry for entry in session.trace)
+        assert any("FROM dispatch_attempts" in entry for entry in session.trace)
+        assert not any("admission_capacity" in entry for entry in session.trace)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(upload_receipts, "_admitted_source_paths", collect)
+    await _admit(
+        _store(session),
+        record=record,
+        submission=SubmissionIdentity(str(uuid.uuid4()), "a" * 64, submission_intent(record.request)),
+    )
+    assert len(observations) == 1
+    assert session.trace[-1] == "COMMIT"
+
+
+async def test_descriptor_worker_drains_cancellation_before_transaction_exit_and_capacity(monkeypatch):
+    from transformation_portal.orchestrator import upload_receipts
+
+    entered, release, completed = threading.Event(), threading.Event(), threading.Event()
+    main_thread = threading.get_ident()
+    session = Session()
+    store = _store(session)
+
+    def collect(*args, **kwargs):
+        assert threading.get_ident() != main_thread
+        entered.set()
+        try:
+            assert release.wait(5)
+            return ()
+        finally:
+            completed.set()
+
+    async def capacity(*args, **kwargs):
+        pytest.fail("cancellation during descriptors must not lock capacity")
+
+    monkeypatch.setattr(upload_receipts, "_admitted_source_paths", collect)
+    monkeypatch.setattr(store, "_capacities", capacity)
+    task = asyncio.create_task(_admit(store))
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert session.trace == ["BEGIN"] and not completed.is_set()
+    finally:
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert completed.is_set()
+    assert session.trace == ["BEGIN", "ROLLBACK"]
+    assert not session.added
+
+
+async def test_descriptor_rejection_precedes_capacity_or_projection_writes(monkeypatch):
+    from transformation_portal.orchestrator import upload_receipts
+
+    session = Session()
+    store = _store(session)
+
+    def unavailable(*args, **kwargs):
+        raise upload_receipts.UploadOwnershipLost("descriptor unavailable")
+
+    async def capacity(*args, **kwargs):
+        pytest.fail("descriptor rejection must precede capacity locks")
+
+    monkeypatch.setattr(upload_receipts, "_admitted_source_paths", unavailable)
+    monkeypatch.setattr(store, "_capacities", capacity)
+    with pytest.raises(upload_receipts.UploadOwnershipLost, match="descriptor unavailable"):
+        await _admit(store)
+    assert session.trace == ["BEGIN", "ROLLBACK"]
+    assert not session.added
 
 
 async def test_photography_admission_atomically_binds_physical_carrier_without_changing_plan_digest(tmp_path):
