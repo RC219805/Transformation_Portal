@@ -285,6 +285,9 @@ class DA3Backend:
         self._candidate_authority = candidate_authority
         self._canonical_plan_bytes = canonical_plan_bytes
         self._engine: Optional[DA3InferenceEngine] = None
+        # Device the in-process engine was loaded for; ``None`` means "the
+        # backend default device" (for example an engine injected by a caller).
+        self._engine_device: Optional[str] = None
         self._device = self._resolve_device(config, candidate_authority)
         # P0-1 (issue #2065): consume the authoritative single-resolution
         # contract when the invocation carries one, instead of re-resolving.
@@ -1111,8 +1114,13 @@ class DA3Backend:
     ) -> DepthResult:
         """Run DA3 inference in the active Python process."""
         use_device = self._effective_device(device)
-        if self._engine is None or device is not None:
+        loaded_device = getattr(self, "_engine_device", None) or self._device
+        if self._engine is None or (device is not None and use_device != loaded_device):
+            # Reload only when there is no engine or the requested device
+            # differs from the one the engine was built for; reloading on every
+            # explicit (but unchanged) device re-instantiated the model per image.
             self._load_engine(use_device)
+            self._engine_device = use_device
 
         image_pil, image_array = self._prepare_image(image)
         if self._engine is None:

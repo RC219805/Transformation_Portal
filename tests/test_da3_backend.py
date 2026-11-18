@@ -885,6 +885,38 @@ def test_da3_backend_unit_contract_metadata(monkeypatch):
     assert any("normalized to relative" in warning for warning in result.warnings)
 
 
+def test_da3_backend_reuses_engine_for_repeated_explicit_device(monkeypatch):
+    """An unchanged explicit device must not rebuild the in-process engine (D-16)."""
+    config = _licensed_da3_config(depth_device="cpu")
+    backend = DA3Backend(config)
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    monkeypatch.setattr(backend, "_uses_subprocess", lambda: False)
+
+    loads = []
+
+    def fake_load(device):
+        loads.append(device)
+        backend._engine = SimpleNamespace(
+            predict=lambda image: SimpleNamespace(
+                depth_map=np.ones((image.height, image.width), dtype=np.float32),
+                metadata={"device": device},
+            )
+        )
+
+    monkeypatch.setattr(backend, "_load_engine", fake_load)
+    image = Image.new("RGB", (16, 16), color="white")
+
+    for _ in range(4):
+        backend.compute(image, device="cpu")
+    backend.compute(image)
+    assert loads == ["cpu"]
+
+    # A genuinely different device still triggers a reload.
+    backend._candidate_authority = None
+    backend.compute(image, device="mps")
+    assert loads == ["cpu", "mps"]
+
+
 def test_da3_backend_uses_engine_effective_device_metadata(monkeypatch):
     """DA3 adapter should report the engine's effective runtime device."""
     config = _licensed_da3_config(depth_device="cpu")
