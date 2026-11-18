@@ -23,6 +23,7 @@ import pytest
 from transformation_portal.dev.test_markers import (
     add_pytest_import,
     add_pytestmark,
+    binds_pytest_name,
     get_directory_marker,
     has_class_or_function_markers,
     has_existing_module_markers,
@@ -1317,3 +1318,85 @@ class TestEndToEndScenarios:
                 assert True
             """)
         assert result == expected
+
+
+# =============================================================================
+# Regression Tests (M-24): collectable output, async tests, tests-root anchoring
+# =============================================================================
+
+
+class TestRetrofitRegressions:
+    """Regression tests for un-collectable rewrites and path-dependent markers."""
+
+    def test_from_pytest_import_gets_pytest_binding(self, tmp_path: Path) -> None:
+        """``from pytest import raises`` does not bind ``pytest``; the rewrite must add it."""
+        file_path = tmp_path / "test_from_import.py"
+        file_path.write_text(
+            _src("""
+                from pytest import raises
+
+
+                def test_x():
+                    with raises(ZeroDivisionError):
+                        1 / 0
+                """),
+            encoding="utf-8",
+        )
+
+        modified, _ = process_file(file_path, dry_run=False)
+
+        assert modified is True
+        rewritten = file_path.read_text(encoding="utf-8")
+        assert "\nimport pytest\n" in rewritten
+        namespace: dict = {}
+        exec(compile(rewritten, str(file_path), "exec"), namespace)  # noqa: S102 - test-controlled source
+        assert namespace["pytestmark"].name == "unit"
+
+    def test_binds_pytest_name(self) -> None:
+        assert binds_pytest_name("import pytest\n") is True
+        assert binds_pytest_name("import pytest.mark\n") is True
+        assert binds_pytest_name("try:\n    import pytest\nexcept ImportError:\n    pass\n") is True
+        assert binds_pytest_name("from pytest import raises\n") is False
+        assert binds_pytest_name("import pytest as pt\n") is False
+        assert binds_pytest_name("def f():\n    import pytest\n") is False
+
+    def test_async_only_module_has_test_functions(self) -> None:
+        content = _src("""
+            async def test_stream():
+                await something()
+
+            class TestAsync:
+                async def test_method(self):
+                    await something()
+            """)
+        assert has_test_functions(content) is True
+        assert has_test_functions("class TestAsync:\n    async def test_m(self):\n        pass\n") is True
+
+    def test_async_only_module_is_processed(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "test_async_only.py"
+        file_path.write_text("async def test_stream():\n    await something()\n", encoding="utf-8")
+
+        modified, reason = process_file(file_path, dry_run=True)
+
+        assert modified is True
+        assert "@pytest.mark.unit" in reason
+
+    def test_marker_ignores_directories_above_tests_root(self) -> None:
+        assert get_directory_marker(Path("/ci/stress/repo/tests/test_a.py")) == ["unit"]
+        assert get_directory_marker(Path("/ci/stress/repo/tests/integration/test_a.py")) == ["integration"]
+        assert get_directory_marker(Path("tests/stress/test_a.py")) == ["stress", "slow"]
+
+    def test_marker_honours_explicit_tests_root(self, tmp_path: Path) -> None:
+        root = tmp_path / "stress" / "checkout" / "suite"
+        assert get_directory_marker(root / "test_a.py", tests_root=root) == ["unit"]
+        assert get_directory_marker(root / "golden" / "test_a.py", tests_root=root) == ["golden"]
+
+    def test_skip_directories_above_tests_root_are_ignored(self, tmp_path: Path) -> None:
+        tests_dir = tmp_path / "data" / "repo" / "tests"
+        tests_dir.mkdir(parents=True)
+        file_path = tests_dir / "test_a.py"
+        file_path.write_text("def test_a():\n    assert 1 + 1 == 2\n", encoding="utf-8")
+
+        modified, reason = process_file(file_path, dry_run=True)
+
+        assert modified is True, reason

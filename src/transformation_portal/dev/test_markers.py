@@ -56,8 +56,48 @@ PYTESTMARK_PATTERN = re.compile(r"^pytestmark\s*=", re.MULTILINE)
 # Pattern to detect existing @pytest.mark on module level
 MODULE_MARKER_PATTERN = re.compile(r"^@pytest\.mark\.\w+", re.MULTILINE)
 
-# Pattern to detect imports
+# Pattern to detect imports. Kept for backward compatibility; process_file()
+# uses binds_pytest_name() instead, because ``from pytest import ...`` does not
+# bind the ``pytest`` name that the inserted ``pytestmark`` line needs.
 IMPORT_PYTEST_PATTERN = re.compile(r"^import pytest\s*$|^from pytest import", re.MULTILINE)
+
+_TEST_FUNCTION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def binds_pytest_name(content: str) -> bool:
+    """Check whether module-level code binds the name ``pytest``.
+
+    Only ``import pytest`` (or ``import pytest.<sub>`` / ``import pytest as
+    pytest``) at module scope, including inside module-level ``if`` / ``try``
+    / ``with`` blocks, counts. ``from pytest import raises`` does not bind
+    ``pytest``.
+
+    Args:
+        content: Python source code as a string.
+
+    Returns:
+        True if ``pytest`` is bound at module scope.
+    """
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return False
+
+    pending: list[ast.stmt] = list(tree.body)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname == "pytest" or (
+                    alias.asname is None and (alias.name == "pytest" or alias.name.startswith("pytest."))
+                ):
+                    return True
+        elif isinstance(node, (ast.If, ast.Try, ast.With)) or type(node).__name__ == "TryStar":
+            for field in ("body", "orelse", "finalbody"):
+                pending.extend(getattr(node, field, []) or [])
+            for handler in getattr(node, "handlers", []) or []:
+                pending.extend(handler.body)
+    return False
 
 
 def has_test_functions(content: str) -> bool:
@@ -67,7 +107,7 @@ def has_test_functions(content: str) -> bool:
         content: Python source code as a string.
 
     Returns:
-        True if the file contains functions starting with 'test_'.
+        True if the file contains (sync or async) functions starting with 'test_'.
     """
     try:
         tree = ast.parse(content)
@@ -75,11 +115,11 @@ def has_test_functions(content: str) -> bool:
         return False
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+        if isinstance(node, _TEST_FUNCTION_TYPES) and node.name.startswith("test_"):
             return True
         if isinstance(node, ast.ClassDef):
             for item in node.body:
-                if isinstance(item, ast.FunctionDef) and item.name.startswith("test_"):
+                if isinstance(item, _TEST_FUNCTION_TYPES) and item.name.startswith("test_"):
                     return True
     return False
 
@@ -131,16 +171,39 @@ def has_class_or_function_markers(content: str) -> bool:
     return False
 
 
-def get_directory_marker(file_path: Path) -> list[str]:
+def _test_directory_parts(file_path: Path, tests_root: Path | None = None) -> tuple[str, ...]:
+    """Return the directory components of ``file_path`` inside the tests tree.
+
+    Components above the tests root (e.g. a CI workspace ``/ci/stress/repo``)
+    must not decide markers or skips. The tests root is ``tests_root`` when
+    given and ``file_path`` is under it, otherwise the innermost ``tests``
+    directory component. Paths with neither keep all directory components.
+    """
+    directory = file_path.parent
+    if tests_root is not None:
+        try:
+            return directory.relative_to(tests_root).parts
+        except ValueError:
+            pass
+    parts = directory.parts
+    if "tests" in parts:
+        anchor = len(parts) - 1 - parts[::-1].index("tests")
+        return parts[anchor + 1 :]
+    return parts
+
+
+def get_directory_marker(file_path: Path, tests_root: Path | None = None) -> list[str]:
     """Determine markers based on directory.
 
     Args:
         file_path: Path to the test file.
+        tests_root: Optional tests root; only directories below it count.
+            Defaults to the innermost ``tests`` directory in ``file_path``.
 
     Returns:
         List of marker names for the file based on its directory location.
     """
-    parts = file_path.parts
+    parts = _test_directory_parts(file_path, tests_root)
     for part in reversed(parts):
         if part in DIRECTORY_MARKERS:
             return DIRECTORY_MARKERS[part]
@@ -375,12 +438,13 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
     return "\n".join(lines)
 
 
-def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
+def process_file(file_path: Path, dry_run: bool = True, tests_root: Path | None = None) -> tuple[bool, str]:
     """Process a single test file.
 
     Args:
         file_path: Path to the test file to process.
         dry_run: If True, don't write changes to disk.
+        tests_root: Optional tests root (see get_directory_marker()).
 
     Returns:
         (modified, reason) tuple where modified is True if the file was
@@ -389,8 +453,8 @@ def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
     if not file_path.name.startswith("test_"):
         return False, "not a test file"
 
-    # Skip fixture/data directories
-    for part in file_path.parts:
+    # Skip fixture/data directories (inside the tests tree only)
+    for part in _test_directory_parts(file_path, tests_root):
         if part in SKIP_DIRECTORIES:
             return False, f"in skip directory: {part}"
 
@@ -411,12 +475,12 @@ def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
     if has_class_or_function_markers(content):
         return False, "has class/function markers (manual review needed)"
 
-    # Ensure pytest is imported - now we handle this
-    if not IMPORT_PYTEST_PATTERN.search(content):
+    # Ensure the ``pytest`` name is bound (``from pytest import x`` is not enough)
+    if not binds_pytest_name(content):
         content = add_pytest_import(content)
 
     # Get appropriate markers
-    markers = get_directory_marker(file_path)
+    markers = get_directory_marker(file_path, tests_root)
 
     # Add markers
     new_content = add_pytestmark(content, markers)
@@ -507,6 +571,7 @@ __all__ = [
     "IMPORT_PYTEST_PATTERN",
     # Detection functions
     "has_test_functions",
+    "binds_pytest_name",
     "has_existing_module_markers",
     "has_class_or_function_markers",
     "get_directory_marker",
